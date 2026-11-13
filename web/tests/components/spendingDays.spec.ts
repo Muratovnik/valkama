@@ -206,7 +206,7 @@ describe('the days', () => {
     expect(days.emitted('day')).toHaveLength(1)
   })
 
-  it('mark the day not over yet as so far, and only that day', () => {
+  it('mark the day not over yet as running, and only that day', () => {
     const days = mountDays(week())
     const stacks = days.findAll('.period-stack')
     expect(stacks.map((stack) => stack.classes().includes('period-incomplete'))).toEqual([
@@ -214,15 +214,15 @@ describe('the days', () => {
       false,
       true,
     ])
-    expect(days.get('.period-axis').text()).toContain('so far')
-    expect(spokenDays(days).at(-1)?.holds).toContain('so far')
+    expect(days.get('.period-axis').text()).toContain('running')
+    expect(spokenDays(days).at(-1)?.holds).toContain('running')
     expect(days.find('.period-readout').exists()).toBe(false)
   })
 
   it('mark no day once the period is over', () => {
     const days = mountDays(week(), { readAt: new Date(2026, 10, 12, 9) })
     expect(days.find('.period-incomplete').exists()).toBe(false)
-    expect(days.text()).not.toContain('so far')
+    expect(days.text()).not.toContain('running')
   })
 
   it('mark where the accounts that worked change, past a day nobody worked', () => {
@@ -245,12 +245,12 @@ describe('the days', () => {
     )
   })
 
-  it('read as a table on a narrow page, with the same days, so far and the marks', () => {
+  it('read as a table on a narrow page, with the same days, the running one and the marks', () => {
     const table = mountDays(week(), { narrow: true })
     expect(table.findComponent(PeriodColumns).exists()).toBe(false)
     const rows = table.getComponent(PeriodColumnsTable).findAll('tbody tr')
     expect(rows).toHaveLength(3)
-    expect(rows.at(-1)?.text()).toContain('so far')
+    expect(rows.at(-1)?.text()).toContain('running')
 
     const marked = mountDays(fiveDays(), { narrow: true, accounts: byAccount(), readAt: AFTER })
     const notes = marked
@@ -292,7 +292,7 @@ describe('the days', () => {
   it('say the same in Russian', () => {
     const days = mountDays(week(), {}, 'ru')
     expect(days.get('h2').text()).toBe('Время агентов по дням, по задачам')
-    expect(days.get('.period-axis').text()).toContain('пока')
+    expect(days.get('.period-axis').text()).toContain('идёт')
   })
 })
 

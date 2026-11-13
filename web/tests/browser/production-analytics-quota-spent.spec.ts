@@ -100,11 +100,9 @@ for (const colorScheme of ['light', 'dark'] as const)
       const shown =
         (await page.locator('.quota-panel .chart-section').getAttribute('data-shown')) ?? ''
 
-      // The block's label, its period and what it leaves out.
-      await expect(work.locator('h5')).toHaveText('Where the window went')
-      await expect(work.locator('.window-spend-basis')).toHaveText(
-        'By API price estimate, not quota points: the work Valkama recorded on this account from 11:30 to 14:30, without the work in claude.ai and the desktop app.',
-      )
+      // The block's label names its period; what it is and leaves out is the section's «ⓘ».
+      await expect(work.locator('h5')).toHaveText('Where the window went from 11:30 to 14:30')
+      await expect(work).not.toContainText('quota points')
       await expect(work).toHaveAttribute('data-state', 'spent')
       // The first line of its chart, or of its table where the panel shows tables.
       const firstLine = work.locator('.ranked-row, tbody tr').first()

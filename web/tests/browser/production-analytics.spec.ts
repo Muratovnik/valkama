@@ -76,7 +76,7 @@ for (const width of [1440, 1024, 390]) {
 
     // The day not over yet says so; the change of accounts is marked and said where its day is
     // read, in its row of the table or in its day's hint on the chart.
-    await expect(analytics.locator('.spending-days')).toContainText('so far')
+    await expect(analytics.locator('.spending-days')).toContainText('running')
     await expect
       .poll(() => daysSaying(analytics, 'Account change: 5b0c7e21 → 5b0c7e21, d4e8a1f0'))
       .toBe(1)

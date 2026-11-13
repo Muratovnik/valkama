@@ -3,8 +3,9 @@
  * oracle is the requirement: under each window that has a start, the work Valkama recorded on that
  * account from the window's start to the answer's moment, ranked by its API price estimate with
  * each item's share of that estimate, by task first and by project or model on choice; the first
- * five items and one line for the rest; words that say it is the API price estimate and not quota
- * points, the period it covers, and that claude.ai and the desktop app are not in it. Another
+ * five items and one line for the rest; a heading that names the period it covers, and the
+ * section's «ⓘ» that says once it is the API price estimate and not quota points, and that
+ * claude.ai and the desktop app are not in it. Another
  * account's work is never in it, and its organization's work with no account known is said apart
  * and never counted to it. No work, only such work, a wait and a failed read each say so in words
  * of their own, and a failed read is retried in its block while the quota panel stands.
@@ -106,13 +107,15 @@ describe('where a window went', () => {
     expect(reads.quotaAsked).toHaveLength(1)
   })
 
-  it('says it is the API price estimate and not quota points, over which period, and what is not in it', async () => {
+  it('names its period in its heading, and leaves what it is and is not to the section’s «ⓘ»', async () => {
     stubAnalyticsReads(usage, quota)
     const page = await openFiveHours()
     const block = blockOf(page, 'Work')
-    expect(block.get('h5').text()).toBe('Where the window went')
-    expect(block.get('.window-spend-basis').text()).toBe(
-      'By API price estimate, not quota points: the work Valkama recorded on this account from 11:30 to 14:30, without the work in claude.ai and the desktop app.',
+    expect(block.get('h5').text()).toBe('Where the window went from 11:30 to 14:30')
+    expect(block.text()).not.toContain('quota points')
+    await page.get('.quota-panel .chart-section > .level-head .level-about-press').trigger('click')
+    expect(document.querySelector('.info-tip-panel')?.textContent).toContain(
+      'Where a window went is the API price estimate of the work Valkama recorded on the account, not quota points, without the work in claude.ai and the desktop app.',
     )
     expect(block.get('.ranked-bars').attributes('aria-label')).toBe(
       'Where Five hours of Work went by task, by API price estimate',
@@ -178,7 +181,7 @@ describe('where a window went', () => {
     stubAnalyticsReads(usage, quota)
     const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
     const week = blockOf(page, 'Work', 'week')
-    expect(week.get('.window-spend-basis').text()).toContain('from Nov 7, 14:30 to 14:30')
+    expect(week.get('h5').text()).toContain('from Nov 7, 14:30 to 14:30')
     expect(lines(week)[0]).toEqual(['MAIN-9 Earlier', '≈ $50.00 · 79%'])
   })
 })
@@ -196,7 +199,7 @@ describe('the states of what used a window', () => {
     const unplaced = blockOf(page, 'a1b2c3d4')
     expect(unplaced.attributes('data-state')).toBe('unplaced')
     expect(plain(unplaced.get('.window-spend-body').text())).toBe(
-      'No work was recorded on this account in this window. Its organization recorded ≈ $4.00 of work with the account unknown, which is not counted here.',
+      'No work was recorded on this account in this window. Not counted here: ≈ $4.00 of work in its organization with the account unknown.',
     )
     expect(unplaced.find('.ranked-bars').exists()).toBe(false)
     // An organization no source read has no window, and so no block.

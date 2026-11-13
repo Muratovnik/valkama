@@ -230,7 +230,7 @@ test('each of the three figures draws its own trend, and nothing moves under the
     // The week to Wednesday: a column's place for each of its days.
     await expect(trend.locator('.mini-trend-period')).toHaveCount(3)
     const label = (await trend.getAttribute('aria-label')) ?? ''
-    expect(label).toMatch(/ per day from .+ to .+: highest .+, last .+ so far$/u)
+    expect(label).toMatch(/ per day from .+ to .+: highest .+, last .+ running$/u)
     trends.push({ label, box: await trend.boundingBox() })
   }
   await record(info, 'trends', trends)

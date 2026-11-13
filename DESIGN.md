@@ -2272,7 +2272,10 @@ not say again what the bar or its section says, and detail — an id, a source, 
 reading is, how a figure was reached — is in the hints of the marks and values it belongs to.
 Each block used to say its caveats whole: the quota opened on two sentences of what does not
 apply to it, each of its windows said two lines more over its spend, and the words outweighed
-the figures they qualified.
+the figures they qualified. So every section is headed by its name, the «ⓘ» ends that heading's
+line, and on a narrow screen the way back over the section names nothing a second time.
+`production-analytics-words.spec.ts` holds it in both languages: with data, no block shows a
+sentence longer than 90 characters, and each caveat stands in its section's «ⓘ» alone.
 
 The rail holds a tile for the overview, one for the token kinds, two for the subscription
 quota — «Five hours» and «Week» — and one for each dimension of the read: account, project,

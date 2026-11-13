@@ -208,7 +208,7 @@ async function hourGaps(page: Page, chart: string, from: number) {
     await expect
       .poll(async () => {
         const names = await hourNames(page, chart)
-        return names.some((name) => name.text === '15:00so far')
+        return names.some((name) => name.text === '15:00running')
       })
       .toBe(true)
     const names = await hourNames(page, chart)
@@ -240,14 +240,14 @@ test('«Today» says the running hour, and its hours’ names keep apart at ever
   // so, and Tab stops on it rather than on 23:00.
   const running = chart.locator('.period-slot[data-key*="T15:00"] .period-column')
   await expect(await pointAt(page, running)).toHaveText(
-    /^Wednesday, November 11 at 15:00: total 0\smin so far/u,
+    /^Wednesday, November 11 at 15:00: total 0\smin running/u,
   )
   await expect(running).toHaveAttribute('tabindex', '0')
   // The axis steps back from 23:00 by three and so names 14:00, beside the running 15:00: the
   // neighbour gives way rather than touch it.
   const placed = await hourNames(page, '.overview-chart')
   const names = placed.map((name) => name.text)
-  expect(names).toContain('15:00so far')
+  expect(names).toContain('15:00running')
   expect(names).toContain('17:00')
   expect(names).not.toContain('14:00')
 

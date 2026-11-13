@@ -1,0 +1,27 @@
+/**
+ * The caveats each section of the Analytics page says once, in the «ⓘ» of its heading, and
+ * nowhere else on the page: that a cost is an estimate at API prices and not a bill, what the
+ * tokens count and leave apart, that a minute's figures share each stretch of work out by its
+ * time in each minute, and of the quota that the period and the filters do not reach it, that no
+ * two of its shares are added and what «Where the window went» is and leaves out. A block says
+ * none of them again.
+ */
+import { useI18n } from 'vue-i18n'
+
+import type { Usage } from '@/shared/api/analyticsApi.ts'
+
+export function useSectionCaveats() {
+  const { t } = useI18n()
+  /** A period read by the minute, whose figures are shared out among the minutes. */
+  const minutes = (usage: Usage) =>
+    usage.period.step === 'minute' ? [t('analytics.time.estimate')] : []
+  const tokens = () => t('analytics.panel.table.kinds.note')
+  return {
+    /** The overview and a dimension's section: the cost, the tokens and the minutes. */
+    spending: (usage: Usage) => [t('analytics.figures.costNote'), tokens(), ...minutes(usage)],
+    /** The token kinds: what the tokens count, and the minutes. */
+    kinds: (usage: Usage) => [tokens(), ...minutes(usage)],
+    /** A section of the quota: what does not reach it, and what used each window. */
+    quota: () => [t('analytics.quota.panel.intro'), t('analytics.quota.spent.basis')],
+  }
+}

@@ -7,11 +7,12 @@
  * for the rest, and it stands under the window's readings on an axis of its own: no dollar meets
  * the window's bar or its step line, and no share here is a share of the quota.
  *
- * Its words say what it is — an estimate at API prices, not quota points — the period it covers,
- * and that work in claude.ai and the desktop app, which the window's share counts, is not in it.
- * No work on the account, work only its organization recorded with no account known, a wait and
- * a read that failed each say so in words of their own; the organization's work with no account
- * is never drawn as the account's. A wait and a failure stay in this block, with a retry.
+ * Its heading names the stretch it covers. That it is an estimate at API prices, not quota points,
+ * and that work in claude.ai and the desktop app, which the window's share counts, is not in it,
+ * the section's «ⓘ» says once for every window (`useSectionCaveats`). No work on the account,
+ * work only its organization recorded with no account known, a wait and a read that failed each
+ * say so in words of their own; the organization's work with no account is never drawn as the
+ * account's. A wait and a failure stay in this block, with a retry.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -86,12 +87,12 @@ const state = computed(() => {
   return read.value.status === 'failed' && !waiting.value ? 'failed' : 'loading'
 })
 
-/** The period the figures cover, from the window's start to the moment they were read to. */
-const basis = computed(() => {
+/** The heading, with the stretch the figures cover: the window's start to the moment read to. */
+const heading = computed(() => {
   const period = answer.value?.period
   const from = period?.from ?? props.window.started_at ?? props.today
   const to = period?.to ?? props.today
-  return t('analytics.quota.spent.basis', {
+  return t('analytics.quota.spent.title', {
     from: quotaWords.moment(from, props.today),
     to: quotaWords.moment(to, props.today),
   })
@@ -162,7 +163,7 @@ const failedAgain = computed(() =>
         :id="titleId"
         class="window-spend-title"
       >
-        {{ t('analytics.quota.spent.title') }}
+        {{ heading }}
       </h5>
       <SegmentedControl
         size="compact"
@@ -172,9 +173,6 @@ const failedAgain = computed(() =>
         @update:model-value="choose"
       />
     </div>
-    <p class="window-spend-basis">
-      {{ basis }}
-    </p>
     <div
       class="window-spend-body"
       :class="{ 'read-pending': dimmed }"
@@ -258,7 +256,7 @@ const failedAgain = computed(() =>
 
 <style scoped>
 /* Under the window's readings, a line of its block on an axis of its own: its title and its
-   breakdowns on one line, its words, then its bars. */
+   breakdowns on one line, then its bars. */
 .window-spend {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -278,13 +276,6 @@ const failedAgain = computed(() =>
 .window-spend-title {
   margin: 0;
   font: var(--font-field-label);
-}
-
-.window-spend-basis {
-  max-inline-size: 72ch;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 
 .window-spend-body {

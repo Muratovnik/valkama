@@ -9,21 +9,32 @@
  * place on it yet.
  *
  * The heading row holds the heading, what stands beside it (`beside`: a plan, a fact) and the
- * controls that act on the whole level, each at the one size a heading's control takes; a line
- * the whole level reads first, such as what its figures are and how old, stands under it
- * (`lead`). What the level holds stands one under the next, two side by side where both read well
- * (`pair`), or as many side by side as keep `columnMin` (`fit`); a part that must take the whole
- * width says so on its own root. A group may stand on a surface of its own.
+ * controls that act on the whole level, each at the one size a heading's control takes. A caveat
+ * that qualifies the whole level — that a cost is an estimate, what the tokens count, that the
+ * period does not reach the quota — is said once, in the «ⓘ» that ends the heading's line
+ * (`about`), never as a line of the page; it opens on a press, so a finger reaches it too
+ * (`InfoTip`). The quota once opened on two sentences of what does not apply to it, which pushed
+ * its accounts down on every visit. What the level holds stands one under the next, two side by
+ * side where both read well (`pair`), or as many side by side as keep `columnMin` (`fit`); a part
+ * that must take the whole width says so on its own root. A group may stand on a surface of its
+ * own.
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
+import InfoTip from '@/shared/ui/InfoTip.vue'
+import LineEnd from '@/shared/ui/LineEnd.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 type Level = 'section' | 'group' | 'block'
 
 const props = withDefaults(
   defineProps<{
     level: Level
+    /** The caveats of the whole level, each a sentence, said in the «ⓘ» of its heading. */
+    about?: readonly string[]
     /** The element the level is; a group of a list is its item. */
     as?: 'section' | 'div' | 'li'
     /** The element of what the level holds: a list of groups is a list. */
@@ -49,6 +60,7 @@ const props = withDefaults(
     columnMin: '20rem',
     surface: false,
     bodyLabel: undefined,
+    about: () => [],
   },
 )
 
@@ -60,10 +72,13 @@ const slots = defineSlots<{
   beside?: () => unknown
   default?: () => unknown
   heading?: () => unknown
-  lead?: () => unknown
 }>()
 
+const { t } = useI18n()
+
 const headed = computed(() => props.title !== '' || Boolean(slots.heading))
+/** The «ⓘ» stands at a heading: a level with no heading has no line for it to end. */
+const caveats = computed(() => (headed.value ? props.about : []))
 </script>
 
 <template>
@@ -91,6 +106,39 @@ const headed = computed(() => props.title !== '' || Boolean(slots.heading))
         v-slash-breaks="title"
         class="level-heading"
       />
+      <LineEnd
+        v-if="caveats.length"
+        class="level-about"
+      >
+        <InfoTip :label="t('analytics.about.label')">
+          <div class="level-about-caveats">
+            <p
+              v-for="caveat in caveats"
+              :key="caveat"
+              class="level-about-caveat"
+            >
+              {{ caveat }}
+            </p>
+          </div>
+          <template #trigger="{ toggle, popup }">
+            <VButton
+              class="level-about-press"
+              variant="ghost"
+              :size="ACTION_SIZE"
+              :aria-label="t('analytics.about.label')"
+              :aria-controls="popup.controls"
+              :aria-expanded="popup.expanded"
+              icon
+              @click="toggle"
+            >
+              <VIcon
+                name="info"
+                :size="16"
+              />
+            </VButton>
+          </template>
+        </InfoTip>
+      </LineEnd>
       <slot name="beside" />
       <div
         v-if="$slots.actions"
@@ -102,7 +150,6 @@ const headed = computed(() => props.title !== '' || Boolean(slots.heading))
         />
       </div>
     </div>
-    <slot name="lead" />
     <component
       :is="bodyAs"
       v-if="$slots.default"
@@ -140,6 +187,17 @@ const headed = computed(() => props.title !== '' || Boolean(slots.heading))
   overflow-wrap: anywhere;
 }
 
+/* The «ⓘ» ends the heading's line, centred on it in the heading's own font (`LineEnd`, the
+   level's rules below); its caveats stand one under the next, a block's lines apart. */
+.level-about-caveats {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.level-about-caveat {
+  margin: 0;
+}
+
 /* The controls stand at the row's end, centred on its first line. */
 .level-actions {
   display: flex;
@@ -161,7 +219,7 @@ const headed = computed(() => props.title !== '' || Boolean(slots.heading))
 }
 
 .level-section {
-  & > .level-head > .level-heading {
+  & > .level-head > :is(.level-heading, .level-about) {
     font: var(--font-section-title);
   }
 
@@ -171,7 +229,7 @@ const headed = computed(() => props.title !== '' || Boolean(slots.heading))
 }
 
 .level-group {
-  & > .level-head > .level-heading {
+  & > .level-head > :is(.level-heading, .level-about) {
     font: var(--font-panel-title);
   }
 
@@ -181,7 +239,7 @@ const headed = computed(() => props.title !== '' || Boolean(slots.heading))
 }
 
 .level-block {
-  & > .level-head > .level-heading {
+  & > .level-head > :is(.level-heading, .level-about) {
     font: var(--font-name);
   }
 

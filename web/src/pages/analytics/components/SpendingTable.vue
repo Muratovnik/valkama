@@ -150,6 +150,7 @@ defineExpose({ reveal })
     ref="root"
     class="spending-table"
     tabindex="-1"
+    :data-measure="measure"
     :aria-label="model.title"
     :style="{
       '--stuck-head': `${stuck.head}px`,
@@ -181,12 +182,6 @@ defineExpose({ reveal })
       class="spending-table-note"
     >
       {{ t('analytics.table.unread') }}
-    </p>
-    <p
-      v-if="measure === 'tokens'"
-      class="spending-table-kinds"
-    >
-      {{ t('analytics.panel.table.kinds.note') }}
     </p>
     <div
       v-if="held"
@@ -321,7 +316,6 @@ defineExpose({ reveal })
 }
 
 .spending-table-note,
-.spending-table-kinds,
 .spending-table-reading,
 .spending-table-failed {
   margin: 0;
@@ -463,11 +457,10 @@ defineExpose({ reveal })
   }
 }
 
-/* Under the measure «tokens», which the note on the kinds stands for, the tokens by kind follow
-   the change and the table is wider than its frame: every column stands at its least, so a
+/* Under the measure «tokens» the tokens by kind follow the change and the table is wider than its frame: every column stands at its least, so a
    heading over figures takes a second line, as in a narrower table, rather than push the change
    past the frame's edge. The kinds after it are reached by the frame's own scroll. */
-.spending-table:has(> .spending-table-kinds) .chart-heading[data-numeric='true'] {
+.spending-table[data-measure='tokens'] .chart-heading[data-numeric='true'] {
   min-inline-size: 7em;
   white-space: normal;
 }

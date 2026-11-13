@@ -28,7 +28,7 @@ const at = (day: number, spend: Stretch['spend']): Stretch => ({
   spend,
 })
 
-/** Monday 2 h, Tuesday 4 h, Wednesday half an hour so far; tokens and a price each day. */
+/** Monday 2 h, Tuesday 4 h, Wednesday half an hour, still running; tokens and a price each day. */
 const WEEK = usageAnswer({
   first: MONDAY,
   days: 3,
@@ -97,16 +97,16 @@ describe('the trend beside each figure', () => {
   it('says the trend in words, as the rail’s tile of the overview does', () => {
     const tiles = mountTiles(WEEK)
     expect(trendOf(tiles, 'time').label).toBe(
-      'Agent time per day from Mon 9 to Wed 11: highest 4 h (Tue 10), last 30 min so far',
+      'Agent time per day from Mon 9 to Wed 11: highest 4 h (Tue 10), last 30 min running',
     )
     expect(trendOf(tiles, 'tokens').label).toBe(
-      'Tokens per day from Mon 9 to Wed 11: highest 3K (Mon 9), last 1.5K so far',
+      'Tokens per day from Mon 9 to Wed 11: highest 3K (Mon 9), last 1.5K running',
     )
     expect(trendOf(tiles, 'cost').label).toBe(
-      'Estimated cost at API prices per day from Mon 9 to Wed 11: highest $4.00 (Mon 9), last $1.00 so far',
+      'Cost per day from Mon 9 to Wed 11: highest $4.00 (Mon 9), last $1.00 running',
     )
     expect(trendOf(mountTiles(WEEK, 'ru'), 'time').label).toBe(
-      'Время агентов по дням с пн 9 по ср 11: наибольшее 4 ч (вт 10), последнее 30 мин пока',
+      'Время агентов по дням с пн 9 по ср 11: наибольшее 4 ч (вт 10), последнее 30 мин идёт',
     )
   })
 
@@ -147,7 +147,7 @@ describe('the trend beside each figure', () => {
       }
       expect(trendOf(tiles, 'time').label).toBe('Agent time per day: 0 min')
       // Nothing spent is a zero cost, as the figure itself says it.
-      expect(trendOf(tiles, 'cost').label).toBe('Estimated cost at API prices per day: ≈ $0.00')
+      expect(trendOf(tiles, 'cost').label).toBe('Cost per day: ≈ $0.00')
     }
   })
 })

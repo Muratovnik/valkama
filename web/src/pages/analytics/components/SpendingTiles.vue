@@ -15,8 +15,9 @@
  * It takes the place of the figure's line and keeps it with nothing to draw, so a new answer
  * changes the columns' heights and nothing around them.
  *
- * The cost says it is an estimate and not a bill, and tokens with no price are said in words
- * under it, never folded into a zero: a cost of nothing and a cost nobody knows are different.
+ * That the cost is an estimate and not a bill, and what the tokens count, the section's «ⓘ» says
+ * (`useSectionCaveats`); tokens with no price are said in words under the cost, never folded into
+ * a zero: a cost of nothing and a cost nobody knows are different.
  * A change is an arrow and words, never a colour alone. A period before with nothing in it says
  * so rather than inventing a percentage, a rise from a base too little for a share
  * (`risenFromLittle`) says what it rose from, and a figure absent on either side — no price, no
@@ -91,7 +92,7 @@ const tiles = computed(() =>
     const notes = {
       time: [],
       tokens: words.tokenKinds(props.usage.total.tokens),
-      cost: [t('analytics.figures.costNote'), words.unpriced(total)].filter(Boolean),
+      cost: [words.unpriced(total)].filter(Boolean),
     }[value]
     const label = words.measure(value)
     const figure = words.figure(value, total)

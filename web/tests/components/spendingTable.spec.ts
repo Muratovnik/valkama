@@ -88,7 +88,7 @@ describe('the breakdown beside the period before', () => {
       'Task',
       'Agent time',
       'Tokens',
-      'Est. cost, API prices',
+      'Cost',
       'Before, Nov 6 – 8',
       'Change',
     ])
@@ -174,10 +174,9 @@ describe('the breakdown beside the period before', () => {
       'Output',
       'Of it reasoning',
     ])
-    expect(table('tokens').get('.spending-table-kinds').text()).toBe(
-      'Tokens count input, output and cache writes; cache reads stand apart, and reasoning is part of output.',
-    )
-    expect(table('time').find('.spending-table-kinds').exists()).toBe(false)
+    // What the tokens count is the section's caveat, said in its «ⓘ», not a line of the table.
+    expect(table('tokens').text()).not.toContain('Tokens count input')
+    expect(table('tokens').attributes('data-measure')).toBe('tokens')
   })
 
   it('totals every column under the rows, from the read’s own total', () => {
@@ -330,7 +329,7 @@ describe('the breakdown beside the period before', () => {
     expect(wrapper.get('.spending-table-note').text()).toBe(
       'The period before was not read, so this table shows this period alone.',
     )
-    expect(headings(wrapper)).toEqual(['Task', 'Agent time', 'Tokens', 'Est. cost, API prices'])
+    expect(headings(wrapper)).toEqual(['Task', 'Agent time', 'Tokens', 'Cost'])
     // Gamma worked only before, which was not read: it is not here.
     expect(rows(wrapper)).toEqual([
       ['MAIN-1 Alpha', '2 h', '2K', '≈ $1.50'],
