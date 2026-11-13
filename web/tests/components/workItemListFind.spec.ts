@@ -349,6 +349,43 @@ describe('the steps between matches', () => {
     expect(painted.size).toBe(0)
   })
 
+  it('close with Escape onto the list’s Tab stop once the element focus came from has gone', async () => {
+    const wrapper = await list()
+    await open(wrapper, 'login')
+    await wrapper.setProps({ items: items.filter((item) => item.reference !== 'MAIN-2') })
+    await flushPromises()
+    expect(document.querySelector('[data-reference="MAIN-2"]')).toBeNull()
+    await press({ key: 'Escape' })
+    expect(bar()).toBeNull()
+    const stop = document.querySelector('.work-item-list .list-open[tabindex="0"]')
+    expect(stop).not.toBeNull()
+    expect(document.activeElement).toBe(stop)
+  })
+})
+
+describe('a list that goes with its find open', () => {
+  it('leaves no mark registered and no listener on the window', async () => {
+    // A list first opened alone, so what the page keeps for its whole life (the
+    // settings' storage) is in place before the listeners are counted.
+    const first = await list()
+    first.unmount()
+    const added = vi.spyOn(globalThis, 'addEventListener')
+    const removed = vi.spyOn(globalThis, 'removeEventListener')
+    const wrapper = await list()
+    await open(wrapper, 'login')
+    expect(painted.size).toBeGreaterThan(0)
+    wrapper.unmount()
+    await flushPromises()
+    expect(painted.size).toBe(0)
+    const left = added.mock.calls.filter(
+      ([type, listener]) =>
+        !removed.mock.calls.some(([gone, done]) => gone === type && done === listener),
+    )
+    expect(left.map(([type]) => type)).toEqual([])
+    expect(findKeys().defaultPrevented).toBe(false)
+    added.mockRestore()
+    removed.mockRestore()
+  })
 })
 
 describe('the current match as the list changes', () => {

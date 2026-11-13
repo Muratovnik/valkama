@@ -67,18 +67,30 @@ export function brief(number: number, state: ReturnType<typeof stateOf>, extra: 
   }
 }
 
-/** Answer the planning read with these items, once `answered` settles. */
+/**
+ * Answer the planning read with these items, once `answered` settles; `states` are
+ * states the workflow has after its six, for items in a state those do not cover.
+ */
 export async function serveSpace(
   page: Page,
   items: object[],
   links: object[] = [],
-  answered: Promise<void> = Promise.resolve(),
+  {
+    answered = Promise.resolve(),
+    states = [],
+  }: { answered?: Promise<void>; states?: readonly object[] } = {},
 ) {
+  const declared = states.length ? { ...workflow, states: [...STATES, ...states] } : workflow
   await page.route('**/api/planning?*', async (route) => {
     await answered
     const response = planningReadFor(new URL(route.request().url()).searchParams)
     if (response.status === 200 && 'work_items' in response.body)
-      Object.assign(response.body, { workflow, work_items: items, links, stale_claims: [] })
+      Object.assign(response.body, {
+        workflow: declared,
+        work_items: items,
+        links,
+        stale_claims: [],
+      })
     await route.fulfill({
       status: response.status,
       contentType: 'application/json',
