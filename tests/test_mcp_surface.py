@@ -1790,6 +1790,37 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertIn("events", answer)
         self.assertEqual(["comment"], list(answer["applied"]))
 
+    def test_an_object_parameter_named_like_text_shows_its_form(self) -> None:
+        """A bare-text value for an object parameter fails in the client, before this server.
+
+        Every one of those failures was on an object parameter with no description;
+        each now shows the JSON it takes, and the form shown is one its schema accepts.
+        """
+
+        [answer] = self.converse(
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": params()}
+        )
+        tools = {
+            tool["name"]: tool["inputSchema"]["properties"] for tool in answer["result"]["tools"]
+        }
+        shown = 0
+        for name, properties in tools.items():
+            for argument, schema in properties.items():
+                if schema.get("type") != "object":
+                    continue
+                with self.subTest(name, argument=argument):
+                    description = schema.get("description", "")
+                    self.assertTrue(description, "an object parameter without a description")
+                    if argument not in ("comment", "summary", "report", "transition"):
+                        continue
+                    self.assertIn("never", description)
+                    start = description.index("{")
+                    form, _end = json.JSONDecoder().raw_decode(description[start:])
+                    self.assertLessEqual(set(schema["required"]), set(form))
+                    self.assertLessEqual(set(form), set(schema["properties"]))
+                    shown += 1
+        self.assertEqual(5, shown)
+
     def test_the_batch_is_published_with_every_group_and_the_single_tools_stay(self) -> None:
         [answer] = self.converse(
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": params()}

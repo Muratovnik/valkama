@@ -176,6 +176,24 @@ _FRICTION = {
     "description": "What hindered the work itself: none, or one line per hindrance. A"
     " closing summary ends its friction here, not in done, next or why.",
 }
+# A parameter whose name reads as text but whose value is an object is the one an
+# agent writes as bare text, and the client then cannot read the call as JSON; it
+# fails before it reaches this server. Each such parameter shows its form.
+#: What a summary or a report takes: an object, shown as one.
+_OUTCOME_FORM = (
+    'An object, never bare text: {"done": "what was done", "next": "what comes next"},'
+    " with why and friction when they apply."
+)
+#: What a batch's one comment takes.
+_COMMENT_FORM = (
+    'One comment, an object, never bare text: {"body": "the text"}, with the other'
+    " keys comment_work_item takes beside body."
+)
+#: What a batch's transition takes.
+_TRANSITION_FORM = (
+    'An object, never a bare state name: {"state": "done"}, with reason, force or rank'
+    " when they apply."
+)
 #: A list the owner ticks under a root comment, a report or a summary: a question of
 #: one multi_choice field that nobody waits for.
 _LIST = {
@@ -745,6 +763,7 @@ TOOLS = [
             "id": WORK_ITEM_REFERENCE,
             "summary": {
                 "type": "object",
+                "description": _OUTCOME_FORM,
                 "properties": {"done": _STR, "next": _STR, "why": _STR, "friction": _FRICTION},
                 "required": ["done", "next"],
             },
@@ -766,6 +785,7 @@ TOOLS = [
             "id": WORK_ITEM_REFERENCE,
             "report": {
                 "type": "object",
+                "description": _OUTCOME_FORM,
                 "properties": {"done": _STR, "next": _STR, "why": _STR, "friction": _FRICTION},
                 "required": ["done", "next"],
             },
@@ -927,6 +947,7 @@ TOOLS = [
             },
             "comment": {
                 "type": "object",
+                "description": _COMMENT_FORM,
                 "properties": {
                     "body": _STR,
                     "checklist_item_id": _STR,
@@ -995,6 +1016,7 @@ TOOLS = [
             },
             "summary": {
                 "type": "object",
+                "description": _OUTCOME_FORM,
                 "properties": {
                     "done": _STR,
                     "next": _STR,
@@ -1007,6 +1029,7 @@ TOOLS = [
             },
             "transition": {
                 "type": "object",
+                "description": _TRANSITION_FORM,
                 "properties": {
                     "state": _STATE,
                     "reason": _STR,

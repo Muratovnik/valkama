@@ -71,6 +71,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **Fewer batch calls fail in the client before they reach Valkama.** Claude Code refused
+  `apply_work_item_changes` and `set_work_item_summary` calls as input that "could not be
+  parsed as JSON" when an agent wrote `comment`, `summary` or `transition` as bare text,
+  and most retries failed the same way. Those parameters, and `report` of `report_work_item`, were the only object
+  parameters with no description; each now shows the JSON it takes, such as
+  `{"body": "the text"}` or `{"state": "done"}`, and says it is never bare text. The skill
+  says the same beside the batch's groups.
 - **The Analytics bar no longer runs past its end beside a span of your own days.** In a
   window from about 1108 to 1300px beside the navigation, the bar's one line with every
   word and gap given up still ran «Refresh» up to 188px past its end, and pressing it

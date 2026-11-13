@@ -86,7 +86,10 @@ Item and step claims are independent: a step's holder need not hold the item.
 `claim`, `update`, `checklist`, `checklist_ticks`, `refs`, `links`, `comment`
 or `comments`, `resolutions`, `questions`, `summary`, `transition`. Each group
 works as its single tool does: `update` as `update_work_item`, `comments` as
-several `comment_work_item` calls, `questions` as `create_work_item_request`. A
+several `comment_work_item` calls, `questions` as `create_work_item_request`.
+Every group but `claim` and `subscribe` is JSON, never bare text: `comment` is
+`{"body": "…"}`, `summary` `{"done": "…", "next": "…"}`, `transition`
+`{"state": "…"}`. Bare text fails in the client, as input not parsed as JSON. A
 refused step writes nothing and names the group and index to correct. Pass the
 `revision` of the last acknowledgement as `expected_revision` to refuse a stale
 write. A question cannot go in the call that closes its item, which would end it
