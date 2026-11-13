@@ -143,12 +143,19 @@ export function useLineMarks(options: {
   const actedOn = (line: SpendingLine, label: string) =>
     line.second && line.value ? words.valueLabel(options.by(), line.value) : label
 
+  /**
+   * A pair's mark is named by what pressing it does with its first value and described by the
+   * whole pair (`actsOnPart`), so its pairs of one value stay apart for a screen reader.
+   */
   function markOf(line: SpendingLine, label = words.lineLabel(options.by(), line)): MarkAction {
     const href = actions.taskLink(options.by(), line.value)?.href
     if (href) return { href }
     if (actions.narrowsTo(options.by(), line.value) === undefined) return {}
     const name = actedOn(line, label)
-    return { actionable: true, action: actions.narrowName(options.by(), line.value, name) }
+    const action = actions.narrowName(options.by(), line.value, name)
+    return line.second
+      ? { actionable: true, action, actsOnPart: true }
+      : { actionable: true, action }
   }
 
   /** A value's link pressed: the task opened, in place where the page answers it. */

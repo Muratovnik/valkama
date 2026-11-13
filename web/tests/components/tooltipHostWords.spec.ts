@@ -7,7 +7,7 @@
 import { defineComponent, h, nextTick, withDirectives } from 'vue'
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import TooltipHost from '@/shared/ui/TooltipHost.vue'
@@ -19,11 +19,13 @@ const SHARE = '32% of the total'
 const surface = defineComponent({
   props: { cut: { type: Boolean, required: true } },
   mounted() {
-    // happy-dom lays nothing out, so the box says how much of its text it shows.
-    const named = (this.$el as HTMLElement).querySelector('.named')
+    // happy-dom lays nothing out, so the box says how much of its text it shows, and its text
+    // is laid out as wide as all it holds (`laidOut`).
+    const named = (this.$el as HTMLElement).querySelector<HTMLElement>('.named')
     if (!named) throw new Error('the name is not drawn')
     Object.defineProperty(named, 'clientWidth', { value: 120 })
     Object.defineProperty(named, 'scrollWidth', { value: this.cut ? 480 : 120 })
+    named.getBoundingClientRect = () => line(120)
   },
   render() {
     return h('main', [
@@ -55,9 +57,22 @@ async function hintOf(cut: boolean) {
   }
 }
 
+/** A line's box from the left edge, `width` wide. */
+const line = (width: number) =>
+  ({ left: 0, right: width, top: 0, bottom: 16, width, height: 16, x: 0, y: 0 }) as DOMRect
+
 let mounted: { unmount: () => void } | null = null
 
+// The hint asks whether the name's text stands past its box, which is where a cut hides it.
+beforeEach(() => {
+  vi.spyOn(Range.prototype, 'getClientRects').mockImplementation(function laidOut(this: Range) {
+    const box = this.startContainer.parentElement?.closest<HTMLElement>('.named')
+    return [line(box?.scrollWidth ?? 0)] as unknown as DOMRectList
+  })
+})
+
 afterEach(() => {
+  vi.restoreAllMocks()
   mounted?.unmount()
   mounted = null
   document.body.innerHTML = ''

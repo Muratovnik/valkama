@@ -9,10 +9,13 @@
  * An entry is a mark of its chart: its hint says what the name does not (`hints`, by series key,
  * `outline` for the mark of the period compared with), and a series that acts (`MarkAction`) is
  * pressed here as on its segments: a link sent out as `follow` with the press, a button as
- * `select` with its key. The rest only show.
+ * `select` with its key. The rest only show. An entry named by what it does is described by its
+ * whole name where that names a part of it, as a pair's names its first value.
  */
+import { useId } from 'vue'
+
 import type { PeriodSeries } from '@/shared/ui/chartGeometry.ts'
-import { markTag, markType } from '@/shared/ui/chartGeometry.ts'
+import { markPartId, markTag, markType } from '@/shared/ui/chartGeometry.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
@@ -35,10 +38,22 @@ function pressAside(one: PeriodSeries, event: MouseEvent) {
   if (one.href && event.button === 1) emit('follow', one.key, event)
 }
 
-/** An entry that acts is named by what it does, where it says so, else by its name. */
+const ids = useId()
+/** The id of an entry's name, which describes the entry where its action says a part of it. */
+const nameId = (one: PeriodSeries) => markPartId(ids, one.key, 'name')
+
+/**
+ * An entry that acts is named by what it does, where it says so, else by its name; where what it
+ * does names a part of its name only (`actsOnPart`), the whole name describes it.
+ */
 const keyAttrs = (one: PeriodSeries) =>
   one.href || one.actionable
-    ? { 'href': one.href, 'type': markType(one), 'aria-label': one.action }
+    ? {
+        'href': one.href,
+        'type': markType(one),
+        'aria-label': one.action,
+        'aria-describedby': one.action && one.actsOnPart ? nameId(one) : undefined,
+      }
     : {}
 
 /** What an entry says that its name does not, by its series' key. */
@@ -66,7 +81,11 @@ const hintOf = (key: string) => props.hints?.get(key)
           aria-hidden="true"
           :data-slot="one.slot"
         />
-        <span class="chart-key-name">{{ one.label }}</span>
+        <span
+          :id="nameId(one)"
+          class="chart-key-name"
+          >{{ one.label }}</span
+        >
       </component>
     </li>
     <li

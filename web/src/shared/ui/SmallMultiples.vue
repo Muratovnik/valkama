@@ -15,11 +15,12 @@
  * caller says how a share reads (`formatShare`), and while the name is cut says it whole first; a
  * period of a chart, where the caller names the periods (`periods`), says its name and its figure.
  * Presentational: a name whose value acts (`MarkAction`) is pressed as its value's row is, a link
- * sent out as `follow` with the press, a button as `select` with the key; the rest only show.
+ * sent out as `follow` with the press, a button as `select` with the key; the rest only show. A
+ * name named by what it does is described by its whole words where that names a part of them.
  */
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 
-import { markTag, roundAxis } from '@/shared/ui/chartGeometry.ts'
+import { markPartId, markTag, roundAxis } from '@/shared/ui/chartGeometry.ts'
 import type { ValueAxis } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { namedHint } from '@/shared/ui/markHints.ts'
@@ -77,10 +78,22 @@ function periodHint(one: PlacedMultiple, index: number) {
   return period ? `${one.label}\n${period.label}: ${figure}` : undefined
 }
 
-/** A name that acts is named by what it does, where it says so, else by its words. */
+const ids = useId()
+/** The id of a chart's words, which describe its name where its action says a part of them. */
+const wordsId = (one: PlacedMultiple) => markPartId(ids, one.key, 'words')
+
+/**
+ * A name that acts is named by what it does, where it says so, else by its words; where what it
+ * does names a part of its words only (`actsOnPart`), the whole words describe it.
+ */
 const nameAttrs = (one: PlacedMultiple) =>
   one.href || one.actionable
-    ? { 'href': one.href, 'type': one.href ? undefined : 'button', 'aria-label': one.action }
+    ? {
+        'href': one.href,
+        'type': one.href ? undefined : 'button',
+        'aria-label': one.action,
+        'aria-describedby': one.action && one.actsOnPart ? wordsId(one) : undefined,
+      }
     : {}
 
 function press(one: PlacedMultiple, event: MouseEvent) {
@@ -124,10 +137,11 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             v-bind="nameAttrs(one)"
             @click="(event: MouseEvent) => press(one, event)"
             @auxclick="(event: MouseEvent) => pressAside(one, event)"
-            ><PairName
-              :name="one.label"
-              :end="one.labelEnd"
-          /></component>
+            ><span :id="wordsId(one)"
+              ><PairName
+                :name="one.label"
+                :end="one.labelEnd" /></span
+          ></component>
           <span class="multiple-value">{{ one.valueText }}</span>
           <span
             class="multiple-plot"
@@ -167,10 +181,11 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             v-bind="nameAttrs(one)"
             @click="(event: MouseEvent) => press(one, event)"
             @auxclick="(event: MouseEvent) => pressAside(one, event)"
-            ><PairName
-              :name="one.label"
-              :end="one.labelEnd"
-          /></component>
+            ><span :id="wordsId(one)"
+              ><PairName
+                :name="one.label"
+                :end="one.labelEnd" /></span
+          ></component>
           <span class="multiple-value">{{ one.valueText }}</span>
         </li>
       </ul>

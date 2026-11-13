@@ -12,13 +12,26 @@
  * bars at 1440 in English are cut, so the run holds the cut case and not only names that fit. A
  * cut name is said whole in its hint, and each name of the table, its row's control, is named by
  * its whole pair, as a cut one is too. Each run prints what it measured.
+ *
+ * A control of a bar, a small chart or the legend is named by what pressing it does, which for a
+ * pair names its model alone: «Show the tasks of claude-opus-5-5» named the high and the medium
+ * row alike, and their descriptions said only their figures, so a screen reader told them apart
+ * by nothing. Each is described by its whole pair, as the browser computes it, and no two of one
+ * chart are named and described alike; a single value's controls keep their name and description.
+ *
+ * A table's name has its hint only while it is cut. The press's hit area stands 12px past its
+ * words to each side and 8px over and under, and counted as a cut it raised the hint of every
+ * name, «claude-sonnet-5-5 · high» whole at 1280 in Russian among them.
+ *
+ * A single name cut in a table's button ends in an ellipsis: a 50-character model name at 1280
+ * was cut at the button's edge with none, «claude-opus-5-5-with-a-rather-».
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { NOW, openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { test } from './test.ts'
 
 const HOUR = 3600
@@ -66,18 +79,30 @@ const SIZES = [
   ...[1024, 1107, 1108, 1200, 1300].map((width) => ({ width, height: 900 })),
 ]
 
-/** The split section open in `locale` at a window size, with its pairs read. */
-async function openPairs(page: Page, locale: 'en' | 'ru', size: (typeof SIZES)[number]) {
+/**
+ * The split section open in `locale` at a window size, with its pairs read. On a `held` clock the
+ * page's timers run only as the test moves them, so it can say that a hint did not come after its
+ * delay; the frames the page draws are then moved on that clock too.
+ */
+async function openPairs(
+  page: Page,
+  locale: 'en' | 'ru',
+  size: (typeof SIZES)[number],
+  held = false,
+) {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+  if (held) await page.clock.install({ time: NOW })
   await serve(page, WORLD)
   await openReport(page, size.width, SPLIT)
   await page.setViewportSize(size)
   await expect(page.locator(PLACES.legend)).toHaveCount(PAIRS.length)
   await expect(page.locator(PLACES.bars).first()).toHaveText(PAIRS[0] ?? '')
   await page.evaluate(() => document.fonts.ready)
-  await page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
+  await (held
+    ? page.clock.runFor(100)
+    : page.evaluate(
+        () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+      ))
 }
 
 /**
@@ -229,3 +254,208 @@ for (const locale of ['en', 'ru'] as const)
       for (const [index, pair] of PAIRS.entries())
         await expect(presses.nth(index)).toHaveAccessibleName(pair)
     })
+
+/** The controls of each chart that names its values, where a press narrows the view to one. */
+const CONTROLS = {
+  bars: '.spending-bars .ranked-line:is(button, a)',
+  multiples: '.spending-multiples .multiple-name:is(button, a)',
+  legend: '.spending-days .chart-key:is(button, a)',
+} as const
+
+/** What a control that narrows the view to a model is called, in each language. */
+const ACTION = {
+  en: (model: string) => `Show the tasks of ${model}`,
+  ru: (model: string) => `Показать задачи: ${model}`,
+}
+
+/** Each control a selector finds, by the name and description the browser computed for it. */
+async function described(page: Page, selector: string) {
+  const session = await page.context().newCDPSession(page)
+  try {
+    const { root } = await session.send('DOM.getDocument', { depth: -1 })
+    const { nodeIds } = await session.send('DOM.querySelectorAll', {
+      nodeId: root.nodeId,
+      selector,
+    })
+    const found: { description: string; name: string }[] = []
+    for (const nodeId of nodeIds) {
+      const { nodes } = await session.send('Accessibility.getPartialAXTree', {
+        nodeId,
+        fetchRelatives: false,
+      })
+      const [node] = nodes
+      found.push({
+        description: String(node?.description?.value ?? ''),
+        name: String(node?.name?.value ?? ''),
+      })
+    }
+    return found
+  } finally {
+    await session.detach()
+  }
+}
+
+/** The model of a pair, its first part. */
+const modelOf = (pair: string) => pair.split(' · ')[0] ?? pair
+
+/**
+ * Whether the hint of the table's name at `index` shows under the pointer, on a page whose clock
+ * is held (`openPairs`): a hint shows after the host's delay of half a second, so a name whose
+ * hint has not come when the clock has moved a second past the pointer's arrival has none.
+ */
+async function hintShows(page: Page, index: number) {
+  const name = page.locator(PLACES.table).nth(index)
+  // In view before the pointer comes, since a scroll closes a hint.
+  await name.scrollIntoViewIfNeeded()
+  await page.mouse.move(0, 0)
+  await page.clock.runFor(1000)
+  await expect(page.getByRole('tooltip')).toBeHidden()
+  await name.hover()
+  await page.clock.runFor(1000)
+  // The hint is placed in steps that wait on each other and on frames of that clock, so it is
+  // given a few more of them, a second in all, before it counts as not come.
+  for (let step = 0; step < 10; step += 1) {
+    if (await page.getByRole('tooltip').isVisible()) return true
+    await page.clock.runFor(100)
+  }
+  return false
+}
+
+/**
+ * Whether the case reported holds both sides: at 1280 in Russian the high sonnet stands whole and
+ * a medium pair is cut. Elsewhere a name may fit or not, and nothing is held.
+ */
+const bothWhereReported = (
+  locale: string,
+  width: number,
+  seen: readonly { cut: boolean; words: string }[],
+) =>
+  locale !== 'ru' ||
+  width !== 1280 ||
+  (seen.some((one) => one.words === 'claude-sonnet-5-5 · high' && !one.cut) &&
+    seen.some((one) => one.cut))
+
+for (const locale of ['en', 'ru'] as const)
+  for (const size of SIZES) {
+    test(`in ${locale} at ${size.width}×${size.height}, a pair's controls are described by the whole pair`, async ({
+      page,
+    }, info) => {
+      await openPairs(page, locale, size)
+      const controls = {
+        bars: await described(page, CONTROLS.bars),
+        multiples: await described(page, CONTROLS.multiples),
+        legend: await described(page, CONTROLS.legend),
+      }
+      await record(info, `pair descriptions ${locale} ${size.width}`, controls)
+      for (const [where, found] of Object.entries(controls)) {
+        expect(found, where).toHaveLength(PAIRS.length)
+        for (const [index, pair] of PAIRS.entries()) {
+          const control = found[index]
+          // Named by what pressing it does, with the model it acts as; described by its pair.
+          expect(control?.name, `${where}: ${pair}`).toBe(ACTION[locale](modelOf(pair)))
+          expect(control?.description, `${where}: ${pair}`).toContain(pair)
+        }
+        // No two controls of one chart are named and described alike.
+        const said = found.map((one) => `${one.name}\n${one.description}`)
+        expect(new Set(said).size, where).toBe(said.length)
+      }
+    })
+
+    test(`in ${locale} at ${size.width}×${size.height}, a table's name has its hint only while it is cut`, async ({
+      page,
+    }, info) => {
+      await openPairs(page, locale, size, true)
+      const found = await names(page, PLACES.table)
+      const hints: boolean[] = []
+      for (const index of found.keys()) hints.push(await hintShows(page, index))
+      const seen = found.map((one, index) => ({
+        words: one.words,
+        cut: one.cut,
+        hint: hints[index],
+      }))
+      await record(info, `table hints ${locale} ${size.width}`, seen)
+      for (const one of seen) expect(one.hint, `${one.words}, cut: ${one.cut}`).toBe(one.cut)
+      // Where it was reported, the run holds a whole name and a cut one.
+      expect(bothWhereReported(locale, size.width, seen)).toBe(true)
+    })
+  }
+
+/** A model whose name is 50 characters, longer than a table's name column at any of the sizes. */
+const LONG_MODEL = 'claude-opus-5-5-with-a-rather-long-synthetic-names'
+const ONE_LONG: TimedStretch[] = [
+  stretch(9, LONG_MODEL, 'high', 4),
+  stretch(10, 'claude-sonnet-5-5', 'high', 2),
+]
+
+/**
+ * Each table name's button: its words, whether they are cut — laid out wider than the box that
+ * clips them — and whether that box's ellipsis reaches them. `text-overflow` draws its ellipsis
+ * in the line boxes of the block that clips, so it ends the words only where they stand in that
+ * block's own lines, with no box laid out whole between: a button is such a box whatever its
+ * display says, and the words it held were cut at its edge with none.
+ */
+async function buttonNames(page: Page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('.spending-table tbody th button.chart-press')].map(
+      (press) => {
+        const walker = document.createTreeWalker(press, NodeFilter.SHOW_TEXT)
+        let text = walker.nextNode() as Text | null
+        while (text && !text.data.trim()) text = walker.nextNode() as Text | null
+        let clip = text?.parentElement ?? null
+        let whole = true
+        while (clip && getComputedStyle(clip).overflowX === 'visible') {
+          if (getComputedStyle(clip).display !== 'inline') whole = false
+          clip = clip.parentElement
+        }
+        const range = document.createRange()
+        if (text) range.selectNodeContents(text)
+        const laid = range.getBoundingClientRect()
+        const edges = clip?.getBoundingClientRect()
+        return {
+          words: press.textContent?.trim() ?? '',
+          cut: Boolean(edges && laid.right > edges.right + 0.5),
+          ellipsis: Boolean(clip && whole && getComputedStyle(clip).textOverflow === 'ellipsis'),
+        }
+      },
+    ),
+  )
+}
+
+for (const locale of ['en', 'ru'] as const)
+  for (const size of SIZES)
+    test(`in ${locale} at ${size.width}×${size.height}, a single name cut in a table's button ends in an ellipsis`, async ({
+      page,
+    }, info) => {
+      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+      await serve(page, ONE_LONG)
+      await openReport(page, size.width, pageAt({ by: 'model' }))
+      await page.setViewportSize(size)
+      await expect(page.locator(PLACES.table)).toHaveCount(2)
+      await page.evaluate(() => document.fonts.ready)
+      const found = await buttonNames(page)
+      await record(info, `single names ${locale} ${size.width}`, found)
+      // The long name is cut at every size, and ends in the ellipsis; the short one stands whole.
+      expect(found[0]).toEqual({ words: LONG_MODEL, cut: true, ellipsis: true })
+      expect(found[1]).toMatchObject({ words: 'claude-sonnet-5-5', cut: false })
+    })
+
+for (const locale of ['en', 'ru'] as const)
+  test(`in ${locale}, a single value's controls are named by their action and described by their figures`, async ({
+    page,
+  }) => {
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    await serve(page, WORLD)
+    await openReport(page, 1280, pageAt({ by: 'model' }))
+    const models = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']
+    await expect(page.locator(PLACES.bars)).toHaveText(models)
+    for (const [where, selector] of Object.entries(CONTROLS)) {
+      const found = await described(page, selector)
+      expect(found, where).toHaveLength(models.length)
+      for (const [index, model] of models.entries()) {
+        expect(found[index]?.name, where).toBe(ACTION[locale](model))
+        // The action says the name, so the description is the figures alone.
+        expect(found[index]?.description, where).not.toContain(model)
+        expect(found[index]?.description, where).not.toBe('')
+      }
+    }
+  })

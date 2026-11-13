@@ -7,7 +7,7 @@
 import { defineComponent, nextTick, ref } from 'vue'
 
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   textIsClipped,
@@ -180,14 +180,48 @@ describe('v-tooltip for assistive technology', () => {
   })
 })
 
-/** A box that holds more than it shows, as a browser would measure it. */
-function overflowing(element: HTMLElement) {
+/**
+ * A box that holds more than it shows, as a browser would measure it: 100px wide and 200px of
+ * what it holds, of which its text is laid out `text` pixels wide from its start.
+ */
+function overflowing(element: HTMLElement, text = 200) {
   element.style.overflowX = 'hidden'
   Object.defineProperty(element, 'scrollWidth', { value: 200 })
-  Object.defineProperty(element, 'clientWidth', { value: 1 })
+  Object.defineProperty(element, 'clientWidth', { value: 100 })
+  element.getBoundingClientRect = () => rect(100)
+  element.dataset.textWidth = String(text)
 }
 
+/** A line's box from the left edge, `width` wide and one line tall. */
+const rect = (width: number) =>
+  ({ left: 0, right: width, top: 0, bottom: 16, width, height: 16, x: 0, y: 0 }) as DOMRect
+
 describe('textIsClipped', () => {
+  // jsdom lays out nothing: a text's line is as wide as the box it stands in says (`overflowing`).
+  beforeEach(() => {
+    vi.spyOn(Range.prototype, 'getClientRects').mockImplementation(function laidOut(this: Range) {
+      const box = this.startContainer.parentElement?.closest<HTMLElement>('[data-text-width]')
+      return [rect(Number(box?.dataset.textWidth ?? 0))] as unknown as DOMRectList
+    })
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('does not count what a box holds past its edge when its text stands inside it', () => {
+    // As a press's hit area stands past a name that fits: more is held than shown, and no text.
+    document.body.innerHTML =
+      '<span id="whole">claude-sonnet-5-5 · high</span><span id="cut">claude-sonnet-5-5 · medium</span>'
+    const [whole, cut] = ['#whole', '#cut'].map(
+      (selector) => document.querySelector<HTMLElement>(selector) as HTMLElement,
+    )
+    if (!whole || !cut) throw new Error('the boxes are missing')
+    overflowing(whole, 90)
+    overflowing(cut, 140)
+    expect(textIsClipped(whole)).toBe(false)
+    expect(textIsClipped(cut)).toBe(true)
+  })
+
   it('counts a label hidden for want of room, and not the copy kept for a screen reader', () => {
     document.body.innerHTML =
       '<button id="narrow">+<span class="label">Create</span></button><span id="short">MAIN-12<span class="visually-hidden">Waiting on MAIN-12</span></span>'
