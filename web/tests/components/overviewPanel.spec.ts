@@ -339,7 +339,7 @@ describe('the overview’s chart', () => {
     expect(column).toEqual(['2 h', '30 min', '0 min'])
   })
 
-  it('stands a single day by the hour, and an hour is not a day to narrow the view to', () => {
+  it('stands a single day by the hour, and each hour of a past day narrows the view as a day does', () => {
     const query = new URLSearchParams({
       from: '2026-11-10',
       to: '2026-11-11',
@@ -361,7 +361,8 @@ describe('the overview’s chart', () => {
     })
     expect(days.text()).toContain('Agent time per hour, by task')
     expect(days.findAll('.period-column')).toHaveLength(24)
-    expect(days.findAll('button.period-column')).toHaveLength(0)
+    // Monday is past at Wednesday's reading, so every one of its hours has begun and acts.
+    expect(days.findAll('button.period-column')).toHaveLength(24)
   })
 })
 

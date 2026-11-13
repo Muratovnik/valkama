@@ -2,9 +2,11 @@
  * The days and moments a view of the Analytics page names, in the browser's own time: what its
  * period is read as, how it is cut into steps, and the days a custom period first stands at.
  */
-import { isMomentSpan, localDay } from '@/shared/api/analyticsAddress.ts'
+import { dayOf, lastDayBefore, named } from '@/pages/analytics/utils/readMoments.ts'
+
+import { isMomentSpan, localDay, momentSpan } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
-import type { UsageStep } from '@/shared/api/analyticsApi.ts'
+import type { Usage, UsageStep } from '@/shared/api/analyticsApi.ts'
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -109,6 +111,28 @@ export function stepOf(view: AnalyticsView): UsageStep {
     return length <= HOUR_SPAN ? 'hour' : 'day'
   }
   return view.period === 'custom' && Boolean(view.from) && view.from === view.to ? 'hour' : 'day'
+}
+
+/** The reader's own period a view is narrowed to: its days, or the moments it runs between. */
+export type OwnPeriod = Pick<AnalyticsView, 'from' | 'period' | 'to'>
+
+/**
+ * The reader's own period over the steps of an answer from `first` to `last`, both included, in
+ * either order: a period pressed, or the periods a frame covers. Steps that are whole days of the
+ * read's calendar give their days, as a day pressed always has; any other steps — hours, minutes,
+ * or days of a span that starts inside one — give the moments from the first one's start to the
+ * last one's end, that end taken up to its minute, so the minute still running stays in. Null
+ * where the answer has no such steps.
+ */
+export function stepsSpan(usage: Usage, first: number, last: number): OwnPeriod | null {
+  const start = usage.series[Math.min(first, last)]
+  const end = usage.series[Math.max(first, last)]
+  if (!start || !end) return null
+  const midnight = named(start.start).toISOString().slice(11, 16) === '00:00'
+  if (usage.period.step === 'day' && midnight)
+    return { period: 'custom', from: dayOf(start.start), to: lastDayBefore(end.end) }
+  const until = Math.ceil(Date.parse(end.end) / MINUTE) * MINUTE
+  return momentSpan(new Date(start.start), new Date(until))
 }
 
 /** A custom period's start and end, as they first stand when it is chosen: this week's days. */

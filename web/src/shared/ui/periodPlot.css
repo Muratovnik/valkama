@@ -185,6 +185,22 @@
   }
 }
 
+/* A frame over the periods it covers (`axisFrame.css`), on the same tracks as the periods, so it
+   starts and ends with their slots and stands over their stacks. */
+.period-spans {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(var(--period-count), minmax(0, 1fr));
+  column-gap: var(--space-half);
+  pointer-events: none;
+
+  & > .axis-frame {
+    grid-row: 1;
+  }
+}
+
 /* Hairlines at the scale's steps, recessive; the line at zero is the baseline the columns
    stand on, one step stronger. */
 .period-grid {

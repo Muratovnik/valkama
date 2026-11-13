@@ -1,0 +1,17 @@
+/*
+ * A frame along a chart's time axis while it is drawn or stretched (`useAxisFrame`), read by
+ * `PeriodColumns` and `StepLine` as their own scoped style; each host places it over what it
+ * covers. An outline in the accent, the colour of what is chosen, with no fill over the marks it
+ * frames, so what lies under it reads as before; a forced palette draws it in its colour of a
+ * selection. It takes no pointer, so the pointer drawing it still reaches the plot.
+ */
+.axis-frame {
+  border-radius: var(--radius-status);
+  outline: var(--space-half) solid var(--color-accent);
+  outline-offset: calc(-1 * var(--space-half));
+  pointer-events: none;
+
+  @media (forced-colors: active) {
+    outline-color: Highlight;
+  }
+}

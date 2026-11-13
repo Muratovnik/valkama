@@ -26,9 +26,11 @@
  * not made: the view stays as its address says, and the words where it was asked say why, so the
  * page never shows a view its link would not give back.
  *
- * A value or a day pressed in the report narrows the view to it and breaks it down by task, as a
- * new place in the history, so Back returns to the view it was pressed in. Work with no task is
- * broken down instead by where it came from (`useLineActions`).
+ * A value or a period pressed in the report — a day, an hour or a minute — narrows the view to it
+ * and breaks it down by task, as a new place in the history, so Back returns to the view it was
+ * pressed in. Work with no task is broken down instead by where it came from (`useLineActions`).
+ * A frame along a chart of periods sets the page's period to the periods it covers, the section
+ * kept, as a new place too.
  *
  * The page opens on its overview (`OverviewPanel`), the period at a glance; a dimension's section
  * is its whole report.
@@ -55,6 +57,7 @@ import { useRefusal } from '@/pages/analytics/composables/useRefusal.ts'
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
+import type { OwnPeriod } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import {
@@ -127,9 +130,13 @@ function narrow(dimension: UsageDimension, value: string | null, label: string, 
   refuse(part, t('analytics.drill.full', { value: label }))
 }
 
-/** The view narrowed to one day, broken down by task. */
-function narrowToDay(day: string, label: string) {
-  if (change({ period: 'custom', from: day, to: day, by: 'work_item' }, 'push')) return
+/**
+ * The view narrowed to one period pressed in a chart of periods — a day, an hour or a minute —
+ * broken down by task; or, given the periods a frame covers, set to them with its section kept.
+ * Either is a new place in the history, so Back returns the view it was set from.
+ */
+function narrowToPeriod(span: OwnPeriod, label: string, framed = false) {
+  if (change(framed ? span : { ...span, by: 'work_item' }, 'push')) return
   refuse('days', t('analytics.drill.full', { value: label }))
 }
 
@@ -397,7 +404,8 @@ const emptyDescription = computed(() => {
               :refused="reportRefused"
               @update:measure="(measure) => change({ measure }, 'replace')"
               @narrow="narrow"
-              @day="narrowToDay"
+              @step="narrowToPeriod"
+              @frame="(span, label) => narrowToPeriod(span, label, true)"
               @open="openFromCard"
               @retry="read.retry"
             />
@@ -419,7 +427,8 @@ const emptyDescription = computed(() => {
               @update:measure="(measure) => change({ measure }, 'replace')"
               @update:across="(across) => change({ across }, 'replace')"
               @narrow="narrow"
-              @day="narrowToDay"
+              @step="narrowToPeriod"
+              @frame="(span, label) => narrowToPeriod(span, label, true)"
               @retry="read.retry"
             />
           </template>
