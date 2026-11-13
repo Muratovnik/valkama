@@ -115,14 +115,19 @@ async function tabTo(page: Page, target: Locator) {
  * The focused control: whether its ring shows, and where it and the ring stand. The one control
  * a table row holds has its ring drawn by the row, inside the row's cells (`rowStates.css`), so
  * there the ring and its box are the row's, as much of it as the table's frame shows: a table
- * wider than its frame scrolls in it, and its row's name stays at the frame's start.
+ * wider than its frame scrolls in it, and its row's name stays at the frame's start. A row of
+ * several controls, a day of the day table, rings the focused one's cell alone, and there the
+ * ring and its box are that cell's.
  */
 const focusRing = (target: Locator) =>
   target.evaluate((element) => {
     const style = getComputedStyle(element)
     const row = element.closest('.row-state.tabular')
-    const cell = row?.firstElementChild
-    const byRow = row && cell && getComputedStyle(cell).boxShadow.includes('inset') ? row : null
+    const cells = row ? [...row.children] : []
+    const ringed = cells.filter((cell) => getComputedStyle(cell).boxShadow.includes('inset'))
+    // The row when every cell draws a part of the ring, the one cell when only it does.
+    const whole = ringed.length > 0 && ringed.length === cells.length
+    const byRow = whole ? row : (ringed[0] ?? null)
     const rowRing = Number.parseFloat(style.getPropertyValue('--size-focus-ring'))
     const drawn = (byRow ?? element).getBoundingClientRect()
     const frame = byRow?.closest('.chart-table-frame')?.getBoundingClientRect()

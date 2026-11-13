@@ -10,7 +10,9 @@
  * chart it does here, a period's from the period's name, sent out as `period`, and a series'
  * from its figures, sent out as `series` or, where the series leads somewhere, as `follow` with
  * the press. A period's name that acts heads its row, so it is named by the period, and what
- * pressing it does is its description.
+ * pressing it does is its description. A row takes the states the page's rows share
+ * (`rowStates.css`) as a row of several controls: its ground under the pointer, and the
+ * keyboard's ring round the cell of the control focused.
  */
 import { computed } from 'vue'
 
@@ -137,6 +139,7 @@ const empty = computed(() => !props.columns.length || !props.series.length)
       <tr
         v-for="row in rows"
         :key="row.one.column.key"
+        class="row-state tabular cells"
         :data-key="row.one.column.key"
       >
         <th
@@ -211,3 +214,5 @@ const empty = computed(() => !props.columns.length || !props.series.length)
 </template>
 
 <style scoped src="@/shared/ui/chartTable.css"></style>
+
+<style scoped src="@/shared/ui/rowStates.css"></style>
