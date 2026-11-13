@@ -624,6 +624,99 @@ class SeatTests(UsageStore):
         )
 
 
+class WindowSpanTests(UsageStore):
+    """What used one account's quota window: the read the quota panel asks for each window.
+
+    It names the window's start and the answer's moment as times at the reader's offset, the
+    account's seat and organization, and `none=seat` for the organization's work no sample
+    places, grouped by the breakdown and the seat. Only the account's own work in the span is
+    its rows; the work of another account, of its organization or not, on the same item, the
+    part of a stretch before the window and another organization's unplaced work are not in the
+    answer at all.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        _, self.task = self.item("Answer a review")
+        _, self.other = self.item("Fix the import")
+        # Each organization's poll names an account from 80 s on: work that ended before that
+        # is on no account anyone knows. The window's organization has a second account, whose
+        # session's own feed puts its work there; the poll's latest says the first for the rest.
+        self.quota_sample(80, SEAT_3, organization="org-w", account="acct-v")
+        self.quota_sample(120, SEAT_1, organization="org-w", account="acct-w")
+        self.quota_sample(100, SEAT_2, organization="org-x", account="acct-x")
+        self.quota_sample(100, SEAT_3, session="s-5")
+        # What that session worked for, outside the window.
+        self.segment("s-5", -2 * DAY, -2 * DAY, seconds=0.0, organization="org-w")
+        # Half before the window's start, half in it.
+        self.segment("s-1", -1800, 1800, item=self.task, cost=1.0, organization="org-w")
+        self.segment("s-1", 600, 1200, item=self.other, cost=0.2, organization="org-w")
+        # Another account of the same organization, and one of another, on the same item.
+        self.segment("s-5", 600, 900, item=self.task, cost=2.0, organization="org-w")
+        self.segment("s-2", 600, 1200, item=self.task, cost=5.0, organization="org-x")
+        # The window's organization, and another, before any sample placed them.
+        self.segment("s-3", 10, 60, cost=0.03, organization="org-w")
+        self.segment("s-4", 10, 60, cost=0.07, organization="org-y")
+        # After the moment the window is read to.
+        self.segment("s-1", 2 * HOUR + 60, 2 * HOUR + 120, item=self.other, organization="org-w")
+
+    def window_read(self, **filters: str) -> dict:
+        return self.read(
+            **{
+                "from": "2030-03-04T03:00:00+03:00",
+                "to": "2030-03-04T05:00:00+03:00",
+                "utc_offset": "180",
+                "group_by": "work_item,seat",
+                **filters,
+            }
+        )
+
+    def lines(self, read: dict) -> list[tuple[str | None, str | None, float, float | None]]:
+        return [
+            (
+                row["group"]["work_item"]["id"],
+                row["group"]["seat"]["id"],
+                row["agent_seconds"],
+                row["estimated_api_cost_usd"],
+            )
+            for row in read["rows"]
+        ]
+
+    def test_a_seat_over_a_window_span_is_that_account_and_its_organizations_unplaced_work(
+        self,
+    ) -> None:
+        read = self.window_read(seat="org-w/acct-w", account="org-w", none="seat")
+        self.assertEqual(
+            {"from": "2030-03-04T03:00:00+03:00", "to": "2030-03-04T05:00:00+03:00"},
+            {name: read["period"][name] for name in ("from", "to")},
+        )
+        self.assertEqual(
+            [
+                (self.task, "org-w/acct-w", 1800.0, 0.5),
+                (self.other, "org-w/acct-w", 600.0, 0.2),
+                (None, None, 50.0, 0.03),
+            ],
+            self.lines(read),
+        )
+        self.assertTrue(read["rows"][2]["group"]["seat"]["unknown"])
+        self.assertEqual(2450.0, read["total"]["agent_seconds"])
+
+    def test_the_seat_alone_is_that_accounts_work_and_no_other_accounts(self) -> None:
+        own = self.window_read(seat="org-w/acct-w")
+        self.assertEqual(
+            [(self.task, "org-w/acct-w", 1800.0, 0.5), (self.other, "org-w/acct-w", 600.0, 0.2)],
+            self.lines(own),
+        )
+        self.assertEqual(
+            [(self.task, "org-w/acct-v", 300.0, 2.0)],
+            self.lines(self.window_read(seat="org-w/acct-v")),
+        )
+        self.assertEqual(
+            [(self.task, "org-x/acct-x", 600.0, 5.0)],
+            self.lines(self.window_read(seat="org-x/acct-x")),
+        )
+
+
 class RefusalTests(UsageStore):
     def test_a_bad_parameter_is_refused_as_the_neighbouring_reads_refuse(self) -> None:
         good = {"from": day(0), "to": day(1)}
