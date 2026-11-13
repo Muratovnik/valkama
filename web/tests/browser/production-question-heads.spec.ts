@@ -46,6 +46,9 @@ async function openList(page: Page, entries: InputRequestEntry[], width: number)
   await page.getByRole('button', { name: LIST }).click()
   const dialog = page.getByRole('dialog', { name: LIST })
   await expect(dialog).toHaveCSS('transform', 'none')
+  // The dialog stands before the list's code has arrived. The list brings its blocks and the
+  // way through them in the head, and the body is measured once both are drawn.
+  await expect(dialog.getByRole('group', { name: 'Question navigation' })).toBeVisible()
   const scroller = dialog.locator('.dialog-frame-body')
   return { ...opened, dialog, scroller }
 }

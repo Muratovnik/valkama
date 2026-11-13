@@ -13,7 +13,7 @@
 const { app, BrowserWindow, Menu, clipboard, ipcMain, shell } = require('electron')
 const { spawn } = require('node:child_process')
 const { createHash } = require('node:crypto')
-const { readFileSync, statSync, writeFileSync } = require('node:fs')
+const { readFileSync, statSync } = require('node:fs')
 const { request: httpRequest } = require('node:http')
 const os = require('node:os')
 const path = require('node:path')
@@ -37,6 +37,7 @@ const { claudeLiveness } = require('./live_sessions')
 const { discoverSupportedOpeners } = require('./opener_catalog')
 const { fetchOpenPlan } = require('./open_plan_request')
 const { establishServer, verifyStartedOwnership } = require('./server_startup')
+const { readPreferences, rememberPreferences } = require('./preferences')
 const { openSessionRequest } = require('./session_opener')
 const { createStartupLog } = require('./startup_log')
 const { resolveLocale, startupAction, startupPageUrl } = require('./startup_page')
@@ -321,32 +322,28 @@ function startupDeps(launcher) {
   }
 }
 
-// The workspace remembers its language in the page's own storage, which this
-// window cannot read before the page exists. The language the page last used
-// is kept here instead, so the starting page speaks it from the first frame.
+// The starting page speaks the workspace's language and draws its rail where the
+// workspace will from the first frame, from what the page last reported
+// (`preferences.js`).
 function preferencesFile() {
   return path.join(app.getPath('userData'), 'valkama-desktop.json')
 }
 
 function startupLocale() {
-  let stored = null
-  try {
-    stored = parseJsonObject(readFileSync(preferencesFile(), 'utf8'))?.locale ?? null
-  } catch {
-    // First start, or unreadable: the system languages decide.
-  }
-  return resolveLocale(stored, app.getPreferredSystemLanguages())
+  return resolveLocale(
+    readPreferences(preferencesFile()).locale ?? null,
+    app.getPreferredSystemLanguages(),
+  )
 }
 
-function rememberLocale(webContents) {
-  webContents
-    .executeJavaScript("localStorage.getItem('valkama-locale')", true)
-    .then((locale) => {
-      if (locale !== 'en' && locale !== 'ru') return
-      writeFileSync(preferencesFile(), `${JSON.stringify({ locale })}\n`, 'utf8')
-    })
-    .catch(() => {})
-}
+ipcMain.on('valkama:preferences', (event, reported) => {
+  if (!isValkamaSender(event)) return
+  try {
+    rememberPreferences(preferencesFile(), reported)
+  } catch {
+    // Unwritable: the next start draws what it remembered before, or the defaults.
+  }
+})
 
 /**
  * Offer what a right click can do where it landed, in the language the page speaks.
@@ -371,7 +368,12 @@ function showStartupPage(state) {
   showingValkama = false
   offeredActions = state.phase === 'stale' ? ['restart'] : state.phase === 'failed' ? ['retry'] : []
   const shown = Date.now()
-  const pageUrl = startupPageUrl({ ...state, locale: startupLocale(), port: PORT })
+  const pageUrl = startupPageUrl({
+    ...state,
+    locale: startupLocale(),
+    navWidth: readPreferences(preferencesFile()).navWidth,
+    port: PORT,
+  })
   void mainWindow.loadURL(pageUrl).then(
     () => log('startup-page-shown', { phase: state.phase, ms: Date.now() - shown }),
     () => {}, // replaced before it finished loading: nothing was shown
@@ -512,9 +514,6 @@ function createWindow() {
   })
   mainWindow.webContents.on('render-process-gone', () => {
     pageListens = false
-  })
-  mainWindow.webContents.on('did-finish-load', () => {
-    if (mainWindow?.webContents.getURL().startsWith(URL)) rememberLocale(mainWindow.webContents)
   })
 
   mainWindow.on('closed', () => {

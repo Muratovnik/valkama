@@ -169,7 +169,8 @@ describe('related task picker', () => {
     expect(signal.aborted).toBe(true)
     finishOld([candidate(8)])
     await flushPromises()
-    // The two searches were one wait of half a second, said at 300 ms: it stays its minimum.
+    // The two searches were one wait of about half a second. The mark is said at the delay,
+    // which the second search reaches, so it is still held for its minimum when the stale answer lands.
     expect(wrapper.get('.picker-wait[role="status"]').text()).toBe(
       messages.en.platform.states.loading,
     )

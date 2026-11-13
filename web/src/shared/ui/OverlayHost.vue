@@ -20,7 +20,7 @@ import {
 import type { OverlayOwnership } from '@/shared/ui/overlayStack.ts'
 import { isStrayPress, outOfReach } from '@/shared/ui/strayPress.ts'
 import { useDrawerWidth } from '@/shared/ui/useDrawerWidth.ts'
-import { useOverlayFocus } from '@/shared/ui/useOverlayFocus.ts'
+import { provideContentReplaced, useOverlayFocus } from '@/shared/ui/useOverlayFocus.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -129,6 +129,7 @@ const { focusSurface, roundToFirst, roundToLast, stopWaiting, trapFocus } = useO
   isDrawer: () => props.variant === 'drawer',
   surface: () => surface.value,
 })
+provideContentReplaced(() => void focusSurface())
 
 // 4px under the window's top edge, above the first chrome label at every width
 // (9px at 390), so the edge crosses no label; the dialog's gutter above is cancelled,

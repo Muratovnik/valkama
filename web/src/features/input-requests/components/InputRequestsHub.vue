@@ -2,12 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import RequestList from '@/features/input-requests/components/RequestList.vue'
 import RequestNavigator from '@/features/input-requests/components/RequestNavigator.vue'
 import { useInputRequests } from '@/features/input-requests/composables/useInputRequests.ts'
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
+import { requestListView } from '@/features/input-requests/utils/requestListView.ts'
 import { hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
@@ -26,12 +26,14 @@ const emit = defineEmits<{
   'select': [target: PlanningTarget]
 }>()
 const { t } = useI18n()
+const RequestList = requestListView.component
 const drafts = ref<Record<string, RequestDraft>>({})
-const list = ref<InstanceType<typeof RequestList> | null>(null)
+/** The list on show; until its code is resident it holds nothing a reader is in. */
+const list = ref<Partial<InstanceType<typeof RequestList>> | null>(null)
 /** A question answered elsewhere stays while it holds something typed, chosen or focused here. */
 const holding = (entry: InputRequestEntry) =>
   holdsDraft(entry.request, drafts.value[requestIdentity(entry)]) ||
-  (list.value?.holdsFocus(entry) ?? false)
+  (list.value?.holdsFocus?.(entry) ?? false)
 /**
  * A question that stopped waiting is put aside under «Answered» at the first read after which
  * it holds nothing typed or chosen, no form of a change stands open in it, and neither the
@@ -40,7 +42,7 @@ const holding = (entry: InputRequestEntry) =>
 function settles(entry: InputRequestEntry) {
   const draft = drafts.value[requestIdentity(entry)]
   const kept = Boolean(draft && (draft.changing !== null || hasDraft(draft)))
-  return !kept && !(list.value?.holdsReader(entry) ?? false)
+  return !kept && !(list.value?.holdsReader?.(entry) ?? false)
 }
 const {
   result,

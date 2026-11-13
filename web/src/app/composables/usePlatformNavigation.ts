@@ -236,7 +236,7 @@ export function usePlatformNavigation(
    * unmounted an open item before the leave guard could ask about its draft;
    * a move the guard refused, or a newer one overtook, leaves it as it was.
    */
-  async function navigate(next: PlatformRoute, mode: 'push' | 'replace') {
+  async function navigate(next: PlatformRoute, mode: 'push' | 'replace' = 'push') {
     const href = serializePlatformRoute(next)
     const failure = await (mode === 'push' ? router.push(href) : router.replace(href))
     if (
@@ -375,5 +375,8 @@ export function usePlatformNavigation(
     updateModuleState,
     workItemLink,
     writeRoute,
+    /** `writeRoute` for a caller that waits: it settles once the route has moved, or the
+     *  router has refused the move. */
+    moveRoute: navigate,
   }
 }

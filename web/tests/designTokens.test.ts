@@ -7,6 +7,7 @@ import { test } from 'vitest'
 // @ts-expect-error - the generator is a plain script, and the tokens it reads
 // are the same ones this file asserts relationships about.
 import { readTokens } from '../scripts/sync-tokens.mjs'
+import { over } from './paletteColors.ts'
 
 /**
  * The palette's relationships, which no generator can check.
@@ -457,17 +458,6 @@ test('a control fill stands above every static ground, and its states run upward
     'disabled must recede',
   )
 })
-
-/** A translucent token laid over an opaque ground, mixed the way the screen mixes them. */
-function over(top: string, ground: string): string {
-  const lift = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*(\d+)%\s*\)$/u.exec(top)
-  assert.ok(lift, `${top} is not an rgb() with a percentage alpha`)
-  const alpha = Number(lift[4]) / 100
-  const mixed = [0, 1, 2].map((index) =>
-    Math.round(Number(lift[index + 1]) * alpha + channel(ground, index) * (1 - alpha)),
-  )
-  return `#${mixed.map((value) => value.toString(16).padStart(2, '0')).join('')}`
-}
 
 test('a label chip stands above every ground it lies on, and lifts again when pointed at', () => {
   // A chip lies on more grounds than a control: a card, a hovered card, a list

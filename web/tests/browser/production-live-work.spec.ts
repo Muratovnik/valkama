@@ -28,16 +28,24 @@ function frameWithCard() {
 
 async function shown(page: Page, streams: Awaited<ReturnType<typeof installLiveStreams>>) {
   await expect(page.locator('.app-nav-shell')).toBeVisible()
-  await expect.poll(() => streams.open()).toHaveLength(1)
+  // The frame first: a space's stream is sent it as it opens, and the stream the
+  // shell started with closes then.
   await streams.live(busyFrame())
+  await expect.poll(() => streams.open()).toHaveLength(1)
   await expect(liveRow(page, 'MAIN-12')).toBeVisible()
 }
 
+/** The views of the streams a list of addresses names, in order. */
+const views = (addresses: string[]) =>
+  addresses.map((address) => new URL(address, 'http://127.0.0.1').searchParams.get('view'))
+
 test.describe('one stream for the tab', () => {
-  for (const [where, address, view] of [
-    ['a space page', firstProject(), 'planning'],
-    ['Settings', SETTINGS, 'live'],
-    ['the portfolio', PORTFOLIO, 'live'],
+  // The shell opens `view=live` as it starts. A space page then opens its own stream, and the
+  // start's closes once that one has delivered; any other page keeps the start's as its own.
+  for (const [where, address, made] of [
+    ['a space page', firstProject(), ['live', 'planning']],
+    ['Settings', SETTINGS, ['live']],
+    ['the portfolio', PORTFOLIO, ['live']],
   ] as const)
     test(`holds exactly one EventSource on ${where}, and the list reads from it`, async ({
       page,
@@ -45,11 +53,13 @@ test.describe('one stream for the tab', () => {
       await installBackend(page)
       const streams = await installLiveStreams(page)
       await page.goto(address)
-      await shown(page, streams)
-      const [open] = await streams.open()
-      expect(new URL(open, 'http://127.0.0.1').searchParams.get('view')).toBe(view)
-      // Not one opened and closed again while the shell made up its mind.
-      expect(await streams.made()).toEqual([open])
+      await expect(page.locator('.app-nav-shell')).toBeVisible()
+      await expect.poll(async () => views(await streams.made())).toEqual(made)
+      await streams.live(busyFrame())
+      await expect(liveRow(page, 'MAIN-12')).toBeVisible()
+      await expect.poll(async () => views(await streams.open())).toEqual([made.at(-1)])
+      // Not one more opened and closed again while the shell made up its mind.
+      expect(views(await streams.made())).toEqual(made)
     })
 
   test('hands the frame from the space stream to the live view and back with one open', async ({

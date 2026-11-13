@@ -1707,6 +1707,9 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
             },
             set(schema["properties"]),
         )
+        ticks = schema["properties"]["checklist_ticks"]["items"]["properties"]
+        self.assertEqual({"item_id", "done", "force"}, set(ticks))
+        self.assertEqual("boolean", ticks["force"]["type"])
         for single in (
             "claim_work_item",
             "update_work_item",

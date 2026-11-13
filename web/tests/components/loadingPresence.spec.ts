@@ -68,6 +68,12 @@ afterEach(() => {
 })
 
 describe('a wait is shown only once it has lasted, and then long enough to be read', () => {
+  it('is set at the design rule: nothing for 500 ms, then at least 200 ms shown', () => {
+    // The behaviour below follows whatever these hold; this pins the numbers DESIGN.md states.
+    expect(LOADING_DELAY_MS).toBe(500)
+    expect(LOADING_MIN_SHOWN_MS).toBe(200)
+  })
+
   it('stands busy with an empty status region from the start, and says its word after the delay', async () => {
     const panel = mountPanel(uiLoading())
     const busy = panel.get('[aria-busy="true"]')

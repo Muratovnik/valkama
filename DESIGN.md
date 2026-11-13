@@ -588,15 +588,47 @@ and only fades the end of a strip that scrolls on past it.
   operator's, not the data's, and a switch of space that took them away for the length of
   a read read as the view being lost. What the bar counts it says only once it has read it.
 - A wait is said only once it has lasted, and then long enough to be read: nothing for
-  the first 300 ms, and once shown at least 400 ms, with whatever arrives meanwhile held
+  the first 500 ms, and once shown at least 200 ms, with whatever arrives meanwhile held
   back until then. `web/src/shared/ui/loadingPresence.ts` holds both numbers and the rule,
   and every read wait goes through it: `PlatformStatePanel`, the downloaded views, and a
   wait said in a line of its own — a section of a card, a dialog's note, a search, whose
   delay counts from the keystroke. A screen whose own branch takes the panel away keeps
   the branch while the rule says the wait is held. While it is not shown, the panel keeps
   its box and its busy mark and paints nothing, and a line keeps a line's height, so the
-  place does not collapse and grow back. A switch of space on a two-megabyte board reads
-  in about 170–200 ms, which is why the delay is not shorter.
+  place does not collapse and grow back.
+  The delay is 500 ms because that is the default of the spin-delay library and of
+  Turbo's progress bar, and because Primer advises showing no indicator for a wait under
+  a second. The minimum of 200 ms is the spin-delay default too; it keeps a read that only
+  just outlasts the delay from flashing for a few dozen milliseconds. The earlier 300 ms
+  delay was too short for a cold first entry: a reply that arrived just after 300 ms
+  lengthened the wait by about 370 ms, in 2 of 10 cold board entries and 3 of 10 list
+  entries. A switch of space on a two-megabyte board reads in about 170–200 ms, which
+  the 500 ms delay also covers with room to spare.
+- Before the application mounts, `web/index.html` draws the shell's chrome and nothing
+  else: the rail with its mark and the outline of its first entries, the context bar and
+  the empty workspace panel, each where the shell draws it, so the shell takes its place
+  without a jump and a slow bundle never leaves the bare ground on screen. The desktop
+  window's starting page draws the same chrome while it finds the server. Neither ever
+  draws a row of content, a count or a word of what the workspace will show: loading the
+  code is not a read, and the board's own read wait is the rule above, unchanged.
+  `web/tests/startupSkeleton.test.ts` holds the two pages to one set of rules, and
+  `production-first-launch.spec.ts` holds each part to the shell's box within half a pixel.
+- The first screen downloads what the shell and the board draw, and nothing else. The
+  card, the list of questions waiting for an answer, the graph, Settings and Analytics
+  each download behind `web/src/shared/ui/lazyView.ts`: the card once the board stands and
+  the page is idle, because opening one is the board's first action; the questions when
+  their dialog first opens, beside the read that opening starts. One opened before its
+  code has arrived says so with the panel's wait in the place it will stand — the drawer,
+  the dialog, the stage — after the same delay, and is never an empty panel. A view that
+  draws its own frame around its own waits hands that frame to the boundary (`frame`), and
+  the download's wait and failure stand in it: the card's stand in the headless frame it
+  draws while its record is read (`InspectorWaitFrame`), with its bar and Close from the
+  first frame, so the dots stand in the card's column and do not move when the card's own
+  wait takes over. On the drawer's bare ground they stood a frame's inset, 24 px, to the
+  left of that column. Only what is
+  drawn inside such a place goes behind that boundary: a component that stands closed
+  beside the shell, such as a dialog with its frame, would draw that wait in the shell's
+  flow. `production-lazy.spec.ts` holds each of them.
 - A read wait has one word, the panel's: «Загрузка», "Loading". The surfaces that each
   said what they were reading — «Читаем цепочку…», «Ищу коммит…», «Поиск…» — gave one
   state five names. «Строим граф…» is not a read but the layout of what was read: it keeps
@@ -747,6 +779,19 @@ was away; a card read that never reached the server names the connection the
 same way, not a record that could not be loaded. The context bar keeps the
 selected Planning space or operating scope and global activity controls in
 fixed, predictable positions.
+
+The chrome says only what it has read. Until the module list names the module, the
+context bar's title stands empty on its line; until the projects are read and the
+place a launch comes back to is restored, the scope selector keeps its box and paints
+nothing, and the rail marks no entry as current. At launch it once said the module's id,
+then «Global» and «Work» as current, and then wherever the app actually came back to.
+The groups under the list of work going on now are drawn once the list has its first
+frame, or once the connection is lost: they used to stand under «Work» at once and drop
+by the list's height a second later. They keep their place in the flow while they wait,
+so no room is held for rows that may not come; a folded list and a rail of icons hold
+nothing back. The wait is short because the list's frame does not wait for the space:
+the shell opens a stream of its own for the frame as it starts, and closes it once the
+space's stream has delivered its own, so a tab holds two streams only for that moment.
 
 The rail's width is the reader's. Its right edge is a window splitter, the same edge a
 drawer is resized by: dragged, or stepped 16px by the arrow keys, Home and End taking it to
@@ -1468,9 +1513,41 @@ wide as all the rows need wherever it scrolls; a sort and a filter act on every
 row; ↑/↓, Home/End and Page Up/Page Down move by a row's place in the whole list
 and bring the row into view; the Tab stop and the row focus is in stay in the
 page wherever the list scrolls; the table tells a reader how many rows it has
-and each row where it stands; and a printed list prints every row. The cost, for
-now: on a list that long, find in page and a screen reader's browse mode reach
-only the rows in the page.
+and each row where it stands; a printed list prints every row; and Ctrl+F finds
+in every row, as the next rule says. The cost, for now: on a list that long, a
+screen reader's browse mode reaches only the rows in the page.
+The list has a find of its own, because the browser's reached only the rows in
+the page. While the list is what the page shows, with no card, dialog or finder
+over it and no menu, choice list or other popup open, Ctrl+F (⌘F) opens the
+list's bar in place of the browser's; over any of those and on every other screen
+Ctrl+F stays the browser's. Ctrl+F is the key that types F, wherever the layout
+puts it, so on Dvorak the key in QWERTY's F place is Ctrl+U and stays the
+browser's; only where that key types no Latin letter, as «а» on a Russian layout,
+is it read by its place. The bar floats over the list's top end corner under the
+sticky head and clear of the scroll bar, so the sorts stay in reach and opening
+it moves nothing; it is a named search landmark,
+and its count, «3 of 12» or «No matches», is a polite status that describes the
+field and is as wide as its widest form, so a step moves no button. The find
+reads the words each row prints, at the list's width and in its language, and
+nothing a reader does not see: a priority folded to its glyph is not found by its
+word. Case does not count, nor white space beyond one space; «ё» is «е», a Latin
+letter is itself without its marks and a stress over a Cyrillic vowel does not
+count, but a letter a mark makes stays itself, «й» apart from «и»; no match spans
+two cells. Enter and Shift+Enter, F3 and Shift+F3 walk the matches in the list's
+order, round past either end, and a match out of sight comes to the middle of the
+room under the head, not to its edge: the match itself, on its own line of a row,
+whether the list draws its window or every row, unless the list's end stops the
+scroll first. The drawn matches are marked through the CSS Custom Highlight API:
+every match keeps its ink on a quarter of the find's yellow,
+the current one is the whole yellow with dark ink, and a forced palette draws them
+in Mark and Highlight. They are marks of the screen: a printed list carries neither
+them nor the bar. The count and the current match follow the stream, a filter
+and an order: the current match stays on its row while the row still matches, and
+only the reader's own step moves the list. Escape closes the bar and gives focus
+back to where it was, without scrolling the list back to it, or to the list's Tab
+stop when that element has gone. While the bar is open the find reads every row's
+words once for its term, and again only when the rows, the language or a width
+that changes what a row prints change; a key typed into the term only matches.
 A list row, a graph node and a search result print a work item's facets only
 through the facet registry, and print the exception, not the default. A list
 row leads its reference with the kind (but a task) in one fixed glyph slot, so

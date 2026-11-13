@@ -10,6 +10,77 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Changed
+
+- **The first launch opens on the shell itself.** The desktop window used to show a small
+  line of text on a black ground and then cut to the whole shell. It now draws the shell's
+  chrome from its first frame — the rail with the mark and its first entries, the context
+  bar and the empty workspace panel — and `index.html` draws the same chrome until the
+  application mounts, each part where the shell draws it, so the handoff moves nothing and
+  a slow bundle no longer shows a bare ground, in the window or in a browser. What the
+  window waits for is said in the panel once a start lasts a second, and with reduced
+  motion nothing in it moves. The window remembers the rail's width beside the language
+  whenever the reader changes either and as the window closes, so the next start draws
+  the rail where it was left; a window that has never heard a width draws the default.
+- **A loading mark appears after half a second and stays at least 200 ms.** A read that
+  answers within half a second now shows no «Loading» at all, where it used to flash the
+  mark after 300 ms. A mark that has appeared stays on screen for at least 200 ms, down
+  from 400 ms.
+- **The first screen downloads a sixth less.** The card and the list of questions waiting
+  for an answer no longer ship with the board: the code the first screen loads before it
+  can draw falls from 443 KiB to 367 KiB compressed. The card downloads once the board
+  stands, so opening one still waits for nothing; the questions download as their dialog
+  opens, beside the read it starts. Opened before its code has arrived, either says
+  «Loading» in its drawer or dialog after the usual delay rather than standing empty; the
+  card's drawer shows its bar with Close at once, and its «Loading» stands where the card's
+  own will, so nothing moves when the card arrives.
+
+### Added
+
+- **The work list finds in every row.** A list of 300 rows or more keeps only the rows
+  about its window in the page, so the browser's find reached those and missed the rest.
+  While the list is what the page shows, Ctrl+F (⌘F) now opens the list's own find bar
+  over its top corner, under the sticky head: it counts a term in the words every row
+  prints, at the list's width and in its language, and says «3 of 12» or «No matches».
+  Enter and Shift+Enter, or F3 and Shift+F3, walk the matches in the list's order and
+  bring each match to the middle of the list under its head; the drawn matches are
+  marked, the current one apart, and a printed list carries neither the marks nor the
+  bar. Case does not count, «ё» finds «е», «cafe» finds «café» and a stress over a
+  Cyrillic vowel is ignored, while «й» stays apart from «и». The current match stays on
+  its row while the stream, a filter or an order changes the list, and Escape closes the
+  bar and gives focus back. With a card, a dialog, a menu or a choice list open, and on
+  every other screen, Ctrl+F is the browser's as before. Ctrl+F is the key that types F
+  on the keyboard's layout, and on a layout with no Latin letter there, such as
+  Russian, the key in F's place. Typing into the term matches the rows' words without
+  reading them again, and resizing the list reads them again only where a width
+  changes what a row prints.
+
+### Fixed
+
+- **The chrome no longer shows interim values at launch.** Until the module list was read
+  the context bar said the module's id (`planning`), and until the remembered place was
+  restored it said «Global» and marked «Work» as current, whatever the app then came back
+  to. The title and the scope selector now keep their place empty until they can say the
+  final value, and the rail marks no entry until the route is known. The groups under the
+  list of work going on now are drawn once its first frame has come, so «Analytics» no
+  longer drops by the list's height a second after launch. That frame no longer waits for
+  the space's read: the shell opens `GET /api/events?view=live` as it starts and closes it
+  once the space's stream has delivered its own frame, so on a large space the groups no
+  longer stay hidden for the seconds its read takes.
+- **A batch's checklist tick can complete a step another session holds.** Each
+  `checklist_ticks` entry of `apply_work_item_changes` takes `force`, as
+  `tick_work_item_checklist_item` does, so `force: true` completes a step another holder
+  claimed in the same call and records the completion as the single tick does. Without
+  `force` the refusal stays, names the step, and the call writes nothing.
+- **A forced write that carries a refusal is recorded as an `overridden` event.** A
+  forced checklist tick, step claim or takeover, a `set_work_item_checklist` that discards
+  a claimed or completed step or completes one another session holds, and a
+  `claim_work_item` that takes over or releases another session's claim now write the
+  `overridden` event a forced transition has always written, naming the guard, and the
+  answer carries `overridden`. A batch names the overrides of every step in it, where it
+  named only the last one before. A forced call that refused nothing records nothing.
+  `force` permits what it permitted before.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed

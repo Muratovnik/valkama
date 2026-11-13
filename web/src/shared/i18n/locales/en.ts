@@ -12,6 +12,7 @@ import { doctorQuotaMessages } from '@/shared/i18n/doctorQuotaMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { graphFrameMessages } from '@/shared/i18n/graphFrameMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
+import { listFindMessages } from '@/shared/i18n/listFindMessages.ts'
 import { liveWorkMessages } from '@/shared/i18n/liveWorkMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 import { mentionMessages } from '@/shared/i18n/mentionMessages.ts'
@@ -1017,6 +1018,7 @@ export const en = {
       sortOther: 'Order',
       sortAscending: 'Sort ascending',
       sortDescending: 'Sort descending',
+      ...listFindMessages.en,
     },
   },
 

@@ -893,7 +893,7 @@ TOOLS = [
                 "description": "Steps to complete, or to reopen with done=false.",
                 "items": {
                     "type": "object",
-                    "properties": {"item_id": _STR, "done": _BOOL},
+                    "properties": {"item_id": _STR, "done": _BOOL, "force": _FORCE},
                     "required": ["item_id"],
                 },
             },

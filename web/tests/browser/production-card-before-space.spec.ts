@@ -3,8 +3,8 @@
  *
  * The space is every item it holds and reads in a fraction of a second on a big store, the
  * card in a tenth of that, and the drawer used to wait for the space before it even asked for
- * the card. Here the space answers two seconds late: the card's title and its description are
- * on screen before that, and what the card takes from the space — the parent's reference and
+ * the card. Here the space answers only once the test lets it, after the card's title and its
+ * description are on screen, and what the card takes from the space — the parent's reference and
  * the states it may move to — comes in afterwards into places already held for it, so nothing
  * on the card moves or blinks when the space answers.
  */
@@ -17,8 +17,6 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { blockedWorkItem, projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
-
-const SPACE_LATE_MS = 2000
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
@@ -36,11 +34,19 @@ const inEpic = (model: Record<string, unknown>) => ({
   ),
 })
 
-/** The space's read, held for two seconds; `answered` is set as it goes on to its answer. */
+/**
+ * The space's read, held until `release`; `answered` is set as it goes on to its answer.
+ *
+ * Held for a fixed two seconds, it answered before the watch began whenever the card's own
+ * code took that long to arrive, and the parent's row was there in the first frame watched.
+ */
 async function lateSpace(page: Page) {
-  const late = { answered: false }
+  const late = { answered: false, release: () => {} }
+  const held = new Promise<void>((done) => {
+    late.release = done
+  })
   await page.route('**/api/planning?*', async (route) => {
-    await new Promise((done) => setTimeout(done, SPACE_LATE_MS))
+    await held
     late.answered = true
     await route.fallback()
   })
@@ -57,34 +63,39 @@ interface Sample {
   title: boolean
 }
 
-/** Watch the drawer on every frame from now on; `stop` hands back what each frame showed. */
+/**
+ * Watch the drawer on every frame from now on; `stop` hands back what each frame showed.
+ * It returns once the first frame is recorded, so what is let in after it is seen arriving.
+ */
 async function watchCard(page: Page) {
   await page.evaluate(
-    ({ title, description }) => {
-      const samples: Sample[] = []
-      const record = () => {
-        const drawer = document.querySelector('.drawer')
-        const copy = drawer?.querySelector('.description-copy')
-        const facts = drawer?.querySelector('.card-facts-block')
-        const parent = [...(drawer?.querySelectorAll('.card-row') ?? [])].find((row) =>
-          row.querySelector('.card-row-label')?.textContent?.trim().startsWith('Parent'),
-        )
-        samples.push({
-          title: [...(drawer?.querySelectorAll('h1, h2') ?? [])].some(
-            (heading) => heading.textContent?.trim() === title,
-          ),
-          description: copy?.textContent?.includes(description) ?? false,
-          stateMenu: Boolean(drawer?.querySelector('.card-facts .choice-select.card-state')),
-          parentRow: parent !== undefined,
-          parentLink: Boolean(parent?.querySelector('.card-parent')),
-          factsBottom: facts?.getBoundingClientRect().bottom ?? Number.NaN,
-          descriptionTop: copy?.getBoundingClientRect().top ?? Number.NaN,
-        })
-        if (!(window as { stopCardWatch?: boolean }).stopCardWatch) requestAnimationFrame(record)
-      }
-      Object.assign(window, { cardSamples: samples })
-      requestAnimationFrame(record)
-    },
+    ({ title, description }) =>
+      new Promise<void>((started) => {
+        const samples: Sample[] = []
+        const record = () => {
+          const drawer = document.querySelector('.drawer')
+          const copy = drawer?.querySelector('.description-copy')
+          const facts = drawer?.querySelector('.card-facts-block')
+          const parent = [...(drawer?.querySelectorAll('.card-row') ?? [])].find((row) =>
+            row.querySelector('.card-row-label')?.textContent?.trim().startsWith('Parent'),
+          )
+          samples.push({
+            title: [...(drawer?.querySelectorAll('h1, h2') ?? [])].some(
+              (heading) => heading.textContent?.trim() === title,
+            ),
+            description: copy?.textContent?.includes(description) ?? false,
+            stateMenu: Boolean(drawer?.querySelector('.card-facts .choice-select.card-state')),
+            parentRow: parent !== undefined,
+            parentLink: Boolean(parent?.querySelector('.card-parent')),
+            factsBottom: facts?.getBoundingClientRect().bottom ?? Number.NaN,
+            descriptionTop: copy?.getBoundingClientRect().top ?? Number.NaN,
+          })
+          started()
+          if (!(window as { stopCardWatch?: boolean }).stopCardWatch) requestAnimationFrame(record)
+        }
+        Object.assign(window, { cardSamples: samples })
+        requestAnimationFrame(record)
+      }),
     { title: workItem.title, description: workItem.description },
   )
   return async () => {
@@ -113,6 +124,7 @@ for (const width of [1280, 390])
     // What the space brings has its place already: the parent's row, and the state as a menu.
     await expect(drawer).toHaveCSS('transform', 'none')
     const stop = await watchCard(page)
+    late.release()
     await expect(drawer.locator('.card-parent')).toContainText(blockedWorkItem.reference)
     expect(late.answered).toBe(true)
     // A few frames after the space has been drawn, so a late move would be seen.
@@ -148,6 +160,7 @@ test('a card opened by its address reads its record once, the space beside it', 
   })
   await page.goto(CARD)
   await expect(page.locator('.drawer').getByRole('heading', { name: workItem.title })).toBeVisible()
+  late.release()
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
   await page.evaluate(
     () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),

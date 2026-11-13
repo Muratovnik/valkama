@@ -43,7 +43,9 @@ async function restoreInOrder(first: 'context' | 'modules'): Promise<PlatformRou
     modules: ref(moduleRegistrations().map((item) => item.manifest)),
     modulesSettled,
     route: ref({ module_id: 'planning', scope: { kind: 'global' } }),
-    writeRoute: (route) => written.push(route),
+    writeRoute: (route) => {
+      written.push(route)
+    },
   })
   const settleContext = async () => {
     contextReady.value = preferred
@@ -99,6 +101,46 @@ test('an address naming no listed section is not remembered as the place to come
   } finally {
     vi.useRealTimers()
   }
+})
+
+test('a clean entry stays pending until the restored route has been written', async () => {
+  const pending = ref(true)
+  const modulesSettled = ref(false)
+  const contextState: EntryInputs['contextState'] = ref({
+    interface_version: 'valkama-ui-state',
+    status: 'ready',
+    payload: preferred,
+  })
+  let moved: (() => void) | undefined
+  const written: PlatformRoute[] = []
+  usePlatformEntryRestore({
+    blocked: ref(true),
+    contextReady: ref(preferred),
+    contextState,
+    defaultRoute: { module_id: 'planning', scope: { kind: 'global' } },
+    entryRestorePending: pending,
+    modules: ref(moduleRegistrations().map((item) => item.manifest)),
+    modulesSettled,
+    route: ref({ module_id: 'planning', scope: { kind: 'global' } }),
+    writeRoute: (route) => {
+      written.push(route)
+      return new Promise<void>((done) => {
+        moved = done
+      })
+    },
+  })
+  modulesSettled.value = true
+  await nextTick()
+  // The router has not moved yet: the entry still stands on the default route.
+  assert.deepEqual(written, [preferred.ui_prefs])
+  assert.equal(pending.value, true)
+  // A read that lands meanwhile does not write the route a second time.
+  contextState.value = { ...contextState.value }
+  await nextTick()
+  assert.equal(written.length, 1)
+  moved?.()
+  await new Promise((done) => setTimeout(done, 0))
+  assert.equal(pending.value, false)
 })
 
 test('clean entry waits when context resolves before modules', async () => {

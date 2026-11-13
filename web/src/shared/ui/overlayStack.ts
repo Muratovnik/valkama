@@ -117,6 +117,26 @@ export function ownsOverlay(lease: OverlayOwnership | null): boolean {
 /** The surface on top now, or null with none open: it changes whenever one opens or closes. */
 export const overlayTop = () => owners.value.at(-1)?.id ?? null
 
+/**
+ * A popup open on the page: the control that owns it says it is expanded, as WAI-ARIA has
+ * a combobox and every control with a popup say (Reka's menus, selects and comboboxes, and
+ * a field driving a list of its own), or Reka's floating content says it is open. A
+ * tooltip or a hover preview is no popup: its state is `delayed-open` or `instant-open`.
+ */
+const OPEN_POPUP = [
+  '[role="combobox"][aria-expanded="true"]',
+  '[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"]',
+  '[data-reka-popper-content-wrapper] > [data-state="open"]',
+].join(', ')
+
+/**
+ * Whether a menu, a choice list or another popup is open on the page. It takes no lease
+ * here, since it closes itself on the next press outside it; read it at the moment it
+ * matters, as a key is pressed.
+ */
+export const popupOpen = () =>
+  typeof document !== 'undefined' && document.querySelector(OPEN_POPUP) !== null
+
 /** Remove only this lease; stale releases cannot dismiss or unlock another host. */
 export function releaseOverlayOwnership(lease: OverlayOwnership | null): void {
   if (!lease) return
