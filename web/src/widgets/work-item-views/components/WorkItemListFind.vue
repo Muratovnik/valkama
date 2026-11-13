@@ -81,7 +81,7 @@ const { at, close, input, open, searching, step, total, type } = useListFind<Wor
 <style scoped>
 /* The list and its find bar, which stands over the list rather than in its scroll.
    The room the bar keeps clear of, until the list is measured: a head a control
-   tall, and no scroll bar. */
+   tall, and no scroll bar. The bar asks this frame how wide the list is. */
 .work-item-list-frame {
   --list-gutter: 0px;
   --list-head-size: var(--size-control-height);
@@ -91,5 +91,6 @@ const { at, close, input, open, searching, step, total, type } = useListFind<Wor
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   height: 100%;
   min-height: 0;
+  container: work-list / inline-size;
 }
 </style>

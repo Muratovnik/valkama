@@ -207,4 +207,22 @@ defineExpose({
 .list-find-widest {
   visibility: hidden;
 }
+
+/* A list narrower than the bar's measure gives the term a line of its own, and the count
+   and the steps the line under it: on one line at 390px the field kept three letters'
+   room beside «Нет совпадений». */
+@container work-list (width < 25rem) {
+  .list-find {
+    flex-wrap: wrap;
+  }
+
+  .list-find-field {
+    flex-basis: 100%;
+  }
+
+  .list-find-count {
+    flex: 1 1 auto;
+    justify-items: start;
+  }
+}
 </style>
