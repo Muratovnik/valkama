@@ -11,6 +11,8 @@ import { comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
 import {
   breakdownOf,
   DEFAULT_VIEW,
+  isMomentSpan,
+  momentSpan,
   readAddress,
   writeAddress,
 } from '@/shared/api/analyticsAddress.ts'
@@ -347,5 +349,97 @@ describe('the read a view asks', () => {
       none: 'work_item,environment',
       compare: 'true',
     })
+  })
+})
+
+describe('the reader’s own period between two moments', () => {
+  /** Three hours of a Wednesday morning, as a frame drawn on «Today» would set them. */
+  const MORNING = {
+    ...DEFAULT_VIEW,
+    period: 'custom',
+    from: '2026-11-11T10:00',
+    to: '2026-11-11T13:00',
+  } as const
+  const now = new Date(2026, 10, 11, 14, 30)
+  const own = (from: string, to: string): AnalyticsView => ({
+    ...DEFAULT_VIEW,
+    period: 'custom',
+    from,
+    to,
+  })
+
+  it('gives back its moments through the URL the shell writes, and a span of days as before', () => {
+    expect(writeAddress(MORNING)).toEqual({
+      period: 'custom',
+      from: '2026-11-11T10:00',
+      to: '2026-11-11T13:00',
+    })
+    expect(throughTheAddress(MORNING)).toEqual(MORNING)
+    expect(isMomentSpan(MORNING)).toBe(true)
+    // Two days keep their meaning: the first and the last day, both whole.
+    const days = own('2026-11-09', '2026-11-11')
+    expect(throughTheAddress(days)).toEqual(days)
+    expect(isMomentSpan(days)).toBe(false)
+  })
+
+  it('sets a span from two instants to the minutes they fall in, in the browser’s own time', () => {
+    const span = momentSpan(new Date(2026, 10, 11, 10, 0, 40), new Date(2026, 10, 11, 13, 0))
+    expect(span).toEqual({ period: 'custom', from: '2026-11-11T10:00', to: '2026-11-11T13:00' })
+    expect(throughTheAddress({ ...DEFAULT_VIEW, ...span })).toEqual(MORNING)
+  })
+
+  it.each([
+    ['an hour past the day', '2026-11-11T24:00'],
+    ['a minute past the hour', '2026-11-11T10:60'],
+    ['seconds', '2026-11-11T10:00:00'],
+    ['an offset', '2026-11-11T10:00Z'],
+    ['a space for the T', '2026-11-11 10:00'],
+    ['an hour of one figure', '2026-11-11T9:00'],
+  ])('drops a moment written with %s, and the span it starts', (_name, start) => {
+    const read = readAddress({ period: 'custom', from: start, to: '2026-11-11T13:00' })
+    expect(read).toEqual({ ...DEFAULT_VIEW, period: 'custom' })
+  })
+
+  it('drops a moment beside a day, beside nothing, or not before its end', () => {
+    const read = (from: string, to?: string) =>
+      readAddress({ period: 'custom', from, ...(to === undefined ? {} : { to }) })
+    // A day keeps its place beside a moment, which is dropped.
+    expect(read('2026-11-09', '2026-11-11T13:00')).toEqual(own('2026-11-09', ''))
+    expect(read('2026-11-11T10:00')).toEqual(own('', ''))
+    expect(read('2026-11-11T13:00', '2026-11-11T10:00')).toEqual(own('', ''))
+    expect(read('2026-11-11T10:00', '2026-11-11T10:00')).toEqual(own('', ''))
+    // Only the reader's own period holds moments.
+    expect(readAddress({ period: 'today', from: MORNING.from, to: MORNING.to })).toEqual({
+      ...DEFAULT_VIEW,
+      period: 'today',
+    })
+  })
+
+  it('reads from its first moment to its last, compared with as long right before it', () => {
+    const start = new Date(2026, 10, 11, 10)
+    expect(periodBounds(MORNING, now)).toEqual({
+      from: start.toISOString(),
+      to: new Date(2026, 10, 11, 13).toISOString(),
+      utcOffset: -start.getTimezoneOffset(),
+    })
+    // No period of its own to compare with: the read's own, of the same length right before.
+    expect(comparedPeriod(MORNING, now)).toBeNull()
+  })
+
+  it.each([
+    ['ten minutes of «Now»', '2026-11-11T14:10', '2026-11-11T14:20', 'minute'],
+    ['two hours', '2026-11-11T10:00', '2026-11-11T12:00', 'minute'],
+    ['two hours and a minute', '2026-11-11T10:00', '2026-11-11T12:01', 'hour'],
+    ['three hours of «Today»', '2026-11-11T10:00', '2026-11-11T13:00', 'hour'],
+    ['three hours across midnight', '2026-11-10T22:00', '2026-11-11T01:00', 'hour'],
+    ['three days', '2026-11-08T10:00', '2026-11-11T10:00', 'hour'],
+    ['three days and a minute', '2026-11-08T10:00', '2026-11-11T10:01', 'day'],
+  ] as const)('reads %s by the %s', (_name, from, to, step) => {
+    expect(stepOf(own(from, to))).toBe(step)
+  })
+
+  it('keeps the steps of a span of days: one day by the hour, more by the day', () => {
+    expect(stepOf(own('2026-11-11', '2026-11-11'))).toBe('hour')
+    expect(stepOf(own('2026-11-09', '2026-11-11'))).toBe('day')
   })
 })
