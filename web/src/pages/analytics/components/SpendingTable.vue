@@ -5,8 +5,10 @@
  * (`useTableModel`). A figure the read does not hold says so in words; a period before that was
  * not read is said once, over the table.
  *
- * It takes the height its panel leaves it and scrolls in its own frame, which keeps a wheel to
- * itself: the heading row, the names and the total row stay in view however far it scrolls. Each
+ * It stands at its full height in the panel's one scroll, and only a table wider than its column
+ * scrolls sideways, in its own frame, the names held at the frame's start. While any of its rows
+ * is in view, its heading row stays at the panel's top edge and its total at the bottom edge
+ * (`stuck`), and a row brought into view by the focus stands clear of both. Each
  * column's heading sorts by it, largest first, then the other way; the first sort is the chosen
  * measure, or the total of a crossed table. A row is one line: its name is cut where the column is
  * narrower (`SpendingTableName`), and the figures take what they need, the name the rest.
@@ -15,9 +17,9 @@
  * it. The heading row over the frame (`SpendingTableHead`) counts the rows, gives their whole account
  * and order in its hint, and holds the controls; the download it asks for is what the table shows,
  * in its order, as a CSV file (`tableFile`). A row's name pressed to narrow the view goes out as
- * `narrow`.
+ * `narrow`. Asked to (`reveal`), it brings itself into view with the focus on it.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SpendingTableHead from '@/pages/analytics/components/SpendingTableHead.vue'
@@ -25,6 +27,7 @@ import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vu
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import { useStuckEdges } from '@/pages/analytics/composables/useStuckEdges.ts'
 import { useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
 import { NAME_COLUMN, useTableSort } from '@/pages/analytics/composables/useTableSort.ts'
 import { tableFile } from '@/pages/analytics/utils/spendingCsv.ts'
@@ -126,10 +129,35 @@ function download() {
 }
 
 const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
+
+const root = ref<HTMLElement | null>(null)
+
+/** Its heading row and total held at the edges of the panel's scroll (`useStuckEdges`). */
+const stuck = useStuckEdges(root)
+
+/** Brings the table into view, its heading row at the top, with the focus on it. */
+function reveal() {
+  const table = root.value
+  if (!table) return
+  table.focus({ preventScroll: true })
+  table.scrollIntoView({ block: 'start' })
+}
+defineExpose({ reveal })
 </script>
 
 <template>
-  <section class="spending-table">
+  <section
+    ref="root"
+    class="spending-table"
+    tabindex="-1"
+    :aria-label="model.title"
+    :style="{
+      '--stuck-head': `${stuck.head}px`,
+      '--stuck-foot': `${stuck.foot}px`,
+      '--stuck-table': `${stuck.table}px`,
+      '--stuck-travel': `${stuck.travel}px`,
+    }"
+  >
     <SpendingTableHead
       :across="across"
       :by="by"
@@ -141,14 +169,7 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
       :waiting="waiting"
       @download="download"
       @update:across="(next) => emit('update:across', next)"
-    >
-      <template
-        v-if="$slots.actions"
-        #actions
-      >
-        <slot name="actions" />
-      </template>
-    </SpendingTableHead>
+    />
     <FieldError
       v-if="notice"
       role="alert"
@@ -279,20 +300,23 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
 <style scoped src="@/shared/ui/chartTable.css"></style>
 
 <style scoped>
-/* The heading row, the notes and the frame, top to bottom: the frame takes what the panel
-   leaves, and scrolls; the rest keep their size. Its headings ask it how wide it is. */
+/* The heading row, the notes and the frame, top to bottom, each as tall as it is. Its headings
+   ask it how wide it is. Focused from a link to it, it rings itself inside its edge. */
 .spending-table {
-  display: flex;
-  flex-direction: column;
+  /* Its heading row, total and whole height, and how far the heading row goes (`useStuckEdges`). */
+  --stuck-head: 0px;
+  --stuck-foot: 0px;
+  --stuck-table: 0px;
+  --stuck-travel: 0px;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   min-width: 0;
-  min-block-size: 0;
   container-type: inline-size;
 
-  /* Held to a height, only the frame gives way: a part with a declared least height (a
-     control's) would otherwise shrink to it and spill onto the next. */
-  & > :not(.spending-table-frame) {
-    flex-shrink: 0;
+  &:focus-visible {
+    outline-offset: var(--space-half);
   }
 }
 
@@ -317,33 +341,23 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
   align-items: center;
 }
 
-/* Its own scroll both ways, which a wheel over it never hands on to the panel. Where the panel
-   does not hold it to a height, as on a phone, it stops at most of the window's. */
-.spending-table-frame {
-  flex: 1 1 auto;
-  min-block-size: 0;
-  max-block-size: 70svh;
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-
-/* The heading row stays at the frame's top and the total at its bottom, each over the rows that
-   pass under it on the canvas the table stands on; their corners stay over both. */
+/* The heading row and the total stay at the panel's edges while any row is in view, over the rows
+   and under each other's corners. The frame scrolls sideways (`ChartTable`), so a sticky cell
+   would stick in it: the panel's scroll moves them instead, by the frame's view timeline, the
+   heading row as far as the total (`stuck`). Without scroll-driven animations they stay put. */
 .table-head .chart-cell {
   position: sticky;
-  inset-block-start: 0;
-  z-index: 2;
+  z-index: 3;
   background: var(--color-canvas);
   box-shadow: inset 0 -1px var(--color-rule);
 
   &:first-child {
-    z-index: 3;
+    z-index: 4;
   }
 }
 
 .table-total .chart-cell {
   position: sticky;
-  inset-block-end: 0;
   z-index: 2;
   color: var(--color-text);
   background: var(--color-canvas);
@@ -351,6 +365,43 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
 
   &.chart-name {
     z-index: 3;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .spending-table-frame {
+    view-timeline: --spending-rows block;
+  }
+
+  .table-head .chart-cell {
+    /* Longhands: the build folds a timeline into the shorthand, and Chrome drops it. Fixed range
+       starts: Chrome keeps the start a range was first given and takes later ones as its length. */
+    animation-name: table-head-stays;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: --spending-rows;
+    animation-range: exit-crossing 0% exit-crossing var(--stuck-travel);
+  }
+
+  .table-total .chart-cell {
+    animation-name: table-total-stays;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: --spending-rows;
+    animation-range: entry-crossing 0% entry-crossing var(--stuck-table);
+  }
+}
+
+/* Each moves from or to its own place, the keyframe left out. */
+@keyframes table-head-stays {
+  to {
+    translate: 0 var(--stuck-travel);
+  }
+}
+
+@keyframes table-total-stays {
+  from {
+    translate: 0 calc(-1 * var(--stuck-table));
   }
 }
 

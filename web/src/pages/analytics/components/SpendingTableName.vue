@@ -96,8 +96,11 @@ function narrowTo() {
 .table-name {
   display: block;
 
+  /* Brought into view by the focus, it stands clear of the heading row and the total its table
+     keeps at the panel's edges (`--stuck-head`, `--stuck-foot`, declared by `SpendingTable`). */
   & .chart-press {
     display: inline;
+    scroll-margin-block: var(--stuck-head, 0) var(--stuck-foot, 0);
   }
 
   & .chart-detail {

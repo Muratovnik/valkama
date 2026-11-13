@@ -4,8 +4,8 @@
  *
  * Between two reads every task did twice the work, so every figure on the page is new while the
  * order of the tasks is not. The bar, the rail, the panel, the period chart's plot and the head of
- * the table stand where they stood at the same size, the panel and the table are scrolled as far
- * as they were, and the section, the measure, the table's sort and the minute under the pointer
+ * the table stand where they stood at the same size, the panel is scrolled as far as it was, and
+ * the section, the measure, the table's sort and the minute under the pointer
  * stay. Nothing blanks on the way: the old answer stays drawn until the new one replaces it.
  */
 import { expect } from '@playwright/test'
@@ -54,12 +54,7 @@ const PARTS = [
 ]
 
 /** The parts that scroll, which a refresh must leave as far scrolled as they were. */
-const SCROLLERS = [
-  '.analytics-page-rail',
-  '.analytics-panel',
-  '.dimension-charts',
-  '.spending-table-frame',
-]
+const SCROLLERS = ['.analytics-page-rail', '.analytics-panel', '.spending-table-frame']
 
 /** Where the parts stand and how far each scroller is scrolled, to the hundredth of a pixel. */
 const layout = (page: Page) =>
@@ -179,16 +174,11 @@ test('a refresh of «Now» moves nothing on a section and keeps the reader’s p
   page,
 }, info) => {
   const refresh = await refreshOf(page, 'work_item', async (analytics) => {
-    // The table sorted by its first column and scrolled down, the charts to the period chart.
+    // The table sorted by its first column, and the panel scrolled down to the period chart.
     const table = analytics.locator('.spending-table')
     await table.locator('thead .table-sort').first().click()
     await expect(table.locator('thead th[aria-sort]')).toHaveCount(1)
-    const scrolledTable = await table.locator('.spending-table-frame').evaluate((frame) => {
-      frame.scrollTop = 120
-      return frame.scrollTop
-    })
-    expect(scrolledTable, 'the table scrolls').toBeGreaterThan(0)
-    expect(await scrollToDays(analytics, '.dimension-charts'), 'the charts scroll').toBeGreaterThan(
+    expect(await scrollToDays(analytics, '.analytics-panel'), 'the panel scrolls').toBeGreaterThan(
       0,
     )
   })

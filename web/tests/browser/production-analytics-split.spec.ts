@@ -1,12 +1,12 @@
 /**
- * How a dimension's panel held beside the rail shares its height, in the real app, over thirty
- * tasks. The figures that choose the measure stand whole at the top, outside any scroll; the
- * charts under them take up to 45% of the rest and scroll inside past that, and the table takes
- * the remainder, never less than 14rem. At 1440×900 that leaves a few ranked rows, a whole row of
- * small charts and at least four whole rows of the table in view, seven at 1920×1080; each row of
- * the table and its heading row is one line. A wheel over the table scrolls it alone while the
- * document and the panel stand still, and its heading row, names and total stay in view. Each run
- * prints what it measured.
+ * How a dimension's panel beside the rail lays out its parts, in the real app, over thirty tasks.
+ * The figures that choose the measure stand whole at the top of the panel; under them the ranked
+ * list, a whole row of small charts and the table, all in the panel's one scroll
+ * (`production-analytics-one-scroll.spec.ts` holds that nothing in it scrolls on its own). Each row
+ * of the table and its heading row is one line, and the figures' columns are as narrow as what
+ * they hold. A wheel over the table moves the panel, the document standing still, and the names
+ * stay pinned at the frame's start. The ranked list's last line and «To the table» bring the table
+ * into view with the focus on it. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -35,39 +35,23 @@ async function openSplit(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height })
   await page.goto(TASK_REPORT)
   await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
-  await expect(page.locator('.dimension-panel')).toHaveAttribute('data-fills', 'true')
   await page.evaluate(() => document.fonts.ready)
 }
 
-/** Where the held panel's parts stand, and how many of the charts' rows show whole. */
+/** Where the panel's parts stand, and how many of the charts' rows show whole in it. */
 function split(page: Page) {
   return page.evaluate(() => {
     const boxOf = (selector: string) => document.querySelector(selector)?.getBoundingClientRect()
     const panel = boxOf('.analytics-panel')
-    const charts = boxOf('.dimension-charts')
-    const body = boxOf('.dimension-body')
-    const table = boxOf('.spending-table')
+    const bars = boxOf('.spending-bars')
     const tiles = boxOf('.spending-tiles')
-    if (!panel || !charts || !body || !table || !tiles)
-      throw new Error('a part of the panel is missing')
+    if (!panel || !bars || !tiles) throw new Error('a part of the panel is missing')
     // This body runs in the page, so a helper at the module's own scope would not be there.
     // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
     const within = (inner: DOMRect, outer: DOMRect) =>
       inner.top >= outer.top - 0.5 &&
       inner.bottom <= outer.bottom + 0.5 &&
       inner.bottom <= window.innerHeight + 0.5
-    // The body rows standing whole between the frame's sticky heading row and its total: the
-    // cells stick, not the row groups, so the cells say where they stand.
-    const tableRowsWhole = () => {
-      const frame = document.querySelector('.spending-table-frame')
-      const head = frame?.querySelector('thead th')?.getBoundingClientRect()
-      const foot = frame?.querySelector('tfoot th')?.getBoundingClientRect()
-      if (!frame || !head || !foot) return 0
-      return [...frame.querySelectorAll('tbody tr')].filter((row) => {
-        const box = row.getBoundingClientRect()
-        return box.top >= head.bottom - 0.5 && box.bottom <= foot.top + 0.5
-      }).length
-    }
     // How many lines each cell of the heading row and of the body rows holds: its height less
     // its padding, by its own line height.
     const linesOf = () =>
@@ -83,26 +67,13 @@ function split(page: Page) {
       })
     const wholeIn = (selector: string) =>
       [...document.querySelectorAll(selector)].filter((one) =>
-        within(one.getBoundingClientRect(), charts),
+        within(one.getBoundingClientRect(), panel),
       ).length
-    const scrollers = [...document.querySelectorAll<HTMLElement>('.dimension-panel *')].filter(
-      (one) =>
-        ['auto', 'scroll'].includes(getComputedStyle(one).overflowY) &&
-        one.scrollHeight > one.clientHeight + 1,
-    )
-    const chartsStyle = getComputedStyle(document.querySelector('.dimension-charts') as Element)
-    const reach = (side: 'marginBottom' | 'marginTop') => Number.parseFloat(chartsStyle[side])
     const root = document.documentElement
-    const panelElement = document.querySelector<HTMLElement>('.analytics-panel')
     return {
-      tilesWhole: within(tiles, panel) && tiles.bottom <= charts.top,
+      tilesWhole: within(tiles, panel) && tiles.bottom <= bars.top,
       tiles: Math.round(tiles.height),
-      rest: Math.round(body.height),
-      // The charts' track: their box less the air they reach past it at the top and the bottom.
-      charts: Math.round(charts.height + reach('marginTop') + reach('marginBottom')),
-      table: Math.round(table.height),
       rankedRows: wholeIn('.spending-bars .ranked-row'),
-      tableRows: tableRowsWhole(),
       // The heading row over the frame, the controls in it and the count's row under them: the
       // title and the controls are one row as tall as the controls, the count one line under it.
       headRow: Math.round(boxOf('.spending-table-head')?.height ?? 0),
@@ -148,50 +119,46 @@ function split(page: Page) {
       }),
       lines: linesOf(),
       multiples: wholeIn('.spending-multiples .multiple'),
-      scrollers: scrollers.map((one) => one.className),
       documentScrolls: root.scrollHeight - root.clientHeight,
-      panelScrolls: (panelElement?.scrollHeight ?? 0) - (panelElement?.clientHeight ?? 0),
     }
   })
-}
-
-/** How far the document, the panel, the charts and the table's frame are scrolled. */
-const scrolled = (page: Page) =>
-  page.evaluate(() => {
-    const top = (selector: string) => Math.round(document.querySelector(selector)?.scrollTop ?? -1)
-    return {
-      document: Math.round(document.scrollingElement?.scrollTop ?? 0),
-      panel: top('.analytics-panel'),
-      charts: top('.dimension-charts'),
-      table: top('.spending-table-frame'),
-    }
-  })
-
-/** How far the table's frame is scrolled down. */
-const tableScrolled = async (page: Page) => {
-  const now = await scrolled(page)
-  return now.table
 }
 
 /** How far the panel is scrolled down. */
-const panelScrolled = async (page: Page) => {
-  const now = await scrolled(page)
-  return now.panel
-}
+const panelScrolled = (page: Page) =>
+  page.evaluate(() => Math.round(document.querySelector('.analytics-panel')?.scrollTop ?? -1))
+
+/** How far the document is scrolled down. */
+const documentScrolled = (page: Page) =>
+  page.evaluate(() => Math.round(document.scrollingElement?.scrollTop ?? 0))
 
 /** Turns the wheel over the middle of an element, the table's frame unless named. */
 async function wheelOver(page: Page, selector = '.spending-table-frame') {
   const box = await page.locator(selector).boundingBox()
   if (!box) throw new Error(`${selector} is not drawn`)
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height / 2, 100))
   await page.mouse.wheel(0, 400)
 }
+
+/** Whether the focus is on the table, and where the table stands against the panel's top. */
+const tableFocused = (page: Page) =>
+  page.evaluate(() => {
+    const table = document.querySelector('.spending-table')
+    const panel = document.querySelector('.analytics-panel')
+    if (!table || !panel) throw new Error('no table')
+    return {
+      focused: document.activeElement === table,
+      top: Math.abs(
+        Math.round(table.getBoundingClientRect().top - panel.getBoundingClientRect().top),
+      ),
+    }
+  })
 
 for (const [width, height] of [
   [1440, 900],
   [1920, 1080],
 ] as const)
-  test(`at ${width}×${height} the figures stand whole and the charts and the table share the rest`, async ({
+  test(`at ${width}×${height} the figures stand whole over the charts and the table`, async ({
     page,
   }, info) => {
     await openSplit(page, width, height)
@@ -200,19 +167,7 @@ for (const [width, height] of [
 
     expect(measured.tilesWhole, 'figures cut or under a scroll').toBe(true)
     expect(measured.documentScrolls).toBe(0)
-    expect(measured.panelScrolls).toBe(0)
-    // The charts hold more than 45% of the rest, so they stop there; the table keeps the remainder.
-    expect(measured.charts).toBeLessThanOrEqual(Math.ceil(measured.rest * 0.45) + 1)
-    expect(measured.charts).toBeGreaterThanOrEqual(Math.floor(measured.rest * 0.45) - 1)
-    expect(measured.table).toBeGreaterThanOrEqual(14 * 16)
-    // Two scrollers and no third: the charts, and the table's frame.
-    expect(measured.scrollers.toSorted()).toEqual(
-      ['dimension-charts', 'chart-table-frame spending-table-frame'].toSorted(),
-    )
     expect(measured.rankedRows, 'ranked rows in view').toBeGreaterThanOrEqual(5)
-    expect(measured.tableRows, 'whole table rows in view').toBeGreaterThanOrEqual(
-      width === 1440 ? 4 : 7,
-    )
     expect(new Set(measured.lines), 'lines in a cell').toEqual(new Set([1]))
     expect(measured.counts, 'the count on one line').toBeLessThanOrEqual(measured.countLine + 1)
     expect(measured.headRow, 'the title and the controls on one line').toBeLessThanOrEqual(
@@ -232,80 +187,23 @@ for (const [width, height] of [
     for (const step of steps) expect(step.trim()).toMatch(/^(0|\d+\s(min|h|d))$/u)
     expect(top).toMatch(/ 0 to \d+\s(min|h|d)$/u)
 
-    await wheelOver(page)
-    await expect.poll(async () => tableScrolled(page)).toBeGreaterThan(0)
-    expect(await scrolled(page)).toMatchObject({ document: 0, panel: 0, charts: 0 })
-    // Scrolled, the heading row still stands at the frame's top, the total at its bottom, and the
-    // names stay pinned at its start.
-    const held = await page.evaluate(() => {
-      const frame = document.querySelector('.spending-table-frame')
-      const box = frame?.getBoundingClientRect()
-      const head = frame?.querySelector('thead th')?.getBoundingClientRect()
-      const foot = frame?.querySelector('tfoot th')?.getBoundingClientRect()
-      const name = frame?.querySelector('tbody th')
-      if (!frame || !box || !head || !foot || !name) throw new Error('the table lost a part')
-      return {
-        head: Math.round(head.top - box.top),
-        foot: Math.round(box.top + frame.clientHeight - foot.bottom),
-        name: getComputedStyle(name).position,
-      }
+    // A wheel over the table moves the panel, the one scroll, and the document stands still; the
+    // names stay pinned at the frame's start.
+    await page.locator('.spending-table-frame').evaluate((frame) => {
+      frame.scrollIntoView({ block: 'start' })
     })
-    await record(info, `analytics split sticky ${width}x${height}`, held)
-    expect(held.head).toBeLessThanOrEqual(1)
-    expect(Math.abs(held.foot)).toBeLessThanOrEqual(1)
-    expect(held.name).toBe('sticky')
+    const before = await panelScrolled(page)
+    await wheelOver(page)
+    await expect.poll(async () => panelScrolled(page)).toBeGreaterThan(before)
+    expect(await documentScrolled(page)).toBe(0)
+    const name = await page
+      .locator('.spending-table-frame tbody th')
+      .first()
+      .evaluate((one) => getComputedStyle(one).position)
+    expect(name).toBe('sticky')
   })
 
-/** The button at the table that gives it the whole panel, by what it says in either state. */
-const wholeButton = (page: Page) =>
-  page.locator('.spending-table').getByRole('button', { name: /^(Expand|Collapse) table$/u })
-
-/** How tall the table stands, and whether the charts are drawn beside it. */
-const tableRoom = (page: Page) =>
-  page.evaluate(() => ({
-    table: Math.round(
-      document.querySelector('.spending-table')?.getBoundingClientRect().height ?? 0,
-    ),
-    charts: document.querySelector('.dimension-charts')?.checkVisibility() ?? false,
-  }))
-
-test('the table takes the whole panel and gives it back, and the page keeps the choice', async ({
-  page,
-}, info) => {
-  await openSplit(page, 1440, 900)
-  const button = wholeButton(page)
-  await expect(button).toHaveText('Expand table')
-  await expect(button).toHaveAttribute('aria-pressed', 'false')
-  const shared = await tableRoom(page)
-
-  await button.focus()
-  await page.keyboard.press('Enter')
-  await expect(button).toHaveText('Collapse table')
-  await expect(button).toHaveAttribute('aria-pressed', 'true')
-  await expect(button).toBeFocused()
-  const whole = await tableRoom(page)
-  await record(info, 'analytics split whole table', { shared, whole })
-  expect(whole.charts).toBe(false)
-  expect(whole.table).toBeGreaterThan(shared.table + 200)
-  expect(page.url()).not.toMatch(/whole|expand/iu)
-
-  // A change of measure, of section, of period and a refresh keep the table whole.
-  await page.locator('.spending-tiles .segmented-option').nth(1).click()
-  await page.locator('.analytics-page-rail').getByRole('button', { name: 'Account' }).click()
-  await page.getByRole('radio', { name: 'Past 4 weeks' }).click()
-  await page.getByRole('button', { name: 'Refresh' }).click()
-  await expect(page.locator('.dimension-panel')).toHaveAttribute('data-whole', 'true')
-  await expect(wholeButton(page)).toHaveAttribute('aria-pressed', 'true')
-  const kept = await tableRoom(page)
-  expect(kept.charts).toBe(false)
-
-  await wholeButton(page).press('Space')
-  await expect(wholeButton(page)).toHaveAttribute('aria-pressed', 'false')
-  await expect(wholeButton(page)).toBeFocused()
-  await expect(page.locator('.dimension-charts')).toBeVisible()
-})
-
-test('the ranked list names twelve tasks and its last line gives the table the whole panel', async ({
+test('the ranked list names twelve tasks and its last line brings the table into view, focused', async ({
   page,
 }) => {
   await openSplit(page, 1440, 900)
@@ -314,16 +212,10 @@ test('the ranked list names twelve tasks and its last line gives the table the w
     .locator('.spending-bars')
     .getByRole('button', { name: '18 more — in the table' })
   await more.click()
-  await expect(page.locator('.dimension-panel')).toHaveAttribute('data-whole', 'true')
-  await expect(wholeButton(page)).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.dimension-charts')).toBeHidden()
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        Boolean(document.querySelector('.spending-table-frame')?.contains(document.activeElement)),
-      ),
-    )
-    .toBe(true)
+  await expect.poll(() => tableFocused(page)).toEqual({ focused: true, top: 0 })
+  // The charts are still there over the table, in the same scroll.
+  await expect(page.locator('.spending-bars')).toBeAttached()
+  await expect(page.getByRole('button', { name: /^(Expand|Collapse) table$/u })).toHaveCount(0)
 })
 
 test('work on no task, the largest share, is ranked first with a bar and a small chart', async ({
@@ -375,95 +267,49 @@ test('the table counts the values of the period as the rail’s tile does', asyn
   expect(first).toBe(values)
 })
 
-/**
- * Where a section in the list's place stands in its panel at a window size: how wide the app's
- * navigation and the section are, where the table's heading row stands against what the panel
- * shows, and how far each scroller is scrolled.
- */
-function inPlace(page: Page) {
-  return page.evaluate(() => {
-    const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect()
-    const panel = document.querySelector<HTMLElement>('.analytics-panel')
-    const head = box('.spending-table-frame thead th')
-    const table = box('.spending-table')
-    const shown = panel?.getBoundingClientRect()
-    if (!panel || !head || !table || !shown) throw new Error('the section drew no table')
-    const shownBottom = Math.min(shown.top + panel.clientHeight, window.innerHeight)
-    return {
-      nav: Math.round(box('.app-nav-frame')?.width ?? 0),
-      section: Math.round(box('.dimension-panel')?.width ?? 0),
-      panel: panel.clientHeight,
-      panelContent: panel.scrollHeight,
-      headTop: Math.round(head.top - shown.top),
-      headInView: head.top >= shown.top - 0.5 && head.bottom <= shownBottom + 0.5,
-      charts: Math.round(box('.dimension-charts')?.height ?? 0),
-      table: Math.round(table.height),
-      // How far over the panel's visible edge the table ends: nothing shows under a table held there.
-      tableAboveEdge: Math.round(shownBottom - table.bottom),
-    }
-  })
-}
-
 // At 1024×768 the app's navigation leaves the page too narrow for the rail beside the section, so
-// the section takes the list's place and is not held. Its table stays at the panel's bottom edge
-// while what stands above passes under it: its heading row in view from the start, a wheel over it
-// moving it alone, a wheel above it moving the panel, and a part focused under it brought up over it.
-test('at 1024×768 beside the app’s navigation the table’s heading is in view and its wheel is its own', async ({
+// the section takes the list's place. It runs in the panel's one scroll as it does beside the rail:
+// a wheel over the table moves the panel, and «To the table» brings the table up, focused.
+test('at 1024×768 in place of the list the section scrolls in the panel and reaches its table', async ({
   page,
 }, info) => {
   await serve(page, THIRTY_TASKS)
   await page.setViewportSize({ width: 1024, height: 768 })
   await page.goto(pageAt({ by: 'work_item', open: 'section' }))
   await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
-  await expect(page.locator('.dimension-panel')).toHaveAttribute('data-fills', 'false')
   await page.evaluate(() => document.fonts.ready)
-  const measured = await inPlace(page)
+  const measured = await page.evaluate(() => {
+    const panel = document.querySelector<HTMLElement>('.analytics-panel')
+    const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect()
+    if (!panel) throw new Error('no panel')
+    return {
+      nav: Math.round(box('.app-nav-frame')?.width ?? 0),
+      section: Math.round(box('.dimension-panel')?.width ?? 0),
+      panel: panel.clientHeight,
+      panelContent: panel.scrollHeight,
+    }
+  })
   await record(info, 'analytics section in place 1024x768', measured)
   expect(measured.nav, 'the app’s navigation').toBeGreaterThan(0)
   expect(measured.section, 'the section narrower than two charts side by side').toBeLessThan(
     48 * 16,
   )
   expect(measured.panelContent, 'a panel that scrolls').toBeGreaterThan(measured.panel)
-  expect(measured.headInView, 'the table’s heading row in view unscrolled').toBe(true)
-  expect(measured.table).toBeGreaterThanOrEqual(14 * 16)
-  expect(
-    Math.abs(measured.tableAboveEdge),
-    'the table held at the panel’s edge',
-  ).toBeLessThanOrEqual(1)
 
-  await wheelOver(page)
-  await expect.poll(async () => tableScrolled(page)).toBeGreaterThan(0)
-  expect(await scrolled(page)).toMatchObject({ document: 0, panel: 0, charts: 0 })
-
-  // Over the figures the wheel moves the panel, and the table's heading row stays where it stood.
   await wheelOver(page, '.spending-tiles')
   await expect.poll(async () => panelScrolled(page)).toBeGreaterThan(0)
-  const moved = await inPlace(page)
-  expect(moved.headInView).toBe(true)
-  expect(moved.headTop).toBe(measured.headTop)
-  expect(Math.abs(moved.tableAboveEdge)).toBeLessThanOrEqual(1)
+  expect(await documentScrolled(page)).toBe(0)
 
-  // A part focused under the table is brought up over it.
   await page.locator('.analytics-panel').evaluate((panel) => panel.scrollTo({ top: 0 }))
-  const control = page.locator('.spending-days .segmented-option').first()
-  await control.focus()
-  await expect
-    .poll(() =>
-      control.evaluate((one) => {
-        const table = document.querySelector('.dimension-table')?.getBoundingClientRect()
-        return table ? Math.round(one.getBoundingClientRect().bottom - table.top) : 1
-      }),
-    )
-    .toBeLessThanOrEqual(0)
+  await page.getByRole('button', { name: 'To the table' }).click()
+  await expect.poll(() => tableFocused(page)).toEqual({ focused: true, top: 0 })
 })
 
-test('a section that is not held has no button for the whole panel', async ({ page }, info) => {
+test('at 1024×768 a column’s heading takes two lines at most', async ({ page }, info) => {
   await serve(page, THIRTY_TASKS)
   await page.setViewportSize({ width: 1024, height: 768 })
   await page.goto(pageAt({ by: 'work_item', open: 'section' }))
   await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
-  await expect(page.locator('.dimension-panel')).toHaveAttribute('data-fills', 'false')
-  await expect(wholeButton(page)).toHaveCount(0)
   // At this width a column's heading takes two lines at most, and a row's name still one.
   const lines = await page.evaluate(() =>
     [...document.querySelectorAll<HTMLElement>('.spending-table-frame thead .table-sort')].map(

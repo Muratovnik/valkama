@@ -172,18 +172,14 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
 </template>
 
 <style scoped>
-/* The figures, the two charts and the table one under the next, each as tall as it is. Held to
-   the panel's height, the panel scrolls it whole: a few kinds never need a scroll of their own. */
+/* The figures, the two charts and the table one under the next, each as tall as it is, in the
+   panel's one scroll. */
 .kinds-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: max-content;
   gap: var(--space-section);
   align-content: start;
   min-width: 0;
-  min-block-size: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   container-type: inline-size;
 }
 

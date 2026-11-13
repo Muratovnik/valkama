@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * The heading row over a dimension's table (`SpendingTable`): its title and its controls — one
- * its panel may set (`actions`), the second dimension, and the download of what it shows, in that
- * order. With no value to list the download is disabled, and words say why.
+ * The heading row over a dimension's table (`SpendingTable`): its title and its controls — the
+ * second dimension and the download of what it shows, in that order. With no value to list the
+ * download is disabled, and words say why.
  *
  * Under it a line says in a few words how many values of the period the table lists in the
  * measure, how many spent nothing there and how many spent only before it, «2 roles · 1 with no
@@ -105,7 +105,6 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
       :title="title"
     />
     <div class="spending-table-controls">
-      <slot name="actions" />
       <ChoiceSelect
         class="spending-table-across"
         size="compact"

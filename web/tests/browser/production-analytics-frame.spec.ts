@@ -9,11 +9,11 @@
  * browser's Back returns to the list.
  *
  * At any of those widths the document never scrolls: the bar stays where it is, and the rail and
- * the panel each scroll on their own, as does the list or the section where they take turns.
- * Beside the rail, a dimension's panel is held to its height and scrolls its parts instead, the
- * charts on their own and the table on its own; in place of the list, and for the overview
- * taller than its panel, the panel scrolls. A window too low for the report leaves the scroll to
- * the panel or its parts, never to the document. Every other module keeps the frame's own scroll.
+ * the panel each scroll on their own, as does the list or the section where they take turns. A
+ * section taller than its panel, beside the rail or in place of the list, scrolls in the panel,
+ * nothing in it scrolling on its own (`production-analytics-one-scroll.spec.ts`). A window too low
+ * for the report leaves the scroll to the panel, never to the document. Every other module keeps
+ * the frame's own scroll.
  * The section on show is in the address, so a reload keeps it; the plain address is the
  * overview, and an address the page wrote before it had sections that names its breakdown opens
  * the same period, measure and filters in the section of that breakdown. Each run prints what it
@@ -61,7 +61,6 @@ async function scrolling(page: Page) {
       bar: area('.analytics-page-bar'),
       rail: area('.analytics-page-rail'),
       panel: area('.analytics-panel'),
-      charts: area('.dimension-charts'),
     }
   })
 }
@@ -69,7 +68,7 @@ async function scrolling(page: Page) {
 /** How far an area of the page is scrolled down, as measured. */
 const scrolledBy = (
   measured: Awaited<ReturnType<typeof scrolling>>,
-  area: 'charts' | 'frame' | 'panel' | 'rail',
+  area: 'frame' | 'panel' | 'rail',
 ) => measured[area]?.scrollTop ?? 0
 
 /** Turns the wheel over the middle of an element. */
@@ -92,7 +91,7 @@ for (const [width, height] of [
   [1440, 900],
   [1440, 600],
 ] as const)
-  test(`the document stands still while the rail and the panel's parts scroll at ${width}×${height}`, async ({
+  test(`the document stands still while the rail and the panel scroll at ${width}×${height}`, async ({
     page,
   }, info) => {
     await openAt(page, width, height)
@@ -105,17 +104,15 @@ for (const [width, height] of [
     expect(before.rail?.overflowY).toBe('auto')
     expect(before.panel?.overflowY).toBe('auto')
     expect(before.rail?.shown && before.panel?.shown).toBe(true)
-    // The section of a dimension is held to its panel, which has nothing to scroll; its charts,
-    // taller than the part they are given, hold the rest under their own scroll.
-    expect(before.panel?.scrollHeight).toBe(before.panel?.clientHeight)
-    expect(before.charts?.overflowY).toBe('auto')
-    expect(before.charts?.scrollHeight).toBeGreaterThan(before.charts?.clientHeight ?? 0)
+    // The section of a dimension is taller than its panel, which holds the rest under its scroll.
+    expect(before.panel?.scrollHeight).toBeGreaterThan(before.panel?.clientHeight ?? 0)
 
-    await wheelOver(page, '.dimension-charts', 600)
-    await expect.poll(async () => scrolledBy(await scrolling(page), 'charts')).toBeGreaterThan(0)
+    // Turned over the figures, the wheel moves the panel, and the document, the bar and the rail
+    // stand still.
+    await wheelOver(page, '.spending-tiles', 600)
+    await expect.poll(async () => scrolledBy(await scrolling(page), 'panel')).toBeGreaterThan(0)
     const after = await scrolling(page)
     expect(after.document.scrollTop).toBe(0)
-    expect(after.panel?.scrollTop).toBe(0)
     expect(after.bar?.y).toBe(before.bar?.y)
     expect(after.rail?.y).toBe(before.rail?.y)
     expect(after.rail?.scrollTop).toBe(0)
@@ -142,9 +139,7 @@ for (const [width, height] of [
     // holds the rest under its own scroll.
     expect(before.panel?.scrollHeight).toBeGreaterThan(before.panel?.clientHeight ?? 0)
 
-    // Turned over the section's figures, where one scrolling the section reads: where the window
-    // is tall enough, the table stays at the panel's bottom edge, half the window high, and a wheel
-    // over it moves the table alone (`production-analytics-split.spec.ts`).
+    // Turned over the section's figures, where one scrolling the section reads.
     await wheelOver(page, '.spending-tiles', 600)
     await expect.poll(async () => scrolledBy(await scrolling(page), 'panel')).toBeGreaterThan(0)
     const after = await scrolling(page)
