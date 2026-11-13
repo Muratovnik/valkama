@@ -966,8 +966,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   still running keeps its name, and a neighbour that would touch it gives way. A day is named by
   its weekday, and the first name the axis prints and the first it prints of each later month by
   the date with the month, «Oct 27», «Nov 1» (`stepName` in the page's words, so every chart of
-  days has it), so a span across months says which; the table names every day in full. The plot's frame is as tall as the plot with its names, so it never scrolls up and down. A single day stands by the hour, and
-  an hour only shows. Where a ranked chart shares a row with others, as a card of first values
+  days has it), so a span across months says which; the table names every day in full. The plot's frame is as tall as the plot with its names, so it never scrolls up and down. A single day stands by the hour
+  and «Now» by the minute, and pressing an hour or a minute narrows the view to it as pressing a
+  day does: the page's own period runs between its moments, and Back returns the view before. An
+  hour used to only show, which left «Today» the one period whose parts led nowhere. Where a ranked chart shares a row with others, as a card of first values
   does, it is `dense`: the name and the value on one line and a thin bar under them, each value
   as wide as its own figure and its name taking the rest of the row.
   Two small charts stand beside a figure rather than in a section of their own, as the
