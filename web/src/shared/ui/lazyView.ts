@@ -22,17 +22,20 @@
  * - A view that draws its own frame around its own waits, as the card does, hands
  *   that frame over as `frame`, and the download's wait and failure stand in it: in
  *   the column the view's own wait will take, not a frame's inset outside it.
+ *   The view takes the frame's place with new elements, so focus held in the frame
+ *   falls to the page; a surface that holds the view is told, and puts it in again.
  *
  * The holder is module-level on purpose: the code is downloaded once per page,
  * so whether it is resident is one fact shared by every place that draws it.
  */
 import { defineComponent, h, onBeforeUnmount, shallowRef } from 'vue'
-import type { Component, ShallowRef } from 'vue'
+import type { Component, ShallowRef, VNode } from 'vue'
 
 import { uiError, uiLoading } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
+import { useContentReplaced } from '@/shared/ui/useOverlayFocus.ts'
 
 const LOADING = uiLoading()
 const FAILURE_REASON = 'platform.failures.viewDownloadFailed'
@@ -174,11 +177,23 @@ export function lazyView<C extends Component>(
         return h(PlatformStatePanel, { state: failure.value, onRetry: attempt })
       }
 
+      // Whether the frame held focus as it went, and so took it to the page with it.
+      const contentReplaced = useContentReplaced()
+      let frameHeldFocus = false
+      const frameLeaving = ({ el }: VNode) => {
+        frameHeldFocus = el instanceof Node && el.contains(document.activeElement)
+      }
+      const viewArrived = () => {
+        const lost = document.activeElement === null || document.activeElement === document.body
+        if (frameHeldFocus && lost) contentReplaced()
+        frameHeldFocus = false
+      }
+
       return () => {
         if (view.value !== null && !presence.shown.value)
-          return h(view.value, { ...attrs, ref: inner }, slots)
+          return h(view.value, { ...attrs, ref: inner, onVnodeMounted: viewArrived }, slots)
         if (frame === undefined) return panel()
-        return h(frame, attrs, { default: panel })
+        return h(frame, { ...attrs, onVnodeBeforeUnmount: frameLeaving }, { default: panel })
       }
     },
   })

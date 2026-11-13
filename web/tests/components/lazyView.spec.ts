@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { messages } from '@/shared/i18n/index.ts'
 import { lazyView } from '@/shared/ui/lazyView.ts'
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
+import { provideContentReplaced } from '@/shared/ui/useOverlayFocus.ts'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })
 
@@ -71,6 +72,26 @@ function mountView(component: object, onPick = vi.fn()) {
     props: { label: 'Graph', onPick },
     slots: { default: () => ' slot' },
   })
+}
+
+/**
+ * A surface holding the view, as a drawer does: it hears that its content was replaced
+ * under the focus, and holds a control of its own beside the view.
+ */
+function mountInSurface(component: object, contentReplaced: () => void) {
+  const render = () => [
+    h('button', { class: 'outside' }, 'Outside'),
+    h(component, { label: 'Graph' }),
+  ]
+  return mount(
+    {
+      setup() {
+        provideContentReplaced(contentReplaced)
+        return render
+      },
+    },
+    { attachTo: document.body, global: { plugins: [i18n] } },
+  )
 }
 
 beforeEach(() => {
@@ -307,5 +328,36 @@ describe('a lazy view downloads on demand without blanking or flickering', () =>
     await flushPromises()
     expect(wrapper.find('.frame').exists()).toBe(false)
     expect(wrapper.get('.downloaded').text()).toBe('Graph slot')
+  })
+
+  // The view arrives with new elements: focus held in the frame went with it, and the
+  // surface that put focus there on the open has to put it in again.
+  it('tells the surface it holds that focus went with the frame the view replaced', async () => {
+    const { calls, loader } = controlledLoader()
+    const contentReplaced = vi.fn()
+    const wrapper = mountInSurface(lazyView(loader, { frame: Frame }).component, contentReplaced)
+    ;(wrapper.get('.frame-close').element as HTMLElement).focus()
+
+    calls[0]?.resolve()
+    await flushPromises()
+    expect(wrapper.find('.frame').exists()).toBe(false)
+    expect(wrapper.find('.downloaded').exists()).toBe(true)
+    expect(contentReplaced).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
+  it('leaves focus alone when the frame did not hold it', async () => {
+    const { calls, loader } = controlledLoader()
+    const contentReplaced = vi.fn()
+    const wrapper = mountInSurface(lazyView(loader, { frame: Frame }).component, contentReplaced)
+    const outside = wrapper.get('.outside').element as HTMLElement
+    outside.focus()
+
+    calls[0]?.resolve()
+    await flushPromises()
+    expect(wrapper.find('.downloaded').exists()).toBe(true)
+    expect(contentReplaced).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(outside)
+    wrapper.unmount()
   })
 })
