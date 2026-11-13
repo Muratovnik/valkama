@@ -1,15 +1,16 @@
 """`valkama hook <client> <event>`: the command a client hook runs.
 
 It reads one hook input from stdin. A lifecycle event is written into the
-store, or spooled when the store cannot take it. `claude pre-tool-use` is a
-pure transform: it prints the output that adds the session identity to a
-Valkama tool call, and never touches the store. `post-tool-use`,
+store, or spooled when the store cannot take it. `claude pre-tool-use` leaves
+the pair of one Valkama tool call beside the store (`pairs`), where the server
+handling that call reads its session, and prints nothing: it neither changes the
+call nor decides its permission, and never opens the store. `post-tool-use`,
 `user-prompt-submit` and `stop` may also answer with a notice of what a person
 did on the work this session holds, and `claude watch` is the background hook
 that wakes an idle session with that notice (`notify`).
 
 The contract with the client is the same in every case: exit 0, and print
-nothing but the transform's output or a notice. A hook that failed its client
+nothing but a notice. A hook that failed its client
 because Valkama is down would make Valkama the thing that breaks a session, and
 Claude adds `SessionStart` stdout to the model's context, so a stray line there
 is a prompt injection. A diagnostic goes to stderr. The one other exit status
@@ -19,7 +20,8 @@ is the watcher's 2, which is how Claude Code's `asyncRewake` is told to wake.
 loads neither the MCP nor the HTTP surface. Nothing is imported here at module
 level: `post-tool-use` runs on every tool call, and the notice path loads only
 `notify`. The lifecycle path imports the store module for the store's path and
-schema version; the transform does not.
+schema version; the call pair takes the path from `notify.settings`, as the
+status line command does, and does not.
 """
 
 from __future__ import annotations
@@ -41,8 +43,8 @@ MAX_INPUT_BYTES = 1024 * 1024
 
 USAGE = "usage: valkama hook <claude|codex> <event>"
 
-#: The identity transform's event, and the clients it is for. Codex carries the
-#: same identity in every call's `_meta`, so it needs no transform.
+#: The call pair's event, and the clients it is for. Codex carries the session
+#: in every call's `_meta`, so it needs no pair.
 IDENTITY_EVENT = "pre-tool-use"
 IDENTITY_CLIENTS = frozenset({"claude"})
 #: `normalize.AGENT_TOOLS`, which a hook on any other tool does not load.
@@ -97,7 +99,7 @@ def _run(arguments: list[str], stdin: BinaryIO, stdout: BinaryIO) -> int:
     client, event = arguments
     raw = stdin.read(MAX_INPUT_BYTES + 1)
     if event == IDENTITY_EVENT and client in IDENTITY_CLIENTS:
-        _identity(raw, stdout)
+        _identity(raw)
         return 0
     from . import notify
 
@@ -132,21 +134,28 @@ def _stage(action: Callable[..., T], *arguments: object) -> T | None:
         return None
 
 
-def _identity(raw: bytes, stdout: BinaryIO) -> None:
+def _identity(raw: bytes) -> None:
+    """Leave the pair of this call for the server; print nothing, decide nothing."""
+
     import json
     import os
 
-    from . import normalize, place
+    from . import normalize, notify, pairs, place
 
     payload = normalize.parse_input(raw) if len(raw) <= MAX_INPUT_BYTES else None
     if payload is None:
         return
     # The variables alone: a tool call reads no process snapshot.
     opened_in = place.classify("claude", place.whitelisted(os.environ)).opened_in
-    output = normalize.identity_output(payload, opened_in=opened_in)
-    if output is not None:
-        stdout.write(json.dumps(output, ensure_ascii=False).encode("utf-8"))
-        stdout.flush()
+    pair = normalize.call_pair(payload, opened_in=opened_in)
+    if pair is None:
+        return
+    store_path = notify.settings()[0]
+    if store_path is None:
+        return  # the store is protected in this environment
+    content = json.dumps(pair, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if pairs.write(store_path, pair["tool_use_id"], content) is None:
+        note("no pair left for this call: no store directory, or an id no file can carry")
 
 
 def _place(client: str) -> place.Place:
@@ -187,7 +196,7 @@ def _lifecycle(client: str, event: str, payload: dict | None) -> None:
     )
     if record is None:
         return
-    # Only here: the identity transform and the notice must not load the store.
+    # Only here: the call pair and the notice must not load the store.
     from .. import store
     from . import ingest
 

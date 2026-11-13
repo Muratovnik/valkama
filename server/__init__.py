@@ -14,7 +14,7 @@ questions about the store and knows nothing about who asked:
     runner.py       process shape for a launched client, and stopping it
     sessions.py     essential lifecycle ingestion and exact work association
     hooks/          `valkama hook`: client hook events into the store or the
-                    spool, and the Claude identity transform
+                    spool, and the Claude call pair
     housekeeping.py start-up maintenance a long-lived process runs: the spool drain
     transcripts.py  the local copy of each ended session's transcript, and its retention
     federation.py   spaces and search across attached databases

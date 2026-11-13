@@ -9,7 +9,7 @@ workspaces and remote URLs; none of those is ever read here, so none of them
 can reach the store or the spool. The one exception is named: the launch of an
 agent keeps the short description of that call, and never its prompt.
 
-The module also builds the Claude `PreToolUse` identity output, which runs on
+The module also reads the Claude `PreToolUse` call pair (`pairs`), which runs on
 every Valkama tool call and must stay this cheap.
 """
 
@@ -368,14 +368,15 @@ def _valid_place(record: HookEvent) -> bool:
     )
 
 
-def identity_output(payload: dict, *, opened_in: str = "") -> dict | None:
-    """The Claude `PreToolUse` output that adds `_identity` to an MCP call, or nothing.
+def call_pair(payload: dict, *, opened_in: str = "") -> dict[str, str] | None:
+    """Who is making the MCP call a Claude `PreToolUse` input names, or nothing.
 
-    `updatedInput` replaces the whole input, so it is the original arguments
-    with `_identity` added; an `_identity` the model wrote itself is replaced.
-    No `permissionDecision` is returned: rewriting the input does not need one,
-    and returning `allow` would skip the prompt for a tool no rule covers.
-    Anything malformed gives nothing, and the call then proceeds unconfirmed.
+    The pair is `{"session_id", "tool_use_id", "agent_id"?, "agent_type"?,
+    "place"?}`, the object `_identity` carried when the hook still rewrote the
+    call, and the server reads it as that. The call itself is left alone: the
+    hook prints nothing and decides nothing, so auto mode reviews the response
+    as the model wrote it. Anything malformed gives nothing, and the call then
+    proceeds unconfirmed.
 
     `opened_in`, when known, goes in as `place`: a client can resume a session
     without a session start, and the confirmed call is then the only report of
@@ -387,24 +388,16 @@ def identity_output(payload: dict, *, opened_in: str = "") -> dict | None:
     tool_name = payload.get("tool_name")
     if not isinstance(tool_name, str) or not tool_name.startswith("mcp__"):
         return None
-    arguments = payload.get("tool_input")
-    if not isinstance(arguments, dict):
-        return None
-    identity: dict[str, str] = {}
+    pair: dict[str, str] = {}
     for field in ("session_id", "tool_use_id"):
         value = payload.get(field)
         if not isinstance(value, str) or not value:
             return None
-        identity[field] = value
+        pair[field] = value
     for field in ("agent_id", "agent_type"):
         value = payload.get(field)
         if isinstance(value, str) and value:
-            identity[field] = value
+            pair[field] = value
     if opened_in in places.OPENED_IN:
-        identity["place"] = opened_in
-    return {
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "updatedInput": {**arguments, "_identity": identity},
-        }
-    }
+        pair["place"] = opened_in
+    return pair

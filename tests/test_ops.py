@@ -24,7 +24,7 @@ sys.path.insert(0, ROOT)
 
 from server import cli, processes, runner, store, transcripts
 from server.executions import service as execution_service
-from server.hooks import spool
+from server.hooks import pairs, spool
 from server.ops import configuration, doctor, setup, toast
 from server.planning import service as planning
 from tests import SUITE_STORE
@@ -460,6 +460,63 @@ class DoctorHookTests(unittest.TestCase):
             "claude 2026-10-31T11:00:00.000Z, codex 2026-10-31T09:00:00.000Z",
             checks["hook-last-event"]["presentation"]["parameters"]["clients"],
         )
+
+    def test_a_recent_write_that_found_no_session_names_its_method(self) -> None:
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        for uid, state, source in (
+            ("1", "confirmed", "claude-pair"),
+            ("2", "confirmed", "codex-meta"),
+            ("3", "unconfirmed", "cli"),
+            ("4", "confirmed", "browser"),
+        ):
+            self.event(
+                conn, uid, kind="planning_write", identity_state=state, identity_source=source
+            )
+        conn.commit()
+        check = self.by_id()["planning-write-identity"]
+        # Confirmed agents, the command line and the owner's UI are nothing to act on.
+        self.assertEqual(("ok", ""), (check["status"], check["fix"]))
+        self.assertEqual("", check["presentation"]["parameters"]["recent_fallbacks"])
+
+        for uid, source in (("5", "mcp"), ("6", "claude-no-pair"), ("7", "mcp")):
+            self.event(
+                conn,
+                uid,
+                kind="planning_write",
+                identity_state="unconfirmed",
+                identity_source=source,
+            )
+        # A fallback older than the recent window is history, not the present.
+        self.event(
+            conn,
+            "8",
+            kind="planning_write",
+            identity_state="unconfirmed",
+            identity_source="claude-hook-unverified",
+            received_at="2020-01-01T00:00:00.000Z",
+        )
+        conn.commit()
+        check = self.by_id()["planning-write-identity"]
+        self.assertEqual("warn", check["status"])
+        parameters = check["presentation"]["parameters"]
+        self.assertEqual("claude-no-pair 1, mcp 2", parameters["recent_fallbacks"])
+        self.assertIn("found no confirmed session: claude-no-pair 1, mcp 2", check["detail"])
+        # Each method says what it means: a key sent with no pair, or no key at all.
+        self.assertIn("left no pair", check["fix"])
+        self.assertIn("stopped sending the key", check["fix"])
+        self.assertNotIn("claude-hook-unverified", check["fix"])
+
+    def test_call_pairs_no_call_took_are_counted(self) -> None:
+        store.connect().close()
+        now = time.time()
+        for name, age in (("toolu_taken_late", 300), ("toolu_just_written", 1)):
+            path = pairs.write(self.path, name, b"{}")
+            assert path is not None
+            os.utime(path, (now - age, now - age))
+        check = self.by_id()["planning-write-identity"]
+        self.assertEqual(1, check["presentation"]["parameters"]["unclaimed_pairs"])
+        self.assertIn("1 call pair(s) the Claude Code hook left", check["detail"])
 
     def test_the_transcript_archive_counts_copies_owed_copies_and_orphans(self) -> None:
         conn = store.connect()

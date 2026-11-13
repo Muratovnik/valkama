@@ -1967,26 +1967,35 @@ writes:
 | --- | --- | --- |
 | `params._meta.sessionId` (Codex) | `confirmed`. The session is `sessionId`; the agent is `_meta.threadId` when it differs from `sessionId` (a subagent's own thread); `_meta.callId` is kept as the tool use id. | `codex-meta` |
 | the same, with an `_identity` argument that names another session, call or agent | `unconfirmed`, with the session from `_meta` | `codex-meta-mismatch` |
-| an `_identity` argument whose `tool_use_id` equals `params._meta["claudecode/toolUseId"]` (Claude Code) | `confirmed`, with the session and agent from `_identity` | `claude-hook` |
+| `params._meta["claudecode/toolUseId"]` (Claude Code), and the [call pair](hook-contract.md#the-call-pair) its `PreToolUse` hook left for that id | `confirmed`, with the session and agent from the pair | `claude-pair` |
+| no pair for that id, and an `_identity` argument whose `tool_use_id` equals it | `confirmed`, with the session and agent from `_identity` | `claude-hook` |
+| no pair, and an `_identity` argument whose `tool_use_id` differs from it | `unconfirmed`, with the session and agent from `_identity` | `claude-hook-mismatch` |
+| no pair and no `_identity` | `unconfirmed`, no session | `claude-no-pair` |
 | an `_identity` argument and no `claudecode/toolUseId` in `_meta` | `unconfirmed`, with the session and agent from `_identity` | `claude-hook-unverified` |
-| an `_identity` argument whose `tool_use_id` differs from `claudecode/toolUseId` | `unconfirmed`, with the session and agent from `_identity` | `claude-hook-mismatch` |
 | none of these | `unconfirmed`, no session | `mcp` |
 
-A model cannot know the id of the call it is about to make, so a matching
-`tool_use_id` is what tells an `_identity` added by a client hook from one the
-model typed. Neither `_meta` key is documented by its client; both are checked,
-never assumed.
+A model cannot know the id of the call it is about to make, so it can neither
+leave a pair for that id nor type an `_identity` that names it; a matching
+`tool_use_id` is what tells either from a guess. A pair counts only for the call
+whose id it carries, and wins over an `_identity` sent beside it. Neither `_meta`
+key is documented by its client; both are checked, never assumed, and each
+call's row records in `source` which way its session was found, which is what
+`valkama doctor` reads to warn about a client that stopped sending one.
 
-`_identity` is the argument a client's `PreToolUse` hook adds to every call of
-this server:
+`_identity` is the argument the `PreToolUse` hook of an earlier release added to
+every call of this server; the current hook leaves the call unchanged and writes
+the call pair instead. The server still reads it, so a session that runs that
+hook keeps its confirmation until it restarts:
 
 ```json
 {"session_id": "<hook session id>", "tool_use_id": "<hook tool use id>", "agent_id": "<optional>", "agent_type": "<optional>"}
 ```
 
-Each value is a string of at most 200 characters, and other keys are ignored.
-The server removes `_identity` from the arguments of every tool, reads included,
-before it checks them against the tool's schema, so no tool refuses it and no
+Each value is a string of at most 200 characters, and other keys are ignored. A
+call pair has the same shape, with `place` beside it, and is read by the same
+rules: a malformed one is no pair. The server removes `_identity` from the
+arguments of every tool, reads included, before it checks them against the
+tool's schema, so no tool refuses it and no
 handler sees it. No published input schema names it, and `tools/list` is the
 same with or without a hook. An `_identity` that does not match this shape is
 dropped: the call runs and is recorded as if it carried none.

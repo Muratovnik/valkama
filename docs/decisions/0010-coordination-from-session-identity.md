@@ -61,9 +61,14 @@ Prototypes run before this decision (Claude Code 2.1.304, Codex Desktop
 2. **Session identity comes from the client, not from the agent.** A
    lifecycle event takes its session from the hook input. An MCP write takes
    it from the call: Codex `_meta.sessionId` and `_meta.threadId`; Claude
-   Code an `_identity` argument added by a `PreToolUse` hook, which the
-   server removes before schema validation and before the argument reaches
-   any domain code. A write without verifiable identity is accepted and
+   Code the pair `tool_use_id → session` that its `PreToolUse` hook leaves
+   beside the store, found through the `_meta["claudecode/toolUseId"]` the
+   client repeats in the call. The hook first added an `_identity` argument
+   to the call instead, which the server removes before schema validation
+   and before the argument reaches any domain code, and still verifies when
+   no pair is found; it stopped because a hook that rewrites a call's input
+   makes Claude Code's auto mode withhold its verdict from every other call
+   of the same response. A write without verifiable identity is accepted and
    marked `unconfirmed`. The process environment of the MCP server and
    free-text author strings are not identity. This replaces the earlier
    invariant that provider hooks are observational feeds and never
@@ -138,8 +143,9 @@ Prototypes run before this decision (Claude Code 2.1.304, Codex Desktop
   Hook trust stays with the client's own review; Valkama never writes trust
   state for the user.
 - Codex `_meta` and Claude Code's `claudecode/toolUseId` in `_meta` are
-  undocumented. The server treats them as inputs to verify, reports their
-  absence in diagnostics, and falls back to hook identity with an
+  undocumented. The server treats them as inputs to verify, records with
+  every write call which way its session was found, reports recent calls
+  that found none in `valkama doctor`, and accepts such a call with an
   `unconfirmed` mark.
 - The product model's kernel vocabulary (Capability, Connection, Assignment
   and their resolution rules) and ADR 0009's split of modules, adapters,

@@ -27,9 +27,57 @@ HOOK = {"session_id": SESSION, "tool_use_id": TOOL_USE}
 
 
 class VerificationTests(unittest.TestCase):
-    def verdict(self, meta: object, argument: object = None) -> tuple:
-        identity = calls.verify_mcp(meta, argument)
+    def verdict(self, meta: object, argument: object = None, paired: object = None) -> tuple:
+        identity = calls.verify_mcp(meta, argument, paired=paired)
         return identity.state, identity.source, identity.session_id, identity.agent_id
+
+    def test_each_way_a_claude_call_finds_its_session(self) -> None:
+        key = {"claudecode/toolUseId": TOOL_USE}
+        cases = [
+            ("the pair names the call", key, None, HOOK,
+             ("confirmed", "claude-pair", SESSION, None)),
+            ("the pair of a subagent's call", key, None, {**HOOK, "agent_id": "a1"},
+             ("confirmed", "claude-pair", SESSION, "a1")),
+            # The pair is what the hook was told; an `_identity` beside it is
+            # the model's, or an older hook's for the same call, and changes nothing.
+            ("a pair and a typed identity", key, {**HOOK, "session_id": "typed"}, HOOK,
+             ("confirmed", "claude-pair", SESSION, None)),
+            ("a pair for another call", key, None, {**HOOK, "tool_use_id": "toolu_other"},
+             ("unconfirmed", "claude-no-pair", None, None)),
+            ("a malformed pair", key, None, {"session_id": SESSION},
+             ("unconfirmed", "claude-no-pair", None, None)),
+            ("no pair, an older hook's identity", key, HOOK, None,
+             ("confirmed", "claude-hook", SESSION, None)),
+            ("the key and nothing else", key, None, None,
+             ("unconfirmed", "claude-no-pair", None, None)),
+            # Without the key there is no call to look up, whatever was found.
+            ("a pair and no key", {}, None, HOOK, ("unconfirmed", "mcp", None, None)),
+            ("a Codex call is never paired", {"sessionId": SESSION, **key}, None,
+             {**HOOK, "session_id": "other"}, ("confirmed", "codex-meta", SESSION, None)),
+        ]  # fmt: skip
+        for label, meta, argument, paired, expected in cases:
+            with self.subTest(label):
+                self.assertEqual(expected, self.verdict(meta, argument, paired))
+
+    def test_only_a_claude_call_is_looked_up(self) -> None:
+        self.assertEqual(TOOL_USE, calls.claude_tool_use({"claudecode/toolUseId": TOOL_USE}))
+        for meta in (
+            {"sessionId": SESSION, "claudecode/toolUseId": TOOL_USE},
+            {},
+            "junk",
+            None,
+            {"claudecode/toolUseId": ""},
+            {"claudecode/toolUseId": 7},
+        ):
+            with self.subTest(meta=meta):
+                self.assertIsNone(calls.claude_tool_use(meta))
+
+    def test_a_paired_call_holds_as_its_claude_session(self) -> None:
+        identity = calls.verify_mcp(
+            {"claudecode/toolUseId": TOOL_USE}, None, paired={**HOOK, "agent_id": "a7"}
+        )
+        with calls.bind(identity, "claim_work_item"):
+            self.assertEqual(f"claude agent a7 (session {SESSION})", calls.holder("agent"))
 
     def test_each_combination_a_client_can_send(self) -> None:
         cases = [
@@ -60,7 +108,7 @@ class VerificationTests(unittest.TestCase):
             ("meta that is not an object", "junk", None, ("unconfirmed", "mcp", None, None)),
             ("an empty sessionId", {"sessionId": ""}, None, ("unconfirmed", "mcp", None, None)),
             ("a malformed hook", {"claudecode/toolUseId": TOOL_USE}, {"session_id": SESSION},
-             ("unconfirmed", "mcp", None, None)),
+             ("unconfirmed", "claude-no-pair", None, None)),
         ]  # fmt: skip
         for label, meta, argument, expected in cases:
             with self.subTest(label):
@@ -91,14 +139,16 @@ class VerificationTests(unittest.TestCase):
 
     def test_every_value_written_is_one_the_code_declares(self) -> None:
         produced = {
-            calls.verify_mcp(meta, argument)
-            for meta, argument in (
-                ({"sessionId": SESSION}, None),
-                ({"sessionId": SESSION}, {**HOOK, "session_id": "x"}),
-                ({"claudecode/toolUseId": TOOL_USE}, HOOK),
-                ({"claudecode/toolUseId": "x"}, HOOK),
-                ({}, HOOK),
-                ({}, None),
+            calls.verify_mcp(meta, argument, paired=paired)
+            for meta, argument, paired in (
+                ({"sessionId": SESSION}, None, None),
+                ({"sessionId": SESSION}, {**HOOK, "session_id": "x"}, None),
+                ({"claudecode/toolUseId": TOOL_USE}, None, HOOK),
+                ({"claudecode/toolUseId": TOOL_USE}, None, None),
+                ({"claudecode/toolUseId": TOOL_USE}, HOOK, None),
+                ({"claudecode/toolUseId": "x"}, HOOK, None),
+                ({}, HOOK, None),
+                ({}, None, None),
             )
         } | {calls.browser()}
         self.assertLessEqual({identity.state for identity in produced}, set(calls.STATES))
@@ -292,6 +342,15 @@ class HeartbeatPlaceTests(unittest.TestCase):
 
     def test_a_confirmed_call_from_another_place_changes_only_opened_in(self) -> None:
         self.call({**HOOK, "place": "terminal"})
+        self.assertEqual(("terminal", "claude-desktop", "C:/demo", "local_0000-demo"), self.where())
+
+    def test_a_pair_s_place_moves_it_as_an_identity_s_did(self) -> None:
+        identity = calls.verify_mcp(
+            {"claudecode/toolUseId": TOOL_USE}, None, paired={**HOOK, "place": "terminal"}
+        )
+        with calls.bind(identity, "comment_work_item"):
+            calls.call_id(self.conn, None)
+        self.conn.commit()
         self.assertEqual(("terminal", "claude-desktop", "C:/demo", "local_0000-demo"), self.where())
 
     def test_a_call_that_names_no_place_or_the_same_one_changes_nothing(self) -> None:

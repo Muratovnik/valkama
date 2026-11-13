@@ -29,7 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from server import housekeeping, sessions, store
-from server.hooks import entry, ingest, normalize, spool
+from server.hooks import entry, ingest, normalize, pairs, spool
 
 UID_A = "00000000-0000-4000-8000-00000000000a"
 UID_B = "00000000-0000-4000-8000-00000000000b"
@@ -233,47 +233,104 @@ class NormalizeTests(unittest.TestCase):
                 self.assertIsNone(normalize.parse_input(raw))
 
 
-class IdentityTransformTests(unittest.TestCase):
-    def test_the_original_arguments_gain_identity_and_nothing_else_changes(self) -> None:
-        output = normalize.identity_output(json.loads(json.dumps(P1_PRE_TOOL_USE)))
-        assert output is not None
-        specific = output["hookSpecificOutput"]
-        self.assertEqual("PreToolUse", specific["hookEventName"])
-        # Rewriting the input is not a permission decision; none is granted.
-        self.assertNotIn("permissionDecision", specific)
-        updated = dict(specific["updatedInput"])
-        identity = updated.pop("_identity")
-        self.assertEqual(P1_PRE_TOOL_USE["tool_input"], updated)
+class CallPairTests(unittest.TestCase):
+    """What the `PreToolUse` hook records for one call: the `_identity` contract, from the input."""
+
+    def test_the_pair_names_the_call_and_its_session(self) -> None:
         self.assertEqual(
-            {"session_id": P1_PRE_TOOL_USE["session_id"], "tool_use_id": "toolu_01ABC"}, identity
+            {"session_id": P1_PRE_TOOL_USE["session_id"], "tool_use_id": "toolu_01ABC"},
+            normalize.call_pair(json.loads(json.dumps(P1_PRE_TOOL_USE))),
         )
 
     def test_inside_a_subagent_the_agent_is_named(self) -> None:
-        output = normalize.identity_output(
-            {**P1_PRE_TOOL_USE, "agent_id": "a7", "agent_type": "Explore"}
-        )
-        assert output is not None
-        identity = output["hookSpecificOutput"]["updatedInput"]["_identity"]
-        self.assertEqual(("a7", "Explore"), (identity["agent_id"], identity["agent_type"]))
+        pair = normalize.call_pair({**P1_PRE_TOOL_USE, "agent_id": "a7", "agent_type": "Explore"})
+        assert pair is not None
+        self.assertEqual(("a7", "Explore"), (pair["agent_id"], pair["agent_type"]))
 
-    def test_an_identity_the_model_wrote_is_replaced(self) -> None:
-        forged = {**P1_PRE_TOOL_USE, "tool_input": {"_identity": {"session_id": "someone-else"}}}
-        output = normalize.identity_output(forged)
-        assert output is not None
-        identity = output["hookSpecificOutput"]["updatedInput"]["_identity"]
-        self.assertEqual(P1_PRE_TOOL_USE["session_id"], identity["session_id"])
+    def test_the_call_s_arguments_are_never_read(self) -> None:
+        # What the model wrote, an `_identity` included, says nothing about who
+        # made the call, and arguments of any shape leave the pair as it is.
+        for arguments in ({"_identity": {"session_id": "someone-else"}}, ["x"], None):
+            with self.subTest(arguments=arguments):
+                pair = normalize.call_pair({**P1_PRE_TOOL_USE, "tool_input": arguments})
+                assert pair is not None
+                self.assertEqual(P1_PRE_TOOL_USE["session_id"], pair["session_id"])
 
-    def test_malformed_input_gives_no_output(self) -> None:
+    def test_malformed_input_gives_no_pair(self) -> None:
         cases = {
             "not an MCP tool": {"tool_name": "Bash"},
-            "arguments are not an object": {"tool_input": ["x"]},
             "no tool use id": {"tool_use_id": ""},
             "no session": {"session_id": None},
             "another hook": {"hook_event_name": "PostToolUse"},
         }
         for name, change in cases.items():
             with self.subTest(name):
-                self.assertIsNone(normalize.identity_output({**P1_PRE_TOOL_USE, **change}))
+                self.assertIsNone(normalize.call_pair({**P1_PRE_TOOL_USE, **change}))
+
+
+class PairFileTests(unittest.TestCase):
+    """The pair's file beside the store: written whole, taken once, pruned when nobody came."""
+
+    def setUp(self) -> None:
+        self.home = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self.home.cleanup)
+        self.path = os.path.join(self.home.name, "store", "valkama.sqlite3")
+        os.makedirs(os.path.dirname(self.path))
+        self.folder = pairs.directory(self.path)
+        self.addCleanup(setattr, pairs, "_pruned_at", pairs._pruned_at)
+        pairs._pruned_at = None
+
+    def take(self, tool_use_id: str, now: float = 1_000_000.0) -> object:
+        return pairs.take(self.path, tool_use_id, now=now, monotonic=now)
+
+    def test_a_pair_is_taken_once(self) -> None:
+        written = pairs.write(self.path, "toolu_01ABC", b'{"session_id": "S"}')
+        self.assertEqual(os.path.join(self.folder, "toolu_01ABC.json"), written)
+        self.assertEqual({"session_id": "S"}, self.take("toolu_01ABC"))
+        self.assertIsNone(self.take("toolu_01ABC"))
+        self.assertEqual([], os.listdir(self.folder))
+
+    def test_an_id_that_cannot_name_a_file_and_a_missing_store_directory_leave_nothing(
+        self,
+    ) -> None:
+        for odd in ("", "../toolu", "toolu_01/x", "t" * 129, "toolu 1"):
+            with self.subTest(odd=odd):
+                self.assertIsNone(pairs.write(self.path, odd, b"{}"))
+                self.assertIsNone(self.take(odd))
+        absent = os.path.join(self.home.name, "absent", "valkama.sqlite3")
+        self.assertIsNone(pairs.write(absent, "toolu_01ABC", b"{}"))
+        self.assertFalse(os.path.exists(os.path.dirname(absent)))
+        self.assertFalse(os.path.exists(self.folder))
+
+    def test_a_file_that_is_not_a_pair_is_taken_as_nothing(self) -> None:
+        for content in (b"not json", b"\xff\xfe", b"[" * (5000)):
+            with self.subTest(content=content[:10]):
+                pairs.write(self.path, "toolu_01ABC", content)
+                self.assertIsNone(self.take("toolu_01ABC"))
+                self.assertFalse(os.path.exists(os.path.join(self.folder, "toolu_01ABC.json")))
+
+    def test_pairs_nobody_took_are_counted_and_then_pruned(self) -> None:
+        now = 1_000_000.0
+        for name, age in (("fresh", 5), ("late", 120), ("old", pairs.STALE_SECONDS + 1)):
+            path = pairs.write(self.path, f"toolu_{name}", b"{}")
+            assert path is not None
+            os.utime(path, (now - age, now - age))
+        self.assertEqual(
+            {"unclaimed": 2, "newest_age_seconds": 120}, pairs.summary(self.path, now=now)
+        )
+        # The first take of a process prunes; one within the interval does not,
+        # however old the pairs have grown, and the next one after it does.
+        self.take("toolu_other", now)
+        self.assertEqual(["toolu_fresh.json", "toolu_late.json"], sorted(os.listdir(self.folder)))
+        much_later = now + 2 * pairs.STALE_SECONDS
+        pairs.take(
+            self.path, "toolu_other", now=much_later, monotonic=now + pairs.PRUNE_EVERY_SECONDS - 1
+        )
+        self.assertEqual(2, len(os.listdir(self.folder)))
+        pairs.take(
+            self.path, "toolu_other", now=much_later, monotonic=now + pairs.PRUNE_EVERY_SECONDS
+        )
+        self.assertEqual([], os.listdir(self.folder))
 
 
 class SessionTouchTests(StoreCase):
@@ -782,13 +839,35 @@ class EntryTests(StoreCase):
         assert row is not None
         self.assertEqual("codex", row["client"])
 
-    def test_pre_tool_use_prints_the_identity_output(self) -> None:
-        code, out, _ = self.run_hook(
-            "claude", "pre-tool-use", stdin=json.dumps(P1_PRE_TOOL_USE).encode()
+    def test_pre_tool_use_leaves_the_pair_beside_the_store_and_prints_nothing(self) -> None:
+        payload = {**P1_PRE_TOOL_USE, "agent_id": "a7", "agent_type": "Explore"}
+        code, out, _ = self.run_hook("claude", "pre-tool-use", stdin=json.dumps(payload).encode())
+        # Nothing on stdout is no `updatedInput` and no permission decision: the
+        # call goes out as the model wrote it.
+        self.assertEqual((0, b""), (code, out))
+        path = os.path.join(pairs.directory(self.path), "toolu_01ABC.json")
+        with open(path, "rb") as handle:
+            pair = json.loads(handle.read())
+        self.assertEqual(
+            {
+                "session_id": P1_PRE_TOOL_USE["session_id"],
+                "tool_use_id": "toolu_01ABC",
+                "agent_id": "a7",
+                "agent_type": "Explore",
+            },
+            {key: pair[key] for key in pair if key != "place"},
         )
-        self.assertEqual(0, code)
-        updated = json.loads(out.decode("utf-8"))["hookSpecificOutput"]["updatedInput"]
-        self.assertEqual("переход → готово", updated["reference"])
+        # A pair is not a store write: no row, nothing spooled.
+        self.assertEqual([], self.events())
+        self.assertEqual([], spool.pending(self.spool))
+
+    def test_a_protected_store_gets_no_pair(self) -> None:
+        with mock.patch.dict(os.environ, {"VALKAMA_PROTECTED_STORE": self.path}):
+            code, out, _ = self.run_hook(
+                "claude", "pre-tool-use", stdin=json.dumps(P1_PRE_TOOL_USE).encode()
+            )
+        self.assertEqual((0, b""), (code, out))
+        self.assertFalse(os.path.exists(pairs.directory(self.path)))
 
     def test_misuse_and_garbage_print_nothing_and_exit_zero(self) -> None:
         cases = {
@@ -856,18 +935,18 @@ class EntryProcessTests(unittest.TestCase):
         self.assertEqual(2, len(spool.pending(spool.directory(self.path))))
         self.assertFalse(os.path.exists(self.path))
 
-    def test_pre_tool_use_answers_on_stdout_and_exits_zero(self) -> None:
+    def test_pre_tool_use_prints_nothing_exits_zero_and_leaves_the_pair(self) -> None:
         done = self.hook(
             "claude", "pre-tool-use", json.dumps(P1_PRE_TOOL_USE, ensure_ascii=False).encode()
         )
-        self.assertEqual(0, done.returncode, done.stderr[:400])
-        updated = json.loads(done.stdout.decode("utf-8"))["hookSpecificOutput"]["updatedInput"]
-        self.assertEqual("toolu_01ABC", updated["_identity"]["tool_use_id"])
-        self.assertEqual(P1_PRE_TOOL_USE["tool_input"]["nested"], updated["nested"])
+        self.assertEqual((0, b""), (done.returncode, done.stdout), done.stderr[:400])
+        folder = pairs.directory(self.path)
+        self.assertEqual(["toolu_01ABC.json"], os.listdir(folder))
         malformed = self.hook("claude", "pre-tool-use", b'{"tool_name": "mcp__valkama__x"}')
         self.assertEqual((0, b""), (malformed.returncode, malformed.stdout))
+        self.assertEqual(["toolu_01ABC.json"], os.listdir(folder))
 
-    def test_the_identity_transform_loads_no_store_and_a_hook_no_surface(self) -> None:
+    def test_the_call_pair_loads_no_store_and_a_hook_no_surface(self) -> None:
         script = (
             "import io, json, sys\n"
             "from server.hooks import entry\n"
@@ -877,7 +956,7 @@ class EntryProcessTests(unittest.TestCase):
             "snapshot = 'ctypes' in sys.modules\n"
             "entry.main(['claude', 'stop'], io.BytesIO(b'{\"session_id\": \"S\"}'), io.BytesIO())\n"
             "lifecycle = sorted(m for m in sys.modules if m.startswith('server.'))\n"
-            "sys.stdout.write(json.dumps([bool(out.getvalue()), transform, snapshot, lifecycle]))\n"
+            "sys.stdout.write(json.dumps([out.getvalue().decode(), transform, snapshot, lifecycle]))\n"
         )
         done = subprocess.run(
             [sys.executable, "-c", script],
@@ -889,12 +968,23 @@ class EntryProcessTests(unittest.TestCase):
             check=True,
         )
         answered, transform, snapshot, lifecycle_modules = json.loads(done.stdout)
-        self.assertTrue(answered)
+        self.assertEqual("", answered)
+        self.assertTrue(
+            os.path.isfile(os.path.join(pairs.directory(self.path), "toolu_01ABC.json"))
+        )
         self.assertNotIn("server.store", transform)
-        # The transform reads where the session is open from variables alone:
-        # the process snapshot belongs to a session start, never to a tool call.
+        # The pair reads where the session is open from variables alone: the
+        # process snapshot belongs to a session start, never to a tool call. The
+        # store's path comes from `notify.settings`, as the status line's does.
         self.assertEqual(
-            {"server.hooks", "server.hooks.entry", "server.hooks.normalize", "server.hooks.place"},
+            {
+                "server.hooks",
+                "server.hooks.entry",
+                "server.hooks.normalize",
+                "server.hooks.notify",
+                "server.hooks.pairs",
+                "server.hooks.place",
+            },
             set(transform),
         )
         self.assertFalse(snapshot)

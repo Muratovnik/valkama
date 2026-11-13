@@ -18,14 +18,20 @@ A write made outside any bound call — the execution runner in the background �
 writes `call_id` NULL and reads exactly like history written before identity
 existed: unconfirmed.
 
-Verification is a pure function of what the client sent. Codex puts the session
-in `_meta` of every call. Claude Code gets it into the call through a
-`PreToolUse` hook that adds an `_identity` argument; what tells that argument
-from one the model typed is that the hook also knows the call's `tool_use_id`,
-which Claude Code repeats in `_meta["claudecode/toolUseId"]` and a model cannot
-know in advance. Neither key is documented, so each is an input to check, never
-an assumption. The server's own environment and the free-text `author` are
-never identity.
+Verification is a pure function of what the client sent and of the pair its
+hook left. Codex puts the session in `_meta` of every call. Claude Code repeats
+the call's `tool_use_id` in `_meta["claudecode/toolUseId"]`, and its
+`PreToolUse` hook, which is told that id with the session, leaves the pair
+`tool_use_id → session` for the server to find (`hooks.pairs`). A model cannot
+know the id of the call it is about to make, so it cannot leave a pair for it.
+
+An older hook added the same object to the call as an `_identity` argument
+instead, and what told it from one the model typed was the same id. It is still
+read when no pair is found, so a session whose hook predates the pair keeps its
+confirmation until it restarts. Neither `_meta` key is documented, so each is an
+input to check, never an assumption, and each call records in `identity_source`
+which way its session was found. The server's own environment and the free-text
+`author` are never identity.
 """
 
 from __future__ import annotations
@@ -56,6 +62,10 @@ STATES = (CONFIRMED, UNCONFIRMED)
 CODEX_META = "codex-meta"
 #: Codex: `_meta.sessionId`, but an `_identity` argument that disagrees with it.
 CODEX_META_MISMATCH = "codex-meta-mismatch"
+#: Claude Code: the pair the hook left for `_meta["claudecode/toolUseId"]`.
+CLAUDE_PAIR = "claude-pair"
+#: Claude Code: `claudecode/toolUseId` in `_meta`, but no pair for it and no `_identity`.
+CLAUDE_NO_PAIR = "claude-no-pair"
 #: Claude Code: `_identity` whose `tool_use_id` equals `_meta["claudecode/toolUseId"]`.
 CLAUDE_HOOK = "claude-hook"
 #: Claude Code: `_identity`, but no `claudecode/toolUseId` in `_meta` to check it against.
@@ -74,6 +84,8 @@ VALKAMA = "valkama"
 SOURCES = (
     CODEX_META,
     CODEX_META_MISMATCH,
+    CLAUDE_PAIR,
+    CLAUDE_NO_PAIR,
     CLAUDE_HOOK,
     CLAUDE_HOOK_UNVERIFIED,
     CLAUDE_HOOK_MISMATCH,
@@ -83,7 +95,7 @@ SOURCES = (
     VALKAMA,
 )
 
-#: The argument a `PreToolUse` hook adds. Removed before schema validation.
+#: The argument an older `PreToolUse` hook adds. Removed before schema validation.
 IDENTITY_ARGUMENT = "_identity"
 #: Who signs a browser write that names no author: the owner.
 OWNER_ACTOR = "user"
@@ -133,7 +145,7 @@ def _text(value: object) -> str | None:
 
 
 def identity_argument(value: object) -> dict[str, str] | None:
-    """The hook's `_identity` object, or None when it is malformed.
+    """The hook's pair, or an older hook's `_identity` object; None when it is malformed.
 
     The contract is `{"session_id", "tool_use_id", "agent_id"?, "agent_type"?,
     "place"?}`, each a string. Anything else in it is ignored. A malformed one is
@@ -161,17 +173,34 @@ def identity_argument(value: object) -> dict[str, str] | None:
     return found
 
 
+def claude_tool_use(meta: object) -> str | None:
+    """The `tool_use_id` whose pair to look for, or None for a call that has none.
+
+    A Codex call names its session in `_meta` and is never looked up.
+    """
+
+    if not isinstance(meta, Mapping) or _text(meta.get("sessionId")) is not None:
+        return None
+    return _text(meta.get(_CLAUDE_TOOL_USE))
+
+
 def verify_mcp(
     meta: object,
     argument: object,
     *,
+    paired: object = None,
     client: str | None = None,
     client_version: str | None = None,
 ) -> Identity:
-    """The identity of one MCP tool call, from its `_meta` and stripped `_identity`.
+    """The identity of one MCP tool call, from its `_meta`, its pair and stripped `_identity`.
 
-    `client` is what the handshake named, when there was one; otherwise the
-    channel the identity came through names it.
+    `paired` is what `hooks.pairs.take` read for `claude_tool_use(meta)`, or
+    None. A pair confirms the call only when it names that same id, so a pair is
+    never borrowed by another call. With no pair, an older hook's `_identity` is
+    verified as it always was; with neither, the call is unconfirmed, and its
+    source says whether the client sent the key at all. `client` is what the
+    handshake named, when there was one; otherwise the channel the identity came
+    through names it.
     """
 
     meta = meta if isinstance(meta, Mapping) else {}
@@ -197,6 +226,19 @@ def verify_mcp(
             client_version=client_version,
         )
     tool_use = _text(meta.get(_CLAUDE_TOOL_USE))
+    pair = identity_argument(paired) if tool_use is not None else None
+    if pair is not None and pair["tool_use_id"] == tool_use:
+        return Identity(
+            state=CONFIRMED,
+            source=CLAUDE_PAIR,
+            session_id=pair["session_id"],
+            agent_id=pair.get("agent_id"),
+            agent_type=pair.get("agent_type"),
+            tool_use_id=tool_use,
+            client=client or "claude",
+            client_version=client_version,
+            opened_in=pair.get("place"),
+        )
     if claimed is not None:
         if tool_use is None:
             state, source = UNCONFIRMED, CLAUDE_HOOK_UNVERIFIED
@@ -217,7 +259,7 @@ def verify_mcp(
         )
     return Identity(
         state=UNCONFIRMED,
-        source=MCP,
+        source=MCP if tool_use is None else CLAUDE_NO_PAIR,
         tool_use_id=tool_use,
         client=client or ("claude" if tool_use is not None else None),
         client_version=client_version,
@@ -275,12 +317,12 @@ def from_agent() -> bool:
 #: The name a holder opens with, by the channel that proved the session. Named
 #: after the channel rather than the handshake's `clientInfo`, so one client
 #: reads the same whether or not it opened with `initialize`.
-_CHANNEL_NAMES = {CODEX_META: "codex", CLAUDE_HOOK: "claude"}
+_CHANNEL_NAMES = {CODEX_META: "codex", CLAUDE_PAIR: "claude", CLAUDE_HOOK: "claude"}
 _PLAIN_TEXT = r"[A-Za-z0-9._:-]{1,40}"
 #: An identifier a holder carries as it is: what both clients send today.
 _PLAIN_ID = re.compile(f"^{_PLAIN_TEXT}$")
 _HOLDER_LABEL = re.compile(
-    f"(?:{'|'.join(_CHANNEL_NAMES.values())})"
+    f"(?:{'|'.join(sorted(set(_CHANNEL_NAMES.values())))})"
     f"(?: agent ({_PLAIN_TEXT}))? \\(session ({_PLAIN_TEXT})\\)"
 )
 

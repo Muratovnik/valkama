@@ -10,7 +10,7 @@ member, and an ancestor contributes its executable name to a lookup, never its
 path, its arguments or its process id.
 
 `ancestors` is the one impure reader, and the hook calls it on a session start
-only. It imports `ctypes` when called, so the identity transform, which imports
+only. It imports `ctypes` when called, so the call pair, which imports
 this module on every Valkama tool call, never loads it.
 """
 

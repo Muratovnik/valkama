@@ -115,9 +115,11 @@ technical store-generation guard.
   Valkama projections with provenance and bounded diagnostics.
 - Session identity comes from the client, not from the agent. A lifecycle
   event takes its session from the hook input; an MCP write takes it from the
-  call — Codex `_meta.sessionId` and `_meta.threadId`, or an `_identity`
-  argument a Claude Code `PreToolUse` hook adds, which the server removes
-  before schema validation. A write without verifiable identity is accepted
+  call — Codex `_meta.sessionId` and `_meta.threadId`, or for Claude Code the
+  pair its `PreToolUse` hook leaves for the `claudecode/toolUseId` the call
+  carries in `_meta` (an earlier hook added an `_identity` argument instead,
+  which the server still verifies and removes before schema validation). A
+  write without verifiable identity is accepted
   and marked `unconfirmed`. The MCP server's process environment and
   free-text author strings are never identity; OTel remains an observational
   feed.
