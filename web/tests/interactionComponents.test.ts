@@ -75,6 +75,10 @@ const planningSurface = readFileSync(
   new URL('../src/pages/planning/PlanningModuleSurface.vue', import.meta.url),
   'utf8',
 )
+const cardPanel = readFileSync(
+  new URL('../src/pages/planning/PlanningCardPanel.vue', import.meta.url),
+  'utf8',
+)
 const workspace = readFileSync(
   new URL('../src/pages/planning/PlanningWorkspace.vue', import.meta.url),
   'utf8',
@@ -134,7 +138,8 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
   assert.match(drawer, /'?open'?: \[reference: string, from: InspectorReturn\]/)
   assert.match(drawer, /'?changed'?: \[\]/)
   assert.match(drawer, /emit\('open'/)
-  assert.match(planningSurface, /<PlanningCardDrawer/)
+  assert.match(planningSurface, /<PlanningCardPanel/)
+  assert.match(cardPanel, /<PlanningCardDrawer/)
   assert.match(cardDrawer, /<ResizableInspector/)
   assert.match(drawer, /<DrawerFrame/)
   assert.match(drawer, /<InspectorTabs/)
@@ -145,7 +150,8 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
   assert.match(drawer, /<InspectorOverview/)
   // A route-owned entity gets a fresh inspector subtree. A refresh of that same
   // keyed entity keeps the current panel and only reloads its data.
-  assert.match(planningSurface, /:key="openIdentity"/)
+  assert.match(planningSurface, /:identity="openIdentity"/)
+  assert.match(cardPanel, /:key="identity"/)
   assert.match(drawer, /:key="reference"/)
   assert.match(
     drawer,
@@ -168,8 +174,9 @@ test('the work-item inspector uses the persisted overlay drawer without consumin
 })
 
 test('command dialogs layer over the inspector using shared modal focus ownership', () => {
-  assert.match(planningSurface, /v-if="open && boundSpaceResourceRef"/)
-  assert.doesNotMatch(planningSurface, /open && !composerOpen/)
+  // The card stays while the composer is open: only an open item and its space decide it.
+  assert.match(planningSurface, /open\.value && boundSpaceResourceRef\.value\n/)
+  assert.doesNotMatch(planningSurface, /open(?:\.value)? && !composerOpen/)
   assert.match(cardDrawer, /<ResizableInspector/)
   assert.match(inspector, /<OverlayHost/)
   assert.match(overlay, /interactive\?: boolean/)

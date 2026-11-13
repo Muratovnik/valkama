@@ -21,9 +21,8 @@ import { useOpenCardModel } from '@/pages/planning/composables/useOpenCardModel.
 import { usePlanningCardTrail } from '@/pages/planning/composables/usePlanningCardTrail.ts'
 import { withBranch, withChain } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import { usePlanningReferenceLinks } from '@/pages/planning/composables/usePlanningReferenceLinks.ts'
-import PlanningCardDrawer from '@/pages/planning/PlanningCardDrawer.vue'
-
-import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
+import PlanningCardPanel from '@/pages/planning/PlanningCardPanel.vue'
+import type { PlanningCardProps } from '@/pages/planning/PlanningCardPanel.vue'
 
 import { fetchPlanning } from '@/shared/api/planningApi.ts'
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -138,21 +137,17 @@ function show(reference: string | null) {
       : planningWorkItemEntity({ space_ref: at, reference }),
   )
 }
-const { canGoBack, closeItem, goBack, openItem, reset, returning } = usePlanningCardTrail({
-  open: () => open.value,
-  show,
-})
+const trail = usePlanningCardTrail({ open: () => open.value, show })
 // Closed from outside the card, by Back or by another module: the walk ends with it.
 watch(open, (reference) => {
-  if (reference === null) reset()
+  if (reference === null) trail.reset()
 })
 
-const card = useTemplateRef<InstanceType<typeof WorkItemInspector>>('card')
-const closePanel = () => card.value?.close()
+const panel = useTemplateRef<InstanceType<typeof PlanningCardPanel>>('panel')
 
 // References to the card's space open in the card, through its departure and onto its trail.
 usePlanningReferenceLinks(space, model, (reference) => {
-  if (reference !== open.value) card.value?.openFrom(reference)
+  panel.value?.openFrom(reference)
 })
 
 /** The chain on the board's graph, in the card's project: the overlay has no graph of its own. */
@@ -170,38 +165,37 @@ function showChain(chain: WorkItemChain, branch: string | null) {
 
 /** The work item whose card is on show, by the id a sender of alerts knows it by. */
 const selectedId = computed(() => openRecord.value?.work_item_id ?? null)
+
+/** What the open card is read and written with here, from the one read of its space. */
+const shownCard = computed((): PlanningCardProps | null =>
+  open.value && resourceRef.value && bound.value
+    ? {
+        reference: open.value,
+        resourceRef: resourceRef.value,
+        projectId: bound.value.projectId,
+        refreshToken: 0,
+        workflow: model.value?.workflow ?? null,
+        spaceReading: reading.value,
+        writable: writable.value,
+        parent: parent.value,
+        kind: openRecord.value?.kind,
+        questionAsked: props.questionAsked,
+        onChanged: readSpace,
+        onChain: showChain,
+        onQuestionTaken: () => emit('question-taken'),
+      }
+    : null,
+)
+
 defineExpose({ selectedId })
 </script>
 
 <template>
-  <PlanningCardDrawer
-    :content-key="identity"
-    :open="Boolean(open && resourceRef)"
+  <PlanningCardPanel
+    ref="panel"
+    :identity="identity"
     :label="openRecord?.title || open || ''"
-    @close="closePanel"
-  >
-    <WorkItemInspector
-      v-if="open && resourceRef && bound"
-      ref="card"
-      :key="identity"
-      :reference="open"
-      :resource-ref="resourceRef"
-      :project-id="bound.projectId"
-      :can-go-back="canGoBack"
-      :return-to="returning"
-      :refresh-token="0"
-      :workflow="model?.workflow ?? null"
-      :space-reading="reading"
-      :writable="writable"
-      :parent="parent"
-      :kind="openRecord?.kind"
-      :question-asked="questionAsked"
-      @back="goBack"
-      @changed="readSpace"
-      @chain="showChain"
-      @close="closeItem"
-      @open="(reference, left) => openItem(reference, true, left)"
-      @question-taken="emit('question-taken')"
-    />
-  </PlanningCardDrawer>
+    :trail="trail"
+    :card="shownCard"
+  />
 </template>
