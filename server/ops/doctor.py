@@ -37,8 +37,9 @@ from urllib import error, request
 from .. import launcher, runner, static_assets, store, transcripts
 from ..alerts import readiness as alert_readiness
 from ..executions import drivers as execution_drivers
-from ..hooks import ingest, spool
+from ..hooks import ingest, pairs, spool
 from ..memory import service as memory_service
+from ..planning import calls as planning_calls
 from ..platform import installed
 from ..projects import project_registry
 from ..quota import poll as quota_poll
@@ -332,6 +333,36 @@ def _store_checks() -> list[dict]:
 
 #: How far back the delivery and identity counters look.
 EVENT_WINDOW_DAYS = 14
+#: How far back an agent write that found no confirmed session makes the identity
+#: check warn: what a client does now, not what it did before a fix.
+RECENT_FALLBACK_HOURS = 24
+
+#: Writes that are not an agent's: the owner's UI, Valkama itself, the command line.
+_NOT_AGENT_SOURCES = (planning_calls.BROWSER, planning_calls.VALKAMA, planning_calls.CLI)
+#: What to do about each way an agent write can fail to find its session.
+_FALLBACK_FIXES = {
+    planning_calls.CLAUDE_NO_PAIR: (
+        "claude-no-pair: Claude Code sent `claudecode/toolUseId`, but its PreToolUse hook left"
+        " no pair beside the store. Register `valkama hook claude pre-tool-use` for the"
+        " mcp__valkama__ tools and check that the store's directory exists."
+    ),
+    planning_calls.MCP: (
+        "mcp: the call carried neither a Codex session nor `claudecode/toolUseId` in `_meta`."
+        " From Claude Code that means the client stopped sending the key; its calls stay"
+        " unconfirmed, and its claims hold by author, until it sends it again."
+    ),
+    planning_calls.CLAUDE_HOOK_UNVERIFIED: (
+        "claude-hook-unverified: an older hook's `_identity` came without `claudecode/toolUseId`"
+        " to check it against. Restart that session so it runs the current hook."
+    ),
+    planning_calls.CLAUDE_HOOK_MISMATCH: (
+        "claude-hook-mismatch: an `_identity` named another call than the one it came with,"
+        " which is what a model typing one looks like."
+    ),
+    planning_calls.CODEX_META_MISMATCH: (
+        "codex-meta-mismatch: an `_identity` disagreed with the session Codex sent."
+    ),
+}
 
 
 def _spool_checks(path: str) -> list[dict]:
@@ -403,6 +434,18 @@ def _execution_event_checks(path: str) -> list[dict]:
                 " WHERE identity_source = ? GROUP BY client ORDER BY client",
                 (ingest.IDENTITY_SOURCE,),
             ).fetchall()
+            fallbacks = conn.execute(
+                "SELECT identity_source, COUNT(*), MAX(received_at) FROM execution_events"
+                " WHERE kind = 'planning_write' AND identity_state = ?"
+                " AND identity_source NOT IN (?,?,?)"
+                " AND received_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)"
+                " GROUP BY identity_source ORDER BY identity_source",
+                (
+                    planning_calls.UNCONFIRMED,
+                    *_NOT_AGENT_SOURCES,
+                    f"-{RECENT_FALLBACK_HOURS} hours",
+                ),
+            ).fetchall()
         finally:
             conn.close()
     except sqlite3.Error as failure:
@@ -417,7 +460,6 @@ def _execution_event_checks(path: str) -> list[dict]:
             )
         ]
     window = f"in the last {EVENT_WINDOW_DAYS} days"
-    writes = ", ".join(f"{state}/{source} {count}" for state, source, count in identities)
     checks = [
         _check(
             "hook-delivery",
@@ -427,16 +469,7 @@ def _execution_event_checks(path: str) -> list[dict]:
             presentation_code="hook-delivery",
             parameters={"count": int(spooled), "days": EVENT_WINDOW_DAYS},
         ),
-        _check(
-            "planning-write-identity",
-            "Planning write identity",
-            "ok",
-            f"Planning writes {window} by identity and source: {writes}"
-            if writes
-            else f"no Planning write recorded its identity {window}",
-            presentation_code="planning-write-identity",
-            parameters={"writes": writes, "days": EVENT_WINDOW_DAYS},
-        ),
+        _write_identity_check(path, identities, fallbacks),
     ]
     if latest:
         last = ", ".join(f"{client} {at}" for client, at in latest)
@@ -463,6 +496,59 @@ def _execution_event_checks(path: str) -> list[dict]:
             )
         )
     return checks
+
+
+def _write_identity_check(path: str, identities: list[tuple], fallbacks: list[tuple]) -> dict:
+    """How the Planning writes found their session, and whether recent ones did not.
+
+    Every write call records the way its session was determined
+    (`identity_source`). Neither `_meta` key a client sends is documented, so a
+    client that stops sending one shows up here first, as agent writes of the
+    last `RECENT_FALLBACK_HOURS` that found no confirmed session. The call pairs
+    the Claude Code hook left and no call took say the same about the calls that
+    write nothing: the hook ran, and the call arrived without the key.
+    """
+
+    window = f"in the last {EVENT_WINDOW_DAYS} days"
+    writes = ", ".join(f"{state}/{source} {count}" for state, source, count in identities)
+    recent = ", ".join(f"{source} {count}" for source, count, _ in fallbacks)
+    newest = max((at for _, _, at in fallbacks), default="")
+    left = pairs.summary(path, now=datetime.now(UTC).timestamp())
+    detail = (
+        f"Planning writes {window} by identity and source: {writes}"
+        if writes
+        else f"no Planning write recorded its identity {window}"
+    )
+    if recent:
+        detail += (
+            f"; in the last {RECENT_FALLBACK_HOURS} hours agent writes found no confirmed"
+            f" session: {recent}, the newest at {newest}"
+        )
+    if left["unclaimed"]:
+        detail += (
+            f"; {left['unclaimed']} call pair(s) the Claude Code hook left in"
+            f" {pairs.directory(path)} were taken by no call, the newest"
+            f" {left['newest_age_seconds']} s old"
+        )
+    fix = " ".join(
+        _FALLBACK_FIXES.get(source, f"{source}: the call proved no session.")
+        for source, _, _ in fallbacks
+    )
+    return _check(
+        "planning-write-identity",
+        "Planning write identity",
+        "warn" if recent else "ok",
+        detail,
+        fix,
+        presentation_code="planning-write-identity",
+        parameters={
+            "writes": writes,
+            "days": EVENT_WINDOW_DAYS,
+            "recent_fallbacks": recent,
+            "newest_fallback": newest,
+            "unclaimed_pairs": left["unclaimed"],
+        },
+    )
 
 
 #: How old the oldest owed copy may be before the archive check warns. A copy
