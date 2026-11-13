@@ -57,6 +57,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **The Analytics bar no longer runs past its end beside a span of your own days.** In a
+  window from about 1108 to 1300px beside the navigation, the bar's one line with every
+  word and gap given up still ran «Refresh» up to 188px past its end, and pressing it
+  scrolled the bar sideways. Such a bar is now the two rows a narrower bar has, with a
+  failed refresh said in full words on the second; a bar with room for the one line keeps
+  it.
 - **The Analytics bar says how old the newest record is beside a period with no work.**
   The bar's freshness stood empty while the panel said the period spent nothing, though
   the answer named the store's newest record; it now says its age there too.

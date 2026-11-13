@@ -25,7 +25,10 @@
  * then the room between its parts narrows, then the age is said by its span, «● 15 s», in the
  * room of the widest span, and then the failure's words go to its disc and its retry. Past all of
  * that a span's name is cut at its end, its hint saying it whole. The age's span is never given
- * up, and neither is a day of the period: its fields are as wide as a date needs.
+ * up, and neither is a day of the period: its fields are as wide as a date needs. A line that runs
+ * past its end with all of that given up gives up the one line last, and is the two rows of a
+ * narrower bar, which take their words back: the reader's own days beside a failure need that up
+ * to a window of about 1300px.
  *
  * On a phone the bar is two rows: the periods in one row that scrolls sideways, the chosen one
  * scrolled into view, and under it the filter, the freshness and the read again, by its icon.
@@ -106,12 +109,24 @@ watch(() => props.view.period, showChosen, { flush: 'post' })
 const line = useTemplateRef<HTMLElement>('line')
 const refreshButton = useTemplateRef<{ $el: HTMLElement }>('refreshButton')
 const { failed } = usePageStanding()
+
+/** A width in the root's ems, as the bar's container queries count it. */
+function ems(width: number) {
+  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+  return width / rem
+}
+
 const room = useBarRoom({
   line,
   last: () => refreshButton.value?.$el,
   order: () =>
     failed.value ? ['words', 'gaps', 'ago', 'failure', 'span'] : ['words', 'gaps', 'ago', 'span'],
   observed: [line],
+  // Wider than a phone and under 50rem the one line has no room whatever period is chosen.
+  narrow: () => {
+    const wide = ems(line.value?.getBoundingClientRect().width ?? 0)
+    return wide > 30 && wide < 50
+  },
   holds: [
     () => props.live,
     () => [props.view.period, props.view.from, props.view.to],
@@ -127,9 +142,8 @@ const room = useBarRoom({
 const bar = useTemplateRef<HTMLElement>('bar')
 const { width: barWidth } = useElementSize(bar)
 const short = computed(() => {
-  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
-  const ems = barWidth.value / rem
-  return (ems > 0 && ems <= 30) || room.gave('words')
+  const wide = ems(barWidth.value)
+  return (wide > 0 && wide <= 30) || room.gave('words')
 })
 /**
  * Whether the room between the parts narrowed, the age said by its span alone («15 s», its hint
@@ -139,6 +153,8 @@ const tight = computed(() => room.gave('gaps'))
 const bare = computed(() => room.gave('ago'))
 const brief = computed(() => room.gave('failure'))
 const spanCut = computed(() => room.gave('span'))
+/** Whether the bar is two rows: too narrow for one line, or with no room for it after all. */
+const twoRows = room.rows
 
 /** That the period is live and how often it reads itself again, as the freshness's hint says. */
 const liveWords = computed(() =>
@@ -162,7 +178,11 @@ const freshHint = computed(() =>
   <div
     ref="bar"
     class="analytics-bar"
-    :class="{ 'analytics-bar-short': short, 'analytics-bar-tight': tight }"
+    :class="{
+      'analytics-bar-short': short,
+      'analytics-bar-tight': tight,
+      'analytics-bar-rows': twoRows,
+    }"
   >
     <div
       ref="line"
@@ -260,7 +280,7 @@ const freshHint = computed(() =>
 
 /* The period, its days, the filters, the freshness and the read again on one line: the filters
    take the room the rest leaves and give it up first, and then the line gives up its words and
-   the room between its parts (`useBarRoom`). A narrow bar is two rows instead (below). */
+   the room between its parts (`useBarRoom`). A bar with no room for it is two rows (below). */
 .analytics-bar-line {
   position: relative;
   display: flex;
@@ -284,27 +304,25 @@ const freshHint = computed(() =>
   margin-inline-start: auto;
 }
 
-/* A bar too narrow for the one line is two rows from the start, whatever period is chosen: the
-   periods and the filters, then the ends of the reader's own period at the second row's start
-   and the freshness with the read again at its end. Otherwise a row wrapped when a part came and
-   moved everything under the bar down: beside the periods, an own period's ends pushed the
-   filters and then the freshness onto a third row, and the panel moved down 44px. At 1024px the
-   line is about 712px, and the periods and two days alone take 693px of it. The second row never
-   wraps again, a failure said on it included: it gives way as the one line does, so nothing under
-   the bar moves. Pressed past its room it runs past its end, where the room it gives way by is
-   measured, and not past its start. The one line needs 50rem in Russian once it has given up all
-   it can beside a failure and an age of hours: at 48rem it ran 13px past its end. */
-@container (width < 50rem) {
-  .analytics-bar-read {
-    justify-content: safe flex-end;
-  }
-}
+/* Two rows (`analytics-bar-rows`, `useBarRoom`): the periods and the filters, then the ends of
+   the reader's own period at the second row's start and the freshness with the read again at its
+   end. A bar too narrow for the one line is two rows from the start, whatever period is chosen.
+   Otherwise a row wrapped when a part came and moved everything under the bar down: beside the
+   periods, an own period's ends pushed the filters and then the freshness onto a third row, and
+   the panel moved down 44px. At 1024px the line is about 712px, and the periods and two days alone
+   take 693px of it. The one line needs 50rem in Russian once it has given up all it can beside a
+   failure and an age of hours: at 48rem it ran 13px past its end. A wider bar is two rows only
+   when its one line, with every other part given up, still runs past its end: beside the reader's
+   own days with a failure said, in Russian, «Refresh» ran 188px past the bar at 1108px, and
+   pressed it scrolled the bar sideways. A bar that has room for the one line stays one line.
 
-/* Wider than a phone (below), the two rows are the line wrapped at a break of no height
-   (`::before`) before the second row's parts, which carry the room between the rows themselves,
-   so the break does not add that room twice. */
-@container (30rem < width < 50rem) {
-  .analytics-bar-line {
+   The second row never wraps again, a failure said on it included: it gives way as the one line
+   does, so nothing under the bar moves. Pressed past its room it runs past its end, where the room
+   it gives way by is measured, and not past its start. Wider than a phone (below), the two rows
+   are the line wrapped at a break of no height (`::before`) before the second row's parts, which
+   carry the room between the rows themselves, so the break does not add that room twice. */
+@container (width > 30rem) {
+  .analytics-bar-rows .analytics-bar-line {
     flex-wrap: wrap;
     row-gap: 0;
 
@@ -320,8 +338,9 @@ const freshHint = computed(() =>
     }
   }
 
-  .analytics-bar-read {
+  .analytics-bar-rows .analytics-bar-read {
     flex: 1 1 0;
+    justify-content: safe flex-end;
   }
 }
 
@@ -386,6 +405,7 @@ const freshHint = computed(() =>
 
   .analytics-bar-read {
     gap: var(--space-2);
+    justify-content: safe flex-end;
     min-width: 0;
   }
 }

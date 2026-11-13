@@ -5,6 +5,14 @@
  * whenever its room or what it holds changes, so a part comes back as soon as there is room for it.
  * That happens between two frames, so no frame shows a line that runs past its end.
  *
+ * The last thing given up is the one line itself: a line that runs past its end with every part
+ * given up becomes two rows (`rows`), as a bar too narrow for one line always is (`narrow`), and
+ * those rows give way again from nothing given up, since the second row has the room the first
+ * one lacked.
+ * The rows change the bar's height inside the browser's measuring of sizes when a resize asked
+ * for them; the page's own box, shallower and measured in the same turn, is what lets the browser
+ * tell the bar's new height in that frame rather than report a loop.
+ *
  * The last part on the line stands at its end; the line runs past it when that part does.
  */
 import type { Ref, WatchSource } from 'vue'
@@ -29,12 +37,16 @@ export function useBarRoom(options: {
   observed: Readonly<Ref<HTMLElement | null>>[]
   /** What stands last on the line, at its end. */
   last: () => HTMLElement | null | undefined
+  /** Whether the bar is two rows whatever it holds, read as the line is fitted. */
+  narrow: () => boolean
   /** The order the parts give way in. */
   order: () => readonly BarPart[]
 }) {
   /** How many parts of `order` are given up. */
   const given = ref(0)
   const yielded = computed(() => new Set(options.order().slice(0, given.value)))
+  /** Whether the line gave itself up for two rows. */
+  const rows = ref(false)
 
   function overruns() {
     const end = options.line.value?.getBoundingClientRect().right
@@ -45,19 +57,35 @@ export function useBarRoom(options: {
 
   /** The newest fit asked for; an older one still under way stops when it sees a newer. */
   let asked = 0
-  async function fit() {
-    const run = (asked += 1)
+
+  /**
+   * Lays the line out on two rows or one with nothing given up, then gives parts up until it
+   * fits; whether it still runs past its end with all of them given up.
+   */
+  async function giveWay(run: number, wrapped: boolean) {
+    rows.value = wrapped
     given.value = 0
     await nextTick()
     while (run === asked && given.value < options.order().length && overruns()) {
       given.value += 1
       await nextTick()
     }
+    return run === asked && overruns()
+  }
+
+  /** Fits the line on one row while that can hold it, and on two once it cannot. */
+  async function fit() {
+    const run = (asked += 1)
+    if (options.narrow() || (await giveWay(run, false))) await giveWay(run, true)
   }
 
   for (const box of options.observed) useResizeObserver(box, () => void fit())
   watch([...options.holds, options.order], () => void fit(), { flush: 'post' })
 
-  /** Whether the line has given up `part`. */
-  return { gave: (part: BarPart) => yielded.value.has(part) }
+  return {
+    /** Whether the line has given up `part`. */
+    gave: (part: BarPart) => yielded.value.has(part),
+    /** Whether the bar is two rows: a narrow one, or a line that gave itself up, its last part. */
+    rows: computed(() => rows.value),
+  }
 }
