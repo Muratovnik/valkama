@@ -2261,7 +2261,13 @@ the first part still changed as the record aged. A line short of room gives up i
 words, then the air between its parts, then the word around the age, «● 15 s», in the room of
 the widest span, and never a day of the reader's own period, whose fields are as wide as a date of
 the widest figures needs: beside a span of days in Russian the line ran «Refresh» 92px past the
-bar's end at 1200px. A refresh that fails keeps what is shown and
+bar's end at 1200px. Below a bar 50rem wide, a window under about 1107px beside the expanded
+navigation, the bar is two rows of one height whatever period is chosen: the periods and the
+filters, then the ends of the reader's own period at the start of the second row and the
+freshness with the refresh at its end. One row cannot hold them there: at 1024px the line is
+about 712px, and the periods and two date fields alone take 693px of it in Russian. Standing
+beside the periods, the ends pushed the filters and then the freshness onto a third row, and the
+panel moved down 44px when a span of days was chosen. A refresh that fails keeps what is shown and
 says so in the bar, «Could not refresh» with a retry. Reading another period or filter dims
 what is shown until its answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in

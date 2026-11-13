@@ -9,7 +9,9 @@
  * The bar is one line wherever it has room for the period, its days and the read again, so the
  * panel under it never moves with what the bar holds: the filters (`AnalyticsChips`) take the
  * room the rest leaves, counting those it has none for, and the list of filters they open lies
- * over the panel.
+ * over the panel. A bar with no room for that one line is two rows of one height whatever period
+ * is chosen: the periods and the filters, then the ends of the reader's own period at the start of
+ * the second and the freshness with the read again at its end.
  *
  * How fresh the figures are is one element of one width: a live period's mark and the age of the
  * newest record the store holds, of any session, counted on each second (`useFreshness`), «● 15 s
@@ -258,7 +260,7 @@ const freshHint = computed(() =>
 
 /* The period, its days, the filters, the freshness and the read again on one line: the filters
    take the room the rest leaves and give it up first, and then the line gives up its words and
-   the room between its parts (`useBarRoom`). A narrow bar wraps the line instead (below). */
+   the room between its parts (`useBarRoom`). A narrow bar is two rows instead (below). */
 .analytics-bar-line {
   position: relative;
   display: flex;
@@ -282,21 +284,44 @@ const freshHint = computed(() =>
   margin-inline-start: auto;
 }
 
-/* A bar too narrow for the freshness beside the rest wraps its line, and keeps the freshness and
-   the read again on a line of their own from the start: otherwise a line wrapped when they came,
-   and moved everything under the bar down. That line never wraps again, a failure said on it
-   included: it gives way as the one line does, so nothing under the bar moves. Pressed past its
-   room it runs past its end, where the room it gives way by is measured, and not past its start.
-   The one line needs 50rem in Russian once it has given up all it can beside a failure and an
-   age of hours: at 48rem it ran 13px past its end. */
+/* A bar too narrow for the one line is two rows from the start, whatever period is chosen: the
+   periods and the filters, then the ends of the reader's own period at the second row's start
+   and the freshness with the read again at its end. Otherwise a row wrapped when a part came and
+   moved everything under the bar down: beside the periods, an own period's ends pushed the
+   filters and then the freshness onto a third row, and the panel moved down 44px. At 1024px the
+   line is about 712px, and the periods and two days alone take 693px of it. The second row never
+   wraps again, a failure said on it included: it gives way as the one line does, so nothing under
+   the bar moves. Pressed past its room it runs past its end, where the room it gives way by is
+   measured, and not past its start. The one line needs 50rem in Russian once it has given up all
+   it can beside a failure and an age of hours: at 48rem it ran 13px past its end. */
 @container (width < 50rem) {
+  .analytics-bar-read {
+    justify-content: safe flex-end;
+  }
+}
+
+/* Wider than a phone (below), the two rows are the line wrapped at a break of no height
+   (`::before`) before the second row's parts, which carry the room between the rows themselves,
+   so the break does not add that room twice. */
+@container (30rem < width < 50rem) {
   .analytics-bar-line {
     flex-wrap: wrap;
+    row-gap: 0;
+
+    &::before {
+      content: '';
+      flex-basis: 100%;
+      order: 1;
+    }
+
+    & > :is(.analytics-bar-own, .analytics-bar-read) {
+      order: 1;
+      margin-block-start: var(--space-2);
+    }
   }
 
   .analytics-bar-read {
-    flex-basis: 100%;
-    justify-content: safe flex-end;
+    flex: 1 1 0;
   }
 }
 

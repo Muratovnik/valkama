@@ -3,7 +3,8 @@
  * open, the address of three of its hours is a new place in the history. The chart then holds
  * those three hours and no other, the read asks for them by the hour and compares them with the
  * three hours right before, and the bar names the span in place of the two days, with nothing in
- * it moved, at the widths where the bar is one line. Back is «Today» again, its whole day. A span
+ * it moved, at the widths where the bar is one line and at 1024px, where it is two rows and the
+ * name stands at the second row's start. Back is «Today» again, its whole day. A span
  * whose name is longer than the line has room for once it gave up all else is cut at its end,
  * the read again kept at the line's end and the hint saying the name whole.
  */
@@ -29,8 +30,15 @@ const TODAY: TimedStretch[] = [
   { at: at(13, 30), group: { work_item: task(2, 'Read') }, spend: { seconds: 3600 } },
 ]
 
-const TODAY_ADDRESS = pageAt({ period: 'today' })
-const SPAN_ADDRESS = pageAt({ period: 'custom', from: '2026-11-11T10:00', to: '2026-11-11T13:00' })
+/**
+ * «Today» and three of its hours, with what else the address holds: the section on show, where the
+ * screen is too narrow for the list of sections beside it.
+ */
+const addresses = (held: Record<string, string>) => ({
+  today: pageAt({ period: 'today', ...held }),
+  span: pageAt({ period: 'custom', from: '2026-11-11T10:00', to: '2026-11-11T13:00', ...held }),
+})
+
 /** Three hours across midnight: the longest name a span of one day's hours has. */
 const NIGHT_ADDRESS = pageAt({
   period: 'custom',
@@ -82,18 +90,31 @@ const steady = (page: Page) =>
     ),
   )
 
+/**
+ * The widths the span is named at, each with what the name stands beside: the periods on the one
+ * line, and at 1024px, where the bar is two rows, the read again on the second; and what the
+ * address holds beside the period: there the section on show, which a narrow screen opens alone.
+ */
+const ROWS = [
+  [1024, '.analytics-refresh', { open: 'section' }],
+  [1200, '.analytics-period', {}],
+  [1440, '.analytics-period', {}],
+  [1920, '.analytics-period', {}],
+] as const
+
 for (const lang of ['en', 'ru'] as const)
   test.describe(`a span of moments, ${lang}`, () => {
     test.use({ locale: lang === 'ru' ? 'ru-RU' : 'en-US' })
 
-    for (const width of [1200, 1440, 1920])
+    for (const [width, row, held] of ROWS)
       test(`three hours of «Today» are read and named at ${width}px, and Back is «Today» again`, async ({
         page,
       }, info) => {
         const words = WORDS[lang]
+        const { today, span } = addresses(held)
         await page.clock.install({ time: NOW })
         const double = await serveLive(page, TODAY)
-        const analytics = await openReport(page, width, TODAY_ADDRESS)
+        const analytics = await openReport(page, width, today)
         const periods = analytics.locator('.analytics-period')
         await expect(periods.getByRole('radio', { name: words.today })).toBeChecked()
         await expect(analytics.locator('.spending-days .period-slot')).toHaveCount(24)
@@ -105,8 +126,8 @@ for (const lang of ['en', 'ru'] as const)
         await page.evaluate((to) => {
           history.pushState({}, '', to)
           dispatchEvent(new PopStateEvent('popstate'))
-        }, SPAN_ADDRESS)
-        await expect.poll(() => path(page)).toBe(SPAN_ADDRESS)
+        }, span)
+        await expect.poll(() => path(page)).toBe(span)
         expect(await page.evaluate(() => history.length)).toBe(opened + 1)
 
         // The chart holds the span's three hours and no other.
@@ -139,19 +160,19 @@ for (const lang of ['en', 'ru'] as const)
         await expect(analytics.locator('.analytics-bar-days')).toHaveCount(0)
         await expect(periods.getByRole('radio', { name: words.today })).not.toBeChecked()
         const after = await steady(page)
-        // The name shares the periods' middle, whole on its one line.
-        const centred = await page.evaluate(() => {
+        // The name shares the middle of the row it stands on, whole on its one line.
+        const centred = await page.evaluate((beside) => {
           const middle = (selector: string) => {
             const box = document.querySelector(selector)?.getBoundingClientRect()
             return box ? box.y + box.height / 2 : Number.NaN
           }
           const span = document.querySelector('.analytics-bar-span')
           return {
-            off: Math.abs(middle('.analytics-bar-span') - middle('.analytics-period')),
+            off: Math.abs(middle('.analytics-bar-span') - middle(beside)),
             // No name at all is as wrong as a name cut short.
             cut: !span || span.scrollWidth > span.clientWidth,
           }
-        })
+        }, row)
         await analytics
           .locator('.analytics-bar')
           .screenshot(shot(info, `analytics-moment-span-bar-${lang}-${width}.png`))
@@ -170,7 +191,7 @@ for (const lang of ['en', 'ru'] as const)
 
         // Back is «Today» again, its whole day by the hour.
         await page.goBack()
-        await expect.poll(() => path(page)).toBe(TODAY_ADDRESS)
+        await expect.poll(() => path(page)).toBe(today)
         await expect(periods.getByRole('radio', { name: words.today })).toBeChecked()
         await expect(analytics.locator('.spending-days .period-slot')).toHaveCount(24)
         await expect(name).toHaveCount(0)
