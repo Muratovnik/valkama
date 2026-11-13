@@ -18,9 +18,11 @@
  *   (`--row-state-underline`, which such a name reads).
  * - Chosen (`.selected`): the pressed rung, a step over the hovered one, the full ink in the
  *   heavier weight, and a mark inside the box on its start side, in the accent. Under the pointer
- *   it stays chosen. A row that is chosen keeps the room of its heavier words itself.
+ *   it stays chosen. A row that is chosen keeps the room of its heavier words itself; a table
+ *   row keeps the weight of its words instead.
  * - Focus: the keyboard's ring inside the box's edge, which moves nothing. A table row draws the
- *   ring of the one control it holds, round the whole row, in place of that control's own.
+ *   ring of the one control it holds, round the whole row, in place of that control's own; a row
+ *   of several controls (`.cells`) draws it round the cell of the one focused, inside that cell.
  */
 .row-state {
   position: relative;
@@ -42,20 +44,23 @@
     color: var(--color-text);
     font-weight: 600;
     background: var(--color-surface-active);
+  }
 
-    &::before {
-      content: '';
-      position: absolute;
-      inset-block: var(--space-2);
-      inset-inline-start: var(--space-1);
-      inline-size: 3px;
-      background: var(--color-accent);
-      border-radius: 999px;
+  /* The chosen row's mark. A table row draws it in its first cell: drawn by the row itself, it
+     stood in the table as a cell of its own and pushed every cell of the row a column along. */
+  &.selected:not(.tabular)::before,
+  &.selected.tabular > :first-child::before {
+    content: '';
+    position: absolute;
+    inset-block: var(--space-2);
+    inset-inline-start: var(--space-1);
+    inline-size: 3px;
+    background: var(--color-accent);
+    border-radius: 999px;
 
-      @media (forced-colors: active) {
-        background: Highlight;
-        forced-color-adjust: none;
-      }
+    @media (forced-colors: active) {
+      background: Highlight;
+      forced-color-adjust: none;
     }
   }
 
@@ -67,10 +72,19 @@
 
 /* A table row (`.tabular`) is its cells: they take its ground, and its first and last round its
    corners. A name cell that stays at the frame's start as the figures scroll takes the ground as
-   well, so the row reads whole under the pointer. */
+   well, so the row reads whole under the pointer and chosen. A table sets its columns by their widest words, so a chosen row keeps the
+   weight of its words: heavier, they widened its columns and moved the row's edge. */
 .row-state.tabular {
-  &:has([href], [type='button']):hover > * {
+  &:has([href], [type='button']):not(.selected):hover > * {
     background: var(--color-surface-hover);
+  }
+
+  &.selected {
+    font-weight: inherit;
+  }
+
+  &.selected > * {
+    background: var(--color-surface-active);
   }
 
   & > :first-child {
@@ -84,23 +98,29 @@
   }
 
   /* The ring of the control it holds, drawn inside the row's cells: a table row cannot draw an
-     outline of its own past the cell that stays at the frame's start. A forced palette drops
-     every shadow, so there the control keeps its own ring. */
+     outline of its own past the cell that stays at the frame's start. A row of several controls
+     (`.cells`) rings the cell of the one focused instead, inside that cell, so the ring says
+     which of them a key presses and covers no neighbour. A forced palette drops every shadow, so
+     there the control keeps its own ring. */
   @media (forced-colors: none) {
-    &:has(:focus-visible) > * {
+    &.cells > :has(:focus-visible) {
+      box-shadow: inset 0 0 0 var(--size-focus-ring) var(--color-focus-ring);
+    }
+
+    &:not(.cells):has(:focus-visible) > * {
       box-shadow:
         inset 0 var(--size-focus-ring) var(--color-focus-ring),
         inset 0 calc(-1 * var(--size-focus-ring)) var(--color-focus-ring);
     }
 
-    &:has(:focus-visible) > :first-child {
+    &:not(.cells):has(:focus-visible) > :first-child {
       box-shadow:
         inset var(--size-focus-ring) 0 var(--color-focus-ring),
         inset 0 var(--size-focus-ring) var(--color-focus-ring),
         inset 0 calc(-1 * var(--size-focus-ring)) var(--color-focus-ring);
     }
 
-    &:has(:focus-visible) > :last-child {
+    &:not(.cells):has(:focus-visible) > :last-child {
       box-shadow:
         inset calc(-1 * var(--size-focus-ring)) 0 var(--color-focus-ring),
         inset 0 var(--size-focus-ring) var(--color-focus-ring),
