@@ -166,8 +166,12 @@ const widths = (page: Page) =>
 
 /** The least width of the panel beside the rail. */
 const PANEL_LEAST = 640
-/** The rail's width beside the panel: 15 of the root's 16-pixel ems. */
-const RAIL = 240
+/**
+ * The range of the rail's width beside the panel, in pixels: 15 and 22 of the root's 16-pixel
+ * ems. Within it the rail is as wide as its entries need.
+ */
+const RAIL_LEAST = 240
+const RAIL_MOST = 352
 
 test('at 1440px the rail and the panel stand side by side, the panel 640 pixels or more', async ({
   page,
@@ -175,7 +179,8 @@ test('at 1440px the rail and the panel stand side by side, the panel 640 pixels 
   await openAt(page, 1440, 900)
   const shown = await widths(page)
   await record(info, 'analytics frame widths 1440', shown)
-  expect(shown.rail, 'the rail').toBeCloseTo(RAIL, 1)
+  expect(shown.rail, 'the rail').toBeGreaterThanOrEqual(RAIL_LEAST)
+  expect(shown.rail, 'the rail').toBeLessThanOrEqual(RAIL_MOST)
   expect(shown.panel, 'the panel beside the rail').toBeGreaterThanOrEqual(PANEL_LEAST)
   expect(shown.rail + shown.panel).toBeCloseTo(shown.page, 1)
 })
@@ -187,8 +192,8 @@ for (const width of [1024, 390])
     await openAt(page, width, 900, pageAt({ open: 'section' }))
     const shown = await widths(page)
     await record(info, `analytics frame widths ${width}`, shown)
-    // Beside the rail, the section would have had under 640 pixels.
-    expect(shown.page - RAIL).toBeLessThan(PANEL_LEAST)
+    // Beside even the narrowest rail, the section would have had under 640 pixels.
+    expect(shown.page - RAIL_LEAST).toBeLessThan(PANEL_LEAST)
     expect(shown.rail, 'the rail beside the section').toBe(0)
     expect(shown.panel).toBeCloseTo(shown.page, 1)
   })
@@ -204,16 +209,19 @@ test('the page’s own box decides, whatever the window: narrowed in a wide one,
       element.style.inlineSize = size
     }, inlineSize)
   await expect(panel).toBeVisible()
-  // The page given 879 pixels of a window of 1440: the rail would leave the panel 639.
-  await narrowTo('879px')
+  // The rail as wide as its entries ask, beside the panel; the page given a pixel less than that
+  // and 640 in a window of 1440, the rail would leave the panel 639.
+  const { rail: railWidth } = await widths(page)
+  await narrowTo(`${railWidth + PANEL_LEAST - 1}px`)
   await expect(panel).toBeHidden()
   await expect(rail).toBeVisible()
-  // One pixel more, and the panel has its 640 beside the rail.
-  await narrowTo('880px')
+  // One pixel more, and the panel has its 640 beside the rail, which is as wide as it was.
+  await narrowTo(`${railWidth + PANEL_LEAST}px`)
   await expect(panel).toBeVisible()
   await expect(rail).toBeVisible()
   const beside = await widths(page)
   expect(beside.panel).toBeCloseTo(PANEL_LEAST, 1)
+  expect(beside.rail).toBe(railWidth)
 })
 
 test('the overview, taller than its panel, scrolls the panel while the document stands still', async ({

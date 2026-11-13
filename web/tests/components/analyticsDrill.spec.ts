@@ -195,19 +195,23 @@ describe('a value pressed on the Analytics page', () => {
     ])
   })
 
-  it('narrows the view to a day pressed on its coloured stack, not on the column around it', async () => {
+  it('narrows the view to a segment’s value, and leaves one of unknown work going nowhere', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const host = await mountPage({ by: 'model' })
-    const tuesday = host.findAll('.spending-days button.period-column')[1]
-    const segment = tuesday?.find('.period-segment')
-    expect(segment?.element.tagName).toBe('SPAN')
-    // Vue drops a press stamped no later than its handler was attached, and the press bubbles
-    // from the segment's own listener to the column's: a person presses a moment after the chart
-    // is drawn, so the clock moves on before the press.
+    const [monday, tuesday] = host.findAll('.spending-days .period-slot')
+    // Tuesday's one stretch ran under no known model: its segment shows a hint and is no control.
+    const unknown = tuesday?.get('.period-segment')
+    expect(unknown?.element.tagName).toBe('SPAN')
+    const segment = monday?.get('.period-segment[data-series="v:model-02"]')
+    expect(segment?.element.tagName).toBe('BUTTON')
+    // A person presses a moment after the chart is drawn; Vue drops a press stamped no later
+    // than its handler was attached.
     vi.setSystemTime(Date.now() + 1000)
+    await unknown?.trigger('click')
+    expect(written(host)).toEqual([])
     await segment?.trigger('click')
     expect(written(host)).toEqual([
-      [{ period: 'custom', from: '2026-11-10', to: '2026-11-10', by: 'work_item' }, 'push'],
+      [{ by: 'work_item', filters: '{"model":["model-02"]}' }, 'push'],
     ])
   })
 

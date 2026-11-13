@@ -170,13 +170,13 @@ const sectionName = computed(
   () => sections.value.find((section) => section.value === view.value.by)?.label ?? '',
 )
 
-/** Whether the page is too narrow for the panel beside the rail, which then take turns. */
+/**
+ * Whether the page is too narrow for the panel beside the rail, which then take turns; the rail's
+ * own width beside the panel decides it with the page's.
+ */
 const page = ref<HTMLElement | null>(null)
-const { narrow: narrowScreen, railWidth } = usePanelRoom(page)
-/** The rail's column beside the panel's; one column, the screen's, while they take turns. */
-const bodyColumns = computed(() =>
-  narrowScreen.value ? undefined : { gridTemplateColumns: `${railWidth} minmax(0, 1fr)` },
-)
+const rail = ref<InstanceType<typeof AnalyticsRail> | null>(null)
+const { narrow: narrowScreen } = usePanelRoom(page, rail)
 const showsRail = computed(() => !narrowScreen.value || !view.value.open)
 const showsPanel = computed(() => !narrowScreen.value || view.value.open)
 
@@ -232,7 +232,6 @@ watch(
  * Where focus goes as the list and a section take turns: the way back, or the section left. Only
  * a move between them does that; the page found too narrow on opening or on a resize moves none.
  */
-const rail = ref<InstanceType<typeof AnalyticsRail> | null>(null)
 const back = ref<InstanceType<typeof VButton> | null>(null)
 watch(
   () => view.value.open,
@@ -327,10 +326,7 @@ const emptyDescription = computed(() => {
       @refresh="refresh"
     />
 
-    <div
-      class="analytics-body"
-      :style="bodyColumns"
-    >
+    <div class="analytics-body">
       <AnalyticsRail
         v-show="showsRail"
         ref="rail"
@@ -432,7 +428,13 @@ const emptyDescription = computed(() => {
 <style scoped>
 /* The bar over the rail and the panel, the whole of the module's frame: the frame does not
    scroll, the rail and the panel do, each on its own. The rail is a ground on the module's
-   panel, which is what parts it from the panel and the bar: a step of tone and air, no line. */
+   panel, which is what parts it from the panel and the bar: a step of tone and air, no line.
+
+   The page stands on one grid of columns with the module's name over it. Its left line is
+   where the context bar starts that name, its inset in `AppContextBar.vue`, a step narrower in
+   a main column of 586px or less: the bar's first control and the edge of the rail's entries
+   (`AnalyticsRail`) stand on it, and taking turns, a section too. The bar and the panel end on
+   one right edge, the module's gutter in from the page's. */
 .analytics-page {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -444,32 +446,24 @@ const emptyDescription = computed(() => {
 }
 
 .analytics-page-bar {
-  padding: var(--space-4) var(--size-page-gutter);
+  padding: var(--space-4) var(--size-page-gutter) var(--space-4) var(--space-5);
 }
 
-/* One column while the list and a section take turns; beside each other, the rail's width is
-   set where the room for them is measured (`usePanelRoom`). What the panel raises over itself —
-   a table's held heading — stays inside it, under the list of filters the bar opens over it. */
+/* One column while the list and a section take turns; beside each other, the rail's column is
+   as wide as the rail asks, and the panel has the rest (`usePanelRoom` reads the rail's width to
+   decide which). What the panel raises over itself — a table's held heading — stays inside it,
+   under the list of filters the bar opens over it. */
 .analytics-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   min-height: 0;
   isolation: isolate;
 }
 
-/* Each of the two holds what it scrolls, a copy for a reader placed out of sight among it too:
+/* The rail's ground, its scroll and its width are its own (`AnalyticsRail`), on the page's left
+   line. The panel holds what it scrolls, a copy for a reader placed out of sight among it too:
    placed against the frame, a table's hidden caption stood far under it and gave the frame
    something to scroll. */
-.analytics-page-rail {
-  position: relative;
-  min-height: 0;
-  padding: var(--space-3);
-  background: var(--color-surface);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-start-end-radius: var(--radius-card);
-}
-
 .analytics-panel {
   position: relative;
   display: grid;
@@ -490,11 +484,19 @@ const emptyDescription = computed(() => {
 }
 
 /* One at a time: the list of sections on its ground across the screen, or the section in its
-   place. */
-.analytics-narrow {
-  & .analytics-page-rail {
-    padding-inline: var(--size-page-gutter);
-    border-start-end-radius: 0;
+   place, both on the page's left line. */
+.analytics-narrow .analytics-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.analytics-narrow .analytics-panel {
+  padding-inline-start: var(--space-5);
+}
+
+@container main (width <= 586px) {
+  .analytics-page-bar,
+  .analytics-narrow .analytics-panel {
+    padding-inline-start: var(--space-3);
   }
 }
 

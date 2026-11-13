@@ -6,7 +6,7 @@ import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import InputRequestsHub from '@/features/input-requests/components/InputRequestsHub.vue'
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
@@ -32,6 +32,7 @@ import {
 } from '../support/inputRequests.ts'
 import { present } from '../support/present.ts'
 import { answer, checkedLabels, radios } from '../support/radioAnswers.ts'
+import { residentView } from '../support/residentView.ts'
 
 vi.mock('@/shared/api/inputRequestApi.ts', async (original) => ({
   ...(await original<typeof import('@/shared/api/inputRequestApi.ts')>()),
@@ -106,10 +107,7 @@ const textareaNamed = (wrapper: Wrapper, name: string) =>
     name,
   )
 
-// The app downloads this view when it is first drawn; a test mounts it resident.
-beforeAll(async () => {
-  await requestListView.load()
-})
+residentView(requestListView)
 
 beforeEach(() => {
   vi.resetAllMocks()
