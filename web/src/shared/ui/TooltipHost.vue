@@ -63,6 +63,13 @@ const shown = shallowRef<HTMLElement | null>(null)
 const hint = computed(() => (shown.value ? tooltipOf(shown.value) : undefined))
 /** The shown element's own words are cut, so its hint says them first. */
 const whole = ref(false)
+/**
+ * What stands between the words and the detail, as an expression: the template compiler drops a
+ * space that ends an element, and the hint's text, which is its accessible copy too, read a cut
+ * name glued to its share, «part 1» and «32%» as «part 132%». The detail's line starts with it,
+ * so it shows nothing.
+ */
+const apart = ' '
 /** What the hint is placed against; the stub trigger stands nowhere. */
 const reference = computed(() => shown.value ?? undefined)
 
@@ -272,10 +279,9 @@ onBeforeUnmount(stopHearing)
           :collision-padding="8"
           hide-when-detached
         >
-          <span
-            v-if="whole && hint.words"
-            class="tooltip-words"
-            >{{ hint.words }} </span
+          <template v-if="whole && hint.words">
+            <span class="tooltip-words">{{ hint.words }}</span
+            >{{ apart }} </template
           >{{ hint.text
           }}<span
             v-if="hint.note"

@@ -80,6 +80,9 @@ checkouts are therefore distinguishable even at the same version.
   answer carries `overridden`. A batch names the overrides of every step in it, where it
   named only the last one before. A forced call that refused nothing records nothing.
   `force` permits what it permitted before.
+- **A cut name and its share keep their space in a hint.** A ranked row whose name was cut
+  read «…part 132% of the total» in its hint, and to a screen reader, for «part 1» and «32%».
+  The name still stands on its own line over the detail.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
