@@ -164,21 +164,34 @@ const wordClass = (surface: FacetSurface) => {
   return trims(surface) ? 'facet-word trimmed-word one-line' : 'facet-word one-line'
 }
 
+/**
+ * The words a mark shows on screen, or null for a glyph shown alone, whose words are its
+ * name and hover text and not on screen. Whatever reads a run as it is drawn — the list's
+ * find counts its matches in it — asks this rather than deciding again.
+ */
+function shownWords(mark: FacetMark, words: MarkWords): string | null {
+  if (mark.short !== undefined) return words.say(mark.short)
+  if (mark.form === 'glyph' && mark.glyph !== null) return null
+  return words.say(mark.text)
+}
+
 /** What a mark draws beside its glyph: its short words, its word alone, or its word. */
 function markWordsOf(mark: FacetMark, whole: string, run: MarkRun, named: boolean): VNode[] {
   const word = wordClass(run.surface)
+  const shown = shownWords(mark, run.words)
+  // A glyph alone: a button's name is its label, and a word kept out of sight would say
+  // nothing more.
+  if (shown === null)
+    return named ? [] : [h('span', { class: 'facet-word facet-word-hidden' }, whole)]
   if (mark.short !== undefined)
     return [
-      h('span', { 'class': word, 'aria-hidden': 'true' }, run.words.say(mark.short)),
+      h('span', { 'class': word, 'aria-hidden': 'true' }, shown),
       // The shared copy for assistive technology, which a hint does not count as cut text.
       h('span', { class: 'facet-word-hidden visually-hidden' }, whole),
     ]
   // A word alone is a word of its own, which takes the mark's tone.
-  if (mark.form === 'word') return [h('span', { class: `${word} facet-word-alone` }, whole)]
-  const glyphOnly = mark.form === 'glyph' && mark.glyph !== null
-  // A button's name is its label: a word kept out of sight would say nothing more.
-  if (glyphOnly && named) return []
-  return [h('span', { class: glyphOnly ? 'facet-word facet-word-hidden' : word }, whole)]
+  if (mark.form === 'word') return [h('span', { class: `${word} facet-word-alone` }, shown)]
+  return [h('span', { class: word }, shown)]
 }
 
 const isActive = (mark: FacetMark, run: MarkRun) =>
@@ -359,6 +372,19 @@ export function drawMarks(marks: readonly FacetMark[], run: MarkRun): VNode {
         { 'class': runClass(run), 'data-surface': run.surface },
         marks.map((mark) => drawEntry(mark, run)),
       )
+}
+
+/**
+ * The words a run `drawMarks` draws shows on screen, mark by mark: a chip's label, a
+ * state's name and every other mark's words, but nothing for a glyph shown alone.
+ */
+export function runWords(marks: readonly FacetMark[], words: MarkWords): string[] {
+  return marks.flatMap((mark) => shownWords(mark, words) ?? [])
+}
+
+/** The word `drawWordCell` shows, which is its mark's whole words whatever its form. */
+export function cellWords([mark]: readonly FacetMark[], words: MarkWords): string[] {
+  return mark ? [words.say(mark.text)] : []
 }
 
 /**

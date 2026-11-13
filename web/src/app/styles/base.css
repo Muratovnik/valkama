@@ -174,6 +174,31 @@ input:is([type='checkbox'], [type='radio']) {
   background: var(--color-accent);
 }
 
+/* The matches of the list's find (`useListFind.ts`), registered by these two names and
+   painted wherever their text stands: in a title's pieces and a state's word as well,
+   which no component's scope reaches. A forced palette has a pair of its own for each. */
+::highlight(list-find) {
+  color: var(--color-text);
+  background-color: var(--color-find-match);
+}
+
+::highlight(list-find-current) {
+  color: var(--color-text-on-find);
+  background-color: var(--color-find-current);
+}
+
+@media (forced-colors: active) {
+  ::highlight(list-find) {
+    color: MarkText;
+    background-color: Mark;
+  }
+
+  ::highlight(list-find-current) {
+    color: HighlightText;
+    background-color: Highlight;
+  }
+}
+
 ::-webkit-scrollbar {
   width: var(--size-scrollbar);
   height: var(--size-scrollbar);

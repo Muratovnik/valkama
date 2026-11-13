@@ -16,13 +16,14 @@
  *
  * Where a row stands, found by its id, and the scroll that brings a row into
  * view live here and nowhere else, so whatever moves through the whole list —
- * the keys today (`useListKeys.ts`) — goes by the list rather than by the rows
- * drawn.
+ * the keys (`useListKeys.ts`) and the list's find (`useListFind.ts`) — goes by
+ * the list rather than by the rows drawn.
  *
  * The table says how many rows it has and each drawn row where it stands, so a
- * screen reader announces a row's place in the whole list. What the window
- * costs for now: find in page and a screen reader's browse mode reach only the
- * rows drawn.
+ * screen reader announces a row's place in the whole list. The browser's find
+ * would reach only the rows drawn, which is why the list has a find of its own;
+ * what the window still costs is a screen reader's browse mode, which reaches
+ * only the rows drawn.
  */
 import { computed, onMounted, shallowRef } from 'vue'
 import type { Ref } from 'vue'
@@ -224,5 +225,26 @@ export function useWindowRows<Row>({ columns, key, pinned, root, rows }: WindowR
       virtualizer.value.scrollToIndex(index)
       return true
     },
+    /**
+     * Scrolls the row at `index`, drawn or not, to about the middle of the room
+     * under the head, which is where find stands what it goes to: brought only
+     * into view, a row below stood on the bottom edge.
+     */
+    center(index: number) {
+      if (windowed.value) {
+        virtualizer.value.scrollToIndex(index, { align: 'center' })
+        return
+      }
+      const element = root.value
+      const row = element?.querySelector('tbody')?.children[index]
+      if (!element || !row) return
+      const { end, start } = edges.value
+      const box = row.getBoundingClientRect()
+      const room = element.clientHeight - start - end
+      const top = element.getBoundingClientRect().top + element.clientTop + start
+      element.scrollTop += box.top - top - Math.max(0, room - box.height) / 2
+    },
+    /** How tall the head is, which is where the body starts. */
+    headSize: computed(() => edges.value.margin),
   }
 }

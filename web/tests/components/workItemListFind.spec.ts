@@ -1,0 +1,267 @@
+/**
+ * The list's own find on a list as it is drawn: Ctrl+F (⌘F) opens a search bar
+ * over the list in place of the browser's, unless something lies over the list;
+ * the count says which match is current of how many; Enter, Shift+Enter, F3 and
+ * Shift+F3 walk the matches round; Escape closes the bar and gives focus back;
+ * every drawn match is marked, the current one apart; and the current match
+ * stays on its row while the list changes under it.
+ *
+ * happy-dom has no CSS Custom Highlight API, so a registry of the same shape
+ * stands in for it and the marks are read from there.
+ */
+import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
+import { fold, termOf } from '@/widgets/work-item-views/utils/listFind.ts'
+
+import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { claimOverlayOwnership, releaseOverlayOwnership } from '@/shared/ui/overlayStack.ts'
+
+import { boardItem } from '../fixtures/board.ts'
+import { i18n } from '../support/workItemBoardHarness.ts'
+
+class TestHighlight extends Set<AbstractRange> {
+  priority = 0
+  constructor(...ranges: AbstractRange[]) {
+    super(ranges)
+  }
+}
+const painted = new Map<string, TestHighlight>()
+
+beforeEach(() => {
+  painted.clear()
+  vi.stubGlobal('Highlight', TestHighlight)
+  vi.stubGlobal('CSS', Object.assign(Object.create(CSS) as typeof CSS, { highlights: painted }))
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  document.body.innerHTML = ''
+})
+
+// The list sorts by Updated, newest first: these read MAIN-4, 3, 2, 1. «login»
+// is in MAIN-4 twice and in MAIN-1 once, and in none of the rows' other words.
+const titles = [
+  'Fix the login page',
+  'Café wifi drops',
+  'Nothing to see',
+  'Login, then login again',
+]
+const items = titles.map((title, index) =>
+  boardItem(index + 1, 'backlog', { title, updated_at: `2026-10-0${index + 1}T10:00:00Z` }),
+)
+
+async function list(locale: 'en' | 'ru' = 'en', shown: WorkItemBrief[] = items) {
+  const plugin = i18n()
+  plugin.global.locale.value = locale
+  const wrapper = mount(WorkItemList, {
+    attachTo: document.body,
+    global: { plugins: [plugin] },
+    props: { items: shown, links: [] },
+  })
+  await flushPromises()
+  return wrapper
+}
+
+type List = VueWrapper
+
+const rowButton = (wrapper: List, reference: string) =>
+  wrapper.get<HTMLButtonElement>(`tbody .list-open[data-reference="${reference}"]`).element
+const bar = () => document.querySelector<HTMLElement>('[role="search"]')
+const field = () => bar()?.querySelector('input') ?? null
+const count = () => bar()?.querySelector('.list-find-now')?.textContent?.trim()
+
+function key(target: EventTarget, init: KeyboardEventInit) {
+  const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+  target.dispatchEvent(event)
+  return event
+}
+const findKeys = (init: KeyboardEventInit = {}) =>
+  key(document.activeElement ?? document.body, { code: 'KeyF', ctrlKey: true, key: 'f', ...init })
+
+async function open(wrapper: List, term: string) {
+  rowButton(wrapper, 'MAIN-2').focus()
+  findKeys()
+  await flushPromises()
+  const input = field()
+  if (!input) throw new Error('Ctrl+F opened no find bar')
+  input.value = term
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await flushPromises()
+}
+
+async function press(init: KeyboardEventInit) {
+  key(document.activeElement ?? document.body, init)
+  await flushPromises()
+}
+
+/** The row a mark is drawn in, by its reference, and the mark's words. */
+function markOf(range: AbstractRange) {
+  const node = range.startContainer
+  const element = node instanceof Element ? node : node.parentElement
+  const row = element?.closest('tr')?.querySelector<HTMLElement>('.list-open')
+  return { row: row?.dataset.reference, text: (range as Range).toString() }
+}
+const marksIn = (name: string) => [...(painted.get(name) ?? [])].map((range) => markOf(range))
+const current = () => marksIn('list-find-current')
+const others = () => marksIn('list-find')
+
+describe('Ctrl+F on the list', () => {
+  it('opens the list’s find bar in place of the browser’s, a named search with its field focused', async () => {
+    await list()
+    const event = findKeys()
+    await flushPromises()
+    expect(event.defaultPrevented).toBe(true)
+    expect(bar()?.getAttribute('aria-label')).toBe('Find in the list')
+    expect(document.activeElement).toBe(field())
+    expect(field()?.getAttribute('aria-label') ?? field()?.labels?.[0]?.textContent).toBeTruthy()
+    // The count is a polite status, and it describes the field.
+    const status = bar()?.querySelector('[role="status"]')
+    expect(status).not.toBeNull()
+    expect(field()?.getAttribute('aria-describedby')).toContain(status?.id)
+  })
+
+  it('opens it on ⌘F as well, and leaves Ctrl+Shift+F to the browser', async () => {
+    await list()
+    expect(findKeys({ ctrlKey: false, metaKey: true }).defaultPrevented).toBe(true)
+    await flushPromises()
+    expect(bar()).not.toBeNull()
+    document.body.innerHTML = ''
+    await list()
+    expect(findKeys({ shiftKey: true }).defaultPrevented).toBe(false)
+  })
+
+  it('is the browser’s while a card, a dialog or the finder lies over the list', async () => {
+    await list()
+    const lease = claimOverlayOwnership(
+      () => null,
+      'drawer',
+      () => {},
+    )
+    try {
+      const event = findKeys()
+      await flushPromises()
+      expect(event.defaultPrevented).toBe(false)
+      expect(bar()).toBeNull()
+    } finally {
+      releaseOverlayOwnership(lease)
+    }
+    await flushPromises()
+    expect(findKeys().defaultPrevented).toBe(true)
+  })
+})
+
+describe('a term in the bar', () => {
+  it('counts every match in the rows’ words and marks each, the current one apart', async () => {
+    const wrapper = await list()
+    await open(wrapper, 'LOGIN')
+    expect(count()).toBe('1 of 3')
+    expect(current()).toEqual([{ row: 'MAIN-4', text: 'Login' }])
+    expect(others()).toEqual([
+      { row: 'MAIN-4', text: 'login' },
+      { row: 'MAIN-1', text: 'login' },
+    ])
+    expect(painted.get('list-find-current')?.priority).toBeGreaterThan(
+      painted.get('list-find')?.priority ?? 0,
+    )
+  })
+
+  it('marks as many matches as it counts, in words the row shows, wherever they stand', async () => {
+    const wrapper = await list()
+    // The state's word, in its own cell of every row.
+    await open(wrapper, 'backlog')
+    const marks = [...current(), ...others()]
+    expect(count()).toBe(`1 of ${items.length}`)
+    expect(marks).toHaveLength(items.length)
+    for (const mark of marks) expect(fold(mark.text).text).toBe(termOf('backlog'))
+  })
+
+  it('says so when nothing matches, and the steps go nowhere', async () => {
+    const wrapper = await list()
+    await open(wrapper, 'nowhere at all')
+    expect(count()).toBe('No matches')
+    expect(current()).toEqual([])
+    await press({ key: 'Enter' })
+    expect(count()).toBe('No matches')
+  })
+
+  it('counts in Russian as well', async () => {
+    const wrapper = await list('ru')
+    await open(wrapper, 'login')
+    expect(count()).toBe('1 из 3')
+    await open(wrapper, 'nowhere at all')
+    expect(count()).toBe('Нет совпадений')
+  })
+})
+
+describe('the steps between matches', () => {
+  it('go on with Enter and F3 and back with Shift, round past either end', async () => {
+    const wrapper = await list()
+    await open(wrapper, 'login')
+    await press({ key: 'Enter' })
+    expect(count()).toBe('2 of 3')
+    expect(current()).toEqual([{ row: 'MAIN-4', text: 'login' }])
+    await press({ key: 'Enter' })
+    expect(count()).toBe('3 of 3')
+    expect(current()).toEqual([{ row: 'MAIN-1', text: 'login' }])
+    await press({ key: 'Enter' })
+    expect(count()).toBe('1 of 3')
+    await press({ key: 'Enter', shiftKey: true })
+    expect(count()).toBe('3 of 3')
+    await press({ key: 'F3' })
+    expect(count()).toBe('1 of 3')
+    await press({ key: 'F3', shiftKey: true })
+    expect(count()).toBe('3 of 3')
+    // Focus stays in the field through every step.
+    expect(document.activeElement).toBe(field())
+  })
+
+  it('close with Escape, which gives focus back to where it was and clears the marks', async () => {
+    const wrapper = await list()
+    await open(wrapper, 'login')
+    await press({ key: 'Escape' })
+    expect(bar()).toBeNull()
+    expect(document.activeElement).toBe(rowButton(wrapper, 'MAIN-2'))
+    expect(painted.size).toBe(0)
+  })
+})
+
+describe('the current match as the list changes', () => {
+  it('stays on its row when a row above it goes, and the count follows', async () => {
+    const wrapper = await list()
+    await open(wrapper, 'login')
+    await press({ key: 'Enter', shiftKey: true })
+    expect(current()).toEqual([{ row: 'MAIN-1', text: 'login' }])
+    await wrapper.setProps({ items: items.filter((item) => item.reference !== 'MAIN-4') })
+    await flushPromises()
+    expect(count()).toBe('1 of 1')
+    expect(current()).toEqual([{ row: 'MAIN-1', text: 'login' }])
+    expect(document.activeElement).toBe(field())
+  })
+
+  it('stays on its row and its order in it when the list is sorted again', async () => {
+    const wrapper = await list()
+    await open(wrapper, 'login')
+    await press({ key: 'Enter' })
+    expect(current()).toEqual([{ row: 'MAIN-4', text: 'login' }])
+    // By reference, A to Z: MAIN-1 leads, and MAIN-4's two matches come last.
+    await wrapper.get('thead .list-sort').trigger('click')
+    await flushPromises()
+    expect(count()).toBe('3 of 3')
+    expect(current()).toEqual([{ row: 'MAIN-4', text: 'login' }])
+  })
+
+  it('goes on from where its row stood once the row no longer matches', async () => {
+    const wrapper = await list()
+    await open(wrapper, 'login')
+    const changed = items.map((item) =>
+      item.reference === 'MAIN-4' ? { ...item, revision: 2, title: 'Signed in' } : item,
+    )
+    await wrapper.setProps({ items: changed })
+    await flushPromises()
+    expect(count()).toBe('1 of 1')
+    expect(current()).toEqual([{ row: 'MAIN-1', text: 'login' }])
+  })
+})

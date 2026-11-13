@@ -19,7 +19,9 @@
  * A long list draws only the rows in and about its window, with gap rows for
  * the rest, and keeps the Tab stop and the row focus is in drawn wherever it
  * scrolls (`useWindowRows.ts`); a shorter one draws every row
- * (`useStagedRows.ts`).
+ * (`useStagedRows.ts`). Since the browser's find would reach only the rows
+ * drawn, Ctrl+F opens the list's own (`WorkItemListFind.vue`), which reads the
+ * words of every row as `listRowWords.ts` says the template draws them.
  *
  * Every facet a row prints comes from the facet registry, in its words, and in
  * the order every surface reads an item in: the kind leads the reference as a
@@ -36,6 +38,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useResizeObserver } from '@vueuse/core'
 
+import WorkItemListFind from '@/widgets/work-item-views/components/WorkItemListFind.vue'
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
 import { useListKeys } from '@/widgets/work-item-views/composables/useListKeys.ts'
 import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
@@ -44,6 +47,7 @@ import { useWindowRows } from '@/widgets/work-item-views/composables/useWindowRo
 import type { ListEntry } from '@/widgets/work-item-views/composables/useWindowRows.ts'
 import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { factsOf, ROW_FACETS, rowWords } from '@/widgets/work-item-views/utils/listRowWords.ts'
 
 import { drawMarks, drawWordCell } from '@/entities/work-item/components/drawMarks.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
@@ -127,20 +131,12 @@ function context(item: WorkItemBrief): FacetContext {
 /** A glyph is a 14px mark; on a phone's list it is read, and the bar filters. */
 const glyphsFilter = computed(() => !narrow.value)
 
-/** The facets of a row's runs, each in the place the row gives it. */
-const UNDER: readonly FacetId[] = ['readiness', 'labels']
-const STATE: readonly FacetId[] = ['state']
-const PRIORITY: readonly FacetId[] = ['priority']
-const HOLDER: readonly FacetId[] = ['holder']
-const STEPS: readonly FacetId[] = ['steps']
+const { HOLDER, PRIORITY, STATE, STEPS, UNDER } = ROW_FACETS
 
 const folded = (key: SortKey) => isFolded(fit.value, key)
 const shownColumns = computed(() => LIST_COLUMNS.filter((column) => !folded(column.key)))
 const foldedColumns = computed(() => LIST_COLUMNS.filter((column) => folded(column.key)))
-/** The state, where its column folded, and an open blocker, on the line of facts. */
-const factFacets = computed(() =>
-  folded('state') ? (['state', 'readiness'] as const) : (['readiness'] as const),
-)
+const factFacets = computed(() => factsOf(fit.value))
 
 /**
  * What a row depends on; walking a thousand rows redraws only the two focus moved
@@ -177,171 +173,177 @@ const facts = (item: WorkItemBrief, facets: readonly FacetId[], asked: FacetCont
 /** One mark in a cell of its own. */
 const fact = (item: WorkItemBrief, facet: readonly FacetId[]) =>
   drawMarks(surfaceMarks('list', item, {}, facet), { solo: true, surface: 'list', words })
-/** A run that filters, out of the Tab order: the row stays one stop. */
+/** How marks that filter are drawn: out of the Tab order, so the row stays one stop. */
+const filterRun = (filterable = true) => ({
+  filter: props.filter,
+  filterable,
+  onFilter: pass,
+  surface: 'list' as const,
+  tabbable: false,
+  words,
+})
+/** A run that filters. */
 const filtering = (marks: readonly FacetMark[], filterable = true) =>
-  drawMarks(marks, {
-    filter: props.filter,
-    filterable,
-    onFilter: pass,
-    surface: 'list',
-    tabbable: false,
-    words,
-  })
+  drawMarks(marks, filterRun(filterable))
 /** A column's word, the mark and nothing round it. */
 const word = (item: WorkItemBrief, facets: readonly FacetId[]) =>
   drawWordCell(surfaceMarks('list', item, {}, facets), { surface: 'list', words })
 const priorityWord = (item: WorkItemBrief) =>
-  drawWordCell(surfaceMarks('list', item, {}, PRIORITY), {
-    filter: props.filter,
-    filterable: true,
-    onFilter: pass,
-    surface: 'list',
-    tabbable: false,
-    words,
-  })
+  drawWordCell(surfaceMarks('list', item, {}, PRIORITY), filterRun())
 /** The glyph before a reference, in its fixed slot. */
 const lead = (item: WorkItemBrief, facet: FacetId) =>
   filtering(leadMarks(facet, 'list', item), glyphsFilter.value)
+
+/** A row's words for the list's find, as the template below draws them. */
+const said = (item: WorkItemBrief) =>
+  rowWords(item, { context: context(item), fit: fit.value, updated: updatedOf(item), words })
 </script>
 
 <template>
-  <div
-    ref="root"
-    class="work-item-list"
-    :data-fit="fit"
+  <WorkItemListFind
+    :list="list"
+    :root="root"
+    :rows="rows"
+    :words="said"
   >
-    <table
-      class="list-table"
-      :aria-rowcount="rowCount"
+    <div
+      ref="root"
+      class="work-item-list"
+      :data-fit="fit"
     >
-      <caption class="visually-hidden">
-        {{
-          t('workItem.list.caption')
-        }}
-      </caption>
-      <WorkItemListHead
-        :sort-state="ariaSort"
-        :columns="shownColumns"
-        :descending="descending"
-        :folded="foldedColumns"
-        :narrow="narrow"
-        :sort-key="sortKey"
-        @sort="sortBy"
-      />
-      <tbody>
-        <tr
-          v-for="entry in entries"
-          :key="entry.key"
-          :ref="list.measure"
-          v-memo="memo(entry)"
-          :aria-hidden="entry.hidden"
-          :aria-rowindex="entry.rowIndex"
-          :data-index="entry.index"
-          :class="rowClass(entry)"
-        >
-          <td
-            v-if="entry.kind === 'gap'"
-            class="list-gap-cell"
-            :style="{ height: gapOf(entry) }"
-          />
-          <template v-else>
-            <td class="list-cell list-ref-cell">
-              <component
-                :is="lead(entry.row, 'kind')"
-                class="list-slot"
-              />
-              <button
-                type="button"
-                class="list-open"
-                :tabindex="tabStop(entry.row)"
-                :data-id="entry.row.work_item_id"
-                :data-reference="entry.row.reference"
-              >
-                {{ entry.row.reference }}
-              </button>
-              <component
-                :is="lead(entry.row, 'priority')"
-                v-if="folded('priority')"
-                class="list-after"
-              />
-            </td>
-            <td class="list-cell list-title">
-              <span
-                v-slash-breaks="entry.row.title"
-                class="list-name"
-              />
-              <span
-                v-if="wide"
-                class="list-under"
-                ><component
-                  :is="filtering(surfaceMarks('list', entry.row, context(entry.row), UNDER))"
-              /></span>
-              <span
-                v-else
-                class="list-facts"
-              >
-                <component :is="facts(entry.row, factFacets, context(entry.row))" />
-                <!-- A dash says "nobody" under a heading; on a line of facts it says nothing. -->
+      <table
+        class="list-table"
+        :aria-rowcount="rowCount"
+      >
+        <caption class="visually-hidden">
+          {{
+            t('workItem.list.caption')
+          }}
+        </caption>
+        <WorkItemListHead
+          :sort-state="ariaSort"
+          :columns="shownColumns"
+          :descending="descending"
+          :folded="foldedColumns"
+          :narrow="narrow"
+          :sort-key="sortKey"
+          @sort="sortBy"
+        />
+        <tbody>
+          <tr
+            v-for="entry in entries"
+            :key="entry.key"
+            :ref="list.measure"
+            v-memo="memo(entry)"
+            :aria-hidden="entry.hidden"
+            :aria-rowindex="entry.rowIndex"
+            :data-index="entry.index"
+            :class="rowClass(entry)"
+          >
+            <td
+              v-if="entry.kind === 'gap'"
+              class="list-gap-cell"
+              :style="{ height: gapOf(entry) }"
+            />
+            <template v-else>
+              <td class="list-cell list-ref-cell">
                 <component
-                  :is="facts(entry.row, HOLDER)"
-                  v-if="holderRef(entry.row)"
+                  :is="lead(entry.row, 'kind')"
+                  class="list-slot"
                 />
+                <button
+                  type="button"
+                  class="list-open"
+                  :tabindex="tabStop(entry.row)"
+                  :data-id="entry.row.work_item_id"
+                  :data-reference="entry.row.reference"
+                >
+                  {{ entry.row.reference }}
+                </button>
                 <component
-                  :is="facts(entry.row, STEPS)"
-                  v-if="folded('checklist') && entry.row.checklist.length"
+                  :is="lead(entry.row, 'priority')"
+                  v-if="folded('priority')"
+                  class="list-after"
+                />
+              </td>
+              <td class="list-cell list-title">
+                <span
+                  v-slash-breaks="entry.row.title"
+                  class="list-name"
                 />
                 <span
-                  v-if="folded('updated')"
-                  class="list-fact"
-                  >{{ updatedOf(entry.row) }}</span
+                  v-if="wide"
+                  class="list-under"
+                  ><component
+                    :is="filtering(surfaceMarks('list', entry.row, context(entry.row), UNDER))"
+                /></span>
+                <span
+                  v-else
+                  class="list-facts"
                 >
-              </span>
-            </td>
-            <td
-              v-if="!folded('state')"
-              class="list-cell"
-            >
-              <component :is="fact(entry.row, STATE)" />
-            </td>
-            <td
-              v-if="!folded('priority')"
-              class="list-cell"
-            >
-              <component :is="priorityWord(entry.row)" />
-            </td>
-            <td
-              v-if="!folded('claim')"
-              v-tooltip.clipped="holderOf(entry.row)"
-              class="list-cell list-holder one-line"
-            >
-              <component
-                :is="word(entry.row, HOLDER)"
-                class="list-claim"
-              />
-            </td>
-            <td
-              v-if="!folded('checklist')"
-              class="list-cell"
-              data-numeric="true"
-            >
-              <component :is="word(entry.row, STEPS)" />
-            </td>
-            <td
-              v-if="!folded('updated')"
-              class="list-cell"
-            >
-              {{ updatedOf(entry.row) }}
-            </td>
-          </template>
-        </tr>
-      </tbody>
-    </table>
-    <DataEmptyState
-      v-if="!rows.length"
-      :title="t('workItem.listEmpty')"
-      compact
-    />
-  </div>
+                  <component :is="facts(entry.row, factFacets, context(entry.row))" />
+                  <!-- A dash says "nobody" under a heading; on a line of facts it says nothing. -->
+                  <component
+                    :is="facts(entry.row, HOLDER)"
+                    v-if="holderRef(entry.row)"
+                  />
+                  <component
+                    :is="facts(entry.row, STEPS)"
+                    v-if="folded('checklist') && entry.row.checklist.length"
+                  />
+                  <span
+                    v-if="folded('updated')"
+                    class="list-fact"
+                    >{{ updatedOf(entry.row) }}</span
+                  >
+                </span>
+              </td>
+              <td
+                v-if="!folded('state')"
+                class="list-cell"
+              >
+                <component :is="fact(entry.row, STATE)" />
+              </td>
+              <td
+                v-if="!folded('priority')"
+                class="list-cell"
+              >
+                <component :is="priorityWord(entry.row)" />
+              </td>
+              <td
+                v-if="!folded('claim')"
+                v-tooltip.clipped="holderOf(entry.row)"
+                class="list-cell list-holder one-line"
+              >
+                <component
+                  :is="word(entry.row, HOLDER)"
+                  class="list-claim"
+                />
+              </td>
+              <td
+                v-if="!folded('checklist')"
+                class="list-cell"
+                data-numeric="true"
+              >
+                <component :is="word(entry.row, STEPS)" />
+              </td>
+              <td
+                v-if="!folded('updated')"
+                class="list-cell"
+              >
+                {{ updatedOf(entry.row) }}
+              </td>
+            </template>
+          </tr>
+        </tbody>
+      </table>
+      <DataEmptyState
+        v-if="!rows.length"
+        :title="t('workItem.listEmpty')"
+        compact
+      />
+    </div>
+  </WorkItemListFind>
 </template>
 
 <style scoped>

@@ -39,6 +39,19 @@ export function contrast(first: string, second: string) {
   return (high + 0.05) / (low + 0.05)
 }
 
+/** A translucent token laid over an opaque ground, mixed the way the screen mixes them. */
+export function over(top: string, ground: string): string {
+  const lift = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*(\d+)%\s*\)$/u.exec(top)
+  assert.ok(lift, `${top} is not an rgb() with a percentage alpha`)
+  const alpha = Number(lift[4]) / 100
+  const below = longHex(ground)
+  const mixed = [1, 3, 5].map((start, index) => {
+    const under = Number.parseInt(below.slice(start, start + 2), 16)
+    return Math.round(Number(lift[index + 1]) * alpha + under * (1 - alpha))
+  })
+  return `#${mixed.map((value) => value.toString(16).padStart(2, '0')).join('')}`
+}
+
 export const VISION = {
   ordinary: [
     [1, 0, 0],
