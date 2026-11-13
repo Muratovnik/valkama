@@ -1,9 +1,17 @@
 """Build and verify the source and Windows desktop release pair.
 
 Release Kit runs build and smoke from a committed, Git-free source snapshot, and
-check in the working tree of the main checkout, with whatever ignored
-`node_modules` that holds. So check reinstalls both npm packages from their
-lockfiles first: what it verifies is what the lockfile pins.
+check in the working tree of the checkout it releases from. Check installs both
+npm packages from their lockfiles, so what it verifies is what the lockfiles pin,
+but never in that checkout: other worktrees on the machine link their
+`node_modules` to its, and `npm ci` empties the tree it installs into, under every
+link to it. So check copies the working tree's sources, the files Git tracks or
+would add and never a `node_modules`, into a temporary directory, installs and
+runs every npm stage there, and puts the web build back in `web/dist`, where
+Release Kit's clean-tree check after the checks finds a committed bundle its
+sources no longer build. The copy is removed when check ends, without entering a
+link inside it. The checkout's own `node_modules`, a directory or a link, is not
+read or changed.
 The desktop installer is a window for the source service, not a bundled server.
 
 Release Kit runs every command here with its own interpreter as `{python}`, so
@@ -20,6 +28,7 @@ release. The server itself makes no network call, so the comparison lives here.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -28,15 +37,16 @@ import math
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import sysconfig
 import tempfile
 import urllib.request
 import zipfile
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -238,6 +248,105 @@ def linked_modules(package: Path) -> Path | None:
     return None if target == package.resolve() / "node_modules" else target
 
 
+def task_parent() -> Path:
+    """The short directory under the OS temporary one that `check` makes its own areas in.
+
+    Release coordinators often supply a deeply nested TEMP: too long for the socket
+    path semgrep-core makes in it, and a deep start for the paths of an npm install.
+    """
+
+    temp_root = (
+        (Path(os.environ["LOCALAPPDATA"]) / "Temp").resolve()
+        if sys.platform == "win32"
+        else Path(tempfile.gettempdir()).resolve()
+    )
+    parent = temp_root / "codex"
+    if parent.resolve().parent != temp_root:
+        raise ValueError("check workspace must stay inside the temporary directory")
+    parent.mkdir(exist_ok=True)
+    return parent
+
+
+def copy_sources(checkout: Path, copy: Path) -> None:
+    """Copy into `copy` each file of `checkout`'s working tree that Git tracks or would add.
+
+    The bytes are the working tree's, edits not yet committed included: what the
+    npm stages read when they ran in the checkout. An ignored file is local output,
+    and a `node_modules` is left out even where Git reports one, as it does a link.
+    The whole tree is copied because the npm stages read past their packages: the
+    web tests read `docs/`, `tests/` and `windows/`, its duplicate scan `server/`,
+    and the desktop tests their samples in `tests/fixtures/`.
+    """
+
+    listed = run(
+        "git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", cwd=checkout
+    ).decode("utf-8", errors="strict")
+    for name in sorted(set(listed.split("\0")) - {""}):
+        relative = PurePosixPath(name)
+        source = checkout.joinpath(*relative.parts)
+        # A tracked file deleted from the working tree is no source to check.
+        if "node_modules" in relative.parts or not source.is_file():
+            continue
+        target = copy.joinpath(*relative.parts)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+
+def _writable_and_again(function: Callable[[str], object], path: str, _failure: object) -> None:
+    """Clear the read-only mark Windows refuses to delete, which an npm package may carry.
+
+    Only on the entry itself: a mode change on a link would change what it points to.
+    """
+
+    entry = Path(path)
+    if entry.resolve() == entry.parent.resolve() / entry.name:
+        os.chmod(entry, stat.S_IWRITE)
+    function(path)
+
+
+def _remove_copy(copy: Path) -> str | None:
+    """Remove the copy without entering a link in it; what was left, said, when not all went."""
+
+    try:
+        shutil.rmtree(copy, onerror=_writable_and_again)
+    except OSError as failure:
+        return f"release check: the npm copy {copy} could not be removed and is left: {failure}"
+    return None
+
+
+@contextlib.contextmanager
+def npm_copy(checkout: Path) -> Iterator[Path]:
+    """A temporary copy of `checkout`'s sources for the npm stages, removed when they end.
+
+    A copy that cannot be removed fails the check; when a stage failed first, that
+    failure is the one raised, and the copy left behind is named beside it.
+    """
+
+    copy = Path(tempfile.mkdtemp(prefix="valkama-npm-", dir=task_parent()))
+    try:
+        copy_sources(checkout, copy)
+        yield copy
+    except BaseException:
+        if (left := _remove_copy(copy)) is not None:
+            sys.stderr.write(f"{left}\n")
+        raise
+    if (left := _remove_copy(copy)) is not None:
+        raise RuntimeError(left)
+
+
+def publish_web_build(built: Path, published: Path) -> None:
+    """Replace the checkout's bundle, `published`, with the one the build wrote in the copy.
+
+    The build empties its output directory before writing, so the bundle replaces
+    the checkout's whole, and a chunk it no longer writes goes too. A committed
+    bundle that differs is then what Release Kit's clean-tree check refuses.
+    """
+
+    if published.exists():
+        shutil.rmtree(published)
+    shutil.copytree(built, published)
+
+
 def version() -> str:
     return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
@@ -292,24 +401,35 @@ def check(interpreter: Interpreter | None = None, requirements: str | None = Non
     wrong interpreter is refused in one message instead of one stage at a time.
     `npm ci` runs ahead of the Python stages, though only the npm stages need it:
     a registry that cannot be reached then costs a minute and not the whole suite.
+    Every npm stage runs in `npm_copy`, never in the checkout; the Python stages
+    run in the checkout.
     """
 
     interpreter = interpreter or running_interpreter()
     if requirements is None:
         requirements = REQUIREMENTS.read_text(encoding="utf-8")
     tools = require_toolchain(interpreter, pins(requirements))
-    for package in NPM_PACKAGES:
-        target = linked_modules(ROOT / package)
-        if target is not None:
-            raise ToolchainError(
-                f"release check: {ROOT / package / 'node_modules'} is a link to {target}, and"
-                " npm ci through a link empties its target for every checkout sharing it."
-                " Remove the link and run the check again."
-            )
     require_version(version())
     base = tool_environment(interpreter, os.environ)
-    stages: list[tuple[str, tuple[str, ...], Path]] = [
-        *(("npm", (NPM, "ci"), ROOT / package) for package in NPM_PACKAGES),
+    with npm_copy(ROOT) as copy:
+        sys.stdout.write(f"release check: the npm stages run in a copy of the sources, {copy}\n")
+        _run_stages(_stages(interpreter, tools, copy), base)
+
+
+def _stages(
+    interpreter: Interpreter, tools: Mapping[str, tuple[str, ...]], copy: Path
+) -> list[tuple[str, tuple[str, ...], Path]]:
+    """Each stage of `check`: its name, its command and where it runs.
+
+    The npm stages run in `copy`, the Python stages in the checkout. The web
+    build is the one npm stage whose output leaves the copy: `_run_stages` puts it
+    in the checkout's `web/dist`.
+    """
+
+    return [
+        # Into the copy: `npm ci` empties the tree it installs into, and the
+        # checkout's may be the one other worktrees link theirs to.
+        *(("npm", (NPM, "ci"), copy / package) for package in NPM_PACKAGES),
         # Early for the reason `npm ci` is: a source that cannot be reached costs
         # seconds, not the whole suite.
         (
@@ -358,41 +478,34 @@ def check(interpreter: Interpreter | None = None, requirements: str | None = Non
             ROOT,
         ),
         ("coverage", (*tools["coverage"], "report"), ROOT),
-        ("npm", (NPM, "test"), ROOT / "web"),
-        ("npm", (NPM, "run", "typecheck"), ROOT / "web"),
-        ("npm", (NPM, "run", "build"), ROOT / "web"),
-        ("npm", (NPM, "test"), ROOT / "desktop"),
+        ("npm", (NPM, "test"), copy / "web"),
+        ("npm", (NPM, "run", "typecheck"), copy / "web"),
+        ("web build", (NPM, "run", "build"), copy / "web"),
+        ("npm", (NPM, "test"), copy / "desktop"),
     ]
+
+
+def _run_stages(stages: list[tuple[str, tuple[str, ...], Path]], base: dict[str, str]) -> None:
     for stage, command, cwd in stages:
         sys.stdout.write(f"release check: {' '.join(command)}\n")
         sys.stdout.flush()
         # Gate output is not parsed; inherit pipes to preserve the tool's text.
         if stage == "coverage run":
-            temp_root = (
-                (Path(os.environ["LOCALAPPDATA"]) / "Temp").resolve()
-                if sys.platform == "win32"
-                else Path(tempfile.gettempdir()).resolve()
-            )
-            task_parent = temp_root / "codex"
-            if task_parent.resolve().parent != temp_root:
-                raise ValueError("check workspace must stay inside the temporary directory")
-            task_parent.mkdir(exist_ok=True)
-            with tempfile.TemporaryDirectory(prefix="valkama-check-", dir=task_parent) as task:
+            with tempfile.TemporaryDirectory(prefix="valkama-check-", dir=task_parent()) as task:
                 environment = isolated_environment(Path(task) / "user-state", base)
                 environment["GIT_CEILING_DIRECTORIES"] = task
                 subprocess.run(command, cwd=cwd, env=environment, check=True)
         elif stage == "semgrep" and sys.platform == "win32":
             # semgrep-core's native socketpair fails when its temporary socket
-            # path is too long. Release coordinators often supply a deeply
-            # nested TEMP; give only this process a short owned OS temp path.
-            native_temp = (Path(os.environ["LOCALAPPDATA"]) / "Temp").resolve()
-            task_parent = native_temp / "codex"
-            if task_parent.resolve().parent != native_temp:
-                raise ValueError("Semgrep workspace must stay inside the OS temporary directory")
-            task_parent.mkdir(exist_ok=True)
-            with tempfile.TemporaryDirectory(prefix="sg-", dir=task_parent) as task:
+            # path is too long; give only this process a short owned OS temp path.
+            with tempfile.TemporaryDirectory(prefix="sg-", dir=task_parent()) as task:
                 environment = {**base, "TEMP": task, "TMP": task, "TMPDIR": task}
                 subprocess.run(command, cwd=cwd, env=environment, check=True)
+        elif stage == "web build":
+            subprocess.run(command, cwd=cwd, env=base, check=True)
+            # The build wrote the copy's `dist`; the checkout's is the one served,
+            # committed and compared by Release Kit after the checks.
+            publish_web_build(cwd / "dist", ROOT / "web" / "dist")
         else:
             subprocess.run(command, cwd=cwd, env=base, check=True)
 

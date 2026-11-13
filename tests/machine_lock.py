@@ -9,8 +9,9 @@ instead of running beside it. `tests/isolated.py gates` takes it in-process for
 its `unittest` step, and `web/tests/browser/allowedRun.ts` runs Playwright
 through the command above, so there is one implementation and one protocol.
 
-The lock is a file in the user's temporary directory: outside every checkout
-and worktree, so all of them meet at it, and outside `~/.valkama` and the
+The lock is a file in the system's temporary directory, whatever TEMP a run
+was given: outside every checkout and worktree, so all of them meet at it, and
+outside `~/.valkama` and the
 installed product, which no test run has any business locking. It is the
 operating system's lock on the file's first byte, taken through
 `server.store_lock`, so it goes with its holder however that process ends and
@@ -27,7 +28,6 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -45,9 +45,19 @@ POLL_SECONDS = 0.25
 
 
 def lock_path() -> Path:
-    """The machine's lock for this user; `/tmp` is shared between users, so the name holds one."""
+    """The machine's lock for this user, in the system's temporary directory.
 
-    return Path(tempfile.gettempdir()) / f"valkama-heavy-tests-{getpass.getuser()}.lock"
+    Not in the TEMP a run was given: a release coordinator gives its checks a TEMP
+    inside the checkout, and a lock there would hold only the runs that share it.
+    On Windows that directory is the user's `%LOCALAPPDATA%/Temp`; elsewhere it is
+    `/tmp`, which users share, so the name holds the user.
+    """
+
+    if sys.platform == "win32":
+        directory = Path(os.environ["LOCALAPPDATA"]) / "Temp"
+    else:
+        directory = Path("/tmp")
+    return directory / f"valkama-heavy-tests-{getpass.getuser()}.lock"
 
 
 def _say(line: str) -> None:

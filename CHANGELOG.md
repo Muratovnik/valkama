@@ -188,6 +188,13 @@ checkouts are therefore distinguishable even at the same version.
   history. A store that holds such pairs keeps the earlier record of each when it
   is opened, after a verified recovery point; `blocks`, `discovered-from` and
   `duplicates` are left as they are.
+- **The release check leaves the checkout's `node_modules` alone.** It no longer installs
+  npm packages in the checkout it releases from, where the install emptied the
+  `node_modules` other worktrees link theirs to. It copies
+  the sources Git tracks or would add, never a `node_modules`, into a temporary
+  directory, runs `npm ci` and every npm stage there, puts the web build in `web/dist`
+  as before, and removes the copy when it ends, on a failure too. A `node_modules` in
+  the checkout, a directory or a link, is left as it is and no longer refused.
 
 ## [2.8.0](https://github.com/Muratovnik/valkama/compare/v2.7.0...v2.8.0) - 2026-11-11
 
