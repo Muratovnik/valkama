@@ -51,8 +51,9 @@ const lead = (page: VueWrapper, section: string) =>
   tile(page, section).get('.rail-tile-lead').text()
 const aside = (page: VueWrapper, section: string) =>
   tile(page, section).find('.rail-tile-aside').text()
+/** The count of values a tile says: its words, as the entry keeps the room of a count without one. */
 const count = (page: VueWrapper, section: string) =>
-  tile(page, section).find('.analytics-rail-count')
+  tile(page, section).find('.analytics-rail-count-words')
 
 /** The reads the rail asks: one by each dimension, none comparing, none of the week before. */
 /** The element an id reference names, or null. */

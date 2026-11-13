@@ -37,7 +37,13 @@ const WORLD: TimedStretch[] = [
   },
 ]
 
-/** Every box measured `width` pixels wide, as the page measures its own: a phone's by default. */
+/** The width the rail stands at beside the panel, the least of its range: 15 of 16-pixel ems. */
+const RAIL_WIDTH = 240
+
+/**
+ * The page measured `width` pixels wide, as it measures its own box, a phone's by default, and the
+ * rail beside its panel `RAIL_WIDTH`: the page reads the rail's own width rather than assume it.
+ */
 function pageWidth(width = 390) {
   vi.stubGlobal(
     'ResizeObserver',
@@ -47,7 +53,12 @@ function pageWidth(width = 390) {
         this.report = report
       }
       observe(target: Element) {
-        const entry = { target, contentRect: { width } } as unknown as ResizeObserverEntry
+        const side = target.matches('.analytics-rail') ? RAIL_WIDTH : width
+        const entry = {
+          target,
+          contentRect: { width: side },
+          borderBoxSize: [{ inlineSize: side, blockSize: 0 }],
+        } as unknown as ResizeObserverEntry
         this.report([entry], this as unknown as ResizeObserver)
       }
       unobserve() {}
@@ -170,7 +181,7 @@ describe('the panel', () => {
 
 describe('a narrow screen', () => {
   it('takes turns where the page, whatever the window, leaves the panel under 640 pixels', async () => {
-    // The rail is 15 of the root's 16-pixel ems: 240 pixels, and 640 for the panel beside it.
+    // The rail stands at 240 pixels beside the panel, which needs 640 beside it.
     for (const [width, side] of [
       [879, false],
       [880, true],
