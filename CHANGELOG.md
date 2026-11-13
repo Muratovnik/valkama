@@ -57,6 +57,16 @@ checkouts are therefore distinguishable even at the same version.
   `claude plugin marketplace add <checkout>` and
   `claude plugin install valkama-quota@valkama`. `doctor` reports the mod as off
   (not installed or not enabled), silent (no `mod` reading in three days) or working.
+- **`GET /api/analytics/quota`: each account's subscription quota windows as they stand
+  now.** One entry per account with a quota sample in the last seven days, by its UUID or
+  the provisional seat a reading without one is on, with its plan and name, and one per
+  organization that worked in that span with no source. Each window of five hours, the
+  week or a model's week gives its latest percent with that reading's time and source, its
+  reset and start, where steady use would stand now, its readings since its start, and a
+  forecast: the five-hour window's point answer, a week only as a range. A window is
+  `fresh` within the fifteen minutes the quota alerts read, and `silent` after; the usage
+  credits and a gateway's spend limit are their own kinds, with no percent and no money.
+  No field adds percentages, within an account or across accounts.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 

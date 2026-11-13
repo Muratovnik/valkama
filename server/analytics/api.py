@@ -15,10 +15,12 @@ import sqlite3
 from collections.abc import Callable, Mapping
 
 from .. import query_params
-from . import usage, uses
+from . import quota, usage, uses
 
 ANALYTICS_API_INTERFACE = "valkama-analytics-api"
 USAGE_PATH = "/api/analytics/usage"
+#: Each account's subscription quota windows as they stand now.
+QUOTA_PATH = "/api/analytics/quota"
 #: How often each analytics surface was opened: read by `GET`, counted by `POST`.
 USES_PATH = "/api/analytics/uses"
 
@@ -119,7 +121,18 @@ def _uses(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict
     }
 
 
+def _quota(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """Each account's quota windows now, its times at `utc_offset`."""
+
+    _refuse_unknown(parameters, frozenset({"utc_offset"}))
+    return {
+        "interface_version": ANALYTICS_API_INTERFACE,
+        "quota": quota.read(conn, _offset(parameters)),
+    }
+
+
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
+    QUOTA_PATH: _quota,
     USAGE_PATH: _usage,
     USES_PATH: _uses,
 }
@@ -174,6 +187,7 @@ def handle_post(
 
 __all__ = [
     "ANALYTICS_API_INTERFACE",
+    "QUOTA_PATH",
     "READ_PATHS",
     "USAGE_PATH",
     "USES_PATH",

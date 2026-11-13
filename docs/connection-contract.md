@@ -1167,9 +1167,10 @@ with a count, oldest first, with every kind. No MCP tool counts or reads uses.
 
 Analytics will read the subscription quota from samples the store keeps, beside the
 usage rows and apart from them. This is what a sample and an account hold, what writes
-them, and how a usage segment is given its seat. No HTTP or MCP read answers with them
-yet; the answer that will read them comes under `valkama-analytics-api` and keeps this
-section's rules. Later builds only add fields, kinds and sources to it.
+them, and how a usage segment is given its seat. `GET /api/analytics/quota` reads them
+under `valkama-analytics-api` and keeps this section's rules
+([Each account's subscription quota](#each-accounts-subscription-quota)); no MCP tool
+reads them.
 
 A sample is one reading of one window of one account. It holds:
 
@@ -1271,6 +1272,89 @@ cannot hold refuses the whole file, naming the line, and writes nothing. The com
 prints the lines read, how many were added, how many matched the sample before them
 (`unchanged`) or were older than a year (`expired`), and each organization's first and
 last time.
+
+### Each account's subscription quota
+
+`GET /api/analytics/quota` answers, under `interface_version` `valkama-analytics-api`,
+where every account's quota windows stand now, from the samples above. It is answered as
+the usage read is, to the page and to a local tool alike, and writes nothing. A later
+build only adds fields, kinds and sources to this answer. No MCP tool reads it.
+
+Its one parameter is `utc_offset`, the caller's offset from UTC in minutes, from `-840`
+to `840`, `0` by default, at which every time in the answer is written. Any other
+parameter, a repeated one or an offset out of its range is refused with `400` and
+`{"error": {"code": "invalid_request", "message": …}}`, as the usage read refuses it. An
+empty store answers with no account.
+
+```json
+{"interface_version": "valkama-analytics-api",
+ "quota": {
+   "now": "2030-03-06T13:00:00.000+03:00", "utc_offset": 180, "fresh_for_seconds": 900,
+   "accounts": [
+     {"organization": "org-a", "account_uuid": "acct-a", "seat": null, "plan": "Max",
+      "name": null, "no_source": false,
+      "windows": [
+        {"kind": "five_hour", "model": null, "state": "fresh",
+         "resets_at": "2030-03-06T16:00:00.000+03:00",
+         "latest": {"at": "2030-03-06T12:55:00.000+03:00", "source": "poll",
+                    "used_percent": 50.0},
+         "started_at": "2030-03-06T11:00:00.000+03:00", "even_percent": 40.0,
+         "readings": [{"at": "2030-03-06T12:00:00.000+03:00", "used_percent": 20.0,
+                       "source": "poll"},
+                      {"at": "2030-03-06T12:55:00.000+03:00", "used_percent": 50.0,
+                       "source": "poll"}],
+         "forecast": {"outcome": "runs_out",
+                      "runs_out_at": "2030-03-06T13:40:00.000+03:00", "basis": "blend"}},
+        {"kind": "week", "model": null, "state": "fresh",
+         "resets_at": "2030-03-08T12:00:00.000+03:00",
+         "latest": {"…": "as above", "used_percent": 41.0},
+         "started_at": "2030-03-01T12:00:00.000+03:00", "even_percent": 72.02,
+         "readings": ["…"],
+         "forecast": {"low_percent": 56.93, "high_percent": 61.2}}]},
+     {"organization": "org-b", "account_uuid": null, "seat": null, "plan": null,
+      "name": null, "no_source": true, "windows": []},
+     {"organization": "org-c", "account_uuid": null, "seat": "week:2030-03-08T09:00Z",
+      "plan": null, "name": null, "no_source": false,
+      "windows": [
+        {"kind": "spend_limit", "model": null, "state": "silent", "resets_at": null,
+         "latest": {"at": "2030-03-06T12:00:00.000+03:00", "source": "statusline"}}]}]}}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `now` | the moment the answer was worked out; every pace and state is as of it |
+| `fresh_for_seconds` | how old a window's latest sample may be and still be fresh: 900, the span the quota alerts read too |
+| `accounts` | one entry per account with a sample in the last seven days, and one per organization with a usage segment in that span and no such sample. Ordered by organization, then account |
+| `organization` | the organization's id |
+| `account_uuid` | the account's UUID: the sample's own, or the one its seat belongs to by the rule above; `null` for a provisional seat and for an organization with no sample |
+| `seat` | the provisional seat the samples without a UUID are on, `null` when the UUID is known. A provisional seat is known for one week, so a provisional account comes back as another entry the next week |
+| `plan` | the plan a source named for the account, or `null` |
+| `name` | the name the owner gave the account, or `null` when none is set |
+| `no_source` | `true` for an organization whose work no quota source has read in the seven days; its `windows` are empty. An account with samples is `false` |
+| `windows` | the account's windows, in the kinds' order above, a model's week by model: one per `kind` and `model` its samples have |
+
+A window that is a share of a limit, `five_hour`, `week` or `week_model`, holds:
+
+| Field | What it holds |
+| --- | --- |
+| `kind`, `model` | the window, as a sample names it |
+| `state` | `fresh` while its latest sample is at most `fresh_for_seconds` old, `silent` once it is older. Samples are kept only when a value changed, so a silent window has not moved since; it does not say the source stopped. A fresh `0.0` is a value, not a missing one |
+| `latest` | the window's latest sample: `at`, `source` (`statusline`, `mod`, `poll` or `import`) and `used_percent`, the share of the window it said was spent |
+| `resets_at` | when the window resets, as its latest sample said; `null` when the window has not started |
+| `started_at` | its reset less its length, five hours or seven days; `null` without a reset |
+| `even_percent` | how much of the window steady use from its start would have spent by `now`: the pace tick. `null` without a reset or once the reset has passed |
+| `readings` | its samples since `started_at` that name this reset, oldest first, each with `at`, `used_percent` and `source`, for a step line. The samples of every source of the account are in it, so one source's reading can be lower than another's before it |
+| `forecast` | `null` while the window has too little history or its reset has passed. The five-hour window gives its point answer: `outcome` `lasts`, `runs_out` with `runs_out_at`, or `spent`, and `basis`, the pace it read (`recent`, `blend` or `window`; `null` when spent). A week, and a model's week, give only a range: `low_percent` and `high_percent`, the share of the week the slower and the faster of its paces would have spent by the reset, above 100 when the week runs out first. A week never has a point forecast here |
+
+A window of `extra_usage` or `spend_limit` is its own kind and holds `kind`, `model`,
+`state`, `resets_at` and `latest` with `at` and `source` alone: no percent, no amount
+and no forecast. The answer holds no money.
+
+No field is a sum or a total of percentages. A percentage belongs to one window of one
+account: the windows of an account are not added, and neither are two accounts'
+percentages, of one organization or of two. A reading whose organization is not known
+yet, because the session's transcript has not been read that far, or that names neither
+an account's UUID nor a seat, belongs to no account and is not in the answer.
 
 ### The poll of the usage endpoint
 
