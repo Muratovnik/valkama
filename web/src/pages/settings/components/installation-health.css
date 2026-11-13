@@ -104,8 +104,10 @@
   border-bottom: 1px solid var(--color-rule);
 }
 
-.health-level-state,
-.health-finding-state {
+/* A level heads a block of findings at the block's step; a finding's title is the label over
+   its own lines, a step under, in the type a state's word already has. Both at the block's
+   size, a finding read as a second heading of the level it belongs to. */
+.health-level-state {
   font: var(--font-row-title);
 }
 
@@ -179,9 +181,10 @@
   }
 }
 
-/* Its toggle stands in a head of the attention section's inset and fill, the levels under it. */
+/* Its toggle stands in a head of the attention section's inset and fill, the levels under it,
+   and it heads the same level the attention's heading does: a group, at the group's step. */
 .health-passed {
-  --font-disclosure: var(--font-label);
+  --font-disclosure: var(--font-panel-title);
   --space-disclosure-gap: 0px;
   --space-disclosure-inset: var(--space-4);
   --color-disclosure-head: var(--color-surface-muted);
@@ -196,10 +199,11 @@
     border-top: 1px solid var(--color-rule);
   }
 
+  /* A passed level heads its checks as an attention level heads its findings: a block. */
   .health-passed-title {
     margin: 0 0 var(--space-2);
     color: var(--color-text-tertiary);
-    font: var(--font-field-label);
+    font: var(--font-row-title);
   }
 
   .health-passed-row {

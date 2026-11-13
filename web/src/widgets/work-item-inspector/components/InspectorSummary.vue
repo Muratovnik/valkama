@@ -74,9 +74,9 @@ function viewReport() {
   justify-self: start;
 }
 
-/* The section's name is the toggle, in the type a panel's heading is set in. */
+/* The section's name is the toggle, in the type every section's heading is set in. */
 .outcome-details {
-  --font-disclosure: var(--font-panel-title);
+  --font-disclosure: var(--font-section-title);
   --space-disclosure-gap: var(--space-heading-content);
 }
 

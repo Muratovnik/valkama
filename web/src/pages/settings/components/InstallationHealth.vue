@@ -184,7 +184,11 @@ onMounted(load)
         <section class="health-attention">
           <header class="health-section-head">
             <span class="health-titleline">
-              <SectionHeading as="h4">{{ t('health.attention') }}</SectionHeading>
+              <SectionHeading
+                as="h4"
+                rank="group"
+                >{{ t('health.attention') }}</SectionHeading
+              >
               <CountBadge
                 placement="inline"
                 :value="problems"
