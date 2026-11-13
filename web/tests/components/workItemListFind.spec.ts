@@ -7,7 +7,8 @@
  * stays on its row while the list changes under it.
  *
  * happy-dom has no CSS Custom Highlight API, so a registry of the same shape
- * stands in for it and the marks are read from there.
+ * stands in for it and the marks are read from there. The words of a row are
+ * read through `rowWords`, watched here for how often the find reads them.
  */
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
@@ -15,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import { fold, termOf } from '@/widgets/work-item-views/utils/listFind.ts'
+import { rowWords } from '@/widgets/work-item-views/utils/listRowWords.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
@@ -22,6 +24,12 @@ import { claimOverlayOwnership, releaseOverlayOwnership } from '@/shared/ui/over
 
 import { boardItem } from '../fixtures/board.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
+
+vi.mock('@/widgets/work-item-views/utils/listRowWords.ts', async (original) => {
+  const actual = await original<typeof import('@/widgets/work-item-views/utils/listRowWords.ts')>()
+  return { ...actual, rowWords: vi.fn(actual.rowWords) }
+})
+const reads = vi.mocked(rowWords)
 
 class TestHighlight extends Set<AbstractRange> {
   priority = 0
@@ -33,6 +41,7 @@ const painted = new Map<string, TestHighlight>()
 
 beforeEach(() => {
   painted.clear()
+  reads.mockClear()
   vi.stubGlobal('Highlight', TestHighlight)
   vi.stubGlobal('CSS', Object.assign(Object.create(CSS) as typeof CSS, { highlights: painted }))
 })
@@ -96,6 +105,34 @@ async function open(wrapper: List, term: string) {
   await flushPromises()
   if (!field()) throw new Error('Ctrl+F opened no find bar')
   await typeIn(term)
+}
+
+/** Boxes measured as a hand sets them: the list is as wide as `resizeList` last said. */
+function measuredBoxes() {
+  const observers: { report: ResizeObserverCallback; targets: Element[] }[] = []
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      readonly watch: { report: ResizeObserverCallback; targets: Element[] }
+      constructor(report: ResizeObserverCallback) {
+        this.watch = { report, targets: [] }
+        observers.push(this.watch)
+      }
+      observe(target: Element) {
+        this.watch.targets.push(target)
+      }
+      unobserve() {}
+      disconnect() {}
+    },
+  )
+  return async function resizeList(width: number) {
+    const list = document.querySelector('.work-item-list')
+    if (!list) throw new Error('no list to resize')
+    const entry = { contentRect: { width }, target: list } as unknown as ResizeObserverEntry
+    for (const { report, targets } of observers)
+      if (targets.includes(list)) report([entry], {} as ResizeObserver)
+    await flushPromises()
+  }
 }
 
 async function press(init: KeyboardEventInit) {
@@ -209,6 +246,32 @@ describe('Ctrl+F on the list', () => {
     await list()
     // Caps Lock on: the letter is still F.
     expect(findKeys({ code: 'KeyF', key: 'F' }).defaultPrevented).toBe(true)
+  })
+})
+
+describe('the words of the rows', () => {
+  it('are read once for a term, not again for each key typed into it', async () => {
+    const wrapper = await list()
+    await open(wrapper, 'l')
+    expect(reads).toHaveBeenCalledTimes(items.length)
+    for (const term of ['lo', 'log', 'logi', 'login']) await typeIn(term)
+    expect(count()).toBe('1 of 3')
+    expect(reads).toHaveBeenCalledTimes(items.length)
+  })
+
+  it('are read again where the list’s width changes what a row prints, not at every pixel', async () => {
+    const resizeList = measuredBoxes()
+    const wrapper = await list()
+    await open(wrapper, 'login')
+    await resizeList(1000)
+    const read = reads.mock.calls.length
+    // Still the same columns, and still wide enough for the labels.
+    for (const width of [1010, 1100, 1240]) await resizeList(width)
+    expect(reads).toHaveBeenCalledTimes(read)
+    // Narrower than the labels need: the rows read again.
+    await resizeList(880)
+    expect(reads).toHaveBeenCalledTimes(read + items.length)
+    expect(count()).toBe('1 of 3')
   })
 })
 

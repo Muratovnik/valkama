@@ -51,7 +51,7 @@ import { factsOf, ROW_FACETS, rowWords } from '@/widgets/work-item-views/utils/l
 
 import { drawMarks, drawWordCell } from '@/entities/work-item/components/drawMarks.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
-import { holderRef, leadMarks, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
+import { holderRef, leadMarks, markWidth, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 import type { FacetContext, FacetId, FacetMark } from '@/entities/work-item/utils/facets.ts'
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
@@ -121,12 +121,13 @@ const { rowCount } = list
 
 const waiting = computed(() => waitingOn(props.links, props.items))
 /**
- * What a row's marks need beyond the item. The width only decides whether
- * labels print, which happens from 900px of list, so a row is drawn again
- * when it crosses that and not on every pixel.
+ * What a row's marks need beyond the item. The width is the one the marks read,
+ * which decides whether labels print: a row is drawn and read for the find again
+ * where the list crosses such a width, not on every pixel.
  */
+const readWidth = computed(() => markWidth('list', width.value))
 function context(item: WorkItemBrief): FacetContext {
-  return { waitingOn: waiting.value.get(item.work_item_id) ?? null, width: width.value }
+  return { waitingOn: waiting.value.get(item.work_item_id) ?? null, width: readWidth.value }
 }
 /** A glyph is a 14px mark; on a phone's list it is read, and the bar filters. */
 const glyphsFilter = computed(() => !narrow.value)
@@ -151,7 +152,7 @@ function memo(entry: ListEntry<WorkItemBrief>): unknown[] {
     tabStop(item),
     waiting.value.get(item.work_item_id),
     fit.value,
-    width.value >= 900,
+    readWidth.value,
     props.filter,
     locale.value,
     entry.index,

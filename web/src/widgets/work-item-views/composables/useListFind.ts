@@ -24,6 +24,8 @@
  * step, a term typed or the bar opened, moves the list.
  *
  * A closed bar costs nothing: no words are read, nothing is observed or marked.
+ * An open one reads every row's words once for the term, and again only when
+ * the rows or what they print change; a key typed into the term only matches.
  */
 import { computed, nextTick, onBeforeUnmount, shallowRef, watch } from 'vue'
 import type { Ref } from 'vue'
@@ -113,12 +115,15 @@ export function useListFind<Row>({ bar, focusBar, key, list, root, rows, words }
   /** What is typed in the bar, kept while it is closed for the next opening. */
   const input = shallowRef('')
   const term = computed(() => (open.value ? termOf(input.value) : ''))
+  const searching = computed(() => term.value !== '')
   const current = shallowRef<ListMatch | null>(null)
   /** Where focus was when the bar opened, to give it back. */
   let returnTo: HTMLElement | null = null
 
+  // Every row's words, folded. They follow the rows and what the rows print, never the
+  // term: a key typed into it only matches again.
   const texts = computed(() =>
-    term.value
+    searching.value
       ? rows().map((row) => ({ id: key(row), text: fold(words(row).join(RUN_BREAK)).text }))
       : [],
   )
@@ -280,7 +285,7 @@ export function useListFind<Row>({ bar, focusBar, key, list, root, rows, words }
     open,
     step,
     /** Whether a term is being looked for. */
-    searching: computed(() => term.value !== ''),
+    searching,
     total: computed(() => matches.value.length),
     type,
   }
