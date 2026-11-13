@@ -82,8 +82,9 @@ with `PermissionError`. `tests/isolated.py` states the rest of its reasons.
 Two heavy runs on one machine fail tests that pass alone: a timing budget of the
 suite was missed by half while another checkout's full suite ran beside it. So
 the `unittest` step of `gates` and every run of `npm run test:browser:allowed`
-but `--list` hold one lock, `tests/machine_lock.py`: a file in the user's
-temporary directory, where every checkout and worktree of the machine meets it.
+but `--list` hold one lock, `tests/machine_lock.py`: a file in the system's
+temporary directory, never in the TEMP a run was given, where every checkout and
+worktree of the machine meets it.
 The step holds it for its own duration and the runner for Playwright's; the other
 steps, a `--only` that leaves `unittest` out, a spec run with
 `npx playwright test <file>`, and a bare `coverage run` take none. It is the
