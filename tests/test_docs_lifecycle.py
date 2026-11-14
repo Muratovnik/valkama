@@ -149,13 +149,12 @@ class DocsLifecycleTests(unittest.TestCase):
 
 
 class ProductModelDocsTests(unittest.TestCase):
-    def test_product_model_is_adopted_for_core_001_and_defines_the_vocabulary(self) -> None:
+    def test_product_model_is_adopted_and_defines_the_vocabulary(self) -> None:
         text = PRODUCT_MODEL.read_text(encoding="utf-8")
         self.assertIsNone(lifecycle_problem(text))
         fields = frontmatter(text)
         self.assertIsNotNone(fields)
         self.assertEqual("adopted", fields["status"])
-        self.assertIn("<!-- kb:core-001-product-model -->", text)
         for term in REQUIRED_PRODUCT_TERMS:
             with self.subTest(term=term):
                 self.assertIn(f"| {term} |", text)

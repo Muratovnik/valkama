@@ -2,8 +2,6 @@
 status: adopted
 ---
 
-<!-- kb:core-001-product-model -->
-
 # Valkama product model
 
 Valkama is a local, single-user workspace for project work: plan an item, claim
