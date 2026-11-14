@@ -337,3 +337,41 @@ test('a card’s figure is as wide as itself, and the name of its row takes the 
   // The figures still end on one edge.
   expect(new Set(rows.map((row) => row.figureRight)).size).toBe(1)
 })
+
+for (const locale of ['en', 'ru'] as const)
+  test(`a name cut in what changed is whole in its hint, and a whole one has none, at 1440px in ${locale}`, async ({
+    page,
+  }, info) => {
+    await page.addInitScript((lang) => localStorage.setItem('valkama-locale', lang), locale)
+    await serve(page, WORLD)
+    const panel = await openOverview(page, 1440, 900)
+    const changes = panel.locator('.overview-changes')
+    const cut = changes.locator('[data-way="up"]').first()
+    const whole = changes.locator('[data-way="down"]').first()
+    const name = cut.locator('.overview-changes-name')
+    const measured = await name.evaluate((element) => ({
+      text: element.textContent ?? '',
+      shown: element.clientWidth,
+      holds: element.scrollWidth,
+    }))
+    await record(info, `changes-cut-${locale}`, measured)
+    expect(measured.holds, 'the name is cut').toBeGreaterThan(measured.shown)
+
+    const hint = page.locator('.tooltip-hint')
+    await page.mouse.move(0, 0)
+    await name.hover()
+    await expect(hint).toBeVisible()
+    await expect(page.getByRole('tooltip')).toHaveText(measured.text)
+
+    // A name the card holds whole has no hint: one shown already hands over at once, and goes.
+    await whole.locator('.overview-changes-name').hover()
+    await expect(hint).toBeHidden()
+
+    // From the keyboard too: the task's link in focus says its name whole.
+    await page.mouse.move(0, 0)
+    await changes.locator('[data-way="up"]').nth(1).focus()
+    await page.keyboard.press('Shift+Tab')
+    await expect(cut).toBeFocused()
+    await expect(hint).toBeVisible()
+    await expect(page.getByRole('tooltip')).toHaveText(measured.text)
+  })
