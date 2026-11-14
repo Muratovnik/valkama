@@ -25,6 +25,7 @@ import { useI18n } from 'vue-i18n'
 import SpendingTableHead from '@/pages/analytics/components/SpendingTableHead.vue'
 import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
+import { useHeadingLines } from '@/pages/analytics/composables/useHeadingLines.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useStuckEdges } from '@/pages/analytics/composables/useStuckEdges.ts'
@@ -138,6 +139,9 @@ const root = ref<HTMLElement | null>(null)
 /** Its heading row and total held at the edges of the panel's scroll (`useStuckEdges`). */
 const stuck = useStuckEdges(root)
 
+/** Its headings over figures on one line, or on two where one would widen it past its frame. */
+const headingLines = useHeadingLines(root, [model, held])
+
 /** Brings the table into view, its heading row at the top, with the focus on it. */
 function reveal() {
   const table = root.value
@@ -154,6 +158,7 @@ defineExpose({ reveal })
     class="spending-table"
     tabindex="-1"
     :data-measure="measure"
+    :data-headings="headingLines"
     :aria-label="model.title"
     :style="{
       '--stuck-head': `${stuck.head}px`,
@@ -435,8 +440,8 @@ defineExpose({ reveal })
 }
 
 /* A row is one line: each figure and its heading take what they need, the name the rest, cut
-   where it is longer (`SpendingTableName`). In a narrower table a heading may take a second line
-   rather than widen its column past its figures. */
+   where it is longer (`SpendingTableName`). Where the headings on one line would widen the table
+   past its frame, they take a second line instead (`headingLines`). */
 .chart-cell[data-numeric='true'] {
   inline-size: 1px;
 }
@@ -454,17 +459,11 @@ defineExpose({ reveal })
   max-inline-size: 0;
 }
 
-@container (width < 50rem) {
-  .chart-heading[data-numeric='true'] {
-    min-inline-size: 7em;
-    white-space: normal;
-  }
-}
-
-/* Under the measure «tokens» the tokens by kind follow the change and the table is wider than its frame: every column stands at its least, so a
-   heading over figures takes a second line, as in a narrower table, rather than push the change
-   past the frame's edge. The kinds after it are reached by the frame's own scroll. */
-.spending-table[data-measure='tokens'] .chart-heading[data-numeric='true'] {
+/* The headings over figures on two lines, each column at its least: the frame of a narrower
+   table, a period before named with its hours, or the tokens by kind after the change under the
+   measure «tokens», whose table is wider than its frame and whose kinds are reached by the frame's
+   own scroll. The change then stands inside the frame's edge rather than past it. */
+.spending-table[data-headings='two'] .chart-heading[data-numeric='true'] {
   min-inline-size: 7em;
   white-space: normal;
 }
