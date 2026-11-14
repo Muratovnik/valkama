@@ -307,9 +307,14 @@ for (const locale of ['en', 'ru'] as const)
 
 /** A model whose name is 50 characters, longer than a table's name column at any of the sizes. */
 const LONG_MODEL = 'claude-opus-5-5-with-a-rather-long-synthetic-names'
+/**
+ * A model whose name is shorter than the least a table's name column keeps, so it stands whole
+ * at every size however much room the figures take.
+ */
+const SHORT_MODEL = 'claude-5'
 const ONE_LONG: TimedStretch[] = [
   stretch(9, LONG_MODEL, 'high', 4),
-  stretch(10, 'claude-sonnet-5-5', 'high', 2),
+  stretch(10, SHORT_MODEL, 'high', 2),
 ]
 
 /**
@@ -361,7 +366,7 @@ for (const locale of ['en', 'ru'] as const)
       await record(info, `single names ${locale} ${size.width}`, found)
       // The long name is cut at every size, and ends in the ellipsis; the short one stands whole.
       expect(found[0]).toEqual({ words: LONG_MODEL, cut: true, ellipsis: true })
-      expect(found[1]).toMatchObject({ words: 'claude-sonnet-5-5', cut: false })
+      expect(found[1]).toMatchObject({ words: SHORT_MODEL, cut: false })
     })
 
 for (const locale of ['en', 'ru'] as const)
