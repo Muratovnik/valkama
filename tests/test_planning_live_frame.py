@@ -71,7 +71,7 @@ class FrameCase(LiveWorkCase):
         return str(row[0])
 
     def epic(self) -> str:
-        created = service.create_work_item(self.conn, space=SPACE, title="Epic", kind="epic")
+        created = service.create_work_item(self.conn, space=SPACE, title="Epic", kind="goal")
         return str(created["reference"])
 
 
@@ -103,7 +103,7 @@ class RowTests(FrameCase):
                     "quiet_since": None,
                     "executor": executors.session_executors(self.conn, [session])[session],
                     "pinned": False,
-                    "state_name": "Backlog",
+                    "state_name": "Triage",
                     "is_terminal": False,
                     "updated_at": self.updated_at(reference),
                 }

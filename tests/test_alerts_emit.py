@@ -489,7 +489,7 @@ class ReviewTests(EmitHarness):
         self.assertEqual([], self.shown)
 
     def test_a_claim_starting_an_item_is_nothing(self) -> None:
-        reference = self.item("Queued", state="todo")
+        reference = self.item("Queued", state="ready")
         self.agent("claim_work_item", id=reference)
         self.settle()
         self.assertEqual([], self.shown)

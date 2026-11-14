@@ -68,9 +68,10 @@ _SPACE = {
 }
 _STATE = {
     "type": "string",
-    "description": "Workflow state, by key or state_id, or by a category (backlog,"
-    " queued, active, review, blocked, completed, cancelled) when exactly one state"
-    " of the workflow has it. The states belong to the space's workflow; read them"
+    "description": "Workflow state, by key or state_id, or by a category ("
+    + ", ".join(model.PUBLIC_CATEGORIES)
+    + ") when exactly one state of the workflow has it. The states belong to the"
+    " space's workflow; read them"
     " from get_planning_space. A name the workflow does not have is refused with"
     " its keys and categories.",
 }
@@ -328,7 +329,8 @@ TOOLS = [
         "create_work_item",
         "Create a work item",
         "One unit of planned work. It starts in the workflow's initial state unless"
-        " you name another. kind=epic is a parent; a hierarchy is one level deep."
+        " you name another. kind=goal is a parent, a stage one under a parent; a"
+        " hierarchy is one level deep."
         " claim, checklist and links act on the new item in the same call, all or"
         " nothing: it is created, then claimed, then given its steps, then linked,"
         " each as the same group of apply_work_item_changes does. A refused step"
@@ -344,7 +346,7 @@ TOOLS = [
             "space": _SPACE,
             "title": _STR,
             "state": _STATE,
-            "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
+            "kind": {"type": "string", "enum": list(model.PUBLIC_KINDS)},
             "priority": {
                 "type": "string",
                 "enum": list(model.PRIORITIES),
@@ -472,8 +474,8 @@ TOOLS = [
         {
             "space": _SPACE,
             "state": _STATE,
-            "category": {"type": "string", "enum": list(model.STATE_CATEGORIES)},
-            "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
+            "category": {"type": "string", "enum": list(model.PUBLIC_CATEGORIES)},
+            "kind": {"type": "string", "enum": list(model.PUBLIC_KINDS)},
             "owner": {
                 "type": "string",
                 "description": "Only items held by this holder, spelled exactly as"
@@ -547,11 +549,11 @@ TOOLS = [
         "Claim a work item",
         "Take ownership before working it. Refuses if somebody else holds it;"
         " force takes it over and records the takeover, release hands it back."
-        " Claiming an item in a backlog or queued state starts it: it moves to the"
+        " Claiming an item in a triage, deferred or ready state starts it: it moves to the"
         " workflow's first active state it can reach, and the answer's started"
         " names both states. Review, blocked, active and finished items keep their"
-        " state. Releasing an active item puts it back in the first queued state"
-        " (or the backlog), named in requeued, unless one of its checklist steps is"
+        " state. Releasing an active item puts it back in the first ready state"
+        " (or the triage one), named in requeued, unless one of its checklist steps is"
         " still claimed. Closing an item releases it already: no release is needed"
         " after a transition to a terminal state. The answer carries from_person when"
         " a person acted on the item in the interface since an agent last wrote to it:"
@@ -571,8 +573,8 @@ TOOLS = [
         "claim_ready_work_item",
         "Claim the next ready work item",
         "Choose and claim in one step: the first unheld item in a startable state"
-        " that nothing unfinished blocks, in the order of work — a queued state"
-        " before the backlog, and inside a state the planned order (see rank in"
+        " that nothing unfinished blocks, in the order of work — a ready state"
+        " before a triage one, and inside a state the planned order (see rank in"
         " apply_work_item_changes's update); priority only breaks a tie. The claim starts the item"
         " as claim_work_item does, so it answers in its active state with started."
         " Answers with nothing when no item is ready.",
@@ -660,7 +662,7 @@ TOOLS = [
             "claim": {
                 "type": "boolean",
                 "description": "true claims the item as claim_work_item does,"
-                " starting it when it is in a backlog or queued state.",
+                " starting it when it is in a triage, deferred or ready state.",
             },
             "subscribe": {
                 "type": "boolean",
@@ -690,7 +692,7 @@ TOOLS = [
                         "description": _PRIORITY_MEANING,
                     },
                     **_EDITED_LABELS,
-                    "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
+                    "kind": {"type": "string", "enum": sorted(model.TASK_KINDS)},
                     "parent": WORK_ITEM_REFERENCE,
                     "rank": _RANK,
                     "mentions": _TEXT_MENTIONS,

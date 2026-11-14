@@ -70,20 +70,22 @@ class PlanningDomainTests(unittest.TestCase):
         workflow = self.space["workflow"]
         self.assertEqual(
             [
-                ("backlog", "backlog"),
-                ("todo", "queued"),
+                ("triage", "triage"),
+                ("deferred", "deferred"),
+                ("ready", "ready"),
                 ("dev", "active"),
                 ("review", "review"),
                 ("done", "completed"),
                 ("blocked", "blocked"),
                 ("cancelled", "cancelled"),
+                ("container", "container"),
             ],
             [(state["key"], state["category"]) for state in workflow["states"]],
         )
         terminal = [state["key"] for state in workflow["states"] if state["is_terminal"]]
         self.assertEqual(["done", "cancelled"], terminal)
         # Every ordered pair except a state to itself, as explicit rows.
-        self.assertEqual(7 * 6, len(workflow["transitions"]))
+        self.assertEqual(9 * 8, len(workflow["transitions"]))
 
     def test_a_state_the_workflow_does_not_have_is_refused(self) -> None:
         created = self.item("Land the planning domain")
@@ -101,10 +103,10 @@ class PlanningDomainTests(unittest.TestCase):
         }
         self.conn.execute(
             "DELETE FROM workflow_transitions WHERE from_state_id = ? AND to_state_id = ?",
-            (state["backlog"], state["todo"]),
+            (state["triage"], state["ready"]),
         )
         with self.assertRaisesRegex(model.WorkflowGuardError, r"\[transition\]"):
-            service.transition_work_item(self.conn, created["reference"], "todo")
+            service.transition_work_item(self.conn, created["reference"], "ready")
 
     # -- guards --------------------------------------------------------------
 
@@ -159,7 +161,7 @@ class PlanningDomainTests(unittest.TestCase):
         self.assertEqual([False, False], [step["done"] for step in cancelled["checklist"]])
         self.assertEqual([], cancelled.get("overridden", []))
         # Done still refuses the same open steps: only cancelling may leave them.
-        reopened = service.transition_work_item(self.conn, created["reference"], "backlog")
+        reopened = service.transition_work_item(self.conn, created["reference"], "triage")
         with self.assertRaisesRegex(model.WorkflowGuardError, r"\[checklist\]"):
             service.transition_work_item(self.conn, reopened["reference"], "done")
 
@@ -217,7 +219,7 @@ class PlanningDomainTests(unittest.TestCase):
         moved = service.transition_work_item(self.conn, created["reference"], "review")
         self.assertEqual(["QA-1 enters Review with no session or commit ref"], moved["warnings"])
         service.attach_ref(self.conn, created["reference"], "commit", "abc1234", author="tester")
-        again = service.transition_work_item(self.conn, created["reference"], "todo")
+        again = service.transition_work_item(self.conn, created["reference"], "ready")
         self.assertEqual([], again["warnings"])
 
     def test_review_takes_a_confirmed_write_as_evidence_of_its_session(self) -> None:
@@ -368,7 +370,7 @@ class PlanningDomainTests(unittest.TestCase):
         payload = views.planning_payload(self.conn)
         self.assertEqual(views.READ_MODEL_INTERFACE, payload["interface_version"])
         self.assertEqual("QA", payload["planning_space"]["key"])
-        self.assertEqual(7, len(payload["workflow"]["states"]))
+        self.assertEqual(9, len(payload["workflow"]["states"]))
         self.assertEqual(2, len(payload["work_items"]))
         self.assertEqual(
             [
@@ -377,8 +379,8 @@ class PlanningDomainTests(unittest.TestCase):
                     "to": second["work_item_id"],
                     "kind": "relates-to",
                     "reference": first["reference"],
-                    "state_name": "Backlog",
-                    "state_category": "backlog",
+                    "state_name": "Triage",
+                    "state_category": "triage",
                     "is_terminal": False,
                     "state_unavailable": None,
                 }
@@ -508,7 +510,7 @@ class PlanningDomainTests(unittest.TestCase):
     # -- hierarchy and links -------------------------------------------------
 
     def test_a_hierarchy_is_one_level_deep(self) -> None:
-        epic = self.item("The epic", kind="epic")
+        epic = self.item("The epic", kind="goal")
         child = self.item("The child", parent=epic["reference"])
         self.assertEqual(epic["work_item_id"], child["parent_id"])
         with self.assertRaisesRegex(model.PlanningError, "one level deep"):
@@ -523,7 +525,7 @@ class PlanningDomainTests(unittest.TestCase):
     def test_reparenting_refuses_a_parent_in_another_planning_space(self) -> None:
         other = service.create_planning_space(self.conn, project_id="other", name="Other Work")
         foreign = service.create_work_item(
-            self.conn, space=other["key"], title="Elsewhere", kind="epic", author="tester"
+            self.conn, space=other["key"], title="Elsewhere", kind="goal", author="tester"
         )
         item = self.item("Local")
         with self.assertRaisesRegex(model.PlanningError, "another planning space"):
@@ -531,15 +533,15 @@ class PlanningDomainTests(unittest.TestCase):
         self.assertIsNone(service.get_work_item(self.conn, item["reference"])["parent_id"])
 
     def test_reparenting_refuses_a_parent_that_is_itself_a_child(self) -> None:
-        epic = self.item("The epic", kind="epic")
+        epic = self.item("The epic", kind="goal")
         child = self.item("The child", parent=epic["reference"])
         item = self.item("Loose")
         with self.assertRaisesRegex(model.PlanningError, "one level deep"):
             service.update_work_item(self.conn, item["reference"], parent=child["reference"])
 
     def test_reparenting_refuses_an_item_that_already_has_children(self) -> None:
-        epic = self.item("The epic", kind="epic")
-        middle = self.item("The middle", kind="epic")
+        epic = self.item("The epic", kind="goal")
+        middle = self.item("The middle", kind="goal")
         self.item("The grandchild", parent=middle["reference"])
         with self.assertRaisesRegex(model.PlanningError, "with children"):
             service.update_work_item(self.conn, middle["reference"], parent=epic["reference"])
@@ -554,8 +556,8 @@ class PlanningDomainTests(unittest.TestCase):
         self.assertIsNone(service.get_work_item(self.conn, second["reference"])["parent_id"])
 
     def test_a_reparent_and_a_detach_are_allowed(self) -> None:
-        first_epic = self.item("First epic", kind="epic")
-        second_epic = self.item("Second epic", kind="epic")
+        first_epic = self.item("First epic", kind="goal")
+        second_epic = self.item("Second epic", kind="goal")
         child = self.item("The child", parent=first_epic["reference"])
         moved = service.update_work_item(
             self.conn, child["reference"], parent=second_epic["reference"]
@@ -565,7 +567,7 @@ class PlanningDomainTests(unittest.TestCase):
         self.assertIsNone(detached["parent_id"])
 
     def test_an_epic_with_children_is_not_deleted_by_accident(self) -> None:
-        epic = self.item("The epic", kind="epic")
+        epic = self.item("The epic", kind="goal")
         self.item("The child", parent=epic["reference"])
         with self.assertRaisesRegex(model.PlanningError, "child item"):
             service.delete_work_item(self.conn, epic["reference"])
@@ -741,7 +743,7 @@ class PlanningDomainTests(unittest.TestCase):
 
         self.assertEqual(
             {
-                open_blocker["reference"]: ("incoming", "Backlog", "backlog", False, None),
+                open_blocker["reference"]: ("incoming", "Triage", "triage", False, None),
                 done_blocker["reference"]: ("incoming", "Done", "completed", True, None),
                 cancelled_blocker["reference"]: (
                     "incoming",

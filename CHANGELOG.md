@@ -10,6 +10,16 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Changed
+
+- **A fresh store holds the work model, at schema 18.** A new space's workflow has a
+  state for each of eight categories — Triage, Deferred, Ready, Dev, Review, Done,
+  Blocked and Cancelled — and new work starts in Triage; `backlog` and `queued` are no
+  longer categories. A goal or a stage is stored as a container, which the store keeps
+  out of ready, active, review and blocked, and a service state beside the eight holds
+  an accepted open one. A store Valkama 2.9 left is refused with "run `valkama migrate
+  work-model` once" and left as it was, and a 2.9 build refuses a store at 18.
+
 ### Removed
 
 - **A store older than Valkama 2.9 left it is no longer brought up.** Opening one now

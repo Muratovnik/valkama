@@ -52,7 +52,7 @@ class RankingTestCase(unittest.TestCase):
         )
         return str(created["reference"])
 
-    def order(self, state: str = "backlog") -> list[str]:
+    def order(self, state: str = "triage") -> list[str]:
         return [
             item["reference"]
             for item in service.list_work_items(self.conn, space=self.space["key"], state_key=state)
@@ -64,7 +64,7 @@ class RankingTestCase(unittest.TestCase):
             for item in service.list_work_items(self.conn, space=self.space["key"], limit=None)
         }
 
-    def positions(self, state: str = "backlog") -> list[float]:
+    def positions(self, state: str = "triage") -> list[float]:
         return [
             float(row[0])
             for row in self.conn.execute(
@@ -142,7 +142,7 @@ class PlacementTests(RankingTestCase):
             " ": "rank must be first, last",
             f"before:{self.a}": "relative to itself",
             f"after:{foreign}": "another planning space",
-            f"before:{moved}": f"{moved} is in Dev, not Backlog",
+            f"before:{moved}": f"{moved} is in Dev, not Triage",
             "after:QA-999": "no work item QA-999",
         }
         before = (self.revisions(), self.positions())
@@ -192,36 +192,36 @@ class TransitionPlacementTests(RankingTestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.queued = [self.item(f"Queued {index}", state="todo") for index in range(3)]
+        self.queued = [self.item(f"Queued {index}", state="ready") for index in range(3)]
         self.moving = self.item("Moving")
 
     def move(self, rank: str | None = None) -> dict:
         return service.transition_work_item(
-            self.conn, self.moving, "todo", rank=rank, author="tester"
+            self.conn, self.moving, "ready", rank=rank, author="tester"
         )
 
     def test_a_move_without_a_placement_queues_last(self) -> None:
         self.move()
-        self.assertEqual([*self.queued, self.moving], self.order("todo"))
+        self.assertEqual([*self.queued, self.moving], self.order("ready"))
 
     def test_a_move_can_name_its_place_in_the_new_state(self) -> None:
         moved = self.move(f"before:{self.queued[1]}")
-        self.assertEqual("todo", moved["state"]["key"])
+        self.assertEqual("ready", moved["state"]["key"])
         self.assertEqual(
             [self.queued[0], self.moving, *self.queued[1:]],
-            self.order("todo"),
+            self.order("ready"),
         )
 
     def test_the_anchor_of_a_move_belongs_to_the_state_it_moves_to(self) -> None:
         stay = self.item("Stays in the backlog")
-        with self.assertRaisesRegex(model.PlanningError, "is in Backlog, not Todo"):
+        with self.assertRaisesRegex(model.PlanningError, "is in Triage, not Ready"):
             self.move(f"after:{stay}")
-        self.assertEqual("backlog", service.get_work_item(self.conn, self.moving)["state"]["key"])
+        self.assertEqual("triage", service.get_work_item(self.conn, self.moving)["state"]["key"])
 
     def test_a_refused_move_places_nothing(self) -> None:
         with self.assertRaisesRegex(model.WorkflowGuardError, "executor"):
             service.transition_work_item(self.conn, self.moving, "dev", rank="first")
-        self.assertEqual([self.moving], self.order("backlog"))
+        self.assertEqual([self.moving], self.order("triage"))
 
 
 class OrderReaderTests(RankingTestCase):
@@ -232,8 +232,8 @@ class OrderReaderTests(RankingTestCase):
         return None if taken is None else str(taken["reference"])
 
     def test_the_queue_takes_todo_before_the_backlog_and_each_in_its_order(self) -> None:
-        backlog = [self.item(f"Backlog {index}") for index in range(2)]
-        todo = [self.item(f"Todo {index}", state="todo") for index in range(2)]
+        backlog = [self.item(f"Triage {index}") for index in range(2)]
+        todo = [self.item(f"Ready {index}", state="ready") for index in range(2)]
         service.update_work_item(self.conn, todo[1], rank="first")
         service.update_work_item(self.conn, backlog[1], rank="first")
         self.assertEqual(
@@ -247,14 +247,14 @@ class OrderReaderTests(RankingTestCase):
         service.claim_work_item(self.conn, first, release=True, author="agent")
         # The release put the started item in the queued state; back beside the
         # urgent one, so the two share a state.
-        service.transition_work_item(self.conn, first, "backlog")
+        service.transition_work_item(self.conn, first, "triage")
         # Two rows an earlier build left at one position: the urgent one goes first.
         self.conn.execute("UPDATE work_items SET position = 7.0")
         self.assertEqual(urgent, self.take())
 
     def test_the_list_reads_each_state_in_its_order(self) -> None:
         a, b = self.item("A"), self.item("B")
-        t = self.item("T", state="todo")
+        t = self.item("T", state="ready")
         service.update_work_item(self.conn, b, rank="first")
         listed = [
             item["reference"]
@@ -263,10 +263,10 @@ class OrderReaderTests(RankingTestCase):
         self.assertEqual([b, a, t], listed)
 
     def test_a_chain_member_carries_its_place_in_the_order_of_work(self) -> None:
-        epic = self.item("Epic", kind="epic")
-        later = self.item("Backlog later", parent=epic)
-        sooner = self.item("Backlog sooner", parent=epic)
-        queued = self.item("Queued", parent=epic, state="todo")
+        epic = self.item("Epic", kind="goal")
+        later = self.item("Triage later", parent=epic)
+        sooner = self.item("Triage sooner", parent=epic)
+        queued = self.item("Queued", parent=epic, state="ready")
         review = self.item("Reviewed", parent=epic, state="review")
         service.update_work_item(self.conn, sooner, rank="first")
         members = chain.chain(self.conn, epic)["members"]
@@ -277,7 +277,7 @@ class OrderReaderTests(RankingTestCase):
         self.assertEqual(len(members), len({member["rank"] for member in members}))
 
     def test_the_work_order_names_every_category_once(self) -> None:
-        self.assertEqual(sorted(model.STATE_CATEGORIES), sorted(ranking.WORK_ORDER))
+        self.assertEqual(sorted(model.PUBLIC_CATEGORIES), sorted(ranking.WORK_ORDER))
 
 
 class BoundaryTests(RankingTestCase):
@@ -314,23 +314,23 @@ class BoundaryTests(RankingTestCase):
         )
 
     def test_a_transition_places_the_item_in_its_new_state(self) -> None:
-        queued = self.item("Queued", state="todo")
+        queued = self.item("Queued", state="ready")
         status, _ = self.post(
-            "/api/planning/work-item/transition", id=self.first, state="todo", rank="first"
+            "/api/planning/work-item/transition", id=self.first, state="ready", rank="first"
         )
         self.assertEqual(200, status)
-        self.assertEqual([self.first, queued], self.order("todo"))
+        self.assertEqual([self.first, queued], self.order("ready"))
 
     def test_a_batch_transition_takes_the_placement_too(self) -> None:
-        queued = self.item("Queued", state="todo")
+        queued = self.item("Queued", state="ready")
         status, body = self.post(
             "/api/planning/work-item/apply",
             id=self.first,
-            transition={"state": "todo", "rank": f"before:{queued}"},
+            transition={"state": "ready", "rank": f"before:{queued}"},
         )
         self.assertEqual(200, status)
-        self.assertEqual({"transition": {"state": "todo"}}, body["applied"])
-        self.assertEqual([self.first, queued], self.order("todo"))
+        self.assertEqual({"transition": {"state": "ready"}}, body["applied"])
+        self.assertEqual([self.first, queued], self.order("ready"))
 
     def test_a_refused_placement_answers_like_any_refused_edit_and_writes_nothing(self) -> None:
         for rank in ("top", 7):
@@ -354,7 +354,7 @@ class EarlierBuildTests(RankingTestCase):
         for _ in range(60):
             service.update_work_item(self.conn, c, rank=f"after:{a}")
             service.update_work_item(self.conn, c, rank="last")
-        service.transition_work_item(self.conn, b, "todo", rank="first")
+        service.transition_work_item(self.conn, b, "ready", rank="first")
         self.conn.commit()
         self.assertEqual(shape, self.schema(self.conn))
         self.assertEqual(

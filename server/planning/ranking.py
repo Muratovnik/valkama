@@ -21,7 +21,8 @@ nothing read is different.
 
 The order across states is not stored, because it follows from the states.
 `WORK_ORDER` says it: work under way first, then work in review, then what is
-queued, then the backlog, then what is blocked, then what is finished. `ranks`
+ready, then what awaits triage, then what is deferred, then what is blocked,
+then what is finished. `ranks`
 numbers a space's items in that order, which is what a reader of one chain
 needs to list its open work the way the queue will take it.
 """
@@ -35,8 +36,17 @@ from typing import NamedTuple
 from . import model, read_model
 
 #: Workflow categories in the order work is listed when it spans states. The
-#: take-next queue reads it too, so Todo is taken before the backlog.
-WORK_ORDER = ("active", "review", "queued", "backlog", "blocked", "completed", "cancelled")
+#: take-next queue reads it too, so ready work is taken before work awaiting triage.
+WORK_ORDER = (
+    "active",
+    "review",
+    "ready",
+    "triage",
+    "deferred",
+    "blocked",
+    "completed",
+    "cancelled",
+)
 
 #: `WORK_ORDER` as a sort key over `s.category`, for a query joined to its state.
 WORK_ORDER_SQL = (

@@ -22,66 +22,12 @@ from unittest import mock
 from server import store
 from server.planning import service as planning
 from tests import schema9
-from tests.test_word_index_migration import WORD_TABLES
-
-#: Schema 11's and 12's tables are the rest of the chain to this build's own schema.
-ADDED_TABLES = {
-    "work_item_request_answers",
-    "owner_alert_settings",
-    "usage_runs",
-    "usage_segments",
-    "usage_requests",
-    "usage_yields",
-    "pinned_work_items",
-    "work_item_subscriptions",
-    "work_item_images",
-    "analytics_surface_uses",
-    "quota_account_names",
-    "quota_accounts",
-    "quota_samples",
-    "quota_alerts",
-    "quota_settings",
-    # The word index, which raises no schema.
-    *WORD_TABLES,
-}
 
 ADDED_ACTIONS = {"comment_resolved", "comment_reopened", "request_changed"}
 
 HELD = "11111111-1111-4111-8111-111111111111"
 CREATED_AT = "2026-11-02T00:00:00Z"
 ANSWER = '{"path":"keep","_note":"Kept as answered"}'
-
-
-def _catalog(conn: sqlite3.Connection, kind: str) -> set[str]:
-    return {
-        str(row[0])
-        for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type=? AND name NOT LIKE 'sqlite_%'", (kind,)
-        )
-    }
-
-
-def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
-    return [str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")]
-
-
-def _values(conn: sqlite3.Connection, shape: dict[str, list[str]]) -> dict[str, list[tuple]]:
-    """Every row of every table, read through the columns the source had."""
-
-    return {
-        table: [
-            tuple(row)
-            for row in conn.execute(f"SELECT {', '.join(columns)} FROM {table} ORDER BY rowid")
-        ]
-        for table, columns in sorted(shape.items())
-    }
-
-
-def _counts(conn: sqlite3.Connection) -> dict[str, int]:
-    return {
-        table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        for table in sorted(_catalog(conn, "table"))
-    }
 
 
 def _call(conn: sqlite3.Connection, **fields: object) -> int:

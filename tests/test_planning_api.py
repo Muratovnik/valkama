@@ -80,42 +80,42 @@ class PlanningApiTests(unittest.TestCase):
             kind="blocks",
         )
         payload = self.get("/api/planning")
-        self.assertEqual(7, len(payload["workflow"]["states"]))
+        self.assertEqual(9, len(payload["workflow"]["states"]))
         self.assertEqual(2, len(payload["work_items"]))
         self.assertEqual(1, len(payload["links"]))
 
     def test_reads_filter_by_state_category_kind_and_owner(self) -> None:
-        self.post("/api/planning/work-items", space="QA", title="Plain")
-        epic = self.post("/api/planning/work-items", space="QA", title="Epic", kind="epic")
-        self.post("/api/planning/work-item/claim", id=epic["reference"], author="one")
+        plain = self.post("/api/planning/work-items", space="QA", title="Plain")
+        goal = self.post("/api/planning/work-items", space="QA", title="Goal", kind="goal")
+        self.post("/api/planning/work-item/claim", id=plain["reference"], author="one")
         self.assertEqual(2, len(self.get("/api/planning/work-items")["work_items"]))
         self.assertEqual(
-            [epic["reference"]],
+            [goal["reference"]],
             [
                 item["reference"]
-                for item in self.get("/api/planning/work-items", kind="epic")["work_items"]
+                for item in self.get("/api/planning/work-items", kind="goal")["work_items"]
             ],
         )
         self.assertEqual(
-            [epic["reference"]],
+            [plain["reference"]],
             [
                 item["reference"]
                 for item in self.get("/api/planning/work-items", owner="one")["work_items"]
             ],
         )
-        # The claim started the epic, so only the plain item is still in the backlog.
+        # The claim started the plain item, so only the goal is still in triage.
         self.assertEqual(
-            ["QA-1"],
+            [goal["reference"]],
             [
                 item["reference"]
-                for item in self.get("/api/planning/work-items", category="backlog")["work_items"]
+                for item in self.get("/api/planning/work-items", category="triage")["work_items"]
             ],
         )
         self.assertEqual(0, len(self.get("/api/planning/work-items", state="done")["work_items"]))
 
     def test_the_whole_read_model_keeps_queues_and_graph_beyond_the_list_limit(self) -> None:
         for number in range(1000):
-            service.create_work_item(self.conn, space="QA", title=f"Backlog {number}")
+            service.create_work_item(self.conn, space="QA", title=f"Triage {number}")
         review = service.create_work_item(self.conn, space="QA", title="Review me", state="review")
         blocked = service.create_work_item(self.conn, space="QA", title="Blocked", state="blocked")
         assigned = service.create_work_item(self.conn, space="QA", title="Assigned", state="dev")
@@ -223,7 +223,7 @@ class PlanningApiTests(unittest.TestCase):
         )
         self.assertEqual("urgent", updated["priority"])
         claimed = self.post("/api/planning/work-item/claim", id="QA-1", author="one")
-        self.assertEqual({"from": "backlog", "to": "dev"}, claimed["started"])
+        self.assertEqual({"from": "triage", "to": "dev"}, claimed["started"])
         with_steps = self.post("/api/planning/work-item/checklist", id="QA-1", items=["write it"])
         step = with_steps["checklist"][0]["id"]
         self.post("/api/planning/work-item/checklist/claim", id="QA-1", item_id=step, author="one")

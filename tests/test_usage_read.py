@@ -131,7 +131,7 @@ class ItemReadTests(Case):
         self.assertEqual((10 + 100 + 20 + 7) + (1 + 2 + 3 + 4), read["unpriced_tokens"])
 
     def test_an_epic_is_the_union_over_its_children_and_the_sum_of_their_spending(self) -> None:
-        epic, _ = self.item("Epic", kind="epic")
+        epic, _ = self.item("Epic", kind="goal")
         first, _ = self.item("One", parent=epic)
         second, _ = self.item("Two", parent=epic)
         self.session()

@@ -86,7 +86,7 @@ class ExecutionUsageTests(unittest.TestCase):
         self.conn.commit()
 
     def item(self, title: str) -> dict:
-        record = planning.create_work_item(self.conn, space="TST", title=title, state="todo")
+        record = planning.create_work_item(self.conn, space="TST", title=title, state="ready")
         self.conn.commit()
         return record
 

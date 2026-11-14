@@ -91,7 +91,7 @@ class ReadOpenTests(unittest.TestCase):
 
     def test_a_store_from_an_older_build_is_refused(self) -> None:
         store.connect().close()
-        self.stamp(store.OLDEST_SCHEMA_VERSION - 1)
+        self.stamp(store.RELEASE_2_9_SCHEMA_VERSION - 1)
         with self.assertRaises(store.StoreTooOldError):
             store.connect_for_read().close()
 

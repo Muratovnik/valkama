@@ -130,7 +130,7 @@ class PlanningToolCallTests(unittest.TestCase):
         spaces = self.call("list_planning_spaces")
         self.assertEqual(1, len(spaces["planning_spaces"]))
         space = self.call("get_planning_space", space="QA")
-        self.assertEqual(7, len(space["workflow"]["states"]))
+        self.assertEqual(9, len(space["workflow"]["states"]))
 
         created = self.call("create_work_item", space="QA", title="Through the tools", author="one")
         self.assertEqual("QA-2", created["reference"])
@@ -593,7 +593,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 {"id": self.ref, "item_id": self.step, "author": "one"},
             ),
             ("/api/planning/work-item/claim", {"id": self.ref, "author": "one"}),
-            ("/api/planning/work-item/transition", {"id": self.ref, "state": "todo"}),
+            ("/api/planning/work-item/transition", {"id": self.ref, "state": "ready"}),
         ):
             with self.subTest(path):
                 handled = planning_api.handle_post(self.conn, path, payload)
@@ -629,7 +629,7 @@ class PlanningCompactReadTests(unittest.TestCase):
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
         service.create_planning_space(self.conn, project_id="tools", name="Quality", key="QA")
-        self.epic = self.call("create_work_item", space="QA", title="Umbrella", kind="epic")
+        self.epic = self.call("create_work_item", space="QA", title="Umbrella", kind="goal")
         self.child = self.call(
             "create_work_item",
             space="QA",

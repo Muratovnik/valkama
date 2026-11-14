@@ -519,7 +519,7 @@ class _Scenario:
         conn = store.connect()
         try:
             epic = str(
-                service.create_work_item(conn, space=SPACE, title="Live epic", kind="epic")[
+                service.create_work_item(conn, space=SPACE, title="Live epic", kind="goal")[
                     "reference"
                 ]
             )

@@ -217,7 +217,7 @@ class PlanningConcurrencyTests(unittest.TestCase):
         second.commit()
         with mock.patch.object(read_model, "item_row", return_value=stale):
             with self.assertRaises(model.RevisionConflictError):
-                service.transition_work_item(first, "QA-1", "todo", author="agent-one")
+                service.transition_work_item(first, "QA-1", "ready", author="agent-one")
         first.rollback()
         self.assertEqual("dev", service.get_work_item(self.conn, "QA-1")["state"]["key"])
 
@@ -531,10 +531,10 @@ class ReadThenWriteTests(unittest.TestCase):
                 "Renamed",
             ),
             "transition": (
-                lambda ref: service.transition_work_item(self.conn, ref, "todo"),
+                lambda ref: service.transition_work_item(self.conn, ref, "ready"),
                 report,
                 lambda item: item["state"]["key"],
-                "todo",
+                "ready",
             ),
             "claim": (
                 lambda ref: service.claim_work_item(self.conn, ref, author="agent-one"),

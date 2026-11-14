@@ -21,20 +21,26 @@ def resolve(conn: sqlite3.Connection, workflow_id: str, reference: object) -> sq
     """The state a caller named: its id, its key, or a category only one state has.
 
     A key wins over a category. The default workflow has states whose keys are
-    category words (`backlog`, `review`, `blocked`, `cancelled`), and a key is
-    the more specific name, so `review` is the state keyed `review` even in a
+    category words (`triage`, `ready`, `review`, `blocked`, `cancelled`), and a key
+    is the more specific name, so `review` is the state keyed `review` even in a
     workflow that gives the category to two states.
+
+    Only a state of the eight categories answers. The service state is not one a
+    caller names, by id, key or category: `container` is refused with the word that
+    replaces it, and its id is a state this workflow does not list.
     """
 
     text = model.text_field(reference, "workflow state", limit=64)
+    model.refuse_retired(text)
     row = conn.execute(
-        "SELECT * FROM workflow_states WHERE workflow_id = ? AND (state_id = ? OR key = ?)",
-        (workflow_id, text, text),
+        "SELECT * FROM workflow_states WHERE workflow_id = ? AND (state_id = ? OR key = ?)"
+        " AND category != ?",
+        (workflow_id, text, text, model.SERVICE_CATEGORY),
     ).fetchone()
     if row is not None:
         return row
-    states = _ordered(conn, workflow_id)
-    if text in model.STATE_CATEGORIES:
+    states = public_states(conn, workflow_id)
+    if text in model.PUBLIC_CATEGORIES:
         matching = [state for state in states if state["category"] == text]
         if len(matching) == 1:
             return matching[0]
@@ -48,7 +54,7 @@ def resolve(conn: sqlite3.Connection, workflow_id: str, reference: object) -> sq
 
 #: The categories work is started from. Coming back to active from review or
 #: blocked is not starting it.
-STARTABLE = frozenset({"backlog", "queued"})
+STARTABLE = frozenset({"triage", "deferred", "ready"})
 
 
 def start_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
@@ -72,16 +78,16 @@ def start_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | Non
 def queue_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
     """The state a released item goes back to, or None when it has nowhere to go.
 
-    The first `queued` state in workflow order that the item can reach from
-    where it stands, or failing that the first reachable `backlog` state: the
+    The first `ready` state in workflow order that the item can reach from
+    where it stands, or failing that the first reachable `triage` state: the
     states the take-next queue takes work from.
     """
 
     found: sqlite3.Row | None = conn.execute(
         "SELECT s.* FROM workflow_states s JOIN workflow_transitions t"
         " ON t.workflow_id = s.workflow_id AND t.to_state_id = s.state_id"
-        " WHERE s.workflow_id = ? AND s.category IN ('queued','backlog') AND t.from_state_id = ?"
-        " ORDER BY CASE s.category WHEN 'queued' THEN 0 ELSE 1 END, s.position LIMIT 1",
+        " WHERE s.workflow_id = ? AND s.category IN ('ready','triage') AND t.from_state_id = ?"
+        " ORDER BY CASE s.category WHEN 'ready' THEN 0 ELSE 1 END, s.position LIMIT 1",
         (row["workflow_id"], row["state_id"]),
     ).fetchone()
     return found
@@ -104,11 +110,19 @@ def cancel_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | No
     return found
 
 
-def _ordered(conn: sqlite3.Connection, workflow_id: str) -> list[sqlite3.Row]:
+def public_states(conn: sqlite3.Connection, workflow_id: str) -> list[sqlite3.Row]:
+    """The states of a workflow a caller sees and names, in workflow order.
+
+    Every state but the service one: a list of states, a refusal's listing and the
+    workflow's description read this, so none of them shows where an accepted open
+    container stands.
+    """
+
     return list(
         conn.execute(
-            "SELECT * FROM workflow_states WHERE workflow_id = ? ORDER BY position",
-            (workflow_id,),
+            "SELECT * FROM workflow_states WHERE workflow_id = ? AND category != ?"
+            " ORDER BY position",
+            (workflow_id, model.SERVICE_CATEGORY),
         )
     )
 
@@ -119,7 +133,7 @@ def _listing(states: list[sqlite3.Row]) -> str:
     counts: dict[str, int] = {}
     for state in states:
         counts[str(state["category"])] = counts.get(str(state["category"]), 0) + 1
-    named = [category for category in model.STATE_CATEGORIES if counts.get(category) == 1]
+    named = [category for category in model.PUBLIC_CATEGORIES if counts.get(category) == 1]
     listed = ", ".join(f"{state['key']} ({state['category']})" for state in states)
     return (
         f"its states are {listed}; a category names a state when exactly one state has it:"

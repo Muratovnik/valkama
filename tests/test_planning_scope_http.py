@@ -192,8 +192,8 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.assertEqual(200, status, answer)
         self.assertEqual(
             {
-                ("b", "SAME-1"): ("task", "medium", "Backlog", "backlog", False),
-                ("example-project", "SAME-1"): ("task", "medium", "Backlog", "backlog", False),
+                ("b", "SAME-1"): ("task", "medium", "Triage", "triage", False),
+                ("example-project", "SAME-1"): ("task", "medium", "Triage", "triage", False),
                 ("example-project", "SAME-2"): ("bug", "urgent", "Done", "completed", True),
             },
             {
@@ -1151,7 +1151,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         conn = store.connect()
         self.addCleanup(conn.close)
         for number in range(999):
-            service.create_work_item(conn, space="SAME", title=f"Backlog {number}")
+            service.create_work_item(conn, space="SAME", title=f"Triage {number}")
         review = service.create_work_item(conn, space="SAME", title="Review me", state="review")
         conn.commit()
 

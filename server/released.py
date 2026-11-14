@@ -60,10 +60,11 @@ def open_store() -> sqlite3.Connection:
     """
 
     conn = scopes.open_readonly({"name": scopes.PRIMARY_SCOPE, "path": store.db_path()})
-    version = int(conn.execute("PRAGMA user_version").fetchone()[0])
-    if version > store.STORE_SCHEMA_VERSION:
+    try:
+        store.refuse_another_generation(conn)
+    except BaseException:
         conn.close()
-        raise store.StoreTooNewError(version, store.STORE_SCHEMA_VERSION)
+        raise
     return conn
 
 

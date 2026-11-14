@@ -123,7 +123,7 @@ class PlanningScaleTests(unittest.TestCase):
             roots = {}
             for key, blockers in (("FEW", 2), ("MANY", 150)):
                 service.create_planning_space(conn, project_id=key.lower(), name=key, key=key)
-                roots[key] = service.create_work_item(conn, space=key, title="Root", kind="epic")
+                roots[key] = service.create_work_item(conn, space=key, title="Root", kind="goal")
                 member = service.create_work_item(
                     conn, space=key, title="Member", parent=roots[key]["reference"]
                 )

@@ -61,8 +61,8 @@ class StateNameTests(unittest.TestCase):
             )
 
     def test_a_category_that_names_one_state_is_that_state(self) -> None:
-        created = self.item(state="queued")
-        self.assertEqual("todo", created["state"]["key"])
+        created = self.item(state="ready")
+        self.assertEqual("ready", created["state"]["key"])
         service.claim_work_item(self.conn, created["reference"], author="tester")
         moved = service.transition_work_item(self.conn, created["reference"], "review")
         self.assertEqual("review", moved["state"]["key"])
@@ -101,8 +101,9 @@ class StateNameTests(unittest.TestCase):
         message = str(refusal.exception)
         self.assertTrue(message.startswith("this workflow has no state named in_progress;"))
         for listed in (
-            "backlog (backlog)",
-            "todo (queued)",
+            "triage (triage)",
+            "deferred (deferred)",
+            "ready (ready)",
             "dev (active)",
             "review (review)",
             "done (completed)",
@@ -113,10 +114,13 @@ class StateNameTests(unittest.TestCase):
             self.assertIn(listed, message)
         # Every category but the one two states share names a state alone.
         self.assertIn(
-            "exactly one state has it: backlog, queued, review, completed, blocked, cancelled",
+            "exactly one state has it: triage, deferred, ready, review, completed, blocked,"
+            " cancelled",
             message,
         )
         self.assertNotIn("has it: active", message)
+        # The service state is no state a caller names, so no listing shows it.
+        self.assertNotIn("container", message)
 
     def test_creating_in_an_unknown_state_is_refused_the_same_way(self) -> None:
         with self.assertRaisesRegex(model.PlanningError, r"no state named doing; its states are"):

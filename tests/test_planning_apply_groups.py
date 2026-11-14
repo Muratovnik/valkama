@@ -426,7 +426,7 @@ class QuestionsGroupTests(BatchCase):
         self.conn.commit()
         single = self.refused("create_work_item_request", id=self.ref, **QUESTION)
         before = self.untouched()
-        error = self.refused_batch(questions=[QUESTION], transition={"state": "backlog"})
+        error = self.refused_batch(questions=[QUESTION], transition={"state": "triage"})
         self.assertEqual(f"questions[0]: {single['message']}", error["message"])
         self.assertEqual(before, self.untouched())
 

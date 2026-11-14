@@ -23,18 +23,51 @@ STORE_SCHEMA_MISMATCH = "store_schema_mismatch"
 
 # A state's category, which is shared, and its name, which is not. Analytics
 # counts an item in `active` without being told that Dev is what it is called.
-STATE_CATEGORIES = (
-    "backlog",
-    "queued",
+#: The eight categories of the work model: what a caller names, what a tool lists
+#: and what a refusal offers. In the order the default workflow places them.
+PUBLIC_CATEGORIES = (
+    "triage",
+    "deferred",
+    "ready",
     "active",
     "review",
     "completed",
     "blocked",
     "cancelled",
 )
-_STATE_CATEGORY_SET = frozenset(STATE_CATEGORIES)
+_PUBLIC_CATEGORY_SET = frozenset(PUBLIC_CATEGORIES)
+#: The category of a workflow's one service state, where an accepted open container
+#: stands. It is not a category of the model: an answer shows such a container by
+#: what it derives, and no input names this word.
+SERVICE_CATEGORY = "container"
+#: What the store's CHECK takes, and nothing else reads: the eight and the service one.
+STORED_CATEGORIES = (*PUBLIC_CATEGORIES, SERVICE_CATEGORY)
+#: The categories a container never stands in: work in them has a holder or waits
+#: on one, and a container is held by nobody.
+TASK_ONLY_CATEGORIES = ("ready", "active", "review", "blocked")
 
-WORK_ITEM_KINDS = frozenset({"task", "epic", "bug", "improvement"})
+#: A container holds other work and is never worked itself. Outside the store it is
+#: a goal, or a stage when it stands under a parent.
+CONTAINER_KIND = "container"
+#: The kinds a task can be edited between; a container is not one of them.
+TASK_KINDS = frozenset({"task", "bug", "improvement"})
+#: What `work_items.kind` holds.
+WORK_ITEM_KINDS = TASK_KINDS | {CONTAINER_KIND}
+#: What a caller names: a task kind, or a container as a goal or a stage.
+PUBLIC_KINDS = ("task", "bug", "improvement", "goal", "stage")
+_CONTAINER_WORDS = frozenset({"goal", "stage"})
+
+#: Why accepted work was accepted: the basis an acceptance records. `migrated` is
+#: the work-model migration's alone: no tool and no HTTP write takes it.
+ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "migrated")
+
+#: The words an input no longer takes, each with the refusal that names what
+#: replaces it. A refusal, not a synonym: nothing reads one word as another. Every
+#: refusal of such a word, from a tool or from HTTP, reads this one list.
+RETIRED_WORDS = {
+    "container": "container is not a category: an accepted goal or stage shows"
+    " container_state; accept one with ready",
+}
 PRIORITIES = ("low", "medium", "high", "urgent")
 _PRIORITY_SET = frozenset(PRIORITIES)
 
@@ -103,8 +136,17 @@ EVENT_ACTIONS = (
     # Schema 15: an edit changed the item's set of labels, the set before and the
     # set after as the detail (`labels_change`).
     "labels_changed",
+    # Schema 18: an item accepted, its basis as the detail; a container that came
+    # to stand in the service state, a reason or nothing as the detail and never a
+    # state's key; a child that left this container, the child's reference.
+    "accepted",
+    "opened",
+    "child_left",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
+#: The actions that say which state an item came to stand in: `created` and
+#: `transitioned` by the key of a category's state, `opened` by its own name alone.
+STATE_ENTRY_ACTIONS = ("created", "transitioned", "opened")
 
 _SPACE_KEY = re.compile(r"^[A-Z][A-Z0-9]{1,7}$")
 _STATE_KEY = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
@@ -274,16 +316,35 @@ def state_key(value: object) -> str:
     return text
 
 
+def refuse_retired(value: object) -> None:
+    """Refuse a word the input no longer takes, naming what replaces it."""
+
+    if isinstance(value, str) and value.strip() in RETIRED_WORDS:
+        raise PlanningError(RETIRED_WORDS[value.strip()])
+
+
 def state_category(value: object) -> str:
-    return enum_field(value, _STATE_CATEGORY_SET, "workflow_state.category")
+    """One of the eight categories a caller names; the service one is refused."""
+
+    refuse_retired(value)
+    return enum_field(value, _PUBLIC_CATEGORY_SET, "workflow_state.category")
 
 
 def priority(value: object) -> str:
     return enum_field(value, _PRIORITY_SET, "work_item.priority")
 
 
+def public_kind(value: object) -> str:
+    """The kind a caller named, as it named it: a task kind, `goal` or `stage`."""
+
+    return enum_field(value, frozenset(PUBLIC_KINDS), "work_item.kind")
+
+
 def work_item_kind(value: object) -> str:
-    return enum_field(value, WORK_ITEM_KINDS, "work_item.kind")
+    """The kind the store holds for the one a caller named: a goal or a stage is a container."""
+
+    kind = public_kind(value)
+    return CONTAINER_KIND if kind in _CONTAINER_WORDS else kind
 
 
 def link_kind(value: object) -> str:
@@ -533,17 +594,22 @@ _LONGEST_SET = ["\x01" * MAX_LABEL_LENGTH] * MAX_LABELS
 LABELS_DETAIL_LIMIT = len(dumps({"from": _LONGEST_SET, "to": _LONGEST_SET}))
 
 
-# The workflow a new PlanningSpace gets. Cancelled is there so that work closed as
-# not needed, duplicated or superseded is not counted as done. The code below
-# reads the table rather than this tuple: a space may be given a different set
-# without anything else changing.
+# The workflow a new PlanningSpace gets: one state for each of the eight categories,
+# in this order, then the service state. `dev` and `done` keep the keys agents name
+# in every close. Cancelled is there so that work closed as not needed, duplicated
+# or superseded is not counted as done. The code below reads the table rather than
+# this tuple: a space may be given a different set without anything else changing.
 DEFAULT_WORKFLOW_NAME = "Delivery"
 DEFAULT_STATES = (
-    ("backlog", "Backlog", "backlog"),
-    ("todo", "Todo", "queued"),
+    ("triage", "Triage", "triage"),
+    ("deferred", "Deferred", "deferred"),
+    ("ready", "Ready", "ready"),
     ("dev", "Dev", "active"),
     ("review", "Review", "review"),
     ("done", "Done", "completed"),
     ("blocked", "Blocked", "blocked"),
     ("cancelled", "Cancelled", "cancelled"),
+    ("container", "Accepted", SERVICE_CATEGORY),
 )
+#: The categories of a state work is over in.
+TERMINAL_CATEGORIES = frozenset({"completed", "cancelled"})

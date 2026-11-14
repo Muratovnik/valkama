@@ -194,7 +194,7 @@ def workable(
     a query.
     """
 
-    return not container and not claim_ref and category in ("backlog", "queued") and not blocked()
+    return not container and not claim_ref and category in ("triage", "ready") and not blocked()
 
 
 #: A closing fact: when the item's latest transition was written, and the

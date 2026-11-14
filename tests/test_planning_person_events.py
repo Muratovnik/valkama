@@ -293,7 +293,7 @@ class WhatCountsTests(Harness):
         other = service.create_work_item(self.conn, space=self.space["key"], title="Other")
         self.conn.commit()
         cases: list[tuple[str, dict, list[str]]] = [
-            ("/api/planning/work-item/transition", {"state": "todo"}, ["status"]),
+            ("/api/planning/work-item/transition", {"state": "ready"}, ["status"]),
             ("/api/planning/work-item/claim", {}, ["claimed", "status"]),
             ("/api/planning/work-item/claim", {"release": True}, ["released", "status"]),
             ("/api/planning/work-item/checklist/claim", {"item_id": one}, ["step_claimed"]),
@@ -425,7 +425,9 @@ class WhoCountsTests(Harness):
         self.person(
             "/api/planning/work-item/comment", id=self.ref, body="From me", author="claude-desk"
         )
-        self.person("/api/planning/work-item/transition", id=self.ref, state="todo", author="agent")
+        self.person(
+            "/api/planning/work-item/transition", id=self.ref, state="ready", author="agent"
+        )
         self.assertEqual(["comment", "status"], self.kinds())
 
     def test_a_launch_writing_under_the_interface_is_not_a_person_speaking(self) -> None:
@@ -588,7 +590,7 @@ class ToldOnWriteTests(Harness):
         asked = [self.ask()["request_id"] for _ in range(2)]
         cases: list[tuple[str, dict]] = [
             ("apply_work_item_changes", {"id": self.ref, "update": {"priority": "high"}}),
-            ("apply_work_item_changes", {"id": self.ref, "transition": {"state": "todo"}}),
+            ("apply_work_item_changes", {"id": self.ref, "transition": {"state": "ready"}}),
             ("claim_work_item", {"id": self.ref}),
             (
                 "apply_work_item_changes",
@@ -681,7 +683,7 @@ class ToldOnWriteTests(Harness):
         self.says("Mine")
         answer = self.person("/api/planning/work-item/comment", id=self.ref, body="Mine again")
         self.assertNotIn("from_person", answer)
-        moved = self.person("/api/planning/work-item/transition", id=self.ref, state="todo")
+        moved = self.person("/api/planning/work-item/transition", id=self.ref, state="ready")
         self.assertNotIn("from_person", moved)
 
     def test_a_tool_outside_any_call_answers_as_it_did(self) -> None:
@@ -848,7 +850,7 @@ class CloseGuardTests(Harness):
     def test_merging_an_item_a_person_moved_is_refused_until_forced(self) -> None:
         other = service.create_work_item(self.conn, space=self.space["key"], title="Merge me")
         self.conn.commit()
-        self.person("/api/planning/work-item/transition", id=other["reference"], state="todo")
+        self.person("/api/planning/work-item/transition", id=other["reference"], state="ready")
         message = self.refused_agent("merge_work_items", id=self.ref, items=[other["reference"]])
         self.assertIn("[person_spoke]", message)
         answer = self.agent("merge_work_items", id=self.ref, items=[other["reference"]], force=True)

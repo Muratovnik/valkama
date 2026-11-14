@@ -457,8 +457,10 @@ registration is removed before its launcher-backed replacement is added.
 
 ## Planning: Kanban view
 
-One column per state of the space's workflow. A new space gets seven: Backlog,
-Todo, Dev, Review, Done, Blocked and Cancelled. Done is for finished work;
+One column per state of the space's workflow. A new space gets one for each of
+the eight categories: Triage, Deferred, Ready, Dev, Review, Done, Blocked and
+Cancelled. Beside them the workflow keeps a service state where an accepted open
+container stands; no listing shows it and no input names it. Done is for finished work;
 Cancelled is for work closed as not needed, duplicated or superseded, and needs
 a closing summary that says why but no ticked checklist.
 
@@ -580,12 +582,13 @@ Graph; its chip leaves it in every view.
 
 ### Migrating an older store
 
-This build opens only a store that Valkama 2.9 left, at schema 17. An older
-store is refused with "open it with Valkama 2.9 first" and left exactly as it was,
-with no snapshot and no write. Open it with Valkama 2.9 once, which carries a store
-of any earlier schema forward under its own snapshots as that release describes,
-and then come back. The paragraphs below describe the snapshots those upgrades
-took and how to go back from them.
+This build opens only a store that Valkama 2.9 left: schema 17 with its word
+index. An older store, or one at 17 without the index, is refused with "open it
+with Valkama 2.9 first" and left exactly as it was, with no snapshot and no write.
+Open it with Valkama 2.9 once, which carries a store of any earlier schema forward
+under its own snapshots as that release describes, and then come back. The
+paragraphs below describe the snapshots those upgrades took and how to go back
+from them.
 
 Every snapshot taken from schema 14 on carries the pictures as well: a folder
 with the snapshot's name and `.images` after it stands beside the snapshot file,

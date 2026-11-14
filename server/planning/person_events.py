@@ -58,6 +58,8 @@ MOST_SHOWN = 20
 #: Every action a person's write can be told as, by the kind it is told under.
 KINDS = {
     "transitioned": "status",
+    # A container that came to stand open again: a change of its state, as a move is.
+    "opened": "status",
     "claimed": "claimed",
     "released": "released",
     "taken_over": "taken_over",
@@ -85,7 +87,11 @@ KINDS = {
 #: or an observed session, which the agent in question already knows. `overridden`:
 #: a note on the transition or merge beside it, which is told. `labels_changed`: a
 #: person's edit of the labels, which is told as the edit its call row names.
-NOT_TOLD = frozenset({"created", "execution_attached", "overridden", "labels_changed"})
+#: `accepted`: the basis of an acceptance, beside the write that accepted the item.
+#: `child_left`: a child's move out of this container, told on the child itself.
+NOT_TOLD = frozenset(
+    {"created", "execution_attached", "overridden", "labels_changed", "accepted", "child_left"}
+)
 
 #: The call that edits an item's fields, and those fields' columns by the name
 #: `calls.call_id` records. The one place a name read back from a row meets SQL.

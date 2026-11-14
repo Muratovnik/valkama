@@ -228,7 +228,14 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
 # `open_read_only` -- takes the stamp for the catalog: a quota source of this build would
 # write into a store at 16 that has no quota tables yet, where stamped 17 it waits for a
 # full open, and a build at 16 would keep samples past their year.
-STORE_SCHEMA_VERSION = 17
+#
+# 18 is the work model: eight categories in place of `backlog` and `queued` with a
+# service state beside them in every workflow, the `container` kind in place of
+# `epic`, the `accepted`, `opened` and `child_left` events, and a trigger that keeps a
+# container out of the states work is held in. Existing rows change their meaning, so
+# no build before it may read a store at 18, and this one opens a store at 17 only
+# once `migrate work-model` has carried it forward.
+STORE_SCHEMA_VERSION = 18
 
 
 class StoreTooNewError(RuntimeError):
@@ -246,23 +253,39 @@ class StoreTooNewError(RuntimeError):
         self.supported = supported
 
 
-#: The oldest store this build brings up: what Valkama 2.9 leaves.
-OLDEST_SCHEMA_VERSION = 17
+#: The schema Valkama 2.9 leaves a store at. 2.8 left the same number without the
+#: word index, so a store of 2.9 is told apart by that index.
+RELEASE_2_9_SCHEMA_VERSION = 17
 
 
 class StoreTooOldError(RuntimeError):
-    """The store predates what this build brings up, so this build leaves it untouched.
+    """The store predates Valkama 2.9, so this build leaves it untouched.
 
     The steps that carried a store from an earlier generation are Valkama 2.9's, and
-    that release keeps them: opened there first, the store reaches the shape this
-    build starts from.
+    that release keeps them: opened there first, the store reaches the shape the
+    work-model migration starts from.
     """
 
     def __init__(self, stored: int) -> None:
         super().__init__(
-            f"this store is at schema {stored} and this build opens only a store that"
-            f" Valkama 2.9 left, at schema {OLDEST_SCHEMA_VERSION} with its word index:"
-            " open it with Valkama 2.9 first."
+            f"this store is at schema {stored} and only a store that Valkama 2.9 left,"
+            f" at schema {RELEASE_2_9_SCHEMA_VERSION} with its word index, can be carried"
+            " to this build: open it with Valkama 2.9 first."
+        )
+        self.stored = stored
+
+
+class WorkModelMigrationRequiredError(RuntimeError):
+    """A store Valkama 2.9 left, which this build opens only after the work-model migration.
+
+    Its rows mean what the old model meant, so nothing of this build reads or writes
+    them until the one explicit command has carried the store forward.
+    """
+
+    def __init__(self, stored: int) -> None:
+        super().__init__(
+            f"this store is at schema {stored}; run `valkama migrate work-model` once"
+            " with every session stopped; it takes a verified recovery point first"
         )
         self.stored = stored
 
@@ -474,30 +497,41 @@ def _read_stored_version_without_write(path: str) -> int:
         probe.close()
 
 
-def _refuse_another_generation(conn: sqlite3.Connection, *, first_store: bool) -> None:
-    """Refuse a store a newer build wrote, or one older than this build brings up.
+def refuse_another_generation(conn: sqlite3.Connection, *, first_store: bool = False) -> None:
+    """Refuse a store of any schema but this build's, naming what brings it here.
 
-    A file that holds no table yet is not a store of an earlier build: it is
-    created as a fresh one, as a missing file is.
+    Newer is `StoreTooNewError`. A store Valkama 2.9 left, at its schema with the
+    word index, is `WorkModelMigrationRequiredError`; anything older, a store of 2.8
+    at the same number included, is `StoreTooOldError`. A file that holds no table
+    yet is not a store of an earlier build: it is created as a fresh one, as a
+    missing file is.
     """
 
     stored_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
     if stored_version > STORE_SCHEMA_VERSION:
         raise StoreTooNewError(stored_version, STORE_SCHEMA_VERSION)
-    if (
-        not first_store
-        and stored_version < OLDEST_SCHEMA_VERSION
-        and conn.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone() is not None
-    ):
-        raise StoreTooOldError(stored_version)
+    if first_store or stored_version == STORE_SCHEMA_VERSION:
+        return
+    if conn.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone() is None:
+        return
+    indexed = (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (planning_words.ROWS,),
+        ).fetchone()
+        is not None
+    )
+    if stored_version == RELEASE_2_9_SCHEMA_VERSION and indexed:
+        raise WorkModelMigrationRequiredError(stored_version)
+    raise StoreTooOldError(stored_version)
 
 
 def _probe_generation(path: str) -> None:
-    """`_refuse_another_generation` on an existing file, through a read-only connection."""
+    """`refuse_another_generation` on an existing file, through a read-only connection."""
 
     probe = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
     try:
-        _refuse_another_generation(probe, first_store=False)
+        refuse_another_generation(probe)
     finally:
         probe.close()
 
@@ -584,7 +618,7 @@ def connect() -> sqlite3.Connection:
         conn = sqlite3.connect(path, timeout=5)
         conn.row_factory = sqlite3.Row
         try:
-            _refuse_another_generation(conn, first_store=first_store)
+            refuse_another_generation(conn, first_store=first_store)
             stored_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
 
             # Classify and snapshot before the first persistent pragma or schema

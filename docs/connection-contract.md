@@ -240,8 +240,8 @@ of `create_work_item`, and of their HTTP writes -- it
 is read, in this order, as:
 
 1. a `state_id` or a key of the item's workflow;
-2. a category (`backlog`, `queued`, `active`, `review`, `blocked`, `completed`,
-   `cancelled`) that exactly one state of the workflow has.
+2. a category (`triage`, `deferred`, `ready`, `active`, `review`, `completed`,
+   `blocked`, `cancelled`) that exactly one state of the workflow has.
 
 A key wins over a category, so `review` is the state keyed `review` even in a
 workflow that gives the review category to two states. A category that two or
@@ -251,10 +251,10 @@ key`. A name that is neither is refused with `invalid_request` listing every
 state as `key (category)` and the categories that name a state alone:
 
 ```text
-this workflow has no state named in_progress; its states are backlog (backlog),
-todo (queued), dev (active), review (review), done (completed), blocked (blocked),
-cancelled (cancelled); a category names a state when exactly one state has it:
-backlog, queued, active, review, completed, blocked, cancelled
+this workflow has no state named in_progress; its states are triage (triage),
+deferred (deferred), ready (ready), dev (active), review (review), done (completed),
+blocked (blocked), cancelled (cancelled); a category names a state when exactly one
+state has it: triage, deferred, ready, active, review, completed, blocked, cancelled
 ```
 
 Both refusals come before any guard and write nothing. Reads keep their two
@@ -343,7 +343,7 @@ Without `rank` a moved item goes last in its new state, as it did before
 placements existed, and a new item goes last in its first state.
 
 `claim_ready_work_item` takes the first ready item in that order: an item in a
-`queued` state before one in a `backlog` state, then the states in the
+`ready` state before one in a `triage` state, then the states in the
 workflow's order, then the place inside the state. Priority only breaks a tie
 between two items at the same place, which a store written before placements
 can hold, and the item number breaks what is left. Placing an item first is what
@@ -861,8 +861,8 @@ member. When the store cannot resolve the source's state, `state_name`,
 `state_missing`; such a source is unknown, not open, and blocks nothing.
 
 A member's `rank` is its 1-based place in the order of work across its whole
-planning space: the states by category (`active`, `review`, `queued`,
-`backlog`, `blocked`, `completed`, `cancelled`), then the workflow's order of
+planning space: the states by category (`active`, `review`, `ready`, `triage`,
+`deferred`, `blocked`, `completed`, `cancelled`), then the workflow's order of
 states, then the place inside a state, as described in
 [The order of work](#the-order-of-work). It is counted over the space, not over
 the chain, so two members' ranks are compared and never counted between: a gap

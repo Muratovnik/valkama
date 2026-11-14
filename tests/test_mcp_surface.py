@@ -1734,7 +1734,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertEqual("", item["claim_ref"])
         self.assertEqual([False, False], [step["done"] for step in item["checklist"]])
         self.assertIsNone(item["summary"])
-        self.assertEqual("backlog", item["state"]["key"])
+        self.assertEqual("triage", item["state"]["key"])
         self.assertEqual([], self.calls())
 
     def test_a_closing_transition_lands_because_its_ticks_and_summary_come_first(self) -> None:
@@ -1748,7 +1748,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
 
         self.assertEqual("done", answer["state"]["key"])
         # The claim started the item before the transition closed it.
-        self.assertEqual({"from": "backlog", "to": "dev"}, answer["started"])
+        self.assertEqual({"from": "triage", "to": "dev"}, answer["started"])
         # The close ended the claim the batch took, in the same call.
         self.assertEqual(("", None), (answer["claim_ref"], answer["claim_state"]))
         self.assertNotIn("events", answer)
@@ -2082,7 +2082,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
 
         self.assertEqual({"claim": True, "links": 2}, answer["applied"])
         # The claim started the new item, and the acknowledgement says so.
-        self.assertEqual({"from": "backlog", "to": "dev"}, answer["started"])
+        self.assertEqual({"from": "triage", "to": "dev"}, answer["started"])
         self.assertEqual("dev", answer["state"]["key"])
         # The session the client proved holds it, not the author the call signed.
         self.assertEqual(f"codex (session {self.SESSION})", answer["claim_ref"])
@@ -2260,11 +2260,11 @@ class RankToolTests(WireCallTestCase):
             for title in ("First", "Second", "Third")
         ]
         self.queued = planning_service.create_work_item(
-            self.conn, space=SPACE_KEY, title="Queued", state="todo"
+            self.conn, space=SPACE_KEY, title="Queued", state="ready"
         )["reference"]
         self.conn.commit()
 
-    def order(self, state: str = "backlog") -> list[str]:
+    def order(self, state: str = "triage") -> list[str]:
         return [
             item["reference"]
             for item in planning_service.list_work_items(
@@ -2293,23 +2293,23 @@ class RankToolTests(WireCallTestCase):
     def test_a_transition_and_a_batch_place_the_item_in_its_new_state(self) -> None:
         self.answer(
             "apply_work_item_changes",
-            {"id": self.items[0], "transition": {"state": "todo", "rank": "first"}},
+            {"id": self.items[0], "transition": {"state": "ready", "rank": "first"}},
         )
-        self.assertEqual([self.items[0], self.queued], self.order("todo"))
+        self.assertEqual([self.items[0], self.queued], self.order("ready"))
         answer = self.answer(
             "apply_work_item_changes",
             {
                 "id": self.items[1],
-                "transition": {"state": "todo", "rank": f"after:{self.items[0]}"},
+                "transition": {"state": "ready", "rank": f"after:{self.items[0]}"},
             },
         )
-        self.assertEqual({"transition": {"state": "todo"}}, answer["applied"])
-        self.assertEqual([self.items[0], self.items[1], self.queued], self.order("todo"))
+        self.assertEqual({"transition": {"state": "ready"}}, answer["applied"])
+        self.assertEqual([self.items[0], self.items[1], self.queued], self.order("ready"))
 
     def test_a_placement_the_store_cannot_follow_is_refused_and_writes_nothing(self) -> None:
         for rank, message in (
             ("top", "rank must be first, last, before:<work item> or after:<work item>"),
-            (f"after:{self.queued}", f"{self.queued} is in Todo, not Backlog"),
+            (f"after:{self.queued}", f"{self.queued} is in Ready, not Triage"),
         ):
             with self.subTest(rank=rank):
                 error = self.refusal(
@@ -2627,7 +2627,7 @@ class ChainToolTests(WireCallTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.root = planning_service.create_work_item(
-            self.conn, space=SPACE_KEY, title="Root", kind="epic"
+            self.conn, space=SPACE_KEY, title="Root", kind="goal"
         )["reference"]
         self.children: dict[str, str] = {}
         for name, state in (
@@ -2635,12 +2635,12 @@ class ChainToolTests(WireCallTestCase):
             ("held", "blocked"),
             ("active", "dev"),
             ("review", "review"),
-            ("claimed", "todo"),
+            ("claimed", "ready"),
         ):
             self.children[name] = planning_service.create_work_item(
                 self.conn, space=SPACE_KEY, title=name, state=state, parent=self.root
             )["reference"]
-        # Held in Todo, as a claim an earlier build took left it: a claim now
+        # Held in Ready, as a claim an earlier build took left it: a claim now
         # starts its item, and this one stands for work held but not started.
         planning_service.claim_work_item(
             self.conn, self.children["claimed"], author="one", move_state=False
@@ -2706,7 +2706,7 @@ class ChainToolTests(WireCallTestCase):
 
     def test_open_members_run_active_review_ready_then_the_rest(self) -> None:
         answer = self.answer("get_work_item_chain", {"id": self.root})
-        # The rest in the order of work: the claimed Todo item before the
+        # The rest in the order of work: the claimed Ready item before the
         # blocked one, whatever their numbers.
         self.assertEqual(
             [
@@ -2727,7 +2727,7 @@ class ChainToolTests(WireCallTestCase):
             {
                 "reference": self.children["claimed"],
                 "title": "claimed",
-                "state": "todo",
+                "state": "ready",
                 "claim_ref": "one",
                 "ready": False,
                 "parent_reference": self.root,

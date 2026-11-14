@@ -57,16 +57,16 @@ class ChainFixture(unittest.TestCase):
         def link(source: str, target: str, kind: str) -> None:
             service.link_work_items(self.conn, self.refs[source], self.refs[target], kind)
 
-        make("R", kind="epic")
+        make("R", kind="goal")
         make("C1", parent="QA-1")
         make("C2", parent="QA-1")
         make("C3", parent="QA-1")
         make("D0")
         make("D1", state="review")
-        make("E", kind="epic")
+        make("E", kind="goal")
         make("E1", parent=self.refs["E"])
-        make("E2", state="todo", parent=self.refs["E"])
-        make("O", kind="epic")
+        make("E2", state="ready", parent=self.refs["E"])
+        make("O", kind="goal")
         make("F", state="done", parent=self.refs["O"])
         make("O2", parent=self.refs["O"])
         make("D2", state="cancelled")
@@ -206,7 +206,7 @@ class ChainBoundaryTests(ChainFixture):
                 "work_item_id": self.ids["R"],
                 "reference": self.refs["R"],
                 "title": "R",
-                "kind": "epic",
+                "kind": "container",
                 "has_children": True,
                 "totals": {"chain": 10, "epic": 3},
             },
@@ -241,7 +241,7 @@ class ChainBoundaryTests(ChainFixture):
             (10, 4, 6, 2), (found["total"], found["closed"], found["open"], found["ready"])
         )
         self.assertEqual(
-            {"active": 1, "backlog": 3, "cancelled": 1, "completed": 3, "queued": 1, "review": 1},
+            {"active": 1, "triage": 3, "cancelled": 1, "completed": 3, "ready": 1, "review": 1},
             found["by_category"],
         )
 
@@ -499,7 +499,7 @@ class ChainBlockerSourceTests(ChainFixture):
     def test_a_member_blocked_from_another_space_names_its_blocker_open_or_finished(self) -> None:
         service.link_work_items(self.conn, self.refs["Z"], self.refs["D0"], "blocks")
         self.assertEqual("OTH-1", self.refs["Z"])
-        self.assertEqual([("OTH-1", "Backlog", "backlog", False, None)], self.blockers_of("D0"))
+        self.assertEqual([("OTH-1", "Triage", "triage", False, None)], self.blockers_of("D0"))
         self.assertFalse(self.ready("D0"))
         # Its discovery link into the chain still does not widen it.
         self.assertNotIn(("Z", "C1", "discovered-from"), self.edge_kinds())
@@ -512,7 +512,7 @@ class ChainBlockerSourceTests(ChainFixture):
     def test_a_member_blocked_by_an_item_of_its_space_outside_the_chain_names_it(self) -> None:
         service.link_work_items(self.conn, self.refs["Blk"], self.refs["D0"], "blocks")
         self.assertEqual(
-            [(self.refs["Blk"], "Backlog", "backlog", False, None)], self.blockers_of("D0")
+            [(self.refs["Blk"], "Triage", "triage", False, None)], self.blockers_of("D0")
         )
         self.assertFalse(self.ready("D0"))
         # A member blocking work outside the chain is that work's to show.
@@ -520,7 +520,7 @@ class ChainBlockerSourceTests(ChainFixture):
 
     def test_the_root_drawn_with_its_chain_names_its_blocker_too(self) -> None:
         service.link_work_items(self.conn, self.refs["Z"], self.refs["R"], "blocks")
-        self.assertEqual([("OTH-1", "Backlog", "backlog", False, None)], self.blockers_of("R"))
+        self.assertEqual([("OTH-1", "Triage", "triage", False, None)], self.blockers_of("R"))
 
     def test_a_blocker_whose_state_cannot_be_read_is_unknown_and_blocks_nothing(self) -> None:
         service.link_work_items(self.conn, self.refs["Blk"], self.refs["D0"], "blocks")

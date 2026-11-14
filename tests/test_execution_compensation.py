@@ -42,7 +42,7 @@ class LaunchCompensationTests(unittest.TestCase):
         self.addCleanup(self.conn.close)
         planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
         created = planning.create_work_item(
-            self.conn, space="TST", title="Contested launch", state="todo"
+            self.conn, space="TST", title="Contested launch", state="ready"
         )
         self.reference = str(created["reference"])
         self.conn.commit()
@@ -124,7 +124,7 @@ class LaunchCompensationTests(unittest.TestCase):
 
         self.assertEqual([True], competing_write)
         item = planning.get_work_item(self.other, self.reference)
-        self.assertEqual("todo", item["state"]["key"])
+        self.assertEqual("ready", item["state"]["key"])
         self.assertEqual("", item["claim_ref"])
         self.assertIn("restored", self.attempt()["result"]["unresolved"])
 
@@ -140,7 +140,7 @@ class LaunchCompensationTests(unittest.TestCase):
 
         item = planning.get_work_item(self.other, self.reference)
         self.assertEqual(original["revision"], item["revision"])
-        self.assertEqual("todo", item["state"]["key"])
+        self.assertEqual("ready", item["state"]["key"])
         self.assertEqual("", item["claim_ref"])
         self.assertEqual(
             [], execution_service.executions_for_work_item(self.other, item["work_item_id"])
@@ -157,7 +157,7 @@ class LaunchCompensationTests(unittest.TestCase):
                 lifecycle.launch_work_item(self.conn, self.packet())
 
         item = planning.get_work_item(self.other, self.reference)
-        self.assertEqual("todo", item["state"]["key"])
+        self.assertEqual("ready", item["state"]["key"])
         self.assertEqual("", item["claim_ref"])
         self.assertEqual([], spawned)
         self.assertIn("launch_failed", item["comments"][-1]["body"])
@@ -180,7 +180,7 @@ class LaunchCompensationTests(unittest.TestCase):
                 lifecycle.launch_work_item(self.conn, self.packet())
 
         item = planning.get_work_item(self.other, self.reference)
-        self.assertEqual("todo", item["state"]["key"])
+        self.assertEqual("ready", item["state"]["key"])
         self.assertEqual("", item["claim_ref"])
         self.assertEqual([], spawned)
         attempt = self.attempt()
@@ -268,7 +268,7 @@ class LaunchCompensationTests(unittest.TestCase):
         self.assertEqual(1, len(first_outcome))
         self.assertIsInstance(first_outcome[0], runner.LaunchError)
         final = planning.get_work_item(self.conn, self.reference)
-        self.assertEqual("todo", final["state"]["key"])
+        self.assertEqual("ready", final["state"]["key"])
         self.assertEqual("", final["claim_ref"])
         attempts = execution_service.executions_for_work_item(self.conn, final["work_item_id"])
         self.assertEqual(1, len(attempts))

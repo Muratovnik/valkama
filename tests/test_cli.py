@@ -83,14 +83,14 @@ class SpaceReportingTests(CliTestCase):
         output = self.invoke("summary", "--space", SPACE_KEY)
         self.assertIn(f"space '{SPACE_NAME}'", output)
         # Claiming starts an item, so one is in the backlog and one under way.
-        self.assertIn("Backlog 1, Dev 1", output)
+        self.assertIn("Triage 1, Dev 1", output)
         self.assertIn("a queued item", output)
 
     def test_summary_reports_an_epic(self) -> None:
-        epic = self.item("an umbrella", kind="epic")
+        epic = self.item("an umbrella", kind="goal")
         self.item("a child", parent=epic)
         output = self.invoke("summary", "--space", SPACE_KEY)
-        self.assertIn("epics:", output)
+        self.assertIn("goals:", output)
         self.assertIn("an umbrella", output)
 
     def test_summary_reports_who_holds_what(self) -> None:

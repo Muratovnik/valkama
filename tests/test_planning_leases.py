@@ -601,9 +601,9 @@ class EndedSessionGraceTests(HookedLeaseTestCase):
     def test_a_server_started_after_the_grace_releases_it_and_says_why(self) -> None:
         self.assertEqual(RELEASED, self.start_server(END + GRACE + timedelta(hours=1)))
         self.assertEqual("", self.item()["claim_ref"])
-        self.assertEqual("todo", self.state_key())
+        self.assertEqual("ready", self.state_key())
         self.assertEqual(
-            [("released", f"session-ended: {held(ONE)}"), ("transitioned", "todo: session-ended")],
+            [("released", f"session-ended: {held(ONE)}"), ("transitioned", "ready: session-ended")],
             self.expiry_events(),
         )
 
@@ -618,7 +618,7 @@ class EndedSessionGraceTests(HookedLeaseTestCase):
         self.conn.commit()
         self.assertEqual(RELEASED, self.start_server(END + timedelta(seconds=1)))
         self.assertEqual(
-            [("released", f"session-ended: {held(ONE)}"), ("transitioned", "todo: session-ended")],
+            [("released", f"session-ended: {held(ONE)}"), ("transitioned", "ready: session-ended")],
             self.expiry_events(),
         )
 
@@ -740,7 +740,7 @@ class ExpiryReasonTests(HookedLeaseTestCase):
         self.mcp("list_work_items", {"space": "LSE"})
         self.assertEqual("", self.item()["claim_ref"])
         self.assertEqual(
-            [("released", f"lease-expired: {held(ONE)}"), ("transitioned", "todo: lease-expired")],
+            [("released", f"lease-expired: {held(ONE)}"), ("transitioned", "ready: lease-expired")],
             self.expiry_events(),
         )
 
@@ -751,7 +751,7 @@ class ExpiryReasonTests(HookedLeaseTestCase):
         self.assertEqual(
             [
                 ("released", f"session-missing: {held(ONE)}"),
-                ("transitioned", "todo: session-missing"),
+                ("transitioned", "ready: session-missing"),
             ],
             self.expiry_events(),
         )
@@ -939,7 +939,7 @@ class ExecutorGuardTests(LeaseTestCase):
         A claim starts its item itself, so the item is put back first.
         """
 
-        service.transition_work_item(self.conn, self.reference, "backlog")
+        service.transition_work_item(self.conn, self.reference, "triage")
         moved = service.transition_work_item(self.conn, self.reference, "dev")
         self.conn.commit()
         return moved["warnings"]
@@ -947,14 +947,14 @@ class ExecutorGuardTests(LeaseTestCase):
     def test_an_unconfirmed_claim_starts_the_item_with_a_warning(self) -> None:
         warning = f"{self.reference} starts under a claim by old that no session confirmed"
         claimed = self.claim(None, author="old")
-        self.assertEqual({"from": "backlog", "to": "dev"}, claimed["started"])
+        self.assertEqual({"from": "triage", "to": "dev"}, claimed["started"])
         self.assertEqual([warning], claimed["warnings"])
         self.assertEqual([warning], self.start())
 
     def test_a_live_lease_starts_the_item_without_one(self) -> None:
         claimed = self.claim(codex(ONE), author="codex")
         self.assertEqual(
-            ({"from": "backlog", "to": "dev"}, None), (claimed["started"], claimed.get("warnings"))
+            ({"from": "triage", "to": "dev"}, None), (claimed["started"], claimed.get("warnings"))
         )
         self.assertEqual([], self.start())
 

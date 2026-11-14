@@ -207,7 +207,7 @@ class MergeMovesTests(MergeTestCase):
                 closing = [e for e in item["events"] if e["action"] == "transitioned"][-1]
                 self.assertEqual(f"cancelled: duplicate of {self.survivor}", closing["detail"])
         survivor = self.get(self.survivor)
-        self.assertEqual("backlog", survivor["state"]["key"])
+        self.assertEqual("triage", survivor["state"]["key"])
         self.assertEqual(
             f"Merged {self.first}, {self.second} into this item: 3 steps, 2 comments,"
             " 1 ref and 2 links moved here. one parser bug",
@@ -301,7 +301,7 @@ class MergeRefusalTests(MergeTestCase):
         closed = self.item("Closed")
         service.set_summary(self.conn, closed, {"done": "d", "next": "n"})
         service.transition_work_item(self.conn, closed, "done")
-        epic = self.item("Umbrella", kind="epic")
+        epic = self.item("Umbrella", kind="goal")
         self.item("Under it", parent=epic)
         for name, items, message in (
             ("itself", [self.survivor], "is the item the others merge into"),
@@ -481,7 +481,7 @@ class MergeSurfaceTests(MergeTestCase):
         self.assertFalse(tool["annotations"]["destructiveHint"])
 
     def test_the_answer_warns_of_what_the_merge_left_or_carried_elsewhere(self) -> None:
-        epic = self.item("Elsewhere", kind="epic")
+        epic = self.item("Elsewhere", kind="goal")
         child = self.item("Under another epic", parent=epic)
         requests.create(
             self.conn,

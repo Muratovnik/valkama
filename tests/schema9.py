@@ -17,6 +17,7 @@ these tables; the same rows land in either catalog.
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from pathlib import Path
 
 from server.planning import store as planning_store
@@ -25,6 +26,17 @@ from tests import schema8
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "store-schema-9.sql"
 LAST = Path(__file__).resolve().parent / "fixtures" / "store-schema-9-last.sql"
 CREATED_AT = "2026-10-31T00:00:00Z"
+#: The default workflow every build before the work model gave a new space: key,
+#: name and category, in position order, with every move between two of them.
+OLD_DEFAULT_STATES = (
+    ("backlog", "Backlog", "backlog"),
+    ("todo", "Todo", "queued"),
+    ("dev", "Dev", "active"),
+    ("review", "Review", "review"),
+    ("done", "Done", "completed"),
+    ("blocked", "Blocked", "blocked"),
+    ("cancelled", "Cancelled", "cancelled"),
+)
 
 
 def statements(fixture: Path = FIXTURE) -> list[tuple[str, str]]:
@@ -57,28 +69,87 @@ def build(
         conn.close()
 
 
+def old_space(conn: sqlite3.Connection, *, project_id: str, name: str, key: str) -> dict:
+    """A space with the old default workflow, as an earlier build inserted it.
+
+    Answers the space's id, its workflow's id and each state's id by key. Plain SQL,
+    so it lands in any catalog from schema 9 to 17 whatever this build's own
+    default workflow is.
+    """
+
+    space_id = str(uuid.uuid4())
+    workflow_id = str(uuid.uuid4())
+    states = {state_key: str(uuid.uuid4()) for state_key, _, _ in OLD_DEFAULT_STATES}
+    conn.execute(
+        "INSERT INTO planning_spaces(planning_space_id,project_id,name,key) VALUES(?,?,?,?)",
+        (space_id, project_id, name, key),
+    )
+    conn.execute(
+        "INSERT INTO workflows(workflow_id,planning_space_id,name,initial_state_id)"
+        " VALUES(?,?,'Delivery',?)",
+        (workflow_id, space_id, states["backlog"]),
+    )
+    for position, (state_key, state_name, category) in enumerate(OLD_DEFAULT_STATES):
+        conn.execute(
+            "INSERT INTO workflow_states(state_id,workflow_id,key,name,category,position,is_terminal)"
+            " VALUES(?,?,?,?,?,?,?)",
+            (
+                states[state_key],
+                workflow_id,
+                state_key,
+                state_name,
+                category,
+                position,
+                1 if category in {"completed", "cancelled"} else 0,
+            ),
+        )
+    conn.executemany(
+        "INSERT INTO workflow_transitions(workflow_id,from_state_id,to_state_id) VALUES(?,?,?)",
+        [
+            (workflow_id, source, target)
+            for source in states.values()
+            for target in states.values()
+            if source != target
+        ],
+    )
+    return {"planning_space_id": space_id, "workflow_id": workflow_id, "states": states}
+
+
 def populate(conn: sqlite3.Connection) -> None:
     """Rows in every table the identity step touches, and in a few it must not.
 
     A held item with its history, a second one linked to it, a comment, a session
-    ref, a request, a session with its events and an execution. The space and its
-    workflow come from `create_space`, which writes only tables the step leaves
-    alone; everything else is the INSERT the earlier build issued. The caller
+    ref, a request, a session with its events and an execution, every one the
+    INSERT the earlier build issued. The space has the workflow its catalog takes:
+    the old default before the work model, this build's own in this build's store,
+    where the second item waits in triage rather than the backlog. The caller
     commits.
     """
 
     conn.row_factory = sqlite3.Row
-    space = planning_store.create_space(conn, project_id="kept", name="Kept", key="KEEP")
-    workflow = planning_store.workflow_for_space(conn, space["planning_space_id"])
-    states = {
-        str(state["key"]): str(state["state_id"])
-        for state in planning_store.states_for_workflow(conn, str(workflow["workflow_id"]))
-    }
+    categories = str(
+        conn.execute("SELECT sql FROM sqlite_master WHERE name = 'workflow_states'").fetchone()[0]
+    )
+    if "'backlog'" in categories:
+        space = old_space(conn, project_id="kept", name="Kept", key="KEEP")
+        waiting = "backlog"
+    else:
+        created = planning_store.create_space(conn, project_id="kept", name="Kept", key="KEEP")
+        space = {
+            **created,
+            "states": {
+                str(state["key"]): str(state["state_id"])
+                for state in planning_store.states_for_workflow(conn, created["workflow_id"])
+            },
+        }
+        waiting = "triage"
+    workflow = space
+    states = space["states"]
     held = "11111111-1111-4111-8111-111111111111"
     linked = "22222222-2222-4222-8222-222222222222"
     for identity, number, state, claim, title in (
         (held, 1, "dev", "kept-agent", "Held with its history"),
-        (linked, 2, "backlog", "", "Blocked by the first"),
+        (linked, 2, waiting, "", "Blocked by the first"),
     ):
         conn.execute(
             "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
@@ -102,7 +173,7 @@ def populate(conn: sqlite3.Connection) -> None:
         "INSERT INTO work_item_links(from_id,to_id,kind,created_at) VALUES(?,?,'blocks',?)",
         (held, linked, CREATED_AT),
     )
-    for action, detail in (("created", "backlog"), ("transitioned", "dev"), ("claimed", "")):
+    for action, detail in (("created", waiting), ("transitioned", "dev"), ("claimed", "")):
         conn.execute(
             "INSERT INTO work_item_events(work_item_id,action,detail,author,created_at)"
             " VALUES(?,?,?,'kept-agent',?)",

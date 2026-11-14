@@ -95,7 +95,7 @@ class LaunchHarness(unittest.TestCase):
         os.environ.pop("VALKAMA_CLAUDE_BIN", None)
         self._dir.cleanup()
 
-    def item(self, title: str, state: str = "todo") -> str:
+    def item(self, title: str, state: str = "ready") -> str:
         record = planning.create_work_item(self.conn, space="TST", title=title, state=state)
         self.conn.commit()
         return str(record["reference"])
@@ -152,7 +152,7 @@ class LaunchLifecycleTests(LaunchHarness):
         with self.assertRaisesRegex(runner.LaunchError, "cannot start claude"):
             executions.launch_work_item(self.conn, self.packet(reference))
         detail = planning.get_work_item(self.conn, reference)
-        self.assertEqual("todo", detail["state"]["key"])
+        self.assertEqual("ready", detail["state"]["key"])
         self.assertEqual("", detail["claim_ref"])
         self.assertIn("launch_failed", detail["comments"][-1]["body"])
 
@@ -217,7 +217,7 @@ class LaunchLifecycleTests(LaunchHarness):
         with self.assertRaisesRegex(runner.LaunchError, "no exact resumable"):
             executions.launch_work_item(self.conn, self.packet(reference, resume=True))
         detail = planning.get_work_item(self.conn, reference)
-        self.assertEqual("todo", detail["state"]["key"])
+        self.assertEqual("ready", detail["state"]["key"])
         self.assertEqual("", detail["claim_ref"])
 
     def test_stale_claims_surface_only_when_nothing_has_happened(self) -> None:
@@ -316,7 +316,7 @@ class ExecutionRecordTests(LaunchHarness):
         self.assertEqual("launch_failed", attempt["outcome"])
         self.assertEqual("terminal", attempt["presence"])
         self.assertEqual(
-            "todo",
+            "ready",
             planning.get_work_item(self.conn, reference)["state"]["key"],
             "the item is exactly where it was",
         )

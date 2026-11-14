@@ -17,7 +17,8 @@ import sqlite3
 from . import model
 
 _EVENT_ACTION_SQL = ",".join(f"'{action}'" for action in model.EVENT_ACTIONS)
-_CATEGORY_SQL = ",".join(f"'{category}'" for category in model.STATE_CATEGORIES)
+_CATEGORY_SQL = ",".join(f"'{category}'" for category in model.STORED_CATEGORIES)
+_TASK_ONLY_SQL = ",".join(f"'{category}'" for category in model.TASK_ONLY_CATEGORIES)
 _KIND_SQL = ",".join(f"'{kind}'" for kind in sorted(model.WORK_ITEM_KINDS))
 _PRIORITY_SQL = ",".join(f"'{value}'" for value in model.PRIORITIES)
 _LINK_SQL = ",".join(f"'{kind}'" for kind in sorted(model.LINK_KINDS))
@@ -68,6 +69,33 @@ _THREAD_COLUMNS = {
 
 def _appended(table: str) -> str:
     return "".join(f",\n    {definition}" for _, definition in _THREAD_COLUMNS[table])
+
+
+#: Which states a kind may stand in, refused by the store as well as by the service:
+#: only a container stands in the service state, and a container never stands where
+#: work is held or waits on a holder. One body, two triggers, because a SQLite
+#: trigger stands on one event.
+_STATE_FITS_KIND_RULES = f"""
+    SELECT RAISE(ABORT, 'only a container stands in the service state')
+    WHERE NEW.kind != '{model.CONTAINER_KIND}' AND EXISTS (
+        SELECT 1 FROM workflow_states s
+        WHERE s.state_id = NEW.state_id AND s.category = '{model.SERVICE_CATEGORY}'
+    );
+    SELECT RAISE(ABORT, 'a container never stands in ready, active, review or blocked')
+    WHERE NEW.kind = '{model.CONTAINER_KIND}' AND EXISTS (
+        SELECT 1 FROM workflow_states s
+        WHERE s.state_id = NEW.state_id AND s.category IN ({_TASK_ONLY_SQL})
+    );
+"""  # noqa: S608 - trigger DDL from the model's own constants, no value
+STATE_FITS_KIND_TRIGGERS = {
+    "work_items_state_fits_kind_insert": "INSERT",
+    "work_items_state_fits_kind_update": "UPDATE OF state_id, kind",
+}
+_STATE_FITS_KIND = "".join(
+    f"CREATE TRIGGER IF NOT EXISTS {name} BEFORE {event} ON work_items"
+    f" BEGIN{_STATE_FITS_KIND_RULES}END;\n"
+    for name, event in STATE_FITS_KIND_TRIGGERS.items()
+)
 
 
 SCHEMA = f"""
@@ -148,7 +176,7 @@ CREATE TABLE IF NOT EXISTS work_items(
 );
 CREATE INDEX IF NOT EXISTS work_items_state
   ON work_items(planning_space_id, state_id, position);
-CREATE INDEX IF NOT EXISTS work_items_parent ON work_items(parent_id);
+{_STATE_FITS_KIND}CREATE INDEX IF NOT EXISTS work_items_parent ON work_items(parent_id);
 -- One work item per improvement case, enforced by the store rather than by the
 -- caller that happens to check first. The Board era carried the same partial
 -- index on `cards(source)`; two rows for one case is a duplicate the
@@ -719,13 +747,14 @@ def create_space(
 
 
 def create_default_workflow(conn: sqlite3.Connection, planning_space_id: str) -> dict:
-    """Seven states, every forward and backward move between them, blocked either way.
+    """A state for each of the eight categories and the service state, every move
+    between them; new work starts in triage.
 
     The transitions are explicit rows rather than "anything to anything": a
     workflow that permitted everything would make the guards below decoration.
     What it does permit is generous, because this installation's history moved
     cards freely and a migration must not invent refusals for rows that already
-    exist.
+    exist. What the model refuses by category, the code refuses above the table.
     """
 
     workflow_id = model.new_id()
@@ -738,10 +767,10 @@ def create_default_workflow(conn: sqlite3.Connection, planning_space_id: str) ->
                 "name": name,
                 "category": category,
                 "position": position,
-                "is_terminal": 1 if category in {"completed", "cancelled"} else 0,
+                "is_terminal": 1 if category in model.TERMINAL_CATEGORIES else 0,
             }
         )
-    initial = next(state for state in states if state["category"] == "backlog")
+    initial = next(state for state in states if state["category"] == "triage")
     conn.execute(
         "INSERT INTO workflows(workflow_id,planning_space_id,name,initial_state_id)"
         " VALUES(?,?,?,?)",

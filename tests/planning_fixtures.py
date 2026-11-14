@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 import uuid
 
-from server.planning import service
+from server.planning import model, service
 
 
 def bulk_items(
@@ -27,7 +27,12 @@ def bulk_items(
     found = service.get_planning_space(conn, space)
     space_id = str(found["planning_space_id"])
     workflow = found["workflow"]
-    states = [str(state["state_id"]) for state in workflow["states"]]
+    # A task never stands in the service state, whether or not the listing shows it.
+    states = [
+        str(state["state_id"])
+        for state in workflow["states"]
+        if state["category"] != model.SERVICE_CATEGORY
+    ]
     first = int(
         conn.execute(
             "SELECT next_number FROM planning_spaces WHERE planning_space_id = ?", (space_id,)

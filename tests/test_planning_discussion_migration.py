@@ -22,9 +22,6 @@ class PlanningDiscussionMigrationTests(unittest.TestCase):
         self.conn = store.connect()
         self.addCleanup(lambda: self.conn.close())
 
-    def snapshots(self) -> list[Path]:
-        return list((Path(self.path).parent / "backups").glob("*-preproductmodel-*.sqlite3"))
-
     def test_schema_seven_build_refuses_migrated_store_before_write(self) -> None:
         self.conn.close()
         before = Path(self.path).read_bytes()

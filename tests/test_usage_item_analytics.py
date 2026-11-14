@@ -82,14 +82,14 @@ class ItemAndAnalyticsTests(UsageStore):
         self.segment("s1", 0, 100, item=item, effort="high", cost=0.012345)
         self.segment("s1", 100, 100, item=item, effort="high", cost=0.02, advisor=True)
         self.segment(
-            "s1", 0, 200, agent="w1", launch_class="bero", item=item, effort="medium", cost=0.03
+            "s1", 0, 200, agent="w1", launch_class="build", item=item, effort="medium", cost=0.03
         )
         self.segment(
             "s1",
             200,
             230,
             agent="w1",
-            launch_class="bero",
+            launch_class="build",
             item=item,
             effort="medium",
             cost=0.004,
@@ -105,8 +105,8 @@ class ItemAndAnalyticsTests(UsageStore):
             {
                 ("main", (None, False), ("high", False)),
                 ("advisor", (None, False), ("high", False)),
-                ("subagent", ("bero", False), ("medium", False)),
-                ("advisor", ("bero", False), ("medium", False)),
+                ("subagent", ("build", False), ("medium", False)),
+                ("advisor", ("build", False), ("medium", False)),
                 ("subagent", (None, True), (None, True)),
                 ("subagent", ("rev", False), ("low", False)),
             },
@@ -125,7 +125,9 @@ class ItemAndAnalyticsTests(UsageStore):
 
     def test_an_epics_tab_is_the_page_filtered_to_the_items_it_covers(self) -> None:
         epic_reference, epic = self.item("Epic")
-        self.conn.execute("UPDATE work_items SET kind = 'epic' WHERE work_item_id = ?", (epic,))
+        self.conn.execute(
+            "UPDATE work_items SET kind = 'container' WHERE work_item_id = ?", (epic,)
+        )
         self.conn.commit()
         children = [
             str(
@@ -140,7 +142,7 @@ class ItemAndAnalyticsTests(UsageStore):
         self.session("s1")
         self.segment("s1", 0, 60, item=epic, cost=0.001)
         self.segment("s1", 60, 180, item=children[0], cost=0.002)
-        self.segment("s1", 100, 400, agent="w1", launch_class="bero", item=children[1])
+        self.segment("s1", 100, 400, agent="w1", launch_class="build", item=children[1])
         self.segment("s1", 400, 450, item=children[1], cost=None, model="claude-new-9")
         self.segment("s1", 500, 900, item=outside, cost=0.5)
         tab = self.item_usage(epic_reference, "epic")
@@ -183,21 +185,28 @@ class ItemAndAnalyticsTests(UsageStore):
             ("", None, True, "high", ("advisor", (None, False)), ("advisor", ("high", False))),
             (
                 "w1",
-                "bero",
+                "build",
                 False,
                 "high",
-                ("subagent", ("bero", False)),
+                ("subagent", ("build", False)),
                 ("subagent", ("high", False)),
             ),
             (
                 "w1",
-                "bero",
+                "build",
                 False,
                 "low",
-                ("subagent", ("bero", False)),
+                ("subagent", ("build", False)),
                 ("subagent", ("low", False)),
             ),
-            ("w1", "bero", True, "low", ("advisor", ("bero", False)), ("advisor", ("low", False))),
+            (
+                "w1",
+                "build",
+                True,
+                "low",
+                ("advisor", ("build", False)),
+                ("advisor", ("low", False)),
+            ),
             ("w2", None, False, None, ("subagent", (None, True)), ("subagent", (None, True))),
         ]
         differed = 0

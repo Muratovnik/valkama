@@ -185,7 +185,7 @@ class StdioTests(unittest.TestCase):
                         "name": "apply_work_item_changes",
                         "arguments": {
                             "id": "SPC-1",
-                            "transition": {"state": "todo"},
+                            "transition": {"state": "ready"},
                             "expected_revision": 0,
                         },
                     },
@@ -692,15 +692,15 @@ class WorkItemGraphTests(unittest.TestCase):
         self.assertEqual(0, self.nodes()[second]["depth"], "a closed blocker no longer counts")
 
     def test_a_container_is_never_offered_as_workable(self) -> None:
-        epic = self.item("epic", kind="epic", state="todo")
-        child = self.item("child", state="todo", parent=epic)
+        goal = self.item("goal", kind="goal", state="triage")
+        child = self.item("child", state="ready", parent=goal)
         nodes = self.nodes()
-        self.assertTrue(nodes[epic]["container"])
-        self.assertFalse(nodes[epic]["ready"], "a container is not work")
+        self.assertTrue(nodes[goal]["container"])
+        self.assertFalse(nodes[goal]["ready"], "a container is not work")
         self.assertTrue(nodes[child]["ready"])
 
     def test_parents_and_provenance_become_edges(self) -> None:
-        epic = self.item("epic", kind="epic")
+        epic = self.item("epic", kind="goal")
         child = self.item("child", parent=epic)
         found = self.item("found")
         planning.link_work_items(self.conn, found, child, "discovered-from")
@@ -731,8 +731,8 @@ class WorkItemGraphTests(unittest.TestCase):
         )
 
     def test_mermaid_marks_the_frontier_and_survives_quotes(self) -> None:
-        speaking = self.item('say "hello"', state="todo")
-        blocked = self.item("waiting", state="todo")
+        speaking = self.item('say "hello"', state="ready")
+        blocked = self.item("waiting", state="ready")
         self.blocks(speaking, blocked)
         text = planning_views.graph_mermaid(planning_views.graph_payload(self.conn))
         self.assertTrue(text.startswith("flowchart LR"))

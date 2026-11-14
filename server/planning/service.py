@@ -881,9 +881,9 @@ def claim_work_item(
 def _start(conn: sqlite3.Connection, identity: str, author: str | None, reason: str) -> dict:
     """Move an item its claim just took into the active state, and answer with it.
 
-    A claim is the moment work starts, and an item left in the backlog while an
+    A claim is the moment work starts, and an item left in triage while an
     agent worked it told everyone reading the board that nobody had begun. So
-    an item in a `backlog` or `queued` state moves to the first active state
+    an item in a `triage`, `deferred` or `ready` state moves to the first active state
     its workflow lets it reach, through the transition guards like any other
     move, and the answer's `started` names where it came from and went. An item
     under way, in review, blocked or finished stays where it is: review and
@@ -931,8 +931,8 @@ def _hand_back(
     released or expired claim would leave its item in an active state with no
     holder: not ready, because the queue takes only unstarted work, and not
     abandoned either, because that list is of held items. So an item in an
-    active state goes back to the first queued state its workflow lets it reach,
-    or the backlog when there is none; the answer is that move, for the
+    active state goes back to the first ready state its workflow lets it reach,
+    or a triage one when there is none; the answer is that move, for the
     caller's `requeued`, or None. Its checklist, comments and history stay. An
     item whose checklist still has a claimed step stays active, because that
     step's holder is still its executor; review, blocked and finished items stay
@@ -1033,8 +1033,8 @@ def claim_ready_work_item(
 ) -> dict | None:
     """Pick the next unheld, unblocked item in a startable state and take it.
 
-    The next one is the first in the order of work: a queued state before the
-    backlog, and inside a state the order the board shows, top first. Priority
+    The next one is the first in the order of work: a ready state before a
+    triage one, and inside a state the order the board shows, top first. Priority
     only breaks a tie in that order, so placing an item first is what puts it
     next, and an urgent item nobody placed waits its turn.
 
@@ -1049,7 +1049,9 @@ def claim_ready_work_item(
 
     clauses = [
         "i.claim_ref = ''",
-        "s.category IN ('backlog','queued')",
+        "s.category IN ('triage','ready')",
+        # A container is never worked: the store refuses it in an active state.
+        f"i.kind != '{model.CONTAINER_KIND}'",
         "NOT EXISTS (SELECT 1 FROM work_item_links l JOIN work_items b"
         " ON b.work_item_id = l.from_id JOIN workflow_states bs ON bs.state_id = b.state_id"
         " WHERE l.to_id = i.work_item_id AND l.kind = 'blocks' AND bs.is_terminal = 0)",

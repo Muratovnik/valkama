@@ -25,39 +25,6 @@ from unittest import mock
 
 from server import store, store_backups
 from server.planning import service as planning
-from tests import schema9
-
-
-def _catalog(conn: sqlite3.Connection, kind: str) -> set[str]:
-    return {
-        str(row[0])
-        for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type=? AND name NOT LIKE 'sqlite_%'", (kind,)
-        )
-    }
-
-
-def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
-    return [str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")]
-
-
-def _values(conn: sqlite3.Connection, shape: dict[str, list[str]]) -> dict[str, list[tuple]]:
-    """Every row of every table, read through the columns the source had."""
-
-    return {
-        table: [
-            tuple(row)
-            for row in conn.execute(f"SELECT {', '.join(columns)} FROM {table} ORDER BY rowid")
-        ]
-        for table, columns in sorted(shape.items())
-    }
-
-
-def _counts(conn: sqlite3.Connection) -> dict[str, int]:
-    return {
-        table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        for table in sorted(_catalog(conn, "table"))
-    }
 
 
 def _call(conn: sqlite3.Connection, **fields: object) -> int:
@@ -86,25 +53,6 @@ class IdentitySchemaMigrationTests(unittest.TestCase):
         patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.path})
         patch.start()
         self.addCleanup(patch.stop)
-
-    def snapshots(self, label: str = "preschema10") -> list[Path]:
-        return list((self.root / "backups").glob(f"*-{label}-*.sqlite3"))
-
-    def populated_source(self) -> None:
-        schema9.build(self.path)
-        conn = sqlite3.connect(self.path)
-        try:
-            schema9.populate(conn)
-            conn.commit()
-        finally:
-            conn.close()
-
-    def migrated(self, path: str) -> sqlite3.Connection:
-        with mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
-            schema9.build(path)
-            conn = store.connect()
-        self.addCleanup(conn.close)
-        return conn
 
     def test_a_claim_written_without_naming_its_call_loses_the_link(self) -> None:
         conn = store.connect()

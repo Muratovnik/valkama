@@ -278,7 +278,7 @@ class WhoListensTests(Harness):
         self.set_up_b()
         self.assertIsNone(self.hook(event="stop"), "B is idle now")
         self.person(COMMENT, id=self.followed, body="A person, marker PS-1")
-        self.person(TRANSITION, id=self.followed, state="backlog", force=True)
+        self.person(TRANSITION, id=self.followed, state="triage", force=True)
         self.person(UPDATE, id=self.followed, title="Retitled by a person")
         self.assertIsNone(
             self.hook(event="stop"), "a person's act on a followed item continues no turn"

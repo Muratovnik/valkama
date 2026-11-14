@@ -76,16 +76,18 @@ def summary_main(space: str | None) -> None:
         by_state[item["state"]["name"]] = by_state.get(item["state"]["name"], 0) + 1
     counts = ", ".join(f"{name} {count}" for name, count in by_state.items())
     print(f"- space '{identity['name']}' ({identity['key']}): {counts or 'no work items'}.")
-    epics = [item for item in items if item["kind"] == "epic"]
-    if epics:
+    goals = [item for item in items if item["kind"] == planning_model.CONTAINER_KIND]
+    if goals:
         listed = "; ".join(
-            f"'{item['title']}' [{item['state']['name']}] {item['reference']}" for item in epics
+            f"'{item['title']}' [{item['state']['name']}] {item['reference']}" for item in goals
         )
-        print(f"- epics: {listed}")
+        print(f"- goals: {listed}")
     ready = [
         item
         for item in items
-        if item["claim_ref"] == "" and item["state"]["category"] in {"backlog", "queued"}
+        if item["claim_ref"] == ""
+        and item["kind"] != planning_model.CONTAINER_KIND
+        and item["state"]["category"] in {"triage", "ready"}
     ]
     if ready:
         listed = "; ".join(f"'{item['title']}' {item['reference']}" for item in ready[:5])
