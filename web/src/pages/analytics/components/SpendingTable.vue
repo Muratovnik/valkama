@@ -351,7 +351,7 @@ defineExpose({ reveal })
 .table-head .chart-cell {
   position: sticky;
   z-index: 3;
-  background: var(--color-canvas);
+  background: var(--color-chart-table-ground, var(--color-canvas));
   box-shadow: inset 0 -1px var(--color-rule);
 
   &:first-child {
@@ -363,7 +363,7 @@ defineExpose({ reveal })
   position: sticky;
   z-index: 2;
   color: var(--color-text);
-  background: var(--color-canvas);
+  background: var(--color-chart-table-ground, var(--color-canvas));
   box-shadow: inset 0 1px var(--color-rule);
 
   &.chart-name {
