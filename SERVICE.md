@@ -39,7 +39,9 @@ cannot break or migrate anything a client session opens. Each new client session
 spawns its own server, and that server opens the live store; with a pinned
 release, code reaches the store only when someone runs `launcher install`. That
 is the one step that publishes the checkout's newer commits to clients, and the
-step at which a raised store schema migrates the store.
+step at which a raised store schema reaches them. It migrates no store: a release
+refuses a store at any schema but its own, and a store Valkama 2.9 left takes
+`valkama migrate work-model` once, with every session stopped.
 
 A release is staged and renamed into place whole, with a record of every file's
 hash. Installing a commit that already has a release reuses it after checking
@@ -71,9 +73,10 @@ front that holds the client's pipe and runs the pinned release's server as a
 child process. Within a few seconds of `launcher install` the front stops that
 server between two requests, starts the newly pinned release, and tells a client
 that can hear it that the tool list changed. So `launcher install` reaches
-running sessions at once, and an install that raises the store schema migrates
-the store through the first session that switches, or, with none running, when
-the next session opens it.
+running sessions at once, and after an install that raises the store schema each
+session that switches refuses the store until it is migrated. For a store Valkama
+2.9 left, stop every session, run `valkama migrate work-model`, and start them
+again.
 
 A release that does not start leaves the session on the release it had, and
 the next tool result carries one warning naming it and why. The store schema

@@ -10,6 +10,18 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- **`valkama migrate work-model` carries a store Valkama 2.9 left to schema 18.** Run
+  once with every session stopped, it takes a verified `pre3.0` snapshot with the
+  pictures beside it, then gives the workflows their eight categories and the service
+  state, the history their renamed keys and every item its kind, acceptance and start,
+  releases what a container or a task outside work still holds and takes the open
+  children out of a closed container, all in one transaction with every postcondition
+  checked before it commits. It prints a JSON report with the time of each step;
+  `--dry-run` migrates a copy, kept with `--into`. A store that is not one 2.9 left is
+  refused and left as it was.
+
 ### Changed
 
 - **A fresh store holds the work model, at schema 18.** A new space's workflow has a

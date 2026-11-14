@@ -30,13 +30,15 @@ Schema 9 dropped the extension registry's tables (`platform_services`,
 `integration_settings`. What a store at 9 holds of the Kernel is
 `platform_store_metadata` and `platform_ui_prefs`, declared in
 `platform/core.py`. The dropped tables keep their names and DDL in
-`platform/migrations.py`, frozen as schema 8 declared them: `store.connect()`
-gives a store older than 9 that catalog before the historical migrations run,
-and drops it in the step that ends the chain, after a verified snapshot
-labelled `preschema9` (or `preproductmodel` for a store older than 8).
-`store_rename` still renames those tables and rewrites the registry's former
-interface ids inside them, because the historical migrations between the
-rename and the drop read and validate them under the current names.
+`platform/migrations.py`, frozen as schema 8 declared them, beside the historical
+migrations and `store_rename`, which renamed those tables and rewrote the
+registry's former interface ids inside them. No store this build opens reaches
+any of them: `store.connect()` refuses a store older than the one Valkama 2.9
+leaves with "open it with Valkama 2.9 first" and leaves it as it was, because 2.9
+carries a store of any earlier schema, the former name and the schema-9 drop
+included, to schema 17 with its word index. A store 2.9 left is refused too, by
+`WorkModelMigrationRequiredError`, until `valkama migrate work-model` carries it
+to this build once, after a verified recovery point labelled `pre3.0`.
 
 Schema 11 added the usage tables (`telemetry/usage_store.py`), which a store can lose
 and read again from the transcripts. The ticks of `telemetry/liveness.py` are the one

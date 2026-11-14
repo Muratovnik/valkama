@@ -14,6 +14,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from server.planning import words
 from tests import schema8
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "store-schema-17.sql"
@@ -34,6 +35,25 @@ def build(path: str, *, data_scope_id: str = "00000000-0000-4000-8000-0000000000
             (data_scope_id, CREATED_AT),
         )
         conn.execute("PRAGMA user_version=17")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def build_2_9(path: str, *, data_scope_id: str = "00000000-0000-4000-8000-000000000029") -> None:
+    """Write a store as Valkama 2.9 leaves one: schema 17 with its word index, in WAL mode.
+
+    The index is what tells 2.9's store from 2.8's at the same number, and what 2.9
+    writes of it is `words.migrate`, which no later build has changed. Items written
+    afterwards are marked stale until `words.bring_current` reads them, as the next
+    open by 2.9 would.
+    """
+
+    build(path, data_scope_id=data_scope_id)
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        words.migrate(conn)
         conn.commit()
     finally:
         conn.close()

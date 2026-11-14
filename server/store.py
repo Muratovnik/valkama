@@ -21,16 +21,24 @@ in the server, which is what lets the rest of the package be split up around it.
 
 from __future__ import annotations
 
+import contextlib
+import datetime
 import os
+import platform
 import sqlite3
+import sys
+import tempfile
+from collections.abc import Iterator, Mapping
+from typing import Any
 
-from . import store_adoption, store_backups, store_lock, store_rename
+from . import store_adoption, store_backups, store_lock, store_rename, store_steps
 from .analytics import store as analytics_store
 from .executions import store as execution_store
 from .ops import configuration
 from .planning import images as planning_images
 from .planning import store as planning_store
 from .planning import words as planning_words
+from .planning import work_model_migration
 from .platform import core as platform_core
 from .platform import migrations as platform_migrations
 from .quota import store as quota_store
@@ -338,10 +346,13 @@ def db_path() -> str:
     return resolved
 
 
-def backup_location() -> store_backups.BackupLocation:
-    """Where recovery points go, which follows the store's own path, with its pictures."""
+def backup_location(path: str | None = None) -> store_backups.BackupLocation:
+    """Where recovery points go, which follows the store's own path, with its pictures.
 
-    path = db_path()
+    The configured store's, or the one at `path`.
+    """
+
+    path = path or db_path()
     return store_backups.BackupLocation(
         os.path.join(os.path.dirname(path), "backups"),
         DATA_PREFIX,
@@ -598,9 +609,21 @@ def connect_for_read() -> sqlite3.Connection:
     return connect()
 
 
-def connect() -> sqlite3.Connection:
-    adopt_legacy_store()
-    path = db_path()
+def connect(path: str | None = None) -> sqlite3.Connection:
+    """The configured store brought up to this build, or the one at `path`.
+
+    A store at `path` is the caller's own -- a fresh one to compare another with --
+    so no earlier generation's directory is adopted for it.
+    """
+
+    if path is None:
+        adopt_legacy_store()
+        path = db_path()
+    located = path
+
+    def locate() -> store_backups.BackupLocation:
+        return backup_location(located)
+
     # Refuse a store of another generation, newer or older, before even the
     # migration lock/directory can be created. The in-lock probes below repeat
     # this check against a concurrent replacement of the file.
@@ -649,15 +672,15 @@ def connect() -> sqlite3.Connection:
                     conn, stored_version
                 )
                 recovery_point, source_identity = store_backups.verified_snapshot(
-                    conn, "preproductmodel", locate=backup_location
+                    conn, "preproductmodel", locate=locate
                 )
             elif before_schema9:
                 recovery_point, source_identity = store_backups.verified_snapshot(
-                    conn, "preschema9", locate=backup_location
+                    conn, "preschema9", locate=locate
                 )
             elif upgrade:
                 recovery_point, source_identity = store_backups.verified_snapshot(
-                    conn, f"preschema{stored_version + 1}", locate=backup_location
+                    conn, f"preschema{stored_version + 1}", locate=locate
                 )
             if recovery_point is not None:
                 # From schema 16 on the upgrade leaves every usage run to be read again,
@@ -665,11 +688,11 @@ def connect() -> sqlite3.Connection:
                 # no snapshot of the store holds: its verified copy goes beside it.
                 liveness.copy_beside(path, recovery_point, DATA_PREFIX)
             elif store_rename.predates_rename(conn):
-                pretable_backup = store_backups.snapshot(conn, backup_location(), "prerename")
+                pretable_backup = store_backups.snapshot(conn, locate(), "prerename")
 
             if planning_store.interactions_migration_needed(conn) and source_identity is None:
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, "preinteractions", locate=backup_location
+                    conn, "preinteractions", locate=locate
                 )
             # A `relates-to` link stored from both ends loses its later record, which
             # only a recovery point keeps; an upgrade's covers it, and a store already
@@ -682,7 +705,7 @@ def connect() -> sqlite3.Connection:
                 and pretable_backup is None
             ):
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, "prerelatesonce", locate=backup_location
+                    conn, "prerelatesonce", locate=locate
                 )
             # Session identity is additive, so it takes its own recovery point
             # only when nothing above took one already for this same open.
@@ -692,7 +715,7 @@ def connect() -> sqlite3.Connection:
                 and _identity_migration_needed(conn)
             ):
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, "preidentity", locate=backup_location
+                    conn, "preidentity", locate=locate
                 )
             # The word index adds tables and triggers and changes no row, so it takes
             # its own recovery point only when nothing above took one for this open.
@@ -702,7 +725,7 @@ def connect() -> sqlite3.Connection:
                 and planning_words.migration_needed(conn)
             ):
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, "prewords", locate=backup_location
+                    conn, "prewords", locate=locate
                 )
 
             conn.execute("PRAGMA journal_mode=WAL")
@@ -816,3 +839,227 @@ def connect() -> sqlite3.Connection:
             conn.rollback()
             conn.close()
             raise
+
+
+# -- the work-model migration ----------------------------------------------------
+
+#: The label of the recovery point `migrate_work_model` takes before its first write.
+WORK_MODEL_LABEL = "pre3.0"
+_ALREADY = "the work-model migration has already run"
+
+
+def store_generation(path: str) -> str:
+    """`current` for a store of this build, `2.9` for one Valkama 2.9 left.
+
+    Any other store is refused as `refuse_another_generation` refuses it, and a file
+    that holds no table as a store older than 2.9 would be: none of them is one the
+    work-model migration carries. Read through a read-only connection, so a refused
+    store is left as it was.
+    """
+
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"there is no store at {path}")
+    probe = sqlite3.connect(_uri(path, "ro"), uri=True)
+    try:
+        try:
+            refuse_another_generation(probe)
+        except WorkModelMigrationRequiredError:
+            return "2.9"
+        stored = int(probe.execute("PRAGMA user_version").fetchone()[0])
+        if stored != STORE_SCHEMA_VERSION:
+            raise StoreTooOldError(stored)
+        return "current"
+    finally:
+        probe.close()
+
+
+def copy_store(source: str, directory: str) -> str:
+    """A copy of the store at `source` in `directory`, with its pictures beside it.
+
+    `VACUUM INTO` through a read-only connection: a store in WAL mode keeps its latest
+    commits in its journal, which a copy of the file alone would miss, and the source
+    is never opened for writing. `directory` must not hold a store already.
+    """
+
+    os.makedirs(directory, exist_ok=True)
+    destination = os.path.join(directory, f"{DATA_PREFIX}.sqlite3")
+    if os.path.exists(destination):
+        raise FileExistsError(f"{destination} already exists")
+    conn = sqlite3.connect(_uri(source, "ro"), uri=True)
+    try:
+        conn.execute("VACUUM INTO ?", (destination,))
+    finally:
+        conn.close()
+    store_backups.copy_pictures(
+        planning_images.directory_beside(source), planning_images.directory_beside(destination)
+    )
+    return destination
+
+
+def _environment(path: str) -> dict[str, Any]:
+    """What the timing of a run depends on: the machine, the SQLite and the store's size."""
+
+    probe = sqlite3.connect(_uri(path, "ro"), uri=True)
+    try:
+        pages = int(probe.execute("PRAGMA page_count").fetchone()[0])
+        page_size = int(probe.execute("PRAGMA page_size").fetchone()[0])
+    finally:
+        probe.close()
+    memory = sqlite3.connect(":memory:")
+    try:
+        memory.execute("CREATE VIRTUAL TABLE probe USING fts5(text)")
+        fts5 = True
+    except sqlite3.OperationalError:
+        fts5 = False
+    finally:
+        memory.close()
+    journal = path + "-wal"
+    return {
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+        "cpus": os.cpu_count(),
+        "python": sys.version.split()[0],
+        "sqlite": sqlite3.sqlite_version,
+        "fts5": fts5,
+        "pages": pages,
+        "page_size": page_size,
+        "store_bytes": os.path.getsize(path),
+        "journal_bytes": os.path.getsize(journal) if os.path.exists(journal) else 0,
+    }
+
+
+@contextlib.contextmanager
+def _fresh_store() -> Iterator[sqlite3.Connection]:
+    """A store as this build creates one, in a directory of its own that goes after it."""
+
+    with tempfile.TemporaryDirectory(prefix="valkama-fresh-", ignore_cleanup_errors=True) as tmp:
+        conn = connect(os.path.join(tmp, f"{DATA_PREFIX}.sqlite3"))
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+
+def _recovery_point_holds(
+    conn: sqlite3.Connection, context: store_steps.Context
+) -> Mapping[str, Any]:
+    """`recovery-point`: the recovery point holds the store exactly as the migration found it.
+
+    Its logical identity is the source's, read when it was taken and again inside the
+    migration's transaction before the first write, and every picture is beside it.
+    Restoring it is copying it into the store's place, as `README.md` describes.
+    """
+
+    del conn
+    held = store_backups.snapshot_identity(context.recovery_point)
+    if held != context.source_identity:
+        raise store_steps.UnmetError("the recovery point does not hold the source store")
+    if context.identity_before != context.source_identity:
+        raise store_steps.UnmetError(
+            "the store changed between its recovery point and the migration"
+        )
+    try:
+        store_backups.verify_pictures(context.recovery_point, context.images)
+    except RuntimeError as error:
+        raise store_steps.UnmetError(str(error)) from error
+    return {"recovery_point": context.recovery_point, "identity": held}
+
+
+RECOVERY_POINT = store_steps.Postcondition(
+    "recovery-point", "the recovery point holds the store as it was", _recovery_point_holds
+)
+
+
+def migrate_work_model(path: str | None = None) -> dict[str, Any]:
+    """Carry a store Valkama 2.9 left to the work model, once, and report the run.
+
+    The only way a store at Valkama 2.9's schema reaches this build: `connect()`
+    refuses one with `WorkModelMigrationRequiredError`, which names this. A store of
+    this build is left alone and reported `current`; any other is refused as
+    `store_generation` refuses it, untouched.
+
+    Under the store's migration lock a verified recovery point labelled
+    `WORK_MODEL_LABEL` is taken first, with the pictures beside it. Then, with
+    foreign keys off -- set before the transaction, since SQLite ignores the pragma
+    inside one -- the steps of `planning.work_model_migration` run in one
+    transaction, the schema is stamped and every postcondition is checked; a failed
+    step or postcondition rolls all of it back and raises `store_steps.RunFailedError`
+    carrying the report. After the commit the word index is brought current.
+
+    Every phase is timed in the report, which also says what the run ran on.
+    """
+
+    path = os.path.abspath(path or db_path())
+    report = store_steps.new_report("work-model")
+    report.update(store=path, schema={"from": STORE_SCHEMA_VERSION, "to": STORE_SCHEMA_VERSION})
+    with store_steps.phase(report, "total"):
+        try:
+            _migrate_work_model(path, report)
+        except store_steps.RunFailedError:
+            report["status"] = "failed"
+            raise
+    return report
+
+
+def _migrate_work_model(path: str, report: dict[str, Any]) -> None:
+    if store_generation(path) == "current":
+        report.update(status="current", message=_ALREADY)
+        return
+    report["schema"]["from"] = RELEASE_2_9_SCHEMA_VERSION
+    report["environment"] = _environment(path)
+    with store_lock.migration_lock(path):
+        # Again under the lock: another process may have run it meanwhile.
+        if store_generation(path) == "current":
+            report.update(status="current", message=_ALREADY)
+            return
+        conn = sqlite3.connect(path, timeout=5)
+        conn.row_factory = sqlite3.Row
+        try:
+            timings: dict[str, float] = {}
+            with store_steps.phase(report, "recovery_point"):
+                recovery_point, source_identity = store_backups.verified_snapshot(
+                    conn,
+                    WORK_MODEL_LABEL,
+                    locate=lambda: backup_location(path),
+                    timings=timings,
+                )
+            report["phases"] += [
+                {"name": f"recovery_point.{name}", "seconds": seconds}
+                for name, seconds in timings.items()
+            ]
+            report["recovery_point"] = recovery_point
+            conn.execute("PRAGMA foreign_keys=OFF")
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                with store_steps.phase(report, "identity_in_transaction"):
+                    before = store_backups.logical_identity(conn)
+                context = store_steps.Context(
+                    now=datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    recovery_point=recovery_point,
+                    source_identity=source_identity,
+                    identity_before=before,
+                    images=backup_location(path).images,
+                    reference=_fresh_store,
+                )
+                store_steps.run(
+                    conn,
+                    steps=work_model_migration.STEPS,
+                    postconditions=(*work_model_migration.POSTCONDITIONS, RECOVERY_POINT),
+                    context=context,
+                    report=report,
+                    schema=STORE_SCHEMA_VERSION,
+                )
+                with store_steps.phase(report, "commit"):
+                    conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+            conn.execute("PRAGMA foreign_keys=ON")
+            with store_steps.phase(report, "bring_current"):
+                conn.execute("BEGIN IMMEDIATE")
+                planning_words.bring_current(conn)
+                conn.commit()
+        finally:
+            conn.close()
+    report["status"] = "migrated"

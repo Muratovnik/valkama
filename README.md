@@ -582,13 +582,41 @@ Graph; its chip leaves it in every view.
 
 ### Migrating an older store
 
-This build opens only a store that Valkama 2.9 left: schema 17 with its word
-index. An older store, or one at 17 without the index, is refused with "open it
-with Valkama 2.9 first" and left exactly as it was, with no snapshot and no write.
-Open it with Valkama 2.9 once, which carries a store of any earlier schema forward
-under its own snapshots as that release describes, and then come back. The
-paragraphs below describe the snapshots those upgrades took and how to go back
-from them.
+This build opens only a store at its own schema, 18, and migrates none as it opens
+it. A store Valkama 2.9 left -- schema 17 with its word index -- is refused with
+"run `valkama migrate work-model` once" and left as it was. An older store, or one
+at 17 without the index, is refused with "open it with Valkama 2.9 first" and left
+exactly as it was, with no snapshot and no write. Open it with Valkama 2.9 once,
+which carries a store of any earlier schema forward under its own snapshots as that
+release describes, and then come back.
+
+To carry a 2.9 store to the work model, stop every process that holds the store --
+the listener and every agent client, since each one runs its own server -- and run:
+
+```powershell
+valkama migrate work-model
+```
+
+It migrates the configured store (`store` or `VALKAMA_DB`). Before its first write
+it takes a verified snapshot labelled `pre3.0` in `backups/` beside the store, with
+the pictures in a `.images` folder beside it, and then runs every step and checks
+every postcondition in one transaction: a step that fails or a postcondition that
+does not hold rolls all of it back and leaves the store at 17. The command prints a
+JSON report with the time and result of each step and postcondition and of the
+snapshot, and exits 1 when the run failed, naming what failed. A second run finds
+the store current and changes nothing.
+
+`--dry-run` migrates a copy instead and only reads the store: `--into <directory>`
+keeps the copy and its snapshot there, and without it the copy goes when the run
+ends. To go back to Valkama 2.9 after the migration, stop every process that holds
+the store, delete the `-wal` and `-shm` files beside it, put the `pre3.0` snapshot in
+place of the database and its `.images` folder in place of `images`, as described
+below, and only then pin the 2.9 release with `launcher install --revision
+<commit>`; everything written since the migration is lost. A 2.9 build refuses a
+store at 18.
+
+The paragraphs below describe the snapshots the earlier upgrades took and how to go
+back from them.
 
 Every snapshot taken from schema 14 on carries the pictures as well: a folder
 with the snapshot's name and `.images` after it stands beside the snapshot file,

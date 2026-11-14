@@ -152,9 +152,10 @@ only the standard library until a connection needs the server.
 path, and the order a store is brought up in, read top to bottom in `connect()`.
 The mechanics each step needs sit beside it: `store_adoption` moves a directory
 an earlier generation wrote, `store_backups` makes and verifies the recovery
-point, `store_lock` serializes the processes doing any of it, and `store_rename`
-carries a store off the former product name. Those four take what they need as
-arguments, because a second answer to "where is the store" is the failure the
+point, `store_lock` serializes the processes doing any of it, `store_rename` carries a
+store off the former product name, and `store_steps` runs a migration as named
+steps and postconditions in one transaction and reports each with its time. Those
+five take what they need as arguments, because a second answer to "where is the store" is the failure the
 one configuration resolution exists to end.
 
 Planning is the domain the Board era left behind, and it lives in `planning/`:
@@ -201,10 +202,12 @@ contains no checkout path. That command runs a pinned release — one commit
 copied out of the checkout — so edits here reach client sessions and the live
 store only at the next `launcher install`, and then at once: every running
 session that has a stdio front switches to the new release within seconds.
-Installing a commit that raises the store schema therefore migrates the live
-store through the first session that switches, or, with none running, when the
-next session opens it: treat that install as the migration and give it the
-same backup and rollback. Only the
+No session migrates the store as it opens it: a build refuses a store at any
+schema but its own. Installing a commit that raises the store schema therefore
+stops every session at its next open of the store, and a store Valkama 2.9 left
+needs `valkama migrate work-model` once, run with every session stopped; it takes
+the verified recovery point `pre3.0` first. Treat that install and that command as
+one migration and give them the same backup and rollback. Only the
 managed launcher shim records the current release entry point and interpreter.
 The desktop installer and tray may keep their
 own service-owned install records. Moving the repository therefore requires one
@@ -234,12 +237,13 @@ under `~/.valkama/adapters/` held to `platform/adapter_contract.py`: a manifest
 of exactly four fields and a transport the owner supplies. Schema 9 dropped the
 registry's tables, the module rows (`platform_modules`) with their audit
 (`platform_registry_audit`), and `integration_settings`; a fresh store never
-has them, and the postconditions refuse a store at 9 that does. Their DDL lives
-on, frozen as schema 8 declared it, in `platform/migrations.py`, for one reason:
-a store older than 9 is given that catalog before the historical migrations
-(validators in `platform/legacy_records.py`, the rename carry-over) run, and
-the last step of the same bring-up drops it again. Do not declare those tables
-anywhere else, and do not add a reader.
+has them. A store older than the one Valkama 2.9 leaves is refused with "open it
+with Valkama 2.9 first" and left as it was: 2.9 carries a store of any earlier
+schema to its own, and this build brings up no older one. Their DDL still sits,
+frozen as schema 8 declared it, in `platform/migrations.py` beside the historical
+migrations (validators in `platform/legacy_records.py`, the rename carry-over),
+which no store this build opens reaches. Do not declare those tables anywhere
+else, and do not add a reader.
 
 The product has now been renamed twice — Kanban, then Agent Hub, then this —
 and the lesson of the second one is written into the gates here: it renamed the

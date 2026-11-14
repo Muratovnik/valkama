@@ -13,6 +13,8 @@
   released --space --repo --range
                            open work items whose commits a release range took in
   scopes | attach | detach attachable database files, federated at read time
+  migrate work-model       carry a store Valkama 2.9 left to the work model, once
+                           (--dry-run migrates a copy, --into keeps it)
 
 This is the one module allowed to import more than one surface: choosing
 between them is exactly what it is for.
@@ -26,6 +28,8 @@ import json
 import os
 import sqlite3
 import sys
+import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +41,7 @@ from . import (
     released,
     static_assets,
     store,
+    store_steps,
     transcripts,
 )
 from .federation import federated_spaces
@@ -98,6 +103,49 @@ def summary_main(space: str | None) -> None:
         print(f"- held: {listed}")
 
 
+def migrate_main(target: str, *, dry_run: bool = False, into: str | None = None) -> None:
+    """Run the one named migration and print its report as JSON.
+
+    The permission is this command and nothing else: `connect()` refuses a store
+    Valkama 2.9 left, and no environment value or setting a spawned session could
+    inherit lets it through. A dry run copies the store with `VACUUM INTO` and
+    migrates the copy, in `into` when it is named and kept there, or in a directory
+    that goes when the run ends; the store itself is only read. A run that fails
+    prints its report too, naming the step or the postconditions, and exits 1.
+    """
+
+    if target != "work-model":
+        raise SystemExit(f"unknown migration target {target!r}")
+    source = db_path()
+    try:
+        if not dry_run:
+            _print_report(store.migrate_work_model(source))
+            return
+        if store.store_generation(source) == "current":
+            _print_report(store.migrate_work_model(source))
+            return
+        with contextlib.ExitStack() as stack:
+            directory = into or stack.enter_context(
+                tempfile.TemporaryDirectory(prefix="valkama-trial-", ignore_cleanup_errors=True)
+            )
+            started = time.perf_counter()
+            copy = store.copy_store(source, directory)
+            copied = round(time.perf_counter() - started, 6)
+            report = store.migrate_work_model(copy)
+            report["phases"].insert(0, {"name": "copy", "seconds": copied})
+            report.update(dry_run=True, source=os.path.abspath(source), kept=into is not None)
+            _print_report(report)
+    except store_steps.RunFailedError as failed:
+        _print_report(failed.report)
+        raise SystemExit(1) from failed
+    except (OSError, RuntimeError) as error:
+        raise SystemExit(str(error)) from error
+
+
+def _print_report(report: dict[str, Any]) -> None:
+    print(json.dumps(report, ensure_ascii=False, indent=1))
+
+
 def runtime_main() -> None:
     """Print the canonical identity a new server process would expose."""
 
@@ -147,6 +195,7 @@ def capabilities_main() -> None:
             "doctor",
             "adapter",
             "export",
+            "migrate",
             "scopes",
             "attach",
             "detach",
@@ -718,6 +767,20 @@ def main(argv: list[str] | None = None) -> None:
         metavar="PATH",
         help="write the export to this file, replacing it whole, and print a summary",
     )
+    migrate_cmd = commands.add_parser(
+        "migrate", help="run one named forward-only data migration, once"
+    )
+    migrate_cmd.add_argument("target", choices=("work-model",))
+    migrate_cmd.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="migrate a copy and report what would change; the store is only read",
+    )
+    migrate_cmd.add_argument(
+        "--into",
+        metavar="DIRECTORY",
+        help="with --dry-run, make the copy in this directory and keep it there",
+    )
     transcripts_cmd = commands.add_parser("transcripts", help="act on the transcript archive")
     transcripts_sub = transcripts_cmd.add_subparsers(dest="transcripts_command", required=True)
     purge_cmd = transcripts_sub.add_parser(
@@ -821,6 +884,10 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit(1)
     elif options.command == "adapter":
         _adapter_command(options)
+    elif options.command == "migrate":
+        if options.into and not options.dry_run:
+            parser.error("--into names where a dry run makes its copy; add --dry-run")
+        migrate_main(options.target, dry_run=options.dry_run, into=options.into)
     elif options.command == "summary":
         summary_main(options.space)
     elif options.command == "released":

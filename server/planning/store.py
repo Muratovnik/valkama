@@ -91,11 +91,73 @@ STATE_FITS_KIND_TRIGGERS = {
     "work_items_state_fits_kind_insert": "INSERT",
     "work_items_state_fits_kind_update": "UPDATE OF state_id, kind",
 }
-_STATE_FITS_KIND = "".join(
+#: Each trigger's statement: the base schema runs them, and so does the migration
+#: that carries an older store, once every item there stands where its kind may.
+STATE_FITS_KIND = tuple(
     f"CREATE TRIGGER IF NOT EXISTS {name} BEFORE {event} ON work_items"
-    f" BEGIN{_STATE_FITS_KIND_RULES}END;\n"
+    f" BEGIN{_STATE_FITS_KIND_RULES}END"
     for name, event in STATE_FITS_KIND_TRIGGERS.items()
 )
+_STATE_FITS_KIND = "".join(f"{statement};\n" for statement in STATE_FITS_KIND)
+
+_ACCEPTANCE_SQL = ",".join(f"'{basis}'" for basis in model.ACCEPTANCE_BASES)
+
+#: The two tables the work-model migration rebuilds, as their column lists: a fresh
+#: store creates them from the same text the migration rebuilds them from, so the
+#: two shapes cannot drift apart. `table_definition` names one.
+_WORKFLOW_STATES = f"""(
+    state_id TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL REFERENCES workflows(workflow_id) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL CHECK(category IN ({_CATEGORY_SQL})),
+    position INTEGER NOT NULL,
+    is_terminal INTEGER NOT NULL DEFAULT 0 CHECK(is_terminal IN (0,1)),
+    UNIQUE(workflow_id, key),
+    UNIQUE(workflow_id, position)
+)"""
+_WORK_ITEMS = f"""(
+    work_item_id TEXT PRIMARY KEY,
+    planning_space_id TEXT NOT NULL
+        REFERENCES planning_spaces(planning_space_id) ON DELETE CASCADE,
+    number INTEGER NOT NULL CHECK(number >= 1),
+    workflow_id TEXT NOT NULL REFERENCES workflows(workflow_id),
+    state_id TEXT NOT NULL REFERENCES workflow_states(state_id),
+    kind TEXT NOT NULL DEFAULT 'task' CHECK(kind IN ({_KIND_SQL})),
+    parent_id TEXT REFERENCES work_items(work_item_id),
+    priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ({_PRIORITY_SQL})),
+    claim_ref TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    summary TEXT NOT NULL DEFAULT '',
+    summary_comment_id INTEGER REFERENCES work_item_comments(id) ON DELETE SET NULL,
+    labels TEXT NOT NULL DEFAULT '[]',
+    source TEXT NOT NULL DEFAULT '',
+    checklist TEXT NOT NULL DEFAULT '[]',
+    position REAL NOT NULL,
+    revision INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT {_NOW},
+    updated_at TEXT NOT NULL DEFAULT {_NOW},
+    -- The write call that took the current claim: its session, agent, time and
+    -- whether that identity was confirmed are read from that row, so they are
+    -- never a second copy here. NULL for a claim recorded before identity
+    -- existed, and for one an older build wrote; see `migrate_identity`.
+    claim_call_id INTEGER REFERENCES execution_events(id),
+    -- Why the item was accepted (`model.ACCEPTANCE_BASES`) and when; both null
+    -- until it is. When work on it first started: set once, never cleared, and
+    -- never on a container, whose start is read from the work under it.
+    acceptance TEXT CHECK(acceptance IS NULL OR acceptance IN ({_ACCEPTANCE_SQL})),
+    accepted_at TEXT,
+    started_at TEXT,
+    UNIQUE(planning_space_id, number)
+)"""
+_REBUILT = {"workflow_states": _WORKFLOW_STATES, "work_items": _WORK_ITEMS}
+
+
+def table_definition(table: str, name: str) -> str:
+    """The `CREATE TABLE` of one rebuilt table under `name`, as a fresh store holds it."""
+
+    return f"CREATE TABLE {name}{_REBUILT[table]}"
 
 
 SCHEMA = f"""
@@ -120,60 +182,14 @@ CREATE TABLE IF NOT EXISTS workflows(
     updated_at TEXT NOT NULL DEFAULT {_NOW},
     UNIQUE(planning_space_id, name)
 );
-CREATE TABLE IF NOT EXISTS workflow_states(
-    state_id TEXT PRIMARY KEY,
-    workflow_id TEXT NOT NULL REFERENCES workflows(workflow_id) ON DELETE CASCADE,
-    key TEXT NOT NULL,
-    name TEXT NOT NULL,
-    category TEXT NOT NULL CHECK(category IN ({_CATEGORY_SQL})),
-    position INTEGER NOT NULL,
-    is_terminal INTEGER NOT NULL DEFAULT 0 CHECK(is_terminal IN (0,1)),
-    UNIQUE(workflow_id, key),
-    UNIQUE(workflow_id, position)
-);
+CREATE TABLE IF NOT EXISTS workflow_states{_WORKFLOW_STATES};
 CREATE TABLE IF NOT EXISTS workflow_transitions(
     workflow_id TEXT NOT NULL REFERENCES workflows(workflow_id) ON DELETE CASCADE,
     from_state_id TEXT NOT NULL REFERENCES workflow_states(state_id) ON DELETE CASCADE,
     to_state_id TEXT NOT NULL REFERENCES workflow_states(state_id) ON DELETE CASCADE,
     PRIMARY KEY(workflow_id, from_state_id, to_state_id)
 );
-CREATE TABLE IF NOT EXISTS work_items(
-    work_item_id TEXT PRIMARY KEY,
-    planning_space_id TEXT NOT NULL
-        REFERENCES planning_spaces(planning_space_id) ON DELETE CASCADE,
-    number INTEGER NOT NULL CHECK(number >= 1),
-    workflow_id TEXT NOT NULL REFERENCES workflows(workflow_id),
-    state_id TEXT NOT NULL REFERENCES workflow_states(state_id),
-    kind TEXT NOT NULL DEFAULT 'task' CHECK(kind IN ({_KIND_SQL})),
-    parent_id TEXT REFERENCES work_items(work_item_id),
-    priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ({_PRIORITY_SQL})),
-    -- Written by nothing and read by nothing: a durable owner distinct from the
-    -- current holder was designed and never built, and `claim_ref` below is the
-    -- only ownership this domain actually has. It stopped being published in the
-    -- payload once that was noticed. The column stays because dropping it would
-    -- change what a row is and so would raise the schema ratchet, refusing every
-    -- older build over a field that was always empty; the next migration with a
-    -- reason of its own can take it.
-    owner_ref TEXT NOT NULL DEFAULT '',
-    claim_ref TEXT NOT NULL DEFAULT '',
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    summary TEXT NOT NULL DEFAULT '',
-    summary_comment_id INTEGER REFERENCES work_item_comments(id) ON DELETE SET NULL,
-    labels TEXT NOT NULL DEFAULT '[]',
-    source TEXT NOT NULL DEFAULT '',
-    checklist TEXT NOT NULL DEFAULT '[]',
-    position REAL NOT NULL,
-    revision INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT {_NOW},
-    updated_at TEXT NOT NULL DEFAULT {_NOW},
-    -- The write call that took the current claim: its session, agent, time and
-    -- whether that identity was confirmed are read from that row, so they are
-    -- never a second copy here. NULL for a claim recorded before identity
-    -- existed, and for one an older build wrote; see `migrate_identity`.
-    claim_call_id INTEGER REFERENCES execution_events(id),
-    UNIQUE(planning_space_id, number)
-);
+CREATE TABLE IF NOT EXISTS work_items{_WORK_ITEMS};
 CREATE INDEX IF NOT EXISTS work_items_state
   ON work_items(planning_space_id, state_id, position);
 {_STATE_FITS_KIND}CREATE INDEX IF NOT EXISTS work_items_parent ON work_items(parent_id);
@@ -337,21 +353,9 @@ def widen_event_actions(conn: sqlite3.Connection) -> None:
     event = conn.execute("SELECT sql FROM sqlite_master WHERE name='work_item_events'").fetchone()
     if event is None or all(f"'{action}'" in event[0] for action in model.EVENT_ACTIONS):
         return
-    definitions = [
-        row[0]
-        for row in conn.execute(
-            "SELECT sql FROM sqlite_master WHERE tbl_name='work_item_events'"
-            " AND type IN ('index','trigger') AND sql IS NOT NULL"
-        )
-    ]
-    sequence = None
-    if "AUTOINCREMENT" in event[0].upper():
-        sequence = conn.execute(
-            "SELECT seq FROM sqlite_sequence WHERE name='work_item_events'"
-        ).fetchone()
     definition = re.sub(
         r'CREATE TABLE(?: IF NOT EXISTS)?\s+"?work_item_events"?',
-        "CREATE TABLE work_item_events_replacement",
+        f"CREATE TABLE work_item_events{REPLACEMENT}",
         event[0],
         count=1,
         flags=re.IGNORECASE,
@@ -365,17 +369,48 @@ def widen_event_actions(conn: sqlite3.Connection) -> None:
     )
     if replaced != 1:
         raise RuntimeError("event migration requires the known action constraint")
+    rebuild_table(conn, "work_item_events", definition, "SELECT * FROM work_item_events")
+
+
+#: What a table being rebuilt is called until it takes its own name.
+REPLACEMENT = "_replacement"
+
+
+def rebuild_table(conn: sqlite3.Connection, table: str, definition: str, rows: str) -> list[str]:
+    """Rebuild one table: create `definition`, fill it from `rows`, put it in its place.
+
+    SQLite cannot change a column or a CHECK in place. `definition` creates the
+    table under its own name with `REPLACEMENT` after it, and `rows` is the SELECT
+    that fills it. The old table goes, the new one takes its name, and every index
+    and trigger that stood on the old one is created again from its stored text in
+    the order the store holds them, so one this module does not know survives too.
+    An AUTOINCREMENT counter keeps its place. Answers the names created again.
+
+    Dropping a table others reference cascades into them while foreign keys are
+    enforced, so a caller rebuilding such a table turns them off first, outside its
+    transaction, where SQLite takes the pragma.
+    """
+
+    stored = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    objects = conn.execute(
+        "SELECT name, sql FROM sqlite_master WHERE tbl_name=?"
+        " AND type IN ('index','trigger') AND sql IS NOT NULL ORDER BY rowid",
+        (table,),
+    ).fetchall()
+    sequence = None
+    if stored is not None and "AUTOINCREMENT" in str(stored[0]).upper():
+        sequence = conn.execute("SELECT seq FROM sqlite_sequence WHERE name=?", (table,)).fetchone()
     conn.execute(definition)
-    conn.execute("INSERT INTO work_item_events_replacement SELECT * FROM work_item_events")
-    conn.execute("DROP TABLE work_item_events")
-    conn.execute("ALTER TABLE work_item_events_replacement RENAME TO work_item_events")
-    for statement in definitions:
-        conn.execute(statement)
+    conn.execute(f"INSERT INTO {table}{REPLACEMENT} {rows}")
+    conn.execute(f"DROP TABLE {table}")
+    conn.execute(f"ALTER TABLE {table}{REPLACEMENT} RENAME TO {table}")
+    for _, statement in objects:
+        conn.execute(str(statement))
     if sequence is not None:
-        conn.execute(
-            "UPDATE sqlite_sequence SET seq=max(seq,?) WHERE name='work_item_events'",
-            (sequence[0],),
-        )
+        conn.execute("UPDATE sqlite_sequence SET seq=max(seq,?) WHERE name=?", (sequence[0], table))
+    return [str(name) for name, _ in objects]
 
 
 #: What a thread may be, refused by the store rather than only by the service:
