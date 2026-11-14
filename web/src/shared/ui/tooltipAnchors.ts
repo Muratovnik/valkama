@@ -222,9 +222,50 @@ const CUTS = new Set(['hidden', 'clip', 'auto', 'scroll'])
 /** How many elements inside a hint's element are looked at: a hint sits on a control. */
 const LOOK_AT = 40
 
+/** The text a box shows or cuts, less the shared copy kept for assistive technology. */
+function shownText(box: HTMLElement): Text[] {
+  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT)
+  const found: Text[] = []
+  for (let node = walker.nextNode(); node && found.length < LOOK_AT; node = walker.nextNode()) {
+    const hidden = node.parentElement?.closest('.visually-hidden')
+    if (node.textContent?.trim() && !(hidden && box.contains(hidden))) found.push(node as Text)
+  }
+  return found
+}
+
+/**
+ * Whether a box that holds more than it shows hides text by it, `across` or down: a line of
+ * its text laid out past the edge it cuts at, its padding box. What it holds past that edge
+ * may be no text at all — a press's hit area standing past its words, as `.chart-press` has
+ * one 12px to each side and 8px over and under — and that is nothing the hint has to say.
+ * Counted, it showed the hint of a table's name that stood whole. The letters of a line stand
+ * a little past a box no taller than its leading, so down only a line a quarter past counts.
+ */
+function hidesText(box: HTMLElement, across: boolean): boolean {
+  const style = getComputedStyle(box)
+  const edges = box.getBoundingClientRect()
+  const inset = (side: 'Left' | 'Right' | 'Top' | 'Bottom') =>
+    Number.parseFloat(style[`border${side}Width`]) || 0
+  const [start, end] = across
+    ? [edges.left + inset('Left'), edges.right - inset('Right')]
+    : [edges.top + inset('Top'), edges.bottom - inset('Bottom')]
+  const range = document.createRange()
+  return shownText(box).some((node) => {
+    range.selectNodeContents(node)
+    return [...range.getClientRects()].some((line) => {
+      const [from, to, size] = across
+        ? [line.left, line.right, line.width]
+        : [line.top, line.bottom, line.height]
+      const slack = across ? 0.5 : Math.max(1, size / 4)
+      return size > 0 && (to > end + slack || from < start - slack)
+    })
+  })
+}
+
 /**
  * Whether the element or something in it shows less text than it holds, across or down.
  * Read at the moment the hint would show, so it answers for the width the box has then.
+ * A box counts while it holds more than it shows and what it hides is text (`hidesText`).
  *
  * The shared copy for assistive technology (`.visually-hidden`) is never shown, so it is
  * never cut: counted, it held up the hint of every element that keeps one, as a mark whose
@@ -236,9 +277,10 @@ export function textIsClipped(element: HTMLElement): boolean {
   return boxes.some((box) => {
     if (!box.textContent?.trim() || box.classList.contains('visually-hidden')) return false
     const style = getComputedStyle(box)
-    const across = CUTS.has(style.overflowX) && box.scrollWidth > box.clientWidth
-    // A line's box can be a pixel shorter than its letters; only a cut line counts.
-    const down = CUTS.has(style.overflowY) && box.scrollHeight > box.clientHeight + 1
+    const across =
+      CUTS.has(style.overflowX) && box.scrollWidth > box.clientWidth && hidesText(box, true)
+    const down =
+      CUTS.has(style.overflowY) && box.scrollHeight > box.clientHeight + 1 && hidesText(box, false)
     return across || down
   })
 }

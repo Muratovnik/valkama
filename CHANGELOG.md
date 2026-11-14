@@ -160,6 +160,13 @@ checkouts are therefore distinguishable even at the same version.
   separator and the second part stand whole. The name used to be cut from its end, so two pairs
   of one model read alike, «claude-opus-5-5 · …», in the bars of a 1440px window. The hint still
   says the whole pair.
+- **Analytics names read whole to a screen reader, end in an ellipsis and hint only when cut.**
+  A pair's bar, small chart and legend entry in a split section are still named by what pressing
+  them does, «Show the tasks of claude-opus-5-5», and are now described by the whole pair before
+  their figures, so the high and the medium row of one model no longer sound alike. A long single
+  name in a section table's button now ends in «…» where it is cut, where it used to stop at the
+  button's edge mid-word. And a table name's hint now shows only when the name is really cut: the
+  press's hit area standing past the name counted as a cut and raised the hint over whole names.
 - **Fewer batch calls fail in the client before they reach Valkama.** Claude Code refused
   `apply_work_item_changes` and `set_work_item_summary` calls as input that "could not be
   parsed as JSON" when an agent wrote `comment`, `summary` or `transition` as bare text,

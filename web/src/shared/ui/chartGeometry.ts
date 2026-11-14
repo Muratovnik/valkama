@@ -37,11 +37,25 @@ export interface MarkAction {
   /** Whether pressing the mark opens what it names. */
   actionable?: boolean
   /**
+   * Whether `action` names a part of the label only, as a pair acts as its first value: the mark
+   * is then described by its whole label before its figures. Two pairs of one value share one
+   * action, and described by their figures alone the screen reader told them apart by nothing.
+   */
+  actsOnPart?: boolean
+  /**
    * Where the mark leads, on this origin: the mark is then a link, which a press hands out as
    * `follow` and a modified or middle press takes elsewhere as any link is taken.
    */
   href?: string
 }
+
+/**
+ * The id of a part of a mark, its words or its figure, that names or describes it: under the
+ * chart's own id, by the mark's key with no white space in it, since a key is a value's id as the
+ * read gives it and `aria-describedby` splits its list at white space.
+ */
+export const markPartId = (chart: string, key: string, part: string) =>
+  `${chart}-${encodeURIComponent(key)}-${part}`
 
 /** The type of the element `markTag` draws: a button's, where the mark is not a link. */
 export const markType = (mark: MarkAction) => (mark.href ? undefined : 'button')

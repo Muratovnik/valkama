@@ -10,7 +10,8 @@
  * Presentational: rows and words come in, a press on a row that opens something goes out as
  * `select` with the row's key, and a press on a row that leads somewhere (`href`) as `follow`
  * with the press, for the host to open it in place or leave it to the browser. A row that acts
- * is named by what it does (`action`) or by its label, and its value describes it. A row is a
+ * is named by what it does (`action`) or by its label, and its value describes it, after its whole
+ * label where the action names a part of it, as a pair's names its first value. A row is a
  * mark of its chart: its hint, under the pointer or the keyboard, says what it does not print —
  * its share of the whole where the caller says how a share reads (`formatShare`), and what the
  * label leaves out (`detail`). A row's name takes one line, ends in an ellipsis where it is cut
@@ -24,7 +25,7 @@
 import { computed, useId } from 'vue'
 
 import type { PlacedRow, RankedRow, RankedWords } from '@/shared/ui/chartGeometry.ts'
-import { markTag, rankRows } from '@/shared/ui/chartGeometry.ts'
+import { markPartId, markTag, rankRows } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { namedHint } from '@/shared/ui/markHints.ts'
 import PairName from '@/shared/ui/PairName.vue'
@@ -68,16 +69,22 @@ const groups = computed(() =>
 
 const ids = useId()
 /** The id of a row's value, which describes the row where the row is a control. */
-const valueId = (row: PlacedRow) => `${ids}-${row.key}`
+const valueId = (row: PlacedRow) => markPartId(ids, row.key, 'value')
+/** The id of a row's name, which describes the row too where its action says a part of it. */
+const labelId = (row: PlacedRow) => markPartId(ids, row.key, 'label')
 
-/** A row that acts is named by what it does, or by its name, and described by its value. */
+/**
+ * A row that acts is named by what it does, or by its name, and described by its value; one
+ * whose action names a part of its name (`actsOnPart`) by its whole name before its value.
+ */
 function lineAttrs(row: PlacedRow) {
   if (!row.href && !row.actionable) return {}
+  const describedBy = row.action && row.actsOnPart ? [labelId(row), valueId(row)] : [valueId(row)]
   return {
     'href': row.href,
     'type': row.href ? undefined : 'button',
     'aria-label': row.action ?? row.label,
-    'aria-describedby': valueId(row),
+    'aria-describedby': describedBy.join(' '),
   }
 }
 
@@ -135,6 +142,7 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
             @auxclick="(event: MouseEvent) => pressAside(row, event)"
           >
             <span
+              :id="labelId(row)"
               class="ranked-label one-line"
               :class="{ 'ranked-quiet': row.quiet }"
               ><PairName

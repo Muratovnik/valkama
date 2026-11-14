@@ -80,14 +80,15 @@ function narrowTo() {
       <button
         v-else-if="narrows"
         type="button"
-        class="chart-press"
+        class="chart-press narrow-press"
         :aria-description="narrowDescription"
         @click="narrowTo"
       >
-        <PairName
-          :name="line.name"
-          :end="line.nameEnd"
-        />
+        <span class="press-words one-line"
+          ><PairName
+            :name="line.name"
+            :end="line.nameEnd"
+        /></span>
       </button>
       <PairName
         v-else
@@ -120,6 +121,20 @@ function narrowTo() {
     display: inline;
     max-inline-size: 100%;
     scroll-margin-block: var(--stuck-head, 0) var(--stuck-foot, 0);
+  }
+
+  /* A button is laid out as one box, whatever its display says, so the line's ellipsis does not
+     reach the words inside it: a long name in it was cut at the button's edge with none. The
+     words keep the line's rule inside the button, and the button keeps its box, its ring and
+     the hit area that stands past it, which a cut on the button itself would clip. A box that
+     cuts has no baseline to give the line, so the button stands on the line's top rather than
+     raising the line by the depth under its letters. */
+  & .narrow-press {
+    vertical-align: top;
+  }
+
+  & .press-words {
+    display: block;
   }
 
   & .chart-detail {
