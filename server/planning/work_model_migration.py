@@ -9,7 +9,9 @@ otherwise cascade into them:
 - **oracle** reads, before any write, what every later check compares against: the
   rows of every table, each item's kind, place, acceptance and start as the rules
   below give them, who last held each closed item, what each accepted open
-  container derives, and the indexes and triggers of the two rebuilt tables.
+  container derives, and the indexes and triggers of `workflow_states` and
+  `work_items`, which `states` and `items` rebuild. `items` rebuilds the events
+  table and `sessions` as well; `fresh-shape` holds every table to a fresh store.
 - **states** gives every workflow the eight categories: `backlog` becomes `triage` and
   `queued` becomes `ready`, a default key and name follow, a Deferred state comes
   right after triage and a service state last, each reachable from and to every
