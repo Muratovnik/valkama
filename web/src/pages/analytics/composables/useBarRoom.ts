@@ -14,6 +14,11 @@
  * tell the bar's new height in that frame rather than report a loop.
  *
  * The last part on the line stands at its end; the line runs past it when that part does.
+ *
+ * News the line may come to say — a refresh that failed — is held while it is fitted (`holding`):
+ * drawn by nobody, it takes its room, so the line gives up for it what it would give up once it is
+ * said. When it is said, it takes only the room the line left (the filters' chips), and nothing else
+ * on the line moves.
  */
 import type { Ref, WatchSource } from 'vue'
 import { computed, nextTick, ref, watch } from 'vue'
@@ -22,11 +27,11 @@ import { useResizeObserver } from '@vueuse/core'
 
 /**
  * A part the bar's line can give up: the words a short bar drops from its buttons, the room
- * between its parts down to a narrow gap, the word around the age («ago»), the failure's words,
- * each of which a screen reader still hears, or the whole of a span's name, cut at its end with
- * its hint saying it whole.
+ * between its parts down to a narrow gap, the word around the age («ago»), each of which a screen
+ * reader still hears, a failure's own retry, which the bar's read again beside it stands for, or
+ * the whole of a span's name, cut at its end with its hint saying it whole.
  */
-export type BarPart = 'ago' | 'failure' | 'gaps' | 'span' | 'words'
+export type BarPart = 'ago' | 'gaps' | 'retry' | 'span' | 'words'
 
 export function useBarRoom(options: {
   /** What else changes what the line holds, read again once it has been drawn. */
@@ -41,18 +46,23 @@ export function useBarRoom(options: {
   narrow: () => boolean
   /** The order the parts give way in. */
   order: () => readonly BarPart[]
+  /** Whether words that may wrap on the line, short of room, took a second line to stand in. */
+  wrapped?: () => boolean
 }) {
   /** How many parts of `order` are given up. */
   const given = ref(0)
   const yielded = computed(() => new Set(options.order().slice(0, given.value)))
   /** Whether the line gave itself up for two rows. */
   const rows = ref(false)
+  /** Whether the line is being fitted, the news it may come to say holding its room. */
+  const holding = ref(false)
 
   function overruns() {
     const end = options.line.value?.getBoundingClientRect().right
     const last = options.last()?.getBoundingClientRect().right
     // Half a pixel either way is rounding, not a part drawn past the end.
-    return end !== undefined && last !== undefined && last > end + 0.5
+    const past = end !== undefined && last !== undefined && last > end + 0.5
+    return past || (options.wrapped?.() ?? false)
   }
 
   /** The newest fit asked for; an older one still under way stops when it sees a newer. */
@@ -76,7 +86,9 @@ export function useBarRoom(options: {
   /** Fits the line on one row while that can hold it, and on two once it cannot. */
   async function fit() {
     const run = (asked += 1)
+    holding.value = true
     if (options.narrow() || (await giveWay(run, false))) await giveWay(run, true)
+    if (run === asked) holding.value = false
   }
 
   for (const box of options.observed) useResizeObserver(box, () => void fit())
@@ -87,5 +99,7 @@ export function useBarRoom(options: {
     gave: (part: BarPart) => yielded.value.has(part),
     /** Whether the bar is two rows: a narrow one, or a line that gave itself up, its last part. */
     rows: computed(() => rows.value),
+    /** Whether the line is being fitted: the news it may come to say takes its room, unseen. */
+    holding: computed(() => holding.value),
   }
 }

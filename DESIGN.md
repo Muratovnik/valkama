@@ -2250,7 +2250,10 @@ kept an inset of its own, which put four left edges within 20px — the chosen e
 heading, the entry's words and the bar's period switch — and the one entry drawn as a box
 stood out past the bar over it. The rail is as wide as its entries need, within a range rather
 than at a constant, and keeps its scrollbar's room whether it scrolls or not: at a constant
-240px an entry's words had 182px, and «Способ запуска» was cut to «Способ запу…».
+240px an entry's words had 182px, and «Способ запуска» was cut to «Способ запу…». The panel
+keeps its scrollbar's room too, out of its end inset, so what it holds ends on the bar's edge
+whether it scrolls or not; with the room taken only while it scrolled, a section ended 10px
+short of the bar.
 
 The bar holds what every part reads by: the period, the filters, how fresh the data is and the
 refresh. A period is «Now», «Today», this week, the past four weeks or a span of the reader's
@@ -2260,26 +2263,38 @@ yesterday; both read again every 30 seconds while the tab is visible, a hidden t
 nothing, and a refresh shows its answer whole or not at all, so the scroll, the section, the
 sort and the place under the pointer stay. Freshness is one element of constant width: a live
 mark and the newest record's age in tabular figures, «● 15 s ago», with the whole sentence in
-its hint — the record's time and, for a live period, how often it reads again. Said twice, as
+its hint — the record's time and, for a live period, how often it reads again. The mark says a
+live period only while its reads stand: after a read that failed it is not drawn, its room kept,
+since a green mark with no age beside a panel saying the read failed claimed a liveness the page
+did not have. Said twice, as
 «every 30 s» and «Last record 14:17 · 15 s ago», it held 21em of the bar, and the air after
 the first part still changed as the record aged. A line short of room gives up its buttons'
 words, then the air between its parts, then the word around the age, «● 15 s», in the room of
-the widest span, and never a day of the reader's own period, whose fields are as wide as a date of
+the widest span, then a failed refresh's retry, the refresh beside it asking the same, and never
+a failure's words or a day of the reader's own period, whose fields are as wide as a date of
 the widest figures needs: beside a span of days in Russian the line ran «Refresh» 92px past the
 bar's end at 1200px. The last thing a line gives up is itself: one that still runs past its end
-becomes the two rows below, with its words back and a failed refresh said in full on the second
-row, and a bar with room for one line keeps one line. Beside a span of days with a failure, in
-Russian, the line needed a 1300px window; at 1108px «Refresh» ran 188px past the bar's end, and
-pressing it scrolled the bar sideways. There, choosing such a span moves the panel down by the
-second row: one line wherever it fits was chosen over a bar of one height for every period.
+becomes the two rows below, with its words back, and a bar with room for one line keeps one line.
+The line is fitted as if a refresh had failed, so a failure said takes only the room the
+filters' chips had, the way to add a filter standing before them: it moves neither the bar's
+height nor any of its controls. Fitted for the bar as it stood, a failure moved «Add filter»
+260px and the age as far, gave up the failure's own words beside a span of days at 1440px, and
+turned a line of 1280px into two rows that moved the panel. Beside a span of days, in Russian,
+the line needs a 1360px window; at 1108px «Refresh» ran 188px past the bar's end, and pressing it
+scrolled the bar sideways. There, choosing such a span moves the panel down by the second row:
+one line wherever it fits was chosen over a bar of one height for every period.
 Below a bar 50rem wide, a window under about 1107px beside the expanded navigation, the bar is
 two rows of one height whatever period is chosen: the periods and the filters, then the ends of
 the reader's own period at the start of the second row and the
 freshness with the refresh at its end. One row cannot hold them there: at 1024px the line is
 about 712px, and the periods and two date fields alone take 693px of it in Russian. Standing
 beside the periods, the ends pushed the filters and then the freshness onto a third row, and the
-panel moved down 44px when a span of days was chosen. A refresh that fails keeps what is shown and
-says so in the bar, «Could not refresh» with a retry. Reading another period or filter dims
+panel moved down 44px when a span of days was chosen. On a phone the bar is three rows of one
+height whatever period is chosen: the periods, scrolling sideways, with the freshness at their
+end; the filter, a failure and the refresh; and the room of the reader's own days, which took a
+row of their own and moved the panel 44px when chosen. A refresh that fails keeps what is shown
+and says so in words before the age at every width, «Could not refresh» with a retry: given up
+on a short line, its words had left a red disc with no hint. Reading another period or filter dims
 what is shown until its answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in
 seconds and the minutes after the newest record are hatched as «no data yet» rather than drawn
