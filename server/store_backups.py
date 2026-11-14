@@ -32,6 +32,7 @@ import os
 import re
 import shutil
 import sqlite3
+import time
 from collections.abc import Callable, Iterator
 from hashlib import sha256
 from typing import NamedTuple
@@ -75,7 +76,9 @@ def _pictures(directory: str) -> list[str]:
     return sorted(name for name in names if _PICTURE.fullmatch(name))
 
 
-def _copy_pictures(source: str, destination: str) -> None:
+def copy_pictures(source: str, destination: str) -> None:
+    """Every picture in `source` into `destination`, with the file naming their store."""
+
     pictures = _pictures(source)
     if not pictures:
         return
@@ -163,7 +166,7 @@ def _snapshot(conn: sqlite3.Connection, backups: BackupLocation, label: str) -> 
     # After the rows, and with no write since them: a picture is on disk before the
     # row that names it commits, so every picture the copied rows name is there.
     if backups.images:
-        _copy_pictures(backups.images, images_beside(destination))
+        copy_pictures(backups.images, images_beside(destination))
         verify_pictures(destination, backups.images)
     # Retention keeps the last 5 of THIS label, ordered by mtime. All three
     # properties are load-bearing, and a second label broke each of them:
@@ -277,6 +280,7 @@ def verified_snapshot(
     label: str,
     *,
     locate: Callable[[], BackupLocation],
+    timings: dict[str, float] | None = None,
 ) -> tuple[str, str]:
     """Name one recovery point that holds exactly this logical source.
 
@@ -297,21 +301,47 @@ def verified_snapshot(
     recovery point is never removed on a guess; renamed rather than left,
     because it would otherwise be found as reusable at every later open and
     stop each of them.
+
+    `timings`, when given, receives the seconds each part took: reading the source's
+    identity, the copy itself, and the copy's check.
     """
 
+    clock = _Clock(timings)
     with _writes_held(conn, locate()):
-        integrity_check(conn, source="source store")
-        source_identity = logical_identity(conn)
+        with clock("source_identity"):
+            integrity_check(conn, source="source store")
+            source_identity = logical_identity(conn)
         reusable = reusable_snapshot(locate(), label)
         if reusable is not None:
             try:
-                if snapshot_identity(reusable) == source_identity:
-                    verify_pictures(reusable, locate().images)
-                    return reusable, source_identity
+                with clock("snapshot_identity"):
+                    if snapshot_identity(reusable) == source_identity:
+                        verify_pictures(reusable, locate().images)
+                        return reusable, source_identity
             except (OSError, sqlite3.Error, RuntimeError):
                 set_aside(reusable)
         backups = locate()
-        destination = _snapshot(conn, backups, label)
-        if snapshot_identity(destination) != source_identity:
-            raise RuntimeError("snapshot does not match the exact logical source store")
+        with clock("vacuum_into"):
+            destination = _snapshot(conn, backups, label)
+        with clock("snapshot_identity"):
+            if snapshot_identity(destination) != source_identity:
+                raise RuntimeError("snapshot does not match the exact logical source store")
         return destination, source_identity
+
+
+class _Clock:
+    """Adds the seconds of each timed part to a caller's dict, or does nothing without one."""
+
+    def __init__(self, timings: dict[str, float] | None) -> None:
+        self.timings = timings
+
+    @contextlib.contextmanager
+    def __call__(self, name: str) -> Iterator[None]:
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            if self.timings is not None:
+                self.timings[name] = self.timings.get(name, 0.0) + round(
+                    time.perf_counter() - start, 6
+                )

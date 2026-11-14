@@ -371,7 +371,7 @@ class BackupTests(StoreCase):
         other = sqlite3.connect(self.path, timeout=0.2)
         other.row_factory = sqlite3.Row
         self.addCleanup(other.close)
-        copy = store_backups._copy_pictures
+        copy = store_backups.copy_pictures
         attempts: list[str] = []
 
         def upload_meanwhile(source: str, destination: str) -> None:
@@ -383,7 +383,7 @@ class BackupTests(StoreCase):
                 attempts.append("waited")
             copy(source, destination)
 
-        with mock.patch.object(store_backups, "_copy_pictures", upload_meanwhile):
+        with mock.patch.object(store_backups, "copy_pictures", upload_meanwhile):
             snapshot, _ = store_backups.verified_snapshot(
                 self.conn, "manual", locate=store.backup_location
             )
