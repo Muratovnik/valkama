@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import sqlite3
 import sys
@@ -26,6 +27,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import cli, store, store_backups, store_steps
 from server.planning import images as planning_images
+from server.planning import store as planning_store
 from server.planning import words
 from server.planning import work_model_migration as migration
 from tests import schema9, schema17
@@ -1007,6 +1009,105 @@ FAULTS = (
 )
 
 
+def once(
+    title: str, write: Callable[[sqlite3.Connection, store_steps.Context], None]
+) -> store_steps.Step:
+    """A fault step a second run would not take again, so `second-run` holds beside it and the
+    report names only what the fault breaks."""
+
+    ran: list[bool] = []
+
+    def run(conn: sqlite3.Connection, context: store_steps.Context) -> None:
+        write(conn, context)
+        ran.append(True)
+
+    return store_steps.Step("fault", title, run, lambda _conn, _context: not ran)
+
+
+def rebuilt(
+    table: str, old: str, new: str
+) -> Callable[[sqlite3.Connection, store_steps.Context], None]:
+    """A step that rebuilds `table` with `old` in its definition written as `new`."""
+
+    def write(conn: sqlite3.Connection, _context: store_steps.Context) -> None:
+        sql = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+        ).fetchone()[0]
+        assert old in sql, (table, old)
+        definition = re.sub(
+            rf'^CREATE TABLE\s+"?{table}"?',
+            f"CREATE TABLE {table}{planning_store.REPLACEMENT}",
+            sql.replace(old, new, 1),
+        )
+        planning_store.rebuild_table(conn, table, definition, f"SELECT * FROM {table}")
+
+    return write
+
+
+def without_trigger(
+    write: Callable[[sqlite3.Connection, store_steps.Context], None],
+) -> Callable[[sqlite3.Connection, store_steps.Context], None]:
+    """`write` with the trigger keeping each kind in its states dropped around it: it
+    reads `workflow_states`, so that table cannot be renamed while it stands."""
+
+    def around(conn: sqlite3.Connection, context: store_steps.Context) -> None:
+        for name in planning_store.STATE_FITS_KIND_TRIGGERS:
+            conn.execute(f"DROP TRIGGER {name}")
+        write(conn, context)
+        for statement in planning_store.STATE_FITS_KIND:
+            conn.execute(statement)
+
+    return around
+
+
+def emptied(half: str) -> Callable[[sqlite3.Connection, store_steps.Context], None]:
+    """A step that leaves one half of the trigger keeping each kind in its states in
+    place, under its name, refusing nothing."""
+
+    def write(conn: sqlite3.Connection, _context: store_steps.Context) -> None:
+        name = f"work_items_state_fits_kind_{half}"
+        conn.execute(f"DROP TRIGGER {name}")
+        conn.execute(
+            f"CREATE TRIGGER {name} BEFORE {planning_store.STATE_FITS_KIND_TRIGGERS[name]}"
+            " ON work_items BEGIN SELECT 1; END"
+        )
+
+    return write
+
+
+#: For each `fresh-shape` probe, a store that passes the pragmas and fails the probe alone: the
+#: fault, and what `fresh-shape` says of it.
+P1_FAULTS = (
+    (
+        "the update half of the trigger refuses nothing",
+        emptied("update"),
+        "moving a task into the service state is taken, a fresh store refuses it",
+    ),
+    (
+        "the insert half of the trigger refuses nothing",
+        emptied("insert"),
+        "inserting a task into the service state is taken, a fresh store refuses it",
+    ),
+    (
+        "the events table refuses an action a fresh store takes",
+        rebuilt("work_item_events", "'accepted',", ""),
+        "with {'action': 'accepted'} is refused (CHECK constraint failed",
+    ),
+    (
+        "the states table takes a category the work model retired",
+        without_trigger(rebuilt("workflow_states", "'triage',", "'backlog','triage',")),
+        "with {'category': 'backlog'} is taken, a fresh store refuses it",
+    ),
+    (
+        "a table holds a CHECK a fresh store does not declare",
+        rebuilt(
+            "work_item_refs", "value TEXT NOT NULL,", "value TEXT NOT NULL CHECK(value != ''),"
+        ),
+        "work_item_refs declares 2 CHECK clauses, a fresh store 1",
+    ),
+)
+
+
 class RollbackTests(StoreCase):
     """A failed step or postcondition leaves the store exactly as it was."""
 
@@ -1043,7 +1144,18 @@ class RollbackTests(StoreCase):
                 self.assertFalse(failed["passed"])
                 self.assertTrue(failed["error"])
 
-    def test_p16_refuses_a_step_a_second_run_would_take_again(self) -> None:
+    def assert_only(self, step: store_steps.Step, failed: list[str], name: str, says: str) -> None:
+        report = self.refused(step)
+        self.assertEqual(failed, report["failed"])
+        entry = next(entry for entry in report["postconditions"] if entry["name"] == name)
+        self.assertIn(says, entry["error"])
+
+    def test_p1_probes_each_check_and_both_halves_of_the_trigger(self) -> None:
+        for title, write, says in P1_FAULTS:
+            with self.subTest(fault=title):
+                self.assert_only(once(title, write), ["fresh-shape"], "fresh-shape", says)
+
+    def test_second_run_refuses_a_step_a_second_run_would_take_again(self) -> None:
         step = store_steps.Step("again", "always", again)
         self.assertIn("second-run", self.refused(step)["failed"])
 

@@ -48,7 +48,7 @@ from typing import Any
 
 from .. import store_steps
 from ..store_steps import Context, Postcondition, Step, UnmetError
-from . import model, read_model, words
+from . import model, read_model, words, work_model_probes
 from . import store as planning_store
 
 #: Who every record the migration writes names as its author.
@@ -1205,75 +1205,6 @@ def _structure(conn: sqlite3.Connection) -> tuple[dict[str, dict[str, list]], li
     return shape, triggers
 
 
-def _refused(
-    conn: sqlite3.Connection, statement: str, parameters: tuple[object, ...], because: str
-) -> str | None:
-    """None when the store refuses `statement` with a message holding `because`."""
-
-    try:
-        conn.execute(statement, parameters)
-    except sqlite3.IntegrityError as error:
-        return None if because in str(error) else f"refused for another reason: {error}"
-    return "taken"
-
-
-def _probe(conn: sqlite3.Connection) -> list[str]:
-    """Try each value the store must refuse, and one it must take, then take all back."""
-
-    problems: list[str] = []
-    space, workflow = model.new_id(), model.new_id()
-    states = {category: model.new_id() for category in ("triage", "ready", _SERVICE)}
-    state_sql = (
-        "INSERT INTO workflow_states(state_id,workflow_id,key,name,category,position)"
-        " VALUES(?,?,?,?,?,?)"
-    )
-    item_sql = (
-        "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
-        "kind,title,position,acceptance) VALUES(?,?,?,?,?,?,'probe',0,?)"
-    )
-    conn.execute("SAVEPOINT work_model_probe")
-    try:
-        conn.execute(
-            "INSERT INTO planning_spaces(planning_space_id,project_id,name,key) VALUES(?,?,?,?)",
-            (space, f"probe-{space}", "probe", f"probe-{space}"),
-        )
-        conn.execute(
-            "INSERT INTO workflows(workflow_id,planning_space_id,name,initial_state_id)"
-            " VALUES(?,?,'probe',?)",
-            (workflow, space, states["triage"]),
-        )
-        for position, (category, state) in enumerate(states.items()):
-            conn.execute(state_sql, (state, workflow, category, category, category, position))
-        for position, old in enumerate(_RENAMED_CATEGORIES, start=10):
-            found = _refused(
-                conn, state_sql, (model.new_id(), workflow, old, old, old, position), "CHECK"
-            )
-            if found:
-                problems.append(f"category {old} {found}")
-        conn.execute(item_sql, (model.new_id(), space, 1, workflow, states["triage"], "task", None))
-        for number, (state, kind, basis, because, what) in enumerate(
-            (
-                ("triage", "epic", None, "CHECK", "kind epic"),
-                ("triage", "task", "bogus", "CHECK", "acceptance bogus"),
-                (_SERVICE, "task", None, "service state", "a task in the service state"),
-                ("ready", _CONTAINER, None, "container never", "a container in ready"),
-            ),
-            start=2,
-        ):
-            found = _refused(
-                conn,
-                item_sql,
-                (model.new_id(), space, number, workflow, states[state], kind, basis),
-                because,
-            )
-            if found:
-                problems.append(f"{what} {found}")
-    finally:
-        conn.execute("ROLLBACK TO work_model_probe")
-        conn.execute("RELEASE work_model_probe")
-    return problems
-
-
 def _p1(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     version = int(conn.execute("PRAGMA user_version").fetchone()[0])
     if version != context.schema:
@@ -1282,6 +1213,11 @@ def _p1(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
         raise UnmetError("no fresh store to compare with")
     with context.reference() as fresh:
         expected, expected_triggers = _structure(fresh)
+        # Foreign keys are off on the store the migration holds; off on the fresh one
+        # too, so a probe row needs no parent on either.
+        fresh.commit()
+        fresh.execute("PRAGMA foreign_keys=OFF")
+        refused = work_model_probes.probe(conn, fresh)
     shape, triggers = _structure(conn)
     found = [f"table {name} is missing" for name in sorted(set(expected) - set(shape))]
     found += [f"table {name} is extra" for name in sorted(set(shape) - set(expected))]
@@ -1294,7 +1230,7 @@ def _p1(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
             f"triggers differ: missing {sorted(set(expected_triggers) - set(triggers))},"
             f" extra {sorted(set(triggers) - set(expected_triggers))}"
         )
-    found += _probe(conn)
+    found += refused
     _unmet(found, "the store is not shaped like a fresh one")
     return {"schema": version, "tables": len(shape), "triggers": len(triggers)}
 
