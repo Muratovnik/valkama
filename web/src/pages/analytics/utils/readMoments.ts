@@ -19,6 +19,9 @@ export function named(moment: string, shift = 0) {
   return new Date(Date.parse(moment) + shift + offset * 60_000)
 }
 
+/** The offset a moment of the read is written at, in minutes east of UTC. */
+export const offsetOf = (moment: string) => (named(moment).getTime() - Date.parse(moment)) / 60_000
+
 /** The day a moment of the read falls on, as a custom period names it: `2030-03-29`. */
 export const dayOf = (moment: string) => named(moment).toISOString().slice(0, 10)
 

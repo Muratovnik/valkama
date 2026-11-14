@@ -160,7 +160,9 @@ checkouts are therefore distinguishable even at the same version.
   with its share and whether it is fresh or silent. Each opens a panel where every
   account stands on a surface of its own: for every window a bar with a tick where steady
   use would stand, when it resets, its forecast (a time it runs out at for the five
-  hours, a range for a week), how old its reading is and which source read it, and its
+  hours; for a week a range, never said past 100 %: a week whose range reaches 100 %
+  says it runs out before its reset and about when, one that crosses it that it may),
+  how old its reading is and which source read it, and its
   readings as a step line, each with a table view. An account's windows stand side by
   side where each has 24rem, one under the next where not. A running window's step line
   opens on its start to now and a third of that span past now, where the forecast

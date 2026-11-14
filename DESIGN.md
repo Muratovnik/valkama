@@ -2394,7 +2394,10 @@ were read, or no reading. The panel has a group per account on a surface of its 
 name its owner gave it or the start of its id, the whole id in its hint, its windows side by
 side where the width allows. Each window shows its bar, when it resets in absolute and relative
 time and its forecast — the five hours a point, lasting to the reset or running out at a time;
-a week a range, said as a range — as short labelled values over the `StepLine` of its readings.
+a week a range, said as a range and never past 100 %, which a quota cannot pass: a low end there
+says the week runs out before its reset and about when its slower pace spends it, a high end
+there that it may, and ends said alike one value — as short labelled values over the `StepLine`
+of its readings.
 Where steady use would stand is drawn — the bar's tick, the line's diagonal — and said in their
 hints, as are how old the latest reading is and who read it. A window's step line is on no
 period of the page, so its scale is its own: it opens on «To now and the forecast» with a
