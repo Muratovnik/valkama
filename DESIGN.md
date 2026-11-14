@@ -1000,8 +1000,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   before its column, a shape and not a hue, and the period's hint, name and table row say it,
   «Account change: a → a, b», naming each account as Settings does: the chart keeps no row for
   changes, over the plot or under it, so they cost the plot none of its height. The periods are one Tab stop and the arrows walk
-  them; nothing in a chart moves on its own, which never meant that nothing may stand over it:
-  a hint lies in the hint layer and shifts nothing. A period that acts when pressed is never
+  them; nothing in a chart moves on its own but a live span's frame keeping up with its running
+  period, as below, which never meant that nothing may stand over it: a hint lies in the hint
+  layer and shifts nothing. A period that acts when pressed is never
   narrower than the 24px target WCAG 2.5.8 asks (`--period-reach`), and a span whose periods
   all fit the chart at that width never scrolls: an inline action's 28px scrolled four weeks
   beside the rail by a few pixels. A span that takes more room than the chart scrolls sideways
