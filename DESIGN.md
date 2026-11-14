@@ -2375,10 +2375,13 @@ into «other» as any series is. Chosen over the table alone, it left the charts
 table answering the first dimension only. A pair's name short of room on its line cuts its first
 part and keeps the separator and the second whole, «claude-opus-5-… · medium», because the second
 is what tells one value's pairs apart: cut from its end, «claude-opus-5-5 · …» stood twice in one
-chart. A pair acts as its first value does, and a bar, a small chart or a legend entry that acts
-is named by that action, «Show the tasks of claude-opus-5-5», so each is described by its whole
-pair before its figures: described by its figures alone, the high and the medium row of one model
-sounded alike to a screen reader.
+chart. In the ranked bars a pair's name takes a line of its own over its bar at every width, as any
+name does in a narrow chart: the second part is a whole value's name, as wide as a model's, and
+the one-line name column, two-fifths of the row, held «claude-opus-5-5» with 13 pixels of the task
+before it and cut the model as well. A pair acts as its first value does, and a bar, a small
+chart or a legend entry that acts is named by that action, «Show the tasks of claude-opus-5-5», so
+each is described by its whole pair before its figures: described by its figures alone, the high
+and the medium row of one model sounded alike to a screen reader.
 
 The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
 figure counts add up to it, cache reads stand beside them and reasoning is part of output.
