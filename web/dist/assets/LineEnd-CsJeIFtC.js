@@ -1,0 +1,1 @@
+import{Ir as e,Sr as t,_r as n,zr as r}from"./vendor-BJyBkWPj.js";import{ht as i}from"./SegmentedControl-TSESMwx6.js";var a={class:`line-end`},o=i(t({__name:`LineEnd`,setup(t){return(t,i)=>(e(),n(`span`,a,[r(t.$slots,`default`,{},void 0,!0)]))}}),[[`__scopeId`,`data-v-226e8cfb`]]);export{o as t};
