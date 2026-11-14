@@ -2232,14 +2232,15 @@ never its name. The rule holds for every write that claims: `claim_work_item`,
 | an `active` state | moves nothing | moves it to the first reachable `queued` state, or failing that the first reachable `backlog` state |
 | a `review`, `blocked`, `completed` or `cancelled` state | moves nothing | moves nothing |
 
-A move is the transition its single tool makes: the workflow's guards judge it,
-it writes a `transitioned` event whose detail is the new key and the reason
-(`dev: claimed`, `todo: released`, `todo: session-ended`, `dev: launched` for a
-launch), it bumps the revision once more, and the item goes last in its new
-state. A claim's move needs no further executor, because the claim is it. Its
-answer, full or acknowledged, adds `started: {"from": "backlog", "to": "dev"}`;
-a release's adds `requeued: {"from": "dev", "to": "todo"}`; and the move's
-warnings, such as a claim no session confirmed, arrive in `warnings`.
+A move is the transition a `transition` group of `apply_work_item_changes`
+makes: the workflow's guards judge it, it writes a `transitioned` event whose
+detail is the new key and the reason (`dev: claimed`, `todo: released`,
+`todo: session-ended`, `dev: launched` for a launch), it bumps the revision once
+more, and the item goes last in its new state. A claim's move needs no further
+executor, because the claim is it. Its answer, full or acknowledged, adds
+`started: {"from": "backlog", "to": "dev"}`; a release's adds
+`requeued: {"from": "dev", "to": "todo"}`; and the move's warnings, such as a
+claim no session confirmed, arrive in `warnings`.
 
 Three cases keep the state where it is:
 
