@@ -93,7 +93,9 @@ checkouts are therefore distinguishable even at the same version.
   Where the context bar stacks its controls under the module's name, the name keeps its
   own size instead of a section's. On the Analytics page each heading is one rank under
   the heading of the part around it, so a screen reader's list of headings reads a chart
-  under its section, not beside it.
+  under its section, not beside it. Settings nests its headings too: its sections stand
+  right under the module's name, and a passed level of the installation checks under
+  «Passed checks», not beside «Needs attention».
 - **The first screen downloads about an eighth less.** The card and the list of questions
   waiting for an answer are no longer in the code the first screen loads before it can
   draw. The card downloads once the board stands, so opening one still waits for nothing;
