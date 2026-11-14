@@ -11,7 +11,8 @@
  *
  * Its first wait, a first read that failed and an answer with no account stand in the product's
  * shared state panel. While it is read again the answer on show stays; a read again that failed
- * keeps it and says from when its figures are.
+ * keeps it as it stood, and the bar says the read failed, as it does for every read of the page
+ * (`useQuota`): a line here moved the heading and every account under it.
  *
  * What used each window is read by the window's own block, to the answer's moment; the panel
  * holds those reads for its chart and its table alike (`provideWindowSpend`).
@@ -52,12 +53,6 @@ const state = computed<PlatformUiState<Quota>>(() => {
   if (read.status === 'failed') return uiError('analytics.quota.panel.failed')
   const { quota } = read
   if (!quota.accounts.length) return uiEmpty('analytics.quota.panel.none')
-  if (read.failedAgain)
-    return uiDegraded(
-      quota,
-      quota.now,
-      t('analytics.quota.panel.failedAgain', { ago: words.ago(quota.now, props.now) }),
-    )
   return read.refreshing ? uiDegraded(quota, quota.now) : uiReady(quota)
 })
 

@@ -5,10 +5,11 @@
  * A read again of the view on show that fails — the bar's refresh or a tick of «Now» — leaves the
  * figures as they stood: the summary cells say the same, no tile with figures says it could not be
  * read, and the bar says beside the data's age that the refresh failed, with the way to ask again,
- * while nothing on the page moves. In «Now» the next tick asks again by itself, and the summary is
- * on show at every moment of a minute of failing ticks. While a new period is read, the last one's
- * panel and tiles stay drawn and dimmed until the answer, with no wait mark and nothing moved,
- * the period chosen already marked; a refresh of the same view, held as long, dims nothing.
+ * while nothing on the page moves; the quota's read again that fails says so there too, and its
+ * panel keeps its figures where they stood. In «Now» the next tick asks again by itself, and the
+ * summary is on show at every moment of a minute of failing ticks. While a new period is read, the
+ * last one's panel and tiles stay drawn and dimmed until the answer, with no wait mark and nothing
+ * moved, the period chosen already marked; a refresh of the same view, held as long, dims nothing.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -16,7 +17,7 @@ import type { Page } from '@playwright/test'
 import { serveUsage, task } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { quotaAt } from '../fixtures/quota.ts'
-import { LONG_TAIL, openReport, pageAt, record, serveQuota } from './analyticsPage.ts'
+import { LONG_TAIL, openReport, pageAt, record, serve, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { at, NOW as LIVE_NOW, serveLive, settled, watchPage } from './liveDouble.ts'
 import { test } from './test.ts'
@@ -298,3 +299,72 @@ test('a new period read for 3 s dims the panel and the tiles until its answer, m
   expect(await frame(page)).toEqual(week.frame)
   await record(info, 'read-pending', { refreshing, pending, answered: answered.figures })
 })
+
+/** Where the quota panel's heading, its accounts and its windows stand, and what each window says. */
+const quotaShown = (page: Page) =>
+  page.evaluate(() => {
+    const scrolled = document.querySelector('.analytics-panel')?.scrollTop ?? 0
+    const parts = '.quota-panel h2, .quota-account, .quota-window'
+    return {
+      boxes: [...document.querySelectorAll<HTMLElement>(parts)].map((part) => {
+        const { x, y, width, height } = part.getBoundingClientRect()
+        return [x, y + scrolled, width, height].map((number) => Math.round(number * 100) / 100)
+      }),
+      facts: [...document.querySelectorAll('.quota-window-facts')].map((facts) =>
+        facts.textContent?.replaceAll(/\s+/gu, ' ').trim(),
+      ),
+    }
+  })
+
+/** The week's panel, chosen on the rail where the rail and the panel take turns. */
+async function openQuotaWeek(page: Page) {
+  const entry = page.locator('.analytics-rail-entry[data-section="quota_week"]')
+  await page.locator('.analytics-rail:visible, .quota-panel:visible').first().waitFor()
+  if (!(await page.locator('.quota-panel').isVisible())) await entry.click()
+  await expect(page.locator('.quota-panel')).toBeVisible()
+}
+
+for (const [width, locale] of [
+  [1024, 'en'],
+  [1280, 'en'],
+  [1280, 'ru'],
+  [1440, 'en'],
+] as const)
+  test(`a quota read again that fails keeps its figures and says so in the bar, moving nothing, at ${width}px in ${locale}`, async ({
+    page,
+  }, info) => {
+    await page.addInitScript((lang) => localStorage.setItem('valkama-locale', lang), locale)
+    await serve(page)
+    await page.setViewportSize({ width, height: 1000 })
+    await page.goto(pageAt({ by: 'quota_week' }))
+    const analytics = page.locator('.analytics-page')
+    await openQuotaWeek(page)
+    await expect(analytics.locator('.quota-account')).toHaveCount(4)
+    await expect(analytics.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
+    await page.evaluate(() => document.fonts.ready)
+    const before = { shown: await quotaShown(page), frame: await frame(page) }
+
+    // The quota alone fails its read again; the bar's refresh asks for it.
+    await serveQuota(page, 'failed')
+    const answered = page.waitForResponse('**/api/analytics/quota?*')
+    await analytics.locator('.analytics-refresh').click()
+    await answered
+    const failed = analytics.locator('.refresh-failed')
+    await expect.soft(failed).toBeVisible()
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    )
+    const after = { shown: await quotaShown(page), frame: await frame(page) }
+    await record(info, `quota-read-failed-${width}-${locale}`, { before, after })
+    expect.soft(after.shown.facts, 'the figures stay').toEqual(before.shown.facts)
+    expect.soft(after.shown.boxes, 'nothing in the panel moves').toEqual(before.shown.boxes)
+    expect.soft(after.frame, 'the bar, the rail and the panel stay').toEqual(before.frame)
+    await expect.soft(analytics.locator('.platform-state-banner')).toHaveCount(0)
+
+    // Its retry asks again; answered, the mark goes and nothing moves back.
+    await serveQuota(page, quotaAt(NOW))
+    await failed.getByRole('button').click()
+    await expect(failed).toHaveCount(0)
+    const retried = await quotaShown(page)
+    expect(retried.boxes).toEqual(before.shown.boxes)
+  })

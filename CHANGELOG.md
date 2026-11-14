@@ -169,8 +169,9 @@ checkouts are therefore distinguishable even at the same version.
   carries the steady pace on; «Whole window» shows all of it, and a frame dragged along
   the line, or stretched from a reading with Shift and an arrow, narrows that line alone.
   The panel reads the quota again every 30 seconds while the tab is visible and keeps its
-  figures meanwhile; when a read again fails, the figures stay and the panel says how old
-  they are. No source, a silent window and a fresh 0 % read differently, and no
+  figures meanwhile; when a read again fails, the figures stay where they stood and the
+  bar says the refresh failed, as for every read of the page, with its retry. No source,
+  a silent window and a fresh 0 % read differently, and no
   percentage is added to another or shown beside dollars.
 - **The quota panel says where each window went.** Under each window of an account, five
   hours, the week or a model's week, «Where the window went» ranks the work Valkama

@@ -78,7 +78,6 @@ export const analyticsQuotaMessages = {
       plan: 'Plan: {plan}',
       none: 'No account was read in the past seven days.',
       failed: 'The quota could not be read.',
-      failedAgain: 'Could not read the quota again; these figures are from {ago}.',
     },
     table: {
       name: 'Window',
@@ -191,7 +190,6 @@ export const analyticsQuotaMessages = {
       plan: 'План: {plan}',
       none: 'Ни один аккаунт не прочитан за последние семь дней.',
       failed: 'Не удалось прочитать квоту.',
-      failedAgain: 'Не удалось прочитать квоту снова; цифры — {ago}.',
     },
     table: {
       name: 'Окно',
