@@ -1141,6 +1141,88 @@ CLAUSE_FAULTS: tuple[
     tuple[str, str, Callable[[dict[str, str]], list[tuple[str, tuple]]], list[str]], ...
 ] = (
     (
+        "history-keys",
+        "no opened record for the container",
+        lambda ids: [
+            (
+                "UPDATE work_item_events SET detail = 'opened elsewhere'"
+                " WHERE work_item_id = ? AND action = 'opened'",
+                (ids["WM-6"],),
+            )
+        ],
+        ["history-keys"],
+    ),
+    (
+        "containers-unheld",
+        "stands in cancelled, not triage",
+        lambda ids: [
+            (
+                "UPDATE work_items SET state_id = (SELECT state_id FROM workflow_states"
+                " WHERE workflow_id = work_items.workflow_id AND key = 'cancelled')"
+                " WHERE work_item_id = ?",
+                (ids["WM-13"],),
+            )
+        ],
+        ["containers-unheld"],
+    ),
+    (
+        "holders",
+        "WM-10 reads as closed",
+        lambda ids: [
+            (
+                "UPDATE work_item_events SET created_at = ?"
+                " WHERE work_item_id = ? AND action = 'transitioned'",
+                (T5, ids["WM-10"]),
+            )
+        ],
+        ["holders"],
+    ),
+    (
+        "holders",
+        "the release on WM-21 comes before its last move",
+        lambda ids: [
+            (
+                "UPDATE work_item_events SET id = (SELECT MAX(id) + 1 FROM work_item_events)"
+                " WHERE id = (SELECT MAX(id) FROM work_item_events"
+                " WHERE work_item_id = ? AND action = 'transitioned')",
+                (ids["WM-21"],),
+            )
+        ],
+        ["holders"],
+    ),
+    (
+        "acceptance",
+        f"WM-2 has migrated at {T5}, not migrated at {T3}",
+        lambda ids: [
+            ("UPDATE work_items SET accepted_at = ? WHERE work_item_id = ?", (T5, ids["WM-2"]))
+        ],
+        ["acceptance"],
+    ),
+    (
+        "indexes",
+        "a search for 'searc' finds other items",
+        lambda ids: [
+            (
+                f"DELETE FROM {words.INDEX} WHERE rowid ="
+                f" (SELECT id FROM {words.ROWS} WHERE work_item_id = ?)",
+                (ids["WM-9"],),
+            )
+        ],
+        ["row-counts", "indexes"],
+    ),
+    (
+        "indexes",
+        "the index marks",
+        lambda _ids: [(f"INSERT INTO {words.ROWS}(work_item_id, stale) VALUES('nobody', 0)", ())],
+        ["row-counts", "indexes"],
+    ),
+    (
+        "identities",
+        "the set of space and number pairs changed",
+        lambda ids: [("UPDATE work_items SET number = 99 WHERE work_item_id = ?", (ids["WM-9"],))],
+        ["identities"],
+    ),
+    (
         "identities",
         "changed its labels",
         lambda ids: _quiet(
