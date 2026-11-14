@@ -1258,6 +1258,15 @@ class RollbackTests(StoreCase):
         with self.assertRaises(store.WorkModelMigrationRequiredError):
             store.connect(self.path)
 
+    def own_store(self) -> None:
+        """A 2.9 store for one subtest: the fault of one the migration did not refuse
+        leaves a migrated store, which the next would find already current."""
+
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.path = os.path.join(directory.name, "valkama.sqlite3")
+        self.ids = build(self.path)
+
     def refused(self, step: store_steps.Step) -> dict:
         before, digest = identity(self.path), file_digest(self.path)
         with with_step(step), self.assertRaises(store_steps.RunFailedError) as raised:
@@ -1278,6 +1287,7 @@ class RollbackTests(StoreCase):
     def test_each_postcondition_refuses_a_store_that_breaks_it(self) -> None:
         for name, sql, parameters in FAULTS:
             with self.subTest(postcondition=name):
+                self.own_store()
                 write = writing(sql, parameters(self.ids))
                 report = self.refused(store_steps.Step("fault", name, write))
                 self.assertIn(name, report["failed"])
@@ -1294,11 +1304,13 @@ class RollbackTests(StoreCase):
     def test_p1_probes_each_check_and_both_halves_of_the_trigger(self) -> None:
         for title, write, says in P1_FAULTS:
             with self.subTest(fault=title):
+                self.own_store()
                 self.assert_only(once(title, write), ["fresh-shape"], "fresh-shape", says)
 
     def test_each_clause_refuses_a_store_only_it_sees_broken(self) -> None:
         for name, says, statements, failed in CLAUSE_FAULTS:
             with self.subTest(postcondition=name, says=says):
+                self.own_store()
                 self.assert_only(once(says, several(statements, self.ids)), failed, name, says)
 
     def test_p16_refuses_a_step_a_second_run_would_take_again(self) -> None:
