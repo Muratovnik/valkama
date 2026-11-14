@@ -6,6 +6,12 @@ import { defineConfig } from 'vite'
 // The Python server hosts dist/ next to it and owns /api, so the dev server
 // proxies there instead of duplicating any backend behaviour.
 export default defineConfig({
+  // Vite keeps its prebuilt dependencies in `node_modules/.vite` by default. A worktree's
+  // `node_modules` may be a link to the main checkout's, and then every checkout's dev server
+  // writes the one cache: a server starting in one rebuilt it while another's browser suite
+  // ran, and that suite's pages lost their modules mid-test. The cache is a checkout's own,
+  // beside the other tools' caches.
+  cacheDir: fileURLToPath(new URL('../.cache/vite', import.meta.url)),
   plugins: [vue()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // Vite 8 defaults `cssTarget` to `build.target`, which is chrome111, and
