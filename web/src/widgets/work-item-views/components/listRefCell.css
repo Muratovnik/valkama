@@ -1,0 +1,55 @@
+/*
+ * What a list row's first cell looks like. It is one stylesheet rather than a
+ * component's scoped block because the list draws that cell as plain elements
+ * (`listRefCell.ts`), with no component of its own to carry a scope; every class
+ * here is written by that one module.
+ */
+
+/* A line of the row, not a control standing in it: at the base rule's height it
+   pushed the row's shared baseline down, and every title with it. The whole row
+   is what a pointer presses, so this box only has to hold the keyboard's focus. */
+.list-open {
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+  color: var(--color-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  background: none;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+
+/* The kind leads the reference in a slot of its own whether or not it has a
+   glyph, so every reference starts where the one above it does. A slot is a
+   line tall: a filtering glyph's 28px reaches into the row's padding. A filled
+   slot stands on the row's baseline, which puts its glyph on the middle of the
+   reference's letters; an empty one on that middle, or it would heighten the row.
+   Its width is the list's `--list-slot-size`, which the head reads as well. */
+.list-slot {
+  place-content: center center;
+  vertical-align: baseline;
+  inline-size: var(--list-slot-size);
+  block-size: 1lh;
+  margin-inline-end: var(--space-1);
+
+  &:empty {
+    vertical-align: middle;
+  }
+}
+
+/* A narrow list steps its tree's indent by the arrow alone. */
+.list-lead {
+  [data-fit='narrow'] & {
+    --space-tree-step: var(--space-4);
+  }
+}
+
+/* The priority's glyph after the reference, where its column has folded away. */
+.list-after {
+  margin-inline-start: var(--space-1);
+}
