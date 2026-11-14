@@ -12,126 +12,119 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
-- **The usage read gives each step by the pair.** With two dimensions in `group_by`,
-  each point of `series` in `GET /api/analytics/usage` now breaks its step down by the
-  pair of both, and each of its `groups` names both dimensions as a row does, where it
-  used to break the step down by the first dimension alone and name only that one. The
-  groups of a step still add up to the step exactly; with one dimension nothing changes.
-- **A split section's small charts and day columns read its pairs.** With «Split by» chosen,
-  the small charts and the day columns of an Analytics section now show the same pairs as its
-  ranked bars and its table, «claude-opus-5-5 · high», named the same way and each in one hue
-  across the three charts, where they used to stay by the section's own values.
-- **A filter on the Analytics page repaints nothing it leaves.** A value's colour, or a pair's,
-  is now its place in the period's ranking without the page's filters, so a filter that takes
-  the largest value away leaves every other value the colour it had in its tile, its bar, its
-  small chart and the day columns, where each used to move up a hue. Another measure may still
-  repaint. This asks the server nothing more while no filter is set or when one is set after
-  the page was read without it; with a filter set, each refresh asks the period once more
-  without it for each dimension the page shows.
+- **A section splits by a second dimension from its heading, and all its charts show the
+  pairs.** «Split by» now stands in the heading of a dimension's section, in place of the
+  table head's own choice, and offers «None» and every other dimension. With a split
+  chosen, the ranked bars, the small charts, the day columns and the table show the
+  section's pairs, each named by both values, the section's value first:
+  «claude-opus-5-5 · high». A pair keeps one hue across the charts, the table has a row
+  per pair instead of the crossed matrix, and the download writes one row per pair. The
+  split is part of the page's address, so a reload or a link opens it and Back returns the
+  split before. Where a pair's name does not fit its line, in the ranked bars, the small
+  charts' names and the table, its first part gives way, «claude-opus-5-… · medium», and
+  the separator and the second part stand whole; the hint says the whole pair. A pair's
+  bar, small chart and legend entry are named by what pressing them does with its first
+  value, «Show the tasks of claude-opus-5-5», and described by the whole pair before their
+  figures, so a screen reader tells the pairs of one model apart.
 - **A search finds every word, wherever it stands, best match first.** `search_work_items`
   matched the whole query as one piece of text and listed the newest change first, so a
   query of several words mostly found nothing. It now reads the query as words: an item
   matches when it holds every one of them, in any order and across its title, description,
   labels, summary, comments and questions, each word matched by its first five letters, so
-  `searching` finds `search` and a Russian word finds its other cases. The best match
-  comes first, the title weighing three times the rest. A query that is exactly a
+  `searching` finds `search` and a longer Russian word finds its other cases. The best
+  match comes first, the title weighing three times the rest. A query that is exactly a
   reference or a number alone is read as one phrase, as before, and answers that item
-  first. The store keeps an SQLite FTS5 index for it, filled from the items already there
-  on the first open; the schema stays at 17, and a store whose SQLite lacks FTS5 still
-  writes every item and searches by phrase, as before.
+  first. The first open after the upgrade fills a word index from the items already there,
+  after a verified recovery point, and the store schema stays at 17. A store whose SQLite
+  lacks FTS5 still writes every item and searches by phrase, as before.
 - **The first launch opens on the shell itself.** The desktop window used to show a small
   line of text on a black ground and then cut to the whole shell. It now draws the shell's
   chrome from its first frame — the rail with the mark and its first entries, the context
   bar and the empty workspace panel — and `index.html` draws the same chrome until the
-  application mounts, each part where the shell draws it, so the handoff moves nothing and
-  a slow bundle no longer shows a bare ground, in the window or in a browser. What the
-  window waits for is said in the panel once a start lasts a second, and with reduced
-  motion nothing in it moves. The window remembers the rail's width beside the language
-  whenever the reader changes either and as the window closes, so the next start draws
-  the rail where it was left; a window that has never heard a width draws the default.
+  application mounts, each part where the shell draws it, so nothing moves when the
+  application takes over and a slow bundle no longer shows a bare ground, in the window or
+  in a browser. Once a start lasts a second the panel says what the window waits for, and
+  with reduced motion nothing in it moves. The next start draws the rail at the width you
+  left it; the window used to keep only the language.
+- **The usage read gives each step by the pair.** With two dimensions in `group_by`, each
+  point of `series` in `GET /api/analytics/usage` now breaks its step down by the pair of
+  both, and each of its `groups` names both dimensions as a row does, where it used to
+  break the step down by the first dimension alone and name only that one. The groups of a
+  step still add up to the step exactly; with one dimension nothing changes.
+- **A filter on the Analytics page repaints nothing it leaves.** A value's colour, or a
+  pair's, is now its place in the period's ranking without the page's filters, so a filter
+  that takes the largest value away leaves every other value the colour it had in its
+  tile, its bar, its small chart and the day columns, where each used to move up a hue.
+  Another measure may still repaint.
+- **The first screen downloads about a sixth less.** The card and the list of questions
+  waiting for an answer are no longer in the code the first screen loads before it can
+  draw. The card downloads once the board stands, so opening one still waits for nothing;
+  the questions download as their dialog opens. Opened before its code has arrived, either
+  says «Loading» in its drawer or dialog after the usual delay rather than standing empty,
+  and the card's drawer shows its bar with Close at once, so nothing moves when the card
+  arrives.
+- **Three argument forms agents write are read instead of refused.**
+  `get_work_item_request` reads `request_id` as its `id`, and every tool whose `id` is a
+  work item reads `work_item_id` as it, the field that `id`'s description names. An
+  `apply_work_item_changes` call whose groups came wrapped in one `changes` argument, as
+  an object or as the text of one, is applied as if each group had been an argument of its
+  own, held to the same names and rules. A `changes` that is not one object, or that
+  repeats a group given beside it, is refused with a call in the unwrapped form. None of
+  these names is added to the published schemas.
+- **A checklist group may be the list of steps itself.** The `checklist` of
+  `apply_work_item_changes` and of `create_work_item` now takes
+  `["first step", {"text": "…", "done": true}]` as well as `{"items": [...]}`, where a
+  bare list used to be refused with «checklist must be an object». `force` stays in the
+  object form, `{"items": [...], "force": true}`. The skill shows the list form first, and
+  the tool descriptions say both.
 - **A loading mark appears after half a second and stays at least 200 ms.** A read that
   answers within half a second now shows no «Loading» at all, where it used to flash the
   mark after 300 ms. A mark that has appeared stays on screen for at least 200 ms, down
   from 400 ms.
-- **The first screen downloads a sixth less.** The card and the list of questions waiting
-  for an answer no longer ship with the board: the code the first screen loads before it
-  can draw falls from 443 KiB to 367 KiB compressed. The card downloads once the board
-  stands, so opening one still waits for nothing; the questions download as their dialog
-  opens, beside the read it starts. Opened before its code has arrived, either says
-  «Loading» in its drawer or dialog after the usual delay rather than standing empty; the
-  card's drawer shows its bar with Close at once, and its «Loading» stands where the card's
-  own will, so nothing moves when the card arrives.
-- **Three argument forms agents write are read instead of refused.** `get_work_item_request`
-  reads `request_id` as its `id`, and every tool whose `id` is a work item reads
-  `work_item_id` as it, the field that `id`'s description names. An
-  `apply_work_item_changes` call whose groups came wrapped in one `changes` argument, as an
-  object or as the text of one, is applied as if each group had been an argument of its
-  own, held to the same names and rules. A `changes` that is not one object, or that repeats
-  a group given beside it, is refused with a call in the unwrapped form. None of these
-  names is added to the published schemas.
 - **A question refused for the shape of its fields shows a field to copy.** When
   `create_work_item_request`, or a batch's `questions`, refuses a field or option id that
   is not a lowercase identifier, or a field missing one of `id`, `label`, `type`,
   `required` and `options`, the refusal now ends with one valid `choice` field with two
   options, written as the JSON to send, and the id refusal says what an identifier may
   hold: a-z first, then a-z, 0-9, `_` or `-`, at most 64.
-- **A checklist group may be the list of steps itself.** The `checklist` of
-  `apply_work_item_changes` and of `create_work_item` now takes
-  `["first step", {"text": "…", "done": true}]` as well as `{"items": [...]}`, where a bare
-  list used to be refused with «checklist must be an object». `force` stays in the object
-  form, `{"items": [...], "force": true}`. The skill shows the list form first, and the
-  tool descriptions say both.
-- **Valkama's Claude Code hook leaves each Valkama call as the model wrote it.** The
-  `PreToolUse` hook no longer adds an `_identity` argument to the call: it prints nothing
-  and leaves a small file named by the call's id in `calls/` beside the store, and the
-  server reads the session and the agent from that file, so a call is confirmed as before,
-  with the source `claude-pair`. A call that finds no such file is recorded as
-  `claude-no-pair` when Claude Code sent the call's id and as `mcp` when it did not. An
-  `_identity` from the earlier hook is still verified when no file is found. A Valkama
-  server process without the stdio front that started before the update reads only
-  `_identity`, so the calls of its session are unconfirmed until that session restarts.
-  `valkama doctor` now warns when an agent write of the last day found no confirmed
-  session, names the way each such write went and what to do about it, and counts the
-  files no call took. See [the hook contract](docs/hook-contract.md#the-call-pair).
 
 ### Added
 
-- **Creating an item names the open items that read like it.** The answer of
-  `create_work_item` carries `similar`: up to three open items of the same space whose
-  title or description share the new title's words, best first, by reference and title,
-  so an agent that filed the same change twice sees it at once. It is a hint, not a
-  check: nothing is refused on it.
 - **The work list finds in every row.** A list of 300 rows or more keeps only the rows
   about its window in the page, so the browser's find reached those and missed the rest.
   While the list is what the page shows, Ctrl+F (⌘F) now opens the list's own find bar
   over its top corner, under the sticky head: it counts a term in the words every row
   prints, at the list's width and in its language, and says «3 of 12» or «No matches».
   Enter and Shift+Enter, or F3 and Shift+F3, walk the matches in the list's order and
-  bring each match to the middle of the list under its head; the drawn matches are
-  marked, the current one apart, and a printed list carries neither the marks nor the
-  bar. Case does not count, «ё» finds «е», «cafe» finds «café» and a stress over a
-  Cyrillic vowel is ignored, while «й» stays apart from «и». The current match stays on
-  its row while the stream, a filter or an order changes the list, and Escape closes the
-  bar and gives focus back. With a card, a dialog, a menu or a choice list open, and on
-  every other screen, Ctrl+F is the browser's as before. Ctrl+F is the key that types F
-  on the keyboard's layout, and on a layout with no Latin letter there, such as
-  Russian, the key in F's place. Typing into the term matches the rows' words without
-  reading them again, and resizing the list reads them again only where a width
-  changes what a row prints.
+  bring each match to the middle of the list under its head; the drawn matches are marked,
+  the current one apart, and a printed list carries neither the marks nor the bar. Case
+  does not count, «ё» finds «е», «cafe» finds «café» and a stress over a Cyrillic vowel is
+  ignored, while «й» stays apart from «и». The current match stays on its row while the
+  stream, a filter or an order changes the list, and Escape closes the bar and gives focus
+  back. With a card, a dialog, a menu or a choice list open, and on every other screen,
+  Ctrl+F is the browser's as before. Ctrl+F is the key that types F on the keyboard's
+  layout, and on a layout with no Latin letter there, such as Russian, the key in F's
+  place.
+- **Creating an item names the open items that read like it.** The answer of
+  `create_work_item` carries `similar`: up to three open items of the same space whose
+  title or description share the new title's words, best first, by reference and title, so
+  an agent that filed the same change twice sees it at once. It is a hint, not a check:
+  nothing is refused on it.
 
 ### Removed
 
-- **Twelve planning tools that each made one write.** The MCP catalogue now has one tool
-  per capability: a write to one item's fields, steps, refs, links, discussion, summary
-  or state is a group of `apply_work_item_changes`, which agents already used for nearly
-  every such write. A call to a removed name is refused with the code `removed_tool`
-  and a message naming the call that does its work, so an agent whose tool list is out
-  of date corrects itself in one call; it is a refusal, not an alias, and writes
-  nothing. The HTTP writes behind these tools are unchanged. Each group of
-  `apply_work_item_changes` now describes what the removed tool's description said,
-  and its `update` publishes the values `priority` and `kind` take. Running client
-  sessions keep the tool list they started with: restart them after installing this
-  release.
+- **Breaking: twelve planning tools that each made one write are removed; make those
+  writes through `apply_work_item_changes`.** The table names the group that replaces each
+  tool. Restart running client sessions after installing this release: a session keeps the
+  tool list it started with. The MCP catalogue falls from 33 tools to 21, one per
+  capability: a write to one item's fields, steps, refs, links, discussion, summary or
+  state is a group of `apply_work_item_changes`, which agents already used for nearly
+  every such write. A call to a removed name is refused with the code `removed_tool` and a
+  message naming the call that does its work, so an agent whose tool list is out of date
+  corrects itself in one call; it is a refusal, not an alias, and writes nothing. The HTTP
+  writes behind these tools are unchanged. Each group of `apply_work_item_changes` now
+  says what the removed tool's description said, and its `update` publishes the values
+  `priority` and `kind` take.
 
   | Removed tool | Call instead |
   | --- | --- |
@@ -154,74 +147,72 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
-- **A pair's name in a split Analytics section keeps the part that tells it apart.** Where a
-  name such as «claude-opus-5-5 · medium» does not fit its line — in the ranked bars, the small
-  charts' names and the table — the first part is now cut, «claude-opus-5-… · medium», and the
-  separator and the second part stand whole. The name used to be cut from its end, so two pairs
-  of one model read alike, «claude-opus-5-5 · …», in the bars of a 1440px window. The hint still
-  says the whole pair.
-- **Analytics names read whole to a screen reader, end in an ellipsis and hint only when cut.**
-  A pair's bar, small chart and legend entry in a split section are still named by what pressing
-  them does, «Show the tasks of claude-opus-5-5», and are now described by the whole pair before
-  their figures, so the high and the medium row of one model no longer sound alike. A long single
-  name in a section table's button now ends in «…» where it is cut, where it used to stop at the
-  button's edge mid-word. And a table name's hint now shows only when the name is really cut: the
-  press's hit area standing past the name counted as a cut and raised the hint over whole names.
-- **Fewer batch calls fail in the client before they reach Valkama.** Claude Code refused
-  `apply_work_item_changes` and `set_work_item_summary` calls as input that "could not be
-  parsed as JSON" when an agent wrote `comment`, `summary` or `transition` as bare text,
-  and most retries failed the same way. Those parameters, and `report` of `report_work_item`, were the only object
-  parameters with no description; each now shows the JSON it takes, such as
-  `{"body": "the text"}` or `{"state": "done"}`, and says it is never bare text. The skill
-  says the same beside the batch's groups.
 - **In Claude Code's auto mode a Valkama call no longer makes the calls beside it fail.**
   A Bash, PowerShell, other MCP or Agent call sent in the same response as a Valkama call
   used to get no verdict and fail with "another call in this response was changed by a
-  hook", and had to be sent again; it now gets auto mode's review like any other call.
-  The skill no longer asks for Valkama calls in a response of their own, and says what to
-  do when that failure still shows up because an older release is installed.
-- **The Analytics bar no longer runs past its end beside a span of your own days.** In a
-  window from about 1108 to 1300px beside the navigation, the bar's one line with every
-  word and gap given up still ran «Refresh» up to 188px past its end, and pressing it
-  scrolled the bar sideways. Such a bar is now the two rows a narrower bar has, with a
-  failed refresh said in full words on the second; a bar with room for the one line keeps
-  it.
-- **The Analytics bar says how old the newest record is beside a period with no work.**
-  The bar's freshness stood empty while the panel said the period spent nothing, though
-  the answer named the store's newest record; it now says its age there too.
+  hook", and had to be sent again. Valkama's `PreToolUse` hook no longer adds an
+  `_identity` argument to the call, so auto mode reviews every call as the model wrote it.
+  The hook prints nothing and leaves a small file named by the call's id in `calls/`
+  beside the store; the server reads the session and the agent from that file, and the
+  call is confirmed as before, with the source `claude-pair`. A call that finds no such
+  file is recorded as `claude-no-pair` when Claude Code sent the call's id and as `mcp`
+  when it did not; an `_identity` from the earlier hook is still verified when no file is
+  found. A Valkama server process without the stdio front that started before the update
+  reads only `_identity`, so the calls of its session are unconfirmed until that session
+  restarts. `valkama doctor` now warns when an agent write of the last day found no
+  confirmed session, names the way each such write went and what to do about it, and
+  counts the files no call took. The skill no longer asks for Valkama calls in a response
+  of their own, and says what to do when the failure still shows up because an older
+  release is installed. See [the hook contract](docs/hook-contract.md#the-call-pair).
+- **Fewer batch calls fail in the client before they reach Valkama.** Claude Code refused
+  `apply_work_item_changes` calls as input that "could not be parsed as JSON" when an
+  agent wrote `comment`, `summary` or `transition` as bare text, and most retries failed
+  the same way. Those groups had no description; each now says it is an object, never bare
+  text, and shows the JSON it takes, such as `{"body": "the text"}` or
+  `{"state": "done"}`. The skill says the same beside the batch's groups.
 - **The chrome no longer shows interim values at launch.** Until the module list was read
   the context bar said the module's id (`planning`), and until the remembered place was
   restored it said «Global» and marked «Work» as current, whatever the app then came back
   to. The title and the scope selector now keep their place empty until they can say the
   final value, and the rail marks no entry until the route is known. The groups under the
   list of work going on now are drawn once its first frame has come, so «Analytics» no
-  longer drops by the list's height a second after launch. That frame no longer waits for
-  the space's read: the shell opens `GET /api/events?view=live` as it starts and closes it
-  once the space's stream has delivered its own frame, so on a large space the groups no
-  longer stay hidden for the seconds its read takes.
+  longer drops by the list's height a second after launch, and that frame no longer waits
+  for the space's read, so on a large space the groups no longer stay hidden for the
+  seconds the read takes.
 - **A batch's checklist tick can complete a step another session holds.** Each
-  `checklist_ticks` entry of `apply_work_item_changes` takes `force`, as
-  `tick_work_item_checklist_item` does, so `force: true` completes a step another holder
-  claimed in the same call and records the completion as the single tick does. Without
-  `force` the refusal stays, names the step, and the call writes nothing.
-- **A forced write that carries a refusal is recorded as an `overridden` event.** A
-  forced checklist tick, step claim or takeover, a `set_work_item_checklist` that discards
-  a claimed or completed step or completes one another session holds, and a
-  `claim_work_item` that takes over or releases another session's claim now write the
-  `overridden` event a forced transition has always written, naming the guard, and the
-  answer carries `overridden`. A batch names the overrides of every step in it, where it
-  named only the last one before. A forced call that refused nothing records nothing.
-  `force` permits what it permitted before.
+  `checklist_ticks` entry of `apply_work_item_changes` takes `force`, which it used to
+  refuse as an unknown field, so `force: true` completes a step another holder claimed, as
+  the removed `tick_work_item_checklist_item` did. Without `force` the refusal stays,
+  names the step, and the call writes nothing.
+- **A forced write that carries a refusal is recorded as an `overridden` event.** A forced
+  checklist tick, step claim or takeover, a `checklist` group that discards a claimed or
+  completed step or completes one another session holds, and a `claim_work_item` that
+  takes over or releases another session's claim now write the `overridden` event a forced
+  transition has always written, naming the guard, and the answer carries `overridden`. A
+  batch names the overrides of every step in it, where it named only the last one before.
+  A forced call that refused nothing records nothing. `force` permits what it permitted
+  before.
+- **A name in an Analytics table ends in an ellipsis where it is cut, and hints only
+  then.** A long single name in a section table's button used to stop at the button's edge
+  mid-word; it now ends in «…». A table name's hint used to show over whole names too; it
+  now shows only when the name is cut.
+- **The Analytics bar no longer runs past its end beside a span of your own days.** In a
+  window from about 1108 to 1300px beside the navigation, the bar's one line ran «Refresh»
+  past its end even with every word and gap given up, and pressing it scrolled the bar
+  sideways. Such a bar is now the two rows a narrower bar has, with a failed refresh said
+  in full words on the second; a bar with room for the one line keeps it.
 - **A hint comes for what a scroll brings under a resting pointer.** A wheel that moved a
   ranked row, or any element with a hint, under a pointer that stayed still showed no hint
-  until the pointer moved again, because the host heard only pointer moves and the browser
-  sends none then. And a hint that opened as a scroll was ending, such as at once after
-  another hint, was closed by that scroll's late event and never came back. The host now
-  hears the pointer's arrival on an element however it comes, and a hint a scroll closed is
-  asked for again when the scroll ends, for the element the pointer rests on.
+  until the pointer moved again, and a hint that opened as a scroll was ending, such as at
+  once after another hint, was closed by that scroll and never came back. The element
+  under a resting pointer now shows its hint however it came there, and a hint a scroll
+  closed comes back when the scroll ends.
+- **The Analytics bar says how old the newest record is beside a period with no work.**
+  The bar's freshness stood empty while the panel said «Nothing was spent in this period»;
+  it now says the newest record's age there too.
 - **A cut name and its share keep their space in a hint.** A ranked row whose name was cut
-  read «…part 132% of the total» in its hint, and to a screen reader, for «part 1» and «32%».
-  The name still stands on its own line over the detail.
+  read «…part 132% of the total» in its hint, and to a screen reader, for «part 1» and
+  «32%». The name still stands on its own line over the detail.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
