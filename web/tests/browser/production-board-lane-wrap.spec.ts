@@ -314,6 +314,9 @@ for (const locale of ['en-US', 'ru-RU'])
       test('a short title keeps its state beside it and its actions with the counts', async ({
         page,
       }) => {
+        // The walk settles 81 widths on drawn frames: about 9 s alone, and a full suite on a
+        // busy machine stretches every frame, so the default 30 s left too little room.
+        test.setTimeout(90_000)
         await page.setViewportSize({ width: 390, height: 900 })
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await installBackend(page)
