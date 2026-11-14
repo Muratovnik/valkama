@@ -231,3 +231,28 @@
   min-block-size: var(--space-4);
   color: var(--color-text-muted);
 }
+
+/* Settings as the module stage holds it: the workspace's container, so the rows' narrow
+   rules answer to the stage's width rather than the window's, and the sheet the groups of
+   General stand on. */
+.settings-rows-stage {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  container: workspace / inline-size;
+}
+
+.settings-rows-sheet {
+  background: var(--color-surface);
+  overflow: hidden;
+  border-radius: var(--radius-card);
+}
+
+.settings-rows-presets {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.settings-rows-days {
+  max-width: 8rem;
+}

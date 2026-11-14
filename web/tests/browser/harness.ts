@@ -34,6 +34,7 @@ import { marksSurface } from './marksSurface.ts'
 import { MenuSurface } from './menuSurface.ts'
 import { now } from './planningFixtures.ts'
 import { previewSurface } from './previewSurface.ts'
+import { SettingsRowsSurface } from './settingsRowsSurface.ts'
 
 import './harness.css'
 
@@ -184,6 +185,12 @@ const Harness = defineComponent({
     if (requestedSurface === 'marks') return marksSurface
     if (requestedSurface === 'menu') return () => h(MenuSurface)
     if (requestedSurface === 'preview') return previewSurface
+    if (requestedSurface === 'settings-rows')
+      return () =>
+        h('main', { class: 'harness-shell' }, [
+          h(AppNav, { modules, badges: {}, active: 'settings', connection: 'live' }),
+          h('div', { class: 'settings-rows-stage' }, [h(SettingsRowsSurface)]),
+        ])
     if (contextHarness) {
       return () =>
         h('main', { class: 'harness-shell' }, [

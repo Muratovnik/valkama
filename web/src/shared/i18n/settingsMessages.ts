@@ -2,6 +2,7 @@
 
 import { accountAliasMessages } from '@/shared/i18n/accountAliasMessages.ts'
 import { kindColorMessages } from '@/shared/i18n/kindColorMessages.ts'
+import { scopedSettingMessages } from '@/shared/i18n/scopedSettingMessages.ts'
 
 export const settingsMessages = {
   en: {
@@ -38,6 +39,7 @@ export const settingsMessages = {
       },
       kindColors: kindColorMessages.en,
       accountAliases: accountAliasMessages.en,
+      scoped: scopedSettingMessages.en,
       searchOptions: 'Search options',
       noOptions: 'No matching options',
       diagnostics: {
@@ -80,6 +82,7 @@ export const settingsMessages = {
       },
       kindColors: kindColorMessages.ru,
       accountAliases: accountAliasMessages.ru,
+      scoped: scopedSettingMessages.ru,
       searchOptions: 'Поиск по вариантам',
       noOptions: 'Подходящих вариантов нет',
       diagnostics: {

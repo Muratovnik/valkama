@@ -7,6 +7,8 @@ defineProps<{
   /** Why the last change to this row did not hold; it stands under the control. */
   failure?: string
   hint?: string
+  /** For a control that takes its description from this row's hint. */
+  hintId?: string
   /** For a control that takes its name from this row's label. */
   labelId?: string
   /**
@@ -30,6 +32,7 @@ defineProps<{
       >
       <small
         v-if="hint"
+        :id="hintId"
         class="settings-row-hint"
         >{{ hint }}</small
       >
