@@ -66,6 +66,22 @@ const SHARE_STEP = 0.01
 const sessionPlace = (value: UsageGroupValue & { id: string }) =>
   [value.family, value.id.slice(0, SESSION_PREFIX)].filter(Boolean).join(' · ')
 
+/**
+ * A figure as a line says it, with what it leaves out apart: the tokens a cost has no price for,
+ * «40 тыс. токенов без цены», empty where it leaves none out. A table lays the remark under the
+ * figure; everything else says the two as one (`besides`).
+ */
+export interface FigureWords {
+  remark: string
+  text: string
+}
+
+/** What stands between a figure and its remark where they are said as one. */
+export const REMARK_JOINT = ', '
+
+/** A figure and its remark as one: «≈ 1 109,00 $, 40 тыс. токенов без цены». */
+const besides = ({ text, remark }: FigureWords) => [text, remark].filter(Boolean).join(REMARK_JOINT)
+
 export function useSpendingWords() {
   const i18n = useI18n()
   const { t } = i18n
@@ -146,11 +162,13 @@ export function useSpendingWords() {
   const unpriced = (spent: Spent) => unpricedTokens(spent.unpriced)
 
   /**
-   * What is said of a measure with the tokens a cost leaves out beside it — `count` of them —
+   * What is said of a measure with the tokens a cost leaves out as its remark — `count` of them —
    * so a cost that misses some never reads as whole; a figure of any other measure as it is.
    */
-  const leavingOut = (name: Measure, said: string, count: number) =>
-    [said, name === 'cost' ? unpricedTokens(count) : ''].filter(Boolean).join(', ')
+  const leavingOut = (name: Measure, text: string, count: number): FigureWords => ({
+    text,
+    remark: name === 'cost' ? unpricedTokens(count) : '',
+  })
 
   /**
    * What the tokens figure counts, by kind — input, output, cache writes, what was processed
@@ -288,26 +306,34 @@ export function useSpendingWords() {
   const lineEnd = (line: SpendingLine) => (line.value && pairEnd(line.second)) || undefined
 
   /**
-   * A line's figure in a measure; a cost says beside it the tokens it leaves out, so a line
-   * with no price reads as that and never as a zero.
+   * A line's figure in a measure and its remark: a cost's remark is the tokens it leaves out, and
+   * a line with no price at all says them as its figure, never a zero.
    */
-  function lineFigure(name: Measure, spent: Spent) {
+  function lineFigureWords(name: Measure, spent: Spent): FigureWords {
     return name === 'cost' && spent.cost === null && spent.unpriced
-      ? unpriced(spent)
+      ? { text: unpriced(spent), remark: '' }
       : leavingOut(name, figure(name, spent), spent.unpriced)
   }
 
+  /** A line's figure with its remark beside it (`lineFigureWords`), as one line says them. */
+  const lineFigure = (name: Measure, spent: Spent) => besides(lineFigureWords(name, spent))
+
   /**
-   * How a line's measure moved, as a table cell says it (`changeCell`); a change of a cost that
-   * compares two figures says beside it the tokens they leave out, by the rule `lineFigure`
-   * says them for one figure, so a change of incomplete costs never reads as whole.
+   * How a line's measure moved, as a table cell says it (`changeCell`), and its remark: a change
+   * of a cost that compares two figures has the tokens they leave out, by the rule
+   * `lineFigureWords` says them for one figure, so a change of incomplete costs never reads as
+   * whole.
    */
-  function lineChange(name: Measure, moved: Change, now: Spent, before: Spent) {
+  function lineChangeWords(name: Measure, moved: Change, now: Spent, before: Spent): FigureWords {
     const said = changeCell(name, moved)
     return moved.direction === 'absent' || moved.direction === 'none'
-      ? said
+      ? { text: said, remark: '' }
       : leavingOut(name, said, now.unpriced + before.unpriced)
   }
+
+  /** How a line's measure moved with its remark beside it (`lineChangeWords`), as one line. */
+  const lineChange = (name: Measure, moved: Change, now: Spent, before: Spent) =>
+    besides(lineChangeWords(name, moved, now, before))
 
   /**
    * What a breakdown is by: «by task», or by its pairs with a second dimension, «by model and by
@@ -508,7 +534,9 @@ export function useSpendingWords() {
     dimension,
     figure,
     lineChange,
+    lineChangeWords,
     lineFigure,
+    lineFigureWords,
     lineEnd,
     lineLabel,
     measure,

@@ -11,7 +11,10 @@
  * (`stuck`), and a row brought into view by the focus stands clear of both. Each
  * column's heading sorts by it, largest first, then the other way; the first sort is the chosen
  * measure. A row is one line: the figures take what they need, the name the rest down to its
- * least, cut where the column is narrower (`SpendingTableName`).
+ * least, cut where the column is narrower (`SpendingTableName`). A cost that leaves tokens without
+ * a price says how many on a second line of its cell, under its amount (`SpendingTableFigure`):
+ * that row is taller, and its column is as wide as the longer of the two lines. A window too
+ * narrow for that column scrolls the table sideways in its frame, the names held at its start.
  *
  * The sorted column's heading is marked, in the ink of the figures with its arrow and a rule under
  * it. The heading row over the frame (`SpendingTableHead`) counts the rows, gives their whole account
@@ -22,6 +25,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import SpendingTableFigure from '@/pages/analytics/components/SpendingTableFigure.vue'
 import SpendingTableHead from '@/pages/analytics/components/SpendingTableHead.vue'
 import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
@@ -266,16 +270,11 @@ defineExpose({ reveal })
             :line="line"
             @narrow="(value, label) => emit('narrow', value, label)"
           />
-          <td
+          <SpendingTableFigure
             v-for="cell in line.cells"
             :key="cell.key"
-            class="chart-cell"
-            data-numeric="true"
-            :data-measure="cell.key"
-            :data-chosen="cell.chosen"
-          >
-            {{ cell.text }}
-          </td>
+            :cell="cell"
+          />
         </tr>
       </tbody>
       <tfoot>
@@ -286,16 +285,11 @@ defineExpose({ reveal })
           >
             {{ t('analytics.panel.table.total') }}
           </th>
-          <td
+          <SpendingTableFigure
             v-for="cell in model.total"
             :key="cell.key"
-            class="chart-cell"
-            data-numeric="true"
-            :data-measure="cell.key"
-            :data-chosen="cell.chosen"
-          >
-            {{ cell.text }}
-          </td>
+            :cell="cell"
+          />
         </tr>
       </tfoot>
     </ChartTable>
@@ -443,8 +437,9 @@ defineExpose({ reveal })
 }
 
 /* A row is one line: each figure and its heading take what they need, the name the rest, cut
-   where it is longer (`SpendingTableName`). Where the headings on one line would widen the table
-   past its frame, they take a second line instead (`headingLines`). */
+   where it is longer (`SpendingTableName`); a figure's remark takes a second line of its own
+   (`SpendingTableFigure`). Where the headings on one line would widen the table past its frame,
+   they take a second line instead (`headingLines`). */
 .chart-cell[data-numeric='true'] {
   inline-size: 1px;
 }
