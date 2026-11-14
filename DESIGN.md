@@ -1002,10 +1002,18 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   narrower than the 24px target WCAG 2.5.8 asks (`--period-reach`), and a span whose periods
   all fit the chart at that width never scrolls: an inline action's 28px scrolled four weeks
   beside the rail by a few pixels. A span that takes more room than the chart scrolls sideways
-  inside the plot and never moves the page, opens on its first periods, fades out toward an
-  edge past which periods are hidden (a mask, which paints no colour and drops while the
-  keyboard stands in the plot), keeps the value axis in view over the plot's start, and brings
-  a period the keyboard reaches clear of that axis with its focus ring whole. Periods that only show
+  inside the plot and never moves the page. A past span — a week, days chosen, an earlier
+  day — opens on its first periods. A live one, «Now» or «Today», opens on its running period,
+  scrolled on only as far as that period needs to stand at the frame's end — one period in from
+  it where later ones follow, so the fade toward those falls on the next and not on it — and
+  the minute or hour running and the minutes with no data yet are in view beside the ones
+  leading to them; while the reader leaves the frame there, it keeps the running period at its
+  end as the span moves on with the clock, and once they scroll it, a new minute or the bar's
+  refresh keeps the period they read where it stood until they scroll back to the running one.
+  The plot fades out toward an edge past which periods are hidden, at the axis on a live span
+  opened on its end (a mask, which paints no colour and drops while the keyboard stands in the
+  plot), keeps the value axis in view over the plot's start, and brings a period the keyboard
+  reaches clear of that axis with its focus ring whole. Periods that only show
   keep sharing the chart's width, however narrow that makes them. A period compared with the
   one shown stands on the same scale as a short line at its height over each column, an edge
   and not a hue, so a period before that was larger never outweighs the columns shown: the
