@@ -1240,6 +1240,18 @@ CLAUSE_FAULTS: tuple[
     ),
     (
         "identities",
+        "changed its checklist beyond the claims released",
+        lambda ids: [
+            (
+                "UPDATE work_items SET checklist = json_set(checklist, '$[0].text', 'Look again')"
+                " WHERE work_item_id = ?",
+                (ids["WM-4"],),
+            )
+        ],
+        ["identities"],
+    ),
+    (
+        "identities",
         "has the labels",
         lambda ids: _quiet(
             """UPDATE work_items SET labels = '["ui"]' WHERE work_item_id = ?""", (ids["WM-6"],)
