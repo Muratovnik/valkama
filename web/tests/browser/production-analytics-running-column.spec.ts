@@ -6,7 +6,8 @@
  * A live period, «Now» or «Today», opens on its running column: the minute or hour still running
  * stands whole inside the frame at the frame's end, clear of the scale, with the minutes that have
  * no data yet beside it, and the frame fades only toward an edge periods are hidden past — at the
- * scale, where the earlier minutes are. A past period — this week, the past four weeks, an earlier
+ * scale, where the earlier minutes are, and at the end only over a later hour, never over the
+ * running one or its name. A past period — this week, the past four weeks, an earlier
  * day — opens on its first periods, its first column beside the scale. Each lands on its own
  * opening when the reader switches from a past period to a live one and back, and a reload on
  * «Now» opens on the running minute again.
@@ -83,15 +84,29 @@ const framePlace = (page: Page) =>
     const { left, right } = frame.getBoundingClientRect()
     const gutter = Number.parseFloat(getComputedStyle(frame).getPropertyValue('--period-gutter'))
     const slots = [...frame.querySelectorAll<HTMLElement>('.period-slot')]
+    const running = slots.findIndex((slot) => slot.querySelector('.period-incomplete'))
+    // The running period's name on the time axis, by the key it shares with its column.
+    const name = [...frame.querySelectorAll<HTMLElement>('.period-axis .chart-tick')]
+      .find((tick) => tick.dataset.key === slots[running]?.dataset.key)
+      ?.querySelector('span')
+      ?.getBoundingClientRect()
+    // How wide the fade toward a hidden edge is, as the frame resolves `--period-fade`.
+    const ruler = document.createElement('div')
+    ruler.style.inlineSize = 'var(--period-fade)'
+    frame.append(ruler)
+    const fade = ruler.getBoundingClientRect().width
+    ruler.remove()
     return {
       room: { left: left + gutter, right },
+      fade,
       scrolled: frame.scrollLeft,
       overflow: frame.scrollWidth - frame.clientWidth,
       slots: slots.map((slot) => {
         const box = slot.getBoundingClientRect()
         return { key: slot.dataset.key ?? '', left: box.left, right: box.right }
       }),
-      running: slots.findIndex((slot) => slot.querySelector('.period-incomplete')),
+      running,
+      name: name ? { left: name.left, right: name.right } : null,
       pending: slots.flatMap((slot, index) =>
         slot.querySelector('.period-pending') ? [index] : [],
       ),
@@ -123,6 +138,15 @@ function fadeAgrees(place: Place) {
 }
 
 /**
+ * Whether a box stands whole in the frame and clear of the fade toward its end, which is drawn
+ * where periods are hidden past that end.
+ */
+function clearOfFade(place: Place, box: { left: number; right: number } | undefined) {
+  const end = place.room.right - (place.hint.end ? place.fade : 0)
+  return box !== undefined && box.left >= place.room.left - 1 && box.right <= end + 1
+}
+
+/**
  * Whether the running column stands at the frame's end, scrolled no further on than that takes:
  * the frame scrolled all the way where it is the last column; else the column after it whole in
  * view at the end, under the fade toward the later ones, and the one after that not.
@@ -135,14 +159,16 @@ function atFrameEnd(place: Place) {
 }
 
 /**
- * What a live opening holds: the running column whole in view, every column with no data yet
- * beside it, at the frame's end when the frame had to scroll to it, and the fade where periods
- * are hidden — never at the end of «Now», whose running minute is its last.
+ * What a live opening holds: the running column and its name on the time axis whole in view and
+ * clear of the fade toward a hidden end, every column with no data yet beside it, at the frame's
+ * end when the frame had to scroll to it, and the fade where periods are hidden — never at the
+ * end of «Now», whose running minute is its last.
  */
 function liveOpening(place: Place) {
   const running = place.slots[place.running]
   return {
     running: place.running >= 0 && inView(place, running),
+    clearOfFade: clearOfFade(place, running) && clearOfFade(place, place.name ?? undefined),
     pending: place.pending.every((index) => inView(place, place.slots[index])),
     atEnd: place.scrolled <= 1 || atFrameEnd(place),
     fade: fadeAgrees(place),
@@ -150,7 +176,7 @@ function liveOpening(place: Place) {
 }
 const LIVE: Opening = {
   verdict: liveOpening,
-  expected: { running: true, pending: true, atEnd: true, fade: true },
+  expected: { running: true, clearOfFade: true, pending: true, atEnd: true, fade: true },
 }
 
 /** What a past opening holds: not scrolled, its first column beside the scale, the fade agreeing. */
