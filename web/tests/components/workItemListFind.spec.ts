@@ -318,6 +318,46 @@ describe('a term in the bar', () => {
   })
 })
 
+describe('a term in a tree', () => {
+  // A goal six levels deep, filtered down to its deepest row: the five above it
+  // stand as its path, and the deepest stands past the indent's fifth level.
+  const chain = Array.from({ length: 6 }, (_, at) =>
+    boardItem(at + 1, 'backlog', {
+      container: at < 5,
+      kind: at < 5 ? 'epic' : 'task',
+      parent_id: at === 0 ? null : boardItem(at).work_item_id,
+    }),
+  )
+  const deepest = chain.slice(-1)
+
+  async function tree() {
+    const plugin = i18n()
+    const wrapper = mount(WorkItemList, {
+      attachTo: document.body,
+      global: { plugins: [plugin] },
+      props: { items: deepest, links: [], tree: { filtered: true, scope: chain, space: 'main' } },
+    })
+    await flushPromises()
+    return wrapper
+  }
+
+  it('finds a path row by what matched under it, as the row prints it', async () => {
+    const wrapper = await tree()
+    await open(wrapper, '1 match')
+    expect(count()).toBe('1 of 5')
+    expect([...current(), ...others()]).toEqual(
+      ['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4', 'MAIN-5'].map((row) => ({ row, text: '1 match' })),
+    )
+  })
+
+  it('finds a row deeper than the indent by the parent it prints', async () => {
+    const wrapper = await tree()
+    await open(wrapper, 'in MAIN-5')
+    expect(count()).toBe('1 of 1')
+    expect(current()).toEqual([{ row: 'MAIN-6', text: 'in MAIN-5' }])
+  })
+})
+
 describe('the steps between matches', () => {
   it('go on with Enter and F3 and back with Shift, round past either end', async () => {
     const wrapper = await list()

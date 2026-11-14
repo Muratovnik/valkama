@@ -40,6 +40,12 @@ export interface RowReading {
   /** When the row last moved, as the list says it. */
   updated: string
   words: MarkWords
+  /**
+   * What a tree prints after the title (`WorkItemListTreeWords.vue`): how much
+   * under the row matched and the parent the indent no longer shows; none in a
+   * flat list.
+   */
+  tree?: readonly string[]
 }
 
 const marksOf = (item: WorkItemBrief, facets: readonly FacetId[], asked: FacetContext = {}) =>
@@ -62,7 +68,7 @@ function underTitle(item: WorkItemBrief, { context, fit, updated, words }: RowRe
  * prints at this width and in this language, and nothing it keeps out of sight.
  */
 export function rowWords(item: WorkItemBrief, reading: RowReading): string[] {
-  const { fit, updated, words } = reading
+  const { fit, tree = [], updated, words } = reading
   const shown = (key: SortKey) => !isFolded(fit, key)
   const cell = (facets: readonly FacetId[]) => cellWords(marksOf(item, facets), words)
   return [
@@ -70,6 +76,7 @@ export function rowWords(item: WorkItemBrief, reading: RowReading): string[] {
     item.reference,
     ...(shown('priority') ? [] : runWords(leadMarks('priority', 'list', item), words)),
     item.title,
+    ...tree,
     ...underTitle(item, reading),
     ...(shown('state') ? runWords(marksOf(item, ROW_FACETS.STATE), words) : []),
     ...(shown('priority') ? cell(ROW_FACETS.PRIORITY) : []),

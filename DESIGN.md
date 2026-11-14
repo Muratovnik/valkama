@@ -2067,7 +2067,8 @@ would move from under them. Selecting does nothing but select, and nothing is ch
 the person but at their own press: Send is what sends. Accepting what the agent recommends is
 that press, in one block of a review or in all the blocks of a choice that wait, and it fills
 only what the person has not chosen and sends nothing by itself. Across blocks, «Accept
-recommended in all» opens in place the list of what would go, a line per block with its task's
+recommended in all» is offered only where the list's host turns it on, which «Needs my answer»
+does not yet; where it is offered, it opens in place the list of what would go, a line per block with its task's
 number, its title and what would be chosen in it, says how many blocks it leaves out because
 their recommendation does not answer them, and sends only on «Accept N»; each block is filled
 and written by its own question, so one that went folds and one that did not keeps what was
