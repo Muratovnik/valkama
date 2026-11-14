@@ -10,22 +10,61 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
+
 ### Changed
 
-- **A section splits by a second dimension from its heading, and all its charts show the
-  pairs.** «Split by» now stands in the heading of a dimension's section, in place of the
-  table head's own choice, and offers «None» and every other dimension. With a split
-  chosen, the ranked bars, the small charts, the day columns and the table show the
-  section's pairs, each named by both values, the section's value first:
-  «claude-opus-5-5 · high». A pair keeps one hue across the charts, the table has a row
-  per pair instead of the crossed matrix, and the download writes one row per pair. The
-  split is part of the page's address, so a reload or a link opens it and Back returns the
-  split before. Where a pair's name does not fit its line, in the ranked bars, the small
-  charts' names and the table, its first part gives way, «claude-opus-5-… · medium», and
-  the separator and the second part stand whole; the hint says the whole pair. A pair's
-  bar, small chart and legend entry are named by what pressing them does with its first
-  value, «Show the tasks of claude-opus-5-5», and described by the whole pair before their
-  figures, so a screen reader tells the pairs of one model apart.
+- **The Analytics page is rebuilt as a monitor.** A rail down the side holds a tile for
+  the overview and one for each of the nine dimensions — account, project, task,
+  executor, role, launch class, model, effort and environment — each with its leading
+  value, its share and a small bar of the split, so every breakdown is in view before any
+  is opened. The rail is as wide as its entries need, from 15 to 22rem, and neither a
+  choice nor arriving figures change its width. The overview shows the period's agent
+  time, tokens and cost estimate as cells that choose the measure, the period chart with
+  the period before as a dashed outline, the tasks that grew and fell the most, and the
+  first five tasks, models, roles and projects. A dimension's section shows its values as
+  ranked bars, as small charts on one scale and as a table at its full height, which sorts
+  by any column and downloads as CSV. The panel is the one part that scrolls: the table's
+  heading row and total row stay at the panel's edges while any of its rows is in view,
+  only a table wider than its column scrolls sideways in a frame, and «To the table» over
+  the charts, like the ranked list's «3 more — in the table», brings the table into view
+  and focuses it. A section, its groups and their blocks each keep a spacing and a heading
+  size of their own. The rail's entries, the ranked rows and the table rows show the
+  pointer, the choice and the keyboard focus alike, and none changes size between them; a
+  row of the day table takes the pointer's ground wherever it is pointed, and the keyboard
+  ring stands round the one cell focused. The page fills the window instead of one narrow
+  column, its bar and the rail's entries start on the line of the module's name, and on a
+  narrow screen the rail and a section take turns.
+- **Every chart mark has its hint and its row's action, and nothing on the Analytics page
+  moves under the pointer.** The line of words over the period chart is gone, and the
+  chart takes its height. A period's column and each of its segments, a ranked bar, a
+  small chart, a reading on the quota's step line and a legend entry say themselves in a
+  hint, under the pointer and on keyboard focus, leaving out what the mark already prints:
+  a period its sum against the period before and its values largest first, a segment its
+  value and its share of the period. A mark acts as its row of the table does: a task
+  opens its card over the page, any other value narrows the view to itself, and the folded
+  tail, unknown work and a period that only shows give the hint alone. A period chart is
+  one Tab stop, on the period under way, and the arrows go on into its segments. A text
+  too long for its line ends in an ellipsis and is whole in its hint and in the chart's
+  table, and a name in a table has a hint only where it is cut. Tiles, cells and charts
+  keep their size while figures arrive.
+- **What a section's figures leave out is said once, in the «ⓘ» of its heading.** That a
+  cost is an estimate at API prices, what the tokens count, that times by the minute are
+  estimates, that the period and the filters do not reach the quota, and what «Where the
+  window went» leaves out no longer stand under every block: each is said in the «ⓘ» that
+  ends its section's heading, and the overview, a dimension and the token kinds each now
+  carry a heading with their name for it. A heading names what is shown, so «Estimated
+  cost at API prices» is now «Cost» on the measure and in the table's head. A period still
+  running is hatched, and its hint, its accessible name and its table row say it is
+  running; the time axis no longer writes «so far» under its name.
+- **A task's card opens over Analytics and Settings instead of moving to the board.** A
+  task pressed on the Analytics page, or opened from «Go to a task», from the questions
+  waiting for an answer or from a reference in any text while Analytics or Settings is on
+  show, opens its card over that page, which keeps its view and its scroll under the card;
+  the page's address names the card, and Back closes it. Planning still opens the card on
+  its board, and a press with a modifier key on a task link still follows the link. When a
+  card over a page cannot read its space, it says so in the shell's notice, in the words
+  the board uses, and still edits what needs no space, such as the priority.
 - **A search finds every word, wherever it stands, best match first.** `search_work_items`
   matched the whole query as one piece of text and listed the newest change first, so a
   query of several words mostly found nothing. It now reads the query as words: an item
@@ -35,8 +74,8 @@ checkouts are therefore distinguishable even at the same version.
   match comes first, the title weighing three times the rest. A query that is exactly a
   reference or a number alone is read as one phrase, as before, and answers that item
   first. The first open after the upgrade fills a word index from the items already there,
-  after a verified recovery point, and the store schema stays at 17. A store whose SQLite
-  lacks FTS5 still writes every item and searches by phrase, as before.
+  after a verified recovery point. A store whose SQLite lacks FTS5 still writes every item
+  and searches by phrase, as before.
 - **The first launch opens on the shell itself.** The desktop window used to show a small
   line of text on a black ground and then cut to the whole shell. It now draws the shell's
   chrome from its first frame — the rail with the mark and its first entries, the context
@@ -46,23 +85,49 @@ checkouts are therefore distinguishable even at the same version.
   in a browser. Once a start lasts a second the panel says what the window waits for, and
   with reduced motion nothing in it moves. The next start draws the rail at the width you
   left it; the window used to keep only the language.
-- **The usage read gives each step by the pair.** With two dimensions in `group_by`, each
-  point of `series` in `GET /api/analytics/usage` now breaks its step down by the pair of
-  both, and each of its `groups` names both dimensions as a row does, where it used to
-  break the step down by the first dimension alone and name only that one. The groups of a
-  step still add up to the step exactly; with one dimension nothing changes.
-- **A filter on the Analytics page repaints nothing it leaves.** A value's colour, or a
-  pair's, is now its place in the period's ranking without the page's filters, so a filter
-  that takes the largest value away leaves every other value the colour it had in its
-  tile, its bar, its small chart and the day columns, where each used to move up a hue.
-  Another measure may still repaint.
-- **The first screen downloads about a sixth less.** The card and the list of questions
+- **Every heading takes the size of its level, and the Analytics headings nest.** A
+  section heading in a drawer no longer stands a step smaller than on a page: a card's
+  sections and a question's title take a section's size, and the groups under them a
+  group's. In the installation checks in Settings, «Needs attention» and «Passed checks»
+  head groups under their section, and a finding's title is the label over its lines.
+  Where the context bar stacks its controls under the module's name, the name keeps its
+  own size instead of a section's. On the Analytics page each heading is one rank under
+  the heading of the part around it, so a screen reader's list of headings reads a chart
+  under its section, not beside it.
+- **The first screen downloads about an eighth less.** The card and the list of questions
   waiting for an answer are no longer in the code the first screen loads before it can
   draw. The card downloads once the board stands, so opening one still waits for nothing;
   the questions download as their dialog opens. Opened before its code has arrived, either
   says «Loading» in its drawer or dialog after the usual delay rather than standing empty,
   and the card's drawer shows its bar with Close at once, so nothing moves when the card
-  arrives.
+  arrives. Focus that stood in the drawer while it waited goes into the card as it
+  arrives, instead of falling to the page.
+- **A filter on the Analytics page repaints nothing it leaves.** A value's colour, or a
+  pair's, is its place in the period's ranking without the page's filters, so a filter
+  that takes the largest value away leaves every other value the colour it had in its
+  tile, its bar, its small chart and the day columns. Another measure may still repaint.
+- **A chart's time axis counts in one round unit.** Agent time on an axis reads in
+  minutes, hours or days, whichever fits the largest value, instead of mixing days and
+  hours in one tick.
+- **A card's Agents tab says the totals and leads to Analytics.** Under the figures —
+  work, all agents, cost, tokens — now stands the link to the same work on the Analytics
+  page, which breaks it down by kind of token, model and effort; the card no longer
+  repeats those lists. Who did the work is one list by role and launch class, rows that
+  differed only by effort added together, and a row of under a minute with no tokens is
+  left out. What a figure counts is said when you point at it, focus it or tap it, and
+  only a cost missing a price keeps a line of its own under the figures.
+- **A space's stream does not send the space the page has just read.** `GET /api/planning`
+  and each frame of `GET /api/events?view=planning` carry `revision`, a digest of the
+  model, and the page opens the stream after its read with `since=<revision>`. While the
+  model is unchanged the stream says `event: current` instead of sending the whole space
+  again, so the server no longer builds it twice at once and the page no longer parses it
+  twice. A change between the read and the stream still comes as the first frame, and a
+  browser reconnecting on its own (`Last-Event-ID`) is still sent the model.
+- **The usage read gives each step by the pair.** With two dimensions in `group_by`, each
+  point of `series` in `GET /api/analytics/usage` now breaks its step down by the pair of
+  both, and each of its `groups` names both dimensions as a row does, where it used to
+  break the step down by the first dimension alone and name only that one. The groups of a
+  step still add up to the step exactly; with one dimension nothing changes.
 - **Three argument forms agents write are read instead of refused.**
   `get_work_item_request` reads `request_id` as its `id`, and every tool whose `id` is a
   work item reads `work_item_id` as it, the field that `id`'s description names. An
@@ -90,6 +155,71 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **The Analytics page shows the subscription quota.** Two tiles, «Five hours» and
+  «Week», stand on the rail after the token kinds and name the tightest account's window
+  with its share and whether it is fresh or silent. Each opens a panel where every
+  account stands on a surface of its own: for every window a bar with a tick where steady
+  use would stand, when it resets, its forecast (a time it runs out at for the five
+  hours, a range for a week), how old its reading is and which source read it, and its
+  readings as a step line, each with a table view. An account's windows stand side by
+  side where each has 24rem, one under the next where not. A running window's step line
+  opens on its start to now and a third of that span past now, where the forecast
+  carries the steady pace on; «Whole window» shows all of it, and a frame dragged along
+  the line, or stretched from a reading with Shift and an arrow, narrows that line alone.
+  The panel reads the quota again every 30 seconds while the tab is visible and keeps its
+  figures meanwhile; when a read again fails, the figures stay and the panel says how old
+  they are. No source, a silent window and a fresh 0 % read differently, and no
+  percentage is added to another or shown beside dollars.
+- **The quota panel says where each window went.** Under each window of an account, five
+  hours, the week or a model's week, «Where the window went» ranks the work Valkama
+  recorded on that account since the window started by its API price estimate, each item
+  with its share of that estimate, by task, project or model, the first five and one line
+  for the rest. The quota's «ⓘ» says it is the API price estimate and not quota points,
+  and that work in claude.ai and the desktop app is not in it. It reads
+  `GET /api/analytics/usage` by the account's `seat`, for the windows shown, so no other
+  account's work is counted; work of the organization with no account known is said
+  apart. No work, such work alone, a wait and a failed read with its retry each say so in
+  the block, and the quota's figures stand meanwhile.
+- **Your own period runs between days or moments, and a chart sets it.** The period you
+  choose may now run between two moments to the minute as well as between two days. A
+  frame dragged along a period chart's time axis, or stretched from the focused period
+  with Shift and an arrow, becomes that period and keeps the section: whole days stay
+  days, and hours or minutes become the moments they run between, the running minute
+  included. Pressing an hour of a single day, or a minute of «Now», that has begun narrows
+  the view to it, broken down by task, as a day does; an hour still to come only shows. A
+  span between moments is drawn by the minute up to two hours, by the hour up to three
+  days and by the day past that, and is compared with as long a span right before it. The
+  bar names the span in place of the two day fields, and choosing a preset leaves it. Each
+  span set is a step of the history, so Back returns the view it was set from, and the
+  address holds it; a link with two days opens as before.
+- **A live period, «Now».** The Analytics page shows the last hour by the minute and
+  reads it again every 30 seconds while the tab is visible; a hidden tab asks nothing. A
+  refresh moves nothing and keeps the scroll, the section and the sort. The minutes after
+  the newest record are hatched as «no data yet» rather than drawn as a drop: on a working
+  machine records arrive in batches up to a minute and a half apart.
+- **The Analytics bar says how fresh the figures are, and stays within its width.** Beside
+  the periods and the filters it says how old the newest record is, «● 15 s ago», the dot
+  for a live period only, in the room of its widest age, so nothing beside it moves as the
+  age grows; the record's moment, and for a live period how often it reads itself again,
+  are its hint and what a screen reader hears. It says the age beside a period with no
+  work as well, and «No records» while the store holds none. Below 50rem, and wherever one
+  line has no room, the bar is two rows: the periods and the filters, then your own
+  period's ends and the freshness with «Refresh» at the end, where a failed refresh is
+  said in full words. Where room is short, the buttons give up their words and a span's
+  name is cut at its end, whole in its hint, so «Refresh» stays inside the bar.
+- **A section splits by a second dimension, and all its charts show the pairs.** «Split
+  by» stands in the heading of a dimension's section and offers «None» and every other
+  dimension. With a split chosen, the ranked bars, the small charts, the day columns and
+  the table show the section's pairs, each named by both values, the section's value
+  first: «claude-opus-5-5 · high». A pair keeps one hue across the charts, the table has a
+  row per pair, and the download writes one row per pair. The split is part of the page's
+  address, so a reload or a link opens it and Back returns the split before. Where a
+  pair's name does not fit its line, in the ranked bars, the small charts' names and the
+  table, its first part gives way, «claude-opus-5-… · medium», and the separator and the
+  second part stand whole; the hint says the whole pair. A pair's bar, small chart and
+  legend entry are named by what pressing them does with its first value, «Show the tasks
+  of claude-opus-5-5», and described by the whole pair before their figures, so a screen
+  reader tells the pairs of one model apart.
 - **The work list finds in every row.** A list of 300 rows or more keeps only the rows
   about its window in the page, so the browser's find reached those and missed the rest.
   While the list is what the page shows, Ctrl+F (⌘F) now opens the list's own find bar
@@ -110,6 +240,102 @@ checkouts are therefore distinguishable even at the same version.
   title or description share the new title's words, best first, by reference and title, so
   an agent that filed the same change twice sees it at once. It is a hint, not a check:
   nothing is refused on it.
+- **You see when Valkama tells the agent your news.** The notice a hook hands the agent
+  about its work items reaches the model only, so the agent could say in your chat that
+  you answered, or that another agent wrote, with nothing on screen to show why. In Claude
+  Code the orchestrator's hook answer now also carries a `systemMessage`, which the client
+  shows you and does not send to the model: one line per item the notice tells, with the
+  item's reference and title, saying whether it was what you did, what another agent
+  wrote, or both. It is written in the language of owner alerts, Russian or English. A
+  subagent's hook and Codex answer as before, without it.
+- **Analytics names sessions and accounts instead of showing hex ids.** An executor is
+  labelled by the title its client gave the session, the same one the live work list
+  shows, wherever Analytics names it: the rail, the cards, the bars, the table, a split's
+  pairs, the filters and the marks' hints. The client and the start of the session id move
+  to the label's hint, beside the name in the table and under the choice in a filter's
+  list. A session with no title, such as a Codex session, keeps its old label.
+  `GET /api/analytics/usage` now gives an executor a `title`, read from the tail of its
+  transcript and kept nowhere. Each transcript is read once per answer and again only
+  after it changes.
+- **Names for accounts.** The usage records hold only an organization id, so Settings →
+  General → Accounts lists each account the past year saw, with its id and its share of
+  agent time, and lets you name it or clear the name. The name is saved to the store when
+  its field is left or Enter is pressed, and the field says while it saves, when a save
+  failed (with a retry) and when a name was cleared. The Analytics page on every device,
+  and the quota alerts, name the account by it, with the id still in the hint. `GET` and
+  `PUT /api/quota/account-names` read and write the names: one line of at most 80
+  characters per organization, the server refusing a longer name or a bad id and changing
+  nothing.
+- **The usage read answers by the minute.** `GET /api/analytics/usage` takes
+  `step=minute` beside `hour` and `day`, so a client can draw the last hour as it is
+  spent. A minute starts on the caller's full minute, and a period still holds at most
+  2,400 steps, which is forty hours by the minute. A stretch of work is split between its
+  minutes in proportion to its time, as it is between hours, so a minute's tokens and
+  cost are a share of the stretch, not a count of what was sent in that minute.
+- **`GET /api/analytics/quota`: each account's subscription quota windows as they stand
+  now.** One entry per account with a quota sample in the last seven days, by its UUID or
+  the provisional seat a reading without one is on, with its plan and name, and one per
+  organization that worked in that span with no source. A provisional seat whose week has
+  ended is left out, so a machine read across a week's reset is one account. Each window
+  of five hours, the week or a model's week gives its latest percent with that reading's
+  time and source, its reset and start, where steady use would stand now, its readings
+  since its start, and a forecast: the five-hour window's point answer, a week only as a
+  range. A window is `fresh` within the fifteen minutes the quota alerts read, and
+  `silent` after; the usage credits and a gateway's spend limit are their own kinds, with
+  no percent and no money. No field adds percentages, within an account or across
+  accounts.
+- **`GET /api/analytics/usage` breaks work down by `seat`**, the subscription account of
+  its organization a stretch was spent on: the account's UUID where a quota sample names
+  it, else the seat's key for its week, and one unknown group for work no sample speaks
+  for or that names no organization. It groups, filters and compares like the other
+  dimensions, and its groups add up to the total. The seats of a read are worked out in
+  one pass over the samples it needs. The Analytics page does not offer it yet.
+- **`valkama statusline`**, Claude Code's status line command, is the first live quota
+  source. It records the five-hour window, the week and a gateway's spend limit from the
+  status line input as samples of the session, straight into the store or through the
+  hook spool, and prints nothing of its own. A status line the user had is passed with
+  `--previous=<base64>` and still shows: it runs with the same input through the same
+  shell, and is stopped after 10 seconds. `doctor` reports the source as off, silent or
+  working. `valkama capabilities` names the command and its interface version under
+  `interfaces.statusline`, so whatever registers it can tell a release that has it.
+- **The quota source `mod`: Valkama's Claude Code mod `valkama-quota`.** It reads the
+  five-hour window and the week inside every Claude Code session, the VS Code
+  extension's included, which runs no status line: at a session's start, when a window
+  moves during a turn and after each response. It hands the reading to the new
+  `valkama statusline --source=mod` through the managed launcher, as the status line's
+  own JSON fields, so the reading takes the status line's parser, store-or-spool path
+  and refusals. The hand-over runs after the hook answers, one at a time, and is stopped
+  after 10 seconds, so a missing, slow or failing Valkama costs the reading, never a
+  turn. The repository is now a Claude Code marketplace, `valkama`: install the mod with
+  `/plugin install valkama-quota --marketplace Muratovnik/valkama`, or with
+  `claude plugin marketplace add <checkout>` and
+  `claude plugin install valkama-quota@valkama`. `doctor` reports the mod as off
+  (not installed or not enabled), silent (no `mod` reading in three days) or working.
+- **The quota source `poll`, off until the owner switches it on.** Settings carries the
+  switch, with the warning that the usage endpoint is undocumented and that Anthropic's
+  terms do not explicitly permit this use; `GET` and `PUT /api/quota/settings` read and
+  write it, and the listener starts or stops the poll at once. The poll reads Claude
+  Code's sign-in for each request, sends it only to `api.anthropic.com` over HTTPS and
+  keeps it nowhere, and keeps no e-mail address or name from the profile. It asks every
+  five minutes while the organization works and every fifteen otherwise, backs off after
+  a 429, leaves a refused or expired sign-in alone until it changes, and waits while
+  status line or mod readings of the organization are fresh. `valkama doctor` says
+  whether it is off, working, paused or refused, and what to do.
+- **`valkama quota import --source FILE`** imports quota history from JSON lines, one
+  sample a line, all or nothing. Importing the same file again adds nothing.
+- **The store keeps subscription quota samples and accounts, at store schema 17.**
+  `quota_samples` holds one row per reading of one window that changed, from the
+  status line, the mod, the poll or an import, each named by its organization or its
+  session, its seat and its window: five hours, the week, a model's week, extra usage or
+  a gateway's spend limit. `quota_accounts` holds an account by its organization and
+  UUID, with its plan, and no e-mail address or name, so the account holds from week to
+  week; a sample without the UUID belongs to the account whose samples name its seat
+  that week. `quota_account_names` holds the owner's name for an account, one per
+  organization. Samples and names are kept in every store snapshot, and samples for a
+  year. A usage segment's seat is read as a state: the latest sample of each feed
+  at or before it holds until its window resets, its own session's feeds first. The
+  upgrade takes the recovery point `preschema17`, and a build at 16 refuses the store
+  after it.
 
 ### Removed
 
@@ -164,12 +390,14 @@ checkouts are therefore distinguishable even at the same version.
   counts the files no call took. The skill no longer asks for Valkama calls in a response
   of their own, and says what to do when the failure still shows up because an older
   release is installed. See [the hook contract](docs/hook-contract.md#the-call-pair).
-- **Fewer batch calls fail in the client before they reach Valkama.** Claude Code refused
-  `apply_work_item_changes` calls as input that "could not be parsed as JSON" when an
-  agent wrote `comment`, `summary` or `transition` as bare text, and most retries failed
-  the same way. Those groups had no description; each now says it is an object, never bare
-  text, and shows the JSON it takes, such as `{"body": "the text"}` or
-  `{"state": "done"}`. The skill says the same beside the batch's groups.
+- **Reads a page sends at once no longer queue for the store, and Analytics opens in about
+  half the time.** Every read opened the store through its whole bring-up under the lock
+  that serialises migrations, so the reads a page sends at once each waited out the lock
+  for all the ones before it, and the page's wait mark stayed up until the last. A read of
+  a store already at this build's schema now opens it without that lock; any other store
+  is still brought up, migrated or refused first. The usage reads themselves are worked
+  out one at a time, because side by side they only traded the interpreter lock on every
+  row and all finished late; in turn, the first is answered in its own time.
 - **The chrome no longer shows interim values at launch.** Until the module list was read
   the context bar said the module's id (`planning`), and until the remembered place was
   restored it said «Global» and marked «Work» as current, whatever the app then came back
@@ -179,6 +407,12 @@ checkouts are therefore distinguishable even at the same version.
   longer drops by the list's height a second after launch, and that frame no longer waits
   for the space's read, so on a large space the groups no longer stay hidden for the
   seconds the read takes.
+- **Fewer batch calls fail in the client before they reach Valkama.** Claude Code refused
+  `apply_work_item_changes` calls as input that "could not be parsed as JSON" when an
+  agent wrote `comment`, `summary` or `transition` as bare text, and most retries failed
+  the same way. Those groups had no description; each now says it is an object, never bare
+  text, and shows the JSON it takes, such as `{"body": "the text"}` or
+  `{"state": "done"}`. The skill says the same beside the batch's groups.
 - **A batch's checklist tick can complete a step another session holds.** Each
   `checklist_ticks` entry of `apply_work_item_changes` takes `force`, which it used to
   refuse as an unknown field, so `force: true` completes a step another holder claimed, as
@@ -192,199 +426,6 @@ checkouts are therefore distinguishable even at the same version.
   batch names the overrides of every step in it, where it named only the last one before.
   A forced call that refused nothing records nothing. `force` permits what it permitted
   before.
-- **A name in an Analytics table ends in an ellipsis where it is cut, and hints only
-  then.** A long single name in a section table's button used to stop at the button's edge
-  mid-word; it now ends in «…». A table name's hint used to show over whole names too; it
-  now shows only when the name is cut.
-- **The Analytics bar no longer runs past its end beside a span of your own days.** In a
-  window from about 1108 to 1300px beside the navigation, the bar's one line ran «Refresh»
-  past its end even with every word and gap given up, and pressing it scrolled the bar
-  sideways. Such a bar is now the two rows a narrower bar has, with a failed refresh said
-  in full words on the second; a bar with room for the one line keeps it.
-- **A hint comes for what a scroll brings under a resting pointer.** A wheel that moved a
-  ranked row, or any element with a hint, under a pointer that stayed still showed no hint
-  until the pointer moved again, and a hint that opened as a scroll was ending, such as at
-  once after another hint, was closed by that scroll and never came back. The element
-  under a resting pointer now shows its hint however it came there, and a hint a scroll
-  closed comes back when the scroll ends.
-- **The Analytics bar says how old the newest record is beside a period with no work.**
-  The bar's freshness stood empty while the panel said «Nothing was spent in this period»;
-  it now says the newest record's age there too.
-- **A cut name and its share keep their space in a hint.** A ranked row whose name was cut
-  read «…part 132% of the total» in its hint, and to a screen reader, for «part 1» and
-  «32%». The name still stands on its own line over the detail.
-
-## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
-
-### Changed
-
-- **The Analytics page is rebuilt as a monitor.** A rail down the side holds a tile for
-  the overview and one for each of the nine dimensions — account, project, task,
-  executor, role, launch class, model, effort and environment — each with its leading
-  value, its share and a small bar of the split, so every breakdown is in view before any
-  is opened. The overview shows the period's agent time, tokens and cost estimate as
-  cells that choose the measure, the period chart with the period before as a dashed
-  outline, the tasks that grew and fell the most, and the first five tasks, models, roles
-  and projects. A dimension's section shows its values as ranked bars, as small charts on
-  one scale and as a table that scrolls in its own frame with its heading, names and
-  total held in view; the table sorts by any column, takes a second dimension, downloads
-  as CSV and can take the whole panel. The page fills the window instead of one narrow
-  column, and on a narrow screen the rail and a section take turns.
-- **Nothing on the Analytics page moves under the pointer.** The line that says the
-  period under the pointer keeps one line whatever it says, and so do the notes under a
-  chart; a longer text ends in an ellipsis and is whole in its hint and in the chart's
-  table. Tiles, cells and charts keep their size while figures arrive.
-- **A chart's time axis counts in one round unit.** Agent time on an axis reads in
-  minutes, hours or days, whichever fits the largest value, instead of mixing days and
-  hours in one tick.
-- **A card's Agents tab says the totals and leads to Analytics.** Under the figures — work,
-  all agents, cost, tokens — now stands the link to the same work on the Analytics page,
-  which breaks it down by kind of token, model and effort; the card no longer repeats those
-  lists. Who did the work is one list by role and launch class, rows that differed only by
-  effort added together, and a row of under a minute with no tokens is left out. What a
-  figure counts is said when you point at it, focus it or tap it, and only a cost missing a
-  price keeps a line of its own under the figures.
-- **A space's stream does not send the space the page has just read.** `GET /api/planning`
-  and each frame of `GET /api/events?view=planning` carry `revision`, a digest of the
-  model, and the page opens the stream after its read with `since=<revision>`. While the
-  model is unchanged the stream says `event: current` instead of sending the whole space
-  again, so the server no longer builds it twice at once and the page no longer parses it
-  twice. A change between the read and the stream still comes as the first frame, and a
-  browser reconnecting on its own (`Last-Event-ID`) is still sent the model.
-
-### Added
-
-- **A live period, «Now».** The Analytics page shows the last hour by the minute and
-  reads it again every 30 seconds while the tab is visible; a hidden tab asks nothing. A
-  refresh moves nothing and keeps the scroll, the section and the sort. The bar says how
-  old the newest record is, in seconds, and the minutes after it are hatched as «no data
-  yet» rather than drawn as a drop: on a working machine records arrive in batches up to
-  a minute and a half apart.
-
-- **The usage read answers by the minute.** `GET /api/analytics/usage` takes
-  `step=minute` beside `hour` and `day`, so a client can draw the last hour as it is
-  spent. A minute starts on the caller's full minute, and a period still holds at most
-  2,400 steps, which is forty hours by the minute. A stretch of work is split between its
-  minutes in proportion to its time, as it is between hours, so a minute's tokens and
-  cost are a share of the stretch, not a count of what was sent in that minute.
-- **You see when Valkama tells the agent your news.** The notice a hook hands the agent
-  about its work items reaches the model only, so the agent could say in your chat that
-  you answered, or that another agent wrote, with nothing on screen to show why. In Claude
-  Code the orchestrator's hook answer now also carries a `systemMessage`, which the client
-  shows you and does not send to the model: one line per item the notice tells, with the
-  item's reference and title, saying whether it was what you did, what another agent
-  wrote, or both. It is written in the language of owner alerts, Russian or English. A
-  subagent's hook and Codex answer as before, without it.
-- **Analytics names sessions and accounts instead of showing hex ids.** An executor is
-  labelled by the title its client gave the session, the same one the live work list
-  shows, wherever Analytics names it: the rail, the cards, the bars, the table, the
-  crossed table's headings, the filters and the chart readout. The client and the start of
-  the session id move to the label's hint, beside the name in the table and under the
-  choice in a filter's list. A session with no title, such as a Codex session, keeps its
-  old label. `GET /api/analytics/usage` now gives an executor a `title`, read from the
-  tail of its transcript and kept nowhere. Each transcript is read once per answer and
-  again only after it changes.
-- **Names for accounts.** The usage records hold only an organization id, so Settings →
-  General → Accounts lists each account the past year saw, with its id and its share of
-  agent time, and lets you name it or clear the name. The name is saved to the store when
-  its field is left or Enter is pressed, and the field says while it saves, when a save
-  failed (with a retry) and when a name was cleared. The Analytics page on every device,
-  and the quota alerts, name the account by it, with the id still in the hint. `GET` and
-  `PUT /api/quota/account-names` read and write the names: one line of at most 80
-  characters per organization, the server refusing a longer name or a bad id and changing
-  nothing.
-- **The Analytics page shows the subscription quota.** Two tiles, «Five hours» and
-  «Week», stand on the rail after the token kinds and name the tightest account's window
-  with its share and whether it is fresh or silent. Each opens a panel with a row per
-  account: for every window a bar with a tick where steady use would stand, when it
-  resets, its forecast (a time it runs out at for the five hours, a range for a week),
-  how old its reading is and which source read it, and its readings as a step line, each
-  with a table view. No source, a silent window and a fresh 0 % read differently, and no
-  percentage is added to another or shown beside dollars.
-- **The quota panel says where each window went.** Under each window of an account, five
-  hours, the week or a model's week, «Where the window went» ranks the work Valkama recorded
-  on that account since the window started by its API price estimate, each item with its
-  share of that estimate, by task, project or model, the first five and one line for the
-  rest. It says it is the API price estimate and not quota points, and that work in
-  claude.ai and the desktop app is not in it. It reads `GET /api/analytics/usage` by the
-  account's `seat`, for the windows shown, so no other account's work is counted; work of
-  the organization with no account known is said apart. No work, such work alone, a wait
-  and a failed read with its retry each say so in the block, and the quota's figures stand
-  meanwhile.
-- **`GET /api/analytics/quota`: each account's subscription quota windows as they stand
-  now.** One entry per account with a quota sample in the last seven days, by its UUID or
-  the provisional seat a reading without one is on, with its plan and name, and one per
-  organization that worked in that span with no source. A provisional seat whose week has
-  ended is left out, so a machine read across a week's reset is one account. Each window of five hours, the
-  week or a model's week gives its latest percent with that reading's time and source, its
-  reset and start, where steady use would stand now, its readings since its start, and a
-  forecast: the five-hour window's point answer, a week only as a range. A window is
-  `fresh` within the fifteen minutes the quota alerts read, and `silent` after; the usage
-  credits and a gateway's spend limit are their own kinds, with no percent and no money.
-  No field adds percentages, within an account or across accounts.
-- **`GET /api/analytics/usage` breaks work down by `seat`**, the subscription account of
-  its organization a stretch was spent on: the account's UUID where a quota sample names
-  it, else the seat's key for its week, and one unknown group for work no sample speaks
-  for or that names no organization. It groups, filters and compares like the other
-  dimensions, and its groups add up to the total. The seats of a read are worked out in
-  one pass over the samples it needs. The Analytics page does not offer it yet.
-- **`valkama statusline`**, Claude Code's status line command, is the first live quota
-  source. It records the five-hour window, the week and a gateway's spend limit from the
-  status line input as samples of the session, straight into the store or through the
-  hook spool, and prints nothing of its own. A status line the user had is passed with
-  `--previous=<base64>` and still shows: it runs with the same input through the same
-  shell, and is stopped after 10 seconds. `doctor` reports the source as off, silent or
-  working. `valkama capabilities` names the command and its interface version under
-  `interfaces.statusline`, so whatever registers it can tell a release that has it.
-- **The quota source `mod`: Valkama's Claude Code mod `valkama-quota`.** It reads the
-  five-hour window and the week inside every Claude Code session, the VS Code
-  extension's included, which runs no status line: at a session's start, when a window
-  moves during a turn and after each response. It hands the reading to the new
-  `valkama statusline --source=mod` through the managed launcher, as the status line's
-  own JSON fields, so the reading takes the status line's parser, store-or-spool path
-  and refusals. The hand-over runs after the hook answers, one at a time, and is stopped
-  after 10 seconds, so a missing, slow or failing Valkama costs the reading, never a
-  turn. The repository is now a Claude Code marketplace, `valkama`: install the mod with
-  `/plugin install valkama-quota --marketplace Muratovnik/valkama`, or with
-  `claude plugin marketplace add <checkout>` and
-  `claude plugin install valkama-quota@valkama`. `doctor` reports the mod as off
-  (not installed or not enabled), silent (no `mod` reading in three days) or working.
-- **The quota source `poll`, off until the owner switches it on.** Settings carries the
-  switch, with the warning that the usage endpoint is undocumented and that Anthropic's
-  terms do not explicitly permit this use; `GET` and `PUT /api/quota/settings` read and
-  write it, and the listener starts or stops the poll at once. The poll reads Claude
-  Code's sign-in for each request, sends it only to `api.anthropic.com` over HTTPS and
-  keeps it nowhere, and keeps no e-mail address or name from the profile. It asks every
-  five minutes while the organization works and every fifteen otherwise, backs off after
-  a 429, leaves a refused or expired sign-in alone until it changes, and waits while
-  status line or mod readings of the organization are fresh. `valkama doctor` says
-  whether it is off, working, paused or refused, and what to do.
-- **`valkama quota import --source FILE`** imports quota history from JSON lines, one
-  sample a line, all or nothing. Importing the same file again adds nothing.
-- **The store keeps subscription quota samples and accounts, at store schema 17.**
-  `quota_samples` holds one row per reading of one window that changed, from the
-  status line, the mod, the poll or an import, each named by its organization or its
-  session, its seat and its window: five hours, the week, a model's week, extra usage or
-  a gateway's spend limit. `quota_accounts` holds an account by its organization and
-  UUID, with its plan, and no e-mail address or name, so the account holds from week to
-  week; a sample without the UUID belongs to the account whose samples name its seat
-  that week. `quota_account_names` holds the owner's name for an account, one per
-  organization. Samples and names are kept in every store snapshot, and samples for a
-  year. A usage segment's seat is read as a state: the latest sample of each feed
-  at or before it holds until its window resets, its own session's feeds first. The
-  upgrade takes the recovery point `preschema17`, and a build at 16 refuses the store
-  after it.
-
-### Fixed
-
-- **Reads a page sends at once no longer queue for the store, and Analytics opens in about
-  half the time.** Every read opened the store through its whole bring-up under the lock
-  that serialises migrations, so the reads a page sends at once each waited out the lock
-  for all the ones before it, and the page's wait mark stayed up until the last. A read of a store already
-  at this build's schema now opens it without that lock; any other store is still brought
-  up, migrated or refused first. The usage reads themselves are worked out one at a time,
-  because side by side they only traded the interpreter lock on every row and all finished
-  late; in turn, the first is answered in its own time.
 - **A relation linked from both ends is one link.** `relates-to` written from the
   other end used to add a second record, so a card listed the relation twice, and
   removing it from that end left the first record in place. It is now one link
@@ -392,6 +433,15 @@ checkouts are therefore distinguishable even at the same version.
   history. A store that holds such pairs keeps the earlier record of each when it
   is opened, after a verified recovery point; `blocks`, `discovered-from` and
   `duplicates` are left as they are.
+- **A hint comes for what a scroll brings under a resting pointer.** A wheel that moved a
+  ranked row, or any element with a hint, under a pointer that stayed still showed no hint
+  until the pointer moved again, and a hint that opened as a scroll was ending, such as at
+  once after another hint, was closed by that scroll and never came back. The element
+  under a resting pointer now shows its hint however it came there, and a hint a scroll
+  closed comes back when the scroll ends.
+- **A cut name and its share keep their space in a hint's text.** A ranked row whose name
+  was cut read «…part 132% of the total» to a screen reader, for «part 1» and «32%». On
+  screen the name still stands on its own line over the detail.
 - **The release check leaves the checkout's `node_modules` alone.** It no longer installs
   npm packages in the checkout it releases from, where the install emptied the
   `node_modules` other worktrees link theirs to. It copies
