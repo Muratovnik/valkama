@@ -10,8 +10,8 @@
  * is in view, its heading row stays at the panel's top edge and its total at the bottom edge
  * (`stuck`), and a row brought into view by the focus stands clear of both. Each
  * column's heading sorts by it, largest first, then the other way; the first sort is the chosen
- * measure. A row is one line: its name is cut where the column is
- * narrower (`SpendingTableName`), and the figures take what they need, the name the rest.
+ * measure. A row is one line: the figures take what they need, the name the rest down to its
+ * least, cut where the column is narrower (`SpendingTableName`).
  *
  * The sorted column's heading is marked, in the ink of the figures with its arrow and a rule under
  * it. The heading row over the frame (`SpendingTableHead`) counts the rows, gives their whole account
@@ -91,6 +91,8 @@ const acrossWords = computed(() => (props.across ? t(`analytics.byDimension.${pr
 
 /** The answer the rows are of: by both dimensions while split, the one on show otherwise. */
 const tableUsage = computed(() => crossed.value?.usage ?? props.usage)
+/** What a row names: a pair of values while split, whose name column keeps more room. */
+const rows = computed(() => (crossed.value ? 'pairs' : 'values'))
 
 const model = useTableModel(() => ({
   by: props.by,
@@ -159,6 +161,7 @@ defineExpose({ reveal })
     tabindex="-1"
     :data-measure="measure"
     :data-headings="headingLines"
+    :data-rows="rows"
     :aria-label="model.title"
     :style="{
       '--stuck-head': `${stuck.head}px`,
@@ -452,11 +455,20 @@ defineExpose({ reveal })
 }
 
 /* The name's column takes all the width the figures leave: as wide as the table, less what the
-   figures' columns need, and never wider than its frame because of a long name. */
+   figures' columns need, and never wider than its frame because of a long name. It gives them
+   room down to the least every chart table keeps its names, eight of its ems (`chartTable.css`):
+   a task's reference and the start of its title. Held at 12rem, it left the change of «Today»
+   past a frame of 676 pixels, a window of 1280 in Russian; where even the least is too much, the
+   table scrolls in its frame with the names held at its start. */
 .chart-name {
   inline-size: 100%;
-  min-inline-size: 12rem;
   max-inline-size: 0;
+}
+
+/* A pair keeps its second value whole, a model's name as long as «· claude-sonnet-5-5», with
+   the start of its first before it (`PairName`): its column keeps the 12rem that holds them. */
+.spending-table[data-rows='pairs'] .chart-name {
+  min-inline-size: 12rem;
 }
 
 /* The headings over figures on two lines, each column at its least: the frame of a narrower

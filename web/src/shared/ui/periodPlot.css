@@ -29,7 +29,8 @@
 
   /* Periods hidden past an edge (`usePlotFrame`): the plot fades out toward that edge over the
      room of a period, so a span that opens on its first days says that more lie past the frame's
-     end, and one scrolled on says it at the scale too; the scale and its ground never fade. A mask
+     end, a live one opened on its running period says it at the scale, and one scrolled between
+     says it at both; the scale and its ground never fade. A mask
      paints no colour and moves nothing. The keyboard's period keeps its ring whole: while one has
      it, nothing fades, and the period it walks to is brought into view anyway. */
   &[data-hidden-start] {

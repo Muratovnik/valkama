@@ -300,7 +300,8 @@ function refresh() {
 
 /**
  * «Now» and «Today» read themselves again while the page is seen, an interval after the last read
- * of the view, whatever asked it: a refresh, or a new period or filter.
+ * of the view, whatever asked it: a refresh, or a new period or filter. Their period chart opens
+ * on the step running (`live`).
  */
 const live = computed(() => view.value.period === 'now' || view.value.period === 'today')
 const liveRefresh = useLiveRefresh({ live: () => live.value, refresh })
@@ -403,6 +404,7 @@ const emptyDescription = computed(() => {
               :compared="read.comparedWith.value"
               :period="read.bounds.value"
               :filters="read.readWith.value"
+              :live="live"
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :project-scoped="Boolean(projectId)"
@@ -426,6 +428,7 @@ const emptyDescription = computed(() => {
               :across="view.across"
               :dimensions="filterDimensions"
               :filters="read.readWith.value"
+              :live="live"
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :refused="reportRefused"
