@@ -196,7 +196,8 @@ test('End and Page Down run no more long tasks in the tree than in the flat list
   await expect(drawnOf(page).first()).toBeVisible()
   await stillFrames(page)
   const flat = await keyTasks(page)
-  const said = (key: 'end' | 'pageDown') => `${key}: tree ${tree[key]} ms, flat ${flat[key]} ms`
+  const said = (key: 'end' | 'pageDown') =>
+    `${key}: tree [${tree[key].join(', ')}] ms, flat [${flat[key].join(', ')}] ms`
   expect(tree.end.length, said('end')).toBeLessThanOrEqual(flat.end.length)
   expect(tree.pageDown.length, said('pageDown')).toBeLessThanOrEqual(flat.pageDown.length)
   await test.info().attach('long-tasks', { body: JSON.stringify({ flat, tree }) })
