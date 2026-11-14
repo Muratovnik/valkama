@@ -82,8 +82,14 @@ const lines = (page: Page) =>
       barEnd: bar
         ? bar.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(bar).paddingRight)
         : 0,
+      // Where what the panel holds ends: inside its scrollbar's room, which it keeps.
       panelEnd:
-        panelBox && panelStyle ? panelBox.right - Number.parseFloat(panelStyle.paddingRight) : 0,
+        panel && panelBox && panelStyle
+          ? panelBox.left +
+            panel.clientLeft +
+            panel.clientWidth -
+            Number.parseFloat(panelStyle.paddingRight)
+          : 0,
       page: box('.analytics-page')?.width ?? 0,
       rail: railBox?.width ?? 0,
       panel: panelBox?.width ?? 0,

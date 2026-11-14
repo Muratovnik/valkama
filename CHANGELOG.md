@@ -199,14 +199,16 @@ checkouts are therefore distinguishable even at the same version.
   machine records arrive in batches up to a minute and a half apart.
 - **The Analytics bar says how fresh the figures are, and stays within its width.** Beside
   the periods and the filters it says how old the newest record is, «● 15 s ago», the dot
-  for a live period only, in the room of its widest age, so nothing beside it moves as the
-  age grows; the record's moment, and for a live period how often it reads itself again,
-  are its hint and what a screen reader hears. It says the age beside a period with no
-  work as well, and «No records» while the store holds none. Below 50rem, and wherever one
-  line has no room, the bar is two rows: the periods and the filters, then your own
-  period's ends and the freshness with «Refresh» at the end, where a failed refresh is
-  said in full words. Where room is short, the buttons give up their words and a span's
-  name is cut at its end, whole in its hint, so «Refresh» stays inside the bar.
+  for a live period only and not after a read that failed, in the room of its widest age,
+  so nothing beside it moves as the age grows; the record's moment, and for a live period
+  how often it reads itself again, are its hint and what a screen reader hears. It says the
+  age beside a period with no work as well, and «No records» while the store holds none.
+  Below 50rem, and wherever one line has no room, the bar is two rows: the periods and the
+  filters, then your own period's ends and the freshness with «Refresh» at the end; on a
+  phone it is three rows of one height whatever period is chosen. A failed refresh is said
+  in full words at every width and moves nothing in the bar or under it. Where room is
+  short, the buttons give up their words and a span's name is cut at its end, whole in its
+  hint, so «Refresh» stays inside the bar.
 - **A section splits by a second dimension, and all its charts show the pairs.** «Split
   by» stands in the heading of a dimension's section and offers «None» and every other
   dimension. With a split chosen, the ranked bars, the small charts, the day columns and

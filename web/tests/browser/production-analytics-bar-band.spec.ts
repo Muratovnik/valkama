@@ -1,13 +1,15 @@
 /**
  * The bar beside the reader's own span of days in the windows just wider than the two rows a
- * narrow bar always has, 1108 to 1300px beside the app's navigation, in either language, with and
+ * narrow bar always has, 1108 to 1440px beside the app's navigation, in either language, with and
  * without a refresh that failed. The oracle is the requirement: the bar is one line wherever that
- * line fits once it has given up all it can, and two rows, its last give-up, wherever it does not.
+ * line fits once it has given up all it can, a failure said included, and two rows, its last
+ * give-up, wherever it does not. The line is fitted holding a failure's room, so it is one line or
+ * two rows alike whether a refresh failed or not: about 1320px in English, 1360px in Russian.
  *
  * At every width the read again stands inside the bar, no text the bar draws is cut by a box or
- * drawn past the bar's end, and pressing the read again scrolls nothing sideways. Where the bar is
- * two rows, a failure is said in its whole words on the second row. The switch between the two
- * is where the one line stops fitting: one window narrower than the narrowest one line, the bar is
+ * drawn past the bar's end, and pressing the read again scrolls nothing sideways. A failure is said
+ * in its whole words, on two rows on the second. The switch between the two is where the one line
+ * stops fitting with the failure said: one window narrower than the narrowest one line, the bar is
  * two rows, and that line had less room to spare than the one pixel it loses there. A week at
  * 1280px, which fits, stays one line beside a failure.
  *
@@ -38,10 +40,10 @@ const DAYS: TimedStretch[] = [
 const OWN_DAYS = { period: 'custom', from: '2026-11-09', to: '2026-11-11' }
 
 /** Windows from just over the narrow bar's 50rem to where the one line has room again. */
-const BAND = [1108, 1140, 1160, 1190, 1220, 1260, 1300] as const
+const BAND = [1108, 1200, 1280, 1320, 1360, 1400, 1440] as const
 
-/** The failure as the bar says it in words, with its retry. */
-const FAILED = { en: 'Could not refresh · Retry', ru: 'Не удалось обновить · Повторить' }
+/** The failure's words, which the bar says with its retry, or without it on a line short of room. */
+const FAILED = { en: 'Could not refresh', ru: 'Не удалось обновить' }
 
 const frames = (page: Page) =>
   page.evaluate(
@@ -157,12 +159,12 @@ function expectFits(name: string, bar: Bar) {
   expect(bar.rows, `${name}: the bar's rows`).toBeGreaterThan(0)
 }
 
-/** On two rows a failure is said in its words, on the second row. */
-function expectSaidWhole(name: string, bar: Bar, failed: boolean) {
-  if (!failed || bar.rows !== 2) return
+/** A failure is said in its words, on one line or two rows; on two rows, on the second. */
+function expectSaidWhole(name: string, bar: Bar) {
   expect(bar.failureWords?.hidden, `${name}: the failure said briefly`).toBe(false)
   const { left = 0, right = 0 } = bar.failureWords ?? {}
   expect(right - left, `${name}: the failure's words`).toBeGreaterThan(40)
+  if (bar.rows !== 2) return
   expect(bar.failure?.top, `${name}: the failure under the periods`).toBeGreaterThanOrEqual(
     bar.periods?.bottom ?? Number.NaN,
   )
@@ -200,13 +202,8 @@ async function serveBand(page: Page) {
 /** Presses the read again and waits for what it says: the failure, when reads are refused. */
 async function pressRefresh(page: Page, failure: string | null) {
   await page.locator('.analytics-refresh').click()
-  if (failure) await expect(page.locator('.refresh-failed')).toHaveText(failure)
+  if (failure) await expect(page.locator('.refresh-failed')).toContainText(failure)
   await frames(page)
-}
-
-/** Has the failure said, when reads are refused, by a press of the read again. */
-async function sayFailure(page: Page, failure: string | null) {
-  await (failure ? pressRefresh(page, failure) : frames(page))
 }
 
 /**
@@ -242,53 +239,56 @@ function turnOf(seen: Record<number, Bar>) {
 }
 
 for (const lang of ['en', 'ru'] as const)
-  for (const failed of [false, true]) {
-    const failure = failed ? FAILED[lang] : null
+  test.describe(`the bar beside an own span of days, ${BAND[0]} to ${BAND.at(-1)}px, ${lang}`, () => {
+    test.use({ locale: lang === 'ru' ? 'ru-RU' : 'en-US' })
 
-    test.describe(`the bar beside an own span of days, 1108 to 1300px, ${lang}`, () => {
-      test.use({ locale: lang === 'ru' ? 'ru-RU' : 'en-US' })
+    test('is one line where it fits and two rows where not, a refresh failed or not', async ({
+      page,
+    }, info) => {
+      const band = await serveBand(page)
+      const seen: Record<number, { failed: Bar; standing: Bar }> = {}
+      for (const width of BAND) {
+        const name = `${width}px`
+        band.fail(false)
+        await page.setViewportSize({ width, height: 900 })
+        await page.goto(pageAt(OWN_DAYS))
+        await expect(page.locator('.analytics-bar-fresh time')).toBeVisible()
+        await page.evaluate(() => document.fonts.ready)
+        await frames(page)
+        const standing = await barOf(page)
+        expectFits(`${name}, the reads standing`, standing)
+        band.fail(true)
+        await pressRefresh(page, FAILED[lang])
+        const bar = await barOf(page)
+        seen[width] = { standing, failed: bar }
+        expectFits(name, bar)
+        expectSaidWhole(name, bar)
+        // The line is fitted holding the failure's room: as many rows whether it is said or not.
+        expect(bar.rows, `${name}: the rows once the failure is said`).toBe(standing.rows)
+        // The press of the read again scrolls nothing sideways.
+        const before = await scrolls(page)
+        await pressRefresh(page, FAILED[lang])
+        expect(await scrolls(page), `${name}: scrolled by the press`).toEqual(before)
+      }
 
-      test(`is one line where it fits and two rows where not${failed ? ', a refresh failed' : ''}`, async ({
-        page,
-      }, info) => {
-        const band = await serveBand(page)
-        const seen: Record<number, Bar> = {}
-        for (const width of BAND) {
-          const name = `${width}px`
-          band.fail(false)
-          await page.setViewportSize({ width, height: 900 })
-          await page.goto(pageAt(OWN_DAYS))
-          await expect(page.locator('.analytics-bar-fresh time')).toBeVisible()
-          await page.evaluate(() => document.fonts.ready)
-          await frames(page)
-          band.fail(failed)
-          await sayFailure(page, failure)
-          const bar = await barOf(page)
-          seen[width] = bar
-          expectFits(name, bar)
-          expectSaidWhole(name, bar, failed)
-          // The press of the read again scrolls nothing sideways.
-          const before = await scrolls(page)
-          await pressRefresh(page, failure)
-          expect(await scrolls(page), `${name}: scrolled by the press`).toEqual(before)
-        }
+      // Two rows at the band's start, where the one line does not fit; one line, once it fits,
+      // stays one line in every wider window.
+      const failedSeen = Object.fromEntries(
+        Object.entries(seen).map(([width, bars]) => [width, bars.failed]),
+      ) as Record<number, Bar>
+      const turn = turnOf(failedSeen)
+      expect(turn.rows[0], `the rows at ${BAND[0]}px`).toBe(2)
+      expect(turn.after, 'the rows from the narrowest one line').not.toContain(2)
+      expect(turn.after.length, 'one line somewhere in the band').toBeGreaterThan(0)
 
-        // Two rows at 1108px, where the one line does not fit; one line, once it fits, stays one
-        // line in every wider window.
-        const turn = turnOf(seen)
-        expect(turn.rows[0], 'the rows at 1108px').toBe(2)
-        expect(turn.after, 'the rows from the narrowest one line').not.toContain(2)
-        expect(turn.after.length, 'one line somewhere in the band').toBeGreaterThan(0)
-
-        // The switch: one pixel narrower than the narrowest one line the bar is two rows, and that
-        // line had under a pixel to spare.
-        const switched = await narrowToSwitch(page, turn)
-        await record(info, `bar-band ${lang}${failed ? ' failed' : ''}`, { switched, seen })
-        expect(switched.spare, `${switched.width}px: room spared by one line`).toBeLessThan(1.5)
-        expect(await band.errors(), 'errors reported to the window').toEqual([])
-      })
+      // The switch, the failure said: one pixel narrower than the narrowest one line the bar is
+      // two rows, and that line had under a pixel to spare.
+      const switched = await narrowToSwitch(page, turn)
+      await record(info, `bar-band ${lang}`, { switched, seen })
+      expect(switched.spare, `${switched.width}px: room spared by one line`).toBeLessThan(1.5)
+      expect(await band.errors(), 'errors reported to the window').toEqual([])
     })
-  }
+  })
 
 for (const lang of ['en', 'ru'] as const)
   test.describe(`a week beside a failed refresh, ${lang}`, () => {

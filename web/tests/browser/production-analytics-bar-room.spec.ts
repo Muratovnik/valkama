@@ -7,7 +7,7 @@
  * window at 1440, 1280 and 1024px beside the app's navigation, in «Now», «Today» and this week,
  * with an age of seconds or of hours: no part of it past the line's end, the read again in the
  * window, the age whole, and the bar as high as before, so nothing under it moves. A live
- * period's mark is part of the freshness and stays.
+ * period's mark is not drawn beside the failure, which says the reads do not stand.
  *
  * Beside the reader's own span of days or of moments, in either language, the read again stands
  * inside the bar at every width from 1024 to 1920px: the line gives up its words, its room between
@@ -249,8 +249,9 @@ for (const lang of ['en', 'ru'] as const)
             const words = after.parts['.refresh-failed-words'] ?? { left: 0, right: 0 }
             expect(words.right - words.left, `${name}: the failure's words`).toBeGreaterThan(40)
             await expect(failed.getByRole('button')).toBeVisible()
-            // A live period keeps its mark beside the failure; another has none.
-            expect(after.mark, `${name}: the live mark`).toBe(period !== 'week')
+            // A failed read leaves no live mark, a live period's included: its room stays.
+            expect(before.mark, `${name}: the live mark before`).toBe(period !== 'week')
+            expect(after.mark, `${name}: the live mark`).toBe(false)
             // Nothing under the bar moves.
             expect(after.bar, `${name}: the bar's height`).toBe(before.bar)
             expect(after.panel, `${name}: the panel's top`).toBe(before.panel)
