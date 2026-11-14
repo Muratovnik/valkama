@@ -501,7 +501,9 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
             "title": row["title"],
             "description": row["description"],
             "checklist": row["checklist"],
-            "claimed": bool(expect[identity]["steps"]),
+            # Set by `release` below: whether `containers` to `children-left` clear this
+            # item's step claims.
+            "steps_released": False,
             "position": row["position"],
             "summary": row["summary"],
         }
@@ -536,6 +538,8 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         if found["claim"]:
             oracle.releases[(identity, "released", found["claim"])] += 1
             oracle.events["released"] += 1
+        if found["steps"]:
+            oracle.content[identity]["steps_released"] = True
         for text in found["steps"]:
             oracle.releases[(identity, "checklist_released", text)] += 1
             oracle.events["checklist_released"] += 1
@@ -1632,13 +1636,13 @@ def _holds_identities(conn: sqlite3.Connection, context: Context) -> Mapping[str
         for column in ("title", "description", "position", "summary"):
             if row[column] != before[column]:
                 found.append(f"{identity} changed its {column}")
-        if before["claimed"]:
+        if before["steps_released"]:
             unclaimed = json.loads(before["checklist"])
             for step in unclaimed:
                 if isinstance(step, dict) and step.get("claimed_by"):
                     step["claimed_by"] = ""
             if json.loads(row["checklist"]) != unclaimed:
-                found.append(f"{identity} changed its checklist beyond its claims")
+                found.append(f"{identity} changed its checklist beyond the claims released")
         elif row["checklist"] != before["checklist"]:
             found.append(f"{identity} changed its checklist")
         labels = oracle.expect[identity]["labels"]

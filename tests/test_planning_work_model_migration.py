@@ -805,6 +805,64 @@ class BoardEraSessionsTests(StoreCase):
         self.assertEqual(1, events[0][0])
 
 
+#: A task at work whose holder took a step, and one whose step is all that holds it.
+KEPT_STEPS = {"WM-7": ("Wire it", "agent-c"), "WM-8": ("Try it", "agent-f")}
+
+
+class KeptStepClaimTests(StoreCase):
+    """A step claimed on a task at work stays claimed, and `identities` compares it as it is."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        conn = sqlite3.connect(self.path)
+        try:
+            for reference, (text, holder) in KEPT_STEPS.items():
+                conn.execute(
+                    "UPDATE work_items SET checklist = ? WHERE work_item_id = ?",
+                    (
+                        json.dumps([_step(text, holder)], sort_keys=True, separators=(",", ":")),
+                        self.ids[reference],
+                    ),
+                )
+            words.bring_current(conn)
+            conn.commit()
+        finally:
+            conn.close()
+        self.checklists = {reference: self.item(reference)["checklist"] for reference in KEPT_STEPS}
+
+    def test_a_claimed_step_on_a_task_at_work_is_kept_and_p14_holds(self) -> None:
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(
+            [(f"P{number}", True) for number in range(1, 18)],
+            [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
+        )
+        for reference in KEPT_STEPS:
+            with self.subTest(item=reference):
+                row = self.item(reference)
+                self.assertEqual(self.checklists[reference], row["checklist"])
+                self.assertEqual("active", row["category"])
+                self.assertEqual([], self.events(reference, "checklist_released"))
+
+    def test_identities_refuses_a_migration_that_clears_a_kept_claim(self) -> None:
+        identity_before, digest = identity(self.path), file_digest(self.path)
+        clear = writing(
+            "UPDATE work_items SET checklist = json_set(checklist, '$[0].claimed_by', '')"
+            " WHERE work_item_id = ?",
+            (self.ids["WM-7"],),
+        )
+        step = store_steps.Step("fault", "clears a kept claim", clear)
+        with with_step(step), self.assertRaises(store_steps.RunFailedError) as raised:
+            self.migrate()
+        report = raised.exception.report
+        self.assertIn("identities", report["failed"])
+        post_identities = next(
+            entry for entry in report["postconditions"] if entry["name"] == "identities"
+        )
+        self.assertIn(f"{self.ids['WM-7']} changed its checklist", post_identities["error"])
+        self.assertEqual((identity_before, digest), (identity(self.path), file_digest(self.path)))
+
+
 class RefusalTests(unittest.TestCase):
     """A store that is not one Valkama 2.9 left is refused and left as it was."""
 
