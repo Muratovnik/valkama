@@ -973,7 +973,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   chart in a list of their own, set apart by air, draw no bar and are read by their figures.
   A hue
   never speaks alone: a chart of two series or more carries a legend, and every hint and every
-  accessible name say each series by name.
+  accessible name say each series by name. The legend's lines step 24px with no gap between
+  them, every line one height, and every key fills its line: one that acts, a link or a button
+  alike, is the 24px target WCAG 2.5.8 asks and reaches no key of the next line, and one that
+  only shows takes no focus, no pointer's hand and no press.
   Every mark of a chart — a period, a segment of one, a small chart's name, a legend entry, a
   ranked row — keeps one contract. Pointing at it, or focusing it from the keyboard, shows its
   hint at the mark through the one hint host: the mark's series, its value, its share and the
