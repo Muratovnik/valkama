@@ -147,9 +147,9 @@ for (const locale of ['ru', 'en'] as const)
           expect.soft(at.scroll, `${where}: the table scrolls past its frame`).toBe(0)
           expect.soft(at.past, `${where}: the table past its frame`).toBeLessThanOrEqual(0.5)
           expect.soft(at.changePast, `${where}: the change past the frame`).toBeLessThanOrEqual(0.5)
-          expect.soft(at.name, `${where}: the name under its floor`).toBeGreaterThanOrEqual(
-            at.floor - 0.5,
-          )
+          expect
+            .soft(at.name, `${where}: the name under its floor`)
+            .toBeGreaterThanOrEqual(at.floor - 0.5)
           // The name is cut for the figures alone: none of their columns holds room it leaves.
           for (const [index, room] of at.slack.entries())
             expect
