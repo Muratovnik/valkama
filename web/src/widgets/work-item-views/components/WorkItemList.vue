@@ -219,6 +219,7 @@ const said = (item: WorkItemBrief) =>
   rowWords(item, {
     context: context(item),
     fit: fit.value,
+    tree: [matchingOf(item), underOf(item)].filter(Boolean),
     updated: updatedOf(item),
     words: runs.words,
   })
