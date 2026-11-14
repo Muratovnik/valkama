@@ -325,8 +325,7 @@ replies.
   mappings, owner planning references or private diagnostics in public source,
   commits, PRs, release notes or artifacts. Raw evidence remains ignored.
 - This repository's documentation: `docs/` here. Every document under `docs/`
-  declares its lifecycle in frontmatter — `status: draft | adopted | superseded`
-  and the `card:` ids of the work it belongs to.
+  declares its lifecycle in frontmatter — `status: draft | adopted | superseded`.
   `tests/test_docs_lifecycle.py` refuses an orphan; `README.md` files describe a
   directory rather than one piece of work and are exempt.
 - The deep halves of `AGENTS.md`: `.agents/rules/`, one topic per file, each
