@@ -30,9 +30,11 @@
  *
  * A period is never narrower than a pointer can hit, and no wider than that forces a span to be:
  * one that fits the chart at that width never scrolls. A span wider than the chart scrolls
- * sideways inside it, the scale staying in view, opens on its first periods and fades toward an
- * edge past which periods are hidden. The plot's x scale is one share of its width per period,
- * from the field's start (`field`, `--period-count`).
+ * sideways inside it, the scale staying in view, and fades toward an edge past which periods are
+ * hidden. A past span opens on its first periods; a `live` one, whose last periods move on with
+ * the clock, opens on its running period at the frame's end and keeps it there until the reader
+ * scrolls away (`usePlotFrame`). The plot's x scale is one share of its width per period, from
+ * the field's start (`field`, `--period-count`).
  *
  * A chart that `frames` takes a span of its periods as well as one: a frame dragged along the
  * plot with a mouse or a pen, or stretched from the period the keyboard stands on with Shift and
@@ -80,9 +82,14 @@ const props = withDefaults(
     PeriodChartProps & {
       /** Whether a frame along the plot takes a span of its periods (`span`). */
       frames?: boolean
+      /**
+       * Whether the span is live, moving on with the clock: it opens on its period still running
+       * (`incomplete`), its last where none is, rather than on its first.
+       */
+      live?: boolean
     }
   >(),
-  { formatShare: undefined, marks: () => [], frames: false },
+  { formatShare: undefined, marks: () => [], frames: false, live: false },
 )
 
 const emit = defineEmits<{
@@ -108,12 +115,16 @@ const acting = computed(
 const frame = ref<HTMLElement | null>(null)
 const plot = ref<HTMLElement | null>(null)
 const field = ref<HTMLElement | null>(null)
-const { gutter, hidden, reveal, width } = usePlotFrame(
-  frame,
-  plot,
-  field,
-  () => `${props.columns.length}:${props.columns[0]?.key ?? ''}:${props.columns.at(-1)?.key ?? ''}`,
-)
+/** The period a live span keeps in view: the one still running, else its last. */
+const running = computed(() => {
+  if (!props.live) return null
+  const still = props.columns.filter((column) => column.incomplete)
+  return (still.at(-1) ?? props.columns.at(-1))?.key ?? null
+})
+const { gutter, hidden, reveal, width } = usePlotFrame(frame, plot, field, {
+  keys: () => props.columns.map((column) => column.key),
+  running: () => running.value,
+})
 
 /**
  * The edges of the frame periods are hidden past, as attributes its fade is drawn by: one stands

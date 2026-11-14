@@ -72,6 +72,8 @@ const props = defineProps<{
   before?: BeforeSteps | null
   /** Whether a task in the stack is named by its number alone, for a chart beside its titles. */
   brief?: boolean
+  /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
+  live?: boolean
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
   notice?: string
 }>()
@@ -218,6 +220,7 @@ function frame(firstKey: string, lastKey: string) {
     <template #chart>
       <PeriodColumns
         v-bind="chart"
+        :live="live"
         frames
         @period="period"
         @span="frame"

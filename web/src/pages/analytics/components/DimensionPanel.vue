@@ -69,6 +69,8 @@ const props = defineProps<{
   /** Why the last press in a part of the panel did not narrow the view; null otherwise. */
   refused: Refusal | null
   usage: Usage
+  /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
+  live?: boolean
 }>()
 /**
  * Read the answer again; narrow the view to a value of the answer's dimension, or to a period
@@ -243,6 +245,7 @@ const showTable = () => table.value?.reveal()
           :accounts="accounts"
           :by="by"
           :across="ranked.across"
+          :live="live"
           :measure="measure"
           :narrow="narrow"
           :notice="noticeIn('days')"

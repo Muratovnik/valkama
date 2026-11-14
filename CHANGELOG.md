@@ -198,10 +198,12 @@ checkouts are therefore distinguishable even at the same version.
   span set is a step of the history, so Back returns the view it was set from, and the
   address holds it; a link with two days opens as before.
 - **A live period, «Now».** The Analytics page shows the last hour by the minute and
-  reads it again every 30 seconds while the tab is visible; a hidden tab asks nothing. A
-  refresh moves nothing and keeps the scroll, the section and the sort. The minutes after
-  the newest record are hatched as «no data yet» rather than drawn as a drop: on a working
-  machine records arrive in batches up to a minute and a half apart.
+  reads it again every 30 seconds while the tab is visible; a hidden tab asks nothing. Its
+  chart, like that of «Today», opens on the period running and keeps it in view as time
+  moves on, and a past period opens on its start. A refresh keeps what a reader set: the
+  scroll, the section and the sort. The minutes after the newest record are hatched as
+  «no data yet» rather than drawn as a drop: on a working machine records arrive in
+  batches up to a minute and a half apart.
 - **The Analytics bar says how fresh the figures are, and stays within its width.** Beside
   the periods and the filters it says how old the newest record is, «● 15 s ago», the dot
   for a live period only and not after a read that failed, in the room of its widest age,

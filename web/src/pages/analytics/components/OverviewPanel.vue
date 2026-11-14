@@ -62,6 +62,8 @@ const props = defineProps<{
   /** Why the last press in a part of the overview did not narrow the view; null otherwise. */
   refused: Refusal | null
   usage: Usage
+  /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
+  live?: boolean
 }>()
 /**
  * Read the answer again; open a dimension's section; narrow the view to a value of a dimension,
@@ -185,6 +187,7 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
           :by="by"
           :measure="measure"
           :narrow="narrow"
+          :live="live"
           :notice="noticeIn('days')"
           :read-at="readAt"
           :usage="usage"
