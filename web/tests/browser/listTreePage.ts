@@ -180,6 +180,51 @@ export const longTasks = (page: Page) =>
     return seen.splice(0).map((ms) => Math.round(ms))
   })
 
+/**
+ * How long the list scrolls, how many rows it shows (said where it draws a
+ * window, its head's row not counted) and the height of its shortest drawn row.
+ */
+export const scrollOf = (page: Page) =>
+  listOf(page).evaluate((element) => {
+    const said = element.querySelector('.list-table')?.getAttribute('aria-rowcount')
+    const rows = element.querySelectorAll('tbody tr.list-row:not(.list-row-held)')
+    const heights = [...rows].map((row) => Math.round(row.getBoundingClientRect().height))
+    return { length: element.scrollHeight, row: Math.min(...heights), shown: Number(said) - 1 }
+  })
+
+/**
+ * The long tasks, in milliseconds, of End from the list's first row, and of five
+ * Page Downs from there once Home has come back. The Tab stop is the first row
+ * in a tree and the first reference in a flat list, so focus starts on it.
+ */
+export async function keyTasks(page: Page) {
+  const focused = page.locator('.work-item-list tbody tr.list-row:focus-within')
+  const rowAt = async () => (await focused.getAttribute('aria-rowindex')) ?? ''
+  await watchLongTasks(page)
+  await page.locator('.work-item-list tbody [tabindex="0"]').first().focus()
+  await stillFrames(page)
+  await longTasks(page)
+
+  const last = await tableOf(page).getAttribute('aria-rowcount')
+  await page.keyboard.press('End')
+  await expect(focused).toHaveAttribute('aria-rowindex', last ?? '')
+  await stillFrames(page)
+  const end = await longTasks(page)
+
+  await page.keyboard.press('Home')
+  await expect(focused).toHaveAttribute('aria-rowindex', '2')
+  await stillFrames(page)
+  await longTasks(page)
+  for (let step = 0; step < 5; step += 1) {
+    const from = await rowAt()
+    await page.keyboard.press('PageDown')
+    await expect(focused).not.toHaveAttribute('aria-rowindex', from)
+  }
+  await stillFrames(page)
+  const pageDown = await longTasks(page)
+  return { end, pageDown }
+}
+
 interface TreeNode {
   expanded: boolean | null
   level: number | null
