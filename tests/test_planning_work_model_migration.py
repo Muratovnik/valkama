@@ -686,6 +686,125 @@ class MigratedStoreTests(StoreCase):
         self.assertEqual(backups, sorted(os.listdir(os.path.join(self.directory.name, "backups"))))
 
 
+#: `sessions` as the Board era declared it, under a name of its own until it takes the
+#: place of the one the catalog holds. The cutover renamed `card_id` to `work_item_id`
+#: and kept its type; the columns added since were appended by `ALTER TABLE`.
+BOARD_SESSIONS = """CREATE TABLE sessions_board(
+    id TEXT PRIMARY KEY,
+    client TEXT NOT NULL,
+    cwd TEXT NOT NULL DEFAULT '',
+    label TEXT NOT NULL DEFAULT '',
+    card_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','ended','failed')),
+    attention TEXT NOT NULL DEFAULT '',
+    attention_seen INTEGER NOT NULL DEFAULT 0,
+    started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    last_seen TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    ended_at TEXT
+)"""
+BOARD_COLUMNS = (
+    "id,client,cwd,label,card_id,status,attention,attention_seen,started_at,last_seen,ended_at"
+)
+APPENDED_COLUMNS = (
+    "parent_session_id",
+    "agent_id",
+    "transcript_path",
+    "client_version",
+    "opened_in",
+    "opened_host",
+    "opened_folder",
+    "host_session_id",
+)
+
+
+def reshape_sessions_as_the_board_left_them(path: str, item: str) -> None:
+    """Give a built store the `sessions` of one that passed the Board cutover, holding
+    sessions that name no item and sessions that name one by its text id."""
+
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute(BOARD_SESSIONS)
+        conn.execute(
+            f"INSERT INTO sessions_board({BOARD_COLUMNS})"
+            f" SELECT {BOARD_COLUMNS.replace('card_id', 'work_item_id')} FROM sessions"
+        )
+        conn.execute("DROP TABLE sessions")
+        conn.execute("ALTER TABLE sessions_board RENAME TO sessions")
+        conn.execute("ALTER TABLE sessions RENAME COLUMN card_id TO work_item_id")
+        for column in APPENDED_COLUMNS:
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+        conn.execute(
+            "CREATE INDEX sessions_parent ON sessions(parent_session_id)"
+            " WHERE parent_session_id != ''"
+        )
+        for number in range(3):
+            conn.execute(
+                "INSERT INTO sessions(id,client,label,work_item_id,started_at,last_seen)"
+                " VALUES(?,'codex','unbound',NULL,?,?)",
+                (f"board-session-{number}", T1, T1),
+            )
+        conn.execute(
+            "INSERT INTO sessions(id,client,label,work_item_id,parent_session_id,agent_id,"
+            "started_at,last_seen) VALUES('board-child','claude','bound',?,'board-session-0',"
+            "'agent-1',?,?)",
+            (item, T2, T2),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+class BoardEraSessionsTests(StoreCase):
+    """A store that passed the Board cutover keeps `sessions.work_item_id` as INTEGER."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        reshape_sessions_as_the_board_left_them(self.path, self.ids["WM-7"])
+        self.before = self.sessions()
+        self.parent_index = self.index_sql()
+
+    def sessions(self) -> list[tuple]:
+        return [
+            tuple(row)
+            for row in self.read(
+                "SELECT *, typeof(work_item_id) FROM sessions ORDER BY id"  # the stored type too
+            )
+        ]
+
+    def index_sql(self) -> list[tuple]:
+        return [
+            tuple(row)
+            for row in self.read(
+                "SELECT type, name, sql FROM sqlite_master WHERE tbl_name = 'sessions'"
+                " AND type IN ('index', 'trigger')"
+                " AND sql IS NOT NULL ORDER BY name"
+            )
+        ]
+
+    def test_the_fixture_is_shaped_as_the_board_left_it(self) -> None:
+        declared = {row[1]: row[2] for row in self.read("PRAGMA table_info(sessions)")}
+        self.assertEqual("INTEGER", declared["work_item_id"])
+        self.assertEqual(
+            ["null", "null", "null", "text", "text"], sorted(row[-1] for row in self.before)
+        )
+
+    def test_items_rebuilds_sessions_to_the_fresh_declaration_and_keeps_its_rows(self) -> None:
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(
+            [(f"P{number}", True) for number in range(1, 18)],
+            [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
+        )
+        declared = {row[1]: row[2] for row in self.read("PRAGMA table_info(sessions)")}
+        self.assertEqual("TEXT", declared["work_item_id"])
+        self.assertEqual(self.before, self.sessions())
+        self.assertEqual(self.parent_index, self.index_sql())
+        step_items = next(step for step in report["steps"] if step["name"] == "items")
+        self.assertEqual(["sessions_parent"], step_items["result"]["sessions_rebuilt"])
+        events = self.read("SELECT COUNT(*) FROM session_events WHERE session_id = 'kept-session'")
+        self.assertEqual(1, events[0][0])
+
+
 class RefusalTests(unittest.TestCase):
     """A store that is not one Valkama 2.9 left is refused and left as it was."""
 

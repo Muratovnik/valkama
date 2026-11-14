@@ -17,7 +17,9 @@ otherwise cascade into them:
 - **history** renames those keys in the history, only where a key stands.
 - **items** rebuilds `work_items`: an epic, or any item with children, becomes a
   container; accepted work gets the basis `migrated`; a task gets the time its work
-  started. The events table takes the new actions.
+  started. The events table takes the new actions. `sessions` is rebuilt to the
+  fresh declaration when the Board cutover left it another: that cutover renamed
+  `card_id` to `work_item_id` and kept its type `INTEGER`.
 - **containers** clears every claim on a container and puts each accepted open one in the
   service state; **task-holders** clears every claim on a task that is not active or blocked,
   and gives an active task nobody holds back to ready; **children-left** takes each open child
@@ -877,15 +879,73 @@ def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {str(row[1]) for row in conn.execute(f'PRAGMA table_info("{table}")')}
 
 
+def _table_info(conn: sqlite3.Connection, table: str) -> list[tuple[str, ...]]:
+    """Each column of `table` as the pragma gives it: name, type, NOT NULL, default, key."""
+
+    return sorted(
+        tuple(str(value) for value in row[1:6])
+        for row in conn.execute(f'PRAGMA table_info("{table}")')
+    )
+
+
+#: The table the Board cutover left in a shape of its own: it renamed `card_id` to
+#: `work_item_id` and kept the type `INTEGER`, where a fresh store declares `TEXT`.
+_SESSIONS = "sessions"
+
+
+def _fresh_sessions(context: Context) -> tuple[str, list[tuple[str, ...]]]:
+    """The `CREATE TABLE` of `sessions` and its columns, as a fresh store of this build
+    holds them; read once a run."""
+
+    found = context.memo.get("fresh_sessions")
+    if found is None:
+        if context.reference is None:
+            raise UnmetError("no fresh store to compare with")
+        with context.reference() as fresh:
+            declared = fresh.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (_SESSIONS,)
+            ).fetchone()
+            found = (str(declared[0]), _table_info(fresh, _SESSIONS))
+        context.memo["fresh_sessions"] = found
+    return found
+
+
+def _sessions_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    return _table_info(conn, _SESSIONS) != _fresh_sessions(context)[1]
+
+
+def _rebuild_sessions(conn: sqlite3.Connection, context: Context) -> list[str]:
+    """`sessions` in the shape a fresh store declares, every value carried as stored."""
+
+    declared, columns = _fresh_sessions(context)
+    names = [column[0] for column in columns]
+    present = _columns(conn, _SESSIONS)
+    unknown = present - set(names)
+    if unknown:
+        raise RuntimeError(f"sessions holds columns this build does not know: {sorted(unknown)}")
+    carried = ", ".join(name for name in names if name in present)
+    definition = re.sub(
+        rf'^CREATE TABLE\s+"?{_SESSIONS}"?',
+        f"CREATE TABLE {_SESSIONS}{planning_store.REPLACEMENT}",
+        declared,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    rows = f"({carried}) SELECT {carried} FROM {_SESSIONS}"  # noqa: S608 - the pragma's names
+    return planning_store.rebuild_table(conn, _SESSIONS, definition, rows)
+
+
 def _items_needed(conn: sqlite3.Connection, context: Context) -> bool:
-    del context
-    return "acceptance" not in _columns(conn, "work_items")
+    return "acceptance" not in _columns(conn, "work_items") or _sessions_needed(conn, context)
 
 
 def _migrate_items(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
-    """`items`: the item table in its new shape, each row with its kind, acceptance and start."""
+    """`items`: the item table in its new shape, each row with its kind, acceptance and start,
+    and `sessions` in the shape a fresh store declares when the Board era left it another."""
 
-    del context
+    sessions = _rebuild_sessions(conn, context) if _sessions_needed(conn, context) else None
+    if "acceptance" in _columns(conn, "work_items"):
+        return {"sessions_rebuilt": sessions}
     unknown = (
         _columns(conn, "work_items") - set(_KEPT_COLUMNS) - {"kind", "labels"} - _DROPPED_COLUMNS
     )
@@ -916,12 +976,13 @@ def _migrate_items(conn: sqlite3.Connection, context: Context) -> Mapping[str, A
         "accepted": int(counted[1] or 0),
         "started": int(counted[2] or 0),
         "indexes_and_triggers_recreated": recreated,
+        "sessions_rebuilt": sessions,
     }
 
 
 def _check_items(conn: sqlite3.Connection, context: Context) -> None:
     if _items_needed(conn, context):
-        raise UnmetError("work_items has not taken its new shape")
+        raise UnmetError("work_items or sessions has not taken its new shape")
 
 
 # -- claims and places ---------------------------------------------------------
@@ -1119,10 +1180,7 @@ def _structure(conn: sqlite3.Connection) -> tuple[dict[str, dict[str, list]], li
         "SELECT name FROM sqlite_master WHERE type = 'table' AND substr(name, 1, 7) != 'sqlite_'"
         " ORDER BY name"
     ).fetchall():
-        columns = sorted(
-            tuple(str(value) for value in row[1:6])
-            for row in conn.execute(f'PRAGMA table_info("{table}")')
-        )
+        columns = _table_info(conn, str(table))
         indexes = sorted(
             (
                 *(str(value) for value in row[1:5]),
