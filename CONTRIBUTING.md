@@ -166,7 +166,7 @@ readable years later.
 | UI | `web/src/`, in the right Feature-Sliced layer |
 | the desktop window | `desktop/` |
 | anything that exists only because the host is Windows | `windows/` |
-| a product contract | `docs/`, with `status:` and `card:` frontmatter |
+| a product contract | `docs/`, with `status:` frontmatter |
 
 A new file at the top level needs an argument for why it belongs to none of
 those. `tests/test_docs_lifecycle.py` refuses a document under `docs/` without

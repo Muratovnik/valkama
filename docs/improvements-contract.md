@@ -1,6 +1,5 @@
 ---
 status: superseded
-card: 217, 351
 ---
 
 # Valkama Improvements contract

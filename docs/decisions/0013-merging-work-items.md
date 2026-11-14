@@ -1,6 +1,5 @@
 ---
 status: draft
-card: 1267
 ---
 
 # ADR 0013: Items that are one change merge into the one that survives

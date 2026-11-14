@@ -1,15 +1,14 @@
 """Every document under docs/ declares its lifecycle, or the suite names it.
 
-The convention comes from the workspace this repository sits in: working notes
-belong in AgentMemory and card comments, and a file that graduates into
-`docs/` is a canonical artifact that says what it is — a frontmatter header
-naming a status and the cards whose work it belongs to. That header is what
-lets the next reader tell an adopted contract from a superseded plan without
-re-deriving either.
+A file that graduates into `docs/` is a canonical artifact that says what it
+is: a frontmatter header naming a status. That header is what lets the next
+reader tell an adopted contract from a superseded plan without re-deriving
+either. The header names no planning items: a `card:` field, or any other field
+starting with `card`, is refused, because a public repository carries no
+reference to its owner's planning.
 
-The parent workspace runs the same check over its own `docs/` only, so this
-repository carries the rule itself: a nested Git root that leaves its gate to
-the parent has no gate in a standalone checkout.
+This repository carries the rule itself, so a standalone checkout has its own
+gate.
 """
 
 from __future__ import annotations
@@ -21,6 +20,10 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 DOCS = Path(__file__).resolve().parent.parent / "docs"
 ROOT = DOCS.parent
 STATUSES = ("draft", "adopted", "superseded")
+# Planning card ids are not a document's business: any frontmatter key that
+# starts with this prefix is refused, so the field cannot come back under a new
+# spelling such as `cards:`.
+RETIRED_FIELD_PREFIX = "card"
 # A README describes a directory rather than one piece of work, so it carries
 # no lifecycle of its own.
 EXEMPT_NAMES = {"README.md", "index.md"}
@@ -83,21 +86,18 @@ def lifecycle_problem(text: str) -> str | None:
     """What keeps this document from being a canonical artifact, if anything."""
     fields = frontmatter(text)
     if fields is None:
-        return "no lifecycle frontmatter (status, card)"
+        return "no lifecycle frontmatter (status)"
     status = fields.get("status", "")
     if status not in STATUSES:
         return f"status {status!r} is not one of {list(STATUSES)}"
-    card = fields.get("card", "")
-    if not card:
-        return "no card reference"
-    parts = card.split(",")
-    if not all(part.strip().isdigit() for part in parts):
-        return f"card reference {card!r} is not a list of card ids"
+    retired = sorted(key for key in fields if key.startswith(RETIRED_FIELD_PREFIX))
+    if retired:
+        return f"retired field(s) {retired}: a document names no planning card"
     return None
 
 
 class DocsLifecycleTests(unittest.TestCase):
-    def test_every_document_declares_status_and_cards(self) -> None:
+    def test_every_document_declares_status(self) -> None:
         problems: list[str] = []
         for path in sorted(DOCS.rglob("*.md")):
             if path.name in EXEMPT_NAMES:
@@ -110,16 +110,17 @@ class DocsLifecycleTests(unittest.TestCase):
     def test_the_scanner_refuses_what_the_convention_refuses(self) -> None:
         refused = {
             "no header": "# Title\n",
-            "unterminated fence": "---\nstatus: adopted\ncard: 1\n",
-            "unknown status": "---\nstatus: final\ncard: 1\n---\n",
-            "missing card": "---\nstatus: adopted\n---\n",
-            "non-numeric card": "---\nstatus: adopted\ncard: soon\n---\n",
-            "empty id in the list": "---\nstatus: adopted\ncard: 1,,2\n---\n",
+            "unterminated fence": "---\nstatus: adopted\n",
+            "unknown status": "---\nstatus: final\n---\n",
+            "missing status": "---\ntitle: Title\n---\n",
+            "card field": "---\nstatus: adopted\ncard: 1\n---\n",
+            "card field under another spelling": "---\nstatus: adopted\ncards: 1, 2\n---\n",
+            "card field in capitals": "---\nstatus: adopted\nCard: 1\n---\n",
         }
         for name, text in refused.items():
             with self.subTest(name):
                 self.assertIsNotNone(lifecycle_problem(text))
-        accepted = "---\nstatus: adopted\ncard: 147, 150\n---\n\n# Title\n"
+        accepted = "---\nstatus: adopted\n---\n\n# Title\n"
         self.assertIsNone(lifecycle_problem(accepted))
 
     def test_direct_python_commands_reference_existing_repository_files(self) -> None:
@@ -154,7 +155,6 @@ class ProductModelDocsTests(unittest.TestCase):
         fields = frontmatter(text)
         self.assertIsNotNone(fields)
         self.assertEqual("adopted", fields["status"])
-        self.assertEqual("351", fields["card"])
         self.assertIn("<!-- kb:core-001-product-model -->", text)
         for term in REQUIRED_PRODUCT_TERMS:
             with self.subTest(term=term):

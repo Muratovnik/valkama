@@ -94,6 +94,6 @@ desktop.ini
 
 # Review reports and other working artifacts a task writes for itself.
 # A finding that outlives its task belongs in docs/audits/ with the
-# frontmatter that says whose work it was.
+# lifecycle frontmatter that declares its status.
 /tmp/
 /.state/

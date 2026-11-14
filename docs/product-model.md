@@ -1,6 +1,5 @@
 ---
 status: adopted
-card: 351
 ---
 
 <!-- kb:core-001-product-model -->

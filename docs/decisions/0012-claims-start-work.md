@@ -1,6 +1,5 @@
 ---
 status: draft
-card: 1266
 ---
 
 # ADR 0012: A claim starts the work it takes, and its session holds it

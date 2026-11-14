@@ -1,6 +1,5 @@
 ---
 status: adopted
-card: 1214
 ---
 
 # ADR 0010: Valkama coordinates agent work from session identity, leases and two trees
