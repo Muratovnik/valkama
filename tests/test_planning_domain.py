@@ -78,14 +78,14 @@ class PlanningDomainTests(unittest.TestCase):
                 ("done", "completed"),
                 ("blocked", "blocked"),
                 ("cancelled", "cancelled"),
-                ("container", "container"),
             ],
             [(state["key"], state["category"]) for state in workflow["states"]],
         )
         terminal = [state["key"] for state in workflow["states"] if state["is_terminal"]]
         self.assertEqual(["done", "cancelled"], terminal)
-        # Every ordered pair except a state to itself, as explicit rows.
-        self.assertEqual(9 * 8, len(workflow["transitions"]))
+        # Every ordered pair except a state to itself, as explicit rows; the service
+        # state and the moves to and from it are not what a caller reads.
+        self.assertEqual(8 * 7, len(workflow["transitions"]))
 
     def test_a_state_the_workflow_does_not_have_is_refused(self) -> None:
         created = self.item("Land the planning domain")
@@ -370,7 +370,7 @@ class PlanningDomainTests(unittest.TestCase):
         payload = views.planning_payload(self.conn)
         self.assertEqual(views.READ_MODEL_INTERFACE, payload["interface_version"])
         self.assertEqual("QA", payload["planning_space"]["key"])
-        self.assertEqual(9, len(payload["workflow"]["states"]))
+        self.assertEqual(8, len(payload["workflow"]["states"]))
         self.assertEqual(2, len(payload["work_items"]))
         self.assertEqual(
             [

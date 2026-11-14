@@ -156,6 +156,10 @@ def list_work_items(
     """Exactly `limit` items from `offset` on, or every one of them when limit is None.
 
     `parent` keeps only the children of that item, named as any item is named.
+    `kind` is named as a caller names it: `goal` keeps the containers under no
+    parent and `stage` those under one. The service state is no state and no
+    category a caller names: `container` is refused for either with the word that
+    replaces it.
 
     Nothing here caps the count: a caller that wants a bounded page with an
     honest account of what it left out asks `list_work_items_page`.
@@ -167,14 +171,20 @@ def list_work_items(
         clauses.append("i.planning_space_id = ?")
         parameters.append(str(_space_row(conn, space)["planning_space_id"]))
     if state_key is not None:
+        model.refuse_retired(state_key)
         clauses.append("s.key = ?")
         parameters.append(model.state_key(state_key))
     if category is not None:
         clauses.append("s.category = ?")
         parameters.append(model.state_category(category))
     if kind is not None:
+        named = model.public_kind(kind)
         clauses.append("i.kind = ?")
-        parameters.append(model.work_item_kind(kind))
+        parameters.append(model.work_item_kind(named))
+        if named == "goal":
+            clauses.append("i.parent_id IS NULL")
+        elif named == "stage":
+            clauses.append("i.parent_id IS NOT NULL")
     if owner is not None:
         clauses.append("i.claim_ref = ?")
         parameters.append(model.actor(owner, "owner"))
@@ -2126,7 +2136,10 @@ def _space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
 
 
 def _workflow_payload(conn: sqlite3.Connection, workflow: sqlite3.Row) -> dict:
-    rows = store.states_for_workflow(conn, str(workflow["workflow_id"]))
+    """The workflow as a caller reads it: its states and moves, without the service state."""
+
+    rows = states.public_states(conn, str(workflow["workflow_id"]))
+    listed = {str(state["state_id"]) for state in rows}
     return {
         "workflow_id": workflow["workflow_id"],
         "name": workflow["name"],
@@ -2145,6 +2158,7 @@ def _workflow_payload(conn: sqlite3.Connection, workflow: sqlite3.Row) -> dict:
         "transitions": [
             {"from": source, "to": target}
             for source, target in store.transitions_for_workflow(conn, str(workflow["workflow_id"]))
+            if source in listed and target in listed
         ],
     }
 

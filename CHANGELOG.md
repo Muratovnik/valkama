@@ -19,6 +19,11 @@ checkouts are therefore distinguishable even at the same version.
   out of ready, active, review and blocked, and a service state beside the eight holds
   an accepted open one. A store Valkama 2.9 left is refused with "run `valkama migrate
   work-model` once" and left as it was, and a 2.9 build refuses a store at 18.
+- **The service state stays out of reach.** `get_planning_space` lists the eight category
+  states and the moves between them only. `container` named as a state, in a transition
+  or a list filter, or as a category is refused with the text that says what replaces
+  it, and `list_work_items(kind=goal)` keeps the containers under no parent while
+  `kind=stage` keeps those under one.
 
 ### Removed
 

@@ -16,7 +16,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import store
+from server import mcp_surface, store
+from server.planning import api as planning_api
 from server.planning import model, service
 from server.planning import store as planning_store
 
@@ -222,6 +223,57 @@ class StateFitsKindTests(FreshStoreCase):
         for key in ("triage", "ready", "dev", "review", "blocked", "done"):
             with self.subTest(key=key):
                 self.insert("task", key)
+
+
+class ServiceStateOutOfReachTests(FreshStoreCase):
+    """What a caller sees of a workflow and names in it: never the service state."""
+
+    def call(self, name: str, **arguments: object) -> object:
+        return mcp_surface.call_tool(self.conn, name, arguments)
+
+    def test_the_space_lists_the_eight_category_states_and_no_move_to_the_service_one(self) -> None:
+        workflow = self.call("get_planning_space", space="MOD")["workflow"]  # type: ignore[index]
+        self.assertEqual(list(CATEGORIES), [state["category"] for state in workflow["states"]])
+        listed = {state["state_id"] for state in workflow["states"]}
+        self.assertNotIn(self.state_id("container"), listed)
+        self.assertEqual(8 * 7, len(workflow["transitions"]))
+        for move in workflow["transitions"]:
+            with self.subTest(move=move):
+                self.assertLessEqual({move["from"], move["to"]}, listed)
+
+    def test_container_is_refused_as_a_state_and_as_a_category_with_the_word_replacing_it(
+        self,
+    ) -> None:
+        created = self.call("create_work_item", space="MOD", title="Some work")
+        reference = created["reference"]  # type: ignore[index]
+        for name, arguments in (
+            ("apply_work_item_changes", {"id": reference, "transition": {"state": "container"}}),
+            ("list_work_items", {"space": "MOD", "category": "container"}),
+            ("list_work_items", {"space": "MOD", "state": "container"}),
+        ):
+            with self.subTest(name=name, arguments=arguments):
+                with self.assertRaises(
+                    (model.PlanningError, planning_api.PlanningHttpError)
+                ) as refusal:
+                    self.call(name, **arguments)
+                self.assertIn(RETIRED_CONTAINER, str(refusal.exception))
+        self.assertEqual("triage", service.get_work_item(self.conn, reference)["state"]["key"])
+
+    def test_a_kind_filter_reads_goal_and_stage_by_where_the_container_stands(self) -> None:
+        goal = service.create_work_item(self.conn, space="MOD", title="Goal", kind="goal")
+        stage = service.create_work_item(
+            self.conn, space="MOD", title="Stage", kind="stage", parent=goal["reference"]
+        )
+        service.create_work_item(self.conn, space="MOD", title="Task", parent=goal["reference"])
+        for kind, expected in (("goal", [goal]), ("stage", [stage])):
+            with self.subTest(kind=kind):
+                self.assertEqual(
+                    [item["reference"] for item in expected],
+                    [
+                        item["reference"]
+                        for item in service.list_work_items(self.conn, space="MOD", kind=kind)
+                    ],
+                )
 
 
 if __name__ == "__main__":

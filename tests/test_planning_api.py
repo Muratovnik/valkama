@@ -80,7 +80,7 @@ class PlanningApiTests(unittest.TestCase):
             kind="blocks",
         )
         payload = self.get("/api/planning")
-        self.assertEqual(9, len(payload["workflow"]["states"]))
+        self.assertEqual(8, len(payload["workflow"]["states"]))
         self.assertEqual(2, len(payload["work_items"]))
         self.assertEqual(1, len(payload["links"]))
 
