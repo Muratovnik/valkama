@@ -33,7 +33,7 @@ const props = defineProps<{
   now: number
   section: QuotaSection
   shown: 'chart' | 'table'
-  /** The answer's own moment, whose day a time is said on without its date. */
+  /** The answer's moment at its offset: each time is said at it, and undated on its day. */
   today: string
 }>()
 

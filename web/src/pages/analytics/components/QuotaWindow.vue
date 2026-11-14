@@ -21,7 +21,7 @@ import { useI18n } from 'vue-i18n'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import QuotaWindowSpend from '@/pages/analytics/components/QuotaWindowSpend.vue'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
-import { momentAtOffset } from '@/pages/analytics/utils/readMoments.ts'
+import { momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
 
 import type { QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
@@ -36,7 +36,7 @@ const props = defineProps<{
   /** The moment the panel stands at, in ms. */
   now: number
   shown: 'chart' | 'table'
-  /** The answer's own moment, whose day a time is said on without its date. */
+  /** The answer's moment at its offset: each time is said at it, and undated on its day. */
   today: string
   window: QuotaShareWindow
 }>()
@@ -82,8 +82,12 @@ const span = computed(() => {
   return { from, to, end: Math.min(Date.parse(today), to) }
 })
 
-/** A moment of the line's axis, said as the answer's own times are, on the reader's clock. */
-const stepMoment = (at: number) => words.moment(momentAtOffset(at), props.today)
+/**
+ * A moment of the line's axis, said as the answer's own times are: at the answer's offset, the
+ * reader's clock when it was read, and dated against the answer's day.
+ */
+const stepMoment = (at: number) =>
+  words.moment(momentAtOffset(at, offsetOf(props.today)), props.today)
 
 const stepWords = computed<StepWords>(() => ({
   ahead: t('analytics.quota.readings.ahead'),
