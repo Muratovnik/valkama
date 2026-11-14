@@ -37,6 +37,7 @@ import {
   scanUiSources,
 } from './ui-system/styles.mjs'
 import { scanTitleBreaks, UNBROKEN_TITLES } from './ui-system/title-breaks.mjs'
+import { scanTreeRoles } from './ui-system/tree-roles.mjs'
 import { scanTrimmedWords } from './ui-system/trimmed-word.mjs'
 
 export function scanUiTree(root = defaultSourceRoot) {
@@ -69,6 +70,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanNativeTitles(sources, hints),
     ...scanTooltipKinds(sources, details),
     ...scanStateNames(sources, stateReads),
+    ...scanTreeRoles(sources),
     ...scanControlSizes(sources, sizes),
     ...scanFocusRingWidths(sources),
     ...scanScopeEscapes(sources),

@@ -56,6 +56,26 @@ test('possible style targets are inspected while proven attribute bags remain va
   assert.deepEqual(scanSemanticStateOwnership(component(safeBags)), [])
 })
 
+test("a tree's attributes bound whole carry no style, and only from their owner", () => {
+  const tree = (from: string) => `
+    <script setup lang="ts">
+      import { treeGridAttrs, treeRowAttrs } from '${from}'
+      function rowAttrs(row: unknown) {
+        return { ...treeRowAttrs(row, 2), 'data-id': id }
+      }
+    </script>
+    <template>
+      <table v-bind="treeGridAttrs({ windowed, rowCount })">
+        <tr v-bind="treeRowAttrs(row)" />
+        <tr v-bind="rowAttrs(row)" />
+      </table>
+    </template>
+  `
+  assert.deepEqual(scanSemanticStateOwnership(component(tree('@/shared/lib/treeRows.ts'))), [])
+  // The same names from anywhere else are bags the guard cannot see into.
+  assert.equal(scanSemanticStateOwnership(component(tree('@/shared/lib/otherRows.ts'))).length, 1)
+})
+
 test('Vue camel-case paint keys normalize to their CSS property identity', () => {
   for (const property of ['backgroundColor', 'borderInlineStartColor', 'outlineColor']) {
     const source = `
