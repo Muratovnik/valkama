@@ -19,6 +19,13 @@
  * the keys (`useListKeys.ts`) and the list's find (`useListFind.ts`) — goes by
  * the list rather than by the rows drawn.
  *
+ * A tree hands two more things (`population`, `everyRow`). Its window opens when
+ * the tree could show `WINDOW_FROM` rows, not when it shows them, or opening one
+ * goal would turn a list drawn whole into a window and the scroll would jump.
+ * And the widest rows are found among every row it could show, folded ones
+ * included, so the columns keep their widths when a goal opens; a widest row
+ * that is not shown is drawn collapsed as well, and is no row of the list.
+ *
  * The table says how many rows it has and each drawn row where it stands, so a
  * screen reader announces a row's place in the whole list. The browser's find
  * would reach only the rows drawn, which is why the list has a find of its own;
@@ -65,9 +72,13 @@ interface WindowRows<Row> {
   columns: readonly WidthColumn<Row>[]
   /** The element that scrolls the rows; the table and its head are inside it. */
   root: Readonly<Ref<HTMLElement | null>>
+  /** Every row the list could show, whose widest give the columns their widths; by default its rows. */
+  everyRow?: () => readonly Row[]
   key: (row: Row) => string
   /** The ids of the rows drawn wherever the window is. */
   pinned: () => readonly (string | undefined)[]
+  /** How many rows the list could show; by default the rows it shows. */
+  population?: () => number
   rows: () => readonly Row[]
 }
 
@@ -79,7 +90,15 @@ interface Edges {
   start: number
 }
 
-export function useWindowRows<Row>({ columns, key, pinned, root, rows }: WindowRows<Row>) {
+export function useWindowRows<Row>({
+  columns,
+  everyRow,
+  key,
+  pinned,
+  population,
+  root,
+  rows,
+}: WindowRows<Row>) {
   const printing = shallowRef(false)
   useEventListener(globalThis, 'beforeprint', () => {
     printing.value = true
@@ -87,7 +106,9 @@ export function useWindowRows<Row>({ columns, key, pinned, root, rows }: WindowR
   useEventListener(globalThis, 'afterprint', () => {
     printing.value = false
   })
-  const windowed = computed(() => !printing.value && rows().length >= WINDOW_FROM)
+  const windowed = computed(
+    () => !printing.value && (population?.() ?? rows().length) >= WINDOW_FROM,
+  )
 
   const places = computed(() => new Map(rows().map((row, at) => [key(row), at])))
   /** Where a row stands in the list, drawn or not; -1 for a row it does not hold. */
@@ -167,6 +188,17 @@ export function useWindowRows<Row>({ columns, key, pinned, root, rows }: WindowR
   const held = computed(() =>
     windowed.value ? (widestRows(rows(), columns) ?? new Set<Row>()) : new Set<Row>(),
   )
+  /**
+   * The widest rows of every row the list could show, where that is more than it
+   * shows. The list keeps them drawn, collapsed, whether it draws a window or not.
+   */
+  const widest = computed(() =>
+    everyRow ? (widestRows(everyRow(), columns) ?? new Set<Row>()) : null,
+  )
+  /** What gives the columns their widths that the rows drawn do not hold. */
+  function collapsedBeside(drawn: ReadonlySet<string>, from: ReadonlySet<Row>): Set<Row> {
+    return new Set([...from].filter((row) => !drawn.has(key(row))))
+  }
 
   const staged = useStagedRows<Row>({ columns, root: () => root.value, rows })
   // A short list draws its first frame, and the rest right after it.
@@ -182,11 +214,14 @@ export function useWindowRows<Row>({ columns, key, pinned, root, rows }: WindowR
         kind: 'row',
         row,
       }))
-      return { collapsed: null, entries: whole }
+      if (!widest.value) return { collapsed: null, entries: whole }
+      const collapsed = collapsedBeside(new Set(all.map((row) => key(row))), widest.value)
+      for (const row of collapsed) whole.push({ key: key(row), kind: 'row', row })
+      return { collapsed, entries: whole }
     }
     const instance = virtualizer.value
     const entries: ListEntry<Row>[] = []
-    const drawn = new Set<Row>()
+    const drawn = new Set<string>()
     let end = instance.options.scrollMargin
     for (const item of instance.getVirtualItems()) {
       const row = all[item.index]
@@ -200,13 +235,13 @@ export function useWindowRows<Row>({ columns, key, pinned, root, rows }: WindowR
         })
       }
       entries.push({ index: item.index, key: key(row), kind: 'row', row, rowIndex: item.index + 2 })
-      drawn.add(row)
+      drawn.add(key(row))
       end = item.end
     }
     const total = instance.getTotalSize()
     if (total > end)
       entries.push({ height: total - end, hidden: true, key: 'gap:end', kind: 'gap' })
-    const collapsed = new Set([...held.value].filter((row) => !drawn.has(row)))
+    const collapsed = collapsedBeside(drawn, widest.value ?? held.value)
     for (const row of collapsed) entries.push({ key: key(row), kind: 'row', row })
     return { collapsed, entries }
   })
@@ -223,7 +258,7 @@ export function useWindowRows<Row>({ columns, key, pinned, root, rows }: WindowR
         : ((root.value?.querySelector('tbody')?.children[index] as HTMLElement | undefined)
             ?.offsetHeight ?? 0),
     /** A row drawn only for the widths it gives its columns. */
-    held: (row: Row) => layout.value.collapsed?.has(row) ?? staged.held(row),
+    held: (row: Row) => (layout.value.collapsed?.has(row) ?? false) || staged.held(row),
     idAt: (index: number) => {
       const row = rows()[index]
       return row === undefined ? undefined : key(row)

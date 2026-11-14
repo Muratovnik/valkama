@@ -571,6 +571,11 @@
   --space-disclosure-gap: var(--space-2);
   --color-disclosure-head: transparent;
 
+  /* A step of a tree row's indent (`TreeRowLead`) where its host names nothing: the arrow's
+     square and the gap after it, so a row's arrow stands under the start of its parent's
+     words. A narrow host declares a shorter one on the lead's root. */
+  --space-tree-step: calc(var(--space-4) + var(--space-2));
+
   /* The control tier: how tall a control stands, and how large a pointer has to
      be able to hit it. One token used to answer both — `--size-control-target`, the
      44px accessibility target — so every control was drawn at the size of its

@@ -11,7 +11,8 @@
  * column prints.
  *
  * The first word each column prints, in the font it prints in, is what the
- * widest row of a column is found by (`widestRows.ts`).
+ * widest row of a column is found by (`widestRows.ts`). In a tree the
+ * reference stands after its row's indent, which is its column's `inset`.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -28,7 +29,10 @@ interface RowWords {
   updated: string
 }
 
-export function useListWords(items: () => readonly WorkItemBrief[]) {
+export function useListWords(
+  items: () => readonly WorkItemBrief[],
+  indent?: (item: WorkItemBrief) => number,
+) {
   const i18n = useI18n()
   const { say } = useMarkWords()
   const thisYear = new Date().getFullYear()
@@ -67,7 +71,7 @@ export function useListWords(items: () => readonly WorkItemBrief[]) {
   const holderOf = (item: WorkItemBrief) => wordsOf(item).holder
   const updatedOf = (item: WorkItemBrief) => wordsOf(item).updated
   const widths: WidthColumn<WorkItemBrief>[] = [
-    { font: '--font-line', word: (item) => item.reference },
+    { font: '--font-line', inset: indent, word: (item) => item.reference },
     { font: '--font-line', word: (item) => item.title },
     { font: '--font-field-label', word: (item) => facetWord(item, 'state') },
     { font: '--font-detail', word: (item) => facetWord(item, 'priority') },

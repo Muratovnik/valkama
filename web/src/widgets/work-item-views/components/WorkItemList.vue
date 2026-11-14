@@ -32,6 +32,14 @@
  * ask; an open blocker is the one readiness a row says. The glyphs and the
  * labels filter, out of the Tab order: the row stays one stop, and the bar
  * reaches the same filter from the keyboard.
+ *
+ * Grouped by goal, the list is a tree (`useListTree.ts`) and a `treegrid`: the
+ * whole scope as rows by depth, each goal and stage folding what is under it,
+ * and under a filter what matched with the path to it, the path's rows in a
+ * quieter tone with the count of what matched under them. The row itself takes
+ * focus there, not its reference (`useListKeys.ts`); the role and the row's
+ * level and place come from `treeRows.ts` alone. Which of the two the list is
+ * is decided when it is made, so its host makes it again to change it.
  */
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -40,21 +48,22 @@ import { useResizeObserver } from '@vueuse/core'
 
 import WorkItemListFind from '@/widgets/work-item-views/components/WorkItemListFind.vue'
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
+import WorkItemListRefCell from '@/widgets/work-item-views/components/WorkItemListRefCell.vue'
+import WorkItemListTreeWords from '@/widgets/work-item-views/components/WorkItemListTreeWords.vue'
+import { useListRuns } from '@/widgets/work-item-views/composables/useListRuns.ts'
 import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
+import { useListTreeRows } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
 import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 import { factsOf, ROW_FACETS, rowWords } from '@/widgets/work-item-views/utils/listRowWords.ts'
 
-import { drawMarks, drawWordCell } from '@/entities/work-item/components/drawMarks.ts'
-import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
-import { holderRef, leadMarks, markWidth, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
-import type { FacetContext, FacetId, FacetMark } from '@/entities/work-item/utils/facets.ts'
-import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
+import { holderRef, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { treeGridAttrs, treeRowAttrs } from '@/shared/lib/treeRows.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -68,15 +77,23 @@ const props = withDefaults(
     links: PlanningEdge[]
     /** The filter in force, so a mark already in it offers to come out. */
     filter?: WorkFilter
+    /**
+     * The list grouped by goal: the whole scope before the filter, whether a
+     * filter is in force, which makes `items` what it let through, and the space
+     * whose fold choices it keeps. Null for the flat list.
+     */
+    tree?: { filtered: boolean; scope: WorkItemBrief[]; space: string } | null
   }>(),
-  { filter: () => EMPTY_WORK_FILTER },
+  { filter: () => EMPTY_WORK_FILTER, tree: null },
 )
 
 const emit = defineEmits<{ filter: [token: WorkFilterToken]; open: [reference: string] }>()
 
 const { t, locale } = useI18n()
 
-const { ariaSort, descending, rows, sortBy, sortKey } = useListSort(() => props.items)
+/** The items a row can stand for: in a tree, the path to a match as well. */
+const source = computed(() => props.tree?.scope ?? props.items)
+const { ariaSort, descending, rows: sorted, sortBy, sortKey } = useListSort(() => source.value)
 
 const root = ref<HTMLElement | null>(null)
 const width = ref(0)
@@ -93,17 +110,31 @@ const fit = computed(() => fitFor(width.value))
 const wide = computed(() => fit.value === 'wide')
 const narrow = computed(() => fit.value === 'narrow')
 
-const { holderOf, updatedOf, widths } = useListWords(() => props.items)
+const tree = useListTreeRows({
+  items: () => props.items,
+  narrow: () => narrow.value,
+  ordered: () => sorted.value,
+  tree: () => props.tree,
+})
+const { cellTab, isPath, matchingOf, nameId, refId, treeLead } = tree
+const { rows, treeOf, underOf } = tree
 
-const words = useMarkWords()
+const { holderOf, updatedOf, widths } = useListWords(() => source.value, tree.indentOf)
+
 // One listener each for the whole list rather than three on every row: a
 // space of a thousand rows paid for three thousand of them on every opening.
 const keys = useListKeys(
   root,
   () => list,
   (reference) => emit('open', reference),
+  tree.focus,
 )
 const tabStop = (item: WorkItemBrief) => keys.tabStop(item.work_item_id)
+const toggle = (item: WorkItemBrief) => keys.toggle(item.work_item_id)
+/** The priority's glyph after the reference, where its column has folded away. */
+const priorityLead = (item: WorkItemBrief) => (folded('priority') ? lead(item, 'priority') : null)
+/** The reference is the flat list's Tab stop; in a tree the row is. */
+const openerTab = (item: WorkItemBrief) => (tree.isTree ? -1 : tabStop(item))
 const list = useWindowRows<WorkItemBrief>({
   columns: widths,
   key: (item) => item.work_item_id,
@@ -111,6 +142,7 @@ const list = useWindowRows<WorkItemBrief>({
   pinned: () => [...keys.kept(), rows.value[0]?.work_item_id],
   root,
   rows: () => rows.value,
+  ...tree.window,
 })
 onMounted(() => {
   width.value = root.value?.clientWidth ?? 0
@@ -119,20 +151,17 @@ onMounted(() => {
 const entries = computed(() => (measured.value ? list.entries.value : []))
 const { rowCount } = list
 
-const waiting = computed(() => waitingOn(props.links, props.items))
-/**
- * What a row's marks need beyond the item. The width is the one the marks read,
- * which decides whether labels print: a row is drawn and read for the find again
- * where the list crosses such a width, not on every pixel.
- */
-const readWidth = computed(() => markWidth('list', width.value))
-function context(item: WorkItemBrief): FacetContext {
-  return { waitingOn: waiting.value.get(item.work_item_id) ?? null, width: readWidth.value }
-}
-/** A glyph is a 14px mark; on a phone's list it is read, and the bar filters. */
-const glyphsFilter = computed(() => !narrow.value)
+const runs = useListRuns({
+  filter: () => props.filter,
+  items: () => source.value,
+  links: () => props.links,
+  narrow: () => narrow.value,
+  onFilter: (token) => emit('filter', token),
+  width,
+})
+const { context, fact, facts, filtering, lead, priorityWord, readWidth, waiting, word } = runs
 
-const { HOLDER, PRIORITY, STATE, STEPS, UNDER } = ROW_FACETS
+const { HOLDER, STATE, STEPS, UNDER } = ROW_FACETS
 
 const folded = (key: SortKey) => isFolded(fit.value, key)
 const shownColumns = computed(() => LIST_COLUMNS.filter((column) => !folded(column.key)))
@@ -147,6 +176,7 @@ function memo(entry: ListEntry<WorkItemBrief>): unknown[] {
   if (entry.kind === 'gap') return [entry.height]
   const item = entry.row
   return [
+    ...tree.memoOf(item),
     item,
     list.held(item),
     tabStop(item),
@@ -162,42 +192,38 @@ const rowClass = (entry: ListEntry<WorkItemBrief>) =>
   entry.kind === 'gap' ? 'list-gap' : ['list-row', { 'list-row-held': list.held(entry.row) }]
 const gapOf = (gap: { height: number }) => `${gap.height}px`
 
-const pass = (token: WorkFilterToken) => emit('filter', token)
-
 /**
- * A row's runs are drawn here as plain elements. A row holds seven of them, and
- * a component for each came to eleven instances a row, some fourteen thousand on
- * a space of a thousand rows, for marks that hold no state of their own.
+ * What a row says to a reader: in a flat list its place where a window is
+ * drawn; in a tree, from `treeRows.ts`, its level, its place beside its
+ * siblings and whether it is open, with its name and, as a path, what it is.
  */
-const facts = (item: WorkItemBrief, facets: readonly FacetId[], asked: FacetContext = {}) =>
-  drawMarks(surfaceMarks('list', item, asked, facets), { surface: 'list', words })
-/** One mark in a cell of its own. */
-const fact = (item: WorkItemBrief, facet: readonly FacetId[]) =>
-  drawMarks(surfaceMarks('list', item, {}, facet), { solo: true, surface: 'list', words })
-/** How marks that filter are drawn: out of the Tab order, so the row stays one stop. */
-const filterRun = (filterable = true) => ({
-  filter: props.filter,
-  filterable,
-  onFilter: pass,
-  surface: 'list' as const,
-  tabbable: false,
-  words,
-})
-/** A run that filters. */
-const filtering = (marks: readonly FacetMark[], filterable = true) =>
-  drawMarks(marks, filterRun(filterable))
-/** A column's word, the mark and nothing round it. */
-const word = (item: WorkItemBrief, facets: readonly FacetId[]) =>
-  drawWordCell(surfaceMarks('list', item, {}, facets), { surface: 'list', words })
-const priorityWord = (item: WorkItemBrief) =>
-  drawWordCell(surfaceMarks('list', item, {}, PRIORITY), filterRun())
-/** The glyph before a reference, in its fixed slot. */
-const lead = (item: WorkItemBrief, facet: FacetId) =>
-  filtering(leadMarks(facet, 'list', item), glyphsFilter.value)
+function rowAttrs(entry: ListEntry<WorkItemBrief>) {
+  if (entry.kind === 'gap') return { 'aria-hidden': true }
+  const row = treeOf(entry.row)
+  if (!row) return { 'aria-rowindex': entry.rowIndex }
+  return {
+    ...treeRowAttrs(row, entry.rowIndex),
+    'aria-description': tree.describedBy(row),
+    'aria-labelledby': tree.labelledBy(entry.row),
+    'data-id': row.id,
+    'data-reference': entry.row.reference,
+    'tabindex': tabStop(entry.row),
+  }
+}
+const tableAttrs = computed(() =>
+  tree.isTree
+    ? treeGridAttrs({ rowCount: rowCount.value ?? 0, windowed: rowCount.value !== undefined })
+    : { 'aria-rowcount': rowCount.value },
+)
 
 /** A row's words for the list's find, as the template below draws them. */
 const said = (item: WorkItemBrief) =>
-  rowWords(item, { context: context(item), fit: fit.value, updated: updatedOf(item), words })
+  rowWords(item, {
+    context: context(item),
+    fit: fit.value,
+    updated: updatedOf(item),
+    words: runs.words,
+  })
 </script>
 
 <template>
@@ -214,7 +240,7 @@ const said = (item: WorkItemBrief) =>
     >
       <table
         class="list-table"
-        :aria-rowcount="rowCount"
+        v-bind="tableAttrs"
       >
         <caption class="visually-hidden">
           {{
@@ -236,8 +262,7 @@ const said = (item: WorkItemBrief) =>
             :key="entry.key"
             :ref="list.measure"
             v-memo="memo(entry)"
-            :aria-hidden="entry.hidden"
-            :aria-rowindex="entry.rowIndex"
+            v-bind="rowAttrs(entry)"
             :data-index="entry.index"
             :class="rowClass(entry)"
           >
@@ -247,30 +272,31 @@ const said = (item: WorkItemBrief) =>
               :style="{ height: gapOf(entry) }"
             />
             <template v-else>
-              <td class="list-cell list-ref-cell">
-                <component
-                  :is="lead(entry.row, 'kind')"
-                  class="list-slot"
-                />
-                <button
-                  type="button"
-                  class="list-open"
-                  :tabindex="tabStop(entry.row)"
-                  :data-id="entry.row.work_item_id"
-                  :data-reference="entry.row.reference"
-                >
-                  {{ entry.row.reference }}
-                </button>
-                <component
-                  :is="lead(entry.row, 'priority')"
-                  v-if="folded('priority')"
-                  class="list-after"
-                />
-              </td>
-              <td class="list-cell list-title">
+              <WorkItemListRefCell
+                class="list-cell"
+                :cell-tab="cellTab"
+                :item="entry.row"
+                :kind="lead(entry.row, 'kind')"
+                :lead="treeLead(entry.row)"
+                :opener-id="refId(entry.row)"
+                :opener-tab="openerTab(entry.row)"
+                :priority="priorityLead(entry.row)"
+                @toggle="toggle(entry.row)"
+              />
+              <td
+                class="list-cell list-title"
+                :tabindex="cellTab"
+              >
                 <span
+                  :id="nameId(entry.row)"
                   v-slash-breaks="entry.row.title"
                   class="list-name"
+                  :class="{ 'list-name-path': isPath(entry.row) }"
+                />
+                <WorkItemListTreeWords
+                  v-if="tree.isTree"
+                  :matching="matchingOf(entry.row)"
+                  :parent="underOf(entry.row)"
                 />
                 <span
                   v-if="wide"
@@ -302,12 +328,14 @@ const said = (item: WorkItemBrief) =>
               <td
                 v-if="!folded('state')"
                 class="list-cell"
+                :tabindex="cellTab"
               >
                 <component :is="fact(entry.row, STATE)" />
               </td>
               <td
                 v-if="!folded('priority')"
                 class="list-cell"
+                :tabindex="cellTab"
               >
                 <component :is="priorityWord(entry.row)" />
               </td>
@@ -315,6 +343,7 @@ const said = (item: WorkItemBrief) =>
                 v-if="!folded('claim')"
                 v-tooltip.clipped="holderOf(entry.row)"
                 class="list-cell list-holder one-line"
+                :tabindex="cellTab"
               >
                 <component
                   :is="word(entry.row, HOLDER)"
@@ -325,12 +354,14 @@ const said = (item: WorkItemBrief) =>
                 v-if="!folded('checklist')"
                 class="list-cell"
                 data-numeric="true"
+                :tabindex="cellTab"
               >
                 <component :is="word(entry.row, STEPS)" />
               </td>
               <td
                 v-if="!folded('updated')"
                 class="list-cell"
+                :tabindex="cellTab"
               >
                 {{ updatedOf(entry.row) }}
               </td>
@@ -397,6 +428,12 @@ const said = (item: WorkItemBrief) =>
   }
 }
 
+/* A tree's row takes focus itself, and its ring stands inside it: outside, the
+   list's scroll cut it at the edges. */
+.list-row:focus-visible {
+  outline-offset: calc(-1 * var(--size-focus-ring));
+}
+
 /* Drawn only for the widths it gives its columns: in a short list's first frame,
    and outside a long list's window. */
 .list-row-held {
@@ -416,25 +453,6 @@ const said = (item: WorkItemBrief) =>
   white-space: nowrap;
 }
 
-/* A line of the row, not a control standing in it: at the base rule's height it
-   pushed the row's shared baseline down, and every title with it. The whole row
-   is what a pointer presses, so this box only has to hold the keyboard's focus. */
-.list-open {
-  min-block-size: 0;
-  padding: 0;
-  border: 0;
-  color: var(--color-text);
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-  background: none;
-  cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    text-decoration: underline;
-  }
-}
-
 .list-title {
   min-width: 16ch;
   color: var(--color-text);
@@ -442,26 +460,10 @@ const said = (item: WorkItemBrief) =>
   white-space: normal;
 }
 
-/* The kind leads the reference in a slot of its own whether or not it has a
-   glyph, so every reference starts where the one above it does. A slot is a
-   line tall: a filtering glyph's 28px reaches into the row's padding. A filled
-   slot stands on the row's baseline, which puts its glyph on the middle of the
-   reference's letters; an empty one on that middle, or it would heighten the row. */
-.list-slot {
-  place-content: center center;
-  vertical-align: baseline;
-  inline-size: var(--list-slot-size);
-  block-size: 1lh;
-  margin-inline-end: var(--space-1);
-
-  &:empty {
-    vertical-align: middle;
-  }
-}
-
-/* The priority's glyph after the reference, where its column has folded away. */
-.list-after {
-  margin-inline-start: var(--space-1);
+/* A path row's title in the quiet tone of finished work; the words after it say
+   what the tone alone would not: how much under it matched. */
+.list-name-path {
+  color: var(--color-text-muted);
 }
 
 /* An open blocker and the labels, on their own line under the title. */

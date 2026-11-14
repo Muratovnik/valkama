@@ -21,6 +21,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { usePlanningCensus } from '@/pages/planning/composables/usePlanningCensus.ts'
+import type { ViewGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import { usePlanningFilter } from '@/pages/planning/composables/usePlanningFilter.ts'
 import PlanningChainFailure from '@/pages/planning/PlanningChainFailure.vue'
 import PlanningWorkspaceBar from '@/pages/planning/PlanningWorkspaceBar.vue'
@@ -28,7 +29,6 @@ import { graphView } from '@/pages/planning/utils/graphView.ts'
 
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
-import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import { filterTokens } from '@/entities/work-item/utils/workFilter.ts'
@@ -65,8 +65,8 @@ const props = defineProps<{
   chainPending?: boolean
   /** Moves each time the card asks for the graph, which then takes focus. */
   graphFocus?: number
-  /** How the board is grouped: not at all, or into one lane per epic. */
-  grouping?: BoardGrouping
+  /** How the views are grouped: the board by parent, the list by goal, or not at all. */
+  grouping?: ViewGrouping
   /** The space is being read: the bar stands, and the stage says so in place of a view. */
   reading?: boolean
   selectedId?: string | null
@@ -78,7 +78,7 @@ const emit = defineEmits<{
   'exit-branch': []
   'exit-chain': []
   'find': [text: string]
-  'group': [grouping: BoardGrouping]
+  'group': [grouping: ViewGrouping]
   'open': [reference: string]
   'place': [move: BoardMove]
   'retry-chain': []
@@ -138,7 +138,7 @@ const {
   maxBytes: () => props.stateBytes,
   write: (state) => emit('state', state),
 })
-const boardGrouping = computed(() => props.grouping ?? 'none')
+const boardGrouping = computed(() => (props.grouping === 'epic' ? 'epic' : 'none'))
 const census = usePlanningCensus(() => ({
   chain: props.chain ?? null,
   filter: filter.value,
@@ -154,6 +154,19 @@ const {
   scope: scopeItems,
   visible: visibleItems,
 } = census
+/**
+ * The list grouped by goal is a tree of the whole scope: what the filter let
+ * through, with the path to it. Grouped or not, it is another list, made anew.
+ */
+const listTree = computed(() =>
+  props.grouping === 'goal'
+    ? {
+        filtered: filtered.value,
+        scope: scopeItems.value,
+        space: props.model.planning_space?.planning_space_id ?? '',
+      }
+    : null,
+)
 /** The workflow's state categories in its own order: what the state facet offers. */
 const categories = computed(() => [
   ...new Set((props.model.workflow?.states ?? []).map((state) => state.category)),
@@ -206,8 +219,17 @@ const graphEdges = computed(() => props.chain?.edges ?? props.model.links)
 const chipReference = computed(() =>
   props.chain && stageView.value !== 'graph' ? props.chain.root.reference : null,
 )
-/** The board's grouping while the board is on the stage, which is when it can be grouped. */
-const barGrouping = computed(() => (stageView.value === 'kanban' ? boardGrouping.value : null))
+/** The grouping of the view on the stage, and what it offers; the graph has none. */
+const barGrouping = computed<ViewGrouping | null>(() => {
+  if (stageView.value === 'kanban') return boardGrouping.value
+  if (stageView.value === 'list') return listTree.value ? 'goal' : 'none'
+  return null
+})
+const barGroupings = computed<readonly ViewGrouping[]>(() =>
+  stageView.value === 'list' ? ['none', 'goal'] : ['none', 'epic'],
+)
+/** The list's key, which makes it anew when it turns from a flat list to a tree. */
+const listKind = computed(() => (listTree.value ? 'tree' : 'flat'))
 /**
  * What the view leaves out of the counts: the graph's parents, which the bar
  * says as a sentence, and the grouped board's epics, which it says as rows.
@@ -248,6 +270,7 @@ defineExpose({ toggleFilter })
       :filter="filter"
       :filtered="filtered"
       :grouping="barGrouping"
+      :groupings="barGroupings"
       :items="countedItems"
       :stored="filterStored"
       :route-state="routeState"
@@ -305,9 +328,11 @@ defineExpose({ toggleFilter })
         <WorkItemList
           v-else-if="stageView === 'list'"
           v-show="matchedItems.length || !filtered"
+          :key="listKind"
           :items="visibleItems"
           :links="model.links"
           :filter="filter"
+          :tree="listTree"
           @filter="toggleFilter"
           @open="(reference) => emit('open', reference)"
         />

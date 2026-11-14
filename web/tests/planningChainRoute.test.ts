@@ -91,8 +91,9 @@ test('a value the endpoint could never answer is invalid rather than sent', () =
     assert.equal(chainTarget(state).status, 'invalid', JSON.stringify(state))
 })
 
-test('the grouping key names only an epic grouping, and leaves the address without it otherwise', () => {
+test('the grouping key names a grouping a view offers, and leaves the address without it otherwise', () => {
   assert.equal(groupingOf({ view: 'kanban', group: 'epic' }), 'epic')
+  assert.equal(groupingOf({ view: 'list', group: 'goal' }), 'goal')
   const ungrouped: Parameters<typeof groupingOf>[0][] = [
     { view: 'kanban' },
     { group: 'parent' },
@@ -103,6 +104,7 @@ test('the grouping key names only an epic grouping, and leaves the address witho
   const grouped = withGrouping({ view: 'kanban', chain: 'MAIN-12' }, 'epic')
   assert.deepEqual(grouped, { view: 'kanban', chain: 'MAIN-12', group: 'epic' })
   assert.deepEqual(withGrouping(grouped, 'none'), { view: 'kanban', chain: 'MAIN-12' })
+  assert.deepEqual(withGrouping({ view: 'list' }, 'goal'), { view: 'list', group: 'goal' })
 })
 
 test('only how the operator is looking goes to another scope, and only as a value it can be', () => {
