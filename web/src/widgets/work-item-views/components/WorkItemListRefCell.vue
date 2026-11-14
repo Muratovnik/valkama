@@ -5,28 +5,32 @@
  * opens the card, and where the priority's column has folded away the
  * priority's glyph after it.
  *
- * The glyphs come drawn, as the list draws every run of a row
- * (`useListRuns.ts`). In a flat list the reference is the row's one stop for
+ * The glyphs are drawn here, by the list's own drawing (`useListRuns.ts`): a
+ * glyph drawn by the list and handed in carried the list's style scope rather
+ * than this cell's, so the kind's slot lost its width where it held no glyph,
+ * and that row's reference started 32px before the others. In a flat list the reference is the row's one stop for
  * the keyboard; in a tree the row is, and the cell takes focus only from the
  * keys.
  */
 import type { VNode } from 'vue'
 
+import type { FacetId } from '@/entities/work-item/utils/facets.ts'
+
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import TreeRowLead from '@/shared/ui/TreeRowLead.vue'
 
 defineProps<{
+  /** Whether the priority's glyph follows the reference: its column has folded away. */
+  after: boolean
   item: WorkItemBrief
-  /** The kind's glyph, drawn. */
-  kind: VNode
   /** In a tree, where the row starts; null in a flat list. */
   lead: { depth: number; expanded: boolean | null; levels: number } | null
   /** The reference's id, which names the row in a tree. */
   openerId: string
   openerTab: number
-  /** The priority's glyph, drawn, where its column has folded away. */
-  priority: VNode | null
   cellTab?: number
+  /** Draws an item's glyph of a facet. */
+  glyph: (item: WorkItemBrief, facet: FacetId) => VNode
 }>()
 
 const emit = defineEmits<{ toggle: [] }>()
@@ -38,7 +42,7 @@ const emit = defineEmits<{ toggle: [] }>()
     :tabindex="cellTab"
   >
     <component
-      :is="kind"
+      :is="glyph(item, 'kind')"
       class="list-slot"
     />
     <TreeRowLead
@@ -61,8 +65,8 @@ const emit = defineEmits<{ toggle: [] }>()
       {{ item.reference }}
     </button>
     <component
-      :is="priority"
-      v-if="priority"
+      :is="glyph(item, 'priority')"
+      v-if="after"
       class="list-after"
     />
   </td>

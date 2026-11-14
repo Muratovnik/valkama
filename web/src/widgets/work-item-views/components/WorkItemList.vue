@@ -131,8 +131,6 @@ const keys = useListKeys(
 )
 const tabStop = (item: WorkItemBrief) => keys.tabStop(item.work_item_id)
 const toggle = (item: WorkItemBrief) => keys.toggle(item.work_item_id)
-/** The priority's glyph after the reference, where its column has folded away. */
-const priorityLead = (item: WorkItemBrief) => (folded('priority') ? lead(item, 'priority') : null)
 /** The reference is the flat list's Tab stop; in a tree the row is. */
 const openerTab = (item: WorkItemBrief) => (tree.isTree ? -1 : tabStop(item))
 const list = useWindowRows<WorkItemBrief>({
@@ -276,11 +274,11 @@ const said = (item: WorkItemBrief) =>
                 class="list-cell"
                 :cell-tab="cellTab"
                 :item="entry.row"
-                :kind="lead(entry.row, 'kind')"
+                :glyph="lead"
                 :lead="treeLead(entry.row)"
                 :opener-id="refId(entry.row)"
                 :opener-tab="openerTab(entry.row)"
-                :priority="priorityLead(entry.row)"
+                :after="folded('priority')"
                 @toggle="toggle(entry.row)"
               />
               <td
