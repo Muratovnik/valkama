@@ -29,7 +29,7 @@ async function plotAndRoom(page: Page) {
     const room =
       panel.getBoundingClientRect().bottom - padding - cards.getBoundingClientRect().bottom
     const scrolls = panel.scrollHeight > panel.clientHeight
-    return { plot: { x, y, width, height }, room: Math.round(room), scrolls }
+    return { plot: { x, y, width, height }, room: Math.round(room), scrolls, padding }
   })
 }
 
@@ -41,12 +41,16 @@ async function fieldHeight(page: Page) {
 
 /**
  * Whether the field gives the panel's box what it has: the panel scrolls with the field at its
- * floor, or the field takes the room the cards leave, to the pixel.
+ * floor, or the field takes the room the cards leave, to the pixel. A box short of the floor by
+ * no more than the air under the cards gives up that air instead of scrolling by it alone, the
+ * field at its floor and the cards whole inside the panel's edge (the overview fit's spec).
  */
-const fillsOrScrolls = (measured: Awaited<ReturnType<typeof plotAndRoom>>) =>
-  measured.scrolls
-    ? Math.round(measured.plot.height) === 200
-    : measured.room >= 0 && measured.room < 2
+const fillsOrScrolls = (measured: Awaited<ReturnType<typeof plotAndRoom>>) => {
+  const atFloor = Math.round(measured.plot.height) === 200
+  if (measured.scrolls) return atFloor
+  if (measured.room >= 0) return measured.room < 2
+  return atFloor && -measured.room <= measured.padding
+}
 
 test('a tall window gives the room under the cards to the plot, and 1440 by 900 keeps 200 pixels of it', async ({
   page,
