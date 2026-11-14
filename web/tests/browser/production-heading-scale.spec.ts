@@ -192,10 +192,10 @@ test("a question's groups stand under the card's discussion and in the questions
 test('Settings and its Diagnostics step down from the module name', async ({ page }) => {
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
-  await expect(page.locator('.settings-group h3').first()).toBeVisible()
+  await expect(page.locator('.settings-group .section-heading').first()).toBeVisible()
   await expectScale(page, 'General', [
     moduleName,
-    ['a section', '.settings-group h3', 'section'],
+    ['a section', '.settings-group .section-heading', 'section'],
     ['a row', '.settings-row-label', 'label'],
   ])
 
@@ -208,11 +208,73 @@ test('Settings and its Diagnostics step down from the module name', async ({ pag
   await expect(page.locator('.health-passed-title').first()).toBeVisible()
   await expectScale(page, 'Diagnostics', [
     moduleName,
-    ['the diagnostics', '.installation-health .health-head h3', 'section'],
-    ['what needs attention', '.health-section-head h4', 'group'],
+    ['the diagnostics', '.installation-health .health-head .section-heading', 'section'],
+    ['what needs attention', '.health-section-head .section-heading', 'group'],
     ['the passed checks', '.health-passed > .disclosure-head .disclosure-summary', 'group'],
     ['a level needing attention', '.health-level-head .state-label', 'block'],
     ['a passed level', '.health-passed-title', 'block'],
     ['a finding', '.health-finding-state .state-label', 'label'],
   ])
+})
+
+/**
+ * The screen's outline as a screen reader walks it, from the module's name down: each heading by
+ * its rank and words, and the heading it stands under, the nearest one before it of a higher rank.
+ * The navigation's own headings stand apart, before the module's name.
+ */
+const outline = (page: Page) =>
+  page.evaluate(() => {
+    const ranked = '.context-bar h1, .settings-page :is(h1, h2, h3, h4, h5, h6)'
+    const headings = [...document.querySelectorAll(ranked)].map((heading) => ({
+      rank: Number(heading.tagName.slice(1)),
+      words: (heading.textContent ?? '').replaceAll(/\s+/gu, ' ').trim(),
+    }))
+    return headings.map((heading, index) => ({
+      ...heading,
+      under: headings
+        .slice(0, index)
+        .reverse()
+        .find((before) => before.rank < heading.rank)?.words,
+    }))
+  })
+
+/** The headings that skip a rank: a rank more than one under the heading before it. */
+const skips = (headings: Awaited<ReturnType<typeof outline>>) =>
+  headings
+    .filter((heading, index) => heading.rank > (headings[index - 1]?.rank ?? 0) + 1)
+    .map(({ rank, words }) => `h${rank} ${words}`)
+
+test('Settings ranks its headings by their nesting, under the module name', async ({
+  page,
+}, info) => {
+  await installBackend(page)
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await expect(page.locator('.settings-group .section-heading').first()).toBeVisible()
+  const general = await outline(page)
+  expect.soft(skips(general), 'General: no rank skipped').toEqual([])
+  const groups = general.filter((heading) => heading.under === 'Настройки')
+  expect
+    .soft(groups, 'General: its groups stand right under the module name')
+    .toHaveLength(await page.locator('.settings-group').count())
+
+  await page
+    .getByRole('tablist', { name: 'Раздел настроек' })
+    .getByRole('tab', { name: 'Диагностика' })
+    .click()
+  await expect(page.locator('.health-level').first()).toBeVisible()
+  await page.locator('.health-passed').getByRole('button').first().click()
+  await expect(page.locator('.health-passed-title').first()).toBeVisible()
+  const diagnostics = await outline(page)
+  await info.attach('outline', {
+    body: JSON.stringify({ general, diagnostics }, null, 2),
+    contentType: 'application/json',
+  })
+  expect.soft(skips(diagnostics), 'Diagnostics: no rank skipped').toEqual([])
+  const under = (words: string) => diagnostics.find((heading) => heading.words === words)?.under
+  expect.soft(under('Диагностика установки')).toBe('Настройки')
+  expect.soft(under('Требует внимания')).toBe('Диагностика установки')
+  // A passed level stands under the passed checks, not under what needs attention.
+  const passed = await page.locator('.health-passed-title').allTextContents()
+  expect(passed.length).toBeGreaterThan(0)
+  for (const level of passed) expect.soft(under(level.trim()), level).toMatch(/^Успешные проверки/u)
 })
