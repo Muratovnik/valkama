@@ -240,6 +240,12 @@ function identifierAttributeShape(expression, provenance, scope, resolving) {
 
 function callAttributeShape(expression, provenance, scope, resolving) {
   const callee = unwrapExpression(expression.callee)
+  if (
+    callee?.type === 'Identifier' &&
+    provenance.context.styleless.has(callee.name) &&
+    !identifierIsShadowed(callee, scope)
+  )
+    return { styles: [], unknown: false }
   if (callee?.type === 'Identifier' && provenance.context.computed.has(callee.name)) {
     const returned = returnExpressions(expression.arguments[0])
     return returned.length === 0

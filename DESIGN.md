@@ -1145,6 +1145,19 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   bare `text` weight, its words in line with what it opens. The ghost's fill is
   for actions; a disclosure in the same fill stood level with the actions beside
   it.
+- **Tree rows:** `treeRows` lays out records as a tree of rows: each row's depth,
+  its place among its siblings, whether it is open or folded, and, under a
+  filter, the path rows kept above what matched, each with how many matched
+  under it. It is the one file that writes the tree grid's role and a row's
+  level, set size and position; a component binds them whole, as
+  `v-bind="treeRowAttrs(row)"` and `treeGridAttrs`. `TreeRowLead` draws a row's
+  start: an indent of 24px a level, 16px on a narrow list, that stops at the
+  fifth level, the third on a narrow list, and the arrow that folds or opens the
+  row. The arrow stays out of the Tab order, because ← and → do the same.
+  `useFoldChoices` keeps a reader's fold or opening against a rule, per space,
+  and forgets a choice once it agrees with the rule. The board's lanes, the
+  graph's frames and the list's tree each keep their own choices under their
+  own rules.
 - **Fields:** `VField` owns the frame around a labelled control — label,
   control, optional hint — and `VTextInput` owns the control itself for one
   line or several. A button beside a field lines up with its control, so that
@@ -1518,6 +1531,24 @@ page wherever the list scrolls; the table tells a reader how many rows it has
 and each row where it stands; a printed list prints every row; and Ctrl+F finds
 in every row, as the next rule says. The cost, for now: on a list that long, a
 screen reader's browse mode reaches only the rows in the page.
+Grouped «By goal», the list is a tree grid. A goal stands at the top, with its
+stages and tasks under it by depth, and rows that share a parent stand in the
+list's sort order. The view menu offers «By goal» on the list and «By epic» on
+the board. A goal or stage with more than 20 open items, or with none open,
+starts folded. A reader's choice against that rule is kept per space and is
+forgotten once it agrees with the rule. A filter lays out the whole scope and
+shows what it let through with the path to it: a path row is quiet, a reader is
+told it is a path, and it says how many rows matched under it. Under a filter
+the rule folds nothing. Below the indent's last level a row names its parent,
+«in MAIN-12», under its title. Focus is on the row. ↑/↓, Home/End and Page
+Up/Page Down move by place in the whole tree. → opens a folded row and
+otherwise goes to the row's first cell. ← folds an open row and otherwise goes
+to its parent. In a cell, ← and → go to the cell beside it, and ← from the
+first cell returns to the row. Enter opens the card. Folding a row that holds
+the focused row moves focus to the folded row. The tree draws its window from
+300 rows it could show, folded rows included, not from the rows it shows. Its
+first column is as wide as the deepest reference needs after its indent, so
+neither a fold nor a scroll moves a column.
 The list has a find of its own, because the browser's reached only the rows in
 the page. While the list is what the page shows, with no card, dialog or finder
 over it and no menu, choice list or other popup open, Ctrl+F (⌘F) opens the
@@ -1962,7 +1993,7 @@ fits beside it, otherwise taking a line of its own under the name, starting wher
 Where even the name's last word and the start are wider than the head's column, as beside three
 44px icons at 320–370px or two beside a long name at 320px, the start stands on a line of its own
 under the name, from its left edge, and the date under it. A line that says who in a phrase,
-«Answered by agent kolo» over an answer, is one unit the same way.
+«Answered by agent worker-b» over an answer, is one unit the same way.
 What can be done to an entry stands at the end of that line, as icons in the muted
 ink that always show, since a phone has no pointer to bring them out with (`EntryHead`,
 `EntryAction`): Reply, the mark and its removal, Make task outcome, Change answer, and on the
@@ -2507,6 +2538,13 @@ their narrow primitive owners, self-justifying negative disclaimers, and vague
 product-quality claims. Component tests prove behavior; targeted
 Playwright checks verify one representative production slice and important
 breakpoints. Screenshots are evidence, not the acceptance oracle by themselves.
+
+Only `shared/lib/treeRows.ts` writes the `treegrid` role, `aria-level`,
+`aria-setsize` and `aria-posinset`. `check:ui-system` rejects those names in
+any other file, whether in markup, in script or as DOM properties. A component
+binds them whole from that file, and the inline-style guard reads that binding
+as carrying no style. With a second writer, two parts of the screen could
+disagree about where a row stands.
 
 Three machines enforce this document and they do not overlap. stylelint owns
 what a single declaration may say — the values a property is allowed to carry.

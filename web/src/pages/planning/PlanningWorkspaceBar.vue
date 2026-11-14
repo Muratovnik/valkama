@@ -4,7 +4,7 @@
  *
  * The row is the view and its menu, then the filter, with the one primary action
  * at its end, where every module puts it. The menu stands by the view because what
- * it holds arranges what is drawn — the board's grouping — or brings a whole view
+ * it holds arranges what is drawn — the view's grouping — or brings a whole view
  * back, a saved one (`PlanningViewMenu`); everything to the right of it narrows
  * what is drawn, so the two are not read as one set of filters. The filter is one
  * field — text and facet chips — and the menu it opens, because the five queue
@@ -22,11 +22,10 @@ import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { CensusExclusion } from '@/pages/planning/composables/usePlanningCensus.ts'
+import type { ViewGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import PlanningViewMenu from '@/pages/planning/PlanningViewMenu.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
-
-import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
 import WorkFilterChips from '@/features/work-filter/WorkFilterChips.vue'
 import WorkFilterField from '@/features/work-filter/WorkFilterField.vue'
@@ -59,8 +58,8 @@ const props = defineProps<{
   exclusion: CensusExclusion | null
   /** The filter differs from the empty one. */
   filtered: boolean
-  /** How the board is grouped; null while the board is not on the stage. */
-  grouping: BoardGrouping | null
+  /** How the view on the stage is grouped; null for a view with no grouping. */
+  grouping: ViewGrouping | null
   /** The work the counts count, whose labels and holders the filter offers. */
   items: readonly WorkItemBrief[]
   /** The module's address state, which a saved view keeps. */
@@ -71,6 +70,8 @@ const props = defineProps<{
   /** The planning space the views are saved in. */
   viewPlace: string
   writable: boolean
+  /** The groupings the view on the stage offers: the board's unless it says. */
+  groupings?: readonly ViewGrouping[]
   /** The space is being read, so the bar has nothing to count yet and says no number. */
   reading?: boolean
 }>()
@@ -80,7 +81,7 @@ const emit = defineEmits<{
   'exit-chain': []
   /** Search every project for the filter's text, from the last row of its menu. */
   'find': [text: string]
-  'group': [grouping: BoardGrouping]
+  'group': [grouping: ViewGrouping]
   /** A saved view chosen: the address state it keeps. */
   'state': [state: Record<string, string | number | boolean>]
   'view': [mode: PlanningViewMode]
@@ -184,6 +185,7 @@ function removeChip(token: WorkFilterToken) {
       />
       <PlanningViewMenu
         :grouping="grouping"
+        :groupings="groupings"
         :place="viewPlace"
         :state="routeState"
         @group="(value) => emit('group', value)"

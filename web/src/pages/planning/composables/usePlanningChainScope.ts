@@ -70,9 +70,16 @@ export function viewOf(state: RouteState | undefined): PlanningViewMode {
   return value === 'graph' || value === 'list' ? value : 'kanban'
 }
 
-/** The board's grouping as the route state carries it; anything else is none. */
-export function groupingOf(state: RouteState | undefined): 'epic' | 'none' {
-  return state?.group === 'epic' ? 'epic' : 'none'
+/**
+ * How a view is grouped: the board into a lane per parent (`epic`), the list
+ * into a tree by goal (`goal`), or not at all. Each view reads the one it
+ * offers and draws any other as none.
+ */
+export type ViewGrouping = 'epic' | 'goal' | 'none'
+
+/** The grouping as the route state carries it; anything else is none. */
+export function groupingOf(state: RouteState | undefined): ViewGrouping {
+  return state?.group === 'epic' || state?.group === 'goal' ? state.group : 'none'
 }
 
 /**
@@ -88,10 +95,10 @@ export function lookAcrossScopes(state: RouteState | undefined): RouteState {
   }
 }
 
-/** The same state grouping the board so; the default leaves the key out. */
-export function withGrouping(state: RouteState | undefined, grouping: 'epic' | 'none'): RouteState {
+/** The same state grouped so; the default leaves the key out. */
+export function withGrouping(state: RouteState | undefined, grouping: ViewGrouping): RouteState {
   const rest = Object.fromEntries(Object.entries(state ?? {}).filter(([key]) => key !== 'group'))
-  return grouping === 'epic' ? { ...rest, group: grouping } : rest
+  return grouping === 'none' ? rest : { ...rest, group: grouping }
 }
 
 /** Whether the chain's closed members are drawn; absent, as in an older address, is no. */

@@ -23,6 +23,7 @@ import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMe
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
+import { treeRowMessages } from '@/shared/i18n/treeRowMessages.ts'
 import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
@@ -41,6 +42,7 @@ export const ru = {
   alerts: alertMessages.ru.alerts,
   open: openMessages.ru.open,
   time: timeMessages.ru.time,
+  tree: treeRowMessages.ru.tree,
   checklistComment: checklistCommentMessages.ru.checklistComment,
   threads: discussionThreadMessages.ru.threads,
   mentions: mentionMessages.ru.mentions,

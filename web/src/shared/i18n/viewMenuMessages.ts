@@ -1,5 +1,5 @@
 /**
- * The Work views' menu beside «Kanban / List / Graph»: how the board is grouped,
+ * The Work views' menu beside «Kanban / List / Graph»: how the view is grouped,
  * the views saved in the space, and the small dialog that names a new one.
  *
  * The menu's word is short on purpose: it stands on a phone's one row with the
@@ -12,6 +12,7 @@ export const viewMenuMessages = {
       grouping: 'Grouping',
       groupNone: 'No grouping',
       groupEpic: 'By parent',
+      groupGoal: 'By goal',
       saved: 'Saved views',
       save: 'Save view…',
       delete: 'Delete view “{name}”',
@@ -31,6 +32,7 @@ export const viewMenuMessages = {
       grouping: 'Группировка',
       groupNone: 'Без группировки',
       groupEpic: 'По родителю',
+      groupGoal: 'По цели',
       saved: 'Сохранённые виды',
       save: 'Сохранить вид…',
       delete: 'Удалить вид «{name}»',

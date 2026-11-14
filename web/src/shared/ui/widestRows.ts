@@ -7,30 +7,43 @@
  * collapsed row gives its widths and takes no height.
  */
 
-/** One column: what a row prints in it, and the token of the font it prints in. */
+/**
+ * One column: what a row prints in it, and the token of the font it prints in.
+ * `inset` is room in pixels a row takes before its word, as a tree's indent
+ * does; a row deep in a tree can be the widest with a shorter word.
+ */
 export interface WidthColumn<Row> {
   font: string
+  inset?: (row: Row) => number
   word: (row: Row) => string
 }
 
-/** The widest of some words in one font; of equal length the canvas decides. */
+/**
+ * The widest of some words in one font, each after its inset; of equal length
+ * the canvas decides. Without insets a word two letters shorter than the
+ * longest is not measured.
+ */
 function widestWord(
-  words: readonly (readonly [string, number])[],
+  words: readonly (readonly [string, number, number])[],
   canvas: CanvasRenderingContext2D,
   font: string,
 ) {
   let longest = 0
-  for (const [word] of words) longest = Math.max(longest, word.length)
+  let inset = false
+  for (const [word, , before] of words) {
+    longest = Math.max(longest, word.length)
+    inset ||= before > 0
+  }
   canvas.font = font
   let widest = -1
   let at = -1
   const measured = new Map<string, number>()
-  for (const [word, index] of words) {
-    if (word.length < longest - 1) continue
+  for (const [word, index, before] of words) {
+    if (!inset && word.length < longest - 1) continue
     const width = measured.get(word) ?? canvas.measureText(word).width
     measured.set(word, width)
-    if (width > widest) {
-      widest = width
+    if (width + before > widest) {
+      widest = width + before
       at = index
     }
   }
@@ -50,9 +63,9 @@ export function widestRows<Row>(
   if (!canvas) return null
   const style = getComputedStyle(document.documentElement)
   const held = new Set<Row>()
-  for (const { font, word } of columns) {
+  for (const { font, inset, word } of columns) {
     const at = widestWord(
-      all.map((row, index) => [word(row), index] as const),
+      all.map((row, index) => [word(row), index, inset?.(row) ?? 0] as const),
       canvas,
       style.getPropertyValue(font),
     )

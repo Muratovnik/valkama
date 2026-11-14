@@ -1,5 +1,12 @@
 const UI_SYSTEM_SOURCE = '@/shared/lib/uiSystem.ts'
 const PRESENTATION_HELPERS = new Set(['semanticStatePresentation', 'statePresentation'])
+/**
+ * The attributes of a tree's table and rows, bound whole with `v-bind`: they
+ * say a role and where a row stands, never a style, and only their owner
+ * writes those (`tree-roles.mjs`).
+ */
+const TREE_ATTRIBUTES_SOURCE = '@/shared/lib/treeRows.ts'
+const TREE_ATTRIBUTES = new Set(['treeGridAttrs', 'treeRowAttrs'])
 
 /** Visit a tree when every match matters rather than only the first one. */
 export function visitNodes(node, visitor) {
@@ -46,6 +53,8 @@ function registerImport(context, source, specifier) {
   if (source === 'vue' && importName(specifier) === 'computed')
     context.computed.add(specifier.local.name)
   if (source === 'vue' && importName(specifier) === 'ref') context.refs.add(specifier.local.name)
+  if (source === TREE_ATTRIBUTES_SOURCE && TREE_ATTRIBUTES.has(importName(specifier)))
+    context.styleless.add(specifier.local.name)
 }
 
 function registerProgramStatement(context, statement) {
@@ -82,6 +91,8 @@ function provenanceContext(program, source) {
     functions: new Map(),
     helpers: new Set(),
     refs: new Set(),
+    /** Imported functions whose attributes carry no style. */
+    styleless: new Set(),
   }
   const setupRange = setupScriptRange(source)
   for (const statement of program.body)

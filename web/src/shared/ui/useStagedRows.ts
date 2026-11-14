@@ -16,8 +16,8 @@
  */
 import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 
-import { widestRows } from '@/widgets/work-item-views/utils/widestRows.ts'
-import type { WidthColumn } from '@/widgets/work-item-views/utils/widestRows.ts'
+import { widestRows } from '@/shared/ui/widestRows.ts'
+import type { WidthColumn } from '@/shared/ui/widestRows.ts'
 
 /** A row's height is never less than this, so this many fill any height. */
 const SHORTEST_ROW = 36

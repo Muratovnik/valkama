@@ -3,10 +3,10 @@
  * The view's menu beside «Kanban / List / Graph»: how the view arranges what it
  * draws, and the views saved in the space.
  *
- * The board's grouping is a choice here and no button of its own in the bar: «By
- * epic» stood among the filter's presets and read as a filter, when it narrows
- * nothing. The menu offers only what applies to the view on the stage, so the list
- * and the graph have no grouping in it.
+ * The grouping is a choice here and no button of its own in the bar: «By epic»
+ * stood among the filter's presets and read as a filter, when it narrows nothing.
+ * The menu offers only what applies to the view on the stage: the board groups by
+ * parent, the list by goal, as a tree, and the graph has no grouping in it.
  *
  * A saved view is the address state under a name (`useSavedViews`): choosing one
  * writes its state back, as any change of the view, the grouping or the filter
@@ -16,7 +16,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
+import type { ViewGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
 
 import SaveViewDialog from '@/features/saved-views/SaveViewDialog.vue'
 import { useSavedViews } from '@/features/saved-views/useSavedViews.ts'
@@ -25,17 +25,22 @@ import type { ViewState } from '@/shared/lib/savedViews.ts'
 import type { MenuEntry } from '@/shared/ui/menuEntries.ts'
 import VMenu from '@/shared/ui/VMenu.vue'
 
-const props = defineProps<{
-  /** How the board is grouped; null while the board is not on the stage. */
-  grouping: BoardGrouping | null
-  /** Where views are saved: one planning space. */
-  place: string
-  /** The module's address state now. */
-  state: ViewState | undefined
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** How the view on the stage is grouped; null for a view with no grouping. */
+    grouping: ViewGrouping | null
+    /** Where views are saved: one planning space. */
+    place: string
+    /** The module's address state now. */
+    state: ViewState | undefined
+    /** The groupings the view on the stage offers: the board's unless it says. */
+    groupings?: readonly ViewGrouping[]
+  }>(),
+  { groupings: () => ['none', 'epic'] },
+)
 
 const emit = defineEmits<{
-  group: [grouping: BoardGrouping]
+  group: [grouping: ViewGrouping]
   /** A saved view chosen: the address state to write. */
   state: [state: ViewState]
 }>()
@@ -48,7 +53,11 @@ const saved = useSavedViews(
 )
 const naming = ref(false)
 
-const GROUPINGS: readonly BoardGrouping[] = ['none', 'epic']
+const GROUPING_WORDS: Record<ViewGrouping, string> = {
+  epic: 'workItem.viewMenu.groupEpic',
+  goal: 'workItem.viewMenu.groupGoal',
+  none: 'workItem.viewMenu.groupNone',
+}
 
 function apply(name: string) {
   const state = saved.stateOf(name)
@@ -73,13 +82,9 @@ const entries = computed<MenuEntry[]>(() => {
             key: 'grouping',
             label: t('workItem.viewMenu.grouping'),
             value: grouping,
-            options: GROUPINGS.map((value) => ({
-              value,
-              label: t(
-                value === 'epic' ? 'workItem.viewMenu.groupEpic' : 'workItem.viewMenu.groupNone',
-              ),
-            })),
-            select: (value: string) => emit('group', value === 'epic' ? 'epic' : 'none'),
+            options: props.groupings.map((value) => ({ value, label: t(GROUPING_WORDS[value]) })),
+            select: (value: string) =>
+              emit('group', props.groupings.find((option) => option === value) ?? 'none'),
           },
         ]),
     ...(names.length
