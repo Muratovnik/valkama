@@ -130,6 +130,11 @@ async function launch(page: Page, address: string, holds: Holds): Promise<Sample
   await pause(holds.frame)
   await streams.live(busyFrame())
   await expect(page.locator('.nav-work-list .nav-row').first()).toBeVisible()
+  // The samples end once the chrome has its final values, not at the list's first row: the
+  // shell's own stream can bring that row before the slower read names the module and the
+  // scope, and a launch cut off there would hold no title to judge.
+  await expect(page.locator('.context-bar .module-title')).toHaveText(/\S/u)
+  await expect(page.locator('.operating-scope [role="combobox"]')).toHaveText(/\S/u)
   await page.evaluate(
     () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
   )
