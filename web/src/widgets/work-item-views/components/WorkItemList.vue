@@ -46,9 +46,9 @@ import { useI18n } from 'vue-i18n'
 
 import { useResizeObserver } from '@vueuse/core'
 
+import { listRefCell } from '@/widgets/work-item-views/components/listRefCell.ts'
 import WorkItemListFind from '@/widgets/work-item-views/components/WorkItemListFind.vue'
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
-import WorkItemListRefCell from '@/widgets/work-item-views/components/WorkItemListRefCell.vue'
 import WorkItemListTreeWords from '@/widgets/work-item-views/components/WorkItemListTreeWords.vue'
 import { useListRuns } from '@/widgets/work-item-views/composables/useListRuns.ts'
 import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
@@ -116,7 +116,7 @@ const tree = useListTreeRows({
   ordered: () => sorted.value,
   tree: () => props.tree,
 })
-const { cellTab, isPath, matchingOf, nameId, refId, treeLead } = tree
+const { cellTab, isPath, matchingOf, nameId } = tree
 const { rows, treeOf, underOf } = tree
 
 const { holderOf, updatedOf, widths } = useListWords(() => source.value, tree.indentOf)
@@ -130,9 +130,6 @@ const keys = useListKeys(
   tree.focus,
 )
 const tabStop = (item: WorkItemBrief) => keys.tabStop(item.work_item_id)
-const toggle = (item: WorkItemBrief) => keys.toggle(item.work_item_id)
-/** The reference is the flat list's Tab stop; in a tree the row is. */
-const openerTab = (item: WorkItemBrief) => (tree.isTree ? -1 : tabStop(item))
 const list = useWindowRows<WorkItemBrief>({
   columns: widths,
   key: (item) => item.work_item_id,
@@ -162,6 +159,8 @@ const { context, fact, facts, filtering, lead, priorityWord, readWidth, waiting,
 const { HOLDER, STATE, STEPS, UNDER } = ROW_FACETS
 
 const folded = (key: SortKey) => isFolded(fit.value, key)
+/** A row's first cell, drawn with the row rather than as a component of its own. */
+const refCell = listRefCell({ after: () => folded('priority'), glyph: lead, keys, tree })
 const shownColumns = computed(() => LIST_COLUMNS.filter((column) => !folded(column.key)))
 const foldedColumns = computed(() => LIST_COLUMNS.filter((column) => folded(column.key)))
 const factFacets = computed(() => factsOf(fit.value))
@@ -271,16 +270,9 @@ const said = (item: WorkItemBrief) =>
               :style="{ height: gapOf(entry) }"
             />
             <template v-else>
-              <WorkItemListRefCell
+              <component
+                :is="refCell(entry.row)"
                 class="list-cell"
-                :cell-tab="cellTab"
-                :item="entry.row"
-                :glyph="lead"
-                :lead="treeLead(entry.row)"
-                :opener-id="refId(entry.row)"
-                :opener-tab="openerTab(entry.row)"
-                :after="folded('priority')"
-                @toggle="toggle(entry.row)"
               />
               <td
                 class="list-cell list-title"
