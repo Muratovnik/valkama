@@ -5,8 +5,9 @@
  *
  * The space has as many cards as a space kept for a year: some two hundred
  * goals, three in four cards done, the largest goal holding 69, one with more
- * than twenty open (folded by the rule) and many with nothing open (folded too),
- * beside a goal five levels deep, three rows at each level. The five-level goal
+ * than twenty open (folded by the rule, the row widest in every column deep
+ * under it) and many with nothing open (folded too), beside a goal five levels
+ * deep, three rows at each level. The five-level goal
  * and the largest one were changed last, so the list's order puts them first.
  */
 import { expect } from '@playwright/test'
@@ -43,6 +44,40 @@ function card(number: number, { closed, container = false, parent, updated = OLD
   })
 }
 
+/** The four stages, one under another, between the crowded goal and the widest row. */
+export const CHAIN = ['MAIN-250', 'MAIN-251', 'MAIN-252', 'MAIN-253'] as const
+/** The row widest in every column, at the deepest indent, under the crowded goal. */
+export const WIDEST = 'MAIN-254'
+
+/**
+ * The goal with more than twenty open. Its last five, all done, stand one under
+ * another: four stages, which the rule folds as it folds the goal, and under them
+ * the row widest in every column — the longest reference at the deepest indent, a
+ * holder with a long name, twelve steps and a date of another year.
+ */
+function crowdedGoal() {
+  const [head, ...kids] = goal(200, 54, 30)
+  const chained = kids.map((kid) => {
+    if (kid.number < 250) return kid
+    const parent = kid.number === 250 ? 200 : kid.number - 1
+    if (kid.number < 254) return card(kid.number, { closed: true, container: true, parent })
+    return {
+      ...card(kid.number, { closed: true, parent }),
+      checklist: Array.from({ length: 12 }, (_, at) => ({
+        id: identity(4000 + at),
+        text: 'Step',
+        done: false,
+        claimed_by: '',
+        done_by: '',
+      })),
+      claim_ref: 'a holder with a long name',
+      priority: 'urgent',
+      updated_at: '2020-08-28T20:08:00Z',
+    }
+  })
+  return [head, ...chained]
+}
+
 /** A container and its children, `open` of them still open. */
 function goal(number: number, children: number, open: number, updated = OLD) {
   const kids = Array.from({ length: children }, (_, at) =>
@@ -72,7 +107,7 @@ export function treeSpace() {
         }),
       )
   const earlier = new Date(Date.now() - 60_000).toISOString()
-  const goals = [...goal(100, 69, 15, earlier), ...goal(200, 54, 30), ...goal(300, 36, 10)]
+  const goals = [...goal(100, 69, 15, earlier), ...crowdedGoal(), ...goal(300, 36, 10)]
   // 193 goals of five: 135 with nothing open, the rest with two open.
   for (let at = 0; at < 193; at += 1) goals.push(...goal(1000 + at * 6, 5, at < 135 ? 0 : 2))
   // The rest of the 1665 cards stand alone, seven in ten done.
