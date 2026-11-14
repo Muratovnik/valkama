@@ -1108,6 +1108,65 @@ P1_FAULTS = (
 )
 
 
+def several(
+    statements: Callable[[dict[str, str]], list[tuple[str, tuple]]], ids: dict[str, str]
+) -> Callable[[sqlite3.Connection, store_steps.Context], None]:
+    """A step that issues each of `statements`, in order."""
+
+    def write(conn: sqlite3.Connection, _context: store_steps.Context) -> None:
+        for sql, parameters in statements(ids):
+            conn.execute(sql, parameters)
+
+    return write
+
+
+def _quiet(sql: str, parameters: tuple) -> list[tuple[str, tuple]]:
+    """`sql` on one item, and its word index row marked current again, so the fault
+    stays one `indexes` does not see."""
+
+    return [
+        (sql, parameters),
+        (
+            "UPDATE work_item_search_rows SET stale = 0 WHERE work_item_id = ?",
+            (parameters[-1],),
+        ),
+    ]
+
+
+#: For one clause of a postcondition each, a write after the steps that only that
+#: clause sees: the postcondition, what it says, the writes, and every postcondition
+#: that fails. Where a second one fails as well, it is the row count of a table the
+#: fault had to add to or take from.
+CLAUSE_FAULTS: tuple[
+    tuple[str, str, Callable[[dict[str, str]], list[tuple[str, tuple]]], list[str]], ...
+] = (
+    (
+        "identities",
+        "changed its labels",
+        lambda ids: _quiet(
+            "UPDATE work_items SET labels = '[ ]' WHERE work_item_id = ?", (ids["WM-9"],)
+        ),
+        ["identities"],
+    ),
+    (
+        "identities",
+        "changed its checklist",
+        lambda ids: [
+            ("UPDATE work_items SET checklist = '[ ]' WHERE work_item_id = ?", (ids["WM-9"],))
+        ],
+        ["identities"],
+    ),
+    (
+        "identities",
+        "has the labels",
+        lambda ids: _quiet(
+            """UPDATE work_items SET labels = '["ui"]' WHERE work_item_id = ?""", (ids["WM-6"],)
+        ),
+        ["identities"],
+    ),
+)
+
+
 class RollbackTests(StoreCase):
     """A failed step or postcondition leaves the store exactly as it was."""
 
@@ -1155,7 +1214,12 @@ class RollbackTests(StoreCase):
             with self.subTest(fault=title):
                 self.assert_only(once(title, write), ["fresh-shape"], "fresh-shape", says)
 
-    def test_second_run_refuses_a_step_a_second_run_would_take_again(self) -> None:
+    def test_each_clause_refuses_a_store_only_it_sees_broken(self) -> None:
+        for name, says, statements, failed in CLAUSE_FAULTS:
+            with self.subTest(postcondition=name, says=says):
+                self.assert_only(once(says, several(statements, self.ids)), failed, name, says)
+
+    def test_p16_refuses_a_step_a_second_run_would_take_again(self) -> None:
         step = store_steps.Step("again", "always", again)
         self.assertIn("second-run", self.refused(step)["failed"])
 

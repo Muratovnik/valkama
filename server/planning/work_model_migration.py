@@ -480,7 +480,10 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
                 started = str(row["created_at"])
                 oracle.started_from_created += 1
         labels = json.loads(row["labels"] or "[]")
-        if container and row["kind"] in ("bug", "improvement") and row["kind"] not in labels:
+        kind_label = (
+            container and row["kind"] in ("bug", "improvement") and row["kind"] not in labels
+        )
+        if kind_label:
             labels = [*labels, row["kind"]]
         expect[identity] = {
             "container": container,
@@ -504,6 +507,9 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
             # Set by `release` below: whether `containers` to `children-left` clear this
             # item's step claims.
             "steps_released": False,
+            "labels": row["labels"],
+            # Whether `items` adds the kind label, writing the labels anew.
+            "kind_label": kind_label,
             "position": row["position"],
             "summary": row["summary"],
         }
@@ -1569,6 +1575,11 @@ def _holds_identities(conn: sqlite3.Connection, context: Context) -> Mapping[str
         row = rows.get(identity)
         if row is None:
             continue
+        # A value no step writes is compared as stored, character for character, so a
+        # step that rewrote it to the same meaning is still seen. Only what a step
+        # writes anew is compared parsed: the checklist whose step claims `containers` to `children-left`
+        # release goes through `model.dumps`, and the labels `items` adds a kind label to
+        # through `json_insert`, each in a spelling of its own.
         for column in ("title", "description", "position", "summary"):
             if row[column] != before[column]:
                 found.append(f"{identity} changed its {column}")
@@ -1581,9 +1592,12 @@ def _holds_identities(conn: sqlite3.Connection, context: Context) -> Mapping[str
                 found.append(f"{identity} changed its checklist beyond the claims released")
         elif row["checklist"] != before["checklist"]:
             found.append(f"{identity} changed its checklist")
-        labels = oracle.expect[identity]["labels"]
-        if json.loads(row["labels"]) != labels:
-            found.append(f"{identity} has the labels {row['labels']}, not {labels}")
+        if before["kind_label"]:
+            labels = oracle.expect[identity]["labels"]
+            if json.loads(row["labels"]) != labels:
+                found.append(f"{identity} has the labels {row['labels']}, not {labels}")
+        elif row["labels"] != before["labels"]:
+            found.append(f"{identity} changed its labels")
     _unmet(found, "content")
     return {"items": len(rows)}
 
