@@ -199,6 +199,17 @@ export function useWindowRows<Row>({
   function collapsedBeside(drawn: ReadonlySet<string>, from: ReadonlySet<Row>): Set<Row> {
     return new Set([...from].filter((row) => !drawn.has(key(row))))
   }
+  /**
+   * A row drawn collapsed is keyed apart from the same row drawn in its place.
+   * Under one key, a collapsed row the window came to draw was moved into place,
+   * and the table's other rows round it, the focused one among them: a moved
+   * element loses focus, so End left focus nowhere.
+   */
+  const collapsedEntry = (row: Row): ListEntry<Row> => ({
+    key: `held:${key(row)}`,
+    kind: 'row',
+    row,
+  })
 
   const staged = useStagedRows<Row>({ columns, root: () => root.value, rows })
   // A short list draws its first frame, and the rest right after it.
@@ -216,7 +227,7 @@ export function useWindowRows<Row>({
       }))
       if (!widest.value) return { collapsed: null, entries: whole }
       const collapsed = collapsedBeside(new Set(all.map((row) => key(row))), widest.value)
-      for (const row of collapsed) whole.push({ key: key(row), kind: 'row', row })
+      for (const row of collapsed) whole.push(collapsedEntry(row))
       return { collapsed, entries: whole }
     }
     const instance = virtualizer.value
@@ -242,7 +253,7 @@ export function useWindowRows<Row>({
     if (total > end)
       entries.push({ height: total - end, hidden: true, key: 'gap:end', kind: 'gap' })
     const collapsed = collapsedBeside(drawn, widest.value ?? held.value)
-    for (const row of collapsed) entries.push({ key: key(row), kind: 'row', row })
+    for (const row of collapsed) entries.push(collapsedEntry(row))
     return { collapsed, entries }
   })
 
