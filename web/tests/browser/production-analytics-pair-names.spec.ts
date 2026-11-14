@@ -9,7 +9,9 @@
  *
  * In the bars, the small charts' names, the day chart's legend and the table, every name is its
  * whole pair, and the separator and the second part are inside every box that clips them. The
- * bars at 1440 in English are cut, so the run holds the cut case and not only names that fit. A
+ * small charts' names and the table's at 1200 in English are cut, so the run holds the cut case
+ * and not only names that fit. The bars give a pair's name a line of its own, where these pairs
+ * fit; the task pairs' spec holds their cut case, with titles longer than any line. A
  * cut name is said whole in its hint, and each name of the table, its row's control, is named by
  * its whole pair, as a cut one is too. Each run prints what it measured.
  *
@@ -32,6 +34,7 @@ import type { Locator, Page } from '@playwright/test'
 import { value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { NOW, openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { pairNames } from './pairNames.ts'
 import { test } from './test.ts'
 
 const HOUR = 3600
@@ -105,87 +108,7 @@ async function openPairs(
       ))
 }
 
-/**
- * Each name a selector finds: its words, whether they are cut — the text of its words laid out
- * whole is wider than its box — and how many pixels of the separator and the second part stand
- * outside a box that clips them, from the name's text up to the name. The words are measured on
- * ranges over the characters, so it holds whatever elements the name is drawn with.
- */
-async function names(page: Page, selector: string) {
-  return page.evaluate((chosen) => {
-    const SEPARATOR = ' · '
-    /** The text nodes of an element with the offset each starts at in its text. */
-    const textNodes = (element: Element) => {
-      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
-      const found: { from: number; node: Text }[] = []
-      let from = 0
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        found.push({ node: node as Text, from })
-        from += node.textContent?.length ?? 0
-      }
-      return found
-    }
-    /** A range over characters `from` to `to` of an element's text. */
-    function rangeOf(element: Element, from: number, to: number) {
-      const range = document.createRange()
-      for (const { node, from: start } of textNodes(element)) {
-        const end = start + node.length
-        if (from >= start && from <= end) range.setStart(node, from - start)
-        if (to >= start && to <= end) {
-          range.setEnd(node, to - start)
-          break
-        }
-      }
-      return range
-    }
-    return [...document.querySelectorAll<HTMLElement>(chosen)].map((name) => {
-      const text = name.textContent ?? ''
-      const words = text.trim()
-      const box = name.getBoundingClientRect()
-      let whole = 0
-      for (const { node } of textNodes(name)) {
-        const range = document.createRange()
-        range.selectNodeContents(node)
-        whole += range.getBoundingClientRect().width
-      }
-      const style = getComputedStyle(name)
-      let room = box.width
-      for (const side of [
-        'paddingLeft',
-        'paddingRight',
-        'borderLeftWidth',
-        'borderRightWidth',
-      ] as const)
-        room -= Number.parseFloat(style[side])
-      const separator = text.lastIndexOf(SEPARATOR)
-      if (separator < 0) return { words, cut: whole > room + 0.5, hidden: null }
-      // From the separator's dot to the last character of the second part.
-      const end = rangeOf(name, separator + 1, text.trimEnd().length)
-      const part = end.getBoundingClientRect()
-      let left = -Infinity
-      let right = Infinity
-      for (let clip = end.startContainer.parentElement; clip; clip = clip.parentElement) {
-        const style = getComputedStyle(clip)
-        if (style.overflowX !== 'visible') {
-          // Its padding box, to the fraction of a pixel that `clientWidth` rounds away.
-          const edges = clip.getBoundingClientRect()
-          left = Math.max(left, edges.left + Number.parseFloat(style.borderLeftWidth))
-          right = Math.min(right, edges.right - Number.parseFloat(style.borderRightWidth))
-        }
-        if (clip === name) break
-      }
-      const hidden = Math.max(0, part.right - right) + Math.max(0, left - part.left)
-      return {
-        words,
-        cut: whole > room + 0.5,
-        hidden: Math.round(hidden * 1000) / 1000,
-        end: Math.round(part.width * 100) / 100,
-      }
-    })
-  }, selector)
-}
-
-type Measured = Awaited<ReturnType<typeof names>>
+type Measured = Awaited<ReturnType<typeof pairNames>>
 
 /**
  * The hint the first cut name of a place shows under the pointer, with the pair it names; null
@@ -209,11 +132,13 @@ const hintsShort = (hints: Record<string, Awaited<ReturnType<typeof hintOfCut>>>
     .map(([where]) => where)
 
 /**
- * Whether the bars hold a cut name where the change was reported, in English at 1440, so the run
+ * Whether the small charts and the table both hold a cut name in English at 1200, so the run
  * holds the cut case; elsewhere a name may fit or not, and nothing is held.
  */
-const cutWhereReported = (locale: string, width: number, bars: Measured) =>
-  locale !== 'en' || width !== 1440 || bars.some((one) => one.cut)
+const cutWhereHeld = (locale: string, width: number, measured: Record<string, Measured>) =>
+  locale !== 'en' ||
+  width !== 1200 ||
+  [measured.multiples, measured.table].every((found) => found?.some((one) => one.cut))
 
 for (const locale of ['en', 'ru'] as const)
   for (const size of SIZES)
@@ -222,10 +147,10 @@ for (const locale of ['en', 'ru'] as const)
     }, info) => {
       await openPairs(page, locale, size)
       const measured = {
-        bars: await names(page, PLACES.bars),
-        multiples: await names(page, PLACES.multiples),
-        legend: await names(page, PLACES.legend),
-        table: await names(page, PLACES.table),
+        bars: await pairNames(page, PLACES.bars),
+        multiples: await pairNames(page, PLACES.multiples),
+        legend: await pairNames(page, PLACES.legend),
+        table: await pairNames(page, PLACES.table),
       }
       const hints: Record<string, Awaited<ReturnType<typeof hintOfCut>>> = {}
       for (const [where, found] of Object.entries(measured)) {
@@ -245,8 +170,8 @@ for (const locale of ['en', 'ru'] as const)
       }
       // A cut name says its whole pair in its hint.
       expect(hintsShort(hints)).toEqual([])
-      // The case the change is for: in English at 1440 the bars' names are cut.
-      expect(cutWhereReported(locale, size.width, measured.bars)).toBe(true)
+      // The cut case: in English at 1200 the small charts' and the table's names are cut.
+      expect(cutWhereHeld(locale, size.width, measured)).toBe(true)
 
       // Each name of the table is its row's control, named by its whole pair, cut or not.
       const presses = page.locator('.spending-table tbody th .chart-press')
@@ -365,7 +290,7 @@ for (const locale of ['en', 'ru'] as const)
       page,
     }, info) => {
       await openPairs(page, locale, size, true)
-      const found = await names(page, PLACES.table)
+      const found = await pairNames(page, PLACES.table)
       const hints: boolean[] = []
       for (const index of found.keys()) hints.push(await hintShows(page, index))
       const seen = found.map((one, index) => ({

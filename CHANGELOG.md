@@ -93,7 +93,9 @@ checkouts are therefore distinguishable even at the same version.
   Where the context bar stacks its controls under the module's name, the name keeps its
   own size instead of a section's. On the Analytics page each heading is one rank under
   the heading of the part around it, so a screen reader's list of headings reads a chart
-  under its section, not beside it.
+  under its section, not beside it. Settings nests its headings too: its sections stand
+  right under the module's name, and a passed level of the installation checks under
+  «Passed checks», not beside «Needs attention».
 - **The first screen downloads about an eighth less.** The card and the list of questions
   waiting for an answer are no longer in the code the first screen loads before it can
   draw. The card downloads once the board stands, so opening one still waits for nothing;
@@ -160,15 +162,18 @@ checkouts are therefore distinguishable even at the same version.
   with its share and whether it is fresh or silent. Each opens a panel where every
   account stands on a surface of its own: for every window a bar with a tick where steady
   use would stand, when it resets, its forecast (a time it runs out at for the five
-  hours, a range for a week), how old its reading is and which source read it, and its
+  hours; for a week a range, never said past 100 %: a week whose range reaches 100 %
+  says it runs out before its reset and about when, one that crosses it that it may),
+  how old its reading is and which source read it, and its
   readings as a step line, each with a table view. An account's windows stand side by
   side where each has 24rem, one under the next where not. A running window's step line
   opens on its start to now and a third of that span past now, where the forecast
   carries the steady pace on; «Whole window» shows all of it, and a frame dragged along
   the line, or stretched from a reading with Shift and an arrow, narrows that line alone.
   The panel reads the quota again every 30 seconds while the tab is visible and keeps its
-  figures meanwhile; when a read again fails, the figures stay and the panel says how old
-  they are. No source, a silent window and a fresh 0 % read differently, and no
+  figures meanwhile; when a read again fails, the figures stay where they stood and the
+  bar says the refresh failed, as for every read of the page, with its retry. No source,
+  a silent window and a fresh 0 % read differently, and no
   percentage is added to another or shown beside dollars.
 - **The quota panel says where each window went.** Under each window of an account, five
   hours, the week or a model's week, «Where the window went» ranks the work Valkama
@@ -199,14 +204,16 @@ checkouts are therefore distinguishable even at the same version.
   machine records arrive in batches up to a minute and a half apart.
 - **The Analytics bar says how fresh the figures are, and stays within its width.** Beside
   the periods and the filters it says how old the newest record is, «● 15 s ago», the dot
-  for a live period only, in the room of its widest age, so nothing beside it moves as the
-  age grows; the record's moment, and for a live period how often it reads itself again,
-  are its hint and what a screen reader hears. It says the age beside a period with no
-  work as well, and «No records» while the store holds none. Below 50rem, and wherever one
-  line has no room, the bar is two rows: the periods and the filters, then your own
-  period's ends and the freshness with «Refresh» at the end, where a failed refresh is
-  said in full words. Where room is short, the buttons give up their words and a span's
-  name is cut at its end, whole in its hint, so «Refresh» stays inside the bar.
+  for a live period only and not after a read that failed, in the room of its widest age,
+  so nothing beside it moves as the age grows; the record's moment, and for a live period
+  how often it reads itself again, are its hint and what a screen reader hears. It says the
+  age beside a period with no work as well, and «No records» while the store holds none.
+  Below 50rem, and wherever one line has no room, the bar is two rows: the periods and the
+  filters, then your own period's ends and the freshness with «Refresh» at the end; on a
+  phone it is three rows of one height whatever period is chosen. A failed refresh is said
+  in full words at every width and moves nothing in the bar or under it. Where room is
+  short, the buttons give up their words and a span's name is cut at its end, whole in its
+  hint, so «Refresh» stays inside the bar.
 - **A section splits by a second dimension, and all its charts show the pairs.** «Split
   by» stands in the heading of a dimension's section and offers «None» and every other
   dimension. With a split chosen, the ranked bars, the small charts, the day columns and

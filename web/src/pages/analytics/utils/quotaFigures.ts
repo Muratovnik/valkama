@@ -37,6 +37,19 @@ export const spendWindows = (account: QuotaAccount) =>
 export const stands = (window: QuotaWindow, now: number) =>
   window.resets_at === null || Date.parse(window.resets_at) > now
 
+/**
+ * When a week's slower pace spends the window, in ms: the range's low end is what that pace
+ * spends by the reset, from the window's share at the answer's moment `now`, so it reaches 100 %
+ * that share of the way along. Null where it names no time: no reset ahead of `now`, or a low end
+ * no higher than what is spent already.
+ */
+export function runsOutAt(window: QuotaShareWindow, low: number, now: number): number | null {
+  const used = window.latest.used_percent
+  if (window.resets_at === null || low <= used) return null
+  const left = Date.parse(window.resets_at) - now
+  return left > 0 ? now + ((100 - used) / (low - used)) * left : null
+}
+
 /** One window of one account. */
 export interface QuotaPick {
   account: QuotaAccount

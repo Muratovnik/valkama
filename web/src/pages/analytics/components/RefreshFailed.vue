@@ -1,12 +1,14 @@
 <script setup lang="ts">
 /**
- * That the last read again of the view on show failed, said in the bar beside the age of the
+ * That the last read again of the view on show failed, said in the bar before the age of the
  * figures it could not replace, with the way to ask once more: «Could not refresh · Retry». The
  * figures stay on show (`useReadStanding`); the words go when an answer replaces them. Nothing is
- * drawn while every read stands, so the bar keeps its line until there is news. On a phone, where
- * the bar says its age and its refresh by sign alone, the words are left to the status a screen
- * reader hears, and the disc and the retry stand; so too on a line that has nothing else left to
- * give up for them (`brief`).
+ * drawn while every read stands; while the bar fits its line the failure holds its room unseen
+ * (`held`), so a failure said takes only room the line left and moves nothing.
+ *
+ * The words are said at every width. On a line that has nothing else left to give up for them
+ * (`brief`), a phone's among them, the retry is what goes: the bar's own read again stands beside
+ * it and asks the same.
  */
 import { useI18n } from 'vue-i18n'
 
@@ -15,8 +17,10 @@ import { usePageStanding } from '@/pages/analytics/composables/useReadStanding.t
 import VButton from '@/shared/ui/VButton.vue'
 
 defineProps<{
-  /** The bar's line has no room for the words: the disc and the retry say it, as on a phone. */
+  /** The bar's line has no room for the retry: the disc and the words say it. */
   brief?: boolean
+  /** The bar is fitting its line: the failure takes its room, drawn by nobody, failed or not. */
+  held?: boolean
 }>()
 /** Read the view again. */
 const emit = defineEmits<{ retry: [] }>()
@@ -27,20 +31,20 @@ const { failed } = usePageStanding()
 
 <template>
   <p
-    v-if="failed"
+    v-if="failed || held"
     class="refresh-failed"
     role="status"
+    :class="{ 'refresh-failed-held': !failed }"
   >
     <span
       class="refresh-failed-mark"
       aria-hidden="true"
     />
-    <span
-      class="refresh-failed-words"
-      :class="{ 'visually-hidden': brief }"
-      >{{ t('analytics.frame.refreshFailed') }} ·
+    <span class="refresh-failed-words"
+      >{{ t('analytics.frame.refreshFailed') }}<template v-if="!brief"> · </template>
     </span>
     <VButton
+      v-if="!brief"
       class="refresh-failed-retry"
       variant="text"
       size="inline"
@@ -67,6 +71,11 @@ const { failed } = usePageStanding()
   white-space: nowrap;
 }
 
+/* Held while the bar fits its line: its room taken, nothing of it seen or heard. */
+.refresh-failed-held {
+  visibility: hidden;
+}
+
 .refresh-failed-mark {
   inline-size: var(--space-2);
   block-size: var(--space-2);
@@ -76,18 +85,6 @@ const { failed } = usePageStanding()
   @media (forced-colors: active) {
     background: CanvasText;
     forced-color-adjust: none;
-  }
-}
-
-/* A phone's bar says its age and its refresh by sign alone: the words stay for a screen reader. */
-@container (width <= 30rem) {
-  .refresh-failed-words {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    white-space: nowrap;
-    overflow: hidden;
-    clip-path: inset(50%);
   }
 }
 </style>
