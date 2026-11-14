@@ -93,6 +93,9 @@ test('what cuts no words a reader sees, or no words at all, passes', () => {
     // One line that runs on, and a box that clips what wraps.
     '.row { white-space: nowrap; }',
     '.box { overflow: hidden; }',
+    // Words that wrap where they must, and break where the text breaks.
+    '.room { white-space: pre-line; overflow: hidden; }',
+    '.note { white-space: pre-wrap; overflow: hidden; }',
     // Clipped down only: a line is not cut across.
     '.row { white-space: nowrap; overflow: visible hidden; }',
     // Words about the properties.
