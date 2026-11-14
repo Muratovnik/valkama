@@ -7,10 +7,12 @@
  * frame's edge.
  *
  * The table is laid out with one line and measured, and the answer is set before the browser
- * paints, so no frame shows the table wider than its frame. That happens whenever the box around
- * the table changes size, which a frame of another width, a table drawn anew or a row more does,
- * and once what the table holds changes (`holds`), which may widen a column and leave the box as
- * it was.
+ * paints, so no frame shows the table wider than its frame. That happens once what the table holds
+ * changes (`holds`), which may widen a column and leave the box around it as it was, and whenever
+ * that box changes size. Laid out again, a table of six hundred rows took some 65 ms, twice for
+ * each step of a window being resized while its headings were on two lines; so while the table
+ * holds the same, the width it needs on one line is kept and only the frame's width is compared
+ * with it. A box on one line is read without laying anything out again.
  */
 import { ref, watch } from 'vue'
 import type { Ref, WatchSource } from 'vue'
@@ -24,21 +26,33 @@ export function useHeadingLines(
   holds: readonly WatchSource[],
 ) {
   const lines = ref<HeadingLines>('one')
+  /** How wide the table is with its headings on one line, until what it holds changes. */
+  let oneLine: number | null = null
 
   function fit() {
     const section = box.value
     const frame = section?.querySelector<HTMLElement>('.chart-table-frame')
     const table = frame?.querySelector('table')
     if (!section || !frame || !table) return
+    // Two lines, and the frame still narrower than one line needs: nothing to lay out.
+    if (lines.value === 'two' && oneLine !== null && frame.clientWidth < oneLine) return
     // Set on the element as well as bound, so the measure reads one line now and the answer
     // stands on it before the next frame, whatever the binding does in between.
     section.dataset.headings = 'one'
-    lines.value = table.offsetWidth > frame.clientWidth ? 'two' : 'one'
+    oneLine = table.offsetWidth
+    lines.value = oneLine > frame.clientWidth ? 'two' : 'one'
     section.dataset.headings = lines.value
   }
 
   useResizeObserver(box, fit)
-  watch([...holds], fit, { flush: 'post' })
+  watch(
+    [...holds],
+    () => {
+      oneLine = null
+      fit()
+    },
+    { flush: 'post' },
+  )
 
   return lines
 }
