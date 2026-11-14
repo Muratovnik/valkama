@@ -1,6 +1,5 @@
 ---
 status: superseded
-card: 232
 ---
 
 # ADR 0009: Agent Hub separates modules, adapters, services, and configuration

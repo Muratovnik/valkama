@@ -1,6 +1,5 @@
 ---
 status: adopted
-card: 1214
 ---
 
 # The client hook contract

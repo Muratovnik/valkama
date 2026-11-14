@@ -1,6 +1,5 @@
 ---
 status: adopted
-card: 261, 351, 1214
 ---
 
 # Valkama Kernel contract

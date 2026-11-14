@@ -1,6 +1,5 @@
 ---
 status: superseded
-card: 199
 ---
 
 # ADR 0008: The agent hub grows around the kanban core

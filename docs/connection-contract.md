@@ -1,6 +1,5 @@
 ---
 status: adopted
-card: 344
 ---
 
 # The connection contract
