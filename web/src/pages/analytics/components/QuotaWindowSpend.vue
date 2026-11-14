@@ -37,7 +37,7 @@ import VButton from '@/shared/ui/VButton.vue'
 const props = defineProps<{
   account: QuotaAccount
   shown: 'chart' | 'table'
-  /** The quota answer's own moment, whose day a time is said on without its date. */
+  /** The quota answer's moment at its offset: each time is said at it, and undated on its day. */
   today: string
   window: QuotaShareWindow
 }>()
