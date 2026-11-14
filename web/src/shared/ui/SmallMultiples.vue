@@ -227,9 +227,14 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
   min-width: 0;
 }
 
-/* A name that acts is a line of the chart, not a control standing in it: the same words, with
-   the pointer's hand and an underline as a name that opens something in a table has. */
+/* A name that acts is a line of the chart, not a control standing in it: the same words and box,
+   with the pointer's hand and an underline as a name that opens something in a table has. A
+   button takes no control's row height: «No task», which only acts as one, stood 40 pixels tall
+   and its name 11 pixels under its neighbour's, a task's link. What a pointer presses reaches
+   over the air above and under the line instead, to the 24 pixels WCAG 2.5.8 asks: padding the
+   margin takes back, since the name's ellipsis clips anything drawn past its box. */
 .multiple-name {
+  min-block-size: 0;
   padding: 0;
   border: 0;
   color: var(--color-text);
@@ -239,6 +244,8 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
   background: none;
 
   &:is([type='button'], [href]) {
+    padding-block: var(--space-1);
+    margin-block: calc(-1 * var(--space-1));
     text-decoration: underline;
     text-decoration-color: var(--color-rule-strong);
     text-underline-offset: var(--space-half);

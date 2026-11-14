@@ -17,7 +17,9 @@
  * label leaves out (`detail`). A row's name takes one line, ends in an ellipsis where it is cut
  * and is then said whole first in that hint (`markHints.ts`); a name of two parts keeps its end
  * whole and cuts its first part (`labelEnd`, `PairName`). The values stand in one column whatever
- * the names do. In a narrow container the name takes a line of its own over its bar. A `dense`
+ * the names do. In a narrow container the name takes a line of its own over its bar, and so does
+ * a pair's at every width: its second part is a whole value's name, as wide as a model's, which
+ * the one-line column of two-fifths of the row could not hold beside any of the first. A `dense`
  * chart, a few rows in a small card, keeps the name and the value on one line and draws a thin
  * bar under both; there each value is as wide as its own figure, ending where the others end,
  * and the name takes the rest of its row, so a long figure in one row cuts no name in another.
@@ -49,6 +51,8 @@ const props = defineProps<{
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
 
 const placed = computed(() => rankRows(props.rows, props.rankAll))
+/** Whether the rows are pairs, whose names take a line of their own; a dense chart keeps its. */
+const pairs = computed(() => !props.dense && props.rows.some((row) => row.labelEnd))
 /** What each row's hint says its share of: the whole given, else what every row adds up to. */
 const whole = computed(
   () =>
@@ -106,7 +110,7 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
 <template>
   <figure
     class="ranked-bars"
-    :class="{ 'ranked-dense': dense }"
+    :class="{ 'ranked-dense': dense, 'ranked-pairs': pairs }"
     :aria-label="label"
   >
     <DataEmptyState
@@ -284,6 +288,19 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
   }
 
   .ranked-label {
+    grid-column: 1 / -1;
+  }
+}
+
+/* So does a chart of pairs, at every width. On one line at 1440 in English, the name's column
+   held «claude-opus-5-5» with 13 pixels of the task before it, «V.», and cut the model too: the
+   second part needs the room the one-line column gives the whole name. */
+.ranked-pairs {
+  & .ranked-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  & .ranked-label {
     grid-column: 1 / -1;
   }
 }
