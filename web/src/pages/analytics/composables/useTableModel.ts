@@ -14,6 +14,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import type { FigureWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { kindsByValue, kindsOf, TOKEN_KINDS } from '@/pages/analytics/utils/tokenKinds.ts'
 import type { TokenKind } from '@/pages/analytics/utils/tokenKinds.ts'
 import {
@@ -31,13 +32,13 @@ import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
 
-export interface TableCell {
+/** A cell's figure and what it leaves out (`FigureWords`), which the cell says under it. */
+export interface TableCell extends FigureWords {
   /** Whether the cell holds the chosen measure, which reads in the figures' own ink. */
   chosen: boolean
   key: string
   /** The number the column sorts by; null for no figure. */
   sort: number | null
-  text: string
 }
 
 /** A column's heading: its name, and what the name leaves out, for its hint. */
@@ -135,7 +136,7 @@ export function useTableModel(source: () => TableSource) {
   const figureCell = (key: string, measure: Measure, spent: Spent, chosen: boolean) => ({
     key,
     chosen,
-    text: words.lineFigure(measure, spent),
+    ...words.lineFigureWords(measure, spent),
     sort: figureOf(measure, spent),
   })
 
@@ -147,6 +148,7 @@ export function useTableModel(source: () => TableSource) {
             key: kind,
             chosen: false,
             text: count === null ? ABSENT : words.scale('tokens', count),
+            remark: '',
             sort: count,
           }
         })
@@ -214,7 +216,7 @@ export function useTableModel(source: () => TableSource) {
               {
                 key: 'change',
                 chosen: false,
-                text: words.lineChange(measure, change, now, before),
+                ...words.lineChangeWords(measure, change, now, before),
                 sort: changeRank(change),
               },
             ]
