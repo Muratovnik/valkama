@@ -27,7 +27,6 @@ from . import (
     images,
     live_frame,
     mention_records,
-    migration,
     model,
     read_model,
     requests,
@@ -143,8 +142,6 @@ def error_response(error: BaseException) -> tuple[int, dict]:
         return 429, {"error": {"code": "mention_limit", "message": str(error)}}
     if isinstance(error, model.StoreSchemaError):
         return 409, {"error": {"code": model.STORE_SCHEMA_MISMATCH, "message": str(error)}}
-    if isinstance(error, migration.MigrationRefused):
-        return 409, {"error": {"code": "migration_refused", "message": str(error)}}
     if isinstance(error, model.PlanningError):
         return 400, {"error": {"code": "invalid_request", "message": str(error)}}
     raise error

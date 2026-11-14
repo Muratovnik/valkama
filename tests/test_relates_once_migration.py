@@ -25,7 +25,7 @@ from unittest import mock
 
 from server import store, store_backups
 from server.planning import store as planning_store
-from tests import schema9, schema15
+from tests import schema9
 
 #: Items of the source store, numbered as `populate` gives them.
 A, B, C, D = (f"{n}{n}{n}{n}{n}{n}{n}{n}-0000-4000-8000-00000000000{n}" for n in range(3, 7))
@@ -206,26 +206,6 @@ class RelatesOnceMigrationTests(unittest.TestCase):
             self.assert_merged(conn, links)
         finally:
             conn.close()
-
-    def test_an_upgrade_merges_the_pairs_under_its_own_recovery_point(self) -> None:
-        """From a catalog an earlier build wrote, the upgrade's snapshot holds the pairs."""
-
-        schema15.build(self.path)
-        raw = sqlite3.connect(self.path)
-        try:
-            links = _populate(raw)
-            raw.commit()
-            identity = store_backups.logical_identity(raw)
-        finally:
-            raw.close()
-        conn = store.connect()
-        try:
-            self.assert_merged(conn, links)
-        finally:
-            conn.close()
-        self.assertEqual([], self.snapshots())
-        (upgrade,) = self.snapshots("preschema16")
-        self.assertEqual(identity, store_backups.snapshot_identity(str(upgrade)))
 
     def test_a_store_without_pairs_gains_the_index_and_no_snapshot(self) -> None:
         conn = store.connect()

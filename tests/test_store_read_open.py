@@ -89,9 +89,15 @@ class ReadOpenTests(unittest.TestCase):
         with self.assertRaises(store.StoreTooNewError):
             store.connect_for_read().close()
 
-    def test_a_store_at_another_schema_waits_for_the_bring_up(self) -> None:
+    def test_a_store_from_an_older_build_is_refused(self) -> None:
         store.connect().close()
-        self.stamp(store.STORE_SCHEMA_VERSION - 1)
+        self.stamp(store.OLDEST_SCHEMA_VERSION - 1)
+        with self.assertRaises(store.StoreTooOldError):
+            store.connect_for_read().close()
+
+    def test_a_store_at_another_schema_waits_for_the_bring_up(self) -> None:
+        # A file that holds no table yet is one the bring-up creates a store in.
+        self.root.joinpath("valkama.sqlite3").touch()
         patient = store_lock.migration_lock
 
         def impatient(path: str) -> AbstractContextManager[None]:

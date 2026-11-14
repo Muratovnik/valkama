@@ -243,8 +243,8 @@ def space_key(value: object) -> str:
 def derive_space_key(name: str, taken: frozenset[str]) -> str:
     """A key from a space's name, and a number only when the name collides.
 
-    `Alpha Workspace` becomes `AW`, `Valkama` becomes `VAL`. A second space whose
-    name derives to the same letters gets `AW2`, because the key is what every
+    `Beta Garden` becomes `BG`, `Valkama` becomes `VAL`. A second space whose
+    name derives to the same letters gets `BG2`, because the key is what every
     human identifier in that space is built from and it cannot be shared.
     """
 
@@ -533,9 +533,8 @@ _LONGEST_SET = ["\x01" * MAX_LABEL_LENGTH] * MAX_LABELS
 LABELS_DETAIL_LIMIT = len(dumps({"from": _LONGEST_SET, "to": _LONGEST_SET}))
 
 
-# The workflow a new PlanningSpace gets. The first six are what this
-# installation's history holds; Cancelled came later, so that work closed as not
-# needed, duplicated or superseded stops being counted as done. The code below
+# The workflow a new PlanningSpace gets. Cancelled is there so that work closed as
+# not needed, duplicated or superseded is not counted as done. The code below
 # reads the table rather than this tuple: a space may be given a different set
 # without anything else changing.
 DEFAULT_WORKFLOW_NAME = "Delivery"
@@ -548,5 +547,3 @@ DEFAULT_STATES = (
     ("blocked", "Blocked", "blocked"),
     ("cancelled", "Cancelled", "cancelled"),
 )
-# The default workflow before Cancelled, which is what its migration recognises.
-PRE_CANCELLED_STATE_KEYS = frozenset(key for key, _name, _category in DEFAULT_STATES[:6])

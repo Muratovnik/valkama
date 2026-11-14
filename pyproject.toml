@@ -160,7 +160,6 @@ ignore = [
 # whose name is the generation's. Both come from literal tuples in this file;
 # every value is still bound.
 "server/platform/migrations.py" = ["S608"]
-"server/platform/relations.py" = ["S608"]
 "server/sessions.py" = ["S608"]
 "server/store.py" = ["S608"]
 
@@ -213,7 +212,6 @@ forbidden_modules = [
   "server.platform.installed",
   "server.platform.legacy_records",
   "server.platform.migrations",
-  "server.platform.relations",
   "server.platform.tools",
   "server.platform.transports",
 ]

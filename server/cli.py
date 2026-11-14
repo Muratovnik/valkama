@@ -13,8 +13,6 @@
   released --space --repo --range
                            open work items whose commits a release range took in
   scopes | attach | detach attachable database files, federated at read time
-  migrate planning-model   one-way Board -> Planning conversion, once, on request
-                           (--dry-run converts a copy and reports)
 
 This is the one module allowed to import more than one surface: choosing
 between them is exactly what it is for.
@@ -26,10 +24,8 @@ import argparse
 import contextlib
 import json
 import os
-import shutil
 import sqlite3
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -100,72 +96,6 @@ def summary_main(space: str | None) -> None:
         print(f"- held: {listed}")
 
 
-def migrate_main(target: str, *, dry_run: bool = False) -> None:
-    """Authorise the one-way conversion, then let `connect()` perform it.
-
-    The permission is set here and nowhere else. `connect()` refuses a Board-era
-    store without it, because the alternative — converting whatever store a
-    process happens to open — converted the owner's live database from a test run
-    and again from every session an MCP client respawned afterwards.
-
-    A dry run copies the store and converts the copy. The Board era rolled a
-    transaction back instead, which is a weaker promise: a rollback still opened
-    the real file for writing, and a crash mid-way left its journal behind. A
-    copy cannot reach the original at all.
-    """
-
-    if target != "planning-model":
-        raise SystemExit(f"unknown migration target {target!r}")
-    source = db_path()
-    if dry_run:
-        with tempfile.TemporaryDirectory() as scratch:
-            copy = os.path.join(scratch, "dry-run.sqlite3")
-            shutil.copyfile(source, copy)
-            print(json.dumps({"dry_run": True, **_convert(copy)}, ensure_ascii=False, indent=1))
-        return
-    print(json.dumps({"dry_run": False, **_convert(source)}, ensure_ascii=False, indent=1))
-
-
-def _convert(path: str) -> dict:
-    """Convert one store and report what it now holds."""
-
-    with (
-        mock_environment(store.CUTOVER_ENV, "1"),
-        mock_environment("VALKAMA_DB", path),
-    ):
-        conn = connect()
-        try:
-            # Literal names, one statement each: the count is a report, and a
-            # generated table name is not worth a generated query.
-            return {
-                "planning_spaces": conn.execute("SELECT COUNT(*) FROM planning_spaces").fetchone()[
-                    0
-                ],
-                "work_items": conn.execute("SELECT COUNT(*) FROM work_items").fetchone()[0],
-                "links": conn.execute("SELECT COUNT(*) FROM work_item_links").fetchone()[0],
-                "comments": conn.execute("SELECT COUNT(*) FROM work_item_comments").fetchone()[0],
-                "refs": conn.execute("SELECT COUNT(*) FROM work_item_refs").fetchone()[0],
-                "events": conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0],
-            }
-        finally:
-            conn.close()
-
-
-@contextlib.contextmanager
-def mock_environment(name: str, value: str):
-    """One environment value for the length of a block, restored afterwards."""
-
-    previous = os.environ.get(name)
-    os.environ[name] = value
-    try:
-        yield
-    finally:
-        if previous is None:
-            os.environ.pop(name, None)
-        else:
-            os.environ[name] = previous
-
-
 def runtime_main() -> None:
     """Print the canonical identity a new server process would expose."""
 
@@ -215,7 +145,6 @@ def capabilities_main() -> None:
             "doctor",
             "adapter",
             "export",
-            "migrate",
             "scopes",
             "attach",
             "detach",
@@ -787,15 +716,6 @@ def main(argv: list[str] | None = None) -> None:
         metavar="PATH",
         help="write the export to this file, replacing it whole, and print a summary",
     )
-    migrate_cmd = commands.add_parser(
-        "migrate", help="run one named forward-only data migration, once"
-    )
-    migrate_cmd.add_argument("target", choices=("planning-model",))
-    migrate_cmd.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="convert a copy and report what would move; the store is untouched",
-    )
     transcripts_cmd = commands.add_parser("transcripts", help="act on the transcript archive")
     transcripts_sub = transcripts_cmd.add_subparsers(dest="transcripts_command", required=True)
     purge_cmd = transcripts_sub.add_parser(
@@ -899,8 +819,6 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit(1)
     elif options.command == "adapter":
         _adapter_command(options)
-    elif options.command == "migrate":
-        migrate_main(options.target, dry_run=options.dry_run)
     elif options.command == "summary":
         summary_main(options.space)
     elif options.command == "released":

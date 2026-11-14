@@ -31,7 +31,6 @@ came to exist in the field at once.
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import re
@@ -56,7 +55,6 @@ from .core import (
     _execute_schema,
     _json,
     _now,
-    _table_present,
 )
 
 # The registry's row shapes, which only the migrations below still read.
@@ -272,92 +270,6 @@ def _normalize_schema2_module_manifest(module_id: str, value: object) -> dict:
             "persisted module descriptor is malformed"
         ) from validation_error
     return current_manifests[module_id]
-
-
-def migrate_planning_pointers(conn: sqlite3.Connection, space_keys: dict) -> dict:
-    """Re-encode every Kernel pointer that spelled a planning space as a board.
-
-    Two things outside Planning name a space: a project's resource binding and
-    the known-store inventory. Both encoded `{data_scope_id, board_name}`, and
-    both must come out of the migration's transaction encoding
-    `{data_scope_id, space_key}` — a binding left behind would leave its project
-    pointing at an identity nothing answers to, which reads as "unbound" rather
-    than as a failure.
-
-    `space_keys` maps the old board name to the key of the space it became; the
-    name is the only join the old encoding carried.
-    """
-
-    rebound = {"project_resource_bindings": 0, "known_stores": 0}
-    # There is no bindings table: a project's bindings live in the workspace
-    # registry file, which `project_registry` normalises on read. Only the store's
-    # own inventory is rewritten here.
-    if _table_present(conn, "platform_known_stores"):
-        # The inventory column depends on how far this store had come: schema 3
-        # held board *names*, the current shape holds encoded resource refs. A
-        # migration reads whichever it is handed.
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(platform_known_stores)")}
-        legacy = "boards_json" in columns
-        column = "boards_json" if legacy else "resources_json"
-        rows = conn.execute(
-            f"SELECT data_scope_id, {column} AS payload FROM platform_known_stores"
-            " ORDER BY data_scope_id"
-        ).fetchall()
-        for row in rows:
-            try:
-                values = json.loads(str(row["payload"]))
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(values, list):
-                continue
-            converted: list = []
-            changed = False
-            for value in values:
-                if legacy:
-                    key = space_keys.get(str(value))
-                    converted.append(key if key is not None else value)
-                    changed = changed or key is not None
-                    continue
-                encoded = _rebound_resource(_json(value), space_keys)
-                converted.append(value if encoded is None else json.loads(encoded))
-                changed = changed or encoded is not None
-            if not changed:
-                continue
-            conn.execute(
-                f"UPDATE platform_known_stores SET {column} = ? WHERE data_scope_id = ?",
-                (_json(converted), str(row["data_scope_id"])),
-            )
-            rebound["known_stores"] += 1
-    return rebound
-
-
-def _rebound_resource(encoded: str, space_keys: dict) -> str | None:
-    """One stored resource ref, re-encoded, or nothing when it is not a space."""
-
-    try:
-        record = json.loads(encoded)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(record, dict) or record.get("kind") != "planning-space":
-        return None
-    resource_id = str(record.get("resource_id", ""))
-    padded = resource_id + "=" * (-len(resource_id) % 4)
-    try:
-        decoded = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
-    except (ValueError, UnicodeDecodeError) as error:
-        raise CatalogMigrationError("a planning-space binding is not readable") from error
-    if not isinstance(decoded, dict) or "board_name" not in decoded:
-        return None
-    name = str(decoded["board_name"])
-    if name not in space_keys:
-        raise CatalogMigrationError(
-            f"a project binds board {name!r}, which no planning space replaces"
-        )
-    return _json(
-        planning_space_entity(
-            {"data_scope_id": str(decoded["data_scope_id"]), "space_key": space_keys[name]}
-        )
-    )
 
 
 def migrate_module_registry(
@@ -642,8 +554,8 @@ CREATE INDEX IF NOT EXISTS platform_registry_audit_entity
 
 # The store identity and adapter-link DDL exactly as schema 8 declared them.
 # Copies rather than imports: `store_identity.metadata` is current and may
-# change with a later schema, and `relations` leaves with the folding of the
-# old migrations, while every store below 9 still carries this text.
+# change with a later schema, while every store below 9 still carries this
+# text.
 _SCHEMA8_STORE_METADATA = """
 CREATE TABLE IF NOT EXISTS platform_store_metadata(
     singleton INTEGER PRIMARY KEY CHECK(singleton = 1),

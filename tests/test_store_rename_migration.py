@@ -127,9 +127,9 @@ class StoreRenameMigrationTests(unittest.TestCase):
         self.assertEqual("platform-built-in", json.loads(detail)["source"])
         self.assertEqual([("platform",)], conn.execute("SELECT client FROM sessions").fetchall())
 
-    def test_connect_refuses_an_incomplete_prerename_catalog_before_mutation(self) -> None:
+    def test_connect_leaves_a_prerename_store_untouched_as_too_old(self) -> None:
         build_prerename_store(self.path)
-        with self.assertRaisesRegex(Exception, "catalog is incomplete or mixed"):
+        with self.assertRaisesRegex(store.StoreTooOldError, "open it with Valkama 2.9 first"):
             store.connect()
         conn = sqlite3.connect(self.path)
         self.addCleanup(conn.close)

@@ -238,9 +238,7 @@ has them, and the postconditions refuse a store at 9 that does. Their DDL lives
 on, frozen as schema 8 declared it, in `platform/migrations.py`, for one reason:
 a store older than 9 is given that catalog before the historical migrations
 (validators in `platform/legacy_records.py`, the rename carry-over) run, and
-the last step of the same bring-up drops it again. The Board-era cutover in
-`platform/relations.py` keeps the adapter-link table text it rebuilds that
-table from, until the old migrations are folded. Do not declare those tables
+the last step of the same bring-up drops it again. Do not declare those tables
 anywhere else, and do not add a reader.
 
 The product has now been renamed twice — Kanban, then Agent Hub, then this —

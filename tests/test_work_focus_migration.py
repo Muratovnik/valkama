@@ -4,19 +4,17 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from server import http_surface, mcp_surface, sessions, store, store_backups
+from server import http_surface, mcp_surface, sessions, store
 from server.executions import service as executions
 from server.planning import service as planning
-from server.platform import migrations, modules
+from server.platform import modules
 from server.ui_state import PlatformHttpError
-from tests import registry_rows
 from tests.retired_modules import FORMER_MODULES
 
 
@@ -73,112 +71,8 @@ class WorkFocusMigrationTests(unittest.TestCase):
             },
         )
         executions.link_session(self.conn, attempt, "exact-session", "launched")
-        # The registry rows a build with the former built-in left behind,
-        # including the retired `codex-skills` adapter this migration removes.
-        registry_rows.seed(self.conn)
-        for module_id, manifest in FORMER_MODULES.items():
-            self.conn.execute(
-                "INSERT INTO platform_modules VALUES(?,?,'disabled',1,9,'2026-01-01T00:00:00Z')",
-                (module_id, json.dumps(manifest)),
-            )
-        self.conn.execute(
-            "INSERT INTO platform_ui_prefs VALUES('last-route',?,'2026-01-01T00:00:00Z')",
-            (json.dumps({"module_id": "skills", "scope": {"kind": "global"}}),),
-        )
-        self.conn.execute(
-            "UPDATE platform_modules SET state='disabled',revision=4 WHERE module_id='memory'"
-        )
-        self.conn.execute("PRAGMA user_version=6")
         self.conn.commit()
         return item
-
-    def test_populated_store_retirement_is_backed_up_and_preserves_work(self) -> None:
-        item = self.populated_source()
-        preserved = (
-            "work_items",
-            "work_item_events",
-            "work_item_refs",
-            "sessions",
-            "session_events",
-            "executions",
-            "execution_sessions",
-        )
-        before = {
-            table: [tuple(row) for row in self.conn.execute(f"SELECT * FROM {table}")]
-            for table in preserved
-        }
-        self.conn.close()
-        self.conn = store.connect()
-        self.assertEqual(
-            store.STORE_SCHEMA_VERSION, self.conn.execute("PRAGMA user_version").fetchone()[0]
-        )
-        for table in preserved:
-            self.assertEqual(
-                before[table],
-                [tuple(row) for row in self.conn.execute(f"SELECT * FROM {table}")],
-                table,
-            )
-        # The retirement's own effect that outlives schema 9: the last route
-        # named a retired module and is gone. The module rows, the retired
-        # built-in and the audit of both went with their tables.
-        self.assertEqual(
-            0, self.conn.execute("SELECT COUNT(*) FROM platform_ui_prefs").fetchone()[0]
-        )
-        for table in ("platform_modules", "platform_adapters", "platform_registry_audit"):
-            with self.subTest(table=table):
-                self.assertIsNone(
-                    self.conn.execute(
-                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
-                    ).fetchone()
-                )
-        self.assertEqual(
-            item["reference"], sessions.session_context(self.conn, "exact-sess")["work_item"]
-        )
-        self.conn.commit()
-        self.conn.close()
-        observer = sqlite3.connect(self.path)
-        self.addCleanup(observer.close)
-        written = observer.execute("PRAGMA data_version").fetchone()[0]
-        self.conn = store.connect()
-        self.assertEqual(written, observer.execute("PRAGMA data_version").fetchone()[0])
-        snapshots = list((Path(self.path).parent / "backups").glob("*-preproductmodel-*.sqlite3"))
-        self.assertEqual(1, len(snapshots))
-        backup = sqlite3.connect(snapshots[0])
-        self.addCleanup(backup.close)
-        self.assertEqual(6, backup.execute("PRAGMA user_version").fetchone()[0])
-        self.assertEqual(7, backup.execute("SELECT COUNT(*) FROM platform_modules").fetchone()[0])
-        store_backups.integrity_check(backup, source="retirement recovery point")
-        # An old Improvements origin is ordinary Planning provenance after retirement.
-        planning.transition_work_item(self.conn, item["reference"], "done")
-        self.conn.commit()
-        self.assertTrue(
-            planning.get_work_item(self.conn, item["reference"])["state"]["is_terminal"]
-        )
-
-    def test_retirement_failure_rolls_back_without_stamping_and_reuses_backup(self) -> None:
-        self.populated_source()
-        self.conn.close()
-        with mock.patch.object(
-            migrations, "retire_work_support_modules", side_effect=RuntimeError("injected")
-        ):
-            with self.assertRaisesRegex(RuntimeError, "injected"):
-                store.connect()
-        raw = sqlite3.connect(self.path)
-        self.assertEqual(6, raw.execute("PRAGMA user_version").fetchone()[0])
-        self.assertEqual(7, raw.execute("SELECT COUNT(*) FROM platform_modules").fetchone()[0])
-        raw.close()
-        self.conn = store.connect()
-        self.assertEqual(
-            store.STORE_SCHEMA_VERSION, self.conn.execute("PRAGMA user_version").fetchone()[0]
-        )
-        self.assertIsNone(
-            self.conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='platform_modules'"
-            ).fetchone()
-        )
-        self.assertEqual(
-            1, len(list((Path(self.path).parent / "backups").glob("*-preproductmodel-*.sqlite3")))
-        )
 
     def test_lifecycle_only_ingest_preserves_historical_stream_rows(self) -> None:
         self.populated_source()

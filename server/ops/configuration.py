@@ -64,8 +64,8 @@ class ConfigurationError(RuntimeError):
 #: What an owner may set, and the variable that overrides each one.
 #:
 #: A setting is listed here only if an owner would reasonably set it for good.
-#: `VALKAMA_CUTOVER` and `VALKAMA_PROTECTED_STORE` are absent on purpose: they
-#: are one-shot switches for a single dangerous operation, and a durable file
+#: `VALKAMA_PROTECTED_STORE` is absent on purpose: it is a one-shot switch for
+#: a single dangerous operation, and a durable file
 #: is exactly where a permission like that must not be able to live.
 SETTINGS: tuple[dict[str, str], ...] = (
     {

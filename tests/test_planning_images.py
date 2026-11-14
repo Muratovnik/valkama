@@ -26,7 +26,6 @@ from unittest import mock
 from server import http_surface, mcp_surface, store, store_backups
 from server.ops import tray
 from server.planning import api, images, model, service
-from tests import schema9, schema13
 from tests.test_mcp_surface import Stdin, Stdout, params
 
 
@@ -168,6 +167,22 @@ class KeepingTests(StoreCase):
         with self.assertRaises(images.ImageRefusedError) as caught:
             images.read(self.conn, sha(data))
         self.assertEqual(404, caught.exception.status)
+
+    def test_the_rows_hold_only_what_a_picture_is(self) -> None:
+        item = self.conn.execute("SELECT work_item_id FROM work_items LIMIT 1").fetchone()[0]
+        insert = "INSERT INTO work_item_images(work_item_id,sha256,media_type,size) VALUES(?,?,?,?)"
+        self.conn.execute(insert, (item, "a" * 64, "image/png", 1))
+        for row in (
+            (item, "A" * 64, "image/png", 1),
+            (item, "b" * 63, "image/png", 1),
+            (item, "c" * 64, "image/svg+xml", 1),
+            (item, "d" * 64, "image/png", 10 * 1024 * 1024 + 1),
+            (item, "a" * 64, "image/png", 1),
+            ("none", "e" * 64, "image/png", 1),
+        ):
+            with self.subTest(row=row), self.assertRaises(sqlite3.IntegrityError):
+                self.conn.execute(insert, row)
+        self.conn.rollback()
 
 
 #: An agent session, for a tool call made the way the stdio loop makes it.
@@ -438,106 +453,6 @@ class SharedDirectoryTests(StoreCase):
             images.store(other, item, png(63))
         self.assertEqual(409, refused.exception.status)
         self.assertFalse((self.folder / sha(png(63))).exists())
-
-
-class SchemaFourteenTests(unittest.TestCase):
-    """A store at 13 gains the table under `preschema14`, and that point brings it back."""
-
-    def setUp(self) -> None:
-        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.addCleanup(directory.cleanup)
-        self.root = Path(directory.name)
-        self.path = str(self.root / "valkama.sqlite3")
-        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.path})
-        patch.start()
-        self.addCleanup(patch.stop)
-        schema13.build(self.path)
-        conn = sqlite3.connect(self.path)
-        schema9.populate(conn)
-        conn.commit()
-        self.before = self.dump(conn)
-        conn.close()
-
-    @staticmethod
-    def dump(conn: sqlite3.Connection) -> list[str]:
-        # Without the word index, which the same open adds and fills from these rows.
-        return [
-            line
-            for line in conn.iterdump()
-            if line.startswith("INSERT")
-            and not line.startswith(('INSERT INTO "work_item_search', "INSERT INTO sqlite_master"))
-        ]
-
-    def snapshots(self) -> list[Path]:
-        return sorted((self.root / "backups").glob("*-preschema14-*.sqlite3"))
-
-    def test_a_store_at_13_reaches_14_under_preschema14_keeping_every_row(self) -> None:
-        conn = store.connect()
-        self.addCleanup(conn.close)
-        # The chain runs on to this build's own schema in the same open.
-        self.assertEqual(
-            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
-        )
-        self.assertEqual(
-            ["work_item_id", "sha256", "media_type", "size", "created_at", "call_id"],
-            [row[1] for row in conn.execute("PRAGMA table_info(work_item_images)")],
-        )
-        self.assertEqual(self.before, self.dump(conn))
-        [snapshot] = self.snapshots()
-        backup = sqlite3.connect(f"file:{snapshot}?mode=ro", uri=True)
-        self.addCleanup(backup.close)
-        self.assertEqual(13, backup.execute("PRAGMA user_version").fetchone()[0])
-        self.assertEqual(self.before, self.dump(backup))
-
-    def test_preschema14_restores_13_and_the_migration_runs_again(self) -> None:
-        store.connect().close()
-        for leftover in (f"{self.path}-wal", f"{self.path}-shm"):
-            if os.path.exists(leftover):
-                os.remove(leftover)
-        [snapshot] = self.snapshots()
-        shutil.copyfile(snapshot, self.path)
-        restored = sqlite3.connect(self.path)
-        self.assertEqual(13, restored.execute("PRAGMA user_version").fetchone()[0])
-        restored.close()
-        conn = store.connect()
-        self.addCleanup(conn.close)
-        self.assertEqual(
-            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
-        )
-        self.assertEqual(self.before, self.dump(conn))
-        self.assertEqual(1, len(self.snapshots()))
-
-    def test_a_build_that_knows_only_13_refuses_a_store_at_14(self) -> None:
-        store.connect().close()
-        before = Path(self.path).read_bytes()
-        with (
-            mock.patch.object(store, "STORE_SCHEMA_VERSION", 13),
-            self.assertRaises(store.StoreTooNewError) as refusal,
-        ):
-            store.connect()
-        self.assertEqual(
-            (store.STORE_SCHEMA_VERSION, 13),
-            (refusal.exception.stored, refusal.exception.supported),
-        )
-        self.assertEqual(before, Path(self.path).read_bytes())
-
-    def test_the_rows_hold_only_what_a_picture_is(self) -> None:
-        conn = store.connect()
-        self.addCleanup(conn.close)
-        item = conn.execute("SELECT work_item_id FROM work_items LIMIT 1").fetchone()[0]
-        insert = "INSERT INTO work_item_images(work_item_id,sha256,media_type,size) VALUES(?,?,?,?)"
-        conn.execute(insert, (item, "a" * 64, "image/png", 1))
-        for row in (
-            (item, "A" * 64, "image/png", 1),
-            (item, "b" * 63, "image/png", 1),
-            (item, "c" * 64, "image/svg+xml", 1),
-            (item, "d" * 64, "image/png", 10 * 1024 * 1024 + 1),
-            (item, "a" * 64, "image/png", 1),
-            ("none", "e" * 64, "image/png", 1),
-        ):
-            with self.subTest(row=row), self.assertRaises(sqlite3.IntegrityError):
-                conn.execute(insert, row)
-        conn.rollback()
 
 
 class HttpCase(StoreCase):

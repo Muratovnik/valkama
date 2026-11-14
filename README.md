@@ -264,7 +264,6 @@ python valkama.py <command> [options]
 | `export [--section planning] [--space KEY]... [--output PATH]` | write every Planning space, every one of its work items and their questions as one JSON export; `planning` is the only section. `--space` (repeatable) narrows it to those spaces and records them as `space_filter`; an unknown space exits non-zero. `--output` writes the file whole through a temporary file beside it and prints one summary line instead of the JSON. A space whose items do not add up to its count stops the export |
 | `transcripts purge [--session ID]... [--before DATE] [--dry-run]` | delete archived transcripts now, on request, whatever retention says; prints counts only |
 | `usage rebuild --session ID [--agent ID] \| --all [--dry-run] [--json]` | read a session's usage run again from its transcript, the way the background reader reads it, and replace the run's segments in one transaction; `--agent` names a subagent's or child thread's run instead. Only a run still being read, whose transcript (or its archived copy) is there and no shorter than what was read, is rebuilt: any other run is left as it is and named with the reason, and without the liveness file beside the store nothing is rebuilt, since its observed time would come back as estimated. `--all` first takes a verified `usagerebuild` snapshot in `backups/` and copies the liveness file beside it as `<snapshot>.liveness`; to restore, put the snapshot back as [Migrating an older store](#migrating-an-older-store) describes and that copy beside the store as `<store>.liveness`. The snapshot holds the store's writes off while it is taken, so on a large store hooks may time out and spool: run `--all` while no agent session is working. Prints each run's time, tokens and cost before and after, and each work item's share of them where it moved; `--json` gives every item's. A rebuild differs from what the reader made only where writes, permission requests, holds, steps, labels or liveness arrived after the reader passed. `--dry-run` prints the same and rebuilds nothing. A rebuilt run is marked current, a run refused for any reason but a move meanwhile keeps that reason until it is stale again, and a request another run counts first is left to that run. A run that would give up a request it counted is refused as `stranded` while a run that left that request to it can no longer be read, so the request stays counted once. The background reader reads stale runs again by itself under the same rules, so this command is for one run now or for a report. Exits non-zero when anything was refused |
-| `migrate planning-model [--dry-run]` | explicitly convert a Board-era store to Planning once; dry run converts a copy |
 | `attach NAME PATH [--label TEXT]` | attach another database file as a scope |
 | `detach NAME` | drop a scope from every view; the file is untouched |
 | `scopes [--json]` | list attached scopes and their Planning spaces |
@@ -581,35 +580,12 @@ Graph; its chip leaves it in every view.
 
 ### Migrating an older store
 
-A store written by an older schema is upgraded the first time a newer build
-opens it, after a verified snapshot (see below). From then on a build of the
-older schema refuses the store rather than read it, so restart every agent
-client after pinning the newer release with `launcher install`: each one
-starts its own server, and the first to open the store upgrades it. Schema 9
-dropped the extension registry's tables, the module rows and the integration
-switches; its snapshot is labelled `preschema9`. Schema 10 lets a comment be a
-reply under another one or under a question and carry a resolve mark, numbers a
-question's answer and keeps the answers it replaced, records where a session
-was last opened, and adds the owner's Windows notification settings
-(`owner_alert_settings`, empty until they are saved); its snapshot is labelled
-`preschema10`. A store older than 9 takes both steps in one open, under the
-`preschema9` (or `preproductmodel`) snapshot. Schema 14 records the pictures
-pasted into an item's text (`work_item_images`); the files themselves stand in
-an `images` folder beside the database, one per content hash. Its snapshot is
-labelled `preschema14`. Schema 15 admits the history event of a changed label
-set (`labels_changed`) and rebuilds the event table for it, keeping every event;
-its snapshot is labelled `preschema15`, and going back to a build at schema 14
-means restoring that snapshot, its pictures included, as the next paragraph
-describes. Schema 16 counts each usage request once in the whole
-store and records which reading wrote each usage run, so that the background
-reader reads every older run again, and it adds the counts of how often each
-Analytics surface was opened (`analytics_surface_uses`, empty until one is). Its
-snapshot is labelled `preschema16`, and
-beside it stands `<snapshot>.liveness`, a verified copy of the liveness file
-the store had then. Going back to a build at schema 15 is the restore described
-below with the `preschema16` snapshot, plus that copy put beside the store as
-`<store>.liveness`. A store at 14 takes both steps in one open, under the one
-`preschema15` snapshot, and that copy then stands beside it instead.
+This build opens only a store that Valkama 2.9 left, at schema 17. An older
+store is refused with "open it with Valkama 2.9 first" and left exactly as it was,
+with no snapshot and no write. Open it with Valkama 2.9 once, which carries a store
+of any earlier schema forward under its own snapshots as that release describes,
+and then come back. The paragraphs below describe the snapshots those upgrades
+took and how to go back from them.
 
 Every snapshot taken from schema 14 on carries the pictures as well: a folder
 with the snapshot's name and `.images` after it stands beside the snapshot file,
@@ -671,22 +647,13 @@ version-1 file left in the spool and sets a version-2 one aside as `*.rejected`,
 which `doctor` counts until the file is deleted. That session start belonged to
 the upgraded store going back discards, so nothing more is lost.
 
-A store that still contains the Board-era model refuses to open until you
-authorize its one-way conversion. Inspect the conversion first, then apply it:
-
-```bash
-python valkama.py migrate planning-model --dry-run
-python valkama.py migrate planning-model
-```
-
-The dry run converts a temporary copy. Before changing the actual store, the
-migration takes a clean SQLite snapshot in the `backups/` directory beside the
-configured database. The generated filename begins `valkama-` and includes a
-migration label such as `preschema9`, `preproductmodel` or `preupgrade`. To
-check recovery without replacing your working store, copy the snapshot to a
-separate path, set `VALKAMA_DB` to the copy, and run the same dry run and
-migration there. The database path may differ from the default when `store` or
-`VALKAMA_DB` is configured. Generated snapshots retain the last five files per
+Before changing a store, an upgrade takes a clean SQLite snapshot in the
+`backups/` directory beside the configured database. The generated filename
+begins `valkama-` and includes a migration label such as `preschema9` or
+`preproductmodel`. To check recovery without replacing your working store, copy
+the snapshot to a separate path and set `VALKAMA_DB` to the copy. The database
+path may differ from the default when `store` or `VALKAMA_DB` is configured.
+Generated snapshots retain the last five files per
 migration label. A snapshot that a retry would reuse but that cannot be read --
 half a file left by a process killed while writing it -- is renamed with the
 suffix `.unverified`, kept, and replaced by a fresh snapshot; remove it by hand

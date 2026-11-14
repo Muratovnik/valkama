@@ -268,7 +268,6 @@ class ProjectRegistryTests(unittest.TestCase):
 
         exact_identity_sources = [
             root / "server" / "store.py",
-            root / "server" / "planning" / "migration.py",
             root / "server" / "sessions.py",
             root / "server" / "executions" / "api.py",
             root / "desktop" / "session_opener.js",

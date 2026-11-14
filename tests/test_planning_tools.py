@@ -10,9 +10,18 @@ from unittest import mock
 from server import mcp_surface, store
 from server.ops import configuration
 from server.planning import api as planning_api
-from server.planning import migration, model, service
+from server.planning import model, service
 from server.planning import tools as planning_tools
-from tests import board_era
+
+
+def seed_quality_assurance(conn) -> None:
+    """The space these tests call QA, holding one item, QA-1, committed."""
+
+    service.create_planning_space(
+        conn, project_id="example-workspace", name="Quality Assurance", key="QA"
+    )
+    service.create_work_item(conn, space="QA", title="Carried over")
+    conn.commit()
 
 
 class PlanningCatalogueTests(unittest.TestCase):
@@ -89,13 +98,7 @@ class PlanningToolCallTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        board_id = board_era.seed(self.conn, "Quality Assurance")
-        board_era.add_card(self.conn, board_id, "Carried over")
-        migration.migrate_board_domain(self.conn, project_for_space={"QA": "example-workspace"})
-        # The real cutover drops these; without that a second connection would
-        # find a Board domain and refuse to open the store.
-        store.drop_board_domain(self.conn)
-        self.conn.commit()
+        seed_quality_assurance(self.conn)
 
     def call(self, name: str, **arguments: object) -> object:
         return mcp_surface.call_tool(self.conn, name, arguments)
@@ -248,11 +251,7 @@ class PlanningAuthorDefaultTests(unittest.TestCase):
         self.addCleanup(patch_config.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        board_id = board_era.seed(self.conn, "Quality Assurance")
-        board_era.add_card(self.conn, board_id, "Carried over")
-        migration.migrate_board_domain(self.conn, project_for_space={"QA": "example-workspace"})
-        store.drop_board_domain(self.conn)
-        self.conn.commit()
+        seed_quality_assurance(self.conn)
 
     def call(self, name: str, **arguments: object) -> dict:
         answer = mcp_surface.call_tool(self.conn, name, arguments)
@@ -315,11 +314,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        board_id = board_era.seed(self.conn, "Quality Assurance")
-        board_era.add_card(self.conn, board_id, "Carried over")
-        migration.migrate_board_domain(self.conn, project_for_space={"QA": "example-workspace"})
-        store.drop_board_domain(self.conn)
-        self.conn.commit()
+        seed_quality_assurance(self.conn)
         # An item that carries every part of a full record, so that a field
         # missing from an acknowledgement is missing by design.
         item = self.call(

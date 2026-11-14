@@ -64,15 +64,6 @@ def _execute_schema(conn: sqlite3.Connection, script: str) -> None:
         raise RuntimeError("incomplete Platform schema statement")
 
 
-def _table_present(conn: sqlite3.Connection, name: str) -> bool:
-    return (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
-        ).fetchone()
-        is not None
-    )
-
-
 def initialize(
     conn: sqlite3.Connection,
     primary_db: str,

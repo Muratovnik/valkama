@@ -161,17 +161,71 @@ class StoreSchemaVersionTests(unittest.TestCase):
         self.addCleanup(conn.close)
         self.assertEqual(store.STORE_SCHEMA_VERSION, self.stored_version())
 
-    def test_a_store_written_before_versioning_existed_is_brought_up(self) -> None:
-        conn = store.connect()
-        conn.close()
+    def digest(self) -> str:
+        with open(self.path, "rb") as handle:
+            return hashlib.sha256(handle.read()).hexdigest()
+
+    def assert_left_as_it_was(self, before: str) -> None:
+        """A refused store: its bytes, no recovery point, no lock left behind."""
+
+        self.assertEqual(before, self.digest())
+        self.assertFalse(os.path.exists(os.path.join(self.home.name, "backups")))
+        self.assertFalse(os.path.exists(self.path + ".migration.lock"))
+
+    def refused_as_too_old(self) -> store.StoreTooOldError:
+        with self.assertRaises(store.StoreTooOldError) as raised:
+            store.connect()
+        message = str(raised.exception)
+        self.assertIn("open it with Valkama 2.9 first", message)
+        self.assertIn(f"schema {raised.exception.stored}", message)
+        return raised.exception
+
+    def test_a_store_written_before_versioning_existed_is_refused_untouched(self) -> None:
         legacy = sqlite3.connect(self.path)
         # The module rows every build before versioning seeded on start.
         registry_rows.seed_modules(legacy)
         legacy.execute("PRAGMA user_version=0")
         legacy.commit()
         legacy.close()
-        reopened = store.connect()
-        self.addCleanup(reopened.close)
+        before = self.digest()
+
+        self.assertEqual(0, self.refused_as_too_old().stored)
+        self.assert_left_as_it_was(before)
+
+    def test_a_board_era_store_is_refused_untouched(self) -> None:
+        legacy = sqlite3.connect(self.path)
+        legacy.executescript(
+            "CREATE TABLE boards(id INTEGER PRIMARY KEY, name TEXT NOT NULL);"
+            "CREATE TABLE cards(id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL);"
+            "INSERT INTO boards(name) VALUES ('Legacy');"
+        )
+        legacy.execute("PRAGMA user_version=4")
+        legacy.commit()
+        legacy.close()
+        before = self.digest()
+
+        self.assertEqual(4, self.refused_as_too_old().stored)
+        self.assert_left_as_it_was(before)
+
+    def test_every_store_below_the_oldest_this_build_opens_is_refused(self) -> None:
+        for stored in (1, 8, 9, store.OLDEST_SCHEMA_VERSION - 1):
+            with self.subTest(stored=stored):
+                if os.path.exists(self.path):
+                    os.remove(self.path)
+                legacy = sqlite3.connect(self.path)
+                legacy.execute("CREATE TABLE planning_spaces(planning_space_id TEXT PRIMARY KEY)")
+                legacy.execute(f"PRAGMA user_version={stored}")
+                legacy.commit()
+                legacy.close()
+                before = self.digest()
+
+                self.assertEqual(stored, self.refused_as_too_old().stored)
+                self.assert_left_as_it_was(before)
+
+    def test_a_file_that_holds_no_table_yet_becomes_a_fresh_store(self) -> None:
+        open(self.path, "wb").close()
+        conn = store.connect()
+        self.addCleanup(conn.close)
         self.assertEqual(store.STORE_SCHEMA_VERSION, self.stored_version())
 
     def test_reopening_a_current_store_leaves_the_generation_alone(self) -> None:

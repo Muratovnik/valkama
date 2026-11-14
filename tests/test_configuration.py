@@ -172,10 +172,9 @@ class ResolutionTests(unittest.TestCase):
             self.assertTrue(item["description"].strip())
 
     def test_a_one_shot_safety_switch_is_not_a_setting(self) -> None:
-        """A durable file is where a cutover permission must not be able to live."""
+        """A durable file is where a one-shot permission must not be able to live."""
 
         overrides = {item["environment"] for item in configuration.SETTINGS}
-        self.assertNotIn("VALKAMA_CUTOVER", overrides)
         self.assertNotIn("VALKAMA_PROTECTED_STORE", overrides)
 
 

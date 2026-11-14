@@ -11,13 +11,9 @@ from __future__ import annotations
 import os
 import shutil
 import sqlite3
-import tempfile
 import unittest
-from pathlib import Path
 from unittest import mock
 
-from server import store
-from server.hooks import ingest
 from server.ops import doctor
 from server.telemetry import (
     liveness,
@@ -28,8 +24,7 @@ from server.telemetry import (
     usage_reread,
 )
 from server.telemetry.usage_store import READING
-from tests import schema14
-from tests.usage_fixtures import HOUR, ORG_A, Case, ClaudeRun, advised, epoch, stamp, usage
+from tests.usage_fixtures import HOUR, ORG_A, Case, ClaudeRun, advised, usage
 
 #: A pass's budget: at one second per run it starts three.
 BUDGET = 2.5
@@ -475,56 +470,6 @@ class RecoveryPointTests(RereadCase):
         self.assertEqual([snapshot], self.snapshots())
 
 
-class UpgradeRecoveryPointTests(unittest.TestCase):
-    """The schema-16 upgrade's own recovery point, taken by this process, is the one.
-
-    From 14 that is the one `preschema15` point schema 15's step shares.
-    """
-
-    def test_the_upgrade_snapshot_counts_and_no_other_is_taken(self) -> None:
-        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.addCleanup(directory.cleanup)
-        root = Path(directory.name)
-        path = str(root / "valkama.sqlite3")
-        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": path})
-        patch.start()
-        self.addCleanup(patch.stop)
-        schema14.build(path)
-        transcript = root / "projects" / "old.jsonl"
-        old = ClaudeRun(transcript, "old")
-        old.prompt(0)
-        old.end_turn(30)
-        conn = sqlite3.connect(path)
-        conn.execute(
-            "INSERT INTO sessions(id, client, transcript_path, status, started_at, last_seen)"
-            " VALUES ('old', 'claude', ?, 'ended', ?, ?)",
-            (str(transcript), stamp(0), stamp(0)),
-        )
-        # A run the schema-14 reader had not read into yet.
-        conn.execute(
-            "INSERT INTO usage_runs(session_id, client, path) VALUES ('old', 'claude', ?)",
-            (str(transcript),),
-        )
-        conn.commit()
-        conn.close()
-        liveness.tick(path, epoch(0))
-        store.connect().close()
-        upgrade = liveness.recovery_point(path)
-        self.assertIsNotNone(upgrade)
-        assert upgrade is not None
-        self.assertIn("preschema15", os.path.basename(upgrade))
-        conn = ingest.open_light(path, store.STORE_SCHEMA_VERSION)
-        self.addCleanup(conn.close)
-        reader = usage_reread.Reader(conn, path)
-        drain(reader, 30.0)
-        self.assertEqual(
-            [(READING,)], [tuple(row) for row in conn.execute("SELECT reading FROM usage_runs")]
-        )
-        self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM usage_yields").fetchone()[0])
-        backups = root / "backups"
-        self.assertEqual([], sorted(backups.glob(f"*{usage_rebuild.SNAPSHOT_LABEL}*")))
-
-
 #: A model the price table did not list when its tokens were read.
 NEW_MODEL = "claude-unlisted-9"
 #: The price table that lists it.
@@ -653,7 +598,7 @@ class SecondReadingTests(RereadCase):
         for record in range(3):
             run.reply(10 + record, request="m1", spent=advised(run.model), advisorModel=run.model)
         run.end_turn(20, effort="high")
-        worker = self.subagent("advised", "w1", label="ovi: build it")
+        worker = self.subagent("advised", "w1", label="code: build it")
         worker.prompt(12, "build it", origin=None)
         worker.end_turn(18)
         self.read()
@@ -685,7 +630,7 @@ class SecondReadingTests(RereadCase):
                 for row in self.segments("advised")
             ],
         )
-        self.assertEqual("ovi", self.run_row("advised", "w1")["launch_class"])
+        self.assertEqual("code", self.run_row("advised", "w1")["launch_class"])
 
 
 class OrganizationShareTests(RereadCase):

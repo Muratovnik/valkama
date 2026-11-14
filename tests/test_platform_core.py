@@ -16,6 +16,7 @@ from server.planning import service as planning_service
 from server.platform import core as platform_core
 from server.platform import migrations as platform_migrations
 from server.platform import modules as platform_modules
+from server.projects import project_registry
 from tests import SUITE_STORE, schema8
 
 
@@ -105,7 +106,7 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
         with open(self.registry, "w", encoding="utf-8") as handle:
             json.dump({"projects": []}, handle)
         self.registry_reader_patch = mock.patch.object(
-            store.project_registry,
+            project_registry,
             "_read_registry_bytes",
             new=Path(self.registry).read_bytes,
         )

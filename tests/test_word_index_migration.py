@@ -24,7 +24,6 @@ from unittest import mock
 from server import store
 from server.planning import service, words
 from tests import schema9, schema17
-from tests.test_schema12_migration import _catalog, _columns, _rows
 
 #: The tables the word index brings: its marks, and the FTS5 table with the four
 #: tables FTS5 keeps it in (holding no copy of the text, it has no content table).
@@ -47,6 +46,41 @@ WORD_TRIGGERS = {
 WORD_INDEXES = {"work_item_search_rows_stale"}
 HELD = "11111111-1111-4111-8111-111111111111"
 LINKED = "22222222-2222-4222-8222-222222222222"
+
+
+def _catalog(conn: sqlite3.Connection, kind: str) -> set[str]:
+    return {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type=? AND sql IS NOT NULL"
+            " AND name NOT LIKE 'sqlite_%'",
+            (kind,),
+        )
+    }
+
+
+def _columns(conn: sqlite3.Connection) -> dict[str, list[str]]:
+    return {
+        table: [str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")]
+        for table in sorted(_catalog(conn, "table"))
+    }
+
+
+def _rows(conn: sqlite3.Connection, shape: dict[str, list[str]]) -> dict[str, list[tuple]]:
+    """Every row of each source table, read through the columns the source had.
+
+    Ordered by every column, since one of the tables has no rowid to order by.
+    """
+
+    return {
+        table: [
+            tuple(row)
+            for row in conn.execute(
+                f"SELECT {', '.join(names)} FROM {table} ORDER BY {', '.join(names)}"
+            )
+        ]
+        for table, names in shape.items()
+    }
 
 
 def _found(conn: sqlite3.Connection, query: str) -> list[str]:

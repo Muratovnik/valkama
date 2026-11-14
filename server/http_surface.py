@@ -989,7 +989,7 @@ class Handler(BaseHTTPRequestHandler):
         """The store, or None once its failure has been answered.
 
         Every route that reads the store opens it here, so a store that cannot
-        open -- too new, mid-cutover, unreadable -- gets the same envelope
+        open -- too new, too old, unreadable -- gets the same envelope
         everywhere. Without it the error escaped the handler: a `ValueError`
         subclass was swallowed as a client disconnect and the connection
         dropped with no answer, which an event stream retries forever.

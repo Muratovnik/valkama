@@ -30,9 +30,7 @@ Schema 9 dropped the extension registry's tables (`platform_services`,
 `integration_settings`. What a store at 9 holds of the Kernel is
 `platform_store_metadata` and `platform_ui_prefs`, declared in
 `platform/core.py`. The dropped tables keep their names and DDL in
-`platform/migrations.py`, frozen as schema 8 declared them (the Board-era
-cutover in `platform/relations.py` also keeps the adapter-link table text it
-rebuilds from): `store.connect()`
+`platform/migrations.py`, frozen as schema 8 declared them: `store.connect()`
 gives a store older than 9 that catalog before the historical migrations run,
 and drops it in the step that ends the chain, after a verified snapshot
 labelled `preschema9` (or `preproductmodel` for a store older than 8).

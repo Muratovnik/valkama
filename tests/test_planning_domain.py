@@ -163,48 +163,6 @@ class PlanningDomainTests(unittest.TestCase):
         with self.assertRaisesRegex(model.WorkflowGuardError, r"\[checklist\]"):
             service.transition_work_item(self.conn, reopened["reference"], "done")
 
-    def test_a_workflow_shaped_like_the_old_default_gains_cancelled_once(self) -> None:
-        workflow_id = self.space["workflow"]["workflow_id"]
-        cancelled = self.conn.execute(
-            "SELECT state_id FROM workflow_states WHERE workflow_id = ? AND key = 'cancelled'",
-            (workflow_id,),
-        ).fetchone()["state_id"]
-        self.conn.execute(
-            "DELETE FROM workflow_transitions WHERE from_state_id = ? OR to_state_id = ?",
-            (cancelled, cancelled),
-        )
-        self.conn.execute("DELETE FROM workflow_states WHERE state_id = ?", (cancelled,))
-        held = self.item("Already here")
-        custom = service.create_planning_space(self.conn, project_id="custom", name="Custom")
-        self.conn.execute(
-            "UPDATE workflow_states SET key = 'shipped' WHERE workflow_id = ? AND key = 'done'",
-            (custom["workflow"]["workflow_id"],),
-        )
-        custom_cancelled = self.conn.execute(
-            "SELECT state_id FROM workflow_states WHERE workflow_id = ? AND key = 'cancelled'",
-            (custom["workflow"]["workflow_id"],),
-        ).fetchone()["state_id"]
-        self.conn.execute(
-            "DELETE FROM workflow_transitions WHERE from_state_id = ? OR to_state_id = ?",
-            (custom_cancelled, custom_cancelled),
-        )
-        self.conn.execute("DELETE FROM workflow_states WHERE state_id = ?", (custom_cancelled,))
-        self.conn.commit()
-        self.conn.close()
-
-        for _ in range(2):
-            reopened = store.connect()
-            space = service.get_planning_space(reopened, self.space["key"])
-            states = space["workflow"]["states"]
-            self.assertEqual("cancelled", states[-1]["key"])
-            self.assertEqual(6, states[-1]["position"])
-            self.assertEqual(7 * 6, len(space["workflow"]["transitions"]))
-            other = service.get_planning_space(reopened, custom["key"])
-            self.assertNotIn("cancelled", [state["key"] for state in other["workflow"]["states"]])
-            item = service.get_work_item(reopened, held["reference"])
-            self.assertEqual("backlog", item["state"]["key"])
-            reopened.close()
-
     def test_blocking_needs_a_blocker_or_a_reason(self) -> None:
         created = self.item("Land the planning domain")
         with self.assertRaisesRegex(model.WorkflowGuardError, r"\[blocker\]"):

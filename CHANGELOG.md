@@ -10,6 +10,15 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Removed
+
+- **A store older than Valkama 2.9 left it is no longer brought up.** Opening one now
+  refuses with "open it with Valkama 2.9 first" and leaves it exactly as it was, with no
+  snapshot and no write; Valkama 2.9 still carries a store of any earlier schema forward.
+  With that, the Board-era conversion is gone, and with it `migrate planning-model`,
+  the `VALKAMA_CUTOVER` permission and the step that gave an old default workflow its
+  Cancelled state.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed
@@ -1221,7 +1230,7 @@ checkouts are therefore distinguishable even at the same version.
   focus off its reply icon or its task number; from the form it closes, focus still goes to the
   question, which says the deadline has passed.
 - An agent's session id stays whole in the head of a comment, a reply and a question. On a
-  phone the head of a reply broke it after its hyphen, «kolo 019a2b3c-» over «4d5e». The head
+  phone the head of a reply broke it after its hyphen, «worker-b 019a2b3c-» over «4d5e». The head
   prints the start of the session, as the card's holder and every other place do, in the
   monospace metadata font: a whole id is wider than a phone's head, and it ran past the head's
   edge or broke across two lines of its own. The whole id is in the tooltip, and a session
@@ -1610,7 +1619,7 @@ checkouts are therefore distinguishable even at the same version.
 - An epic's row held at the top of the board no longer hides the first 4 px of the tile coming
   out from under it, and in high-contrast mode the tiles passing beside it no longer show as
   stripes at its sides.
-- The line over a question's answer that says who gave it, «Answered by agent kolo», keeps
+- The line over a question's answer that says who gave it, «Answered by agent worker-b», keeps
   that phrase whole: where it does not fit beside the time, the time moves to the line under
   it, rather than the agent's name breaking off onto a second line beside the time. An answer
   recorded before Valkama could tell who gave it no longer calls its author an agent: it
