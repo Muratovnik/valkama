@@ -16,13 +16,12 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { WidthColumn } from '@/widgets/work-item-views/utils/widestRows.ts'
-
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
 import { facetMarks } from '@/entities/work-item/utils/facets.ts'
 import type { FacetId } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type { WidthColumn } from '@/shared/ui/widestRows.ts'
 
 interface RowWords {
   holder: string

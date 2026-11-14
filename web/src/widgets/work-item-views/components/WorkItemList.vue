@@ -40,11 +40,8 @@ import { useResizeObserver } from '@vueuse/core'
 
 import WorkItemListFind from '@/widgets/work-item-views/components/WorkItemListFind.vue'
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
-import { useListKeys } from '@/widgets/work-item-views/composables/useListKeys.ts'
 import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
-import { useWindowRows } from '@/widgets/work-item-views/composables/useWindowRows.ts'
-import type { ListEntry } from '@/widgets/work-item-views/composables/useWindowRows.ts'
 import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 import { factsOf, ROW_FACETS, rowWords } from '@/widgets/work-item-views/utils/listRowWords.ts'
@@ -61,6 +58,9 @@ import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import { useListKeys } from '@/shared/ui/useListKeys.ts'
+import { useWindowRows } from '@/shared/ui/useWindowRows.ts'
+import type { ListEntry } from '@/shared/ui/useWindowRows.ts'
 
 const props = withDefaults(
   defineProps<{

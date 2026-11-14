@@ -32,9 +32,9 @@ import { defaultRangeExtractor, useVirtualizer } from '@tanstack/vue-virtual'
 import type { Range } from '@tanstack/vue-virtual'
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 
-import { useStagedRows } from '@/widgets/work-item-views/composables/useStagedRows.ts'
-import { widestRows } from '@/widgets/work-item-views/utils/widestRows.ts'
-import type { WidthColumn } from '@/widgets/work-item-views/utils/widestRows.ts'
+import { useStagedRows } from '@/shared/ui/useStagedRows.ts'
+import { widestRows } from '@/shared/ui/widestRows.ts'
+import type { WidthColumn } from '@/shared/ui/widestRows.ts'
 
 /** A list this long draws only the rows in and about its window. */
 const WINDOW_FROM = 300
