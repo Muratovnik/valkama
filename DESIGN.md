@@ -2461,7 +2461,9 @@ the page as it was (Inspectors).
 
 A cost is always an estimate at API prices and is written as one, with «≈», and the section's
 «ⓘ» says once that it is not a bill; cached reads are counted apart from the tokens processed
-anew and never summed into them.
+anew and never summed into them. In a table, the tokens a cost leaves without a price stand as a
+quieter second line under its amount, which keeps to the row's line, and a window too narrow for
+them may scroll the table sideways with its names kept in place.
 
 ### Settings
 
