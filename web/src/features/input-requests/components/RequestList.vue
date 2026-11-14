@@ -26,13 +26,24 @@
  * What stopped waiting and was put aside (`answered`) stands folded under «Answered (N)» after
  * the rest, and opens in place. What waits carries its identity as `data-request-waiting`, which
  * is what the way through the list in the dialog's head counts and goes to.
+ *
+ * Where the list is told to (`recommendAll`), it offers to accept what is recommended in all its
+ * blocks that wait (`RequestRecommendedAll`), and each of them is filled and written by its own
+ * record, under no right to move focus: the reader stays on that action.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
+import RequestRecommendedAll from '@/features/input-requests/components/RequestRecommendedAll.vue'
+import type { Outcome } from '@/features/input-requests/composables/useRequestWrites.ts'
 import { useUnderReader } from '@/features/input-requests/composables/useUnderReader.ts'
 import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
+import { choiceRecord } from '@/features/input-requests/utils/questionRecord.ts'
+import type {
+  QuestionRecord,
+  RecommendedAnswer,
+} from '@/features/input-requests/utils/questionRecord.ts'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
 import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
@@ -51,19 +62,24 @@ import VButton from '@/shared/ui/VButton.vue'
 import VDisclosure from '@/shared/ui/VDisclosure.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-const props = defineProps<{
-  /** What stopped waiting and was put aside, folded after the rest. */
-  answered: InputRequestEntry[]
-  drafts: Record<string, RequestDraft>
-  /** What stands in its place: what waits, and what stopped waiting while it was read. */
-  entries: InputRequestEntry[]
-  failed: boolean
-  loading: boolean
-  partial: boolean
-  result: InputRequestList | null
-  /** The identities of the questions still waiting. */
-  waiting: ReadonlySet<string>
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** What stopped waiting and was put aside, folded after the rest. */
+    answered: InputRequestEntry[]
+    drafts: Record<string, RequestDraft>
+    /** What stands in its place: what waits, and what stopped waiting while it was read. */
+    entries: InputRequestEntry[]
+    failed: boolean
+    loading: boolean
+    partial: boolean
+    result: InputRequestList | null
+    /** The identities of the questions still waiting. */
+    waiting: ReadonlySet<string>
+    /** It offers to accept what is recommended in all the blocks that wait. */
+    recommendAll?: boolean
+  }>(),
+  { recommendAll: false },
+)
 const emit = defineEmits<{
   dismiss: [entry: InputRequestEntry]
   draft: [key: string, value: RequestDraft]
@@ -137,6 +153,7 @@ type CardHandle = {
   focus: () => void
   focusOutcome: () => void
   holdsFocus: () => boolean
+  send: (draft: RequestDraft, right: FocusRight) => Promise<Outcome>
 }
 const cards: Record<string, CardHandle | null> = {}
 const errorLine = ref<HTMLElement | null>(null)
@@ -183,6 +200,22 @@ function holdsReader(entry: InputRequestEntry) {
 const answeredOpen = ref(false)
 function draftFor(entry: InputRequestEntry) {
   return props.drafts[requestIdentity(entry)] ?? EMPTY_DRAFT
+}
+/** The blocks that wait, as the records of a choice: every question is one today. */
+const waitingRecords = computed(() =>
+  props.entries
+    .filter((entry) => props.waiting.has(requestIdentity(entry)))
+    .map((entry) => choiceRecord(entry)),
+)
+const recordDraft = (record: QuestionRecord) => draftFor(record.entry)
+/**
+ * One block accepted as filled: the form holds what goes, so a write that fails keeps it, and
+ * the block's own record writes it.
+ */
+async function sendFilled({ draft, record }: RecommendedAnswer): Promise<Outcome> {
+  const key = requestIdentity(record.entry)
+  emit('draft', key, draft)
+  return (await cards[key]?.send(draft, NO_FOCUS_RIGHT)) ?? 'held'
 }
 /** What waits names itself to the way through the list in the head; nothing else does. */
 function waitingMark(entry: InputRequestEntry) {
@@ -292,6 +325,12 @@ defineExpose({ holdsFocus, holdsReader })
           >
         </template>
       </DataEmptyState>
+      <RequestRecommendedAll
+        v-if="recommendAll"
+        :draft-of="recordDraft"
+        :records="waitingRecords"
+        :send="sendFilled"
+      />
       <RequestCard
         v-for="entry in entries"
         :key="requestIdentity(entry)"

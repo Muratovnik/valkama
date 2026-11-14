@@ -46,9 +46,19 @@
  * the same row: with no asking there is no place kept for it, nor room for Don't answer in the
  * way on, which stood 9px wider than its words for it in English, so what stands before the way on
  * is only what is offered there, and with nothing offered the way on ends the comment's line.
+ *
+ * A question of a kind other than a choice is answered by its own row of buttons (`answers`),
+ * one press each, standing where the two answers do and wrapping as one as they do. Nobody
+ * declines it, but an answer that cannot be taken back asks first, as Don't answer does, and
+ * in the same way: its own box says Back, so a second press without moving only goes back, the
+ * box beside it says the answer in the danger's ink, and the asking, in its own words, takes the
+ * same place. Every box holds room for each word it can come to say, so nothing moves. The
+ * answer that puts the question off opens its choice of a day in place (`later`), and says so.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import type { KindAnswer } from '@/features/input-requests/utils/questionRecord.ts'
 
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -64,14 +74,22 @@ const props = withDefaults(
     dismissable: boolean
     refreshable: boolean
     waiting: boolean
+    /** A kind's own answers, in place of the two; none for a choice. */
+    answers?: readonly KindAnswer[]
+    /** The answer whose step of asking stands, by its place among them. */
+    asking?: number | null
     /** Somebody waits on the answer, so it can be refused. */
     declinable?: boolean
+    /** Whether the choice of a day the answer that puts off opens is open, and its id. */
+    later?: { controls: string; open: boolean } | null
     /** What Send says, where it sends something other than an answer. */
     sendWord?: string
   }>(),
-  { declinable: true, sendWord: undefined },
+  { answers: () => [], asking: null, declinable: true, later: null, sendWord: undefined },
 )
 const emit = defineEmits<{
+  /** A press on a kind's answer, by its place; `confirmed` once its step of asking was answered. */
+  'answer': [index: number, confirmed: boolean]
   'dismiss': []
   'onward': []
   'refresh': []
@@ -85,10 +103,54 @@ const asksTwo = computed(() => props.waiting || props.changing)
 /** It waits and can be refused, so the step of declining may come and needs its place. */
 const declines = computed(() => props.waiting && props.declinable)
 const offersWayOut = computed(() => props.changing || props.declinable)
-/** The words that keep the asking's place while it can be asked, unseen. */
-const askingRoom = computed(() => (declines.value ? t('requests.declineAsked') : undefined))
+/** It waits for one of its kind's answers rather than for its form. */
+const byAnswers = computed(() => props.waiting && props.answers.length > 0)
+/** The box an answer's step asks in: the next one, or the one before where it is the last. */
+const confirmAt = (index: number) => (index + 1 < props.answers.length ? index + 1 : index - 1)
+const askedWords = (index: number) =>
+  t('requests.record.asked', { answer: props.answers[index]?.label ?? '' })
+/**
+ * What the step asks, where one may come: declining, or an answer of a kind that asks first.
+ * While none stands, the words of the first that would, which keep the place.
+ */
+const stepWords = computed(() => {
+  if (byAnswers.value) {
+    const step = props.asking ?? props.answers.findIndex((answer) => answer.twoStep)
+    return step >= 0 ? askedWords(step) : undefined
+  }
+  return declines.value ? t('requests.declineAsked') : undefined
+})
 /** Something stands before the two answers, or their asking needs the place. */
-const leads = computed(() => declines.value || props.refreshable)
+const leads = computed(() => Boolean(stepWords.value) || props.refreshable)
+/**
+ * What a kind's answer says now and in which ink, every other word its box may come to say, and,
+ * for the answer that puts off, the choice of a day it opens.
+ */
+function kindButton(answer: KindAnswer, index: number) {
+  const step = props.asking
+  const words = [
+    answer.label,
+    ...(answer.twoStep ? [t('requests.back')] : []),
+    ...props.answers.flatMap((other, at) =>
+      other.twoStep && confirmAt(at) === index ? [other.label] : [],
+    ),
+  ]
+  const opens = answer.later ? (props.later ?? { controls: '', open: false }) : null
+  const box = {
+    away: step === index,
+    controls: opens?.open ? opens.controls : undefined,
+    expanded: opens ? opens.open : undefined,
+    room: words.join('\n'),
+  }
+  if (step === index) return { ...box, variant: 'secondary' as const, word: t('requests.back') }
+  if (step !== null && confirmAt(step) === index)
+    return { ...box, variant: 'danger' as const, word: props.answers[step]?.label ?? '' }
+  return { ...box, variant: 'secondary' as const, word: answer.label }
+}
+/** A lone answer that asks has no box beside it, so its asking brings one. */
+const loneStep = computed(() =>
+  props.asking !== null && confirmAt(props.asking) < 0 ? props.answers[props.asking] : undefined,
+)
 const wayOutDisabled = computed(() => !props.changing && props.disabled)
 const wayOut = computed(() => {
   if (props.changing) {
@@ -118,6 +180,13 @@ function pressWayOut() {
   emit('way-out')
   focusWayOut()
 }
+/** A kind's box: its own answer, the way back from a step, or the answer that step asks for. */
+function pressKind(index: number) {
+  const step = props.asking
+  if (step === index) pressWayOut()
+  else if (step !== null && confirmAt(step) === index) emit('answer', step, true)
+  else emit('answer', index, false)
+}
 defineExpose({ focusWayOut })
 </script>
 
@@ -131,8 +200,8 @@ defineExpose({ focusWayOut })
     <div
       v-if="leads"
       class="request-lead"
-      :class="{ 'is-room': declines, 'is-asking': declining }"
-      :data-room="askingRoom"
+      :class="{ 'is-room': Boolean(stepWords), 'is-asking': declining }"
+      :data-room="stepWords"
     >
       <div class="request-lead-controls">
         <VButton
@@ -147,11 +216,38 @@ defineExpose({ focusWayOut })
         class="request-asked"
         role="alert"
       >
-        {{ t('requests.declineAsked') }}
+        {{ stepWords }}
       </p>
     </div>
     <div
-      v-if="asksTwo"
+      v-if="byAnswers"
+      class="request-pair"
+    >
+      <VButton
+        v-for="(answer, index) in answers"
+        :key="index"
+        class="request-held"
+        :class="{ 'request-way-out': kindButton(answer, index).away }"
+        :aria-controls="kindButton(answer, index).controls"
+        :aria-disabled="busyMark"
+        :aria-expanded="kindButton(answer, index).expanded"
+        :data-room="kindButton(answer, index).room"
+        :disabled="disabled"
+        :variant="kindButton(answer, index).variant"
+        @click="pressKind(index)"
+        >{{ kindButton(answer, index).word }}</VButton
+      >
+      <VButton
+        v-if="loneStep"
+        variant="danger"
+        :aria-disabled="busyMark"
+        :disabled="disabled"
+        @click="emit('answer', asking ?? -1, true)"
+        >{{ loneStep.label }}</VButton
+      >
+    </div>
+    <div
+      v-else-if="asksTwo"
       class="request-pair"
     >
       <VButton
@@ -316,9 +412,11 @@ defineExpose({ focusWayOut })
   flex-direction: column;
   gap: 0;
 
+  /* A room of several words, one a line, is as wide as the widest. */
   &::after {
     content: attr(data-room);
     height: 0;
+    white-space: pre-line;
     overflow: hidden;
     visibility: hidden;
   }
