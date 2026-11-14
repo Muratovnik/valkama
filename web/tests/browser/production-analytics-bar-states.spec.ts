@@ -10,7 +10,8 @@
  * top, and every control of the bar its place. A span of days chosen keeps the bar's height and the
  * panel's top wherever the bar is of one height for every period: on a phone, in the two rows of a
  * narrow bar, and on a line wide enough for the span; between 50rem and about 1360px the line
- * beside a span is two rows where a preset's is one, which `DESIGN.md` chose over one height.
+ * beside a span is two rows where a preset's is one, which `DESIGN.md` chose over one height. On a
+ * phone the chosen period stands in view in its row, opened, chosen or beside a failure.
  *
  * The bar and the panel end on one right edge whether the panel scrolls or not.
  */
@@ -199,6 +200,38 @@ for (const width of ONE_HEIGHT)
     await record(info, `bar-states days ${width}`, { week, days })
     expect(days.bar, "the bar's height").toBe(week.bar)
     expect(days.body, 'the top under the bar').toBe(week.body)
+  })
+
+/** How far the chosen period stands past either end of the periods' row, which scrolls sideways. */
+const chosenPast = (page: Page) =>
+  page.evaluate(() => {
+    const strip = document.querySelector('.analytics-period') as HTMLElement
+    const chosen = strip.querySelector('.active') as HTMLElement
+    const row = strip.getBoundingClientRect()
+    const own = chosen.getBoundingClientRect()
+    return Math.max(row.left - own.left, own.right - row.right, 0)
+  })
+
+for (const width of [360, 390] as const)
+  test(`the chosen period stands in view on a phone at ${width}px`, async ({ page }, info) => {
+    const fail = await serveFailing(page, width)
+    const past: Record<string, number> = {}
+    for (const [name, state] of Object.entries(PERIODS)) {
+      await open(page, state)
+      past[`${name} opened`] = await chosenPast(page)
+      fail(true)
+      await failRefresh(page)
+      past[`${name} failed`] = await chosenPast(page)
+      fail(false)
+    }
+    await open(page, PERIODS.week)
+    await page.getByRole('radio', { name: 'Свой' }).click()
+    await expect(page.locator('.analytics-bar input[type="date"]')).toHaveCount(2)
+    await frames(page)
+    past['days chosen'] = await chosenPast(page)
+    await record(info, `bar-states chosen ${width}`, past)
+    for (const [name, value] of Object.entries(past))
+      expect.soft(value, `the chosen period past the row, ${name}`).toBeLessThanOrEqual(0.5)
   })
 
 for (const width of [390, 760, 1440] as const)

@@ -96,7 +96,10 @@ function choosePeriod(period: PeriodPreset) {
   emit('amend', period === 'custom' ? { period, ...customDays(new Date()) } : { period })
 }
 
-/** The periods' row, which scrolls sideways on a phone, and keeps the chosen one in view. */
+/**
+ * The periods' row, which scrolls sideways on a phone, and keeps the chosen one in view: when it is
+ * chosen, and once the line is fitted, which changes the row's room.
+ */
 const periods = ref<{ $el: HTMLElement } | null>(null)
 function showChosen() {
   periods.value?.$el
@@ -104,7 +107,6 @@ function showChosen() {
     ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
 }
 onMounted(showChosen)
-watch(() => props.view.period, showChosen, { flush: 'post' })
 
 /**
  * What the line gives up while it has no room for all it holds (`useBarRoom`): its buttons' words,
@@ -167,6 +169,7 @@ const spanCut = computed(() => room.gave('span'))
 const twoRows = room.rows
 /** Whether the line is being fitted, a failure holding its room unseen. */
 const held = room.holding
+watch([() => props.view.period, held], showChosen, { flush: 'post' })
 
 /** Whether a read failed: a read again, its figures kept, or the view's, with none to show. */
 const readsFailed = computed(() => failed.value || props.readFailed)
