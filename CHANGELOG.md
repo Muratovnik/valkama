@@ -289,7 +289,8 @@ checkouts are therefore distinguishable even at the same version.
   it, else the seat's key for its week, and one unknown group for work no sample speaks
   for or that names no organization. It groups, filters and compares like the other
   dimensions, and its groups add up to the total. The seats of a read are worked out in
-  one pass over the samples it needs. The Analytics page does not offer it yet.
+  one pass over the samples it needs. The Analytics page offers no breakdown by it; its
+  quota panel reads each account's spend by it.
 - **`valkama statusline`**, Claude Code's status line command, is the first live quota
   source. It records the five-hour window, the week and a gateway's spend limit from the
   status line input as samples of the session, straight into the store or through the
