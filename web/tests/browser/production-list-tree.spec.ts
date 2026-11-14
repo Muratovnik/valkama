@@ -48,6 +48,10 @@ import { test } from './test.ts'
 test('the tree draws fewer than 100 rows anywhere it scrolls, and its columns stay', async ({
   page,
 }) => {
+  // Twenty-one scroll positions and up to six reaches down a folded chain, each step waiting
+  // for still frames: about 20 s alone, which a full suite on a busy machine pushed past the
+  // default 30 s.
+  test.setTimeout(90_000)
   await openTree(page, treeSpace())
   await expect(tableOf(page)).toHaveAttribute('role', 'treegrid')
   await expect(tableOf(page)).toHaveAttribute('aria-rowcount')
