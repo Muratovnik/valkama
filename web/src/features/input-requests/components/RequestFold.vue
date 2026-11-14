@@ -14,6 +14,9 @@
  *
  * Words still in the form when the question closed some other way are the only copy of
  * what was written. They stay in view (`RequestUnsent`), and never join the reply.
+ *
+ * A question its task's closing took away says so with the task's number: nobody waits on it
+ * any longer, and «closed» alone did not say why.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -75,7 +78,10 @@ const closing = computed(() => {
     const declined = person === false ? 'requests.agentDeclined' : 'requests.declinedBy'
     return t(declined, { actor: actorName(by) })
   }
-  const state = t(`requests.${status}`)
+  const state =
+    props.request.expired_reason === 'task_closed'
+      ? t('requests.record.withdrawn', { reference: props.request.reference })
+      : t(`requests.${status}`)
   if (!by) return state
   const signed = person === false ? 'requests.agentResolved' : 'requests.resolvedBy'
   return `${state} · ${t(signed, { actor: actorName(by) })}`

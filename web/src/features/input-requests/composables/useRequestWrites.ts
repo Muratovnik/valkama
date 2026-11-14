@@ -23,6 +23,11 @@ const SUPPORTED_FIELDS = new Set(['boolean', 'choice', 'multi_choice', 'text', '
 
 type Action = 'answer' | 'change' | 'decline'
 type Checked = ReturnType<typeof checkAnswers>
+/**
+ * How a press ended: it only asked (`asked`), could not start (`held`), stopped at a field
+ * (`refused`), or wrote and went through (`sent`) or did not (`failed`).
+ */
+export type Outcome = 'asked' | 'failed' | 'held' | 'refused' | 'sent'
 
 function failure(error: unknown) {
   if (!(error instanceof InputRequestError)) return 'mutationError'
@@ -56,7 +61,9 @@ function failure(error: unknown) {
  *
  * A write and a read the person asked for are given the right to move focus as they begin
  * (`grantFocus`), and the host's answers to how they ended move focus through it: a person who
- * went on into another field while the answer was out is left there.
+ * went on into another field while the answer was out is left there. A write the person started
+ * elsewhere, for several questions at once, comes with its own right and its own draft: what
+ * one press of a kind's answer sends, or what accepting a recommendation filled.
  */
 export function useRequestWrites(host: {
   draft: () => RequestDraft
@@ -175,32 +182,36 @@ export function useRequestWrites(host: {
   function stepBack() {
     if (!busy.value) asked.value = false
   }
-  async function resolve(action: Action) {
-    if (busy.value || !opens(action)) return
+  async function resolve(
+    action: Action,
+    given: { draft?: RequestDraft; right?: FocusRight } = {},
+  ): Promise<Outcome> {
+    if (busy.value || !opens(action)) return 'held'
     // A person need put nothing into a question to decline it, and it cannot be taken back,
     // so whatever brought this press here, the first one only asks.
     if (action === 'decline' && !asked.value) {
       asked.value = true
-      return
+      return 'asked'
     }
+    const draft = given.draft ?? host.draft()
     const checked =
       action === 'decline'
         ? null
-        : checkAnswers(request.value.fields, host.draft(), { list: isCommentList(local.value) })
+        : checkAnswers(request.value.fields, draft, { list: isCommentList(local.value) })
     refused.value = checked?.refused ?? []
     const first = refused.value[0]
     if (first !== undefined) {
       // Taken to the first field to fix, the reader hears its message with it.
       await host.refuse(first)
-      return
+      return 'refused'
     }
     asked.value = action === 'decline'
-    await write(action, checked, grantFocus())
+    return write(action, checked, draft, given.right ?? grantFocus())
   }
-  function send(action: Action, checked: Checked | null) {
+  function send(action: Action, checked: Checked | null, draft: RequestDraft) {
     const entry = local.value
     if (!checked || action === 'decline') return declineInputRequest(entry)
-    const { note, changing: base } = host.draft()
+    const { note, changing: base } = draft
     const parts = { own: checked.own, field_notes: checked.fieldNotes }
     if (action === 'answer') return answerInputRequest(entry, checked.values, note, parts)
     const atBase = {
@@ -217,22 +228,30 @@ export function useRequestWrites(host: {
     if (reread) host.write({ ...draft, changing: result.request.revision })
     await host.settled(result, reread, right)
   }
-  async function write(action: Action, checked: Checked | null, right: FocusRight) {
+  async function write(
+    action: Action,
+    checked: Checked | null,
+    draft: RequestDraft,
+    right: FocusRight,
+  ): Promise<Outcome> {
     const identity = requestIdentity(local.value)
     const current = ++generation
     busy.value = true
     error.value = ''
     try {
-      const result = await send(action, checked)
-      if (current !== generation || identity !== requestIdentity(local.value)) return
+      const result = await send(action, checked, draft)
+      if (current !== generation || identity !== requestIdentity(local.value)) return 'held'
       if (requestIdentity(result) !== identity) {
         await fail('mutationError', true, right)
-        return
+        return 'failed'
       }
       local.value = result
       await settle(result, action, right)
+      return 'sent'
     } catch (error_) {
-      if (current === generation) await fail(failure(error_), true, right)
+      if (current !== generation) return 'held'
+      await fail(failure(error_), true, right)
+      return 'failed'
     } finally {
       if (current === generation) {
         busy.value = false

@@ -52,9 +52,9 @@ const IF = 9
 
 /** An ellipsis, or any other mark that stands for cut text; `clip` is the initial value. */
 const ELLIPSIS = /(?:^|[;{\s])text-overflow\s*:\s*(?!clip\s*(?:!important\s*)?(?:;|$))[^;\s]/im
-/** Text held to one line. */
+/** Text held to one line: `pre-line` and `pre-wrap` wrap, and hold nothing to one. */
 const NO_WRAP =
-  /(?:^|[;{\s])(?:white-space\s*:\s*(?:nowrap|pre)\b|text-wrap(?:-mode)?\s*:\s*nowrap\b)/im
+  /(?:^|[;{\s])(?:white-space\s*:\s*(?:nowrap|pre)(?![\w-])|text-wrap(?:-mode)?\s*:\s*nowrap\b)/im
 /** An overflow that clips across: the shorthand's first value, or the inline axis's own. */
 const CLIPS_ACROSS = /(?:^|[;{\s])overflow(?:-x|-inline)?\s*:\s*(?:hidden|clip)\b/im
 /** The element is hidden whole, kept for assistive technology alone. */

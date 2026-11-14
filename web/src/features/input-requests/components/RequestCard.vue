@@ -10,7 +10,8 @@
  * and said nothing of which block it was on. In the list that head is the one that sticks
  * (`RequestHeader`), and what sticks under it (a review's count) is told its height.
  *
- * Selecting does nothing but select, and nothing is chosen for the person: Send is what
+ * Selecting does nothing but select, and nothing is chosen for the person but at their own
+ * press, such as accepting what is recommended: Send is what
  * sends, every kind of field goes through it, and a send that fails keeps all of it with
  * the reason in the foot. Once the question is no longer waiting it folds (`RequestFold`).
  *
@@ -30,6 +31,18 @@
  * host, which outlives this while a dialog closes and opens and which the draft guard asks.
  * Folding also lifts what stands below it, so a press that lands here only because of that
  * reaches nothing: it was meant for another question.
+ *
+ * It is the frame of a question of every kind (`QuestionRecord`). A choice of options is
+ * answered by its form, as above. Any other kind draws its own content in `subject`, which is
+ * handed the question, and is answered by its kind's row of buttons in the foot: one press
+ * writes, through the same write as Send, what that answer says over what the form holds; an
+ * answer that cannot be taken back asks first, as Don't answer does, and the answer that puts
+ * the question off opens the choice of a day in place (`RequestLater`). Its history, a change of
+ * its answer, its fold and what it left unsent are this frame's, whatever its kind. Where the
+ * listing says the question's space and project, its head says them.
+ *
+ * A write started elsewhere for several questions at once goes through `send`, with the draft
+ * it fills and a right to move focus of its own, and is told how it ended.
  */
 import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -39,15 +52,15 @@ import { useEventListener } from '@vueuse/core'
 import RequestAnswerFields from '@/features/input-requests/components/RequestAnswerFields.vue'
 import RequestFold from '@/features/input-requests/components/RequestFold.vue'
 import RequestFoot from '@/features/input-requests/components/RequestFoot.vue'
-import RequestHeader from '@/features/input-requests/components/RequestHeader.vue'
-import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
+import RequestHead from '@/features/input-requests/components/RequestHead.vue'
 import { useAnswerChange } from '@/features/input-requests/composables/useAnswerChange.ts'
+import { useKindAnswers } from '@/features/input-requests/composables/useKindAnswers.ts'
 import { useRequestFocus } from '@/features/input-requests/composables/useRequestFocus.ts'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
-import { useStepAttention } from '@/features/input-requests/composables/useStepAttention.ts'
 import { useUncoveredFocus } from '@/features/input-requests/composables/useUncoveredFocus.ts'
 import { ANSWER_VERSION_LIMIT, unsentWords } from '@/features/input-requests/utils/answerChange.ts'
 import { unsentChoices } from '@/features/input-requests/utils/answerDisplay.ts'
+import type { QuestionRecord } from '@/features/input-requests/utils/questionRecord.ts'
 import { hasDraft, stillRefused } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
@@ -56,15 +69,11 @@ import { provideDocumentLinks } from '@/entities/project-document/documentLinks.
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
-import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { NO_FOCUS_RIGHT } from '@/shared/lib/focusRight.ts'
 import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { unbroken } from '@/shared/lib/unbroken.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
-import EntryAction from '@/shared/ui/EntryAction.vue'
-import EntryHead from '@/shared/ui/EntryHead.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
-import MetaLine from '@/shared/ui/MetaLine.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import { stopStrayPresses } from '@/shared/ui/strayPress.ts'
 
@@ -72,12 +81,25 @@ const props = withDefaults(
   defineProps<{
     draft: RequestDraft
     entry: InputRequestEntry
+    /** Its kind's answers; none for a choice, which its form answers. */
+    answers?: QuestionRecord['answers']
     /** The question's task is closed. Left out where that is not known; the server still says. */
     itemClosed?: boolean
+    kind?: QuestionRecord['kind']
+    project?: QuestionRecord['project']
+    space?: QuestionRecord['space']
     standalone?: boolean
     suggest?: InstanceType<typeof MarkdownEditor>['$props']['suggest']
   }>(),
-  { itemClosed: false, standalone: false, suggest: undefined },
+  {
+    answers: () => [],
+    itemClosed: false,
+    kind: 'choice',
+    project: null,
+    space: null,
+    standalone: false,
+    suggest: undefined,
+  },
 )
 const emit = defineEmits<{
   'dismiss': [entry: InputRequestEntry]
@@ -91,6 +113,7 @@ const metaId = useId()
 const titleId = useId()
 const deadlineId = useId()
 const outcomeId = useId()
+const laterId = useId()
 // A path in a question belongs to that question's task, whichever task is open.
 provideDocumentLinks(() => ({
   space: planningSpaceEntity(props.entry.target.space_ref).resource_id,
@@ -102,11 +125,11 @@ const { focus, focusOn, focusOutcome, holdsFocus, reveal } = useRequestFocus(car
 const deadlineLine = ref<HTMLElement | null>(null)
 const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
 const foot = ref<InstanceType<typeof RequestFoot> | null>(null)
-const header = ref<InstanceType<typeof RequestHeader> | null>(null)
+const head = ref<InstanceType<typeof RequestHead> | null>(null)
 /** What sticks to the panel's top under the head of the block, a review's count, stands under it. */
 const headHeight = computed(() =>
-  props.standalone && header.value
-    ? { '--request-head-height': `${header.value.height}px` }
+  props.standalone && head.value
+    ? { '--request-head-height': `${head.value.height}px` }
     : undefined,
 )
 
@@ -123,11 +146,13 @@ const {
   refresh,
   refused,
   request,
+  requiresRefresh,
   resolve,
   sendDisabled,
   stepBack,
   supported,
   unchanged,
+  writable,
 } = useRequestWrites({
   draft: () => props.draft,
   entry: () => props.entry,
@@ -147,10 +172,23 @@ const {
   },
 })
 
-useStepAttention(card, declining, stepBack)
-
 const waiting = computed(() => request.value.status === 'pending')
 const inForm = computed(() => waiting.value || changing.value)
+const kind = useKindAnswers({
+  answers: () => props.answers,
+  draft: () => props.draft,
+  focusDay: () => foot.value?.focusDay(),
+  kind: () => props.kind,
+  laterId,
+  question: card,
+  waiting,
+  write: (draft) => emit('update:draft', draft),
+  writes: { busy, declining, requiresRefresh, resolve, sendDisabled, stepBack, writable },
+})
+const { asking, byAnswers, chooseDay, laterControl, offered, putOff } = kind
+const { press: pressAnswer, stepStands } = kind
+/** Writes what another place filled, for several questions at once, and says how it ended. */
+const send = (draft: RequestDraft, right: FocusRight) => resolve('answer', { draft, right })
 /**
  * The question stopped waiting, and focus moves only when it fell to the page, where what held
  * it went; a control that stays keeps the focus the person put on it. The person's own write or
@@ -240,12 +278,10 @@ const deadlineLabel = computed(() =>
     time: request.value.expires_at ? unbroken(stamp(request.value.expires_at)) : '',
   }),
 )
-/** An agent asks, whatever name it signs with: this interface asks nothing. */
-const authorName = computed(() => actorName(request.value.author))
-const authorSession = computed(() => actorSession(request.value.author))
 
 function pressWayOut() {
-  if (changing.value) change.cancel()
+  if (asking.value !== null) kind.back()
+  else if (changing.value) change.cancel()
   else if (declining.value) stepBack()
   else void resolve('decline')
 }
@@ -259,10 +295,13 @@ function pressOnward() {
  */
 useEventListener(card, 'keydown', (event: KeyboardEvent) => {
   if (event.key !== 'Escape' || event.isComposing) return
-  if (!declining.value && !changing.value) return
+  if (!stepStands.value && !changing.value) return
   event.preventDefault()
   event.stopPropagation()
-  if (askingCancel.value) void change.keep()
+  if (asking.value !== null) {
+    foot.value?.focusWayOut()
+    kind.back()
+  } else if (askingCancel.value) void change.keep()
   else if (changing.value) change.cancel()
   else {
     stepBack()
@@ -283,7 +322,7 @@ function writeNote(note: string) {
   stepBack()
   emit('update:draft', { ...props.draft, note })
 }
-defineExpose({ focus, focusOutcome, holdsFocus, reveal })
+defineExpose({ focus, focusOutcome, holdsFocus, reveal, send })
 </script>
 
 <template>
@@ -296,51 +335,23 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
     :aria-describedby="describedBy"
     :style="headHeight"
   >
-    <RequestHeader
-      v-if="standalone"
-      ref="header"
+    <RequestHead
+      ref="head"
+      :changeable="changeable"
+      :changing="changing"
       :entry="entry"
+      :meta-id="metaId"
+      :note-toggle="noteToggle"
+      :project="project"
+      :space="space"
+      :standalone="standalone"
       :title-id="titleId"
+      @change-answer="change.start"
+      @note="pressNote"
       @select="emit('select', $event)"
     >
-      <template #actions>
-        <!-- It reaches past its box rather than growing it: grown, it made the head that sticks
-             a line taller on a phone, over a title of four lines there already. -->
-        <RequestNoteToggle
-          v-if="noteToggle"
-          v-bind="noteToggle"
-          :title="t('requests.questionNote')"
-          reach
-          @press="pressNote"
-        />
-      </template>
-    </RequestHeader>
-    <EntryHead>
-      <MetaLine
-        :id="metaId"
-        class="request-meta"
-        :when="stamp(request.created_at)"
-        :session="authorSession"
-        >{{ authorName }}</MetaLine
-      >
-      <template #actions>
-        <RequestNoteToggle
-          v-if="noteToggle && !standalone"
-          v-bind="noteToggle"
-          :title="t('requests.questionNote')"
-          @press="pressNote"
-        />
-        <EntryAction
-          v-else-if="changeable || changing"
-          class="request-change"
-          icon="edit"
-          :class="{ 'is-away': changing }"
-          :label="t('requests.changeAnswer')"
-          @click="change.start"
-        />
-        <slot name="actions" />
-      </template>
-    </EntryHead>
+      <template #actions><slot name="actions" /></template>
+    </RequestHead>
     <template v-if="inForm">
       <CollapsibleText
         class="request-prompt"
@@ -377,6 +388,11 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
       >
         {{ t('requests.unsupported') }}
       </p>
+      <slot
+        v-else-if="byAnswers"
+        name="subject"
+        :entry="entry"
+      />
       <RequestAnswerFields
         v-else
         ref="answerFields"
@@ -407,17 +423,23 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
     <RequestFoot
       v-if="hasFoot"
       ref="foot"
+      :answers="offered"
+      :asking="asking"
       :asking-cancel="askingCancel"
       :busy="busy"
       :changing="changing"
-      :declining="declining"
+      :declining="stepStands"
       :disabled="sendDisabled"
       :dismissable="standalone && !inForm"
       :error="errorText"
       :refreshable="canRefresh"
       :stuck="answerFields?.structured ?? false"
       :undecided="answerFields?.undecided ?? 0"
+      :later="laterControl"
       :waiting="waiting"
+      @answer="pressAnswer"
+      @day="chooseDay"
+      @put-off="putOff"
       @discard="change.end"
       @dismiss="emit('dismiss', entry)"
       @keep="change.keep"
@@ -456,10 +478,6 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
 .request-card:focus-visible {
   border-radius: var(--radius-card);
   outline-offset: var(--space-half);
-}
-
-.request-change.is-away {
-  visibility: hidden;
 }
 
 .request-fact {

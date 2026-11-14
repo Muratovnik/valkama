@@ -8,12 +8,18 @@
  * comment on a list under a comment stands first in its row (`note`); a question's block has
  * its comment in its head. Over it stands how many points are still undecided: the question
  * can be sent so, and the agent reads them as undecided, which is said before and not after.
+ *
+ * A question of a kind other than a choice is answered by its kind's own row (`answers`), in the
+ * place of the two answers. The answer that puts the question off opens over that row the choice
+ * of a day (`RequestLater`), where the press that opened it is.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestActions from '@/features/input-requests/components/RequestActions.vue'
+import RequestLater from '@/features/input-requests/components/RequestLater.vue'
 import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
+import type { KindAnswer } from '@/features/input-requests/utils/questionRecord.ts'
 
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
@@ -35,31 +41,43 @@ const props = withDefaults(
     /** Points of a review shown with no decision. */
     undecided: number
     waiting: boolean
+    /** A kind's own answers, in place of the two; none for a choice. */
+    answers?: readonly KindAnswer[]
+    /** The answer whose step of asking stands, by its place among them. */
+    asking?: number | null
     /** What the strip asks once a change is cancelled, where the change is not to an answer. */
     cancelMessage?: string
     /** Somebody waits on the answer, so it can be refused. */
     declinable?: boolean
     /** What the strip's way on says, where it discards something other than an answer. */
     discardWord?: string
+    /** The choice of a day the answer that puts off opens: its id, if it is open, its day. */
+    later?: { controls: string; open: boolean; value: string } | null
     /** The comment on the list can be opened from here, how it stands, and what it is on. */
     note?: { disabled: boolean; open: boolean; title: string; written: boolean } | null
     /** What Send says, where it sends something other than an answer. */
     sendWord?: string
   }>(),
   {
+    answers: () => [],
+    asking: null,
     cancelMessage: undefined,
     declinable: true,
     discardWord: undefined,
+    later: null,
     note: null,
     sendWord: undefined,
   },
 )
 const emit = defineEmits<{
+  'answer': [index: number, confirmed: boolean]
+  'day': [day: string]
   'discard': []
   'dismiss': []
   'keep': []
   'note': []
   'onward': []
+  'put-off': []
   'refresh': []
   'way-out': []
 }>()
@@ -68,8 +86,10 @@ const { t } = useI18n()
 const edge = computed(() => (props.stuck ? 'end' : undefined))
 const actions = ref<InstanceType<typeof RequestActions> | null>(null)
 const errorLine = ref<HTMLElement | null>(null)
+const day = ref<InstanceType<typeof RequestLater> | null>(null)
 
 defineExpose({
+  focusDay: () => day.value?.focus(),
   focusError: () => moveFocus(errorLine.value),
   focusWayOut: () => actions.value?.focusWayOut(),
 })
@@ -97,18 +117,33 @@ defineExpose({
       @cancel="emit('keep')"
       @confirm="emit('discard')"
     />
+    <RequestLater
+      v-if="later?.open"
+      ref="day"
+      class="request-later-place"
+      :busy="busy"
+      :disabled="disabled"
+      :panel-id="later.controls"
+      :value="later.value"
+      @put-off="emit('put-off')"
+      @update:value="emit('day', $event)"
+    />
     <RequestActions
       v-show="!askingCancel"
       ref="actions"
+      :answers="answers"
+      :asking="asking"
       :busy="busy"
       :changing="changing"
       :declinable="declinable"
       :declining="declining"
       :disabled="disabled"
       :dismissable="dismissable"
+      :later="later"
       :refreshable="refreshable"
       :send-word="sendWord"
       :waiting="waiting"
+      @answer="(index, confirmed) => emit('answer', index, confirmed)"
       @dismiss="emit('dismiss')"
       @onward="emit('onward')"
       @refresh="emit('refresh')"
@@ -172,7 +207,8 @@ defineExpose({
   font: var(--font-detail);
 }
 
-.request-confirm {
+.request-confirm,
+.request-later-place {
   flex: 1 1 100%;
 }
 

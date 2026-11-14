@@ -2055,8 +2055,15 @@ more bars than the list said were waiting. A block answered while the list is op
 stands; it goes under «Answered (N)», after those waiting and opening in place, at a later read than
 the one its own answer started, and only once it holds no typed or chosen words, no open change and
 no focus, and neither the pointer nor focus stands in it or after it in the list, which its leaving
-would move from under them. Selecting does nothing but select, nothing is chosen for
-the person, recommended or not, and Send is what sends. Every choice is a full-width row
+would move from under them. Selecting does nothing but select, and nothing is chosen for
+the person but at their own press: Send is what sends. Accepting what the agent recommends is
+that press, in one block of a review or in all the blocks of a choice that wait, and it fills
+only what the person has not chosen and sends nothing by itself. Across blocks, «Accept
+recommended in all» opens in place the list of what would go, a line per block with its task's
+number, its title and what would be chosen in it, says how many blocks it leaves out because
+their recommendation does not answer them, and sends only on «Accept N»; each block is filled
+and written by its own question, so one that went folds and one that did not keeps what was
+filled, with the reason in its foot. Every choice is a full-width row
 whatever their number: its label, a quiet word on the recommended one, and as much of
 its description as leaves the labels scannable, so that the first screen still says what
 is asked and what the choices are. A description of one line stands whole under its
@@ -2088,6 +2095,17 @@ chosen decided it anyway. A change of answer opens the comment on whichever of t
 in force holds; an older answer holding both opens it on the own option, then the note after a
 blank line, and saved beside a choice that goes as one note. Its field takes 2000 characters, a
 note's limit, since its words may become either.
+A question of a kind other than a choice of options keeps the same frame, its head, fold, history,
+change of answer and unsent words, and puts its kind's content where the fields stand and its
+kind's answers where Don't answer and Send do: a row of buttons, each writing at one press what it
+says, through the same write as Send. Nobody declines such a question. An answer that cannot be
+taken back asks first, as Don't answer does: its own box says Back, the box beside it says the
+answer in the danger's ink, the asking stands where Don't answer's does, and every box holds room
+for each word it can come to say. «Later…» opens in place the day to come back to the question and
+«Put off», unavailable with the reason under it until a day from today on is chosen; the day is
+part of the draft. Where the listing names the question's space and project, the head's first line
+says them around the task's number, the space before it and the project after. A question its
+task's closing withdrew folds on «Question withdrawn: MAIN-12 was closed».
 A review's point is one row: a chevron and the point's label, which are one press that opens the
 point, the three words of the verdict at the row's end and the comment's glyph after them; under
 the label, from its edge to the row's end, one quiet line of what the point comes to. Accepted

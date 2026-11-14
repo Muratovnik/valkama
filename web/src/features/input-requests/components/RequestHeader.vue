@@ -20,11 +20,17 @@
  *
  * The title names the block (`titleId`), which is what takes focus when the list moves on
  * to it: the title itself is words, and a ring round it stood as a capsule round one line.
+ *
+ * Where the listing says the question's space and project, the first line says them around the
+ * number, «Field Notes · TASK-7 · Valkama»: the space the number belongs to before it, the
+ * project after. Where it says neither, the line is what it was before spaces had names.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useResizeObserver } from '@vueuse/core'
+
+import type { QuestionRecord } from '@/features/input-requests/utils/questionRecord.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { planningTargetRoute } from '@/shared/api/planningTarget.ts'
@@ -36,11 +42,16 @@ import LineEnd from '@/shared/ui/LineEnd.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 
-const props = defineProps<{
-  entry: InputRequestEntry
-  /** The id of the title, which names the question it stands over. */
-  titleId: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    entry: InputRequestEntry
+    /** The id of the title, which names the question it stands over. */
+    titleId: string
+    project?: QuestionRecord['project']
+    space?: QuestionRecord['space']
+  }>(),
+  { project: null, space: null },
+)
 const emit = defineEmits<{ select: [target: PlanningTarget] }>()
 const { t } = useI18n()
 const head = ref<HTMLElement | null>(null)
@@ -50,14 +61,24 @@ useResizeObserver(head, ([entry]) => {
   height.value = entry?.borderBoxSize[0]?.blockSize ?? 0
 })
 const request = computed(() => props.entry.request)
-/** Project, and the space where the reference does not already begin with its key. */
+/**
+ * What stands before the number and after it: the space and the project where the listing names
+ * them; otherwise the project, and the space where the reference does not already begin with its
+ * key, before it.
+ */
 const projects = useProjectTitles()
 const place = computed(() => {
+  if (props.space || props.project)
+    return {
+      before: props.space ? `${props.space.name} ·` : '',
+      after: props.project ? `· ${props.project.title}` : '',
+    }
   const { project_id: id, space_ref: space } = props.entry.target
   const project = projectTitle(projects.value, id)
-  return request.value.reference.startsWith(`${space.space_key}-`)
+  const before = request.value.reference.startsWith(`${space.space_key}-`)
     ? project
     : `${project} · ${space.space_key}`
+  return { before: `${before} ·`, after: '' }
 })
 provideReferenceLinks((reference, parent) => {
   if (reference.kind !== 'work-item' || reference.value !== request.value.reference)
@@ -80,11 +101,12 @@ defineExpose({ height })
   >
     <div class="request-header-line">
       <p class="request-context">
-        {{ place }} ·
+        {{ place.before }}
         <RichText
           :source="request.reference"
           inline
         />
+        {{ place.after }}
       </p>
       <LineEnd class="request-header-actions"><slot name="actions" /></LineEnd>
     </div>
