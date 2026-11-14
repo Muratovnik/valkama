@@ -239,6 +239,11 @@ and only fades the end of a strip that scrolls on past it.
   sheet; a host lying on the workspace panel itself — the Work module's frame, every
   project's work, installation health, the shell's recovery, a task's link — names
   the ground there instead, because the sheet stood two steps up, 1.41 to the panel.
+  What a chart's table keeps in place while the rest passes under it — the names at
+  its frame's start, a section table's heading row and total — is painted in
+  `--color-chart-table-ground`, the canvas unless its host names the ground it lies
+  on: a quota account, on a surface of its own, names that surface, where the canvas
+  stood as dark blocks on it.
   A question asked in place (`ConfirmStrip`) is a block of the sheet's tone where it
   stands on a ground; on a sheet, whose tone that already is, it draws no ground and
   no inset and its words start on the sheet's edge. The strip reads which of the two

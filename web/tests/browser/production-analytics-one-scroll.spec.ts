@@ -6,8 +6,9 @@
  * task table stands at its full height in that scroll; with the panel scrolled to the table's
  * middle and to its last rows, its heading row and its total are both inside the panel's visible
  * box and drawn over the rows, a row's name focused there stands clear of both, and «To the table»
- * over the charts brings the table into view with the focus on it. Each run prints what it
- * measured.
+ * over the charts brings the table into view with the focus on it. The heading row and the total
+ * hold to the edges as well when the table is drawn anew after the section opened: a split chosen,
+ * a split section reloaded and a split taken away. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -115,6 +116,74 @@ async function scrollTableTo(page: Page, at: number) {
   })
 }
 
+/**
+ * Scrolls the panel to the task table's middle and to its last rows and holds that the heading row
+ * and the total are inside the panel's visible box and drawn over the rows there, the heading row
+ * over the total, and in the middle at the panel's top and bottom edges; `path` names how the
+ * table was reached. Each miss is reported and the run goes on, so every path says how it stood.
+ * Returns what it measured.
+ */
+async function expectStuck(page: Page, path: string) {
+  const middle = await scrollTableTo(page, 0.5)
+  const end = await scrollTableTo(page, 0.97)
+  for (const [where, at] of Object.entries({ middle, end })) {
+    const said = `${path}, ${where}`
+    expect.soft(at.rowsInView, `${said}: rows in view`).toBeGreaterThan(0)
+    expect.soft(at.head, `${said}: the heading row`).toMatchObject({ inside: true, onTop: true })
+    expect.soft(at.total, `${said}: the total`).toMatchObject({ inside: true, onTop: true })
+    expect
+      .soft(at.head?.bottom ?? 0, `${said}: the heading row over the total`)
+      .toBeLessThanOrEqual(at.total?.top ?? 0)
+  }
+  // In the middle the heading row stands at the panel's top edge and the total at its bottom.
+  const top = Math.abs((middle.head?.top ?? 0) - middle.visible.top)
+  const bottom = Math.abs((middle.total?.bottom ?? 0) - middle.visible.bottom)
+  expect.soft(top, `${path}: the heading row at the top edge`).toBeLessThanOrEqual(1)
+  expect.soft(bottom, `${path}: the total at the bottom edge`).toBeLessThanOrEqual(1)
+  return { middle, end }
+}
+
+/** Chooses the second dimension the task section is split by, through «Split by» in its heading. */
+async function splitBy(page: Page, name: string) {
+  await page.locator('.dimension-section > .level-head .dimension-split .choice-trigger').click()
+  await page.getByRole('option', { name, exact: true }).click()
+}
+
+/**
+ * The table is drawn anew after its section opened whenever a split is chosen or taken away, and
+ * on a reload of a split section it comes only once the read by both dimensions lands: on each of
+ * those paths its heading row and total keep to the panel's edges as on the first opening.
+ */
+test('the heading row and total keep to the edges on every path to the table', async ({
+  page,
+}, info) => {
+  await serve(page, TASKS)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(TASK_REPORT)
+  const rows = page.locator('.spending-table tbody tr')
+  await expect(rows).toHaveCount(44)
+  await page.evaluate(() => document.fonts.ready)
+  const seen: Record<string, unknown> = {}
+
+  // The account a pair names after its task, by the start of its id, says the split has landed.
+  const paired = rows.first().getByText('5b0c7e21', { exact: false })
+  await splitBy(page, 'Account')
+  await expect(paired).toBeVisible()
+  seen.split = await expectStuck(page, 'split chosen')
+
+  await page.reload()
+  await expect(paired).toBeVisible()
+  await expect(rows).toHaveCount(44)
+  await page.evaluate(() => document.fonts.ready)
+  seen.reloaded = await expectStuck(page, 'split section reloaded')
+
+  await splitBy(page, 'None')
+  await expect(paired).toHaveCount(0)
+  await expect(rows).toHaveCount(44)
+  seen.unsplit = await expectStuck(page, 'split taken away')
+  await record(info, 'stuck edges on every path', seen)
+})
+
 for (const [width, height] of SIZES)
   test.describe(`at ${width}×${height}`, () => {
     test.beforeEach(async ({ page }) => {
@@ -149,21 +218,7 @@ for (const [width, height] of SIZES)
       await page.goto(TASK_REPORT)
       await expect(page.locator('.spending-table tbody tr').first()).toBeVisible()
       await page.evaluate(() => document.fonts.ready)
-      const middle = await scrollTableTo(page, 0.5)
-      const end = await scrollTableTo(page, 0.97)
-      await record(info, `stuck edges ${width}x${height}`, { middle, end })
-      for (const [where, at] of Object.entries({ middle, end })) {
-        expect(at.rowsInView, `${where}: rows in view`).toBeGreaterThan(0)
-        expect(at.head, `${where}: the heading row`).toMatchObject({ inside: true, onTop: true })
-        expect(at.total, `${where}: the total`).toMatchObject({ inside: true, onTop: true })
-        expect(
-          at.head?.bottom ?? 0,
-          `${where}: the heading row over the total`,
-        ).toBeLessThanOrEqual(at.total?.top ?? 0)
-      }
-      // In the middle the heading row stands at the panel's top edge and the total at its bottom.
-      expect(Math.abs((middle.head?.top ?? 0) - middle.visible.top)).toBeLessThanOrEqual(1)
-      expect(Math.abs((middle.total?.bottom ?? 0) - middle.visible.bottom)).toBeLessThanOrEqual(1)
+      await record(info, `stuck edges ${width}x${height}`, await expectStuck(page, 'opened'))
 
       // A row's name focused under the total is brought up clear of it, and of the heading row.
       await scrollTableTo(page, 0.2)

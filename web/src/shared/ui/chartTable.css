@@ -59,13 +59,14 @@
 
 /* In a table wider than its frame the name heading each row, and the heading over the names,
    stay at the frame's start while the figures scroll under them, so a row never loses its day.
-   They are laid on the canvas a chart's table stands on, which covers what passes under them. */
+   They are laid on the ground the table stands on (`--color-chart-table-ground`: the canvas, or
+   the surface a host names), which covers what passes under them. */
 .chart-name,
 .chart-heading:first-child {
   position: sticky;
   inset-inline-start: 0;
   z-index: 1;
-  background: var(--color-canvas);
+  background: var(--color-chart-table-ground, var(--color-canvas));
 }
 
 /* What a row is not, said in the quiet ink: the folded tail, work with no task, work nobody
