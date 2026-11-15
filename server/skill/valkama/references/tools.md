@@ -41,9 +41,11 @@ says what they mean together.
 
 Every write answers with an acknowledgement: `reference`, `url` (the address that
 opens the item), `work_item_id`, `revision`, `state` (`key`, `name`,
-`is_terminal`), `claim_ref` (the holder) and `claim_state` (`live`, `stale`,
-`unconfirmed` or null), plus what the call changed. Pass `verbose: true` for the
-full item instead; it carries `url` too.
+`is_terminal`; `null` for an accepted open goal or stage, whose `container_state`
+alone says what it derives), `open` (whether its work is over), `claim_ref` (the
+holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
+`container_state` where the item has one and what the call changed. Pass
+`verbose: true` for the full item instead; it carries `url` too.
 
 | Tool | Also answers |
 | --- | --- |
@@ -222,6 +224,7 @@ taken.
 | any state but triage, deferred or cancelled, from triage or deferred | a basis of acceptance (`acceptance`), which `force` does not carry |
 | a deferred state | refused: putting work off is its own action |
 | active, review or blocked, for a goal or stage | refused: a goal or stage is accepted (ready), completed or cancelled |
+| a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
 | a completed state | every step done and a summary |
 | a cancelled state | a summary; open steps stay open |
 | a blocked state | an unfinished item linked `blocks` to it, or a `reason` |

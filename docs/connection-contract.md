@@ -103,8 +103,10 @@ content block followed by a text block of JSON.
 
 A write to a work item answers with a short acknowledgement instead of the whole
 item: `reference`, `url`, `work_item_id`, `revision`, `state` (`key`, `name`,
-`is_terminal`), `claim_ref` and `claim_state`, plus what that call changed. `url`
-is described in [The address of a work item](#the-address-of-a-work-item).
+`is_terminal`; `null` for an accepted open goal or stage, whose `container_state`
+alone says what it derives), `open` (whether its work is over), `claim_ref` and
+`claim_state`, plus `container_state` where the item has one and what that call
+changed. `url` is described in [The address of a work item](#the-address-of-a-work-item).
 `revision` is the value to pass as `expected_revision` on the next write.
 `claim_state` is the holder's lease, described in
 [Claims are leases](#claims-are-leases).
@@ -262,8 +264,9 @@ refused. An edit changes a kind only among `task`, `bug` and `improvement`.
 | `blocked` | waiting on something else |
 | `cancelled` | not to be done |
 
-Every item record -- `get_work_item`, `GET /api/planning/work-item`, an item of a
-list, a chain member, a write's answer -- carries these fields of the model:
+The whole record of an item -- the answer of `get_work_item` and of
+`GET /api/planning/work-item`, an item of `GET /api/planning/work-items`, and the
+HTTP answer of a write to an item -- carries these fields of the model:
 
 | Field | What it holds |
 | --- | --- |
@@ -274,6 +277,22 @@ list, a chain member, a write's answer -- carries these fields of the model:
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
 | `workable` | whether it may be taken now: a task, held by nobody, in `triage` or `ready`, with nothing unfinished blocking it. It is the rule `claim_ready_work_item` takes work by |
+
+Four other answers carry only some of these fields:
+
+- an MCP list row (`list_work_items`, unless `verbose`) carries `state`, as its
+  key (`null` for an accepted open goal or stage), and `container_state` where the
+  item has one; none of `open`, `acceptance`, `started_at`, `waits_for` or `workable`;
+- an HTTP chain member of `GET /api/planning/work-item/chain` carries `state`,
+  `open`, `container_state` and `workable`; none of `acceptance`, `started_at` or
+  `waits_for`;
+- an MCP `get_work_item_chain` answers no members: its `open_members` are rows of
+  `reference`, `title`, `state` (its key), `container_state` where the item has
+  one, `claim_ref`, `workable`, `parent_reference` and `rank`; none of `open`,
+  `acceptance`, `started_at` or `waits_for`;
+- an MCP write acknowledgement carries `state` (`null` for an accepted open goal
+  or stage), `open` and `container_state` where the item has one; none of
+  `acceptance`, `started_at`, `waits_for` or `workable`.
 
 A goal or stage derives its `container_state` from the items under it. It is
 `awaiting_confirmation` when it has had children and none of them is open,
