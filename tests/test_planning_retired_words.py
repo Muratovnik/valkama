@@ -6,9 +6,10 @@ as its replacement: each is refused, the refusal names what replaces it, and the
 refused call writes nothing. The words and what each refusal says are stated
 here from the work model, not read from the list in `model`.
 
-Every input is driven with every word it took, through MCP and over HTTP. The MCP
-inputs are also read off the published schemas, so a tool that starts taking a
-kind, a scope, a category or a state fails this file until it is driven here.
+Every input is driven with every word it took, through MCP and over HTTP. Every
+published MCP argument and every HTTP parameter named kind, scope, category or
+state is read off the schemas and the route registries, so one that is added fails
+this file until it is driven here, or listed with the reason it takes no such word.
 
 What an agent reads does not teach the words either: no tool's schema, no line of
 the handshake and no page of the skill Valkama ships names one.
@@ -16,11 +17,14 @@ the handshake and no page of the skill Valkama ships names one.
 
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 import os
 import re
 import sqlite3
 import tempfile
+import textwrap
 import unittest
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -28,7 +32,7 @@ from unittest import mock
 
 from server import mcp_surface, store
 from server.ops import skills
-from server.planning import api, model, service, tools
+from server.planning import api, model, service
 
 KEY = "RW"
 CONTAINER = (
@@ -160,23 +164,101 @@ INPUTS: dict[str, dict[str, Call]] = {
 }
 
 
-def _fields(properties: dict, path: str) -> Iterator[tuple[str, str]]:
-    """Each argument of a schema that names a kind, a scope, a category or a state."""
+#: The names the census reads: a caller sends a word under one of them, so each
+#: such input is driven above or listed below with the reason it takes no retired word.
+CENSUSED = frozenset({"state", "kind", "category", "scope"})
 
-    for name, schema in properties.items():
+#: Inputs named `kind` that take no work-model word, each with the values it takes.
+#: A new input with a census name is driven above or listed here with its reason.
+NOT_WORK_MODEL_KINDS: dict[str, str] = {
+    "mcp create_work_item.links[].kind": "a link kind",
+    "mcp apply_work_item_changes.links[].kind": "a link kind",
+    "mcp apply_work_item_changes.refs[].kind": "a ref kind: commit, memory, session or url",
+    "mcp apply_work_item_changes.questions[].kind": "a question kind: question or decision",
+    "mcp create_work_item_request.kind": "a request kind: question or decision",
+    "POST /api/planning/work-items links": "a link kind",
+    "POST /api/planning/work-item/apply links": "a link kind",
+    "POST /api/planning/work-item/apply refs": "a ref kind",
+    "POST /api/planning/work-item/apply questions": "a question kind",
+    "POST /api/planning/work-item/link": "a link kind",
+    "POST /api/planning/work-item/ref": "a ref kind",
+    "POST /api/planning/work-item/request": "a request kind",
+}
+
+#: The names a route reads from its request; a helper it passes the request to reads them too.
+REQUEST_MAPPINGS = frozenset({"payload", "parameters"})
+
+
+def _mcp_census(schema: dict, path: str) -> Iterator[tuple[str, str]]:
+    """Each argument of an input schema, at any depth, that has a census name."""
+
+    for name, sub in schema.get("properties", {}).items():
         where = f"{path}.{name}"
-        named = set(schema.get("enum", ()))
-        if name == "kind" and "task" in named:
-            yield "kind", where
-        elif name == "scope" and "tree" in named:
-            yield "scope", where
-        elif name == "category" and "triage" in named:
-            yield "category", where
-        elif name == "state" and schema is tools._STATE:
-            yield "state", where
-        for inner in (schema.get("properties"), schema.get("items", {}).get("properties")):
-            if inner:
-                yield from _fields(inner, where)
+        if name in CENSUSED:
+            yield name, where
+        yield from _mcp_census(sub, where)
+        if isinstance(sub.get("items"), dict):
+            yield from _mcp_census(sub["items"], where + "[]")
+
+
+def _names_read(function: Callable, helpers: dict[str, Callable], seen: set[str]) -> set[str]:
+    """The string arguments a route reads from its request, followed through its helpers.
+
+    A route reads a parameter as a literal argument of a call (`_first(parameters,
+    "state")`) or a subscript of the request. A helper the request is passed to is
+    read the same way, so `_created(conn, payload)` contributes its names; a call
+    that passes some other mapping, such as one group's entry, does not.
+    """
+
+    tree = ast.parse(textwrap.dedent(inspect.getsource(function)))
+    found: set[str] = set()
+    called: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            found.update(
+                arg.value
+                for arg in node.args
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+            )
+            if isinstance(node.func, ast.Name) and any(
+                isinstance(arg, ast.Name) and arg.id in REQUEST_MAPPINGS for arg in node.args
+            ):
+                called.add(node.func.id)
+        elif (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in REQUEST_MAPPINGS
+            and isinstance(node.slice, ast.Constant)
+            and isinstance(node.slice.value, str)
+        ):
+            found.add(node.slice.value)
+    for name in sorted(called - seen):
+        seen.add(name)
+        if name in helpers:
+            found |= _names_read(helpers[name], helpers, seen)
+    return found
+
+
+def _http_census() -> set[tuple[str, str]]:
+    """Each HTTP parameter with a census name, keyed by the route or apply group reading it."""
+
+    helpers = {
+        name: value
+        for name, value in vars(api).items()
+        if inspect.isfunction(value) and value.__module__ == api.__name__
+    }
+    found: set[tuple[str, str]] = set()
+    for method, routes in (("GET", api._READS), ("POST", api._WRITES)):
+        for path, handler in routes.items():
+            read = _names_read(handler, helpers, set()) & CENSUSED
+            found.update((name, f"{method} {path}") for name in read)
+    for group, fields in api.APPLY_GROUPS:
+        found.update(
+            (name, f"POST /api/planning/work-item/apply {group}") for name in fields & CENSUSED
+        )
+    for group, fields in api.CREATE_GROUPS:
+        found.update((name, f"POST /api/planning/work-items {group}") for name in fields & CENSUSED)
+    return found
 
 
 class RetiredWordTests(unittest.TestCase):
@@ -224,19 +306,18 @@ class RetiredWordTests(unittest.TestCase):
             {field: set(words) for field, words in model.RETIRED_WORDS.items()},
         )
 
-    def test_every_published_argument_that_takes_such_a_word_is_driven(self) -> None:
+    def test_every_published_argument_named_for_a_word_is_driven_or_listed(self) -> None:
         published = {
-            (field, f"mcp {tool['name']}{path}")
-            for tool in tools.TOOLS
-            for field, path in _fields(tool["inputSchema"]["properties"], "")
-        }
+            (name, f"mcp {where}")
+            for tool in mcp_surface.catalogue()
+            for name, where in _mcp_census(tool["inputSchema"], tool["name"])
+        } | _http_census()
         driven = {
-            (field, where.split(",")[0])
-            for field, inputs in INPUTS.items()
-            for where in inputs
-            if where.startswith("mcp ")
+            (field, where.split(",")[0]) for field, inputs in INPUTS.items() for where in inputs
         }
-        self.assertEqual(published, driven)
+        listed = driven | {("kind", where) for where in NOT_WORK_MODEL_KINDS}
+        self.assertEqual(set(), published - listed, "published but neither driven nor listed")
+        self.assertEqual(set(), listed - published, "driven or listed but not published")
 
     def test_the_replacements_are_taken(self) -> None:
         """The words a refusal offers are ones the same input reads."""
