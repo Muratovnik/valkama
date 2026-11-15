@@ -458,9 +458,17 @@ export function dayTicks(
 
 type Format = (value: number) => string
 
+/** A part's share of its whole in words (`formatShare`), or nothing where none can be said. */
+export function shareWords(
+  value: number,
+  whole: number,
+  share: ((ratio: number) => string) | undefined,
+): string {
+  return share && whole > 0 && Number.isFinite(value) ? share(Math.max(0, value) / whole) : ''
+}
+
 /** A period named in full, as its accessible name and its hint name it. */
-export const periodName = (stacked: StackedColumn) =>
-  stacked.column.fullLabel ?? stacked.column.label
+const periodName = (stacked: StackedColumn) => stacked.column.fullLabel ?? stacked.column.label
 
 /** What a period holds, in words: its sum, each series in it, and what is said of it. */
 export function columnSummary(stacked: StackedColumn, words: PeriodWords, format: Format): string {
@@ -493,18 +501,31 @@ function sumWords(stacked: StackedColumn, words: PeriodWords, format: Format) {
   return `${words.total} ${format(stacked.total)}${running}`
 }
 
-/** Each segment as its series and its figure: «opus 2 h». */
-export const seriesParts = (segments: readonly StackSegment[], format: Format) =>
-  segments.map((segment) => `${segment.series.label} ${format(segment.value)}`)
+/** A segment as its series and its figure, «opus 2 h», and after a comma what `more` says. */
+function seriesPart(segment: StackSegment, format: Format, more = '') {
+  const figure = `${segment.series.label} ${format(segment.value)}`
+  return more ? `${figure}, ${more}` : figure
+}
 
-/** One segment in words, with the sum of the period it stands in. */
+/** Each segment as its series and its figure, «opus 2 h», with what `more` says of each. */
+export const seriesParts = (
+  segments: readonly StackSegment[],
+  format: Format,
+  more?: (segment: StackSegment) => string,
+) => segments.map((segment) => seriesPart(segment, format, more?.(segment)))
+
+/**
+ * One segment in words: its figure, its share of the period where the chart says how a share
+ * reads, and the sum of the period it stands in.
+ */
 export function segmentSummary(
   stacked: StackedColumn,
   segment: StackSegment,
-  words: PeriodWords,
-  format: Format,
+  chart: Pick<PeriodChartProps, 'formatShare' | 'formatValue' | 'words'>,
 ): string {
-  const head = `${periodName(stacked)}: ${segment.series.label} ${format(segment.value)}, ${sumWords(stacked, words, format)}`
+  const { formatShare, formatValue: format, words } = chart
+  const share = shareWords(segment.value, stacked.total, formatShare)
+  const head = `${periodName(stacked)}: ${seriesPart(segment, format, share)}, ${sumWords(stacked, words, format)}`
   return [head, ...columnNotes(stacked, words, { withSum: true })].join('. ')
 }
 

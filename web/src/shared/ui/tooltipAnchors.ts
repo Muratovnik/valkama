@@ -20,7 +20,9 @@
  *   its register, each with its reason, and refuses a hint that states no kind.
  *
  * The argument is the side it stands on (`top` unless said: `right`, `bottom`, `left`), and
- * the hint moves to the other side where the window has no room. `clipped` shows it only
+ * the hint moves to the other side where the window has no room, and above the element where
+ * neither side has. A side may end in `-start` (`right-start`): the hint then stands level with
+ * the element's start, its top on a side, rather than its middle. `clipped` shows it only
  * while the element or something in it has more text than its box shows: an ellipsis, a
  * clamp, or a label hidden for want of room. An empty or absent text shows nothing.
  *
@@ -34,6 +36,12 @@
  * before the detail, since a cut word is not on the screen; while they are not, the hint is
  * the detail alone. With no detail to add it is the `clipped` hint of its words.
  *
+ * An element marked `data-tooltip-area` speaks with the one hint it holds: the pointer anywhere
+ * in it, and focus a key brings to anything in it, shows that hint, placed against the element
+ * that carries it, and moving between its parts leaves the hint as it is. A chart's period is
+ * one: the period carries the hint, and its segments, which stand beside it rather than in it
+ * so that no control holds another, carry none.
+ *
  * For assistive technology it does what `title` did. With nothing else naming the element
  * the hint is its name, as `aria-label`; otherwise it is its description, through
  * `aria-describedby` and a hidden copy of the words the host keeps, unless it says nothing
@@ -43,6 +51,12 @@ import { shallowReactive } from 'vue'
 import type { Directive, DirectiveBinding } from 'vue'
 
 export type TooltipSide = 'top' | 'right' | 'bottom' | 'left'
+
+/** Where along its side a hint stands: at the element's middle, or level with its start. */
+export type TooltipAlign = 'center' | 'start'
+
+/** The directive's argument: a side, and `-start` to stand level with the element's start. */
+type TooltipPlace = TooltipSide | `${TooltipSide}-start`
 
 /** What a hint is to its element, which decides when it shows (see above). */
 export type TooltipKind = 'name' | 'clipped' | 'detail'
@@ -59,6 +73,7 @@ export type TooltipValue =
   | undefined
 
 interface Tooltip {
+  align: TooltipAlign
   clipped: boolean
   /** The id of the hidden copy that describes the element, while it does. */
   describes: string | null
@@ -73,7 +88,7 @@ interface Tooltip {
   words: string
 }
 
-const SIDES = new Set<string>(['top', 'right', 'bottom', 'left'])
+const SIDES: readonly TooltipSide[] = ['top', 'right', 'bottom', 'left']
 const KINDS: readonly TooltipKind[] = ['name', 'clipped', 'detail']
 /** What the elements show, read by the host as it shows and reshown when it changes. */
 const tooltips = shallowReactive(new WeakMap<Element, Tooltip>())
@@ -147,7 +162,7 @@ function forget(element: HTMLElement) {
 
 function file(
   element: HTMLElement,
-  binding: DirectiveBinding<TooltipValue, TooltipKind, TooltipSide>,
+  binding: DirectiveBinding<TooltipValue, TooltipKind, TooltipPlace>,
 ) {
   const { value } = binding
   const parts: Exclude<TooltipValue, string | null | undefined> =
@@ -168,7 +183,9 @@ function file(
   const said = note ? `${main}\n${note}` : main
   const before = tooltips.get(element)
   const clipped = kind === 'clipped' || parts.clipped === true || !detail
-  const side: TooltipSide = binding.arg && SIDES.has(binding.arg) ? binding.arg : 'top'
+  const [asked = '', along] = (binding.arg ?? '').split('-')
+  const side = SIDES.find((each) => each === asked) ?? 'top'
+  const align: TooltipAlign = along === 'start' ? 'start' : 'center'
   const names = before?.names === true || !nameOf(element, before)
   let describes: string | null = null
   if (names) element.setAttribute('aria-label', said)
@@ -192,19 +209,39 @@ function file(
   element.dataset.tooltipKind = kind
   // The popup library closes a hint whose pointer, on the hint, stands over another one.
   element.dataset.graceAreaTrigger = ''
-  tooltips.set(element, { clipped, describes, kind, names, note, side, text: main, words })
+  tooltips.set(element, { align, clipped, describes, kind, names, note, side, text: main, words })
 }
 
-export const vTooltip: Directive<HTMLElement, TooltipValue, TooltipKind, TooltipSide> = {
+export const vTooltip: Directive<HTMLElement, TooltipValue, TooltipKind, TooltipPlace> = {
   mounted: file,
   updated: file,
   beforeUnmount: forget,
 }
 
-/** The element an event happened on or in, if it shows a hint. */
+/** The area the element stands in, which speaks with the one hint it holds, if any. */
+const areaOf = (element: Element) => element.closest<HTMLElement>('[data-tooltip-area]')
+
+/** The element an event happened on or in, if it shows a hint: its area's, inside one. */
 export function tooltipAnchorOf(target: EventTarget | null): HTMLElement | null {
-  return target instanceof Element ? target.closest<HTMLElement>('[data-tooltip]') : null
+  if (!(target instanceof Element)) return null
+  const area = areaOf(target)
+  return area
+    ? area.querySelector<HTMLElement>('[data-tooltip]')
+    : target.closest<HTMLElement>('[data-tooltip]')
 }
+
+/**
+ * The element whose hint focus on `target` shows: its own, or its area's. A control inside a
+ * hinted element outside any area shows none: it is not that element.
+ */
+export function focusAnchorOf(target: EventTarget | null): HTMLElement | null {
+  const anchor = tooltipAnchorOf(target)
+  if (!anchor || !(target instanceof Element)) return null
+  return anchor === target || areaOf(target)?.contains(anchor) ? anchor : null
+}
+
+/** The element whose hover holds `anchor`'s hint up: its area, or itself. */
+export const tooltipReachOf = (anchor: HTMLElement) => areaOf(anchor) ?? anchor
 
 /** What the element's hint says and how it shows, read reactively. */
 export const tooltipOf = (element: Element) => tooltips.get(element)

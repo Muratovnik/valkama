@@ -15,10 +15,14 @@
  * as a table.
  *
  * Series are told apart by the legend's words and by the hue `seriesSlots()` pinned to each
- * name, never by the hue alone. No line stands over the plot: every mark — a period, a segment,
- * a legend entry — says what it holds in its own hint at the mark (`markHints.ts`), under the
- * pointer or the keyboard, and the hint lies over the page, so pointing moves nothing. The time
- * axis keeps its names apart, measured in the axis's own font (`dayTicks`).
+ * name, never by the hue alone. No line stands over the plot: a period and a legend entry say
+ * what they hold in a hint (`markHints.ts`), under the pointer or the keyboard, and the hint lies
+ * over the page, so pointing moves nothing. A period is one place for the pointer: its whole
+ * height and its half of the gap to each neighbour, its segments and the ground between them
+ * (`data-tooltip-area`), so crossing it never swaps one hint for another. Its hint says each
+ * series' share of it too, stands beside its column at the plot's top, to the right where there
+ * is room, and stays put while focus climbs into its segments; a segment has none of its own.
+ * The time axis keeps its names apart, measured in the axis's own font (`dayTicks`).
  *
  * Presentational: data and words come in, a press goes out as what its mark is. A period that
  * names its `action` is a button sent out as `period` with its key; a segment or legend entry of
@@ -70,7 +74,7 @@ import {
 import ChartLegend from '@/shared/ui/ChartLegend.vue'
 import ChartTicks from '@/shared/ui/ChartTicks.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import { periodHint, segmentHint, seriesHint } from '@/shared/ui/markHints.ts'
+import { periodHint, seriesHint } from '@/shared/ui/markHints.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { FRAME_KEYS } from '@/shared/ui/useAxisFrame.ts'
 import { cellId, useChartCursor } from '@/shared/ui/useChartCursor.ts'
@@ -225,7 +229,7 @@ function segmentStyle(one: StackedColumn, at: number) {
 function segmentAttrs(one: StackedColumn, index: number, at: number) {
   const segment = one.segments[at]
   if (!segment || !markActs(segment.series)) return { 'aria-hidden': 'true' }
-  const name = segmentSummary(one, segment, props.words, props.formatValue)
+  const name = segmentSummary(one, segment, props)
   return {
     'href': segment.series.href,
     'type': markType(segment.series),
@@ -328,6 +332,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                 :key="one.column.key"
                 class="period-slot"
                 :data-key="one.column.key"
+                data-tooltip-area
               >
                 <span
                   v-if="one.column.pending"
@@ -336,7 +341,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                 />
                 <component
                   :is="periodTag(one)"
-                  v-tooltip.detail="periodHint(one, words, formatValue)"
+                  v-tooltip:right-start.detail="periodHint(one, words, formatValue, formatShare)"
                   class="period-column"
                   v-bind="columnAttrs(one, index)"
                   @click="pressPeriod(one)"
@@ -353,7 +358,6 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                     :is="markTag(segment.series, 'span')"
                     v-for="(segment, at) in one.segments"
                     :key="segment.series.key"
-                    v-tooltip.detail="segmentHint(one, segment, props)"
                     class="period-segment series-fill"
                     :data-slot="segment.series.slot"
                     :data-series="segment.series.key"
@@ -439,23 +443,6 @@ function focus(event: FocusEvent, index: number, at: number | null) {
   /* The period the keyboard stands on keeps its whole focus ring over the scale's ground. */
   &:focus-within {
     z-index: 3;
-  }
-}
-
-/* The whole height of its period is what a pointer points at and presses, never only the painted
-   part: above its stack and in the gaps between its segments. A period that acts is a line of the
-   chart, not a control standing in it. */
-.period-column {
-  flex: 1;
-  min-width: 0;
-  min-block-size: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  border-radius: var(--radius-status);
-
-  &[type='button'] {
-    cursor: pointer;
   }
 }
 

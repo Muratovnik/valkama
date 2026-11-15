@@ -923,8 +923,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   never for text cut short. It shows after a short rest of the pointer and at once on
   focus a key brought, never for a finger, and goes with Escape, a press, the pointer
   leaving or a scroll. It stands above its element unless the place asks for a side —
-  the rail's hints stand to its right, clear of the rows — and flips where the window
-  has no room. Every hint states its kind, and the kind says when it shows: `name` is
+  the rail's hints stand to its right, clear of the rows, and a chart's period's to the
+  right of its column, level with the plot's top — and flips where the window has no
+  room; where neither side has room for it, it stands above. Every hint states its kind, and the kind says when it shows: `name` is
   the words of an element that shows only a glyph, shown whenever it is pointed at;
   `clipped` is the whole of words its element shows cut, shown only while they are cut;
   `detail` says what the element does not show, and stands in `check:ui-system`'s
@@ -979,11 +980,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   only shows takes no focus, no pointer's hand and no press.
   Every mark of a chart — a period, a segment of one, a small chart's name, a legend entry, a
   ranked row — keeps one contract. Pointing at it, or focusing it from the keyboard, shows its
-  hint at the mark through the one hint host: the mark's series, its value, its share and the
+  hint at the mark through the one hint host, a segment's being its period's: the mark's series, its value, its share and the
   period before, leaving out what the mark already prints, as every hint does. A period, which
   the keyboard walks, says its sum against the period before, what is said of it and its series
-  largest first; a segment says its series, its value and its share of the period. The hint
-  lies over the page, so pointing and leaving move nothing. Pressing a mark does what its entity
+  largest first, each with its share of the period. A segment has no hint of its own: the period
+  is one place for the pointer, its whole height and its half of the gap to each neighbour, its
+  segments and the ground between them included, and focus on a segment shows the period's hint
+  too. Crossing a period keeps its one hint, its words and its place; the next period's stands
+  beside its own column at the same height, so moving along the plot moves the hint sideways
+  only, and no hint covers the period it speaks for. Segments still lift under the pointer and
+  act when pressed. The hint lies over the page, so pointing and leaving move nothing. Pressing a mark does what its entity
   does, the same as its row of the table: a task opens its card, any other value narrows the
   view to itself and a period narrows it to that period. The folded tail, unknown work and a
   period that only shows lead nowhere: their marks show a hint and do nothing when pressed. A

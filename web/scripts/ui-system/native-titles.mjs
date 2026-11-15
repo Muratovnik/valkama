@@ -251,12 +251,8 @@ export const DETAIL_TOOLTIPS = new Map([
     'the entry names the mark of the period compared with; that period’s sum is on no mark',
   ],
   [
-    'shared/ui/PeriodColumns.vue <component> v-tooltip.detail="periodHint(one, words, formatValue)"',
-    'a period prints nothing of itself: its sum against the period before, what changed and its series are its hint',
-  ],
-  [
-    'shared/ui/PeriodColumns.vue <component> v-tooltip.detail="segmentHint(one, segment, props)"',
-    'a segment is a block of hue: its series, its value and its share of the period are its hint',
+    'shared/ui/PeriodColumns.vue <component> v-tooltip:right-start.detail="periodHint(one, words, formatValue, formatShare)"',
+    'a period prints nothing of itself, and its segments are blocks of hue that speak through it: its sum against the period before, what changed and its series with their shares are its hint',
   ],
   [
     'shared/ui/RankedBars.vue <component> v-tooltip.detail="namedHint(row, whole, formatShare)"',

@@ -14,15 +14,10 @@ import {
   markTag,
   nextCursor,
   segmentSummary,
+  shareWords,
   stackColumns,
 } from '@/shared/ui/chartGeometry.ts'
-import {
-  namedHint,
-  periodHint,
-  segmentHint,
-  seriesHint,
-  shareWords,
-} from '@/shared/ui/markHints.ts'
+import { namedHint, periodHint, seriesHint } from '@/shared/ui/markHints.ts'
 
 import { column, series, words } from './fixtures/periodChart.ts'
 
@@ -53,7 +48,7 @@ describe('the hint of a mark', () => {
     const [segment] = one.segments
     assert.ok(segment)
     assert.equal(
-      segmentSummary(one, segment, said, String),
+      segmentSummary(one, segment, { words: said, formatValue: String }),
       'd1: Account A 1, total 7 so far. Switched to B',
     )
     // The table says the sum in a cell of its own, so its note still says the period is running.
@@ -67,18 +62,23 @@ describe('the hint of a mark', () => {
     assert.equal(periodHint(one, words, String), 'd1: total 0')
   })
 
-  test('of a segment: its series, its value and its share of its period, then the period', () => {
-    const { columns } = stackColumns([column('d1', { a: 1, b: 3 })], series)
+  // A segment has no hint of its own: its period's says what the segment's did, its share too.
+  test('of a period, where its chart says how a share reads: each series with its share of it', () => {
+    const { columns } = stackColumns([column('d1', { a: 1, b: 3 }, true)], series)
     const [one] = columns
-    assert.ok(one?.segments[1])
+    assert.ok(one)
     assert.equal(
-      segmentHint(one, one.segments[1], { words, formatValue: String, formatShare: percent }),
-      'Account B 3, 75% of the total\nd1',
+      periodHint(one, words, String, percent),
+      'd1: total 4 so far\nAccount B 3, 75% of the total\nAccount A 1, 25% of the total',
     )
     // With no words for a share, none is said.
+    assert.equal(periodHint(one, words, String), 'd1: total 4 so far\nAccount B 3\nAccount A 1')
+    // A segment's name says its share as well, between its figure and its period's sum.
+    const [first] = one.segments
+    assert.ok(first)
     assert.equal(
-      segmentHint(one, one.segments[1], { words, formatValue: String }),
-      'Account B 3\nd1',
+      segmentSummary(one, first, { words, formatValue: String, formatShare: percent }),
+      'd1: Account A 1, 25% of the total, total 4 so far',
     )
   })
 

@@ -14,7 +14,13 @@
  *   finger shows none, and nor does a pointer with a button down: it is dragging.
  * - Focus shows a hint when a key moved it there, as it shows a ring; a press does not. It is
  *   the focused element's own hint or none: a control inside a hinted element is not that
- *   element, and one with a hint of another kind, a why tip's, would raise two at once.
+ *   element, and one with a hint of another kind, a why tip's, would raise two at once. Inside
+ *   an area (`data-tooltip-area`) it is the area's one hint, which stays where it stands while
+ *   focus moves among the area's parts, as it does while the pointer does.
+ * - A hint asked for on a side stands there where its lines fit beside its element, else on the
+ *   other side, else on the roomier one drawn narrower, down to `NARROWEST_BESIDE`, and above
+ *   the element where neither side has that much. Left to the library, a side with no room
+ *   squeezed the hint into what room it had, a word a line.
  * - A hint of the `clipped` kind shows only while its text is cut, measured as it would show;
  *   a name and a detail always show. A detail on an element whose own words are cut says
  *   them whole first, on a line of their own, measured the same way; uncut, it is the detail.
@@ -38,14 +44,18 @@ import {
   TooltipTrigger,
 } from 'reka-ui'
 
+import { drawnWidth } from '@/shared/lib/textWidth.ts'
 import { overlayTop } from '@/shared/ui/overlayStack.ts'
 import { previewAnchorOf } from '@/shared/ui/referencePreviewAnchors.ts'
+import type { TooltipAlign, TooltipSide } from '@/shared/ui/tooltipAnchors.ts'
 import {
+  focusAnchorOf,
   onTooltipAnchorGone,
   textIsClipped,
   tooltipAnchorOf,
   tooltipDescriptions,
   tooltipOf,
+  tooltipReachOf,
 } from '@/shared/ui/tooltipAnchors.ts'
 
 let root: ReturnType<typeof injectTooltipRootContext> | null = null
@@ -75,6 +85,62 @@ const whole = ref(false)
 const apart = ' '
 /** What the hint is placed against; the stub trigger stands nowhere. */
 const reference = computed(() => shown.value ?? undefined)
+
+/**
+ * The widest a hint is drawn, as `--tooltip-widest` says in `.tooltip-hint`, and the narrowest it
+ * is drawn beside its element, in rem.
+ */
+const WIDEST = 20
+const NARROWEST_BESIDE = 12
+/** The room between a hint and its element, and between a hint and the window's edge, in px. */
+const OFFSET = 6
+const EDGE = 8
+
+interface Place {
+  align: TooltipAlign
+  side: TooltipSide
+  /** How wide the hint is drawn at most where it stands, in px, where narrower than `WIDEST`. */
+  widest?: number
+}
+
+/** Where the shown hint stands, decided as it opens. */
+const place = ref<Place>({ align: 'center', side: 'top' })
+
+/**
+ * How wide the hint's lines are drawn, its padding and its border (`.tooltip-hint`) included:
+ * its element's own words first while they are cut, its text, its note.
+ */
+function hintWidth(lines: readonly string[]): number {
+  const root = getComputedStyle(document.documentElement)
+  const font = root.getPropertyValue('--font-note').trim()
+  const inset = 2 * ((Number.parseFloat(root.getPropertyValue('--space-2')) || 0) + 1)
+  return Math.max(0, ...lines.map((line) => drawnWidth(line, font))) + inset
+}
+
+/** Where the hint of `element` stands: on the side it asks for, or where it has room. */
+function placeOf(element: HTMLElement, lines: readonly string[]): Place {
+  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+  const { align = 'center', side = 'top' } = tooltipOf(element) ?? {}
+  if (side !== 'left' && side !== 'right') return { align, side }
+  const box = element.getBoundingClientRect()
+  const room = {
+    left: box.left - OFFSET - EDGE,
+    right: document.documentElement.clientWidth - box.right - OFFSET - EDGE,
+  }
+  const other = side === 'left' ? 'right' : 'left'
+  const need = Math.min(WIDEST * rem, hintWidth(lines))
+  if (room[side] >= need) return { align, side }
+  if (room[other] >= need) return { align, side: other }
+  const roomier = room[other] > room[side] ? other : side
+  return room[roomier] >= NARROWEST_BESIDE * rem
+    ? { align, side: roomier, widest: room[roomier] }
+    : { align: 'center', side: 'top' }
+}
+
+/** The hint's widest where its place draws it narrower than `WIDEST`. */
+const widestStyle = computed(() =>
+  place.value.widest ? { '--tooltip-widest': `${place.value.widest}px` } : undefined,
+)
 
 /** The element the root is pointed at. */
 let anchor: HTMLElement | null = null
@@ -110,8 +176,12 @@ function shows(element: HTMLElement) {
  */
 function speakerOf(element: HTMLElement | null): HTMLElement | null {
   let speaker = element
-  while (speaker && tooltipOf(speaker)?.clipped && !textIsClipped(speaker))
-    speaker = tooltipAnchorOf(speaker.parentElement)
+  while (speaker && tooltipOf(speaker)?.clipped && !textIsClipped(speaker)) {
+    const holder = tooltipAnchorOf(speaker.parentElement)
+    // Inside an area its one hint holds every part, its own element too.
+    if (holder === speaker) break
+    speaker = holder
+  }
   return speaker ?? element
 }
 
@@ -134,10 +204,16 @@ function request(next: boolean) {
   }
   const element = heldByFocus ? anchor : speakerOf(anchor)
   if (!element?.isConnected || !shows(element)) return
-  const reached = heldByFocus ? element === document.activeElement : element.matches(':hover')
+  const reached = heldByFocus
+    ? focusAnchorOf(document.activeElement) === element
+    : tooltipReachOf(element).matches(':hover')
   if (!reached) return
+  const tooltip = tooltipOf(element)
   shown.value = element
-  whole.value = Boolean(tooltipOf(element)?.words) && textIsClipped(element)
+  whole.value = Boolean(tooltip?.words) && textIsClipped(element)
+  const words = whole.value ? [tooltip?.words ?? ''] : []
+  const lines = [...words, ...(tooltip?.text ?? '').split('\n'), tooltip?.note ?? '']
+  place.value = placeOf(element, lines)
   open.value = true
 }
 
@@ -205,22 +281,18 @@ useEventListener(
   },
   { capture: true },
 )
-/** The element focus is on, when it has a hint of its own. */
-const focusedAnchor = (target: EventTarget | null) => {
-  const element = tooltipAnchorOf(target)
-  return element === target ? element : null
-}
-
 useEventListener(document, 'focusin', (event: FocusEvent) => {
-  const element = focusedAnchor(event.target)
+  const element = focusAnchorOf(event.target)
   if (!element || !keyed) return
   pointAt(element)
   heldByFocus = true
   root?.onOpen()
 })
 useEventListener(document, 'focusout', (event: FocusEvent) => {
-  const element = focusedAnchor(event.target)
+  const element = focusAnchorOf(event.target)
   if (!element || element !== anchor || !heldByFocus) return
+  // Focus moving among the parts of the element's area keeps its hint where it stands.
+  if (focusAnchorOf(event.relatedTarget) === element) return
   heldByFocus = false
   close()
 })
@@ -303,10 +375,11 @@ onBeforeUnmount(stopHearing)
         <TooltipContent
           v-if="hint"
           class="tooltip-hint"
-          align="center"
-          :side="hint.side"
-          :side-offset="6"
-          :collision-padding="8"
+          :align="place.align"
+          :side="place.side"
+          :side-offset="OFFSET"
+          :collision-padding="EDGE"
+          :style="widestStyle"
           hide-when-detached
         >
           <template v-if="whole && hint.words">
@@ -346,8 +419,11 @@ onBeforeUnmount(stopHearing)
 }
 
 .tooltip-hint {
+  /* The widest a hint is drawn (`WIDEST`); beside an element with less room, the host's less. */
+  --tooltip-widest: 20rem;
+
   z-index: 120;
-  max-inline-size: min(20rem, var(--reka-tooltip-content-available-width));
+  max-inline-size: min(var(--tooltip-widest), var(--reka-tooltip-content-available-width));
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-tooltip-border);
   color: var(--color-tooltip-text);
