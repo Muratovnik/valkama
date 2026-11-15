@@ -19,7 +19,7 @@ import contextvars
 import dataclasses
 import json
 import sqlite3
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 
 from . import agents as planning_agents
 from . import (
@@ -208,9 +208,14 @@ def list_work_items(
     )
     rows = conn.execute(query, parameters).fetchall()
     closed = read_model.closings(conn, rows)
-    # What every container derives, read for the spaces the page touches in one pass.
-    tree = item_tree.of_spaces(conn, {str(row["planning_space_id"]) for row in rows})
+    tree = _page_tree(conn, rows)
     return [read_model.present(conn, row, closed=closed, tree=tree) for row in rows]
+
+
+def _page_tree(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> item_tree.Tree:
+    """What every container of a page derives, read for the spaces it touches in one pass."""
+
+    return item_tree.of_spaces(conn, {str(row["planning_space_id"]) for row in rows})
 
 
 def list_work_items_page(
@@ -343,14 +348,17 @@ def search_work_items(
             offset=model.count_field(offset, "offset"),
         )
         if rows is not None:
-            return [_word_hit(conn, row, found) for row in rows]
+            tree = _page_tree(conn, rows)
+            return [_word_hit(conn, row, found, tree) for row in rows]
     return _phrase_search(conn, text, space_id=space_id, limit=limit, offset=offset)
 
 
-def _word_hit(conn: sqlite3.Connection, row: sqlite3.Row, found: list[str]) -> dict:
+def _word_hit(
+    conn: sqlite3.Connection, row: sqlite3.Row, found: list[str], tree: item_tree.Tree
+) -> dict:
     """One item a word search found, with the lines that say why (`words.hits`)."""
 
-    return {**read_model.present(conn, row), **words.hits(conn, row, found)}
+    return {**read_model.present(conn, row, tree=tree), **words.hits(conn, row, found)}
 
 
 def _phrase_search(
@@ -406,8 +414,9 @@ def _phrase_search(
         query, (*parameters, max(1, int(limit)), model.count_field(offset, "offset"))
     ).fetchall()
     found = []
+    tree = _page_tree(conn, rows)
     for row in rows:
-        item = read_model.present(conn, row)
+        item = read_model.present(conn, row, tree=tree)
         comment_hit = row["comment_hit"] or decisions.get(str(row["work_item_id"]))
         if comment_hit:
             item["comment_hit"] = str(comment_hit)[:240]

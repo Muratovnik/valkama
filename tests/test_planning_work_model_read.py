@@ -22,7 +22,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import store
-from server.planning import chain, model, service, views, words
+from server.planning import chain, item_tree, model, service, views, words
 from tests.planning_tree import Tree
 
 
@@ -47,6 +47,9 @@ class ReadCase(unittest.TestCase):
 
     def record(self, name: str) -> dict:
         return service.get_work_item(self.conn, self.tree.refs[name])
+
+    def category(self, name: str) -> str:
+        return str(self.record(name)["state"]["category"])
 
     def derived(self, name: str) -> str | None:
         """What an item derives, read alone and in the space's list, which must agree."""
@@ -131,8 +134,14 @@ class ContainerStateRowTests(ReadCase):
     def test_row_11_a_task_closed_unclaimed_was_started_by_its_close(self) -> None:
         self.goal()
         self.stage()
-        # Entering completed records the start: the close is placed with it.
-        self.tree.add("a", state="done", parent="S", started=True)
+        self.tree.add("a", state="ready", parent="S")
+        self.assertIsNone(self.record("a")["started_at"])
+        self.assert_derived(S="not_started", G="not_started")
+        # The close is the write here: entering completed records the start.
+        reference = self.tree.refs["a"]
+        service.set_summary(self.conn, reference, {"done": "Closed", "next": "Nothing"})
+        service.transition_work_item(self.conn, reference, "done")
+        self.assertEqual(("", "completed"), (self.record("a")["claim_ref"], self.category("a")))
         self.assertIsNotNone(self.record("a")["started_at"])
         self.assert_derived(S="awaiting_confirmation", G="in_progress")
 
@@ -217,15 +226,19 @@ class ContainerStateRowTests(ReadCase):
         self.assert_derived(S="awaiting_confirmation", G="in_progress")
 
     def test_row_23_a_task_taken_by_number_accepts_no_container_above_it(self) -> None:
-        # The claim's write half, the assignment it records, is the write rules'; the
-        # task stands where that claim puts it.
         self.tree.add("G", kind="goal")
         self.tree.add("S", kind="stage", parent="G")
-        self.tree.add("a", state="dev", parent="S", started=True, basis="assignment")
+        self.tree.add("a", parent="S")
+        self.assertIsNone(self.record("a")["acceptance"])
+        # The claim is the write here: it takes the task by its number, out of triage.
+        service.claim_work_item(self.conn, self.tree.refs["a"], author="agent")
+        record = self.record("a")
         self.assertEqual(
-            ("active", {"basis": "assignment", "at": self.record("a")["acceptance"]["at"]}),
-            (self.record("a")["state"]["category"], self.record("a")["acceptance"]),
+            ("active", "assignment"),
+            (record["state"]["category"], record["acceptance"]["basis"]),
         )
+        self.assertIsNotNone(record["acceptance"]["at"])
+        self.assertIsNotNone(record["started_at"])
         self.assert_derived(G=None, S=None)
         for name in ("G", "S"):
             with self.subTest(item=name):
@@ -283,8 +296,9 @@ class MarkRowTests(ReadCase):
             with self.subTest(state=key):
                 self.tree.move("a", key)
                 record = self.record("a")
-                self.assertEqual((category, started), (record["state"]["category"], started))
-                self.assertEqual(started, record["started_at"])
+                self.assertEqual(
+                    (category, started), (record["state"]["category"], record["started_at"])
+                )
 
     def test_a_goal_starts_when_the_first_thing_under_it_did(self) -> None:
         self.goal()
@@ -413,6 +427,36 @@ class OnePassTests(ReadCase):
         per_item = (with_tasks - few) / (tasks_items - few_items)
         # A container costs a reader no more than a task does: its tree is read once.
         self.assertEqual(per_item * (goals_items - tasks_items), with_goals - with_tasks)
+
+    def test_a_search_derives_every_container_of_its_page_from_one_tree(self) -> None:
+        """Both ways a search reads, by words and as a phrase, read the page's tree once."""
+
+        self.goal()
+        self.stage()
+        self.tree.add("a", state="dev", parent="S", started=True)
+        self.conn.commit()
+        loaded: list[object] = []
+        of_spaces = item_tree.of_spaces
+
+        def counted(conn: object, space_ids: object) -> item_tree.Tree:
+            loaded.append(space_ids)
+            return of_spaces(conn, space_ids)  # type: ignore[arg-type]
+
+        alone = mock.patch.object(item_tree, "of_item", side_effect=AssertionError("per item"))
+        # Every item's title holds "item"; a reference alone is read as a phrase.
+        for query, containers in (("item", ("G", "S")), (self.tree.refs["S"], ("S",))):
+            counting = mock.patch.object(item_tree, "of_spaces", counted)
+            with self.subTest(query=query), alone, counting:
+                loaded.clear()
+                found = {
+                    item["reference"]: item["container_state"]
+                    for item in service.search_work_items(self.conn, query, space=self.tree.key)
+                }
+                self.assertEqual(1, len(loaded))
+                self.assertEqual(
+                    {self.tree.refs[name]: "in_progress" for name in containers},
+                    {ref: state for ref, state in found.items() if state is not None},
+                )
 
 
 if __name__ == "__main__":
