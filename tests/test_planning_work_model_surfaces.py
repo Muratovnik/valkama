@@ -124,7 +124,7 @@ MCP_READS: dict[str, list[Args]] = {
     "list_platform_modules": [_none],
 }
 MCP_WRITES: dict[str, list[Args]] = {
-    "create_planning_space": [lambda _case: {"project_id": "other", "name": "Other", "key": "OT"}],
+    "create_planning_space": [lambda _case: {"project_id": "other", "name": "Other", "key": "OX"}],
     "create_work_item": [
         lambda case: {"space": KEY, "title": "Under the goal", "parent": case.refs["G"]},
     ],
@@ -178,7 +178,7 @@ HTTP_READS: dict[str, list[Args]] = {
     "/api/planning/held": [_q(lambda _case: {"session": SESSION})],
 }
 HTTP_WRITES: dict[str, list[Args]] = {
-    "/api/planning/spaces": [lambda _case: {"project_id": "other", "name": "Other", "key": "OT"}],
+    "/api/planning/spaces": [lambda _case: {"project_id": "other", "name": "Other", "key": "OX"}],
     "/api/planning/work-items": [
         lambda case: {"space": KEY, "title": "Under the goal", "parent": case.refs["G"]}
     ],
