@@ -21,38 +21,37 @@ def bulk_items(
     The items fill the states in workflow order, so the last of them sit in the
     terminal states — the ones a list read in state order reaches last. Returns
     the new items' ids. The space's counter moves past the new numbers, so a
-    later `create_work_item` there does not collide with them.
+    later `create_work_item` there does not collide with them. An item that stands
+    in accepted work is accepted, by assignment, as the store requires of it.
     """
 
     found = service.get_planning_space(conn, space)
     space_id = str(found["planning_space_id"])
     workflow = found["workflow"]
     # A task never stands in the service state, whether or not the listing shows it.
-    states = [
-        str(state["state_id"])
-        for state in workflow["states"]
-        if state["category"] != model.SERVICE_CATEGORY
-    ]
+    states = [state for state in workflow["states"] if state["category"] != model.SERVICE_CATEGORY]
     first = int(
         conn.execute(
             "SELECT next_number FROM planning_spaces WHERE planning_space_id = ?", (space_id,)
         ).fetchone()[0]
     )
+    placed = [states[index * len(states) // count] for index in range(count)]
     rows = [
         (
             str(uuid.uuid4()),
             space_id,
             first + index,
             str(workflow["workflow_id"]),
-            states[index * len(states) // count],
+            str(state["state_id"]),
             f"{title} {first + index}",
             index,
+            model.NAMED_BASIS if state["category"] in model.ACCEPTED_CATEGORIES else None,
         )
-        for index in range(count)
+        for index, state in enumerate(placed)
     ]
     conn.executemany(
         "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
-        "title,position) VALUES(?,?,?,?,?,?,?)",
+        "title,position,acceptance) VALUES(?,?,?,?,?,?,?,?)",
         rows,
     )
     conn.execute(
@@ -73,3 +72,15 @@ def item_ids(conn: sqlite3.Connection, space: str) -> set[str]:
             "SELECT work_item_id FROM work_items WHERE planning_space_id = ?", (space_id,)
         )
     }
+
+
+#: Where filed work stands accepted: the default workflow's keys and the categories.
+ACCEPTED_PLACES = frozenset(
+    {"ready", "dev", "review", "blocked", "done", "container", *model.ACCEPTED_CATEGORIES}
+)
+
+
+def basis_for(state: object) -> dict[str, str]:
+    """What an agent names to file work in `state`: an assignment where work stands accepted."""
+
+    return {"acceptance": model.NAMED_BASIS} if state in ACCEPTED_PLACES else {}

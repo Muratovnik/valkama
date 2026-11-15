@@ -309,7 +309,11 @@ class TellingTests(ResolveCase):
         self.tool("apply_work_item_changes", id=self.ref, summary={"done": "d", "next": "n"})
         self.http(RESOLVE, id=self.ref, comment_id=root, resolution="Done again")
         with self.assertRaisesRegex(api.PlanningHttpError, r"^transition: \[person_spoke\]"):
-            self.call("apply_work_item_changes", id=self.ref, transition={"state": "completed"})
+            self.call(
+                "apply_work_item_changes",
+                id=self.ref,
+                transition={"state": "completed", "acceptance": "assignment"},
+            )
         self.conn.commit()
 
     def test_an_agents_mark_says_what_a_person_did_and_ends_the_window(self) -> None:
@@ -598,7 +602,7 @@ class ResolutionsGroupTests(ResolveCase):
                 {"comment_id": again, "reopen": True},
             ],
             summary={"done": "Reviewed", "next": "Nothing"},
-            transition={"state": "completed"},
+            transition={"state": "completed", "acceptance": "assignment"},
         )
         self.assertEqual(
             [marked, again], [entry["comment_id"] for entry in answer["applied"]["resolutions"]]

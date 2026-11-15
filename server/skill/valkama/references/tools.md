@@ -9,19 +9,48 @@ says what they mean together.
 - **An item** is named by its reference (`MAIN-12`) or its `work_item_id`.
 - **A space** is named by its key (`MAIN`), its name or its id.
 - **A state** is named by its key, its id, or a category that exactly one state
-  of the workflow has: `backlog`, `queued`, `active`, `review`, `blocked`,
-  `completed`, `cancelled`. A key wins over a category. A name the workflow
-  lacks is refused with its states and the categories that name one, so read
-  the refusal instead of guessing another name.
-- **A kind** is `task`, `bug`, `improvement` or `epic`.
+  of the workflow has: `triage`, `deferred`, `ready`, `active`, `review`,
+  `completed`, `blocked`, `cancelled`. A key wins over a category. A name the
+  workflow lacks is refused with its states and the categories that name one, so
+  read the refusal instead of guessing another name. A word an earlier model used
+  is refused with the word that replaces it.
+- **A kind** is `task`, `bug` or `improvement` for work that is taken and worked,
+  `goal` for work that holds other work under no parent, and `stage` for such work
+  under a parent, at any depth. A goal or stage is never claimed. A task's kind
+  changes only among the first three.
+
+## What an item says about itself
+
+- `open` says whether its work is still open. An accepted open goal or stage has
+  `state: null` and a `container_state`: `not_started`, `in_progress` or
+  `awaiting_confirmation`, read from the work under it. In `triage`, `deferred`,
+  `completed` or `cancelled` it shows its `state` like any item.
+- `acceptance` is why and when the work was accepted (`basis`: `owner`,
+  `assignment`, `inherited`, `label_rule`, `migrated`; `at`), null while it is
+  not. Work under goals and stages that are all accepted and open is accepted as
+  part of them (`inherited`); a claim of any other work accepts it (`assignment`).
+  Other work an agent files without a `state` stays in `triage` unless it sends
+  `acceptance: "assignment"`, on the owner's word; an item with no basis moved to
+  `ready`, `active`, `review`, `blocked` or `completed` without it is refused with
+  `acceptance`, `force` or not. A move to `triage` takes the basis away. A goal or
+  stage is accepted by a transition to `ready`, and accepted out of `triage` or
+  `deferred` it accepts the work in `triage` under it, stopping at a deferred goal
+  or stage.
+- `started_at` is when work on it began, `waits_for` the open items blocking it,
+  and `workable` whether a task may be taken now: unheld, in `triage` or
+  `ready`, with nothing unfinished blocking it.
+- `get_work_item_chain` with `scope: "tree"` reads everything under an item at
+  any depth; `scope: "chain"`, the default, adds what was discovered from it.
 
 ## Writes and their answers
 
 Every write answers with an acknowledgement: `reference`, `url` (the address that
 opens the item), `work_item_id`, `revision`, `state` (`key`, `name`,
-`is_terminal`), `claim_ref` (the holder) and `claim_state` (`live`, `stale`,
-`unconfirmed` or null), plus what the call changed. Pass `verbose: true` for the
-full item instead; it carries `url` too.
+`is_terminal`; `null` for an accepted open goal or stage, whose `container_state`
+alone says what it derives), `open` (whether its work is over), `claim_ref` (the
+holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
+`container_state` where the item has one and what the call changed. Pass
+`verbose: true` for the full item instead; it carries `url` too.
 
 | Tool | Also answers |
 | --- | --- |
@@ -31,8 +60,8 @@ full item instead; it carries `url` too.
 | `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
-`claim_ready_work_item` answers with the item it took, or nothing when no item
-is ready. A comment in `applied` has `comment_id`, and `reply_to` and
+`claim_ready_work_item` answers with the item it took, or nothing when no task
+is workable. A comment in `applied` has `comment_id`, and `reply_to` and
 `reply_to_request`: the root a reply joined, both null for a new root, and
 `list_request_id` when it carried a `list`, as the summary does. A comment or a
 summary that named other items in `mentions` adds `mentions`: per item its
@@ -187,15 +216,21 @@ events are shown than there are.
 `rank` in the batch's `update` (in the item's own state) and `transition` (in
 the state it moves to): `first`, `last`,
 `before:MAIN-12`, `after:MAIN-12`, the anchor in that same state. Without
-`rank`, a moved item goes last. `claim_ready_work_item` takes the first ready
-item: a queued state before the backlog, then the order inside the state;
-priority only breaks a tie.
+`rank`, a moved item goes last. `claim_ready_work_item` takes the first
+workable task: a ready state before a triage one, then the order inside the
+state; priority only breaks a tie. A goal, a stage and deferred work are never
+taken.
 
 ## Guards
 
 | Moving to | Needs |
 | --- | --- |
-| an active state from backlog or queued | a holder: a claim on the item or on one of its steps |
+| an active state | a holder after the move: a claim on the item or on one of its steps; `force` does not carry this |
+| ready, active, review, blocked or completed, for an item with no basis | a basis of acceptance (`acceptance`), which `force` does not carry |
+| a deferred state | refused: putting work off is its own action |
+| active, review or blocked, for a goal or stage | refused: a goal or stage is accepted (ready), completed or cancelled |
+| a triage state, for an accepted open goal or stage | refused: an accepted goal or stage is completed or cancelled |
+| a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
 | a completed state | every step done and a summary |
 | a cancelled state | a summary; open steps stay open |
 | a blocked state | an unfinished item linked `blocks` to it, or a `reason` |
@@ -220,7 +255,11 @@ with its claims in place: until then `claim_ready_work_item` does not hand the
 item out and a server start does not release it. The history names why a claim
 was released: `session-ended`, `session-missing` or `lease-expired`, the last for
 14 quiet days. `release: true` requeues an item that was
-in its active state unless one of its steps is still claimed.
+in its active state unless one of its steps is still claimed. A task at work stands
+held: with no ready state to requeue it in, a release, the tick or release of its
+last held step and a takeover of its stale claim are refused, and its lapsed lease
+is not released at all. Any transition but to an active or blocked state ends the
+item's claims, as a close does.
 `list_work_items` with `owner` set to a holder exactly as `claim_ref` spells it
 lists that holder's items.
 

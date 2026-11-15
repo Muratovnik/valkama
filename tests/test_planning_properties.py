@@ -32,13 +32,21 @@ from hypothesis.stateful import Bundle, RuleBasedStateMachine, invariant, rule
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import store
-from server.planning import model, service
+from server.planning import model, service, transitions
 from tests.property_settings import machine_settings
 
 SPACE_NAME = "Property Space"
 SPACE_KEY = "PRO"
 # Two of them, so a claim can be contested; neither names anybody real.
 AUTHORS = st.sampled_from(("agent-one", "agent-two"))
+
+
+def unforced(refusal: Exception) -> bool:
+    """Whether a refusal names a guard that force does not carry."""
+
+    return any(f"[{guard}]" in str(refusal) for guard in transitions.UNFORCED)
+
+
 TITLES = (
     st.text(alphabet="abcdefghijklmnopqrstuvwxyz ", min_size=1, max_size=24)
     .map(str.strip)
@@ -117,13 +125,20 @@ class PlanningMachine(RuleBasedStateMachine):
         before = self.row(item)
         try:
             result = service.transition_work_item(
-                self.conn, item, target, author=author, force=force, reason=reason or ""
+                self.conn,
+                item,
+                target,
+                author=author,
+                force=force,
+                reason=reason or "",
+                acceptance="assignment",
             )
-        except model.WorkflowGuardError:
+        except model.WorkflowGuardError as refusal:
             # A refusal is a decision not to write, so nothing may have moved
-            # and the version the caller holds must still be current.
+            # and the version the caller holds must still be current. Force
+            # carries every guard but the ones the work model holds to.
             after = self.row(item)
-            assert not force
+            assert not force or unforced(refusal), refusal
             assert after["state_key"] == before["state_key"]
             assert after["revision"] == before["revision"]
             return
@@ -195,20 +210,21 @@ class PlanningMachine(RuleBasedStateMachine):
         before = self.row(item)
         try:
             service.claim_work_item(self.conn, item, author=author, release=release, force=force)
-        except model.PlanningError:
+        except model.PlanningError as refusal:
             # Losing a contested claim costs nothing, and neither does being
             # refused the release of somebody else's: the holder keeps it and
             # the loser's view of the item is still current. Only `force` gets
-            # through, so a refusal proves it was absent.
+            # through, so a refusal proves it was absent, unless the guard is
+            # where the item stands: in review or closed nothing is held.
             after = self.row(item)
-            assert not force
+            assert not force or isinstance(refusal, model.WorkflowGuardError), refusal
             assert after["claim_ref"] == before["claim_ref"]
             assert after["revision"] == before["revision"]
             return
         after = self.row(item)
         assert after["claim_ref"] == ("" if release else author)
-        # A claim starts unstarted work and a release requeues work under way,
-        # each one more guarded write; nothing else moves the state.
+        # A claim starts unstarted work and a release requeues work under way;
+        # nothing else moves the state.
         start = not release and before["state_key"] in ("triage", "deferred", "ready")
         steps_held = any(step["claimed_by"] for step in json.loads(before["checklist"]))
         requeue = release and before["state_key"] == "dev" and not steps_held
@@ -218,7 +234,8 @@ class PlanningMachine(RuleBasedStateMachine):
             assert after["state_key"] == "ready"
         else:
             assert after["state_key"] == before["state_key"]
-        assert after["revision"] == before["revision"] + 1 + int(start or requeue)
+        # A start is written with the holder; a requeue is a write of its own after the release.
+        assert after["revision"] == before["revision"] + 1 + int(requeue)
 
     @rule(item=items, texts=ITEM_TEXTS, force=st.booleans())
     def set_checklist(self, item, texts, force):
@@ -231,7 +248,7 @@ class PlanningMachine(RuleBasedStateMachine):
             assert after["checklist"] == before["checklist"]
             assert after["revision"] == before["revision"]
             return
-        assert self.row(item)["revision"] == before["revision"] + 1
+        self.written_once_or_requeued(item, before)
 
     @rule(
         item=items,
@@ -255,7 +272,15 @@ class PlanningMachine(RuleBasedStateMachine):
             assert after["checklist"] == before["checklist"]
             assert after["revision"] == before["revision"]
             return
-        assert self.row(item)["revision"] == before["revision"] + 1
+        self.written_once_or_requeued(item, before)
+
+    def written_once_or_requeued(self, item: str, before: sqlite3.Row) -> None:
+        """One write, and a second when it let the task's last holder go: back to ready."""
+
+        after = self.row(item)
+        requeued = before["state_key"] == "dev" and after["state_key"] == "ready"
+        assert after["revision"] == before["revision"] + 1 + int(requeued)
+        assert requeued or after["state_key"] == before["state_key"]
 
     @rule(item=items, done=TITLES, next_step=TITLES, author=AUTHORS)
     def summarize(self, item, done, next_step, author):
@@ -289,6 +314,18 @@ class PlanningMachine(RuleBasedStateMachine):
             ]
             assert len(set(positions)) == len(positions), f"{key}: {positions}"
             assert positions == sorted(positions), f"{key}: {positions}"
+
+    @invariant()
+    def a_holder_stands_only_at_work_or_blocked_and_work_always_has_one(self):
+        for row in self.conn.execute(
+            "SELECT w.claim_ref, w.checklist, s.category FROM work_items w"
+            " JOIN workflow_states s ON s.state_id = w.state_id"
+        ):
+            held = bool(row["claim_ref"]) or any(
+                step["claimed_by"] for step in json.loads(row["checklist"])
+            )
+            assert not held or row["category"] in model.HELD_CATEGORIES, dict(row)
+            assert held or row["category"] != "active", dict(row)
 
     @invariant()
     def a_revision_never_goes_backwards(self):

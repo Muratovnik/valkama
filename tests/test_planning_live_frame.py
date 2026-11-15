@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from unittest import mock
 
-from server.planning import executors, live_frame, live_work, service
+from server.planning import executors, live_frame, live_work, model, service
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -103,7 +103,7 @@ class RowTests(FrameCase):
                     "quiet_since": None,
                     "executor": executors.session_executors(self.conn, [session])[session],
                     "pinned": False,
-                    "state_name": "Triage",
+                    "state_name": "Dev",
                     "is_terminal": False,
                     "open": True,
                     "container_state": None,
@@ -229,29 +229,34 @@ class RowTests(FrameCase):
     def test_a_pin_outlives_the_close_and_reopening_makes_it_an_open_row_again(self) -> None:
         reference = self.item()
         self.pin(reference)
-        service.transition_work_item(self.conn, reference, "done", force=True)
+        service.transition_work_item(
+            self.conn, reference, "done", force=True, acceptance="assignment"
+        )
         closed = self.rows()[reference]
         self.assertEqual(
             ("Done", True, True), (closed["state_name"], closed["is_terminal"], closed["pinned"])
         )
-        service.transition_work_item(self.conn, reference, "dev", force=True)
+        service.transition_work_item(self.conn, reference, "ready", force=True)
         reopened = self.rows()[reference]
         self.assertEqual(
-            ("Dev", False, True),
+            ("Ready", False, True),
             (reopened["state_name"], reopened["is_terminal"], reopened["pinned"]),
         )
 
     def test_a_closed_item_without_a_pin_is_no_row(self) -> None:
         reference = self.item()
         self.pin(reference)
-        service.transition_work_item(self.conn, reference, "done", force=True)
+        service.transition_work_item(
+            self.conn, reference, "done", force=True, acceptance="assignment"
+        )
         self.pin(reference, False)
         self.assertEqual([], self.frame()["spaces"])
 
     def test_the_parent_of_a_row_is_a_row_so_parent_names_one(self) -> None:
         epic, idle_epic = self.epic(), self.epic()
         task, idle = self.child(epic), self.child(idle_epic)
-        service.transition_work_item(self.conn, epic, "done", force=True)
+        service.set_summary(self.conn, epic, {"done": "Dropped", "next": "Nothing"})
+        service.transition_work_item(self.conn, epic, "cancelled")
         self.working(task)
         rows = self.rows()
         self.assertEqual({epic, task}, set(rows), (idle, idle_epic))
@@ -259,13 +264,15 @@ class RowTests(FrameCase):
         self.assertIsNone(rows[epic]["state"])
         self.assertTrue(rows[epic]["is_terminal"], "a closed parent still heads its group")
 
-    def test_an_epic_at_work_is_one_row_heading_its_group_with_its_own_state(self) -> None:
+    def test_a_goal_heads_its_group_and_only_the_task_under_it_is_at_work(self) -> None:
         epic = self.epic()
         task = self.child(epic)
-        self.working(epic)
-        self.pin(task)
+        with self.assertRaisesRegex(model.WorkflowGuardError, model.CONTAINER_UNHELD):
+            self.claim(epic, "session-of-the-goal")
+        self.working(task)
         self.assertEqual([epic, task], self.order())
-        self.assertEqual("working", self.rows()[epic]["state"])
+        rows = self.rows()
+        self.assertEqual((None, "working"), (rows[epic]["state"], rows[task]["state"]))
 
     def test_spaces_come_by_key_and_a_space_with_no_rows_is_left_out(self) -> None:
         service.create_planning_space(self.conn, project_id="a", name="Alpha", key="AA")
@@ -297,7 +304,7 @@ class OrderTests(FrameCase):
         for reference in (first, second_item, third):
             self.pin(reference)
         before = self.order()
-        service.transition_work_item(self.conn, first, "dev", force=True)
+        service.claim_work_item(self.conn, first, author="agent")
         self.working(second_item)
         self.assertEqual(before, self.order())
 

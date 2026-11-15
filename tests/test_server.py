@@ -40,6 +40,7 @@ from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 from tests import SUITE_STORE
+from tests.planning_fixtures import basis_for
 from tests.registry_fixtures import project_entry, registry_bytes
 
 
@@ -185,7 +186,7 @@ class StdioTests(unittest.TestCase):
                         "name": "apply_work_item_changes",
                         "arguments": {
                             "id": "SPC-1",
-                            "transition": {"state": "ready"},
+                            "transition": {"state": "ready", "acceptance": "assignment"},
                             "expected_revision": 0,
                         },
                     },
@@ -664,6 +665,7 @@ class WorkItemGraphTests(unittest.TestCase):
         self._dir.cleanup()
 
     def item(self, title: str, **fields) -> str:
+        fields = {**basis_for(fields.get("state")), **fields}
         record = planning.create_work_item(self.conn, space="TST", title=title, **fields)
         self.conn.commit()
         return str(record["reference"])
@@ -687,7 +689,7 @@ class WorkItemGraphTests(unittest.TestCase):
         ready = {reference for reference, node in self.nodes().items() if node["workable"]}
         self.assertEqual({first}, ready, "only the head of the chain is workable")
 
-        planning.transition_work_item(self.conn, first, "done", force=True)
+        planning.transition_work_item(self.conn, first, "done", force=True, acceptance="assignment")
         self.conn.commit()
         self.assertEqual(0, self.nodes()[second]["depth"], "a closed blocker no longer counts")
 

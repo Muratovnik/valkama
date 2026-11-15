@@ -79,7 +79,12 @@ class VocabularyTests(unittest.TestCase):
         self.assertEqual(("created", "transitioned", "opened"), model.STATE_ENTRY_ACTIONS)
 
     def test_container_is_a_retired_word_and_no_category(self) -> None:
-        self.assertEqual({"container": RETIRED_CONTAINER}, model.RETIRED_WORDS)
+        for field in ("category", "state"):
+            with self.subTest(field=field):
+                self.assertEqual(
+                    model.RetiredWord(RETIRED_CONTAINER, lists=False),
+                    model.RETIRED_WORDS[field]["container"],
+                )
         with self.assertRaises(model.PlanningError) as refusal:
             model.state_category("container")
         self.assertEqual(RETIRED_CONTAINER, str(refusal.exception))
@@ -150,18 +155,30 @@ class DefaultWorkflowTests(FreshStoreCase):
         self.assertEqual("triage", created["state"]["key"])
 
 
-class StateFitsKindTests(FreshStoreCase):
-    """The first stage of `work_items_state_fits_kind`: which states a kind stands in."""
+#: The default workflow's states of accepted work, where an item stands with a basis.
+ACCEPTED_KEYS = ("ready", "dev", "review", "blocked", "done", "container")
+NO_BASIS = "accepted work stands only with the basis it was accepted on"
 
-    def insert(self, kind: str, key: str) -> str:
+
+class StateFitsKindTests(FreshStoreCase):
+    """`work_items_state_fits_kind`: which states a kind stands in, and with what basis.
+
+    The first stage holds each kind to its states; the second holds accepted work to
+    a basis. A row placed here in accepted work is given one unless the case is that
+    it has none.
+    """
+
+    def insert(self, kind: str, key: str, basis: object = "default") -> str:
+        if basis == "default":
+            basis = "owner" if key in ACCEPTED_KEYS else None
         identity = model.new_id()
         number = self.conn.execute(
             "SELECT COALESCE(MAX(number), 0) + 1 FROM work_items"
         ).fetchone()[0]
         self.conn.execute(
             "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
-            "kind,priority,title,description,labels,position)"
-            " SELECT ?, planning_space_id, ?, ?, ?, ?, 'medium', 'Placed', '', '[]', ?"
+            "kind,priority,title,description,labels,position,acceptance)"
+            " SELECT ?, planning_space_id, ?, ?, ?, ?, 'medium', 'Placed', '', '[]', ?, ?"
             " FROM workflows WHERE workflow_id = ?",
             (
                 identity,
@@ -170,6 +187,7 @@ class StateFitsKindTests(FreshStoreCase):
                 self.state_id(key),
                 kind,
                 number,
+                basis,
                 self.workflow_id,
             ),
         )
@@ -223,6 +241,60 @@ class StateFitsKindTests(FreshStoreCase):
         for key in ("triage", "ready", "dev", "review", "blocked", "done"):
             with self.subTest(key=key):
                 self.insert("task", key)
+
+    def test_accepted_work_is_refused_without_a_basis(self) -> None:
+        for kind, key in (
+            *(("task", key) for key in ACCEPTED_KEYS[:-1]),
+            ("container", "container"),
+        ):
+            with (
+                self.subTest(kind=kind, key=key),
+                self.assertRaisesRegex(sqlite3.IntegrityError, NO_BASIS),
+            ):
+                self.insert(kind, key, basis=None)
+        refused = self.conn.execute("SELECT COUNT(*) FROM work_items").fetchone()[0]
+        self.assertEqual(0, refused, "a refused insert leaves no row")
+
+    def test_a_basis_and_the_state_needing_it_change_in_one_statement_or_not_at_all(
+        self,
+    ) -> None:
+        task = self.insert("task", "triage")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, NO_BASIS):
+            self.conn.execute(
+                "UPDATE work_items SET state_id = ? WHERE work_item_id = ?",
+                (self.state_id("ready"), task),
+            )
+        self.conn.execute(
+            "UPDATE work_items SET state_id = ?, acceptance = 'assignment' WHERE work_item_id = ?",
+            (self.state_id("ready"), task),
+        )
+        with self.assertRaisesRegex(sqlite3.IntegrityError, NO_BASIS):
+            self.conn.execute(
+                "UPDATE work_items SET acceptance = NULL WHERE work_item_id = ?", (task,)
+            )
+        self.conn.execute(
+            "UPDATE work_items SET state_id = ?, acceptance = NULL WHERE work_item_id = ?",
+            (self.state_id("triage"), task),
+        )
+        self.assertEqual(
+            (self.state_id("triage"), None),
+            tuple(
+                self.conn.execute(
+                    "SELECT state_id, acceptance FROM work_items WHERE work_item_id = ?", (task,)
+                ).fetchone()
+            ),
+        )
+
+    def test_work_not_accepted_stands_without_a_basis(self) -> None:
+        for kind, key in (
+            ("task", "triage"),
+            ("task", "deferred"),
+            ("task", "cancelled"),
+            ("container", "triage"),
+            ("container", "cancelled"),
+        ):
+            with self.subTest(kind=kind, key=key):
+                self.insert(kind, key, basis=None)
 
 
 class ServiceStateOutOfReachTests(FreshStoreCase):

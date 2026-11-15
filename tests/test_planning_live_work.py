@@ -123,7 +123,7 @@ class LiveWorkCase(unittest.TestCase):
 
     def claim(self, reference: str, session: str, agent: str | None = None) -> None:
         with calls.bind(confirmed(session, agent), "claim_work_item"):
-            service.claim_work_item(self.conn, reference, move_state=False)
+            service.claim_work_item(self.conn, reference)
 
     def hold_step(self, reference: str, session: str | None, agent: str | None = None) -> None:
         (step, *_) = service.get_work_item(self.conn, reference)["checklist"]
@@ -353,7 +353,7 @@ def _session_without_a_row(case: LiveWorkCase, reference: str) -> None:
 
 
 def _claim_nobody_confirmed(case: LiveWorkCase, reference: str) -> None:
-    service.claim_work_item(case.conn, reference, author="someone", move_state=False)
+    service.claim_work_item(case.conn, reference, author="someone")
 
 
 def _attempt(status: str) -> _Build:

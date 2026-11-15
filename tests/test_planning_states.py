@@ -14,8 +14,9 @@ import unittest
 import uuid
 from unittest import mock
 
-from server import store
+from server import mcp_surface, store
 from server.planning import model, service
+from tests.planning_fixtures import basis_for
 
 
 class StateNameTests(unittest.TestCase):
@@ -33,6 +34,7 @@ class StateNameTests(unittest.TestCase):
         self.workflow_id = str(self.space["workflow"]["workflow_id"])
 
     def item(self, **kwargs: object) -> dict:
+        kwargs = {**basis_for(kwargs.get("state")), **kwargs}
         return service.create_work_item(
             self.conn, space=self.space["key"], title="Name a state", author="tester", **kwargs
         )
@@ -64,12 +66,20 @@ class StateNameTests(unittest.TestCase):
         created = self.item(state="ready")
         self.assertEqual("ready", created["state"]["key"])
         service.claim_work_item(self.conn, created["reference"], author="tester")
-        moved = service.transition_work_item(self.conn, created["reference"], "review")
+        moved = service.transition_work_item(
+            self.conn, created["reference"], "review", acceptance="assignment"
+        )
         self.assertEqual("review", moved["state"]["key"])
         blocked = service.transition_work_item(
-            self.conn, created["reference"], "blocked", reason="waiting on a vendor"
+            self.conn,
+            created["reference"],
+            "blocked",
+            reason="waiting on a vendor",
+            acceptance="assignment",
         )
         self.assertEqual("blocked", blocked["state"]["key"])
+        # Review let the holder go; work goes back to the active state held.
+        service.claim_work_item(self.conn, created["reference"], author="tester")
         active = service.transition_work_item(self.conn, created["reference"], "active")
         self.assertEqual("dev", active["state"]["key"])
 
@@ -84,7 +94,9 @@ class StateNameTests(unittest.TestCase):
         self.add_state("pairing", "active")
         created = self.item(state="review")
         with self.assertRaises(model.PlanningError) as refusal:
-            service.transition_work_item(self.conn, created["reference"], "active")
+            service.transition_work_item(
+                self.conn, created["reference"], "active", acceptance="assignment"
+            )
         message = str(refusal.exception)
         self.assertIn("category active names 2 states in this workflow: dev, pairing", message)
         self.assertIn("name one by its key", message)
@@ -97,7 +109,9 @@ class StateNameTests(unittest.TestCase):
         self.add_state("pairing", "active")
         created = self.item()
         with self.assertRaises(model.PlanningError) as refusal:
-            service.transition_work_item(self.conn, created["reference"], "in_progress")
+            service.transition_work_item(
+                self.conn, created["reference"], "in_progress", acceptance="assignment"
+            )
         message = str(refusal.exception)
         self.assertTrue(message.startswith("this workflow has no state named in_progress;"))
         for listed in (
@@ -125,6 +139,43 @@ class StateNameTests(unittest.TestCase):
     def test_creating_in_an_unknown_state_is_refused_the_same_way(self) -> None:
         with self.assertRaisesRegex(model.PlanningError, r"no state named doing; its states are"):
             self.item(state="doing")
+
+    def test_a_list_filter_names_a_state_as_a_write_does(self) -> None:
+        # The key, the state_id and the category one state has name the same items.
+        waiting = self.item(state="ready")
+        active = self.item(state="ready")
+        service.claim_work_item(self.conn, active["reference"], author="tester")
+        dev_id = self.conn.execute(
+            "SELECT state_id FROM workflow_states WHERE workflow_id = ? AND key = 'dev'",
+            (self.workflow_id,),
+        ).fetchone()[0]
+
+        def listed(name: str) -> list[str]:
+            rows = service.list_work_items(self.conn, space=self.space["key"], state=name)
+            return [str(row["reference"]) for row in rows]
+
+        by_key = listed("dev")
+        self.assertEqual([active["reference"]], by_key)
+        self.assertEqual(by_key, listed(str(dev_id)))
+        self.assertEqual(by_key, listed("active"))
+        self.assertNotIn(waiting["reference"], listed("active"))
+
+        served = mcp_surface.call_tool(
+            self.conn, "list_work_items", {"space": self.space["key"], "state": "active"}
+        )
+        self.assertEqual([active["reference"]], [row["reference"] for row in served["work_items"]])
+
+    def test_a_list_filter_refuses_an_unknown_name_and_a_retired_one(self) -> None:
+        self.item(state="ready")
+        with self.assertRaisesRegex(model.PlanningError, "no state named doing"):
+            service.list_work_items(self.conn, space=self.space["key"], state="doing")
+        with self.assertRaisesRegex(model.PlanningError, "backlog is now triage"):
+            service.list_work_items(self.conn, space=self.space["key"], state="backlog")
+
+    def test_a_list_filter_refuses_a_category_two_states_share(self) -> None:
+        self.add_state("pairing", "active")
+        with self.assertRaisesRegex(model.PlanningError, "category active names 2 states"):
+            service.list_work_items(self.conn, space=self.space["key"], state="active")
 
 
 if __name__ == "__main__":

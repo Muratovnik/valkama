@@ -250,7 +250,8 @@ class PlanningScaleTests(unittest.TestCase):
                     "open": "",
                     "held": "UPDATE work_items SET claim_ref = 'codex (session session-1)',"
                     " claim_call_id = :call",
-                    "closed while held": "UPDATE work_items SET state_id = :done",
+                    "closed while held": "UPDATE work_items SET state_id = :done,"
+                    " acceptance = 'assignment'",
                 }
                 for shape, change in shapes.items():
                     if change:

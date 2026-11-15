@@ -116,9 +116,15 @@ class PlanningApiTests(unittest.TestCase):
     def test_the_whole_read_model_keeps_queues_and_graph_beyond_the_list_limit(self) -> None:
         for number in range(1000):
             service.create_work_item(self.conn, space="QA", title=f"Triage {number}")
-        review = service.create_work_item(self.conn, space="QA", title="Review me", state="review")
-        blocked = service.create_work_item(self.conn, space="QA", title="Blocked", state="blocked")
-        assigned = service.create_work_item(self.conn, space="QA", title="Assigned", state="dev")
+        review = service.create_work_item(
+            self.conn, space="QA", title="Review me", state="review", acceptance="assignment"
+        )
+        blocked = service.create_work_item(
+            self.conn, space="QA", title="Blocked", state="blocked", acceptance="assignment"
+        )
+        assigned = service.create_work_item(
+            self.conn, space="QA", title="Assigned", state="ready", acceptance="assignment"
+        )
         service.claim_work_item(self.conn, assigned["reference"], author="one")
         service.link_work_items(self.conn, blocked["reference"], review["reference"], "blocks")
 
@@ -249,6 +255,7 @@ class PlanningApiTests(unittest.TestCase):
             [
                 "created",
                 "claimed",
+                "accepted",
                 "transitioned",
                 "checklist_replaced",
                 "checklist_claimed",
@@ -430,7 +437,7 @@ class PlanningApiTests(unittest.TestCase):
         moved = self.post(
             "/api/planning/work-item/apply",
             id=item["reference"],
-            transition={"state": "blocked", "reason": "y" * 503},
+            transition={"state": "blocked", "reason": "y" * 503, "acceptance": "assignment"},
         )
         self.assertEqual("blocked", moved["state"]["key"])
         (detail,) = self.conn.execute(

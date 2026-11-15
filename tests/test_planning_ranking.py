@@ -20,6 +20,7 @@ from unittest import mock
 from server import store
 from server.planning import api as planning_api
 from server.planning import calls, chain, model, ranking, service
+from tests.planning_fixtures import basis_for
 
 #: How an earlier build listed a state and put an item last in it, copied from
 #: that build rather than restated from the code under test, so the assertions
@@ -47,6 +48,7 @@ class RankingTestCase(unittest.TestCase):
         )
 
     def item(self, title: str, **kwargs: object) -> str:
+        kwargs = {**basis_for(kwargs.get("state")), **kwargs}
         created = service.create_work_item(
             self.conn, space=self.space["key"], title=title, author="tester", **kwargs
         )
@@ -55,7 +57,7 @@ class RankingTestCase(unittest.TestCase):
     def order(self, state: str = "triage") -> list[str]:
         return [
             item["reference"]
-            for item in service.list_work_items(self.conn, space=self.space["key"], state_key=state)
+            for item in service.list_work_items(self.conn, space=self.space["key"], state=state)
         ]
 
     def revisions(self) -> dict[str, int]:
@@ -134,7 +136,8 @@ class PlacementTests(RankingTestCase):
         foreign = str(
             service.create_work_item(self.conn, space=other["key"], title="Theirs")["reference"]
         )
-        moved = self.item("In development", state="dev")
+        moved = self.item("In development", state="ready")
+        service.claim_work_item(self.conn, moved, author="tester")
         cases = {
             "top": "rank must be first, last",
             "first:QA-1": "rank must be first, last",
@@ -197,7 +200,7 @@ class TransitionPlacementTests(RankingTestCase):
 
     def move(self, rank: str | None = None) -> dict:
         return service.transition_work_item(
-            self.conn, self.moving, "ready", rank=rank, author="tester"
+            self.conn, self.moving, "ready", rank=rank, author="tester", acceptance="assignment"
         )
 
     def test_a_move_without_a_placement_queues_last(self) -> None:
@@ -220,7 +223,9 @@ class TransitionPlacementTests(RankingTestCase):
 
     def test_a_refused_move_places_nothing(self) -> None:
         with self.assertRaisesRegex(model.WorkflowGuardError, "executor"):
-            service.transition_work_item(self.conn, self.moving, "dev", rank="first")
+            service.transition_work_item(
+                self.conn, self.moving, "dev", rank="first", acceptance="assignment"
+            )
         self.assertEqual([self.moving], self.order("triage"))
 
 
@@ -247,7 +252,7 @@ class OrderReaderTests(RankingTestCase):
         service.claim_work_item(self.conn, first, release=True, author="agent")
         # The release put the started item in the queued state; back beside the
         # urgent one, so the two share a state.
-        service.transition_work_item(self.conn, first, "triage")
+        service.transition_work_item(self.conn, first, "triage", acceptance="assignment")
         # Two rows an earlier build left at one position: the urgent one goes first.
         self.conn.execute("UPDATE work_items SET position = 7.0")
         self.assertEqual(urgent, self.take())
@@ -354,7 +359,7 @@ class EarlierBuildTests(RankingTestCase):
         for _ in range(60):
             service.update_work_item(self.conn, c, rank=f"after:{a}")
             service.update_work_item(self.conn, c, rank="last")
-        service.transition_work_item(self.conn, b, "ready", rank="first")
+        service.transition_work_item(self.conn, b, "ready", rank="first", acceptance="assignment")
         self.conn.commit()
         self.assertEqual(shape, self.schema(self.conn))
         self.assertEqual(

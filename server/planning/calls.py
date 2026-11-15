@@ -314,6 +314,13 @@ def from_agent() -> bool:
     return identity is not None and identity.source not in (BROWSER, VALKAMA)
 
 
+def by_person() -> bool:
+    """Whether the person is making this call: an authorized write of the interface."""
+
+    identity = current()
+    return identity is not None and identity.source == BROWSER
+
+
 #: The name a holder opens with, by the channel that proved the session. Named
 #: after the channel rather than the handshake's `clientInfo`, so one client
 #: reads the same whether or not it opened with `initialize`.

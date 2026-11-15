@@ -46,6 +46,13 @@ class BatchCase(ThreadTestCase):
     def apply(self, **groups: object) -> dict:
         return self.agent(BATCH, id=self.ref, **groups)
 
+    def goal(self, title: str) -> str:
+        """A goal: what an item stands under, a task holding no children."""
+
+        return str(
+            service.create_work_item(self.conn, space="TALK", title=title, kind="goal")["reference"]
+        )
+
     def refused(self, name: str, **arguments: object) -> dict:
         """The error body a surface would answer with, after committing what is left."""
 
@@ -111,7 +118,7 @@ class BatchCase(ThreadTestCase):
 
 class UpdateGroupTests(BatchCase):
     def test_every_field_lands_as_the_single_edit_lands_it(self) -> None:
-        parent = self.item("An epic")
+        parent = self.goal("An epic")
         self.conn.commit()
         edit = {
             "title": "Renamed",
@@ -145,7 +152,7 @@ class UpdateGroupTests(BatchCase):
         self.assertEqual((calls.CONFIRMED, SESSION), (row["identity_state"], row["session_id"]))
 
     def test_an_edit_names_only_what_was_sent_and_a_cleared_parent_is_sent(self) -> None:
-        parent = self.item("An epic")
+        parent = self.goal("An epic")
         service.update_work_item(self.conn, self.ref, parent=parent)
         self.conn.commit()
         answer = self.apply(update={"title": "Renamed", "parent": "", "kind": None})
@@ -422,7 +429,7 @@ class QuestionsGroupTests(BatchCase):
 
     def test_a_closed_item_takes_no_question_even_from_a_batch_that_reopens_it(self) -> None:
         service.set_summary(self.conn, self.ref, SUMMARY)
-        service.transition_work_item(self.conn, self.ref, "cancelled")
+        service.transition_work_item(self.conn, self.ref, "cancelled", acceptance="assignment")
         self.conn.commit()
         single = self.refused("create_work_item_request", id=self.ref, **QUESTION)
         before = self.untouched()
@@ -481,7 +488,7 @@ class AskingAndClosingTests(BatchCase):
 
 class EditingAndClosingTests(BatchCase):
     def test_a_new_parent_and_kind_land_with_the_close_that_follows_them(self) -> None:
-        parent = self.item("An epic")
+        parent = self.goal("An epic")
         self.conn.commit()
         answer = self.apply(
             claim=True,
@@ -497,12 +504,10 @@ class EditingAndClosingTests(BatchCase):
         self.assertEqual(["parent", "kind"], sorted(answer["applied"]["update"], reverse=True))
 
     def test_a_refused_parent_leaves_the_item_open(self) -> None:
-        child = self.item("A child")
-        parent = self.item("An epic")
-        service.update_work_item(self.conn, child, parent=self.ref)
+        parent = self.item("A task")
         self.conn.commit()
         before = self.untouched()
-        # The item has a child, and a hierarchy is one level deep.
+        # A task holds no children.
         error = self.refused_batch(
             claim=True,
             update={"parent": parent},
@@ -510,7 +515,7 @@ class EditingAndClosingTests(BatchCase):
             transition={"state": "done"},
         )
         self.assertEqual({"group": "update", "index": 0}, error["step"])
-        self.assertIn("one level deep", error["message"])
+        self.assertIn("a task holds no children", error["message"])
         self.assertEqual(before, self.untouched())
 
     def test_an_edit_and_a_close_land_on_a_closed_item_as_the_single_tools_do(self) -> None:
@@ -553,7 +558,8 @@ class ChecklistTicksGroupTests(BatchCase):
             (step["done"], step["done_by"], step["claimed_by"]),
         )
         self.assertEqual(self.actions(self.twin), self.actions())
-        self.assertEqual(["checklist_completed", "overridden"], self.actions()[-2:])
+        # The tick took the task's last holder, so it went back to the queue.
+        self.assertEqual(["checklist_completed", "overridden", "transitioned"], self.actions()[-3:])
         self.assertEqual(
             [{"item_id": self.step, "done": True}], answer["applied"]["checklist_ticks"]
         )
@@ -585,7 +591,7 @@ class ChecklistTicksGroupTests(BatchCase):
         self.assertEqual(["checklist_claim"], answer["overridden"])
         self.assertEqual(["checklist_claim"], self.overridden_events())
         self.assertEqual(["checklist_claim"], self.overridden_events(self.twin))
-        self.assertEqual(["checklist_completed", "overridden"], self.actions()[-2:])
+        self.assertEqual(["checklist_completed", "overridden", "transitioned"], self.actions()[-3:])
 
     def test_a_forced_tick_of_an_unclaimed_step_records_no_override(self) -> None:
         free = self.unclaimed_step(self.ref)
@@ -707,6 +713,7 @@ class OrderTests(BatchCase):
         self.assertEqual(
             [
                 "claimed",
+                "accepted",
                 "transitioned",
                 "checklist_replaced",
                 "checklist_completed",
@@ -715,6 +722,7 @@ class OrderTests(BatchCase):
                 "request_created",
                 "summarized",
                 "transitioned",
+                "released",
             ],
             self.actions()[recorded:],
         )
@@ -727,7 +735,9 @@ class OrderTests(BatchCase):
         self.assertEqual(
             comments, [entry["comment_id"] for entry in applied["comments"]], "every new comment"
         )
-        request = record["events"][-3]["detail"]
+        [request] = [
+            event["detail"] for event in record["events"] if event["action"] == "request_created"
+        ]
         self.assertEqual([{"request_id": request, "revision": 0}], applied["questions"])
         self.assertEqual(
             [
@@ -763,16 +773,17 @@ class OrderTests(BatchCase):
         # A placement names an item in the same state, which the claim has only
         # just moved this one into.
         ahead = str(
-            service.create_work_item(self.conn, space="TALK", title="Under way", state="dev")[
-                "reference"
-            ]
+            service.create_work_item(
+                self.conn, space="TALK", title="Under way", state="ready", acceptance="assignment"
+            )["reference"]
         )
+        service.claim_work_item(self.conn, ahead, author="another")
         self.conn.commit()
         rank = {"rank": f"before:{ahead}"}
         self.assertIn("its own state", self.refused_single(UPDATE, id=self.twin, **rank)["message"])
         answer = self.apply(claim=True, update=rank)
         self.assertEqual("dev", answer["state"]["key"])
-        rows = service.list_work_items(self.conn, space="TALK", state_key="dev")
+        rows = service.list_work_items(self.conn, space="TALK", state="dev")
         self.assertEqual([self.ref, ahead], [row["reference"] for row in rows])
 
     def test_a_comment_reads_the_checklist_the_same_call_set(self) -> None:

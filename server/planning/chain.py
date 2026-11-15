@@ -61,6 +61,7 @@ def utc_now() -> datetime:
 def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> dict:
     """The chain rooted at the named item, in the named scope."""
 
+    model.refuse_retired("scope", scope)
     if scope not in SCOPES:
         raise model.PlanningError("scope must be chain or tree")
     root = read_model.item_row(conn, reference)
@@ -157,6 +158,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 "workable": read_model.workable(
                     container=row["kind"] == model.CONTAINER_KIND,
                     claim_ref=row["claim_ref"],
+                    checklist=row["checklist"],
                     category=str(row["state_category"]),
                     blocked=partial(operator.contains, blocked, identity),
                 ),

@@ -13,10 +13,87 @@ override, so overriding is a decision on the record rather than a workaround.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Mapping
 
-from . import calls, leases, model, person_events, states
+from . import calls, leases, model, person_events
 
 Finding = tuple[str, str]
+
+#: The guards `force` does not carry: past them the store would hold what the work
+#: model has no place for — a container at work, accepted work with no basis, a
+#: task at work with nobody holding it, or a deferral with no condition to end it.
+UNFORCED = frozenset({"container", "container_state", "deferred", "acceptance", "executor"})
+
+
+def refuse(refusals: list[Finding], force: bool) -> None:
+    """Refuse a write its findings stop: any of them without `force`, an unforced one with it."""
+
+    if any(guard in UNFORCED for guard, _ in refusals) or (refusals and not force):
+        raise model.WorkflowGuardError(
+            "; ".join(f"[{guard}] {message}" for guard, message in refusals)
+        )
+
+
+def placement(
+    item: Mapping[str, object] | sqlite3.Row,
+    current: sqlite3.Row | None,
+    target: sqlite3.Row,
+    *,
+    reference: str,
+    basis: object,
+) -> list[Finding]:
+    """What the work model refuses of an item standing in `target`, coming from `current`.
+
+    `current` is None for an item being created. `basis` is the acceptance the item
+    has or the write gives it. These refusals hold however the item gets there —
+    created, moved or started by a claim — and none of them is forced.
+    """
+
+    found: list[Finding] = []
+    container = item["kind"] == model.CONTAINER_KIND
+    category = str(target["category"])
+    was = None if current is None else str(current["category"])
+    if container and category in model.TASK_ONLY_CATEGORIES:
+        found.append(
+            (
+                "container",
+                f"{reference} is a goal or stage: nobody works one, so it never stands in"
+                f" {target['name']}; accept it with ready, and work the tasks under it",
+            )
+        )
+    if category == "deferred" and was != "deferred":
+        found.append(
+            (
+                "deferred",
+                f"{reference} is deferred by the deferral action, with the condition it"
+                " comes back on, not by a move",
+            )
+        )
+    if container and category == "triage" and was == model.SERVICE_CATEGORY:
+        found.append(
+            (
+                "container_state",
+                f"{reference} is an accepted goal or stage: it is closed or cancelled,"
+                " never put back in triage",
+            )
+        )
+    if container and category == "completed" and was in (None, *model.UNACCEPTED_CATEGORIES):
+        found.append(
+            (
+                "container_state",
+                f"{reference} was never accepted: work that is not to be done is cancelled,"
+                " not completed",
+            )
+        )
+    if category in model.ACCEPTED_CATEGORIES and not basis:
+        found.append(
+            (
+                "acceptance",
+                f"{reference} is not accepted: pass acceptance {model.NAMED_BASIS} for work"
+                " you were asked to do, or leave it to the owner to accept",
+            )
+        )
+    return found
 
 
 def findings(
@@ -25,8 +102,15 @@ def findings(
     target: sqlite3.Row,
     *,
     reason: str = "",
+    basis: object = None,
+    held: bool | None = None,
 ) -> tuple[list[Finding], list[str]]:
-    """Hard refusals and soft warnings for moving `item` to `target` state."""
+    """Hard refusals and soft warnings for moving `item` to `target` state.
+
+    `basis` is the acceptance the item has or the move gives it. `held` says
+    whether a holder stands on the item after the write, for a write that takes
+    the claim itself; left out, it is read from the item.
+    """
 
     current = conn.execute(
         "SELECT * FROM workflow_states WHERE state_id = ?", (item["state_id"],)
@@ -59,9 +143,17 @@ def findings(
     entering = (
         current["category"] != target["category"] or current["state_id"] != target["state_id"]
     )
-    if target["category"] == "active" and current["category"] in states.STARTABLE:
-        claimed_step = any(step["claimed_by"] for step in checklist)
-        if not item["claim_ref"] and not claimed_step:
+    refusals += placement(item, current, target, reference=reference, basis=basis)
+    if (
+        target["category"] == "active"
+        and current["category"] != "active"
+        and item["kind"] != model.CONTAINER_KIND
+    ):
+        # Coming in from anywhere else, a task at work has a holder after the write: a
+        # claim this write takes, or one it already has, as a blocked task keeps it.
+        if held is None:
+            held = bool(item["claim_ref"]) or any(step["claimed_by"] for step in checklist)
+        if not held:
             refusals.append(
                 (
                     "executor",
@@ -69,7 +161,7 @@ def findings(
                     " checklist steps before starting it",
                 )
             )
-        warning = _lease_warning(conn, item, reference)
+        warning = lease_warning(conn, item, reference)
         if warning:
             warnings.append(warning)
     if target["category"] == "review" and entering:
@@ -156,7 +248,7 @@ def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) ->
     )
 
 
-def _lease_warning(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+def lease_warning(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
     """What to say when the executor the guard accepted may not be there.
 
     A claim still counts as an executor: refusing an unconfirmed one would

@@ -49,8 +49,9 @@ def _populate(conn: sqlite3.Connection) -> dict[str, list[tuple]]:
     """
 
     schema9.populate(conn)
+    # In the state of the waiting item: one at work stands accepted, on a basis.
     space, workflow, state = conn.execute(
-        "SELECT planning_space_id, workflow_id, state_id FROM work_items LIMIT 1"
+        "SELECT planning_space_id, workflow_id, state_id FROM work_items WHERE number = 2"
     ).fetchone()
     for number, identity in enumerate((A, B, C, D), start=3):
         conn.execute(

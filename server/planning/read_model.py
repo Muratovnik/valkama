@@ -222,18 +222,43 @@ def acceptance(row: sqlite3.Row) -> dict | None:
 
 
 def workable(
-    *, container: bool, claim_ref: object, category: str, blocked: Callable[[], bool]
+    *,
+    container: bool,
+    claim_ref: object,
+    checklist: object,
+    category: str,
+    blocked: Callable[[], bool],
 ) -> bool:
     """Whether an item is workable now: a task, unheld, unblocked, in triage or ready.
 
-    The rule the take-next queue applies, stated once, so a projection that
-    loaded its facts in bulk answers it the way a single item's record does. A
-    container is never workable: nobody holds one. `blocked` is asked last and
-    only when the rest already holds, because it is the one fact that may cost
-    a query.
+    The rule the take-next queue applies, stated once with its query's form
+    (`WORKABLE_CLAUSES`), so a projection that loaded its facts in bulk answers it
+    the way a single item's record does and the queue hands out what reads
+    workable. A container is never workable: nobody holds one. Unheld is the item
+    and every step of it. `blocked` is asked last and only when the rest already
+    holds, because it is the one fact that may cost a query.
     """
 
-    return not container and not claim_ref and category in ("triage", "ready") and not blocked()
+    return (
+        not container
+        and not claim_ref
+        and not any(step["claimed_by"] for step in model.checklist(checklist))
+        and category in model.WORKABLE_CATEGORIES
+        and not blocked()
+    )
+
+
+#: `workable` as the take-next queue's conditions on an item `i` in its state `s`.
+WORKABLE_CLAUSES = (
+    f"i.kind != '{model.CONTAINER_KIND}'",
+    "i.claim_ref = ''",
+    "NOT EXISTS (SELECT 1 FROM json_each(i.checklist) j"
+    " WHERE COALESCE(json_extract(j.value, '$.claimed_by'), '') != '')",
+    "s.category IN (" + ",".join(f"'{category}'" for category in model.WORKABLE_CATEGORIES) + ")",
+    "NOT EXISTS (SELECT 1 FROM work_item_links l JOIN work_items b"
+    " ON b.work_item_id = l.from_id JOIN workflow_states bs ON bs.state_id = b.state_id"
+    " WHERE l.to_id = i.work_item_id AND l.kind = 'blocks' AND bs.is_terminal = 0)",
+)
 
 
 #: A closing fact: when the item's latest transition was written, and the
@@ -787,6 +812,7 @@ def present(
     record["workable"] = workable(
         container=row["kind"] == model.CONTAINER_KIND,
         claim_ref=row["claim_ref"],
+        checklist=record["checklist"],
         category=str(state["category"]),
         blocked=lambda: bool(record["waits_for"]),
     )

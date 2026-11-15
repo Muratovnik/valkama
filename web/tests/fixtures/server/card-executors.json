@@ -26,31 +26,34 @@
         "kind": "task",
         "priority": "medium",
         "state": {
-          "state_id": "00000000-0000-4000-8000-000000000003",
-          "key": "triage",
-          "name": "Triage",
-          "category": "triage",
+          "state_id": "00000000-0000-4000-8000-000000000011",
+          "key": "dev",
+          "name": "Dev",
+          "category": "active",
           "is_terminal": false
         },
         "open": true,
         "container_state": null,
-        "acceptance": null,
-        "started_at": null,
+        "acceptance": {
+          "basis": "assignment",
+          "at": "2026-01-02T03:04:05Z"
+        },
+        "started_at": "2026-01-02T03:04:05Z",
         "waits_for": [],
-        "claim_ref": "claude (session 00000000-0000-4000-8000-000000000011)",
+        "claim_ref": "claude (session 00000000-0000-4000-8000-000000000012)",
         "claim_state": "live",
         "parent_id": null,
         "labels": [],
         "source": "",
         "checklist": [
           {
-            "id": "00000000-0000-4000-8000-000000000012",
+            "id": "00000000-0000-4000-8000-000000000013",
             "text": "An agent's",
             "done": false,
-            "claimed_by": "claude agent a4d2c8f1e0b3a297 (session 00000000-0000-4000-8000-000000000011)",
+            "claimed_by": "claude agent a4d2c8f1e0b3a297 (session 00000000-0000-4000-8000-000000000012)",
             "done_by": "",
             "executor": {
-              "session": "00000000-0000-4000-8000-000000000011",
+              "session": "00000000-0000-4000-8000-000000000012",
               "agent": "a4d2c8f1e0b3a297",
               "opened_in": "ide",
               "opened_host": "vscode",
@@ -59,7 +62,7 @@
             }
           },
           {
-            "id": "00000000-0000-4000-8000-000000000013",
+            "id": "00000000-0000-4000-8000-000000000014",
             "text": "A person's",
             "done": false,
             "claimed_by": "the owner",
@@ -74,7 +77,7 @@
             }
           },
           {
-            "id": "00000000-0000-4000-8000-000000000014",
+            "id": "00000000-0000-4000-8000-000000000015",
             "text": "A digest's",
             "done": false,
             "claimed_by": "claude (session 388ed4aac64b107a)",
@@ -96,16 +99,16 @@
         "last_claim_ref": null,
         "workable": false,
         "claim": {
-          "holder": "claude (session 00000000-0000-4000-8000-000000000011)",
+          "holder": "claude (session 00000000-0000-4000-8000-000000000012)",
           "state": "live",
-          "session_id": "00000000-0000-4000-8000-000000000011",
+          "session_id": "00000000-0000-4000-8000-000000000012",
           "agent_id": null,
           "source": "claude-hook",
           "acquired_at": "2026-01-02T03:04:05.000Z",
           "last_seen": "2026-01-02T03:04:05Z",
           "expires_at": "2026-01-02T03:04:05Z",
           "executor": {
-            "session": "00000000-0000-4000-8000-000000000011",
+            "session": "00000000-0000-4000-8000-000000000012",
             "agent": null,
             "opened_in": "ide",
             "opened_host": "vscode",
@@ -185,7 +188,31 @@
             "identity": {
               "state": "confirmed",
               "source": "claude-hook",
-              "session_id": "00000000-0000-4000-8000-000000000011",
+              "session_id": "00000000-0000-4000-8000-000000000012",
+              "agent_id": null
+            }
+          },
+          {
+            "action": "accepted",
+            "detail": "assignment",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "claude-hook",
+              "session_id": "00000000-0000-4000-8000-000000000012",
+              "agent_id": null
+            }
+          },
+          {
+            "action": "transitioned",
+            "detail": "dev: claimed",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "claude-hook",
+              "session_id": "00000000-0000-4000-8000-000000000012",
               "agent_id": null
             }
           },
@@ -197,7 +224,7 @@
             "identity": {
               "state": "confirmed",
               "source": "claude-hook",
-              "session_id": "00000000-0000-4000-8000-000000000011",
+              "session_id": "00000000-0000-4000-8000-000000000012",
               "agent_id": "a4d2c8f1e0b3a297"
             }
           },
@@ -232,7 +259,7 @@
         "agents": [
           {
             "agent_id": "b5e3d9a2f1c4b308",
-            "session_id": "00000000-0000-4000-8000-000000000015",
+            "session_id": "00000000-0000-4000-8000-000000000016",
             "agent_type": "",
             "label": "",
             "started_at": "2026-01-02T03:04:05Z",
@@ -242,7 +269,7 @@
             "link": "exact",
             "coordinator_items": null,
             "executor": {
-              "session": "00000000-0000-4000-8000-000000000015",
+              "session": "00000000-0000-4000-8000-000000000016",
               "agent": "b5e3d9a2f1c4b308",
               "opened_in": "app",
               "opened_host": "claude-desktop",
@@ -252,7 +279,7 @@
           },
           {
             "agent_id": "a4d2c8f1e0b3a297",
-            "session_id": "00000000-0000-4000-8000-000000000011",
+            "session_id": "00000000-0000-4000-8000-000000000012",
             "agent_type": "",
             "label": "",
             "started_at": "2026-01-02T03:04:05Z",
@@ -260,14 +287,14 @@
             "ended_at": null,
             "steps": [
               {
-                "id": "00000000-0000-4000-8000-000000000012",
+                "id": "00000000-0000-4000-8000-000000000013",
                 "text": "An agent's"
               }
             ],
             "link": "exact",
             "coordinator_items": null,
             "executor": {
-              "session": "00000000-0000-4000-8000-000000000011",
+              "session": "00000000-0000-4000-8000-000000000012",
               "agent": "a4d2c8f1e0b3a297",
               "opened_in": "ide",
               "opened_host": "vscode",

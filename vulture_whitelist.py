@@ -33,6 +33,7 @@ _.tick  # unused method (tests\test_board_properties.py)
 _.summarize  # unused method (tests\test_board_properties.py)
 _.a_state_orders_its_items_uniquely  # unused method (tests\test_board_properties.py)
 _.a_revision_never_goes_backwards  # unused method (tests\test_board_properties.py)
+_.a_holder_stands_only_at_work_or_blocked_and_work_always_has_one  # unused method (tests\test_planning_properties.py)
 
 # `redirect_request` is urllib's own hook: `build_opener` calls it by name on
 # every 3xx, and its six arguments are the framework's signature. Refusing a

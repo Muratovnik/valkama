@@ -361,12 +361,21 @@ class RetentionTests(ArchiveCase):
         self.conn.commit()
 
     def item(self, state: str = "dev") -> str:
-        record = planning.create_work_item(self.conn, space="TST", title="refers", state=state)
+        """An item asked for as work, at work by default: claimed, as work starts."""
+
+        filed = "ready" if state == "dev" else state
+        record = planning.create_work_item(
+            self.conn, space="TST", title="refers", state=filed, acceptance="assignment"
+        )
+        if state == "dev":
+            planning.claim_work_item(self.conn, str(record["reference"]), author="worker")
         self.conn.commit()
         return str(record["reference"])
 
     def close(self, reference: str) -> str:
-        planning.transition_work_item(self.conn, reference, "done", force=True)
+        planning.transition_work_item(
+            self.conn, reference, "done", force=True, acceptance="assignment"
+        )
         self.conn.commit()
         return str(
             self.conn.execute(
@@ -463,7 +472,9 @@ class RetentionTests(ArchiveCase):
                 self.assertEqual(0, self.sweep(now=later).purged)
                 self.assertEqual([self.archive], self.files())
                 # Only this item refers now; closing it hands the decision back to time.
-                planning.transition_work_item(self.conn, reference, "cancelled", force=True)
+                planning.transition_work_item(
+                    self.conn, reference, "cancelled", force=True, acceptance="assignment"
+                )
                 self.conn.commit()
         self.assertEqual(1, self.sweep(now=later).purged)
 

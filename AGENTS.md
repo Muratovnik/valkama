@@ -19,8 +19,14 @@ is complete on its own.
   change is to that section's rules.
 - `server/skill/valkama` is the skill clients install to work the planning
   tools. A change to what a planning tool does updates it in the same change;
-  `tests/test_skill_content.py` checks only that the tools it names exist.
-- Preserve supported external MCP handshake and tool schemas. Preserve existing
+  `tests/test_skill_content.py` checks only that the tools it names exist, and
+  `tests/test_planning_retired_words.py` that it names no retired word.
+- Preserve supported external MCP handshake and tool schemas. One exception
+  stands: Valkama 3.0 breaks them for the work model alone — its kinds,
+  categories and item record fields, the scope `tree`, `acceptance`, and the
+  retired words refused on input — as
+  `docs/decisions/0014-work-model-breaks-the-planning-schemas.md` records. It
+  covers nothing else and no later change. Preserve existing
   local data through a verified backup, one forward-only migration, and a
   tested restore path. A migrated store has one runtime schema: never add a
   dual-read, dual-write, alias, or compatibility data layer.

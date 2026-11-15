@@ -17,7 +17,8 @@ import uuid
 from unittest import mock
 
 from server import store
-from server.planning import api, service
+from server.planning import api, model, service
+from tests.planning_fixtures import basis_for
 
 
 class ClaimMoveTestCase(unittest.TestCase):
@@ -36,6 +37,7 @@ class ClaimMoveTestCase(unittest.TestCase):
         self.workflow_id = str(self.space["workflow"]["workflow_id"])
 
     def item(self, state: str | None = None, **kwargs: object) -> str:
+        kwargs = {**basis_for(state), **kwargs}
         return service.create_work_item(
             self.conn, space=self.key, title="Work", state=state, **kwargs
         )["reference"]
@@ -96,30 +98,56 @@ class ClaimStartsWorkTests(ClaimMoveTestCase):
         for state in ("triage", "ready"):
             with self.subTest(state):
                 reference = self.item(state)
+                filed = len(self.events(reference))
                 answer = self.claim(reference)
                 self.assertEqual({"from": state, "to": "dev"}, answer["started"])
                 self.assertEqual("dev", answer["state"]["key"])
                 self.assertEqual("agent", answer["claim_ref"])
+                # Work taken out of triage is accepted by the claim, as assigned.
+                accepted = [("accepted", "assignment", "agent")] if state == "triage" else []
                 self.assertEqual(
-                    [("claimed", "", "agent"), ("transitioned", "dev: claimed", "agent")],
-                    self.events(reference)[1:],
+                    [
+                        ("claimed", "", "agent"),
+                        *accepted,
+                        ("transitioned", "dev: claimed", "agent"),
+                    ],
+                    self.events(reference)[filed:],
                 )
 
-    def test_a_claim_leaves_every_other_state_where_it_is(self) -> None:
-        for state in ("dev", "review", "blocked", "done", "cancelled"):
+    def test_a_claim_leaves_blocked_work_where_it_is(self) -> None:
+        reference = self.item("ready")
+        self.claim(reference)
+        service.transition_work_item(
+            self.conn, reference, "blocked", reason="waits", acceptance="assignment"
+        )
+        self.claim(reference, release=True)
+        answer = service.claim_work_item(self.conn, reference, author="next")
+        self.assertNotIn("started", answer)
+        self.assertNotIn("warnings", answer)
+        self.assertEqual(("blocked", "next"), (answer["state"]["key"], answer["claim_ref"]))
+
+    def test_a_claim_of_work_in_review_or_closed_is_refused_and_writes_nothing(self) -> None:
+        for state, guard in (
+            ("review", "[review]"),
+            ("done", "[closed]"),
+            ("cancelled", "[closed]"),
+        ):
             with self.subTest(state):
                 reference = self.item(state)
-                answer = self.claim(reference)
-                self.assertNotIn("started", answer)
-                self.assertNotIn("warnings", answer)
-                self.assertEqual(state, answer["state"]["key"])
-                self.assertEqual(["created", "claimed"], [e[0] for e in self.events(reference)])
+                before = self.events(reference)
+                with self.assertRaises(model.WorkflowGuardError) as refused:
+                    self.claim(reference)
+                self.assertIn(guard, str(refused.exception))
+                self.assertEqual((state, before), (self.state(reference), self.events(reference)))
 
-    def test_a_takeover_and_the_take_next_queue_start_what_they_take(self) -> None:
-        held = self.item()
-        service.claim_work_item(self.conn, held, author="first", move_state=False)
+    def test_a_takeover_keeps_the_work_where_its_holder_had_it(self) -> None:
+        held = self.item("ready")
+        service.claim_work_item(self.conn, held, author="first")
         taken = service.claim_work_item(self.conn, held, author="second", force=True)
-        self.assertEqual({"from": "triage", "to": "dev"}, taken["started"])
+        self.assertNotIn("started", taken)
+        self.assertEqual(("dev", "second"), (taken["state"]["key"], taken["claim_ref"]))
+
+    def test_the_take_next_queue_starts_what_it_takes(self) -> None:
         queued = self.item("ready")
         picked = service.claim_ready_work_item(self.conn, space=self.key, author="agent")
         assert picked is not None
@@ -128,7 +156,7 @@ class ClaimStartsWorkTests(ClaimMoveTestCase):
 
     def test_a_forced_takeover_records_the_override_beside_the_takeover(self) -> None:
         held = self.item()
-        service.claim_work_item(self.conn, held, author="first", move_state=False)
+        service.claim_work_item(self.conn, held, author="first")
         taken = service.claim_work_item(
             self.conn, held, author="second", force=True, move_state=False
         )
@@ -137,12 +165,15 @@ class ClaimStartsWorkTests(ClaimMoveTestCase):
 
     def test_a_forced_release_of_a_claim_held_by_another_records_the_override(self) -> None:
         held = self.item()
-        service.claim_work_item(self.conn, held, author="first", move_state=False)
+        service.claim_work_item(self.conn, held, author="first")
         released = service.claim_work_item(
             self.conn, held, author="second", release=True, force=True, move_state=False
         )
         self.assertEqual(["claim"], released["overridden"])
-        self.assertEqual(["released", "overridden"], [a for a, _, _ in self.events(held)][-2:])
+        # The release puts the work nobody holds now back in the queue.
+        self.assertEqual(
+            ["released", "overridden", "transitioned"], [a for a, _, _ in self.events(held)][-3:]
+        )
 
     def test_a_forced_claim_of_an_unheld_item_records_no_override(self) -> None:
         free = self.item()
@@ -160,17 +191,17 @@ class ClaimStartsWorkTests(ClaimMoveTestCase):
         second = self.item()
         self.assertEqual({"from": "triage", "to": "dev"}, self.claim(second)["started"])
 
-    def test_with_no_active_state_to_reach_the_claim_holds_and_says_why(self) -> None:
+    def test_with_no_active_state_to_reach_the_claim_is_refused_and_says_why(self) -> None:
         self.forbid("triage", "dev")
         reference = self.item()
-        answer = self.claim(reference)
-        self.assertNotIn("started", answer)
-        self.assertEqual("agent", answer["claim_ref"])
-        self.assertEqual(
-            [f"{reference} stays in Triage: its workflow has no active state it can move to"],
-            answer["warnings"],
-        )
-        self.assertEqual("triage", self.state(reference))
+        before = self.events(reference)
+        with self.assertRaisesRegex(
+            model.WorkflowGuardError,
+            f"{reference} stays in Triage: its workflow has no active state it can move to",
+        ):
+            self.claim(reference)
+        self.assertEqual(("triage", before), (self.state(reference), self.events(reference)))
+        self.assertEqual("", service.get_work_item(self.conn, reference)["claim_ref"])
 
     def test_a_batch_transition_runs_after_the_claim_started_the_item(self) -> None:
         reference = self.item()
@@ -182,8 +213,9 @@ class ClaimStartsWorkTests(ClaimMoveTestCase):
         self.assertEqual(200, status)
         self.assertEqual({"from": "triage", "to": "dev"}, answer["started"])
         self.assertEqual("review", answer["state"]["key"])
+        # Review takes the holder away in the move that puts the task there.
         self.assertEqual(
-            ["created", "claimed", "transitioned", "transitioned"],
+            ["created", "claimed", "accepted", "transitioned", "transitioned", "released"],
             [e[0] for e in self.events(reference)],
         )
 
@@ -204,28 +236,28 @@ class ReleaseRequeuesWorkTests(ClaimMoveTestCase):
         assert picked is not None
         self.assertEqual(reference, picked["reference"])
 
-    def test_without_a_queued_state_the_backlog_takes_it(self) -> None:
+    def test_without_a_queued_state_the_release_is_refused_rather_than_left_unheld(
+        self,
+    ) -> None:
+        # Never to triage, which would take the acceptance away unseen.
         self.forbid("dev", "ready")
         reference = self.item()
         self.claim(reference)
-        answer = self.claim(reference, release=True)
-        self.assertEqual({"from": "dev", "to": "triage"}, answer["requeued"])
+        before = self.events(reference)
+        with self.assertRaisesRegex(model.WorkflowGuardError, "reach no ready state"):
+            self.claim(reference, release=True)
+        self.assertEqual(("dev", before), (self.state(reference), self.events(reference)))
+        self.assertEqual("agent", service.get_work_item(self.conn, reference)["claim_ref"])
 
-    def test_a_release_with_nowhere_to_go_or_nothing_under_way_moves_nothing(self) -> None:
-        reference = self.item()
-        self.claim(reference)
-        self.forbid("dev", "ready")
-        self.forbid("dev", "triage")
-        stays = self.claim(reference, release=True)
-        self.assertNotIn("requeued", stays)
-        self.assertEqual("dev", stays["state"]["key"])
-        for state in ("review", "blocked", "done"):
-            with self.subTest(state):
-                other = self.item(state)
-                self.claim(other)
-                answer = self.claim(other, release=True)
-                self.assertNotIn("requeued", answer)
-                self.assertEqual(state, answer["state"]["key"])
+    def test_a_release_of_blocked_work_moves_nothing(self) -> None:
+        other = self.item("ready")
+        self.claim(other)
+        service.transition_work_item(
+            self.conn, other, "blocked", reason="waits", acceptance="assignment"
+        )
+        answer = self.claim(other, release=True)
+        self.assertNotIn("requeued", answer)
+        self.assertEqual(("blocked", ""), (answer["state"]["key"], answer["claim_ref"]))
 
     def test_a_claimed_checklist_step_keeps_the_item_under_way(self) -> None:
         reference = self.item()
@@ -236,14 +268,18 @@ class ReleaseRequeuesWorkTests(ClaimMoveTestCase):
         self.assertNotIn("requeued", answer)
         self.assertEqual("dev", answer["state"]["key"])
 
-    def test_move_state_false_neither_starts_nor_requeues(self) -> None:
+    def test_move_state_false_starts_nothing_and_holds_only_work_under_way(self) -> None:
         reference = self.item()
+        with self.assertRaisesRegex(model.WorkflowGuardError, "holds only work under way"):
+            self.claim(reference, move_state=False)
+        self.assertEqual("triage", self.state(reference))
+        self.claim(reference)
         held = self.claim(reference, move_state=False)
-        self.assertEqual("triage", held["state"]["key"])
-        service.transition_work_item(self.conn, reference, "dev")
+        self.assertEqual(("dev", "agent"), (held["state"]["key"], held["claim_ref"]))
+        self.assertNotIn("started", held)
+        # A release still keeps the holder rule: nothing at work stands unheld.
         released = self.claim(reference, release=True, move_state=False)
-        self.assertEqual("dev", released["state"]["key"])
-        self.assertNotIn("requeued", released)
+        self.assertEqual({"from": "dev", "to": "ready"}, released["requeued"])
 
 
 if __name__ == "__main__":

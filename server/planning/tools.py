@@ -66,6 +66,24 @@ _SPACE = {
     "type": "string",
     "description": "Planning space, by key (MAIN), name, or planning_space_id.",
 }
+#: What an item names as the work it stands under.
+_PARENT = {
+    "type": "string",
+    "description": "The goal or stage it stands under, by its reference (MAIN-142) or its"
+    " work_item_id: an open goal or stage of the same space, at any depth, never the"
+    " item itself or one under it. A task holds no children.",
+}
+#: The one basis of acceptance an agent names itself, read by a creation and a move.
+_ACCEPTANCE = {
+    "type": "string",
+    "enum": [model.NAMED_BASIS],
+    "description": "assignment: you accept this work as asked of you. Work under goals and"
+    " stages that are all accepted and open is accepted as part of them, whatever this"
+    " says, and a claim accepts what it starts without it. Otherwise an item you create"
+    " with no state stays in triage unless you name it, and an item with no basis, in"
+    " triage, deferred or cancelled out of triage, moved to ready, active, review, blocked"
+    " or completed is refused with acceptance without it, force or not.",
+}
 _STATE = {
     "type": "string",
     "description": "Workflow state, by key or state_id, or by a category ("
@@ -199,10 +217,22 @@ _COMMENT_FORM = (
 _TRANSITION_FORM = (
     'An object, never a bare state name: {"state": "done"}, with reason, force or rank'
     " when they apply. The one path a state changes by. The workflow's guards apply:"
-    " an active state needs an executor, a terminal state needs every checklist step"
-    " ticked and a closing summary, a blocked state needs a blocker or a stated reason."
+    " an active state needs a holder after the write (executor), a terminal state needs"
+    " every checklist step ticked and a closing summary, a blocked state needs a blocker"
+    " or a stated reason. An item with no basis, in triage, deferred or cancelled out"
+    " of triage, moved to ready, active, review, blocked or completed needs one"
+    " (acceptance): inherited under goals and stages that are all accepted and open,"
+    " else the acceptance you send. A move to triage takes the basis away. A goal or"
+    " stage is accepted by a move to ready, after which it shows state null and its"
+    " container_state; accepted out of triage or deferred, it accepts the work in"
+    " triage under it, stopping at a deferred goal or stage. It then"
+    " moves to completed or cancelled, never to active, review, blocked or back to"
+    " triage, and one never accepted is cancelled, not completed. Entering deferred is"
+    " refused."
     " A cancelled state needs only the summary, saying why the work stopped; its undone"
-    " steps stay open. force carries a refusal through and records it. A terminal state"
+    " steps stay open. force carries a refusal through and records it, except executor,"
+    " acceptance, deferred and the refusals that keep a goal or stage out of work. Any"
+    " state but an active or blocked one"
     " also ends the item's claim and any step claim, whoever holds them; the answer"
     " names the holder as released, and last_claim_ref keeps reading it. Reopening"
     " restores no claim. The item goes last in its new state unless rank places it. An"
@@ -328,9 +358,14 @@ TOOLS = [
     _tool(
         "create_work_item",
         "Create a work item",
-        "One unit of planned work. It starts in the workflow's initial state unless"
-        " you name another. kind=goal is a parent, a stage one under a parent; a"
-        " hierarchy is one level deep."
+        "One unit of planned work. kind is task, bug or improvement for work an agent"
+        " takes, goal or stage for work that holds other work: a goal stands under no"
+        " parent and a stage under one, at any depth. A goal or stage is never claimed or"
+        " worked itself; once accepted it shows state null and its container_state."
+        " Without state, an item under goals and stages that are all accepted and open"
+        " is accepted as part of them; another an agent files starts in triage unless"
+        " acceptance accepts it. Accepted, a task starts in ready and a goal or stage"
+        " stands accepted at once. A named state meets the refusals a move there does."
         " claim, checklist and links act on the new item in the same call, all or"
         " nothing: it is created, then claimed, then given its steps, then linked,"
         " each as the same group of apply_work_item_changes does. A refused step"
@@ -360,12 +395,13 @@ TOOLS = [
                 " docs/plan.md#kb:a7f3. Point at the immutable <!-- kb:xxxx -->"
                 " comment; never copy the plan text into the item.",
             },
-            "parent": WORK_ITEM_REFERENCE,
+            "parent": _PARENT,
+            "acceptance": _ACCEPTANCE,
             "claim": {
                 "type": "boolean",
                 "description": "true claims the new item as claim_work_item does,"
                 " which starts it: it is created in its first state and then moved"
-                " to the active one.",
+                " to the active one. A goal or stage is refused and nothing is created.",
             },
             "checklist": {
                 "type": "object",
@@ -415,7 +451,12 @@ TOOLS = [
         f" {requests.ITEM_QUESTIONS} items with the open ones first and then the newest closed,"
         " and truncated when there are more. images lists the pictures pasted into its"
         " text, each with sha256, media_type, size, created_at and the path its Markdown"
-        " names; read_work_item_image shows one.",
+        " names; read_work_item_image shows one. open says whether its work is still open."
+        " An accepted open goal or stage shows state null and container_state:"
+        " not_started, in_progress or awaiting_confirmation. acceptance is the basis it was"
+        " accepted on and when, null in triage or deferred; started_at is when work on it"
+        " began, waits_for the open items blocking it, and workable whether a task may be"
+        " taken now.",
         READ_ONLY,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -468,7 +509,9 @@ TOOLS = [
         "List work items",
         "Items in state order, and inside a state in the planned order, filtered by state,"
         " category, kind, holder or parent. One compact row per item: reference, title,"
-        " kind, state, priority, parent and holder."
+        " kind, state, priority, parent and holder; an accepted open goal or stage has"
+        " state null and adds its container_state. kind=goal lists the goals, kind=stage"
+        " the stages."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -505,7 +548,7 @@ TOOLS = [
         " change) and recent: the last 7 UTC"
         " days' created and closed and a trend of growing, converging or steady."
         " open_members lists the open members, active first, then review, then"
-        " ready, then the rest, each in the order of work; a row's rank is its"
+        " workable, then the rest, each in the order of work; a row's rank is its"
         " place in that order across the space, to compare, not to count; at most"
         f" {CHAIN_PAGE} per page." + _PAGING,
         READ_ONLY,
@@ -550,13 +593,19 @@ TOOLS = [
         "Claim a work item",
         "Take ownership before working it. Refuses if somebody else holds it;"
         " force takes it over and records the takeover, release hands it back."
-        " Claiming an item in a triage, deferred or ready state starts it: it moves to the"
+        " Only a task is held: a goal or stage is refused, a task in review too (the"
+        " owner's answer returns it to ready), and a closed one until it is reopened."
+        " Claiming a task in a triage, deferred or ready state starts it: it moves to the"
         " workflow's first active state it can reach, and the answer's started"
-        " names both states. Review, blocked, active and finished items keep their"
-        " state. Releasing an active item puts it back in the first ready state"
-        " (or the triage one), named in requeued, unless one of its checklist steps is"
-        " still claimed. Closing an item releases it already: no release is needed"
-        " after a transition to a terminal state. The answer carries from_person when"
+        " names both states; with no active state to reach the claim is refused. One"
+        " not under goals and stages that are all accepted and open is accepted by"
+        " assignment. A blocked task stays blocked. Releasing an active task puts it back"
+        " in the first ready state, named in requeued, unless one of its checklist steps"
+        " is still claimed; with no ready state to reach the release is refused, since"
+        " nothing at work stands unheld, and so is taking over a stale claim there. A"
+        " released blocked task stays blocked, held by nobody. A transition to any state"
+        " but an active or blocked one releases the item already: no release follows it."
+        " The answer carries from_person when"
         " a person acted on the item in the interface since an agent last wrote to it:"
         " their words about this work, to read before the next step.",
         WRITES,
@@ -573,12 +622,13 @@ TOOLS = [
     _tool(
         "claim_ready_work_item",
         "Claim the next ready work item",
-        "Choose and claim in one step: the first unheld item in a startable state"
-        " that nothing unfinished blocks, in the order of work — a ready state"
-        " before a triage one, and inside a state the planned order (see rank in"
-        " apply_work_item_changes's update); priority only breaks a tie. The claim starts the item"
+        "Choose and claim in one step: the first workable task — unheld, in a triage or"
+        " ready state, with nothing unfinished blocking it — in the order of work: a"
+        " ready state before a triage one, and inside a state the planned order (see rank"
+        " in apply_work_item_changes's update); priority only breaks a tie. A goal, a stage"
+        " and deferred work are never taken. The claim starts the item"
         " as claim_work_item does, so it answers in its active state with started."
-        " Answers with nothing when no item is ready.",
+        " Answers with nothing when no task is workable.",
         WRITES,
         {"space": _SPACE, "author": _AUTHOR},
     ),
@@ -586,7 +636,12 @@ TOOLS = [
         "claim_work_item_checklist_item",
         "Claim one checklist step",
         "Take one step so two agents can split an item without either inventing"
-        " a percentage. Refuses another holder's step unless force.",
+        " a percentage. Refuses another holder's step unless force, and, as a claim of"
+        " the item does, every step of a goal or stage and of a task in review or closed."
+        " Claiming a step of a task in a triage, deferred or ready state starts the task"
+        " as claiming it would. When the last held step of an active task nobody holds"
+        " is released, the task goes back to the first ready state, named in requeued;"
+        " with no ready state to reach the release is refused.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -609,7 +664,8 @@ TOOLS = [
         " to it, gets a summary naming it, is released and closes in its cancelled"
         " state. Their history, reports with their threads, description and parent"
         " stay on them. Refused before anything is written:"
-        " an item in another space, a closed item, a merged item with children,"
+        " an item in another space, a closed item, a merged item with children, a goal"
+        " or stage with a task (goals and stages merge only with each other),"
         f" more than {model.MAX_CHECKLIST} steps in all, or an item another session"
         " holds unless force. The answer lists what each item moved.",
         WRITES,
@@ -693,8 +749,13 @@ TOOLS = [
                         "description": _PRIORITY_MEANING,
                     },
                     **_EDITED_LABELS,
-                    "kind": {"type": "string", "enum": sorted(model.TASK_KINDS)},
-                    "parent": WORK_ITEM_REFERENCE,
+                    "kind": {
+                        "type": "string",
+                        "enum": sorted(model.TASK_KINDS),
+                        "description": "A task's kind, changed among these; a goal or stage"
+                        " is never edited into a task, and its place says which it is.",
+                    },
+                    "parent": _PARENT,
                     "rank": _RANK,
                     "mentions": _TEXT_MENTIONS,
                 },
@@ -718,7 +779,9 @@ TOOLS = [
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
                 "description": "Steps to complete, or to reopen with done=false."
-                " Completion records who and clears the live claim.",
+                " Completion records who and clears the live claim; when that was the"
+                " last hold on an active task nobody holds, the batch's end puts the task"
+                " back in the first ready state, and with none to reach it is refused.",
                 "items": {
                     "type": "object",
                     "properties": {"item_id": _STR, "done": _BOOL, "force": _FORCE},
@@ -857,6 +920,7 @@ TOOLS = [
                     "reason": _STR,
                     "force": _FORCE,
                     "rank": _RANK,
+                    "acceptance": _ACCEPTANCE,
                 },
                 "required": ["state"],
             },
@@ -1432,6 +1496,7 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
                 else {}
             ),
             "claim_ref": member["claim_ref"],
+            "claim_state": member["claim_state"],
             "workable": member["workable"],
             "parent_reference": member["parent_reference"],
             "rank": member["rank"],

@@ -213,11 +213,15 @@ class PlanningConcurrencyTests(unittest.TestCase):
         stale = read_model.item_row(first, "QA-1")
         second = self.open()
         service.claim_work_item(second, "QA-1", author="agent-two")
-        service.transition_work_item(second, "QA-1", "dev", author="agent-two")
+        service.transition_work_item(
+            second, "QA-1", "dev", author="agent-two", acceptance="assignment"
+        )
         second.commit()
         with mock.patch.object(read_model, "item_row", return_value=stale):
             with self.assertRaises(model.RevisionConflictError):
-                service.transition_work_item(first, "QA-1", "ready", author="agent-one")
+                service.transition_work_item(
+                    first, "QA-1", "ready", author="agent-one", acceptance="assignment"
+                )
         first.rollback()
         self.assertEqual("dev", service.get_work_item(self.conn, "QA-1")["state"]["key"])
 
@@ -531,7 +535,9 @@ class ReadThenWriteTests(unittest.TestCase):
                 "Renamed",
             ),
             "transition": (
-                lambda ref: service.transition_work_item(self.conn, ref, "ready"),
+                lambda ref: service.transition_work_item(
+                    self.conn, ref, "ready", acceptance="assignment"
+                ),
                 report,
                 lambda item: item["state"]["key"],
                 "ready",
@@ -593,7 +599,9 @@ class ReadThenWriteTests(unittest.TestCase):
         got SQLite's `IntegrityError` instead of the refusal that names the child.
         """
 
-        parent = service.create_work_item(self.conn, space=self.space["key"], title="Parent")
+        parent = service.create_work_item(
+            self.conn, space=self.space["key"], title="Parent", kind="goal"
+        )
         self.conn.commit()
 
         def other_child() -> None:

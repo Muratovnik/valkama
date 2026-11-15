@@ -118,7 +118,9 @@ class ReleasedTestCase(unittest.TestCase):
         return reference
 
     def close_item(self, reference: str) -> None:
-        service.transition_work_item(self.conn, reference, "completed", force=True)
+        service.transition_work_item(
+            self.conn, reference, "completed", force=True, acceptance="assignment"
+        )
         self.conn.commit()
 
     def report(self, *extra: str, revisions: str = "start..main") -> dict:

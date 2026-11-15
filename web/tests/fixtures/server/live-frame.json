@@ -36,7 +36,7 @@
           "since": null,
           "quiet_since": "2026-01-02T03:04:05Z",
           "executor": {
-            "session": "00000000-0000-4000-8000-000000000017",
+            "session": "00000000-0000-4000-8000-000000000018",
             "agent": null,
             "opened_in": "terminal",
             "opened_host": "",
@@ -44,7 +44,7 @@
             "state": "live"
           },
           "pinned": false,
-          "state_name": "Triage",
+          "state_name": "Dev",
           "is_terminal": false,
           "open": true,
           "container_state": null,
@@ -81,7 +81,7 @@
           "since": "2026-01-02T03:04:05Z",
           "quiet_since": null,
           "executor": {
-            "session": "00000000-0000-4000-8000-000000000011",
+            "session": "00000000-0000-4000-8000-000000000012",
             "agent": null,
             "opened_in": "ide",
             "opened_host": "vscode",
@@ -89,7 +89,7 @@
             "state": "live"
           },
           "pinned": false,
-          "state_name": "Triage",
+          "state_name": "Dev",
           "is_terminal": false,
           "open": true,
           "container_state": null,
@@ -98,7 +98,7 @@
       ],
       "sessions": [
         {
-          "session": "00000000-0000-4000-8000-000000000018",
+          "session": "00000000-0000-4000-8000-000000000019",
           "title": "Contract session",
           "folder": "checkout",
           "state": "waiting",
@@ -107,7 +107,7 @@
           "agents": 0,
           "since": "2026-01-02T03:04:05Z",
           "executor": {
-            "session": "00000000-0000-4000-8000-000000000018",
+            "session": "00000000-0000-4000-8000-000000000019",
             "agent": null,
             "opened_in": "",
             "opened_host": "",
