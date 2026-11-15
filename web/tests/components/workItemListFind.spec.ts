@@ -321,10 +321,10 @@ describe('a term in the bar', () => {
 describe('a term in a tree', () => {
   // A goal six levels deep, filtered down to its deepest row: the five above it
   // stand as its path, and the deepest stands past the indent's fifth level.
-  const chain = Array.from({ length: 6 }, (_, at) =>
+  const kinds = ['goal', 'stage', 'stage', 'stage', 'stage', 'task'] as const
+  const chain = kinds.map((kind, at) =>
     boardItem(at + 1, 'backlog', {
-      container: at < 5,
-      kind: at < 5 ? 'epic' : 'task',
+      kind,
       parent_id: at === 0 ? null : boardItem(at).work_item_id,
     }),
   )
