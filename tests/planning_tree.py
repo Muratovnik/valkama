@@ -17,6 +17,7 @@ says so.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from server.planning import model, service, store, words
@@ -66,8 +67,13 @@ class Tree:
         started: bool = False,
         basis: object = DERIVED,
         holder: str = "",
+        step_holder: str = "",
     ) -> str:
-        """Place an item; `kind` is `task`, `goal` or `stage`, `state` a default key."""
+        """Place an item; `kind` is `task`, `goal` or `stage`, `state` a default key.
+
+        A task at work is held by `holder`, or by a worker of its own; given
+        `step_holder`, it is held by that holder of its one step and by nobody else.
+        """
 
         container = kind in ("goal", "stage")
         if state == "container" and not container:
@@ -76,13 +82,14 @@ class Tree:
         number = store.next_number(self.conn, self.space_id)
         parent_id = self.ids[parent] if parent is not None else None
         accepted = self._basis(state, parent_id, container) if basis is DERIVED else basis
-        if state == "dev" and not holder:
+        if state == "dev" and not holder and not step_holder:
             holder = f"worker of {name}"
+        steps = [{"text": f"The step of {name}", "claimed_by": step_holder}] if step_holder else []
         self.conn.execute(
             "INSERT INTO work_items(work_item_id, planning_space_id, number, workflow_id,"
             " state_id, kind, priority, title, description, labels, position, parent_id,"
-            " acceptance, accepted_at, started_at, claim_ref)"
-            " VALUES (?, ?, ?, ?, ?, ?, 'medium', ?, '', '[]', ?, ?, ?, ?, ?, ?)",
+            " acceptance, accepted_at, started_at, claim_ref, checklist)"
+            " VALUES (?, ?, ?, ?, ?, ?, 'medium', ?, '', '[]', ?, ?, ?, ?, ?, ?, ?)",
             (
                 identity,
                 self.space_id,
@@ -97,6 +104,7 @@ class Tree:
                 self.stamp() if accepted is not None else None,
                 self.stamp() if started else None,
                 holder,
+                json.dumps(model.checklist(steps)),
             ),
         )
         self.ids[name] = identity
@@ -178,9 +186,9 @@ def oracle(conn: sqlite3.Connection, key: str = "OR") -> Tree:
     straight under G; a closed stage D, a stage E not accepted and a deferred one,
     F. H is an accepted goal with nothing under it and K one whose only child, k,
     left. X blocks G and S blocks the ready task y outside the tree; z is in review,
-    w blocked, v cancelled and u a spare task. Every kind and every category is
-    here, and three of the four goals and stages that stand accepted and open
-    derive a different state.
+    w blocked, v cancelled and u a spare task, and t is at work held by a step of it
+    alone. Every kind and every category is here, and three of the four goals and
+    stages that stand accepted and open derive a different state.
     """
 
     tree = Tree(conn, key)
@@ -205,6 +213,7 @@ def oracle(conn: sqlite3.Connection, key: str = "OR") -> Tree:
     tree.add("w", state="blocked", started=True)
     tree.add("v", state="cancelled")
     tree.add("u")
+    tree.add("t", state="dev", started=True, step_holder="worker of t")
     tree.block("X", "G")
     tree.block("S", "y")
     return tree

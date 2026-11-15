@@ -635,6 +635,61 @@ class ThroughMcpTests(WriteCase):
                 self.assertEqual(("deferred", ("", [])), (self.category(name), self.holders(name)))
                 self.assertFalse(self.record(name)["workable"])
 
+    def test_a_task_moved_back_to_triage_loses_its_basis(self) -> None:
+        self.tree.add("a", state="ready")
+        self.conn.commit()
+        self.assertEqual(model.NAMED_BASIS, self.basis("a"))
+        self.transition("a", "triage")
+        self.assertEqual(
+            ("triage", None, None),
+            (self.category("a"), self.basis("a"), self.stored("a", "accepted_at")),
+        )
+
+    def test_a_stage_accepted_under_a_goal_not_accepted_gives_its_tasks_no_basis(self) -> None:
+        # The chain is climbed past the parent: S stands accepted, G above it does not.
+        self.tree.add("G", kind="goal")
+        self.tree.add("S", kind="stage", state="container", parent="G")
+        self.tree.add("a", parent="S")
+        self.tree.add("b", parent="S")
+        self.conn.commit()
+        if self.agent:
+            self.refused(lambda: self.transition("b", "ready"), "[acceptance]")
+        self.claim("a")
+        named = {"acceptance": model.NAMED_BASIS} if self.agent else {}
+        self.transition("b", "ready", **named)
+        self.assertEqual(
+            (self.entry_basis(), self.entry_basis()), (self.basis("a"), self.basis("b"))
+        )
+
+    def test_a_batch_that_ticks_the_last_held_step_and_asks_review_never_passes_ready(
+        self,
+    ) -> None:
+        self.tree.add("a", state="ready")
+        self.conn.commit()
+        self.give_step("a")
+        self.claim_step("a")
+        self.assertEqual(("active", ""), (self.category("a"), self.holders("a")[0]))
+        mark = self.mark()
+        self.call(
+            "apply",
+            {
+                "id": self.ref("a"),
+                "checklist_ticks": [{"item_id": self.step("a")}],
+                "transition": {"state": "review"},
+            },
+        )
+        # The batch is one write: work went to review, not to ready and on from there.
+        moves = [detail for action, detail in self.actions("a", mark) if action == "transitioned"]
+        self.assertEqual((["review"], "review"), (moves, self.category("a")))
+
+    def test_the_first_claim_of_a_blocked_task_never_started_records_its_start(self) -> None:
+        self.tree.add("w", state="blocked")
+        self.conn.commit()
+        self.assertIsNone(self.stored("w", "started_at"))
+        self.claim("w")
+        self.assertEqual("blocked", self.category("w"))
+        self.assertIsNotNone(self.stored("w", "started_at"))
+
     def test_a_closed_goal_opened_again_keeps_its_basis(self) -> None:
         self.accepted_goal(stage=False)
         service.set_summary(self.conn, self.ref("G"), {"done": "Done", "next": "Nothing"})
@@ -784,8 +839,9 @@ class HolderRuleTests(WriteCase):
         super().setUp()
         self.tree = oracle(self.conn, "WK")
         # Each item gets a step and a summary, so that ticks, step claims and the
-        # closing moves all have something to meet; the steps of a and w are held.
-        holders = {"a": "worker of a", "w": "worker of w"}
+        # closing moves all have something to meet; the steps of a, w and t are held,
+        # and t, at work, by its step alone.
+        holders = {"a": "worker of a", "w": "worker of w", "t": "worker of t"}
         for name, identity in self.tree.ids.items():
             closed = self.conn.execute(
                 "SELECT s.is_terminal FROM work_items i JOIN workflow_states s"
@@ -918,6 +974,70 @@ class HolderRuleTests(WriteCase):
 class HolderRuleOverHttpTests(HolderRuleTests):
     """The same walk with the owner's interface making each write but the lease."""
 
+    via = "http"
+
+
+class OneStatementTests(WriteCase):
+    """A write that changes an item's state and its basis changes both in one statement.
+
+    Two statements in one order pass the store's own check of every statement, so
+    only the statements themselves show it: each one that sets a state or a basis
+    on an item sets both.
+    """
+
+    def item_updates(self, write: Callable[[], object]) -> list[tuple[bool, bool]]:
+        """Of each `UPDATE work_items` the write issues, whether it sets the state and the basis."""
+
+        seen: list[str] = []
+        self.conn.set_trace_callback(seen.append)
+        try:
+            write()
+        finally:
+            self.conn.set_trace_callback(None)
+        # A statement is traced again for each trigger it fires, with its own text: the
+        # text names the item and the revision it expects, so a second write differs.
+        updates = [
+            text
+            for text in dict.fromkeys(seen)
+            if text.lstrip().upper().startswith("UPDATE WORK_ITEMS")
+        ]
+        return [
+            ("state_id =" in text, "acceptance =" in text)
+            for text in updates
+            if "state_id =" in text or "acceptance =" in text
+        ]
+
+    def test_state_and_basis_are_one_statement_per_item_in_every_write_that_moves_both(
+        self,
+    ) -> None:
+        named = {"acceptance": model.NAMED_BASIS} if self.agent else {}
+        self.tree.add("a")
+        self.tree.add("T", kind="goal")
+        self.tree.add("c1", parent="T")
+        self.tree.add("c2", parent="T")
+        self.tree.add("r", state="ready")
+        self.tree.add("p")
+        self.tree.add("q")
+        self.conn.commit()
+        self.give_step("q")
+        writes: tuple[tuple[str, Callable[[], object], int], ...] = (
+            ("acceptance", lambda: self.transition("a", "ready", **named), 1),
+            ("cascade", lambda: self.transition("T", "ready", **named), 3),
+            ("entry into triage", lambda: self.transition("r", "triage"), 1),
+            ("claim", lambda: self.claim("p"), 1),
+            ("step claim", lambda: self.claim_step("q"), 1),
+        )
+        for name, write, items in writes:
+            with self.subTest(write=name):
+                self.assertEqual([(True, True)] * items, self.item_updates(write))
+        # And each write did change both: a basis given, or taken away by triage.
+        self.assertEqual(
+            {"a": True, "c1": True, "c2": True, "r": False, "p": True, "q": True},
+            {name: self.basis(name) is not None for name in ("a", "c1", "c2", "r", "p", "q")},
+        )
+
+
+class OneStatementOverHttpTests(OneStatementTests):
     via = "http"
 
 
