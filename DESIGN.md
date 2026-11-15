@@ -207,7 +207,7 @@ and only fades the end of a strip that scrolls on past it.
   | sheet | `--color-surface-sheet` | `#333333` | 1.21 on its lane | a card, a panel lying on a ground |
   | control | `--color-control-surface` | `#3d3d3d` | 1.16 on a card | a resting control, a hovered card |
   | pressed | `--color-surface-active` | `#464646` | 1.15 on a control | a hovered or chosen control |
-  | recess | `--color-surface-recess` | `#181818` | 1.41 under a card | an epic well, a strip cut into a card |
+  | recess | `--color-surface-recess` | `#181818` | 1.41 under a card | a goal's well, a strip cut into a card |
 
   Separation without a line is a contrast, so it is measured as one. Every
   pair of grounds that stand side by side owes 1.15 — the workspace on the
@@ -251,7 +251,7 @@ and only fades the end of a strip that scrolls on past it.
   `--surface-panel` and `--color-surface-sheet` painted identically, and later
   `--color-surface-hover` and `--color-control-surface` as two rungs of one
   grey, while the check read a hand-written list of two. A group cut into
-  a ground is the one move that goes the other way: an epic bundle is a well one
+  a ground is the one move that goes the other way: a goal's bundle is a well one
   step *down* from the lane, because a second outline around cards that already
   have one would be two frames deep. What lies in a well still counts its step
   from the ground the well is cut into, not from the floor of the well, or the
@@ -300,9 +300,9 @@ and only fades the end of a strip that scrolls on past it.
   and uses the shared semantic-state component.
 - A kind's colour names the kind and never argues with a state. It draws the kind's
   glyph and word and nothing else: a card, a column, a frame and the zoomed-out
-  graph node stay the state's to speak on. Its hues keep out of the state's way: an
-  epic is the epic loot's purple lifted until it reads (`#a335ee` stands at 1.93:1 on
-  the hover card), a bug is rose because the coral beside it is blocked, an improvement
+  graph node stay the state's to speak on. Its hues keep out of the state's way: a
+  goal and a stage share one colour, as they share one sign, an epic loot's purple lifted
+  until it reads (`#a335ee` stands at 1.93:1 on the hover card), a bug is rose because the coral beside it is blocked, an improvement
   turquoise because green is done, a task a grey-blue because blue is in progress. Each
   default holds 4.5:1 on every ground a mark stands on, the hover card being the
   lightest, and the four stay apart under protanopia, deuteranopia and tritanopia;
@@ -420,7 +420,7 @@ and only fades the end of a strip that scrolls on past it.
   is drawn across the whole 28px it is pressed across, the height of the «+»
   beside it, rather than as tall as its words. A field holding chips keeps the
   field's height: a chip's remove button gives the base rule's 40px back, which
-  had stood the new-task labels field 52px tall beside a 40px epic. A field's
+  had stood the new-task labels field 52px tall beside a 40px parent field. A field's
   advice for an empty field is its placeholder, never a hint under one field of a
   pair, which stands that field taller than its neighbour.
   `production-row-controls.spec.ts` measures each such row's heights and top edges.
@@ -742,7 +742,7 @@ and only fades the end of a strip that scrolls on past it.
   never a margin per child. Three regions of a card each setting their own
   margin is how the card came to read tighter at the top than at the bottom
   with nothing owning the answer, and a bottom margin on a list item is what
-  made an epic group inset 8px at the sides and 16px underneath. One container
+  made a goal's group inset 8px at the sides and 16px underneath. One container
   holds one of the four levels of the spacing rule above, so a container whose
   children are of two levels nests the lower one in a container of its own
   instead of spacing both with one gap: a quota window laid its heading, its
@@ -829,9 +829,9 @@ the pinned. After the spaces, under the heading «Сессии вне прост
 whose folder lies under no space, with the same rows on view and their own «давно ждут».
 «Сейчас никто не работает» stands only when no space has rows or sessions and none is
 outside, and the count on the phone's rail button is the number of rows on view, items and
-sessions. An epic, or any item the list holds only as the parent of others, is no row of
-its own: its title is said on its items' rows. An epic at work is a row like any other.
-This replaced a tree of epics with their items under them, quiet and pinned items mixed in
+sessions. A goal, or any item the list holds only as the parent of others, is no row of
+its own: its title is said on its items' rows. A goal at work is a row like any other.
+This replaced a tree of parents with their items under them, quiet and pinned items mixed in
 by number, which read as a heap, and then a single fold whose one word for held and silent
 work said nothing of what each row was doing.
 
@@ -840,14 +840,14 @@ count; it is a row of one line whatever follows it, so the sign, the number, the
 the controls at its end stand where they stand on a row of one line. The second, smaller and
 muted, starts under the title and says the state in a word, «работает», «спрашивает» or
 «ждёт», then how long, «N мин» under an hour and «N ч» from one and nothing under a minute,
-then after « · » the epic's title for an item or the folder for a session that has a title
+then after « · » the goal's title for an item or the folder for a session that has a title
 of its own. How long counts from the session's `since` and moves on once a minute, from one
 clock for the whole list; it changes words only and never the order. A row in a fold and a
-pinned row keep to one line: the sign, the number, the epic's title, muted, before the
+pinned row keep to one line: the sign, the number, the goal's title, muted, before the
 item's own, which gives way first, down to three letters and never more than two fifths of
 the row, and a closed item's state at the row's end, never more than half of it, cut with an
 ellipsis. The row's hint and its accessible name say the whole row in a sentence: what it
-is, its epic or folder, the state with what it means (asking: the session stopped in the
+is, its goal or folder, the state with what it means (asking: the session stopped in the
 middle of a turn for a permission or an answer; waiting: its turn is over; held: its session
 is at work on another item; silent: since which day), how long as a sentence says it
 («ждёт уже 2 ч», "waiting for 2 h", where the second line says «ждёт 2 ч»), and the agents on
@@ -1353,13 +1353,12 @@ the one-off cheaper than the shared thing.
 ### Work
 
 Work presents board, list, and graph views from the same Planning read model.
-It pairs a collapsible epic index with a horizontally scrollable board.
 The bar above the views is two rows and no more: the view and its menu, then the
 filter, then the one primary action, every control of the row at one compact
 height, and under them what is drawn and how much of it. The view's menu, «View»
 by the view because it arranges what is drawn, holds how the view is arranged and
 the views kept: the grouping is a choice in it, offered only where the view has one
-(the board's «No grouping» or «By parent»); «Save view…» keeps the address's state —
+(the board's «No grouping» or «By goal»); «Save view…» keeps the address's state —
 the view, its grouping and the filter — under a name, per space, in the interface's
 own settings, and a kept view is a choice the menu marks while the address holds it
 exactly; choosing it puts its state back, and the marked one can be deleted. A
@@ -1403,18 +1402,18 @@ cross in its check's place, and a press there takes it out whichever way it was 
 address a negated value rides its facet's own key behind `%-`, which no older link holds. On a phone the counts' line is as tall as the reset that joins it while a filter
 is on, so the work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
 with its root — and a view that draws fewer items says what it leaves out: the
-grouped board says how many epics it draws as rows where the line has room, and
+grouped board says how many parents it draws as rows where the line has room, and
 a filter names the closed items it let through only when no open one matched.
-Epic progress, lane state, and active work share the same semantic palette.
-Aggregate epic activity belongs to the epic index, including its compact state,
-and to an epic's frame on the graph, where it is the one sign of work moving
+A goal's progress, lane state, and active work share the same semantic palette.
+Aggregate activity under a goal belongs to its lane's head, including its compact state,
+and to its frame on the graph, where it is the one sign of work moving
 inside a folded frame; bundle headers on the board do not repeat a “working” label.
 A frame says that sign in words, «5 working», and never as a sign or a number alone.
 Zoomed out, where its band has no room for the words, it shortens to the count beside the
 working session's sign, «◌ 5», and the reference is cut before the mark goes; it never gives way
 whole, since then nothing on the field says work is running. The header's hover text says
 it whole, as a zoomed-out card's does, and so does its button's name: over the work under no
-epic, whose one button is the fold, the fold's.
+parent, whose one button is the fold, the fold's.
 On a phone the list's folded orders are one choice in the title's heading, in the
 heading's font and with the least around it, and an order's name is never cut: the
 longest takes a line of its own under the title's sort.
@@ -1464,15 +1463,15 @@ them. The reference is set in the line's own figures, not tabular ones: no
 column of digits lines up on a tile. So urgent, an improvement, a four-digit
 reference and «⛔» with another hold whole in a desktop column when the space's
 key is three letters; a longer key folds as any exception short of room does.
-The board grouped by parent gives a lane to each item that holds others, an epic or
-an item of any other kind, and one to the work under none, «No parent» («Без
-родителя»): the grouping and its lanes name the parent, as the card does, and only an
-epic's own title and sign say it is one; the branch map's lane under none and the
+The board grouped by goal gives a lane to each item that holds others, a goal or a
+stage, and one to the work under none, «No parent» («Без
+родителя»): the lanes name the parent, as the card does, and only a goal's or a
+stage's own title and sign say which it is; the branch map's lane under none and the
 graph's frame under none are named the same way.
-On the board grouped by parent a cell with no tile drawn takes no ground until a
+On the board grouped by goal a cell with no tile drawn takes no ground until a
 tile of its lane is dragged and could land there, and a finished cell's offer of
-its tiles is a line of text. An epic's row is one line: its reference, its title
-and what it holds, and its state only once the epic has moved, since one not
+its tiles is a line of text. A goal's row is one line: its reference, its title
+and what it holds, and where it stands only once its work has moved, since one not
 started is the norm of a board that holds a hundred of them and the word goes on
 being read out. Its card and its chain are two icons with their words in
 `title` and `aria-label`, as an entry's actions are, at the end of the line;
@@ -1498,7 +1497,7 @@ the arrow: a line from the row's edge stood 4px left of the arrow. The indent,
 wrapped line, so the row takes a line more across at most the 28px of width
 above each width where lines from the edge would first fit it in one line
 fewer. That happens up to 890px in Russian under a finger (849px with a mouse;
-in English 802px under a finger, 782px with a mouse), in lanes with an epic and
+in English 802px under a finger, 782px with a mouse), in lanes with a goal and
 without: three lines for two, or four for three where a long title also names
 work out of sight.
 They come up as a row's actions do (**Actions that come up**), in a place kept
@@ -1533,8 +1532,7 @@ in every row, as the next rule says. The cost, for now: on a list that long, a
 screen reader's browse mode reaches only the rows in the page.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its
 stages and tasks under it by depth, and rows that share a parent stand in the
-list's sort order. The view menu offers «By goal» on the list and «By epic» on
-the board. A goal or stage with more than 20 open items, or with none open,
+list's sort order. The view menu offers «By goal» on the list and on the board alike. A goal or stage with more than 20 open items, or with none open,
 starts folded. A reader's choice against that rule is kept per space and is
 forgotten once it agrees with the rule. A filter lays out the whole scope and
 shows what it let through with the path to it: a path row is quiet, a reader is
@@ -1600,8 +1598,8 @@ same glyphs, then its state's dot and name and its project; results share
 their columns so every reference and title start at one edge.
 «Связи» holds the item's related work, then its evidence. A group of related work longer than
 five rows opens folded to its heading, which counts its rows by state — «Привело к 14 ·
-11 выполнено · 2 бэклог · 1 отменено» — and a shorter group opens; what the reader opened
-or folded holds while the card is open and comes back with it by Back. An epic's fourteen
+11 выполнено · 2 не разобрано · 1 отменено» — and a shorter group opens; what the reader opened
+or folded holds while the card is open and comes back with it by Back. A goal's fourteen
 rows of «Привело к» put everything under them a long scroll away. A link's row says the
 other end's state in one place whatever the length of its title: in a column every group
 of the list shares, on the title's first line with every dot on one edge, and under the
@@ -1614,12 +1612,12 @@ The card offers it only where there is a chain — an item with children, or one
 discovered from — and for an item with no children only once the chain read has said so;
 a card on the tab whose next read finds no chain steps back to «Обзор». The chain stood in
 «Связи» before, after the links and references, as a relation of the item, which put it
-under every link of an epic; the map and its hundreds of rows had held Overview's first
+under every link of a goal; the map and its hundreds of rows had held Overview's first
 screen between the next step and the description before that. The tab names it, so it has
-no heading of its own: it opens on its «Эпик | Цепочка» switch and «На графе», and Back from
+no heading of its own: it opens on its «Состав | Цепочка» switch and «На графе», and Back from
 the graph opens the card on this tab. The switch stands only where the two answer
 differently, by the counts the chain read gives for both scopes: where the work grew nothing
-past the root's children the two are one list, and a root with no children has no epic scope
+past the root's children the two are one list, and a root with no children has no contents
 to read. An item of an attached store has the tab only where it has children, and there it
 says that its chain is read in the primary store.
 The section leads with a branch map: one lane per origin of work,
@@ -1705,13 +1703,13 @@ What those days added and closed, why there is no verdict yet, and the chart of
 the chain's history stand one action away, and the action's state comes back with
 the card's other reading on Back. The scope rides the heading's row.
 
-Over the whole space the graph stands in frames. An epic, and any item that grew
-children, is drawn as a frame round its work, and the work filed under no parent has
+Over the whole space the graph stands in frames. A goal or a stage is drawn as a
+frame round its work, and the work filed under no parent has
 a frame of its own, «Без родителя» (`none`), so every open item stands somewhere on
 the field. A frame is told by tone and draws no line: it is ground a step above the
 field and its cards a step above it, and a frame inside a frame is a well cut a
 step below the one it stands in. Without a filter the field draws every frame with
-open work and every open epic, and in «All» every epic; under a filter, as on the
+open work and every open goal, and in «All» every goal; under a filter, as on the
 board, only a frame the filter found something in. So every item is on the field,
 as a card or as the frame it heads, and the open-or-all switch counts the items the
 counts line above it counts. A frame has three readings.
@@ -1720,14 +1718,14 @@ wider than a card so its counts fit. A header is as tall as its title, one to th
 lines, with the counts right under it, and the layout leaves it the room that same
 header takes when drawn; the chevron leads its reference line, and everything in the
 header starts at one left edge, the one its cards start at. Zoomed out past reading, the header is the
-epic's reference grown with the field, as a zoomed-out card's is, with the count of
+goal's reference grown with the field, as a zoomed-out card's is, with the count of
 work moving under it at the far end and a thicker edge beneath; the work under no parent
 keeps its name instead. The header is two buttons with one action each, as a card
-is one: the chevron folds or opens the frame, and the rest opens the epic's card;
+is one: the chevron folds or opens the frame, and the rest opens the goal's card;
 over the work under no parent the rest is plain text, with no parent to open. At the scale
 the field opens at, the chevron is a 28px target under a fine pointer and 44px under a
 finger or at a phone's width, reaching up and back into the header's padding and the air
-round the frame and never onto the epic's words, so the header is drawn no taller; each
+round the frame and never onto the goal's words, so the header is drawn no taller; each
 button's focus ring goes round its own drawing with air and no further, and the fold's face
 under the pointer covers its chevron alone, zoomed out too, where its target is the whole band
 of the work under no parent: never that band's words or its edge. Zoomed out, the chevron is as
@@ -1736,18 +1734,18 @@ keeps the share of its words it has at reading size, so the focus reads as they 
 opens with as much air above its first row as between two frames, so no edge cuts a fold's
 target. Below a
 quarter of full size a header is a few pixels and the frame round it is what the hand
-finds, so the ground of an open frame with an epic opens that epic too and the pointer
+finds, so the ground of an open frame with a goal opens that goal too and the pointer
 says so. It is the pointer's shortcut: the keyboard has the header's button and no new
 stop, a card on the ground and a frame inside a frame answer for themselves, and a drag
 from the ground moves the field. A card in
-a frame does not name its epic, since the frame does. A chain has no frames: it
-keeps its flat drawing, its root and its epics as nodes, because its progress is
+a frame does not name its goal, since the frame does. A chain has no frames: it
+keeps its flat drawing, its root and its goals as nodes, because its progress is
 the card's map and not the field's.
 
 A frame starts folded by its structure alone — how much open work it holds — and
 never by who is working on it, or every agent's turn would lay the field out again.
 A frame holding more than 20 open items starts folded and shows its progress in its
-header instead, and so does an epic with nothing open; the frame of the work under
+header instead, and so does a goal with nothing open; the frame of the work under
 no parent with nothing open folds only past 20 drawn cards, so «All» on a space with
 a few finished items draws them. Every frame between those starts open, so the
 links of its work are seen at once. What the operator chooses for a frame, folded or
@@ -1758,9 +1756,9 @@ so a frame left alone follows its work again. Folding or opening a frame lays th
 field out again, and the camera follows across, at the operator's zoom, so the
 frame's header stays where it stood on the screen and what was pressed does not
 move from under the hand (`toggled`). The arrows reach a header's two buttons as
-they reach cards, the fold on its left (`frame:<id>:fold`) and the epic across the
+they reach cards, the fold on its left (`frame:<id>:fold`) and the goal across the
 rest (`frame:<id>`); the work under no parent has only the first. Right from the fold
-is the epic's button beside it and Left from that button is the fold, however wide
+is the goal's button beside it and Left from that button is the fold, however wide
 the header, since measured from centres a wide header's second button stands further
 off than the first card under the fold. Once a fold hides
 the target the keyboard stood on, the field's Tab stop is the fold button of the
@@ -1769,7 +1767,7 @@ hidden and is no target, except over the work under no parent, whose header has 
 other button and keeps it (`foldIsTarget`): the arrows, the Tab stop and the way in read one
 list of the targets the field draws at its zoom, so Tab never rests on a button
 that takes no focus and the field stays one stop at any zoom. Focus on a fold the zoom
-hides moves to the epic's button beside it before the fold goes, whatever changed
+hides moves to the goal's button beside it before the fold goes, whatever changed
 the zoom, and the camera stays; at reading size the stop is the fold again.
 
 Open work comes first as the field is read, finished frames after it. The field's
@@ -1779,7 +1777,7 @@ the space has five or more lone frames with open work, they stand on a shelf of
 their own, then the linked open work on a second, then the finished frames on a
 third, and each shelf stacks its small frames to fill its rows (`GROUP_MIXED`).
 Without shelves a row is as wide as the widest piece and as tall as its tallest, so
-a dozen small epics beside one linked piece thousands of pixels wide made one thin
+a dozen small goals beside one linked piece thousands of pixels wide made one thin
 strip with empty field under it, and the first screen at 1500 px was 83 % empty;
 `box` ignores priorities in its grouping modes, which is why the priority stands on
 the shelves and the grouping within them. A first open piece can still begin with a
@@ -1796,20 +1794,21 @@ already in sight.
 A header says how its work stands in words, a number beside each word and never
 rounded to «99+»: «8 из 21 выполнено», then how many are in review, in progress and
 blocked, each only when it is not zero, and how many are being worked on now. The
-epic's state is said once it has moved, and quietly on a closed epic that still
+goal's standing is said once its work has moved, and quietly on a closed goal that still
 holds open work. Only the title gives way when the row is short; the counts are
 never cut, and take a row under the name before they would be. Under the row a 3px
 edge draws the same counts as a chain's lane is drawn: finished, review, under way,
-blocked, then what is ahead (queued and backlog together), each part as long as its
+blocked, then what is ahead (ready, untriaged and deferred work, and a nested goal or
+stage still open, together), each part as long as its
 share, in the board's hues, and a part too short to see still a dot. The counts
-describe the epic and not the view: every item under the frame, open and closed,
+describe the goal and not the view: every item under the frame, open and closed,
 nested frames' included, whatever is drawn or a filter lets through. Over the whole
-space the key names the parts the frames' edges draw, «Впереди» for queued and
-backlog together, and finished work by the board's word, «Выполнено», which the
+space the key names the parts the frames' edges draw, «Впереди» for all that is
+ahead together, and finished work by the board's word, «Выполнено», which the
 header's count says too.
 
-A link is drawn between the drawn ends it reaches: a card, an epic's frame, or the
-outermost folded frame the card stands in. So a link to an epic ends on its frame
+A link is drawn between the drawn ends it reaches: a card, a goal's frame, or the
+outermost folded frame the card stands in. So a link to a goal ends on its frame
 rather than being dropped, and a line to work folded away ends on the frame that
 holds it. Frames lie under the lines and cards over them, so a line runs across a
 frame and into the card it ends on. A link between an item and a frame it stands in
@@ -1909,9 +1908,9 @@ Overview, in the state chip's word and on its baseline. It was drawn as the stat
 that the agent waits the state's dot already says. The priority is a menu as well, urgent to low, each
 choice saying what it means; on an item the client cannot change both are plain marks.
 The parent is named «Родитель», since any item may hold others one level deep, and drawn by
-its own kind's sign in that kind's ink, as a tile of it draws it: the epic's sign for an epic,
-a bug's for a bug, and for a plain task, which has no sign, the generic parent's. Every
-parent was called «Эпик» under the epic's sign, a task holding others too. Its reference is
+its own kind's sign in that kind's ink, as a tile of it draws it: the container's sign for a
+goal or a stage, a bug's for a bug, and for a plain task, which has no sign, the generic parent's. Every
+parent was once called by the one container word under its sign, a task holding others too. Its reference is
 an item link, the same link a number in text is: a press opens the parent through the card's
 departure, its draft guard and Back, and resting on it shows its hover card; its number is
 trimmed to its letters as every value of the facts is, so it stands on its name's baseline.
@@ -1938,8 +1937,8 @@ one height, the state chip's, so a wrap adds a row of that height and never a ha
 One action ends the holder's row on a wide drawer and stands at full width under the
 facts on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать себе» on
 another's. Where the facts argue against taking it the reason stands there instead —
-«Ждёт MAIN-12», the number a link, while an open blocker remains, «Эпик — возьмите задачу из него» on an
-epic.
+«Ждёт MAIN-12», the number a link, while an open blocker remains, «Цель — возьмите задачу из неё» on a
+goal and «Этап — возьмите задачу из него» on a stage.
 Reading down, the tabs stick to the top of the scroller, on one row that scrolls inside
 itself where it has to, the one shown and the one focused brought into it, and whatever
 is scrolled into view comes to rest under them. The bar answers with two fades on the
@@ -2489,10 +2488,12 @@ already chosen stays shown, with what it comes to beside it. Windows notificatio
 holds the switch, the events, how much a notification's text reveals, a readiness row
 that says what Windows will do with one and how to change it, and a trial that sends
 a real notification; turning the switch off keeps the events chosen. Task type colors
-holds a row per type: its glyph and word in the colour they have now, the platform's
+holds a row per colour: its glyph and word in the colour they have now, the platform's
 colour field, the value in words and a reset, with one reset for all under them. A
 colour under 3:1 on the hover card is said beside its field in a quiet line and stays
-chosen. A plain task has no glyph anywhere, so its row is its word. Accounts holds a
+chosen. A goal and a stage share one row, «Цель и этап» («Goal and stage»), as they share
+one sign and one colour; a colour stored for a kind this build does not have is not read,
+so that row starts from the default. A plain task has no glyph anywhere, so its row is its word. Accounts holds a
 row per account the past year's work was billed to, the most agent time first: its
 whole id with its share of that time, a name field whose placeholder says what Analytics
 shows without one, and a clear; an account named before that the year did not see keeps
