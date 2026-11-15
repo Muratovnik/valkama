@@ -19,9 +19,10 @@ playwright-report/
 *.log
 
 # One ignored home for everything the development tools cache: ruff, mypy,
-# import-linter, coverage's raw arc data and the Hypothesis constants store.
-# Each of them is pointed here by pyproject.toml or by tests/property_settings.py
-# rather than left to scatter a dotted directory across the repository root.
+# import-linter, coverage's raw arc data, the Hypothesis constants store and Vite's
+# prebuilt dependencies. Each of them is pointed here by pyproject.toml, by
+# tests/property_settings.py or by web/vite.config.ts rather than left to scatter
+# a dotted directory across the repository root or into a shared node_modules.
 # Nothing here is an input to anything: delete it and the next gate run rebuilds it.
 /.cache/
 

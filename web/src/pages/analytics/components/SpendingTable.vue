@@ -10,8 +10,8 @@
  * is in view, its heading row stays at the panel's top edge and its total at the bottom edge
  * (`stuck`), and a row brought into view by the focus stands clear of both. Each
  * column's heading sorts by it, largest first, then the other way; the first sort is the chosen
- * measure. A row is one line: its name is cut where the column is
- * narrower (`SpendingTableName`), and the figures take what they need, the name the rest.
+ * measure. A row is one line: the figures take what they need, the name the rest down to its
+ * least, cut where the column is narrower (`SpendingTableName`).
  *
  * The sorted column's heading is marked, in the ink of the figures with its arrow and a rule under
  * it. The heading row over the frame (`SpendingTableHead`) counts the rows, gives their whole account
@@ -25,6 +25,7 @@ import { useI18n } from 'vue-i18n'
 import SpendingTableHead from '@/pages/analytics/components/SpendingTableHead.vue'
 import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
+import { useHeadingLines } from '@/pages/analytics/composables/useHeadingLines.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useStuckEdges } from '@/pages/analytics/composables/useStuckEdges.ts'
@@ -90,6 +91,8 @@ const acrossWords = computed(() => (props.across ? t(`analytics.byDimension.${pr
 
 /** The answer the rows are of: by both dimensions while split, the one on show otherwise. */
 const tableUsage = computed(() => crossed.value?.usage ?? props.usage)
+/** What a row names: a pair of values while split, whose name column keeps more room. */
+const rows = computed(() => (crossed.value ? 'pairs' : 'values'))
 
 const model = useTableModel(() => ({
   by: props.by,
@@ -138,6 +141,9 @@ const root = ref<HTMLElement | null>(null)
 /** Its heading row and total held at the edges of the panel's scroll (`useStuckEdges`). */
 const stuck = useStuckEdges(root)
 
+/** Its headings over figures on one line, or on two where one would widen it past its frame. */
+const headingLines = useHeadingLines(root, [model, held])
+
 /** Brings the table into view, its heading row at the top, with the focus on it. */
 function reveal() {
   const table = root.value
@@ -154,6 +160,8 @@ defineExpose({ reveal })
     class="spending-table"
     tabindex="-1"
     :data-measure="measure"
+    :data-headings="headingLines"
+    :data-rows="rows"
     :aria-label="model.title"
     :style="{
       '--stuck-head': `${stuck.head}px`,
@@ -346,7 +354,7 @@ defineExpose({ reveal })
 .table-head .chart-cell {
   position: sticky;
   z-index: 3;
-  background: var(--color-canvas);
+  background: var(--color-chart-table-ground, var(--color-canvas));
   box-shadow: inset 0 -1px var(--color-rule);
 
   &:first-child {
@@ -358,7 +366,7 @@ defineExpose({ reveal })
   position: sticky;
   z-index: 2;
   color: var(--color-text);
-  background: var(--color-canvas);
+  background: var(--color-chart-table-ground, var(--color-canvas));
   box-shadow: inset 0 1px var(--color-rule);
 
   &.chart-name {
@@ -435,8 +443,8 @@ defineExpose({ reveal })
 }
 
 /* A row is one line: each figure and its heading take what they need, the name the rest, cut
-   where it is longer (`SpendingTableName`). In a narrower table a heading may take a second line
-   rather than widen its column past its figures. */
+   where it is longer (`SpendingTableName`). Where the headings on one line would widen the table
+   past its frame, they take a second line instead (`headingLines`). */
 .chart-cell[data-numeric='true'] {
   inline-size: 1px;
 }
@@ -447,24 +455,27 @@ defineExpose({ reveal })
 }
 
 /* The name's column takes all the width the figures leave: as wide as the table, less what the
-   figures' columns need, and never wider than its frame because of a long name. */
+   figures' columns need, and never wider than its frame because of a long name. It gives them
+   room down to the least every chart table keeps its names, eight of its ems (`chartTable.css`):
+   a task's reference and the start of its title. Held at 12rem, it left the change of «Today»
+   past a frame of 676 pixels, a window of 1280 in Russian; where even the least is too much, the
+   table scrolls in its frame with the names held at its start. */
 .chart-name {
   inline-size: 100%;
-  min-inline-size: 12rem;
   max-inline-size: 0;
 }
 
-@container (width < 50rem) {
-  .chart-heading[data-numeric='true'] {
-    min-inline-size: 7em;
-    white-space: normal;
-  }
+/* A pair keeps its second value whole, a model's name as long as «· claude-sonnet-5-5», with
+   the start of its first before it (`PairName`): its column keeps the 12rem that holds them. */
+.spending-table[data-rows='pairs'] .chart-name {
+  min-inline-size: 12rem;
 }
 
-/* Under the measure «tokens» the tokens by kind follow the change and the table is wider than its frame: every column stands at its least, so a
-   heading over figures takes a second line, as in a narrower table, rather than push the change
-   past the frame's edge. The kinds after it are reached by the frame's own scroll. */
-.spending-table[data-measure='tokens'] .chart-heading[data-numeric='true'] {
+/* The headings over figures on two lines, each column at its least: the frame of a narrower
+   table, a period before named with its hours, or the tokens by kind after the change under the
+   measure «tokens», whose table is wider than its frame and whose kinds are reached by the frame's
+   own scroll. The change then stands inside the frame's edge rather than past it. */
+.spending-table[data-headings='two'] .chart-heading[data-numeric='true'] {
   min-inline-size: 7em;
   white-space: normal;
 }

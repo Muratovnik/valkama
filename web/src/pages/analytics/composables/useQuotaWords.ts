@@ -12,13 +12,18 @@
 import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { stands } from '@/pages/analytics/utils/quotaFigures.ts'
-import { dayOf } from '@/pages/analytics/utils/readMoments.ts'
+import { runsOutAt, stands } from '@/pages/analytics/utils/quotaFigures.ts'
+import { dayOf, momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 
 import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
-import type { QuotaAccount, QuotaShareWindow, QuotaWindow } from '@/shared/api/analyticsApi.ts'
+import type {
+  QuotaAccount,
+  QuotaRange,
+  QuotaShareWindow,
+  QuotaWindow,
+} from '@/shared/api/analyticsApi.ts'
 import { agoWords, spanWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import type { StepPoint } from '@/shared/ui/windowGeometry.ts'
 
@@ -88,15 +93,31 @@ export function useQuotaWords() {
     return t('analytics.quota.resets', { at, in: spanWords(left, span) })
   }
 
+  /**
+   * A week's range, never past 100 %, which a quota cannot pass: a low end there runs the window
+   * out before the reset, about when its slower pace says; a high end there only may; ends said
+   * alike are one value.
+   */
+  function range(window: QuotaShareWindow, found: QuotaRange, today: string) {
+    const low = share(found.low_percent)
+    const high = share(found.high_percent)
+    if (window.latest.used_percent >= 100) return t('analytics.quota.forecast.spent')
+    if (found.low_percent >= 100) {
+      const at = runsOutAt(window, found.low_percent, Date.parse(today))
+      if (at === null) return t('analytics.quota.forecast.short')
+      const said = moment(momentAtOffset(at, offsetOf(today)), today)
+      return t('analytics.quota.forecast.shortBy', { at: said })
+    }
+    if (found.high_percent >= 100) return t('analytics.quota.forecast.mayRunOut', { low })
+    if (low === high) return t('analytics.quota.forecast.one', { share: low })
+    return t('analytics.quota.forecast.range', { low, high })
+  }
+
   /** The five hours as a point — lasts, runs out at a time, spent — and a week as a range. */
   function forecast(window: QuotaShareWindow, today: string) {
     const found = window.forecast
     if (!found) return t('analytics.quota.forecast.none')
-    if ('low_percent' in found)
-      return t('analytics.quota.forecast.range', {
-        low: share(found.low_percent),
-        high: share(found.high_percent),
-      })
+    if ('low_percent' in found) return range(window, found, today)
     if (found.outcome === 'runs_out' && found.runs_out_at)
       return t('analytics.quota.forecast.runs_out', { at: moment(found.runs_out_at, today) })
     return t(`analytics.quota.forecast.${found.outcome === 'spent' ? 'spent' : 'lasts'}`)

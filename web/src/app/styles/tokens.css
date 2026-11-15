@@ -503,6 +503,13 @@
      ground instead, or the panel stands two steps up. Read the way
      `--color-count-badge-ring` is: the panel falls back to the sheet. */
   --color-state-panel-surface: var(--color-surface-sheet);
+
+  /* The ground a chart's table stands on, which what it keeps in place while the rest passes
+     under it is painted in: the names at its frame's start, a section table's heading row and
+     total. The panel's canvas; a host on a surface of its own, as a quota account is, names
+     that surface instead, or the kept cells stand as dark blocks on it. Read the way
+     `--color-count-badge-ring` is: the table falls back to the canvas. */
+  --color-chart-table-ground: var(--color-canvas);
   --color-text-disabled: var(--color-gray-450);
   --color-graph-line: var(--color-cyan-400);
   --color-graph-line-muted: var(--color-slate-450);

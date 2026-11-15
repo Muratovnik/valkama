@@ -239,6 +239,11 @@ and only fades the end of a strip that scrolls on past it.
   sheet; a host lying on the workspace panel itself — the Work module's frame, every
   project's work, installation health, the shell's recovery, a task's link — names
   the ground there instead, because the sheet stood two steps up, 1.41 to the panel.
+  What a chart's table keeps in place while the rest passes under it — the names at
+  its frame's start, a section table's heading row and total — is painted in
+  `--color-chart-table-ground`, the canvas unless its host names the ground it lies
+  on: a quota account, on a surface of its own, names that surface, where the canvas
+  stood as dark blocks on it.
   A question asked in place (`ConfirmStrip`) is a block of the sheet's tone where it
   stands on a ground; on a sheet, whose tone that already is, it draws no ground and
   no inset and its words start on the sheet's edge. The strip reads which of the two
@@ -968,7 +973,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   chart in a list of their own, set apart by air, draw no bar and are read by their figures.
   A hue
   never speaks alone: a chart of two series or more carries a legend, and every hint and every
-  accessible name say each series by name.
+  accessible name say each series by name. The legend's lines step 24px with no gap between
+  them, every line one height, and every key fills its line: one that acts, a link or a button
+  alike, is the 24px target WCAG 2.5.8 asks and reaches no key of the next line, and one that
+  only shows takes no focus, no pointer's hand and no press.
   Every mark of a chart — a period, a segment of one, a small chart's name, a legend entry, a
   ranked row — keeps one contract. Pointing at it, or focusing it from the keyboard, shows its
   hint at the mark through the one hint host: the mark's series, its value, its share and the
@@ -992,15 +1000,24 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   before its column, a shape and not a hue, and the period's hint, name and table row say it,
   «Account change: a → a, b», naming each account as Settings does: the chart keeps no row for
   changes, over the plot or under it, so they cost the plot none of its height. The periods are one Tab stop and the arrows walk
-  them; nothing in a chart moves on its own, which never meant that nothing may stand over it:
-  a hint lies in the hint layer and shifts nothing. A period that acts when pressed is never
+  them; nothing in a chart moves on its own but a live span's frame keeping up with its running
+  period, as below, which never meant that nothing may stand over it: a hint lies in the hint
+  layer and shifts nothing. A period that acts when pressed is never
   narrower than the 24px target WCAG 2.5.8 asks (`--period-reach`), and a span whose periods
   all fit the chart at that width never scrolls: an inline action's 28px scrolled four weeks
   beside the rail by a few pixels. A span that takes more room than the chart scrolls sideways
-  inside the plot and never moves the page, opens on its first periods, fades out toward an
-  edge past which periods are hidden (a mask, which paints no colour and drops while the
-  keyboard stands in the plot), keeps the value axis in view over the plot's start, and brings
-  a period the keyboard reaches clear of that axis with its focus ring whole. Periods that only show
+  inside the plot and never moves the page. A past span — a week, days chosen, an earlier
+  day — opens on its first periods. A live one, «Now» or «Today», opens on its running period,
+  scrolled on only as far as that period needs to stand at the frame's end — one period in from
+  it where later ones follow, so the fade toward those falls on the next and not on it — and
+  the minute or hour running and the minutes with no data yet are in view beside the ones
+  leading to them; while the reader leaves the frame there, it keeps the running period at its
+  end as the span moves on with the clock, and once they scroll it, a new minute or the bar's
+  refresh keeps the period they read where it stood until they scroll back to the running one.
+  The plot fades out toward an edge past which periods are hidden, at the axis on a live span
+  opened on its end (a mask, which paints no colour and drops while the keyboard stands in the
+  plot), keeps the value axis in view over the plot's start, and brings a period the keyboard
+  reaches clear of that axis with its focus ring whole. Periods that only show
   keep sharing the chart's width, however narrow that makes them. A period compared with the
   one shown stands on the same scale as a short line at its height over each column, an edge
   and not a hue, so a period before that was larger never outweighs the columns shown: the
@@ -2060,7 +2077,8 @@ would move from under them. Selecting does nothing but select, and nothing is ch
 the person but at their own press: Send is what sends. Accepting what the agent recommends is
 that press, in one block of a review or in all the blocks of a choice that wait, and it fills
 only what the person has not chosen and sends nothing by itself. Across blocks, «Accept
-recommended in all» opens in place the list of what would go, a line per block with its task's
+recommended in all» is offered only where the list's host turns it on, which «Needs my answer»
+does not yet; where it is offered, it opens in place the list of what would go, a line per block with its task's
 number, its title and what would be chosen in it, says how many blocks it leaves out because
 their recommendation does not answer them, and sends only on «Accept N»; each block is filled
 and written by its own question, so one that went folds and one that did not keeps what was
@@ -2295,7 +2313,10 @@ kept an inset of its own, which put four left edges within 20px — the chosen e
 heading, the entry's words and the bar's period switch — and the one entry drawn as a box
 stood out past the bar over it. The rail is as wide as its entries need, within a range rather
 than at a constant, and keeps its scrollbar's room whether it scrolls or not: at a constant
-240px an entry's words had 182px, and «Способ запуска» was cut to «Способ запу…».
+240px an entry's words had 182px, and «Способ запуска» was cut to «Способ запу…». The panel
+keeps its scrollbar's room too, out of its end inset, so what it holds ends on the bar's edge
+whether it scrolls or not; with the room taken only while it scrolled, a section ended 10px
+short of the bar.
 
 The bar holds what every part reads by: the period, the filters, how fresh the data is and the
 refresh. A period is «Now», «Today», this week, the past four weeks or a span of the reader's
@@ -2305,26 +2326,38 @@ yesterday; both read again every 30 seconds while the tab is visible, a hidden t
 nothing, and a refresh shows its answer whole or not at all, so the scroll, the section, the
 sort and the place under the pointer stay. Freshness is one element of constant width: a live
 mark and the newest record's age in tabular figures, «● 15 s ago», with the whole sentence in
-its hint — the record's time and, for a live period, how often it reads again. Said twice, as
+its hint — the record's time and, for a live period, how often it reads again. The mark says a
+live period only while its reads stand: after a read that failed it is not drawn, its room kept,
+since a green mark with no age beside a panel saying the read failed claimed a liveness the page
+did not have. Said twice, as
 «every 30 s» and «Last record 14:17 · 15 s ago», it held 21em of the bar, and the air after
 the first part still changed as the record aged. A line short of room gives up its buttons'
 words, then the air between its parts, then the word around the age, «● 15 s», in the room of
-the widest span, and never a day of the reader's own period, whose fields are as wide as a date of
+the widest span, then a failed refresh's retry, the refresh beside it asking the same, and never
+a failure's words or a day of the reader's own period, whose fields are as wide as a date of
 the widest figures needs: beside a span of days in Russian the line ran «Refresh» 92px past the
 bar's end at 1200px. The last thing a line gives up is itself: one that still runs past its end
-becomes the two rows below, with its words back and a failed refresh said in full on the second
-row, and a bar with room for one line keeps one line. Beside a span of days with a failure, in
-Russian, the line needed a 1300px window; at 1108px «Refresh» ran 188px past the bar's end, and
-pressing it scrolled the bar sideways. There, choosing such a span moves the panel down by the
-second row: one line wherever it fits was chosen over a bar of one height for every period.
+becomes the two rows below, with its words back, and a bar with room for one line keeps one line.
+The line is fitted as if a refresh had failed, so a failure said takes only the room the
+filters' chips had, the way to add a filter standing before them: it moves neither the bar's
+height nor any of its controls. Fitted for the bar as it stood, a failure moved «Add filter»
+260px and the age as far, gave up the failure's own words beside a span of days at 1440px, and
+turned a line of 1280px into two rows that moved the panel. Beside a span of days, in Russian,
+the line needs a 1360px window; at 1108px «Refresh» ran 188px past the bar's end, and pressing it
+scrolled the bar sideways. There, choosing such a span moves the panel down by the second row:
+one line wherever it fits was chosen over a bar of one height for every period.
 Below a bar 50rem wide, a window under about 1107px beside the expanded navigation, the bar is
 two rows of one height whatever period is chosen: the periods and the filters, then the ends of
 the reader's own period at the start of the second row and the
 freshness with the refresh at its end. One row cannot hold them there: at 1024px the line is
 about 712px, and the periods and two date fields alone take 693px of it in Russian. Standing
 beside the periods, the ends pushed the filters and then the freshness onto a third row, and the
-panel moved down 44px when a span of days was chosen. A refresh that fails keeps what is shown and
-says so in the bar, «Could not refresh» with a retry. Reading another period or filter dims
+panel moved down 44px when a span of days was chosen. On a phone the bar is three rows of one
+height whatever period is chosen: the periods, scrolling sideways, with the freshness at their
+end; the filter, a failure and the refresh; and the room of the reader's own days, which took a
+row of their own and moved the panel 44px when chosen. A refresh that fails keeps what is shown
+and says so in words before the age at every width, «Could not refresh» with a retry: given up
+on a short line, its words had left a red disc with no hint. Reading another period or filter dims
 what is shown until its answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in
 seconds and the minutes after the newest record are hatched as «no data yet» rather than drawn
@@ -2425,10 +2458,13 @@ into «other» as any series is. Chosen over the table alone, it left the charts
 table answering the first dimension only. A pair's name short of room on its line cuts its first
 part and keeps the separator and the second whole, «claude-opus-5-… · medium», because the second
 is what tells one value's pairs apart: cut from its end, «claude-opus-5-5 · …» stood twice in one
-chart. A pair acts as its first value does, and a bar, a small chart or a legend entry that acts
-is named by that action, «Show the tasks of claude-opus-5-5», so each is described by its whole
-pair before its figures: described by its figures alone, the high and the medium row of one model
-sounded alike to a screen reader.
+chart. In the ranked bars a pair's name takes a line of its own over its bar at every width, as any
+name does in a narrow chart: the second part is a whole value's name, as wide as a model's, and
+the one-line name column, two-fifths of the row, held «claude-opus-5-5» with 13 pixels of the task
+before it and cut the model as well. A pair acts as its first value does, and a bar, a small
+chart or a legend entry that acts is named by that action, «Show the tasks of claude-opus-5-5», so
+each is described by its whole pair before its figures: described by its figures alone, the high
+and the medium row of one model sounded alike to a screen reader.
 
 The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
 figure counts add up to it, cache reads stand beside them and reasoning is part of output.
@@ -2444,7 +2480,10 @@ were read, or no reading. The panel has a group per account on a surface of its 
 name its owner gave it or the start of its id, the whole id in its hint, its windows side by
 side where the width allows. Each window shows its bar, when it resets in absolute and relative
 time and its forecast — the five hours a point, lasting to the reset or running out at a time;
-a week a range, said as a range — as short labelled values over the `StepLine` of its readings.
+a week a range, said as a range and never past 100 %, which a quota cannot pass: a low end there
+says the week runs out before its reset and about when its slower pace spends it, a high end
+there that it may, and ends said alike one value — as short labelled values over the `StepLine`
+of its readings.
 Where steady use would stand is drawn — the bar's tick, the line's diagonal — and said in their
 hints, as are how old the latest reading is and who read it. A window's step line is on no
 period of the page, so its scale is its own: it opens on «To now and the forecast» with a

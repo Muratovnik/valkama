@@ -110,10 +110,12 @@ const hintOf = (key: string) => props.hints?.get(key)
 <style scoped src="@/shared/ui/seriesFill.css"></style>
 
 <style scoped>
+/* The lines step 24 pixels, the target WCAG 2.5.8 asks, with no gap between them: every key fills
+   its line, so one that acts is pressed across all 24 and never reaches into the next line's. */
 .chart-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
+  gap: 0 var(--space-4);
   padding: 0;
   margin: 0;
   color: var(--color-text-muted);
@@ -124,15 +126,18 @@ const hintOf = (key: string) => props.hints?.get(key)
 .chart-entry {
   display: flex;
   min-width: 0;
+  min-block-size: var(--space-6);
 }
 
 /* An entry that acts is a line of the legend, not a control standing in it: the same box and
-   words as one that does not, with the pointer's hand. */
+   words as one that does not, with the pointer's hand. A button takes no control's row height:
+   «No task», which acts only as one, stood 40 pixels tall among the 17 of its neighbours' links. */
 .chart-key {
   display: inline-flex;
   gap: var(--space-2);
   align-items: center;
   min-width: 0;
+  min-block-size: 0;
   padding: 0;
   border: 0;
   color: inherit;

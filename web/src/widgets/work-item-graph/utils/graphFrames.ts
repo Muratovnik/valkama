@@ -29,15 +29,7 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import { chainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
-
-/**
- * A frame holding more open work than this starts folded, and so does a goal
- * holding none: the field opens on the links of the goals in between, and a
- * large frame shows its progress in its header instead. The work under none
- * with nothing open folds only past this many drawn cards, so «All» on a space
- * with a few finished items draws them.
- */
-export const FOLD_ABOVE = 20
+import { FOLD_ABOVE } from '@/shared/lib/treeRows.ts'
 
 export interface FrameProjectionInput {
   /** The whole space: a frame counts its work whatever the field draws. */
@@ -158,8 +150,12 @@ function frameCandidates(
       ? visible.length > 0
       : openWork > 0 || input.showDone || (goal !== null && open(goal))
     if (!wanted) continue
-    // A goal with nothing open folds; the work under none is no goal to
-    // summarise, so in «All» it folds only when its finished work is large too.
+    // A frame holding more open work than `FOLD_ABOVE`, the count the list's
+    // tree folds by too, starts folded, and so does a goal holding none: the
+    // field opens on the links of the goals in between, and a large frame shows
+    // its progress in its header instead. The work under none is no goal to
+    // summarise, so in «All» it folds only past that many drawn cards, and a
+    // space with a few finished items draws them.
     const idle = goal !== null || visible.length === 0 || visible.length > FOLD_ABOVE
     const defaultFolded = openWork > FOLD_ABOVE || (openWork === 0 && idle)
     candidates.set(id, {

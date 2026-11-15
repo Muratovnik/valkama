@@ -114,6 +114,9 @@ for (const { least, touch, width } of [
     test(`at ${width}px a fold is a ${least}px square at the opening scale, and the goal's words stay the goal's`, async ({
       page,
     }) => {
+      // Every scale this walks waits for a settled camera: about 16 s alone at 1280px, which
+      // a full suite on a busy machine pushed past the default 30 s.
+      test.setTimeout(90_000)
       await openBroadField(page, width)
       await settledCamera(page)
       expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(touch)

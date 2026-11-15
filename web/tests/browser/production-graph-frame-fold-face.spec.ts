@@ -275,15 +275,22 @@ const ZOOMED = { overview: '.graph-frame.overview', far: '.graph-frame-head.far'
 /** A goal's band, zoomed out: its button spans it, and it has no fold. */
 const GOAL_BAND = '.vue-flow .graph-frame-head.overview:has(.graph-frame-open[data-walk-target])'
 
-/** Press «Zoom out» until the field draws `selector`. */
+/**
+ * Press «Zoom out» until the field draws `selector`. Each press waits for a settled camera, so
+ * the walk gets its own budget: the default 5 s of a poll ran out on a busy machine before the
+ * level was reached, though the test itself had minutes left.
+ */
 async function zoomOutUntil(page: Page, selector: string) {
   await expect
-    .poll(async () => {
-      if ((await page.locator(selector).count()) > 0) return true
-      await zoomOutButton(page).click()
-      await settledCamera(page)
-      return false
-    })
+    .poll(
+      async () => {
+        if ((await page.locator(selector).count()) > 0) return true
+        await zoomOutButton(page).click()
+        await settledCamera(page)
+        return false
+      },
+      { timeout: 30_000 },
+    )
     .toBe(true)
 }
 

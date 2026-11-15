@@ -9,6 +9,9 @@
  * part of what a period spends. The arrow says the way; the headings of the ways are for a
  * screen reader.
  *
+ * A name cut at the card's edge is whole in the line's hint, under the pointer and in the keyboard's
+ * focus, and a name the card holds whole has none.
+ *
  * A task is a link to its card, as a bar of the breakdown by task is; the rest are lines. With no
  * period before read, the block says so with the page's own way to read it again, and with
  * nothing moved, that nothing did.
@@ -27,6 +30,7 @@ import { comparedLines, figureOf } from '@/pages/analytics/utils/usageFigures.ts
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage } from '@/shared/api/analyticsApi.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -172,6 +176,7 @@ function follow(key: string, event: MouseEvent) {
           >
             <component
               :is="line.tag"
+              v-tooltip.clipped="line.name"
               class="overview-changes-line"
               :href="line.href"
               :data-way="group.way"

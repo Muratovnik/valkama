@@ -303,6 +303,8 @@ export type QuotaAccount = Quota['accounts'][number]
 export type QuotaWindow = QuotaAccount['windows'][number]
 /** A window that is a share of a limit: five hours, the week, a model's week. */
 export type QuotaShareWindow = Extract<QuotaWindow, { readings: unknown }>
+/** A week's forecast: the share its slower and its faster pace spend by the reset. */
+export type QuotaRange = Extract<NonNullable<QuotaShareWindow['forecast']>, { low_percent: number }>
 
 /** Whether a window is a share of a limit, with a percent, a pace and readings. */
 export const isShareWindow = (window: QuotaWindow): window is QuotaShareWindow =>

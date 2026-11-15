@@ -7,8 +7,9 @@
  * table, and the readings are a table of their own.
  *
  * The five hours forecast a point: it lasts to the reset, runs out at a time, or is spent. A week
- * forecasts a range, and says it as one. A silent window is hatched, says «silent» and when its
- * reading last changed; a fresh 0 % is a bar with no fill that says «0% used» and «fresh».
+ * forecasts a range, said never past 100 % (`useQuotaWords`). A silent window is hatched, says
+ * «silent» and when its reading last changed; a fresh 0 % is a bar with no fill that says
+ * «0% used» and «fresh».
  *
  * Under its readings stands what used the window (`QuotaWindowSpend`): the work Valkama recorded
  * on the account since the window's start, by its API price estimate, on an axis of its own. A

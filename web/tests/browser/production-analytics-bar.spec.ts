@@ -6,7 +6,7 @@
  * At 1440 and 1920 the bar keeps one height with none to four filters and with a span of days,
  * the filters it has no room for counted in «Filters: N»; the list of filters opens over the
  * panel, moving nothing, and a chip taken out leaves the focus in the bar. On a phone the bar is
- * two rows, its periods one row that scrolls sideways, with the rail right under it. «Today»,
+ * three rows, its periods one row that scrolls sideways, with the rail right under it. «Today»,
  * chosen in the bar, is the day's hours 0 to 23 with the one running hatched, compared with the
  * same hours of yesterday, and its address gives the view back.
  */
@@ -115,7 +115,7 @@ test('the age of the newest record counting up moves nothing in the bar, one row
   await record(info, 'bar-steady', seen)
 })
 
-test('on a phone the bar is two rows, its periods one row, and the rail right under it', async ({
+test('on a phone the bar is three rows, its periods one row, and the rail right under it', async ({
   page,
 }, info) => {
   await serve(page)
@@ -134,7 +134,8 @@ test('on a phone the bar is two rows, its periods one row, and the rail right un
   await record(info, 'bar-phone', measured)
   expect(measured.options).toHaveLength(5)
   expect(new Set(measured.options).size, 'the periods in one row').toBe(1)
-  expect(measured.bar).toBeLessThanOrEqual(140)
+  // The periods, the filter with the read again, and the room of the reader's own days.
+  expect(measured.bar).toBeLessThanOrEqual(160)
   expect(measured.gap).toBeGreaterThanOrEqual(0)
   expect(measured.gap).toBeLessThan(40)
   await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible()

@@ -5,13 +5,14 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { FOLD_ABOVE, frameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
+import { frameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import type { FrameProjectionInput } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import { NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { FOLD_ABOVE } from '@/shared/lib/treeRows.ts'
 
 import { broadSpace } from './fixtures/graphSpaces.ts'
 

@@ -160,6 +160,8 @@ const read = useUsageRead({
 })
 
 const today = computed(() => localDay(read.askedAt.value))
+/** Whether the view's read failed with nothing to show, which the panel says. */
+const readFailed = computed(() => read.state.value.status === 'error')
 
 /** The dimensions a person filters on: at a project's scope its project is already chosen. */
 const filterDimensions = computed<UsageDimension[]>(() =>
@@ -298,7 +300,8 @@ function refresh() {
 
 /**
  * «Now» and «Today» read themselves again while the page is seen, an interval after the last read
- * of the view, whatever asked it: a refresh, or a new period or filter.
+ * of the view, whatever asked it: a refresh, or a new period or filter. Their period chart opens
+ * on the step running (`live`).
  */
 const live = computed(() => view.value.period === 'now' || view.value.period === 'today')
 const liveRefresh = useLiveRefresh({ live: () => live.value, refresh })
@@ -334,6 +337,7 @@ const emptyDescription = computed(() => {
       :filters-refused="filtersRefused"
       :last-event-at="read.lastEventAt.value"
       :live="live"
+      :read-failed="readFailed"
       :today="today"
       :values="read.filterValues.value"
       :view="view"
@@ -400,6 +404,7 @@ const emptyDescription = computed(() => {
               :compared="read.comparedWith.value"
               :period="read.bounds.value"
               :filters="read.readWith.value"
+              :live="live"
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :project-scoped="Boolean(projectId)"
@@ -423,6 +428,7 @@ const emptyDescription = computed(() => {
               :across="view.across"
               :dimensions="filterDimensions"
               :filters="read.readWith.value"
+              :live="live"
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :refused="reportRefused"
@@ -478,7 +484,10 @@ const emptyDescription = computed(() => {
 /* The rail's ground, its scroll and its width are its own (`AnalyticsRail`), on the page's left
    line. The panel holds what it scrolls, a copy for a reader placed out of sight among it too:
    placed against the frame, a table's hidden caption stood far under it and gave the frame
-   something to scroll. */
+   something to scroll. It keeps its scrollbar's room whether it scrolls or not, paid for out of
+   its end inset, so what it holds ends on the bar's right edge either way: with the room taken
+   only while it scrolled, a section ended 10px short of the bar while it scrolled and on the
+   bar's edge when it did not. */
 .analytics-panel {
   position: relative;
   display: grid;
@@ -487,9 +496,11 @@ const emptyDescription = computed(() => {
   align-content: start;
   min-width: 0;
   min-height: 0;
-  padding: var(--space-3) var(--size-page-gutter) var(--space-6);
+  padding: var(--space-3) calc(var(--size-page-gutter) - var(--size-scrollbar)) var(--space-6)
+    var(--size-page-gutter);
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 
   /* Focus taken to the section after a key rings the panel inside its edge, which the window
      and the rail would cut outside it. */

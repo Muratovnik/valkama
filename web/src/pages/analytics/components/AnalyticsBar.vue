@@ -17,21 +17,24 @@
  * newest record the store holds, of any session, counted on each second (`useFreshness`), «● 15 s
  * ago». Its room is that of the widest age, in figures of one width, so the age counting up moves
  * nothing beside it, and the sentence whole — the record's moment and, for a live period, how
- * often it reads itself again — is its hint. A read again that failed says so beside it
- * (`RefreshFailed`).
+ * often it reads itself again — is its hint. The mark claims a live period only while its reads
+ * stand: after a read that failed, with figures kept or none to show, it is not drawn, its room
+ * kept. A read again that failed says so in words before the age (`RefreshFailed`).
  *
  * A line with no room for all of that gives up what matters least first, and never runs past its
  * end (`useBarRoom`): the words of its buttons go first, the read again then said by its icon,
  * then the room between its parts narrows, then the age is said by its span, «● 15 s», in the
- * room of the widest span, and then the failure's words go to its disc and its retry. Past all of
- * that a span's name is cut at its end, its hint saying it whole. The age's span is never given
- * up, and neither is a day of the period: its fields are as wide as a date needs. A line that runs
- * past its end with all of that given up gives up the one line last, and is the two rows of a
- * narrower bar, which take their words back: the reader's own days beside a failure need that up
- * to a window of about 1300px.
+ * room of the widest span, and then a failure's retry goes, the read again beside it asking the
+ * same. Past all of that a span's name is cut at its end, its hint saying it whole. The age's span
+ * is never given up, nor a failure's words, nor a day of the period: its fields are as wide as a
+ * date needs. A line that runs past its end with all of that given up gives up the one line last,
+ * and is the two rows of a narrower bar, which take their words back: the reader's own days need
+ * that up to a window of about 1360px. The line is fitted as if a failure were said, so one said
+ * takes only the room the chips had and moves nothing: neither the bar's height nor its controls.
  *
- * On a phone the bar is two rows: the periods in one row that scrolls sideways, the chosen one
- * scrolled into view, and under it the filter, the freshness and the read again, by its icon.
+ * On a phone the bar is three rows of one height whatever period is chosen: the periods in one row
+ * that scrolls sideways, the chosen one scrolled into view, with the freshness at its end; under
+ * it the filter, a failure and the read again, by its icon; and the room of the reader's own days.
  */
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -66,6 +69,8 @@ const props = defineProps<{
   lastEventAt: string | null | undefined
   /** Whether the period reads itself again (`useLiveRefresh`). */
   live: boolean
+  /** Whether the view's read failed with nothing to show, which the panel says. */
+  readFailed: boolean
   /** The day the read was asked on, the last a custom period can name. */
   today: string
   /** What each filter offers, as the read gave it. */
@@ -91,7 +96,10 @@ function choosePeriod(period: PeriodPreset) {
   emit('amend', period === 'custom' ? { period, ...customDays(new Date()) } : { period })
 }
 
-/** The periods' row, which scrolls sideways on a phone, and keeps the chosen one in view. */
+/**
+ * The periods' row, which scrolls sideways on a phone, and keeps the chosen one in view: when it is
+ * chosen, and once the line is fitted, which changes the row's room.
+ */
 const periods = ref<{ $el: HTMLElement } | null>(null)
 function showChosen() {
   periods.value?.$el
@@ -99,12 +107,10 @@ function showChosen() {
     ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
 }
 onMounted(showChosen)
-watch(() => props.view.period, showChosen, { flush: 'post' })
 
 /**
  * What the line gives up while it has no room for all it holds (`useBarRoom`): its buttons' words,
- * the room between its parts, the word around the age, the failure's words while a read again
- * failed, and a span's name.
+ * the room between its parts, the word around the age, a failure's retry, and a span's name.
  */
 const line = useTemplateRef<HTMLElement>('line')
 const refreshButton = useTemplateRef<{ $el: HTMLElement }>('refreshButton')
@@ -119,8 +125,14 @@ function ems(width: number) {
 const room = useBarRoom({
   line,
   last: () => refreshButton.value?.$el,
-  order: () =>
-    failed.value ? ['words', 'gaps', 'ago', 'failure', 'span'] : ['words', 'gaps', 'ago', 'span'],
+  // On a phone the failure's words wrap rather than run past the row's end, a last resort.
+  wrapped: () => {
+    const words = line.value?.querySelector<HTMLElement>('.refresh-failed-words')
+    if (!words) return false
+    const size = Number.parseFloat(getComputedStyle(words).fontSize)
+    return words.getBoundingClientRect().height > 1.9 * size
+  },
+  order: () => ['words', 'gaps', 'ago', 'retry', 'span'],
   observed: [line],
   // Wider than a phone and under 50rem the one line has no room whatever period is chosen.
   narrow: () => {
@@ -147,14 +159,22 @@ const short = computed(() => {
 })
 /**
  * Whether the room between the parts narrowed, the age said by its span alone («15 s», its hint
- * and its hidden words saying «ago»), the failure said briefly, and a span's name cut.
+ * and its hidden words saying «ago»), a failure said without its retry, and a span's name cut.
  */
 const tight = computed(() => room.gave('gaps'))
 const bare = computed(() => room.gave('ago'))
-const brief = computed(() => room.gave('failure'))
+const brief = computed(() => room.gave('retry'))
 const spanCut = computed(() => room.gave('span'))
 /** Whether the bar is two rows: too narrow for one line, or with no room for it after all. */
 const twoRows = room.rows
+/** Whether the line is being fitted, a failure holding its room unseen. */
+const held = room.holding
+watch([() => props.view.period, held], showChosen, { flush: 'post' })
+
+/** Whether a read failed: a read again, its figures kept, or the view's, with none to show. */
+const readsFailed = computed(() => failed.value || props.readFailed)
+/** Whether the live mark stands: a live period whose reads stand. */
+const liveShown = computed(() => props.live && !readsFailed.value)
 
 /** That the period is live and how often it reads itself again, as the freshness's hint says. */
 const liveWords = computed(() =>
@@ -168,7 +188,7 @@ const { fresh, widest } = useFreshness(() => props.lastEventAt)
 const freshRoom = computed(() => (bare.value ? widest.value.bare : widest.value.whole))
 /** The freshness's hint, a fact a line: the sentence of the newest record; the period live. */
 const freshHint = computed(() =>
-  [fresh.value?.at ? fresh.value.words : '', props.live ? liveWords.value : '']
+  [fresh.value?.at ? fresh.value.words : '', liveShown.value ? liveWords.value : '']
     .filter(Boolean)
     .join('\n'),
 )
@@ -215,6 +235,12 @@ const freshHint = computed(() =>
         @clear="emit('amend', { filters: {} })"
       />
       <div class="analytics-bar-read">
+        <RefreshFailed
+          class="analytics-bar-failed"
+          :brief="brief"
+          :held="held"
+          @retry="emit('refresh')"
+        />
         <p
           v-tooltip.detail="freshHint"
           class="analytics-bar-fresh"
@@ -223,7 +249,7 @@ const freshHint = computed(() =>
         >
           <span class="analytics-bar-fresh-shown">
             <span
-              v-if="live"
+              v-if="liveShown"
               class="analytics-bar-fresh-mark"
               aria-hidden="true"
             />
@@ -240,10 +266,6 @@ const freshHint = computed(() =>
             </template>
           </span>
         </p>
-        <RefreshFailed
-          :brief="brief"
-          @retry="emit('refresh')"
-        />
         <VButton
           ref="refreshButton"
           class="analytics-refresh"
@@ -382,31 +404,54 @@ const freshHint = computed(() =>
   align-items: center;
 }
 
-/* A phone: the periods one row that scrolls sideways, and the filter, the freshness and the
-   read again, by its icon alone, the row under it. */
+/* A phone: three rows of one height whatever period is chosen. The periods one row that scrolls
+   sideways, with the freshness at its end; the filter, a failure and the read again, by its icon
+   alone, the row under it; and the room of the reader's own days. A span of days chosen used to
+   take a row of its own and move everything under the bar down 44px, and a failure's words had no
+   room beside the freshness, so the disc stood alone. The failure has a column of its own under
+   the periods, the column of the freshness's start beside it its own too, so nothing moves when
+   it is said. The freshness's group lends the rows its parts. */
 @container (width <= 30rem) {
   .analytics-bar-line {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto var(--size-control-height-compact);
+    grid-template-columns: minmax(min-content, 1fr) auto auto auto;
     gap: var(--space-2);
+  }
+
+  .analytics-bar-read {
+    display: contents;
   }
 
   .analytics-period {
     flex-wrap: nowrap;
-    grid-column: 1 / -1;
+    grid-area: 1 / 1 / 2 / 3;
     overflow-x: auto;
     overscroll-behavior-inline: contain;
     scrollbar-width: none;
+
+    /* As wide as its row leaves it, which its periods side by side would otherwise widen. */
+    contain: inline-size;
+  }
+
+  .analytics-bar-fresh {
+    grid-area: 1 / 3 / 2 / 5;
+    align-self: center;
+  }
+
+  /* Its words wrap onto a second line in the row's height only where a narrow phone has no room
+     left for them on one (`useBarRoom`): at 360px in Russian they ran 30px past the window. */
+  .analytics-bar-line .analytics-bar-failed {
+    grid-area: 2 / 2 / 3 / 3;
+    white-space: normal;
+  }
+
+  .analytics-refresh {
+    grid-area: 2 / 4 / 3 / 5;
   }
 
   .analytics-bar-own {
-    grid-column: 1 / -1;
-  }
-
-  .analytics-bar-read {
-    gap: var(--space-2);
-    justify-content: safe flex-end;
-    min-width: 0;
+    grid-area: 3 / 1 / 4 / -1;
   }
 }
 
@@ -424,6 +469,14 @@ const freshHint = computed(() =>
 /* A line that gave up everything else narrows the room between its parts. */
 .analytics-bar-tight :is(.analytics-bar-line, .analytics-bar-read) {
   column-gap: var(--space-2);
+}
+
+/* A phone's rows already part their parts by that narrow gap; giving it up, they narrow it again,
+   which a failure said beside the filter and the read again needs. */
+@container (width <= 30rem) {
+  .analytics-bar-tight .analytics-bar-line {
+    column-gap: var(--space-1);
+  }
 }
 
 /* That the period reads itself again: the sign of the hint's words, not their meaning. */

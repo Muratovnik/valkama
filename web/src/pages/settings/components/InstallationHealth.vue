@@ -5,6 +5,10 @@
  * The server owns every check and its stable presentation code. This component
  * keeps the causal level order, puts actionable findings first, and leaves raw
  * paths and backend prose behind an explicit technical-details disclosure.
+ *
+ * Its headings rank by what holds them, from the `h2` right under the module's name: what needs
+ * attention and the passed checks are each an `h3` under it, and a passed level an `h4` under the
+ * passed checks. A rank says nesting only: each heading's size is its `rank`'s, as before.
  */
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -135,7 +139,7 @@ onMounted(load)
   >
     <header class="health-head">
       <div class="health-head-copy">
-        <SectionHeading as="h3">{{ t('health.heading') }}</SectionHeading>
+        <SectionHeading as="h2">{{ t('health.heading') }}</SectionHeading>
       </div>
       <VButton
         v-tooltip.name="recheckLabel"
@@ -185,7 +189,7 @@ onMounted(load)
           <header class="health-section-head">
             <span class="health-titleline">
               <SectionHeading
-                as="h4"
+                as="h3"
                 rank="group"
                 >{{ t('health.attention') }}</SectionHeading
               >
@@ -274,6 +278,7 @@ onMounted(load)
         <VDisclosure
           v-if="passedLevels.length"
           class="health-passed"
+          heading="h3"
         >
           <template #summary>
             <span>{{ t('settings.diagnostics.passed') }}</span>

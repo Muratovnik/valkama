@@ -5,8 +5,9 @@
  *
  * The space has as many cards as a space kept for a year: some two hundred
  * goals, three in four cards done, the largest goal holding 69, one with more
- * than twenty open (folded by the rule) and many with nothing open (folded too),
- * beside a goal five levels deep, three rows at each level. The five-level goal
+ * than twenty open (folded by the rule, the row widest in every column deep
+ * under it) and many with nothing open (folded too), beside a goal five levels
+ * deep, three rows at each level. The five-level goal
  * and the largest one were changed last, so the list's order puts them first.
  */
 import { expect } from '@playwright/test'
@@ -48,6 +49,40 @@ function card(number: number, { closed, container = false, parent, updated = OLD
   })
 }
 
+/** The four stages, one under another, between the crowded goal and the widest row. */
+export const CHAIN = ['MAIN-250', 'MAIN-251', 'MAIN-252', 'MAIN-253'] as const
+/** The row widest in every column, at the deepest indent, under the crowded goal. */
+export const WIDEST = 'MAIN-254'
+
+/**
+ * The goal with more than twenty open. Its last five, all done, stand one under
+ * another: four stages, which the rule folds as it folds the goal, and under them
+ * the row widest in every column — the longest reference at the deepest indent, a
+ * holder with a long name, twelve steps and a date of another year.
+ */
+function crowdedGoal() {
+  const [head, ...kids] = goal(200, 54, 30)
+  const chained = kids.map((kid) => {
+    if (kid.number < 250) return kid
+    const parent = kid.number === 250 ? 200 : kid.number - 1
+    if (kid.number < 254) return card(kid.number, { closed: true, container: true, parent })
+    return {
+      ...card(kid.number, { closed: true, parent }),
+      checklist: Array.from({ length: 12 }, (_, at) => ({
+        id: identity(4000 + at),
+        text: 'Step',
+        done: false,
+        claimed_by: '',
+        done_by: '',
+      })),
+      claim_ref: 'a holder with a long name',
+      priority: 'urgent',
+      updated_at: '2020-08-28T20:08:00Z',
+    }
+  })
+  return [head, ...chained]
+}
+
 /** A container and its children, `open` of them still open. */
 function goal(number: number, children: number, open: number, updated = OLD) {
   const kids = Array.from({ length: children }, (_, at) =>
@@ -77,7 +112,7 @@ export function treeSpace() {
         }),
       )
   const earlier = new Date(Date.now() - 60_000).toISOString()
-  const goals = [...goal(100, 69, 15, earlier), ...goal(200, 54, 30), ...goal(300, 36, 10)]
+  const goals = [...goal(100, 69, 15, earlier), ...crowdedGoal(), ...goal(300, 36, 10)]
   // 193 goals of five: 135 with nothing open, the rest with two open.
   for (let at = 0; at < 193; at += 1) goals.push(...goal(1000 + at * 6, 5, at < 135 ? 0 : 2))
   // The rest of the 1665 cards stand alone, seven in ten done.
@@ -149,6 +184,51 @@ export const longTasks = (page: Page) =>
     const seen = (window as unknown as { longTasksSeen: number[] }).longTasksSeen
     return seen.splice(0).map((ms) => Math.round(ms))
   })
+
+/**
+ * How long the list scrolls, how many rows it shows (said where it draws a
+ * window, its head's row not counted) and the height of its shortest drawn row.
+ */
+export const scrollOf = (page: Page) =>
+  listOf(page).evaluate((element) => {
+    const said = element.querySelector('.list-table')?.getAttribute('aria-rowcount')
+    const rows = element.querySelectorAll('tbody tr.list-row:not(.list-row-held)')
+    const heights = [...rows].map((row) => Math.round(row.getBoundingClientRect().height))
+    return { length: element.scrollHeight, row: Math.min(...heights), shown: Number(said) - 1 }
+  })
+
+/**
+ * The long tasks, in milliseconds, of End from the list's first row, and of five
+ * Page Downs from there once Home has come back. The Tab stop is the first row
+ * in a tree and the first reference in a flat list, so focus starts on it.
+ */
+export async function keyTasks(page: Page) {
+  const focused = page.locator('.work-item-list tbody tr.list-row:focus-within')
+  const rowAt = async () => (await focused.getAttribute('aria-rowindex')) ?? ''
+  await watchLongTasks(page)
+  await page.locator('.work-item-list tbody [tabindex="0"]').first().focus()
+  await stillFrames(page)
+  await longTasks(page)
+
+  const last = await tableOf(page).getAttribute('aria-rowcount')
+  await page.keyboard.press('End')
+  await expect(focused).toHaveAttribute('aria-rowindex', last ?? '')
+  await stillFrames(page)
+  const end = await longTasks(page)
+
+  await page.keyboard.press('Home')
+  await expect(focused).toHaveAttribute('aria-rowindex', '2')
+  await stillFrames(page)
+  await longTasks(page)
+  for (let step = 0; step < 5; step += 1) {
+    const from = await rowAt()
+    await page.keyboard.press('PageDown')
+    await expect(focused).not.toHaveAttribute('aria-rowindex', from)
+  }
+  await stillFrames(page)
+  const pageDown = await longTasks(page)
+  return { end, pageDown }
+}
 
 interface TreeNode {
   expanded: boolean | null

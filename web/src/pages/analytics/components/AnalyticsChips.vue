@@ -3,10 +3,12 @@
  * The filters on the Analytics bar: each value set, a chip that takes it out; the way to add a
  * filter; and the list of every filter it opens.
  *
- * The chips take the room the bar's line leaves them (`useChipRoom`), and those it has no room for
- * are counted with the rest in «Filters: N», which opens the same list, where each stands. Beside
- * the count the way to add a filter is its icon, and on a short bar (`short`), which already
- * shows it so, the count stands for it. A chip names its value as its field does, from one list.
+ * The way to add a filter stands first, then the count, then the chips, which take the room the
+ * bar's line leaves them (`useChipRoom`): whatever takes that room — a failure the bar says —
+ * moves none of the buttons. The chips it has no room for are counted with the rest in
+ * «Filters: N», which opens the same list, where each stands. Beside the count the way to add a
+ * filter is its icon, and on a short bar (`short`), which already shows it so, the count stands
+ * for it. A chip names its value as its field does, from one list.
  *
  * A chip taken out hands the focus to the chip that takes its place, the one before it when it
  * was the last, the count, or the way to add a filter when none is left: the focus does not fall
@@ -155,29 +157,6 @@ const removeLabel = (label: string) => t('analytics.filters.remove', { label })
     :class="{ 'analytics-chips-short': short, 'analytics-chips-folded': folded }"
   >
     <div class="analytics-bar-filters">
-      <div
-        ref="chipRoom"
-        class="analytics-bar-chips"
-      >
-        <SearchComboboxChips
-          :chips="shown"
-          :disabled="false"
-          :remove-label="removeLabel"
-          @remove="takeOut"
-        />
-      </div>
-      <VButton
-        v-if="folded"
-        ref="count"
-        class="analytics-filter-folded"
-        variant="ghost"
-        size="compact"
-        :aria-expanded="adding"
-        :aria-controls="fieldsId"
-        @click="adding = !adding"
-      >
-        {{ t('analytics.frame.filtersFolded', { count: chips.length }) }}
-      </VButton>
       <VButton
         ref="add"
         class="analytics-filter-add"
@@ -193,6 +172,29 @@ const removeLabel = (label: string) => t('analytics.filters.remove', { label })
         />
         <span class="analytics-filter-add-words">{{ t('analytics.frame.addFilter') }}</span>
       </VButton>
+      <VButton
+        v-if="folded"
+        ref="count"
+        class="analytics-filter-folded"
+        variant="ghost"
+        size="compact"
+        :aria-expanded="adding"
+        :aria-controls="fieldsId"
+        @click="adding = !adding"
+      >
+        {{ t('analytics.frame.filtersFolded', { count: chips.length }) }}
+      </VButton>
+      <div
+        ref="chipRoom"
+        class="analytics-bar-chips"
+      >
+        <SearchComboboxChips
+          :chips="shown"
+          :disabled="false"
+          :remove-label="removeLabel"
+          @remove="takeOut"
+        />
+      </div>
     </div>
     <div
       v-show="adding"

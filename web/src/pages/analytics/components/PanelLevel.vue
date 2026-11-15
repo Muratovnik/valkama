@@ -240,7 +240,10 @@ const caveats = computed(() => (headed.value ? props.about : []))
   gap: var(--space-2);
 }
 
+/* On a surface of its own, which a chart's table in it stands on (`--color-chart-table-ground`). */
 .level-surface {
+  --color-chart-table-ground: var(--color-surface);
+
   padding: var(--space-4);
   background: var(--color-surface);
   border-radius: var(--radius-card);
