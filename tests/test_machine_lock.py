@@ -178,8 +178,9 @@ class LockTests(LockCase):
         given = str(ROOT / ".git" / "relkit" / "tmp" / "candidate")
         # The isolated gates runner redirects LOCALAPPDATA into its result directory, which
         # may sit inside the checkout; the lock's place is pinned here so the check holds
-        # whatever the caller's redirection is.
-        profile = str(Path(tempfile.gettempdir()) / "valkama-lock-profile")
+        # whatever the caller's redirection is. Not under the TEMP this run was given either:
+        # the release coordinator runs this very check with that TEMP inside the checkout.
+        profile = str(Path(ROOT.anchor) / "valkama-lock-profile")
         with mock.patch.dict(os.environ, {"LOCALAPPDATA": profile}):
             reference = machine_lock.lock_path().resolve()
         with mock.patch.dict(
