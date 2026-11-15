@@ -661,6 +661,82 @@ class ThroughMcpTests(WriteCase):
             (self.entry_basis(), self.entry_basis()), (self.basis("a"), self.basis("b"))
         )
 
+    def test_a_stage_accepted_under_a_goal_not_accepted_gives_its_waiting_tasks_its_basis(
+        self,
+    ) -> None:
+        # G stays unaccepted, so nobody decided about the goal: what S takes along is
+        # accepted by the write that accepted S, as a claim of it would be (c, under S2).
+        self.tree.add("G", kind="goal")
+        self.tree.add("S", kind="stage", parent="G")
+        self.tree.add("a", parent="S")
+        self.tree.add("S2", kind="stage", state="container", parent="G")
+        self.tree.add("c", parent="S2")
+        self.conn.commit()
+        mark = self.mark()
+        self.transition("S", "ready", acceptance=model.NAMED_BASIS)
+        self.assertEqual(
+            [("accepted", self.entry_basis()), ("opened", "")], self.actions("S", mark)
+        )
+        self.assertEqual(("ready", self.entry_basis()), (self.category("a"), self.basis("a")))
+        self.assertEqual(
+            [
+                ("accepted", self.entry_basis()),
+                ("transitioned", f"ready: accepted with {self.ref('S')}"),
+            ],
+            self.actions("a", mark),
+        )
+        self.assertEqual(
+            ("triage", None, []), (self.category("G"), self.basis("G"), self.actions("G", mark))
+        )
+        self.claim("c")
+        self.assertEqual(self.basis("c"), self.basis("a"))
+
+    def test_a_stage_accepted_under_a_goal_not_accepted_gives_its_basis_all_the_way_down(
+        self,
+    ) -> None:
+        self.tree.add("G", kind="goal")
+        self.tree.add("S", kind="stage", parent="G")
+        self.tree.add("S2", kind="stage", parent="S")
+        self.tree.add("a", parent="S2")
+        self.tree.add("b", parent="S")
+        self.conn.commit()
+        mark = self.mark()
+        self.transition("S", "ready", acceptance=model.NAMED_BASIS)
+        for name in ("S", "S2", "a", "b"):
+            with self.subTest(item=name):
+                self.assertEqual(self.entry_basis(), self.basis(name))
+        self.assertEqual(
+            [("accepted", self.entry_basis()), ("opened", "")], self.actions("S2", mark)
+        )
+        self.assertEqual(("ready", "ready"), (self.category("a"), self.category("b")))
+        self.assertEqual(
+            [
+                ("accepted", self.entry_basis()),
+                ("transitioned", f"ready: accepted with {self.ref('S')}"),
+            ],
+            self.actions("a", mark),
+        )
+        self.assertEqual(
+            ("triage", None, []), (self.category("G"), self.basis("G"), self.actions("G", mark))
+        )
+
+    def test_a_stage_accepted_under_an_accepted_goal_still_gives_its_tasks_inherited(
+        self,
+    ) -> None:
+        self.accepted_goal(stage=False)
+        self.tree.add("S", kind="stage", parent="G")
+        self.tree.add("S2", kind="stage", parent="S")
+        self.tree.add("a", parent="S")
+        self.tree.add("c", parent="S2")
+        self.conn.commit()
+        mark = self.mark()
+        self.transition("S", "ready", acceptance=model.NAMED_BASIS)
+        for name in ("S", "S2", "a", "c"):
+            with self.subTest(item=name):
+                self.assertEqual("inherited", self.basis(name))
+        self.assertEqual(("ready", "ready"), (self.category("a"), self.category("c")))
+        self.assertEqual([("accepted", "inherited"), ("opened", "")], self.actions("S2", mark))
+
     def test_a_batch_that_ticks_the_last_held_step_and_asks_review_never_passes_ready(
         self,
     ) -> None:

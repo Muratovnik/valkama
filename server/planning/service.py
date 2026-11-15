@@ -984,8 +984,11 @@ def _transition(
         _log(conn, identity, "released", held, author)
     for step in unheld:
         _log(conn, identity, "checklist_released", step["text"][:120], author)
-    if opened and current["category"] in model.UNACCEPTED_CATEGORIES:
-        warnings += _cascade(conn, identity, read_model.reference(conn, row), author)
+    # Out of triage or deferred the item had no basis, so the move that accepts it gave one.
+    if opened and gives is not None and current["category"] in model.UNACCEPTED_CATEGORIES:
+        # The order of bases for what is under it, read with the item now accepted.
+        under = "inherited" if item_tree.accepted_chain(conn, identity) else gives
+        warnings += _cascade(conn, identity, read_model.reference(conn, row), under, author)
     overridden = _record_overrides(conn, identity, [guard for guard, _ in refusals], author)
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     answer["warnings"] = warnings
@@ -1066,15 +1069,20 @@ def _accepting(
 
 
 def _cascade(
-    conn: sqlite3.Connection, identity: str, accepted: str, author: str | None
+    conn: sqlite3.Connection, identity: str, accepted: str, basis: str, author: str | None
 ) -> list[str]:
     """Accept the work waiting in triage under a container accepted in this write.
 
     Its tasks go to the first ready state they can reach and its goals and stages
-    stand accepted, each `inherited`, with `accepted` and the entry written; the
+    stand accepted, each on `basis`, with `accepted` and the entry written; the
     containers accepted with it are descended into. A deferred container stops the
     descent: what is under it keeps a container above it that is not accepted.
     Anything else is not waiting to be accepted and stays as it is.
+
+    `basis` is the order of bases read once for the whole descent, since every item
+    it reaches has the same containers above it that are not accepted with it:
+    `inherited` when, with this container accepted, every one up to the root stands
+    accepted and open, and otherwise the basis of the write that accepted it.
     """
 
     warnings: list[str] = []
@@ -1099,14 +1107,14 @@ def _cascade(
         updates = [
             "state_id = ?",
             "position = ?",
-            *_accepting(child, target, "inherited", parameters),
+            *_accepting(child, target, basis, parameters),
         ]
         _write(conn, child, updates, parameters)
         found = str(child["work_item_id"])
-        _log(conn, found, "accepted", "inherited", author)
+        _log(conn, found, "accepted", basis, author)
         if container:
             _log(conn, found, "opened", "", author)
-            warnings += _cascade(conn, found, accepted, author)
+            warnings += _cascade(conn, found, accepted, basis, author)
         else:
             _log(conn, found, "transitioned", f"{target['key']}: accepted with {accepted}", author)
     return warnings

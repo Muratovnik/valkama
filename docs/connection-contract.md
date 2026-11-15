@@ -324,8 +324,13 @@ A goal or stage is accepted by a transition to `ready`; it then stands in no
 state a reader sees, and shows `state` `null` and its `container_state`. Accepted
 out of `triage` or `deferred`, it accepts in the same write the work in `triage`
 under it: each task moves to the first `ready` state it can reach and each goal or
-stage stands accepted and is descended into, all `inherited`; one with nowhere to
-go stays in `triage`, named in `warnings`. A goal or stage in `deferred` stops the
+stage stands accepted and is descended into; one with nowhere to go stays in
+`triage`, named in `warnings`. Each takes its basis in the same order: `inherited`
+when, with the goal or stage accepted, every goal and stage above it is accepted
+and open, and otherwise the basis the accepting write gave, `owner` from the
+browser and the `acceptance` an agent sent. A stage accepted under a goal that is
+not accepted thus gives its work the stage's own basis, as a claim of that work
+would, and leaves the goal as it is. A goal or stage in `deferred` stops the
 descent, and nothing under it changes.
 
 A record carries no `container` and no `ready` field: `kind` says which items
