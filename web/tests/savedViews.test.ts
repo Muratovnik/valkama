@@ -11,11 +11,14 @@ import {
   activeView,
   deleteView,
   keepReadViews,
+  readDroppedViews,
   readSavedViews,
   saveView,
   VIEW_NAME_CHARS,
   viewsOf,
   viewState,
+  withDropped,
+  withoutDropped,
 } from '@/shared/lib/savedViews.ts'
 import { DEFAULT_SETTINGS, mergeSettings } from '@/shared/lib/settings.ts'
 
@@ -135,6 +138,22 @@ describe('saved views', () => {
     const none = keepReadViews(views, MAIN, () => true)
     assert.deepEqual(none.dropped, [])
     assert.equal(none.views, views)
+  })
+
+  test('the names of the views taken out wait in their own place until it has named them', () => {
+    let dropped = withDropped({}, MAIN, ['Old', 'Former'])
+    dropped = withDropped(dropped, MAIN, ['Former', 'Gone'])
+    dropped = withDropped(dropped, OTHER, ['Old'])
+    assert.deepEqual(dropped, { [MAIN]: ['Old', 'Former', 'Gone'], [OTHER]: ['Old'] })
+    assert.deepEqual(withoutDropped(dropped, MAIN), { [OTHER]: ['Old'] })
+    // Stored, they are read back as they were, and what cannot be read is no names.
+    assert.deepEqual(mergeSettings({ droppedViews: dropped }).droppedViews, dropped)
+    assert.deepEqual(
+      readDroppedViews({ [MAIN]: ['Old', 'Old', ' ', 7, ' Kept '], [OTHER]: 'Old', x: [] }),
+      { [MAIN]: ['Old', 'Kept'] },
+    )
+    assert.deepEqual(mergeSettings({ droppedViews: 'garbage' }).droppedViews, {})
+    assert.deepEqual(DEFAULT_SETTINGS.droppedViews, {})
   })
 
   test('the settings reader keeps saved views and reads a corrupt or missing value as none', () => {

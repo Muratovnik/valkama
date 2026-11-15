@@ -16,100 +16,21 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-
-import { installBackend } from './backend.ts'
 import { boardSpace } from './boardFixtures.ts'
 import { routeState } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
+import { attachedSpaceRef, planningReadModel, spaceRef } from './planningFixtures.ts'
 import {
-  attachedSpaceRef,
-  dataScopeId,
-  planningReadModel,
-  projectScope,
-  spaceRef,
-} from './planningFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+  choose,
+  listed,
+  menuButton,
+  openMenu,
+  openSpace,
+  seed,
+  spaceRoute,
+  WORDS,
+} from './savedViewsPage.ts'
 import { test } from './test.ts'
-
-const WORDS = {
-  en: {
-    menu: 'View',
-    grouping: 'By goal',
-    flat: 'No grouping',
-    save: 'Save view…',
-    name: 'Name',
-    confirm: 'Save',
-    delete: (name: string) => `Delete view “${name}”`,
-    dropped: (name: string) => `Removed a saved view this version cannot read: “${name}”`,
-    filter: 'Filter work',
-    ready: 'Workable',
-    held: 'Has an assignee',
-    list: 'List',
-    // What stood in the header before, as buttons of its own.
-    gone: ['Workable', 'Assigned', 'Has a holder', 'By goal', 'Group the board by goal'],
-  },
-  ru: {
-    menu: 'Вид',
-    grouping: 'По цели',
-    flat: 'Без группировки',
-    save: 'Сохранить вид…',
-    name: 'Название',
-    confirm: 'Сохранить',
-    delete: (name: string) => `Удалить вид «${name}»`,
-    dropped: (name: string) => `Убран сохранённый вид, которого эта версия не читает: «${name}»`,
-    filter: 'Фильтр работы',
-    ready: 'Можно брать',
-    held: 'Есть исполнитель',
-    list: 'Список',
-    gone: [
-      'Можно брать',
-      'Назначено',
-      'Есть ответственный',
-      'По цели',
-      'Группировать доску по эпикам',
-    ],
-  },
-} as const
-
-type Locale = keyof typeof WORDS
-
-/** The space's work as the read answers it: the shared fixture and the board's goals. */
-async function seed(page: Page, locale: Locale, width: number) {
-  await page.setViewportSize({ width, height: 900 })
-  await page.addInitScript((language) => localStorage.setItem('valkama-locale', language), locale)
-  await installBackend(page, { includeAttachedDuplicate: true })
-  await page.route('**/api/planning?*', async (route) => {
-    const query = new URL(route.request().url()).searchParams
-    const response = planningReadFor(query, true)
-    if (
-      response.status === 200 &&
-      'work_items' in response.body &&
-      query.get('data_scope_id') === dataScopeId
-    )
-      response.body.work_items = [...response.body.work_items, ...(boardSpace() as never[])]
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
-}
-
-const spaceRoute = (space = spaceRef, state: Record<string, string> = {}) =>
-  serializePlatformRoute({
-    module_id: 'planning',
-    scope: projectScope,
-    entity: planningSpaceEntity(space),
-    state: { view: 'kanban', ...state },
-  })
-
-async function openSpace(page: Page, space = spaceRef, state: Record<string, string> = {}) {
-  await page.goto(spaceRoute(space, state))
-  await expect(page.locator('.workspace-head')).toBeVisible()
-  await expect(page.locator('[data-reference]').first()).toBeVisible()
-}
 
 /** The references the stage draws now. */
 const drawn = (page: Page) =>
@@ -128,35 +49,6 @@ function expected(condition: 'held' | 'ready') {
       condition === 'ready' ? item.workable : item.claim_ref !== '' && !item.state?.is_terminal,
     )
     .map((item) => item.reference)
-}
-
-const menuButton = (page: Page, locale: Locale) =>
-  page.locator('.workspace-head').getByRole('button', { name: WORDS[locale].menu, exact: true })
-
-async function openMenu(page: Page, locale: Locale) {
-  await menuButton(page, locale).click()
-  await expect(page.getByRole('menu')).toBeVisible()
-}
-
-/** An entry of the view's menu, chosen with the menu opened for it. */
-async function choose(
-  page: Page,
-  locale: Locale,
-  role: 'menuitem' | 'menuitemradio',
-  name: string,
-) {
-  await openMenu(page, locale)
-  await page.getByRole('menu').getByRole(role, { name }).click()
-}
-
-/** The views the menu lists for this space. */
-async function listed(page: Page, locale: Locale) {
-  await openMenu(page, locale)
-  const names = await page.getByRole('menu').getByRole('menuitemradio').allInnerTexts()
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('menu')).toHaveCount(0)
-  const grouping = new Set<string>([WORDS[locale].grouping, WORDS[locale].flat])
-  return names.map((name) => name.trim()).filter((name) => !grouping.has(name))
 }
 
 /** The header's row: each visible control's box, and whatever in the head reaches past its edge. */
@@ -375,87 +267,6 @@ test('the keyboard alone saves a view, cancels a save, applies a view and delete
   await expect(page.getByRole('menu')).toHaveCount(0)
   expect(await listed(page, 'en')).toEqual([])
 })
-
-/** The open menu's box, its note's, its first entry's, and the window's width. */
-function measureNote(page: Page) {
-  return page.getByRole('menu').evaluate((list) => {
-    // A part the menu lacks measures as the whole menu, which no assertion below lets pass.
-    const box = (selector: string | null) => {
-      const part = selector === null ? list : (list.querySelector(selector) ?? list)
-      const { left, right, top, bottom } = part.getBoundingClientRect()
-      return { left, right, top, bottom }
-    }
-    return {
-      window: document.documentElement.clientWidth,
-      menu: box(null),
-      note: box('.menu-note'),
-      first: box('[role^="menuitem"]'),
-    }
-  })
-}
-
-/**
- * A view saved by a build that knew a value this one does not — here a grouping by something
- * gone — would open as another view under the old name. It is removed as the space opens, and
- * the menu names it once, as its description and its first line, inside the window.
- */
-for (const [locale, width] of [
-  ['en', 1280],
-  ['ru', 390],
-] as const)
-  test(`a saved view this build does not read is removed and named once (${locale}, ${width}px)`, async ({
-    page,
-  }) => {
-    const words = WORDS[locale]
-    const note = words.dropped('Former lanes')
-    await seed(page, locale, width)
-    await openSpace(page, spaceRef, { group: 'goal' })
-    for (const name of ['Former lanes', 'Lanes']) {
-      await choose(page, locale, 'menuitem', words.save)
-      await page.getByRole('dialog').getByRole('textbox', { name: words.name }).fill(name)
-      await page.getByRole('dialog').getByRole('button', { name: words.confirm }).click()
-      await expect(page.getByRole('dialog')).toHaveCount(0)
-    }
-    // As a build that knew the grouping would have kept it: the first view saved.
-    await page.evaluate(() => {
-      const settings = JSON.parse(localStorage.getItem('valkama-settings') ?? '{}')
-      const [views] = Object.values(settings.views) as { name: string; state: object }[][]
-      views[0].state = { ...views[0].state, group: 'former' }
-      localStorage.setItem('valkama-settings', JSON.stringify(settings))
-    })
-    await page.reload()
-    await expect(page.locator('[data-reference]').first()).toBeVisible()
-    const kept = await page.evaluate(() =>
-      Object.values(JSON.parse(localStorage.getItem('valkama-settings') ?? '{}').views)
-        .flat()
-        .map((view) => (view as { name: string }).name),
-    )
-    expect(kept).toEqual(['Lanes'])
-
-    await openMenu(page, locale)
-    const menu = page.getByRole('menu')
-    await expect(menu).toHaveAccessibleDescription(note)
-    await expect(menu.locator('.menu-note')).toHaveText(note)
-    const at = await measureNote(page)
-    expect(at.menu.left).toBeGreaterThanOrEqual(0)
-    expect(at.menu.right).toBeLessThanOrEqual(at.window)
-    expect(at.note.left).toBeGreaterThanOrEqual(at.menu.left)
-    expect(at.note.right).toBeLessThanOrEqual(at.menu.right)
-    expect(at.note.bottom).toBeLessThanOrEqual(at.first.top)
-    await expectNoSilentClipping(page, `view menu note ${locale} ${width}px`, '.menu-popup')
-    await page.keyboard.press('Escape')
-    await expect(menu).toHaveCount(0)
-
-    // Said once: neither the menu opened again nor a reload says it.
-    expect(await listed(page, locale)).toEqual(['Lanes'])
-    await openMenu(page, locale)
-    await expect(page.getByRole('menu').locator('.menu-note')).toHaveCount(0)
-    await page.keyboard.press('Escape')
-    await page.reload()
-    await expect(page.locator('[data-reference]').first()).toBeVisible()
-    await openMenu(page, locale)
-    await expect(page.getByRole('menu').locator('.menu-note')).toHaveCount(0)
-  })
 
 /**
  * «Save view…» opens its dialog as the menu goes, with no timer between them. The dialog once

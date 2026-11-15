@@ -97,6 +97,7 @@ test('settings stored with the notify fields of older builds read cleanly and lo
   })
   assert.deepEqual(Object.keys(merged).toSorted(), [
     'accountAliases',
+    'droppedViews',
     'editor',
     'executionTab',
     'kindColors',

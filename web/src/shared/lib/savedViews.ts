@@ -118,15 +118,43 @@ export function keepReadViews(
   const dropped = list.filter((view) => !reads(view.state)).map((view) => view.name)
   if (!dropped.length) return { dropped, views }
   let next = views
-
-  for (const [index, name_] of dropped.entries()) {
-    if (!(index in dropped)) {
-      continue
-    }
-
-    next = deleteView(next, place, name_)
-  }
+  for (const name of dropped) next = deleteView(next, place, name)
   return { dropped, views: next }
+}
+
+/**
+ * The names of the views taken out as unread, by place, until the place has named them once.
+ * They are kept with the views rather than by whoever shows them, because the views are gone
+ * from the settings as soon as they are read: a reload, or a screen closed before its menu
+ * opened, would otherwise take the only record that they were there.
+ */
+export type DroppedViews = Readonly<Record<string, readonly string[]>>
+
+/** What was stored, read: a place whose value is not a list of names is left out. */
+export function readDroppedViews(raw: unknown): DroppedViews {
+  const dropped: Record<string, string[]> = {}
+  for (const [place, list] of Object.entries(record(raw) ?? {})) {
+    if (!Array.isArray(list)) continue
+    const names = [
+      ...new Set(list.flatMap((name) => (typeof name === 'string' ? [viewName(name)] : []))),
+    ].filter(Boolean)
+    if (names.length) dropped[place] = names
+  }
+  return dropped
+}
+
+/** The dropped names with these added to the place's, each named once. */
+export function withDropped(
+  dropped: DroppedViews,
+  place: string,
+  names: readonly string[],
+): DroppedViews {
+  return { ...dropped, [place]: [...new Set([...(dropped[place] ?? []), ...names])] }
+}
+
+/** The dropped names without the place's, once it has named them. */
+export function withoutDropped(dropped: DroppedViews, place: string): DroppedViews {
+  return Object.fromEntries(Object.entries(dropped).filter(([where]) => where !== place))
 }
 
 /** The state to write back when the view is applied; null for a view the place does not have. */

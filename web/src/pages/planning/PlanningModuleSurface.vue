@@ -38,6 +38,7 @@ import { useI18n } from 'vue-i18n'
 import { useOpenCardModel } from '@/pages/planning/composables/useOpenCardModel.ts'
 import { usePlanningCardTrail } from '@/pages/planning/composables/usePlanningCardTrail.ts'
 import {
+  chainTarget,
   groupingOf,
   viewOf,
   withGrouping,
@@ -55,6 +56,7 @@ import PlanningPortfolioFrame from '@/pages/planning/PlanningPortfolioFrame.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { readingModel } from '@/pages/planning/utils/readingModel.ts'
+import { withoutUnreadValues } from '@/pages/planning/utils/savedViewReads.ts'
 
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
@@ -225,6 +227,22 @@ const {
   notice: (message) => emit('notice', message),
   write: (state) => emit('state', state),
 })
+
+/**
+ * An address holding a value this build does not read — a grouping, a view or a filter value
+ * a build before this one wrote — is written again without it, as a chain it cannot name is
+ * above, so the address says what the views show and a view saved from it keeps no such value.
+ * A chain that cannot be named goes first: its refusal says so, and its write comes back here.
+ */
+watch(
+  () => props.route.state,
+  (state) => {
+    if (chainTarget(state).status === 'invalid') return
+    const read = withoutUnreadValues(state)
+    if (read !== null) emit('state', read)
+  },
+  { immediate: true },
+)
 
 const { openRecord, parent } = useOpenCardModel(model, open)
 /** The card on show, in the panel every host of a card shares. */

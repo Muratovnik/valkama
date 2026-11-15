@@ -20,8 +20,8 @@ import { readAccountAliases } from '@/shared/lib/accountAliases.ts'
 import type { AccountAliases } from '@/shared/lib/accountAliases.ts'
 import { readKindColors } from '@/shared/lib/kindColors.ts'
 import type { KindColors } from '@/shared/lib/kindColors.ts'
-import { readSavedViews } from '@/shared/lib/savedViews.ts'
-import type { SavedViews } from '@/shared/lib/savedViews.ts'
+import { readDroppedViews, readSavedViews } from '@/shared/lib/savedViews.ts'
+import type { DroppedViews, SavedViews } from '@/shared/lib/savedViews.ts'
 import { STATE_NAMINGS } from '@/shared/lib/stateNames.ts'
 import type { StateNaming } from '@/shared/lib/stateNames.ts'
 
@@ -46,6 +46,8 @@ export interface PlatformSettings {
    * move there; empty after that, and on a device that never gave one.
    */
   accountAliases: AccountAliases
+  /** The names of saved views taken out as unread, by place, until that place has named them. */
+  droppedViews: DroppedViews
   editor: Editor
   executionTab: boolean
   /** Only what the owner chose; a kind not here takes the stylesheet's default. */
@@ -72,6 +74,7 @@ const DEFAULT_OPENING: SessionOpening = { fallback: 'vscode', always: '', comman
 
 export const DEFAULT_SETTINGS: PlatformSettings = {
   accountAliases: {},
+  droppedViews: {},
   editor: 'vscode',
   executionTab: false,
   kindColors: {},
@@ -152,6 +155,7 @@ export function mergeSettings(raw: unknown): PlatformSettings {
   // Only what this setting itself stored turns it on, so every older shape reads as off.
   return {
     accountAliases: readAccountAliases(source.accountAliases),
+    droppedViews: readDroppedViews(source.droppedViews),
     editor,
     executionTab: source.executionTab === true,
     kindColors: readKindColors(source.kindColors),

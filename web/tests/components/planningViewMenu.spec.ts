@@ -80,7 +80,7 @@ describe('the view menu and a saved view this build does not read', () => {
 
     expect(entriesOf(wrapper)[0]).toMatchObject({ kind: 'note', key: 'dropped' })
     expect(noteOf(wrapper)).toBe(
-      'Removed saved views this version cannot read: “Former lanes”, “Old column”, “Old scope”',
+      'Removed views with values this version does not know: “Former lanes”, “Old column”, “Old scope”',
     )
     const listed = entriesOf(wrapper).find((entry) => entry.key === 'views')
     expect(listed?.kind === 'choice' && listed.options.map((option) => option.label)).toEqual([
@@ -90,7 +90,9 @@ describe('the view menu and a saved view this build does not read', () => {
     expect(stored()[PLACE]?.map((view) => view.name)).toEqual(['Lanes', 'Tree'])
     expect(stored()[OTHER]?.map((view) => view.name)).toEqual(['Former lanes'])
 
-    // Once the menu that said so has closed, it says it no more, nor after a reload.
+    // Once the menu that said so has closed, it says it no more, nor after a reload. A menu
+    // closes a moment after the space opened, never in the tick of the write that opening made.
+    await wrapper.vm.$nextTick()
     wrapper.getComponent(MenuStub).vm.$emit('close')
     await wrapper.vm.$nextTick()
     expect(noteOf(wrapper)).toBeUndefined()
@@ -101,9 +103,58 @@ describe('the view menu and a saved view this build does not read', () => {
   it('names one view in the singular, in Russian too', () => {
     store({ [PLACE]: [{ name: 'Старые колонки', state: { cat: 'queued' } }] })
     expect(noteOf(menu('ru'))).toBe(
-      'Убран сохранённый вид, которого эта версия не читает: «Старые колонки»',
+      'Убран вид со значениями, которых эта версия не знает: «Старые колонки»',
     )
     expect(stored()[PLACE]).toBeUndefined()
+  })
+
+  it('names several views in Russian as the plural the note takes', () => {
+    store({
+      [PLACE]: [
+        { name: 'Старые колонки', state: { cat: 'queued' } },
+        { name: 'Старые полосы', state: { group: 'former' } },
+      ],
+    })
+    expect(noteOf(menu('ru'))).toBe(
+      'Убраны виды со значениями, которых эта версия не знает: «Старые колонки», «Старые полосы»',
+    )
+  })
+
+  it('names the views it removed though the menu went before it was opened, and after a reload', async () => {
+    store({
+      [PLACE]: [
+        { name: 'Lanes', state: { view: 'kanban', group: 'goal' } },
+        { name: 'Former lanes', state: { view: 'kanban', group: 'former' } },
+      ],
+    })
+    // The space was opened and left, and the page reloaded, with the menu never opened.
+    menu().unmount()
+    expect(stored()[PLACE]?.map((view) => view.name)).toEqual(['Lanes'])
+    menu().unmount()
+    const wrapper = menu()
+    expect(noteOf(wrapper)).toBe(
+      'Removed a view with values this version does not know: “Former lanes”',
+    )
+
+    // Said once, whichever menu said it: the next one, and the next page, say nothing.
+    wrapper.getComponent(MenuStub).vm.$emit('close')
+    await wrapper.vm.$nextTick()
+    expect(noteOf(wrapper)).toBeUndefined()
+    wrapper.unmount()
+    expect(noteOf(menu())).toBeUndefined()
+  })
+
+  it('names a view only in the space it was removed from', () => {
+    store({ [OTHER]: [{ name: 'Former lanes', state: { group: 'former' } }] })
+    setActivePinia(createPinia())
+    mount(PlanningViewMenu, {
+      props: { grouping: 'none', place: OTHER, state: { view: 'kanban' } },
+      global: {
+        plugins: [createI18n({ legacy: false, locale: 'en', messages, pluralRules })],
+        stubs: { VMenu: MenuStub, SaveViewDialog: true },
+      },
+    }).unmount()
+    expect(noteOf(menu())).toBeUndefined()
   })
 
   it('says nothing and keeps every view this build reads', () => {

@@ -17,7 +17,7 @@ export const viewMenuMessages = {
       save: 'Save view…',
       delete: 'Delete view “{name}”',
       dropped:
-        'Removed a saved view this version cannot read: {names} | Removed saved views this version cannot read: {names}',
+        'Removed a view with values this version does not know: {names} | Removed views with values this version does not know: {names}',
       droppedName: '“{name}”',
     },
     saveView: {
@@ -39,7 +39,7 @@ export const viewMenuMessages = {
       save: 'Сохранить вид…',
       delete: 'Удалить вид «{name}»',
       dropped:
-        'Убран сохранённый вид, которого эта версия не читает: {names} | Убраны сохранённые виды, которых эта версия не читает: {names} | Убраны сохранённые виды, которых эта версия не читает: {names}',
+        'Убран вид со значениями, которых эта версия не знает: {names} | Убраны виды со значениями, которых эта версия не знает: {names} | Убраны виды со значениями, которых эта версия не знает: {names}',
       droppedName: '«{name}»',
     },
     saveView: {
