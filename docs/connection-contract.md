@@ -236,7 +236,9 @@ refused with `invalid_request` and status 400.
 
 Since 3.0 every work item is one of five kinds, and its state is one of eight
 categories or, for an accepted open goal or stage, what it derives from the work
-under it.
+under it. Why this broke the earlier schemas, and what a client sends and reads
+instead, is in
+[ADR 0014](decisions/0014-work-model-breaks-the-planning-schemas.md).
 
 | `kind` | What it is |
 | --- | --- |
