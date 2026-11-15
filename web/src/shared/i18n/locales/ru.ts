@@ -853,8 +853,7 @@ export const ru = {
     },
     listEmpty: 'В этом пространстве ещё нет работы.',
     noSpace: 'У этого проекта пока нет пространства планирования.',
-    cutoverPending:
-      'Планирование всё ещё живёт в домене Board. Выполните `valkama migrate planning-model` один раз.',
+    cutoverPending: 'Выполните `valkama migrate work-model` один раз, остановив все сессии.',
     kind: {
       task: 'Задача',
       bug: 'Дефект',

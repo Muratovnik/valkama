@@ -23,7 +23,7 @@ import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 import { WEB_AUTHOR } from '@/shared/api/webAuthor.ts'
 
-/** The cutover has not run, so the Board domain is still the live one. */
+/** Planning is unavailable until the store is carried forward: the notice names the command. */
 export class CutoverPendingError extends Error {
   constructor(reason: string) {
     super(reason)

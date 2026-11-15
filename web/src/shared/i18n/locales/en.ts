@@ -853,8 +853,7 @@ export const en = {
     },
     listEmpty: 'This space has no work items yet.',
     noSpace: 'This project has no planning space yet.',
-    cutoverPending:
-      'Planning still lives in the Board domain. Run `valkama migrate planning-model` once to convert it.',
+    cutoverPending: 'Run `valkama migrate work-model` once, with every session stopped.',
     kind: {
       task: 'Task',
       bug: 'Bug',
