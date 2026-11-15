@@ -28,6 +28,7 @@ import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { standingOf } from '@/shared/lib/standing.ts'
 import type { NamedState } from '@/shared/lib/stateNames.ts'
 import type { IconName, SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 
@@ -380,7 +381,7 @@ function steps(item: FacetSubject) {
 function valueOf(facet: FacetId, item: FacetSubject, context: FacetContext): string | null {
   if (facet === 'kind') return item.kind
   if (facet === 'priority') return item.priority
-  if (facet === 'state') return item.state?.category ?? item.container_state ?? null
+  if (facet === 'state') return standingOf(item)
   if (facet === 'readiness') return readinessOf(item, context)
   if (facet === 'labels') return item.labels?.length ? item.labels.join(',') : null
   if (facet === 'holder') return holderRef(item) || null

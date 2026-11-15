@@ -11,8 +11,8 @@ import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
+import type { StandingItem } from '@/shared/lib/standing.ts'
 import { useStandingName } from '@/shared/lib/useStateName.ts'
-import type { StandingItem } from '@/shared/lib/useStateName.ts'
 
 const render = () => h('div')
 

@@ -18,7 +18,8 @@ import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
 import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
-import { standingOf, useStandingName } from '@/shared/lib/useStateName.ts'
+import { standingOf } from '@/shared/lib/standing.ts'
+import { useStandingName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'

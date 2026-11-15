@@ -10,7 +10,7 @@ import { holderRef } from '@/entities/work-item/utils/facets.ts'
 
 import { PRIORITIES } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import type { StandingItem } from '@/shared/lib/useStateName.ts'
+import type { StandingItem } from '@/shared/lib/standing.ts'
 
 export type SortKey =
   'reference' | 'title' | 'state' | 'priority' | 'claim' | 'checklist' | 'updated'

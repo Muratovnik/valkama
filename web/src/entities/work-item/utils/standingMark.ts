@@ -6,6 +6,7 @@
 import type { FacetForm, FacetMark } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { standingOf } from '@/shared/lib/standing.ts'
 
 /**
  * Where an item stands, as every surface knows it: open or not, and the state it
@@ -28,7 +29,7 @@ export function stateMark(
   form: FacetForm,
 ): FacetMark {
   const { state } = item
-  const value = state?.category ?? item.container_state ?? 'not_started'
+  const value = standingOf(item)
   return {
     facet: 'state',
     value,

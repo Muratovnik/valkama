@@ -18,8 +18,8 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import { linkEndStateSaid, validateWorkItemBrief, workableIds } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { standingOf } from '@/shared/lib/useStateName.ts'
-import type { StandingItem } from '@/shared/lib/useStateName.ts'
+import { standingOf } from '@/shared/lib/standing.ts'
+import type { StandingItem } from '@/shared/lib/standing.ts'
 
 const brief = (): Record<string, unknown> =>
   JSON.parse(

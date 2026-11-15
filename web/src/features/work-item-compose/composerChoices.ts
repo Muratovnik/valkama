@@ -8,7 +8,7 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { byUse } from '@/shared/lib/byUse.ts'
-import type { StandingItem } from '@/shared/lib/useStateName.ts'
+import type { StandingItem } from '@/shared/lib/standing.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 
 /** The facets a new item is given in the dialog; the state is the workflow's to choose. */

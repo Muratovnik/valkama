@@ -20,7 +20,8 @@ import GraphFrameWorking from '@/widgets/work-item-graph/components/GraphFrameWo
 import { kindGlyph as kindGlyphOf, printsFacet } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { standingOf, useStandingName } from '@/shared/lib/useStateName.ts'
+import { standingOf } from '@/shared/lib/standing.ts'
+import { useStandingName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'

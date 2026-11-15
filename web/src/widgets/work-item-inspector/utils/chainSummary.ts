@@ -9,8 +9,8 @@
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS, chainGroup, groupStateNames } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
+import type { StandingItem } from '@/shared/lib/standing.ts'
 import type { NamedState } from '@/shared/lib/stateNames.ts'
-import type { StandingItem } from '@/shared/lib/useStateName.ts'
 
 /** How a state is named on screen: `useStateName`, or a plain stand-in where no screen is. */
 type StateName = (state: NamedState) => string
