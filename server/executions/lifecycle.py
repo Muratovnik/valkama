@@ -473,17 +473,17 @@ def _restore(
             and current["claim_ref"] == launched["claim_ref"] == actor
         )
         if owned:
-            restored = planning_service.transition_work_item(
+            restored = planning_service.put_back_after_launch(
                 conn,
                 reference,
                 state,
                 author=actor,
-                reason="launch_failed",
-                force=True,
                 expected_revision=int(launched["revision"]),
             )
             # The state was put back above, so neither claim write may move
             # it: a claim would start it again and a release would requeue it.
+            # A move out of work has already let the launch's claim go, and a
+            # second release would only write a second, empty `released`.
             if claim:
                 planning_service.claim_work_item(
                     conn,
@@ -493,7 +493,7 @@ def _restore(
                     expected_revision=int(restored["revision"]),
                     move_state=False,
                 )
-            else:
+            elif restored["claim_ref"] == actor:
                 planning_service.claim_work_item(
                     conn,
                     reference,
