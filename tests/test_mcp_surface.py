@@ -2198,6 +2198,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
                         "work_item_id",
                         "revision",
                         "state",
+                        "open",
                         "claim_ref",
                         "claim_state",
                         "title",
@@ -2466,6 +2467,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
                 "state_category": "completed",
                 "is_terminal": True,
                 "state_unavailable": None,
+                "container_state": None,
             },
             link,
         )
@@ -2692,7 +2694,16 @@ class ChainToolTests(WireCallTestCase):
         whole = self.whole()
         self.assertNotIn("members", answer)
         self.assertNotIn("edges", answer)
-        for key in ("root", "scope", "total", "closed", "open", "ready", "by_category"):
+        for key in (
+            "root",
+            "scope",
+            "total",
+            "closed",
+            "open",
+            "workable",
+            "by_category",
+            "by_container_state",
+        ):
             self.assertEqual(whole[key], answer[key], key)
         self.assertEqual((38, 32, 6), (answer["total"], answer["closed"], answer["open"]))
         self.assertEqual(whole["origins"], answer["origins"])
@@ -2700,9 +2711,9 @@ class ChainToolTests(WireCallTestCase):
         self.assertEqual(33, len(whole["series"]))
         self.assertEqual(whole["series"][-30:], answer["series"])
 
-    def test_the_epic_scope_leaves_the_discovered_item_out(self) -> None:
-        answer = self.answer("get_work_item_chain", {"reference": self.root, "scope": "epic"})
-        self.assertEqual(("epic", 37, 5), (answer["scope"], answer["total"], answer["open"]))
+    def test_the_tree_scope_leaves_the_discovered_item_out(self) -> None:
+        answer = self.answer("get_work_item_chain", {"reference": self.root, "scope": "tree"})
+        self.assertEqual(("tree", 37, 5), (answer["scope"], answer["total"], answer["open"]))
 
     def test_open_members_run_active_review_ready_then_the_rest(self) -> None:
         answer = self.answer("get_work_item_chain", {"id": self.root})
@@ -2729,7 +2740,7 @@ class ChainToolTests(WireCallTestCase):
                 "title": "claimed",
                 "state": "ready",
                 "claim_ref": "one",
-                "ready": False,
+                "workable": False,
                 "parent_reference": self.root,
                 "rank": ranks[self.children["claimed"]],
             },
@@ -2766,7 +2777,7 @@ class ChainToolTests(WireCallTestCase):
         for arguments, wanted in (
             ({"id": self.root, "offset": -1}, "offset must be a non-negative integer"),
             ({"id": self.root, "limit": True}, "limit must be a non-negative integer"),
-            ({"id": self.root, "scope": "related"}, "scope must be chain or epic"),
+            ({"id": self.root, "scope": "related"}, "scope must be chain or tree"),
             (
                 {"id": "not a reference"},
                 "a work item reference reads as KEY-NUMBER, such as MAIN-142",

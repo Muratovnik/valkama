@@ -309,7 +309,7 @@ class PlanningExactApiTests(unittest.TestCase):
                 self.assertEqual(schema9.CREATED_AT, held["updated_at"])
                 # Blocked by the first, which is open, so not startable.
                 blocked = self.brief_from(space_ref, "KEEP-2")
-                self.assertEqual(("", False), (blocked["claim_ref"], blocked["ready"]))
+                self.assertEqual(("", False), (blocked["claim_ref"], blocked["workable"]))
 
     def test_global_portfolio_and_memory_share_every_registered_project(self) -> None:
         unbound_root = self.root / "unbound"

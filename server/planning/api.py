@@ -286,7 +286,7 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
 
 
 def _chain(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    """The chain of work rooted at one item: `scope` is `chain` (the default) or `epic`."""
+    """The chain of work rooted at one item: `scope` is `chain` (the default) or `tree`."""
 
     scope = _first(parameters, "scope")
     return {
@@ -298,7 +298,7 @@ def _chain(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dic
 
 
 def _item_usage(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    """What work on one item took; `scope` `epic` or `chain` takes in what it grew into."""
+    """What work on one item took; `scope` `tree` or `chain` takes in what it grew into."""
 
     return {
         "interface_version": PLANNING_API_INTERFACE,
@@ -1038,7 +1038,10 @@ def _apply_step(
         return {}, written
     answer = _transition(conn, {**entry, **base})
     found = {name: answer[name] for name in ("warnings", "overridden") if answer.get(name)}
-    moved = {"state": answer["state"]["key"]}
+    # An accepted open goal or stage stands in no state a caller names: it shows what it derives.
+    moved = {"state": answer["state"]["key"] if answer["state"] is not None else None}
+    if answer["container_state"] is not None:
+        moved["container_state"] = answer["container_state"]
     if answer.get("released"):
         moved["released"] = answer["released"]
     return found, moved
@@ -1074,7 +1077,7 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         findings, applied = _run_steps(conn, base, steps)
         answer = service.get_work_item(conn, reference)
         # A closed item takes no question or list, so one written here came before this close.
-        if answer["state"]["is_terminal"]:
+        if not answer["open"]:
             _refuse_unanswerable(applied)
     return {**answer, **findings, "applied": applied}
 

@@ -6,9 +6,11 @@ record those writes hand back. They change for different reasons — a new field
 in the payload is not a new rule about who may write — and the dependency runs
 one way, from the writer to the reader.
 
-Readiness and containment are computed here rather than by each view, because
-the Board era left that to the callers and they disagreed about a held item and
-about a container.
+Readiness and what a container derives are computed here, through `item_tree`,
+rather than by each view, because the Board era left that to the callers and
+they disagreed about a held item and about a container. A state leaves through
+`states.public_state` alone, so the service state an accepted open container
+stands in never reaches a reader.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ import json
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping, Sequence
 
-from . import calls, leases, mentions, model, subscriptions
+from . import calls, item_tree, leases, mentions, model, states, subscriptions
 
 
 @contextlib.contextmanager
@@ -98,22 +100,44 @@ def comment_count(conn: sqlite3.Connection, row: sqlite3.Row) -> int:
 STATE_MISSING = "state_missing"
 
 
-def end_state(row: sqlite3.Row) -> dict[str, object]:
+def end_state(row: sqlite3.Row, container_state: str | None = None) -> dict[str, object]:
     """The state a link names for one of its ends, from that end's state columns.
 
     Every read that names a link's end selects them as `state_name`,
     `state_category` and `is_terminal`, through a LEFT JOIN, so a state the
     store cannot resolve arrives as nulls; it is said as unknown here, with the
-    reason beside it, and never as open.
+    reason beside it, and never as open. An end that is an accepted open container
+    stands in a state of no category: its name and category are null, it is open,
+    nothing is unavailable, and `container_state` says what it derives, which the
+    caller read from the items under it (`item_tree`).
     """
 
     readable = row["state_category"] is not None
+    shown = (
+        states.public_state(
+            {
+                "key": None,
+                "name": row["state_name"],
+                "category": row["state_category"],
+                "is_terminal": row["is_terminal"],
+            }
+        )
+        if readable
+        else None
+    )
     return {
-        "state_name": row["state_name"] if readable else None,
-        "state_category": row["state_category"] if readable else None,
+        "state_name": shown["name"] if shown is not None else None,
+        "state_category": shown["category"] if shown is not None else None,
         "is_terminal": bool(row["is_terminal"]) if readable else None,
         "state_unavailable": None if readable else STATE_MISSING,
+        "container_state": container_state if readable and shown is None else None,
     }
+
+
+def service_ends(rows: Sequence[sqlite3.Row], column: str) -> list[str]:
+    """The ends among link rows that stand in the service state, by the id `column` names."""
+
+    return [str(row[column]) for row in rows if row["state_category"] == model.SERVICE_CATEGORY]
 
 
 def links(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
@@ -140,6 +164,7 @@ def links(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
         " ORDER BY l.kind, l.other",
         (work_item_id, work_item_id),
     ).fetchall()
+    ends = item_tree.below(conn, service_ends(rows, "work_item_id"))
     found = []
     for row in rows:
         if row["work_item_id"] is None or row["space_key"] is None:
@@ -151,7 +176,7 @@ def links(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
                 "work_item_id": row["work_item_id"],
                 "reference": model.human_id(str(row["space_key"]), int(row["number"])),
                 "title": row["title"],
-                **end_state(row),
+                **end_state(row, ends.container_state(str(row["work_item_id"]))),
             }
         )
     return found
@@ -172,24 +197,38 @@ def blocked(conn: sqlite3.Connection, work_item_id: str) -> bool:
     )
 
 
-def is_container(conn: sqlite3.Connection, work_item_id: str) -> bool:
-    """Whether anything calls this item its parent, which makes it a container."""
+def outward_kind(kind: object, parent_id: object) -> str:
+    """The kind a reader sees: a container is a goal, or a stage under a parent.
 
-    return (
-        conn.execute(
-            "SELECT 1 FROM work_items WHERE parent_id = ? LIMIT 1", (work_item_id,)
-        ).fetchone()
-        is not None
-    )
+    Every place a kind leaves the server from a row reads it through this.
+    """
+
+    if kind == model.CONTAINER_KIND:
+        return "stage" if parent_id else "goal"
+    return str(kind)
+
+
+def acceptance(row: sqlite3.Row) -> dict | None:
+    """Why accepted work was accepted and when, or None while it is not.
+
+    An attached store an earlier build wrote is read as it is, and it records no
+    acceptance: its rows have no such column, and nothing there was accepted so.
+    """
+
+    columns = row.keys()  # `in row` would search a Row's values, not its names
+    if "acceptance" not in columns or row["acceptance"] is None:
+        return None
+    return {"basis": row["acceptance"], "at": row["accepted_at"]}
 
 
 def workable(
     *, container: bool, claim_ref: object, category: str, blocked: Callable[[], bool]
 ) -> bool:
-    """Whether an item is workable now: unheld, uncontained, unblocked and not started.
+    """Whether an item is workable now: a task, unheld, unblocked, in triage or ready.
 
-    The one statement of the rule, so a projection that loaded its facts in bulk
-    answers it the way a single item's record does. `blocked` is asked last and
+    The rule the take-next queue applies, stated once, so a projection that
+    loaded its facts in bulk answers it the way a single item's record does. A
+    container is never workable: nobody holds one. `blocked` is asked last and
     only when the rest already holds, because it is the one fact that may cost
     a query.
     """
@@ -677,6 +716,7 @@ def present(
     unresolved: bool = False,
     events: int | None = None,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
+    tree: item_tree.Tree | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
 
@@ -691,25 +731,31 @@ def present(
     mark, carrying the same and `truncated`, the next page after `comments_after`.
     None given is the whole history, which is what every write answers with and
     what a screen draws from. `closed` is what `closings` loaded for a read of
-    many items; absent, the item asks `closing` itself.
+    many items; absent, the item asks `closing` itself. `tree` is what such a read
+    loaded of its spaces (`item_tree.of_spaces`); absent, the item loads what is
+    under it.
+
+    `state` is what `states.public_state` makes of the item's state: null for an
+    accepted open container, which says what it derives as `container_state`
+    instead. `open` says whether work on it is over, whatever its kind.
     """
 
     state = state_by_id(conn, str(row["state_id"]))
+    shown = states.public_state(state)
     record = {
         "work_item_id": row["work_item_id"],
         "planning_space_id": row["planning_space_id"],
         "reference": reference(conn, row),
         "number": int(row["number"]),
         "title": row["title"],
-        "kind": row["kind"],
+        "kind": outward_kind(row["kind"], row["parent_id"]),
         "priority": row["priority"],
-        "state": {
-            "state_id": state["state_id"],
-            "key": state["key"],
-            "name": state["name"],
-            "category": state["category"],
-            "is_terminal": bool(state["is_terminal"]),
-        },
+        "state": None if shown is None else {"state_id": state["state_id"], **shown},
+        "open": not state["is_terminal"],
+        "container_state": None,
+        "acceptance": acceptance(row),
+        "started_at": None,
+        "waits_for": [],
         "claim_ref": row["claim_ref"],
         "claim_state": None,
         "parent_id": row["parent_id"],
@@ -734,12 +780,15 @@ def present(
         if closed is None
         else closed.get(identity, (None, None))
     )
-    record["container"] = is_container(conn, identity)
-    record["ready"] = workable(
-        container=record["container"],
+    facts = tree if tree is not None else item_tree.of_item(conn, row, str(state["category"]))
+    record["container_state"] = facts.container_state(identity)
+    record["started_at"] = facts.started_at(identity)
+    record["waits_for"] = facts.waits_for(identity)
+    record["workable"] = workable(
+        container=row["kind"] == model.CONTAINER_KIND,
         claim_ref=row["claim_ref"],
-        category=state["category"],
-        blocked=lambda: blocked(conn, identity),
+        category=str(state["category"]),
+        blocked=lambda: bool(record["waits_for"]),
     )
     if not full:
         # A count, under its own name. Calling it `comments` in the brief and

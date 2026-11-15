@@ -32,6 +32,7 @@ import subprocess
 from dataclasses import dataclass
 
 from . import processes, store
+from .planning import item_tree, states
 from .planning import service as planning_service
 from .projects import project_registry, scopes
 from .refs import resolve_ref, split_commit_value
@@ -182,7 +183,8 @@ def _own_names(repository: str) -> set[str]:
 
 def _open_commit_refs(conn: sqlite3.Connection, space_id: str) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT i.number, i.title, s.name AS state, r.value, r.label"
+        "SELECT i.work_item_id, i.number, i.title, s.key, s.name, s.category, s.is_terminal,"
+        " r.value, r.label"
         " FROM work_items i"
         " JOIN workflow_states s ON s.state_id = i.state_id"
         " JOIN work_item_refs r ON r.work_item_id = i.work_item_id AND r.kind = 'commit'"
@@ -313,14 +315,21 @@ def released_items(
     refs = _open_commit_refs(conn, str(planning_space["planning_space_id"]))
     values = [str(ref["value"]).strip() for ref in refs]
     release = _read_release(conn, key, repository, revisions, values)
+    # An accepted open goal or stage is named by what it derives, not by its service state.
+    derived = item_tree.below(
+        conn, [str(ref["work_item_id"]) for ref in refs if states.public_state(ref) is None]
+    )
     items: dict[int, dict] = {}
     for ref, value in zip(refs, values, strict=True):
+        public = states.public_state(ref)
         item = items.setdefault(
             int(ref["number"]),
             {
                 "reference": f"{key}-{ref['number']}",
                 "title": ref["title"],
-                "state": ref["state"],
+                "state": public["name"]
+                if public is not None
+                else derived.container_state(str(ref["work_item_id"])),
                 "matched": [],
                 "not_matched": [],
             },

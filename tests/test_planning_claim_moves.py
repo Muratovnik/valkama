@@ -195,7 +195,7 @@ class ReleaseRequeuesWorkTests(ClaimMoveTestCase):
         answer = self.claim(reference, release=True)
         self.assertEqual({"from": "dev", "to": "ready"}, answer["requeued"])
         self.assertEqual(("ready", ""), (answer["state"]["key"], answer["claim_ref"]))
-        self.assertTrue(answer["ready"])
+        self.assertTrue(answer["workable"])
         self.assertEqual(
             [("released", "agent", "agent"), ("transitioned", "ready: released", "agent")],
             self.events(reference)[-2:],

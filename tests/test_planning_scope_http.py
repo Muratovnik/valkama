@@ -101,10 +101,10 @@ class PlanningScopeHttpTests(unittest.TestCase):
     def test_the_usage_reads_answer_a_real_listener_where_the_interface_reads_them(self) -> None:
         """`web/src/shared/api/planningUsageApi.ts` reads these paths with no data scope."""
 
-        status, item = self.request("/api/planning/work-item/usage?id=SAME-1&scope=epic")
+        status, item = self.request("/api/planning/work-item/usage?id=SAME-1&scope=tree")
         self.assertEqual(200, status, item)
         self.assertEqual("valkama-planning-api", item["interface_version"])
-        self.assertEqual(("SAME-1", "epic"), (item["usage"]["reference"], item["usage"]["scope"]))
+        self.assertEqual(("SAME-1", "tree"), (item["usage"]["reference"], item["usage"]["scope"]))
         self.assertEqual("primary-only", item["usage"]["title"])
         self.assertIsNone(item["usage"]["tokens"]["input"])
         self.assertEqual(["SAME-1"], [line["reference"] for line in item["usage"]["by_item"]])

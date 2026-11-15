@@ -50,7 +50,7 @@ from typing import Any
 
 from .. import store_steps
 from ..store_steps import Context, Postcondition, Step, UnmetError
-from . import model, read_model, words, work_model_probes
+from . import item_tree, model, read_model, words, work_model_probes
 from . import store as planning_store
 
 #: Who every record the migration writes names as its author.
@@ -1521,12 +1521,24 @@ def _holds_derived(conn: sqlite3.Connection, context: Context) -> Mapping[str, A
         )
     ]
     derived = _derived(conn, _DERIVED_AFTER, containers)
+    # The read model's own rule, over every space in the one pass a board reads with:
+    # what a reader is shown must be what the store held before the migration.
+    tree = item_tree.of_spaces(
+        conn, [str(row[0]) for row in conn.execute("SELECT planning_space_id FROM planning_spaces")]
+    )
+    shown = {identity: tree.container_state(identity) for identity in containers}
     references = _references(conn)
     found = [
         f"{references.get(identity, identity)} derives {derived.get(identity)},"
         f" not {oracle.derived.get(identity)}"
         for identity in sorted(set(derived) | set(oracle.derived))
         if derived.get(identity) != oracle.derived.get(identity)
+    ]
+    found += [
+        f"{references.get(identity, identity)} reads {shown.get(identity)},"
+        f" not {oracle.derived.get(identity)}"
+        for identity in sorted(set(shown) | set(oracle.derived))
+        if shown.get(identity) != oracle.derived.get(identity)
     ]
     _unmet(found, "derived states")
     return {"derived": dict(sorted(Counter(derived.values()).items()))}

@@ -684,7 +684,7 @@ class WorkItemGraphTests(unittest.TestCase):
 
         depths = {reference: node["depth"] for reference, node in self.nodes().items()}
         self.assertEqual({first: 0, second: 1, third: 2}, depths)
-        ready = {reference for reference, node in self.nodes().items() if node["ready"]}
+        ready = {reference for reference, node in self.nodes().items() if node["workable"]}
         self.assertEqual({first}, ready, "only the head of the chain is workable")
 
         planning.transition_work_item(self.conn, first, "done", force=True)
@@ -695,9 +695,9 @@ class WorkItemGraphTests(unittest.TestCase):
         goal = self.item("goal", kind="goal", state="triage")
         child = self.item("child", state="ready", parent=goal)
         nodes = self.nodes()
-        self.assertTrue(nodes[goal]["container"])
-        self.assertFalse(nodes[goal]["ready"], "a container is not work")
-        self.assertTrue(nodes[child]["ready"])
+        self.assertEqual("goal", nodes[goal]["kind"])
+        self.assertFalse(nodes[goal]["workable"], "a container is not work")
+        self.assertTrue(nodes[child]["workable"])
 
     def test_parents_and_provenance_become_edges(self) -> None:
         epic = self.item("epic", kind="goal")
@@ -726,7 +726,7 @@ class WorkItemGraphTests(unittest.TestCase):
         self.assertTrue(all(node["depth"] >= 0 for node in payload["nodes"]))
         self.assertEqual(
             set(),
-            {node["reference"] for node in payload["nodes"] if node["ready"]},
+            {node["reference"] for node in payload["nodes"] if node["workable"]},
             "items inside a cycle are not offered as workable",
         )
 

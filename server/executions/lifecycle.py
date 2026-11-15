@@ -80,6 +80,12 @@ def _launch_reserved(
     try:
         conn.execute("BEGIN IMMEDIATE")
         record = planning_service.get_work_item(conn, reference)
+        # Nobody works a goal or a stage: it is refused before its state is read,
+        # since an accepted open one shows none.
+        if record["kind"] in ("goal", "stage"):
+            raise planning_model.PlanningError(
+                "a goal or stage has no holder; claim a task under it"
+            )
         resume_session_id = _resumable_session(conn, record, packet.client) if packet.resume else ""
         state_before = str(record["state"]["key"])
         claim_before = str(record["claim_ref"] or "")

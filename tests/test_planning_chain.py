@@ -182,12 +182,12 @@ class ChainBoundaryTests(ChainFixture):
         excluded = {"R", "O", "O2", "Up", "Rel", "Dup", "Blk", "Z"}
         self.assertFalse(excluded & set(self.names([m["reference"] for m in found["members"]])))
 
-    def test_the_epic_scope_is_the_roots_children_alone(self) -> None:
-        found = self.read(id=self.refs["R"], scope="epic")
-        self.assertEqual("epic", found["scope"])
+    def test_the_tree_scope_is_everything_under_the_root(self) -> None:
+        found = self.read(id=self.refs["R"], scope="tree")
+        self.assertEqual("tree", found["scope"])
         self.assertEqual(["C1", "C2", "C3"], self.names([m["reference"] for m in found["members"]]))
         self.assertEqual(
-            (3, 1, 2, 1), (found["total"], found["closed"], found["open"], found["ready"])
+            (3, 1, 2, 1), (found["total"], found["closed"], found["open"], found["workable"])
         )
         self.assertEqual(
             [("R", 3, 2)],
@@ -206,9 +206,9 @@ class ChainBoundaryTests(ChainFixture):
                 "work_item_id": self.ids["R"],
                 "reference": self.refs["R"],
                 "title": "R",
-                "kind": "container",
+                "kind": "goal",
                 "has_children": True,
-                "totals": {"chain": 10, "epic": 3},
+                "totals": {"chain": 10, "tree": 3},
             },
             by_reference["root"],
         )
@@ -217,13 +217,13 @@ class ChainBoundaryTests(ChainFixture):
         # R grew past its three children; O's children grew nothing; D1 has no children
         # and one item discovered from it; E's chain adds D2, found from its child E1.
         expected = {
-            "R": {"chain": 10, "epic": 3},
-            "O": {"chain": 2, "epic": 2},
-            "D1": {"chain": 1, "epic": 0},
-            "E": {"chain": 3, "epic": 2},
+            "R": {"chain": 10, "tree": 3},
+            "O": {"chain": 2, "tree": 2},
+            "D1": {"chain": 1, "tree": 0},
+            "E": {"chain": 3, "tree": 2},
         }
         for name, totals in expected.items():
-            for scope in ("chain", "epic"):
+            for scope in ("chain", "tree"):
                 with self.subTest(root=name, scope=scope):
                     found = self.read(id=self.refs[name], scope=scope)
                     self.assertEqual(totals, found["root"]["totals"])
@@ -233,12 +233,12 @@ class ChainBoundaryTests(ChainFixture):
         found = self.read(id=self.refs["D1"])
         self.assertEqual(["F"], self.names([m["reference"] for m in found["members"]]))
         self.assertFalse(found["root"]["has_children"])
-        self.assertEqual(0, self.read(id=self.refs["D1"], scope="epic")["total"])
+        self.assertEqual(0, self.read(id=self.refs["D1"], scope="tree")["total"])
 
     def test_counts_and_categories(self) -> None:
         found = self.read(id=self.refs["R"])
         self.assertEqual(
-            (10, 4, 6, 2), (found["total"], found["closed"], found["open"], found["ready"])
+            (10, 4, 6, 2), (found["total"], found["closed"], found["open"], found["workable"])
         )
         self.assertEqual(
             {"active": 1, "triage": 3, "cancelled": 1, "completed": 3, "ready": 1, "review": 1},
@@ -278,7 +278,7 @@ class ChainBoundaryTests(ChainFixture):
         self.assertEqual("2026-10-10T08:00:00Z", members["C3"]["created_at"])
         # Ready: unheld, uncontained, not started, and nothing unfinished blocks
         # it. D0's only blocker is finished; E is a container; E2 waits on C3.
-        self.assertEqual({"C2", "D0"}, {name for name, m in members.items() if m["ready"]})
+        self.assertEqual({"C2", "D0"}, {name for name, m in members.items() if m["workable"]})
         self.assertEqual(
             ("one", "unconfirmed"), (members["C3"]["claim_ref"], members["C3"]["claim_state"])
         )
@@ -300,7 +300,7 @@ class ChainBoundaryTests(ChainFixture):
         for member in self.read(id=self.refs["R"])["members"]:
             with self.subTest(member=member["reference"]):
                 item = service.get_work_item(self.conn, member["reference"])
-                self.assertEqual(item["ready"], member["ready"])
+                self.assertEqual(item["workable"], member["workable"])
 
     def test_edges_are_the_blocks_and_discovery_links_inside_the_chain(self) -> None:
         found = self.read(id=self.refs["R"])
@@ -366,8 +366,9 @@ class ChainBoundaryTests(ChainFixture):
                 "total",
                 "closed",
                 "open",
-                "ready",
+                "workable",
                 "by_category",
+                "by_container_state",
                 "origins",
                 "series",
                 "recent",
@@ -393,6 +394,7 @@ class ChainBoundaryTests(ChainFixture):
                     "state_category",
                     "is_terminal",
                     "state_unavailable",
+                    "container_state",
                 },
                 set(edge),
             )
@@ -401,13 +403,16 @@ class ChainBoundaryTests(ChainFixture):
                 "work_item_id",
                 "reference",
                 "title",
+                "kind",
                 "state",
+                "open",
+                "container_state",
                 "claim_ref",
                 "claim_state",
                 "parent_reference",
                 "created_at",
                 "closed_at",
-                "ready",
+                "workable",
                 "rank",
             },
             set(found["members"][0]),
@@ -418,11 +423,11 @@ class ChainBoundaryTests(ChainFixture):
 
     def test_a_bad_scope_an_unknown_item_and_no_item_are_refused(self) -> None:
         self.assertEqual(
-            (400, "invalid_request", "scope must be chain or epic"),
+            (400, "invalid_request", "scope must be chain or tree"),
             self.refusal(id=self.refs["R"], scope="relates"),
         )
         self.assertEqual(
-            (400, "invalid_request", "scope must be chain or epic"),
+            (400, "invalid_request", "scope must be chain or tree"),
             self.refusal(id=self.refs["R"], scope="Chain"),
         )
         # A blank parameter is an absent one on every read here, so it is the default.
@@ -485,9 +490,9 @@ class ChainBlockerSourceTests(ChainFixture):
         ]
         # Readiness and the edges must tell one story: the item record is the oracle.
         self.assertEqual(
-            service.get_work_item(self.conn, self.refs[name])["ready"], member["ready"]
+            service.get_work_item(self.conn, self.refs[name])["workable"], member["workable"]
         )
-        return bool(member["ready"])
+        return bool(member["workable"])
 
     def edge_kinds(self) -> set[tuple[str, str, str]]:
         by_id = {identity: name for name, identity in self.ids.items()}

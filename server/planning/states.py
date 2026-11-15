@@ -13,6 +13,7 @@ Reads only. The writes that use these answers live in `service`.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Mapping
 
 from . import model
 
@@ -108,6 +109,25 @@ def cancel_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | No
         (row["workflow_id"], row["state_id"]),
     ).fetchone()
     return found
+
+
+def public_state(state: Mapping[str, object] | sqlite3.Row) -> dict | None:
+    """A state as a reader sees it: its key, name, category and whether work is over in it.
+
+    The one way a workflow state leaves the server. It takes a `workflow_states` row,
+    or the `key`, `name`, `category` and `is_terminal` of one read beside an item,
+    and answers None for the service state: an accepted open container shows no
+    state of its own but the one it derives, `container_state`.
+    """
+
+    if state["category"] == model.SERVICE_CATEGORY:
+        return None
+    return {
+        "key": state["key"],
+        "name": state["name"],
+        "category": state["category"],
+        "is_terminal": bool(state["is_terminal"]),
+    }
 
 
 def public_states(conn: sqlite3.Connection, workflow_id: str) -> list[sqlite3.Row]:

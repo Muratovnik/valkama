@@ -358,7 +358,7 @@ class PlanningDomainTests(unittest.TestCase):
         service.set_summary(self.conn, blocker["reference"], {"done": "d", "next": "n"})
         service.transition_work_item(self.conn, blocker["reference"], "done")
         graph = views.graph_payload(self.conn)
-        ready = {node["reference"]: node["ready"] for node in graph["nodes"]}
+        ready = {node["reference"]: node["workable"] for node in graph["nodes"]}
         self.assertTrue(ready[blocked["reference"]])
 
     # -- read model ----------------------------------------------------------
@@ -383,6 +383,7 @@ class PlanningDomainTests(unittest.TestCase):
                     "state_category": "triage",
                     "is_terminal": False,
                     "state_unavailable": None,
+                    "container_state": None,
                 }
             ],
             payload["links"],
@@ -838,7 +839,8 @@ class PlanningDomainTests(unittest.TestCase):
             for node in views.graph_payload(self.conn, space=self.space["key"])["nodes"]
         }
         self.assertEqual(
-            (False, 1), (graph[blocked["reference"]]["ready"], graph[blocked["reference"]]["depth"])
+            (False, 1),
+            (graph[blocked["reference"]]["workable"], graph[blocked["reference"]]["depth"]),
         )
 
         # Finished, the foreign blocker blocks nothing: the item is workable again.
@@ -853,7 +855,8 @@ class PlanningDomainTests(unittest.TestCase):
             for node in views.graph_payload(self.conn, space=self.space["key"])["nodes"]
         }
         self.assertEqual(
-            (True, 0), (graph[blocked["reference"]]["ready"], graph[blocked["reference"]]["depth"])
+            (True, 0),
+            (graph[blocked["reference"]]["workable"], graph[blocked["reference"]]["depth"]),
         )
 
     def test_a_view_link_whose_source_has_no_readable_state_blocks_nothing(self) -> None:

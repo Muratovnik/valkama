@@ -21,6 +21,7 @@ from . import agents as planning_agents
 from . import (
     calls,
     images,
+    item_tree,
     leases,
     model,
     ranking,
@@ -203,7 +204,9 @@ def list_work_items(
     )
     rows = conn.execute(query, parameters).fetchall()
     closed = read_model.closings(conn, rows)
-    return [read_model.present(conn, row, closed=closed) for row in rows]
+    # What every container derives, read for the spaces the page touches in one pass.
+    tree = item_tree.of_spaces(conn, {str(row["planning_space_id"]) for row in rows})
+    return [read_model.present(conn, row, closed=closed, tree=tree) for row in rows]
 
 
 def list_work_items_page(
@@ -470,6 +473,11 @@ def _parent_row(
         raise model.PlanningError("a work item cannot be its own parent")
     if str(parent_row["planning_space_id"]) != space_id:
         raise model.PlanningError("a parent work item lives in another planning space")
+    # Work filed under finished work would read as done before it began.
+    if read_model.state_by_id(conn, str(parent_row["state_id"]))["is_terminal"]:
+        raise model.PlanningError(
+            f"{read_model.reference(conn, parent_row)} is closed; reopen it first"
+        )
     if parent_row["parent_id"]:
         raise model.PlanningError("a work item hierarchy is one level deep")
     if item_id is not None:
@@ -1652,7 +1660,8 @@ def _fold(
             {
                 "reference": reference,
                 "work_item_id": identity,
-                "state": str(target["key"]),
+                # A merge closes in a cancelled state, which always has a key to show.
+                "state": (states.public_state(target) or {}).get("key"),
                 "moved": moved,
             }
         )

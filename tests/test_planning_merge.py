@@ -457,6 +457,7 @@ class MergeSurfaceTests(MergeTestCase):
                 "work_item_id",
                 "revision",
                 "state",
+                "open",
                 "claim_ref",
                 "claim_state",
                 "merged",

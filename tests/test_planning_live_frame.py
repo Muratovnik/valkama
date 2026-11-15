@@ -105,6 +105,8 @@ class RowTests(FrameCase):
                     "pinned": False,
                     "state_name": "Triage",
                     "is_terminal": False,
+                    "open": True,
+                    "container_state": None,
                     "updated_at": self.updated_at(reference),
                 }
             ],

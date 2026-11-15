@@ -1,14 +1,14 @@
 """One chain of work: what an item's work grew into, and whether it converges.
 
-An epic's children say what was planned. They do not say what the work turned
+A goal's tree says what was planned. It does not say what the work turned
 into: an item found while doing a child is linked `discovered-from` it, and
-often lands under another epic or under none, so the epic can close with every
+often lands under another goal or under none, so the goal can close with every
 child done while the work it started is still growing elsewhere. A chain follows
 that growth.
 
-For a root R, scope `epic` is R's children. Scope `chain` starts there and keeps
-adding, until nothing new is found, every item discovered from R or from a
-member and every child of a member. The walk goes downward only: it never adds
+For a root R, scope `tree` is everything under R, at any depth. Scope `chain`
+starts from R's children and keeps adding, until nothing new is found, every
+item discovered from R or from a member and every child of a member. The walk goes downward only: it never adds
 a member's parent and never follows `discovered-from` upstream. `relates-to`
 and `duplicates` never extend it, because they join otherwise unrelated work —
 followed, they merge most of a space into one chain — and `blocks` says what
@@ -26,7 +26,11 @@ Everything is read in one query per table and computed here, so a space of a
 thousand items answers in one pass rather than one read per member; only a held
 member costs one more, to read its lease. Readiness is the read model's own
 rule, asked through `read_model.workable` with facts loaded in bulk, and so is a
-member's `rank`: its place in the space's order of work, `ranking.ranks`.
+member's `rank`: its place in the space's order of work, `ranking.ranks`. A
+member's state is what `states.public_state` shows, and an accepted open
+container's what it derives, from the same `item_tree` read of the space: its
+`state` is null, and the counts put it in `by_container_state`, never in a
+category of its own.
 """
 
 from __future__ import annotations
@@ -37,10 +41,10 @@ from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
 
-from . import leases, model, ranking, read_model
+from . import item_tree, leases, model, ranking, read_model, states
 
 #: The scopes a chain is read in.
-SCOPES = ("chain", "epic")
+SCOPES = ("chain", "tree")
 #: How many UTC days, today included, the `recent` window covers.
 RECENT_DAYS = 7
 #: The link kinds a chain answers as edges. `discovered-from` is also what
@@ -58,7 +62,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
     """The chain rooted at the named item, in the named scope."""
 
     if scope not in SCOPES:
-        raise model.PlanningError("scope must be chain or epic")
+        raise model.PlanningError("scope must be chain or tree")
     root = read_model.item_row(conn, reference)
     root_id = str(root["work_item_id"])
     space_id = str(root["planning_space_id"])
@@ -104,8 +108,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         if row["parent_id"] is not None:
             children.setdefault(str(row["parent_id"]), []).append(identity)
     members = _members(root_id, scope, rows, children, links)
-    # How many members each scope holds, whichever was asked: an epic's children are
-    # always among its chain's members, so equal totals mean the two answers are one.
+    # How many members each scope holds, whichever was asked.
     totals = {
         other: len(members)
         if other == scope
@@ -113,6 +116,8 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         for other in SCOPES
     }
     rank = ranking.ranks(rows.values())
+    tree = item_tree.of_spaces(conn, [space_id])
+    sources = item_tree.below(conn, read_model.service_ends(links, "from_id"))
 
     # What an unfinished item blocks, wherever the blocker lives. A blocker whose
     # state the store cannot resolve is not unfinished, as `read_model.blocked` says.
@@ -131,12 +136,17 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 "work_item_id": identity,
                 "reference": model.human_id(key, int(row["number"])),
                 "title": row["title"],
-                "state": {
-                    "key": row["state_key"],
-                    "name": row["state_name"],
-                    "category": row["state_category"],
-                    "is_terminal": terminal,
-                },
+                "kind": read_model.outward_kind(row["kind"], row["parent_id"]),
+                "state": states.public_state(
+                    {
+                        "key": row["state_key"],
+                        "name": row["state_name"],
+                        "category": row["state_category"],
+                        "is_terminal": terminal,
+                    }
+                ),
+                "open": not terminal,
+                "container_state": tree.container_state(identity),
                 "claim_ref": row["claim_ref"],
                 "claim_state": leases.state(conn, row),
                 "parent_reference": model.human_id(key, int(rows[parent]["number"]))
@@ -144,8 +154,8 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 else None,
                 "created_at": row["created_at"],
                 "closed_at": closed_by_event.get(identity, row["updated_at"]) if terminal else None,
-                "ready": read_model.workable(
-                    container=identity in children,
+                "workable": read_model.workable(
+                    container=row["kind"] == model.CONTAINER_KIND,
                     claim_ref=row["claim_ref"],
                     category=str(row["state_category"]),
                     blocked=partial(operator.contains, blocked, identity),
@@ -160,7 +170,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
             "work_item_id": root_id,
             "reference": model.human_id(key, int(root["number"])),
             "title": root["title"],
-            "kind": root["kind"],
+            "kind": read_model.outward_kind(root["kind"], root["parent_id"]),
             "has_children": root_id in children,
             "totals": totals,
         },
@@ -179,7 +189,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 "to": str(link["to_id"]),
                 "kind": str(link["kind"]),
                 "reference": model.human_id(str(link["space_key"]), int(link["number"])),
-                **read_model.end_state(link),
+                **read_model.end_state(link, sources.container_state(str(link["from_id"]))),
             }
             for link in links
             if link["kind"] in EDGE_KINDS
@@ -199,7 +209,13 @@ def _members(
     """Who belongs to the chain, by the definition in the module docstring."""
 
     members = set(children.get(root_id, []))
-    if scope == "epic":
+    if scope == "tree":
+        pending = list(members)
+        while pending:
+            for child in children.get(pending.pop(), []):
+                if child not in members and child != root_id:
+                    members.add(child)
+                    pending.append(child)
         return members
     discovered: dict[str, list[str]] = {}
     for link in links:
@@ -221,14 +237,26 @@ def _members(
 
 
 def _counts(found: list[dict]) -> dict:
-    closed = sum(1 for member in found if member["state"]["is_terminal"])
-    categories = Counter(str(member["state"]["category"]) for member in found)
+    """How many members are closed, open and workable, by category and by derived state.
+
+    A member is counted by the state it shows: an accepted open container has no
+    category, only what it derives, so it is in `by_container_state` alone.
+    """
+
+    closed = sum(1 for member in found if not member["open"])
+    categories = Counter(
+        str(member["state"]["category"]) for member in found if member["state"] is not None
+    )
+    derived = Counter(
+        str(member["container_state"]) for member in found if member["container_state"]
+    )
     return {
         "total": len(found),
         "closed": closed,
         "open": len(found) - closed,
-        "ready": sum(1 for member in found if member["ready"]),
+        "workable": sum(1 for member in found if member["workable"]),
         "by_category": dict(sorted(categories.items())),
+        "by_container_state": dict(sorted(derived.items())),
     }
 
 
@@ -258,7 +286,7 @@ def _origins(found: list[dict], root_id: str, rows: dict[str, sqlite3.Row], key:
                 ),
             }
         group["count"] += 1
-        if not member["state"]["is_terminal"]:
+        if member["open"]:
             group["open"] += 1
     ordered = sorted(
         groups.values(),

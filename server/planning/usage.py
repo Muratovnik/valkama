@@ -417,7 +417,7 @@ def _item_line(item: str | None, names: dict[str, dict], rows: Sequence[sqlite3.
 
 
 def for_item(conn: sqlite3.Connection, reference: object, scope: str | None = None) -> dict:
-    """One item's usage, or with `scope` chain or epic its whole chain's, root first."""
+    """One item's usage, or with `scope` chain or tree its whole chain's, root first."""
 
     root = str(read_model.item_row(conn, reference)["work_item_id"])
     order = [root]

@@ -165,7 +165,7 @@ class PlanningApiTests(unittest.TestCase):
         )
         graph = self.get("/api/planning/graph")
         self.assertEqual([created["reference"]], [node["reference"] for node in graph["nodes"]])
-        self.assertTrue(graph["nodes"][0]["ready"])
+        self.assertTrue(graph["nodes"][0]["workable"])
 
     def test_a_read_resolves_the_space_from_the_project_that_binds_it(self) -> None:
         """A browser knows its project long before it knows a space id."""

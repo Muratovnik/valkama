@@ -495,11 +495,12 @@ TOOLS = [
     _tool(
         "get_work_item_chain",
         "Read a chain of work",
-        "What one item's work grew into and whether it converges. scope=epic counts"
-        " the item's children; scope=chain (the default) adds, transitively, every"
-        " item discovered from it or from a member and every child of a member;"
-        " relates-to, duplicates and blocks never widen it. Answers with total,"
-        " closed, open, ready, by_category, origins (members grouped by parent),"
+        "What one item's work grew into and whether it converges. scope=tree counts"
+        " everything under the item, at any depth; scope=chain (the default) adds,"
+        " transitively, every item discovered from it or from a member and every child"
+        " of a member; relates-to, duplicates and blocks never widen it. Answers with"
+        " total, closed, open, workable, by_category, by_container_state (accepted"
+        " goals and stages by what they derive), origins (members grouped by parent),"
         f" the newest {CHAIN_SERIES_ENTRIES} entries of series (one per day with a"
         " change) and recent: the last 7 UTC"
         " days' created and closed and a trend of growing, converging or steady."
@@ -510,7 +511,7 @@ TOOLS = [
         READ_ONLY,
         {
             "id": WORK_ITEM_REFERENCE,
-            "scope": {"type": "string", "enum": ["chain", "epic"]},
+            "scope": {"type": "string", "enum": ["chain", "tree"]},
             "offset": _OFFSET,
             "limit": {
                 "type": "integer",
@@ -1333,7 +1334,7 @@ def _compact_row(conn: sqlite3.Connection, item: dict) -> dict:
         "reference": item["reference"],
         "title": item["title"],
         "kind": item["kind"],
-        "state": item["state"]["key"],
+        "state": item["state"]["key"] if item["state"] is not None else None,
         "priority": item["priority"],
         "parent": read_model.reference(conn, read_model.item_by_id(conn, parent))
         if parent
@@ -1341,6 +1342,9 @@ def _compact_row(conn: sqlite3.Connection, item: dict) -> dict:
         "claim_ref": item["claim_ref"],
         "claim_state": item["claim_state"],
     }
+    # What an accepted open goal or stage derives, where it stands in no state.
+    if item["container_state"] is not None:
+        row["container_state"] = item["container_state"]
     # Why a search returned the item; a row without it cannot be told from noise.
     hits = ("comment_hit", "question_hit", "summary_hit")
     return row | {name: item[name] for name in hits if name in item}
@@ -1378,14 +1382,15 @@ def _listing(
 
 def _open_rank(member: dict) -> int:
     """Where an open chain member is listed: work under way first, then work waiting
-    on a reviewer, then work anyone could take now, then everything else."""
+    on a reviewer, then work anyone could take now, then everything else, an
+    accepted goal or stage among it: it is worked through what stands under it."""
 
-    category = member["state"]["category"]
+    category = member["state"]["category"] if member["state"] is not None else None
     if category == "active":
         return 0
     if category == "review":
         return 1
-    return 2 if member["ready"] else 3
+    return 2 if member["workable"] else 3
 
 
 def _count_argument(arguments: Mapping[str, object], name: str, default: int) -> int:
@@ -1413,16 +1418,21 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     found.pop("edges")
     found["series"] = found["series"][-CHAIN_SERIES_ENTRIES:]
     open_members = sorted(
-        (member for member in members if not member["state"]["is_terminal"]),
+        (member for member in members if member["open"]),
         key=lambda member: (_open_rank(member), member["rank"]),
     )
     found["open_members"] = [
         {
             "reference": member["reference"],
             "title": member["title"],
-            "state": member["state"]["key"],
+            "state": member["state"]["key"] if member["state"] is not None else None,
+            **(
+                {"container_state": member["container_state"]}
+                if member["container_state"] is not None
+                else {}
+            ),
             "claim_ref": member["claim_ref"],
-            "ready": member["ready"],
+            "workable": member["workable"],
             "parent_reference": member["parent_reference"],
             "rank": member["rank"],
         }

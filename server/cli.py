@@ -78,29 +78,34 @@ def summary_main(space: str | None) -> None:
     items = payload["work_items"]
     by_state: dict[str, int] = {}
     for item in items:
-        by_state[item["state"]["name"]] = by_state.get(item["state"]["name"], 0) + 1
+        # An accepted open goal or stage is counted by what it derives.
+        shown = _shown_state(item)
+        by_state[shown] = by_state.get(shown, 0) + 1
     counts = ", ".join(f"{name} {count}" for name, count in by_state.items())
     print(f"- space '{identity['name']}' ({identity['key']}): {counts or 'no work items'}.")
-    goals = [item for item in items if item["kind"] == planning_model.CONTAINER_KIND]
-    if goals:
-        listed = "; ".join(
-            f"'{item['title']}' [{item['state']['name']}] {item['reference']}" for item in goals
-        )
-        print(f"- goals: {listed}")
-    ready = [
-        item
-        for item in items
-        if item["claim_ref"] == ""
-        and item["kind"] != planning_model.CONTAINER_KIND
-        and item["state"]["category"] in {"triage", "ready"}
-    ]
+    for kind, heading in (("goal", "goals"), ("stage", "stages")):
+        containers = [item for item in items if item["kind"] == kind]
+        if containers:
+            listed = "; ".join(
+                f"'{item['title']}' [{_shown_state(item)}] {item['reference']}"
+                for item in containers
+            )
+            print(f"- {heading}: {listed}")
+    ready = [item for item in items if item["workable"]]
     if ready:
         listed = "; ".join(f"'{item['title']}' {item['reference']}" for item in ready[:5])
-        print(f"- ready to take (unclaimed, in a startable state): {listed}")
+        print(f"- ready to take (unclaimed, startable, waiting for nothing): {listed}")
     held = [item for item in items if item["claim_ref"]]
     if held:
         listed = "; ".join(f"{item['reference']} {item['claim_ref']}" for item in held[:5])
         print(f"- held: {listed}")
+
+
+def _shown_state(item: dict) -> str:
+    """The state a summary line names: its state's name, or what a container derives."""
+
+    state = item["state"]
+    return str(state["name"]) if state is not None else str(item["container_state"])
 
 
 def migrate_main(target: str, *, dry_run: bool = False, into: str | None = None) -> None:

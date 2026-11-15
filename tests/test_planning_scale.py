@@ -28,8 +28,8 @@ class PlanningScaleTests(unittest.TestCase):
             state = space["workflow"]["states"][0]["state_id"]
             identities = [str(uuid.uuid4()) for _ in range(1200)]
             conn.executemany(
-                "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,title,parent_id,position)"
-                " VALUES(?,?,?,?,?,?,?,?)",
+                "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,title,parent_id,position)"
+                " VALUES(?,?,?,?,?,?,?,?,?)",
                 [
                     (
                         identity,
@@ -37,6 +37,7 @@ class PlanningScaleTests(unittest.TestCase):
                         index + 1,
                         space["workflow"]["workflow_id"],
                         state,
+                        "container" if index == 0 else "task",
                         f"Task {index + 1}",
                         identities[0] if index == 1 else None,
                         index,
@@ -62,10 +63,10 @@ class PlanningScaleTests(unittest.TestCase):
             finally:
                 conn.set_progress_handler(None, 0)
             self.assertEqual(1200, len(items))
-            self.assertTrue(items[0]["container"])
-            self.assertFalse(items[0]["ready"])
+            self.assertEqual("goal", items[0]["kind"])
+            self.assertFalse(items[0]["workable"])
             self.assertEqual(identities[0], items[1]["parent_id"])
-            self.assertTrue(items[2]["ready"])
+            self.assertTrue(items[2]["workable"])
             self.assertEqual({1}, {item["comment_count"] for item in items})
 
     def test_an_item_read_costs_the_same_however_many_links_it_has(self) -> None:

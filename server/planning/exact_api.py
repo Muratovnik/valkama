@@ -18,7 +18,7 @@ from collections.abc import Callable, Mapping
 from ..projects import project_registry
 from ..store_identity.refs import planning_space_ref, validate_work_item_ref
 from ..ui_state import PlatformHttpError, envelope
-from . import interactions, model, service
+from . import interactions, item_tree, model, service, states
 from .routing import PlanningRouting, one, scope_parameters, space_ref_parameters
 
 PLANNING_INTERFACE = "valkama-planning"
@@ -134,6 +134,16 @@ def _space_view(routing: PlanningRouting, space_ref: dict) -> dict:
             raise PlatformHttpError(
                 409, "unavailable", "Exact Project planning space is unavailable"
             )
+        rows = store.execute(
+            "SELECT w.work_item_id, w.number, w.title, w.priority, w.labels, w.claim_ref,"
+            " w.revision, w.updated_at, s.key, s.name, s.category, s.is_terminal"
+            " FROM work_items w JOIN workflow_states s ON s.state_id = w.state_id"
+            " WHERE w.planning_space_id = ? ORDER BY s.position, w.position, w.number",
+            (str(space["planning_space_id"]),),
+        ).fetchall()
+        # What every accepted open goal and stage derives, in one read of the space.
+        tree = item_tree.of_spaces(store, [str(space["planning_space_id"])])
+        shown = [states.public_state(row) for row in rows]
         work_items = [
             {
                 "work_item_ref": {
@@ -141,21 +151,16 @@ def _space_view(routing: PlanningRouting, space_ref: dict) -> dict:
                     "reference": f"{space_ref['space_key']}-{int(row['number'])}",
                 },
                 "title": row["title"],
-                "state_key": row["state_key"],
-                "state_category": row["category"],
+                "state_key": state["key"] if state is not None else None,
+                "state_category": state["category"] if state is not None else None,
+                "container_state": tree.container_state(str(row["work_item_id"])),
                 "priority": row["priority"],
                 "labels": json.loads(row["labels"]),
                 "claim_ref": row["claim_ref"],
                 "revision": int(row["revision"]),
                 "updated_at": row["updated_at"],
             }
-            for row in store.execute(
-                "SELECT w.number, w.title, w.priority, w.labels, w.claim_ref, w.revision,"
-                " w.updated_at, s.key AS state_key, s.category"
-                " FROM work_items w JOIN workflow_states s ON s.state_id = w.state_id"
-                " WHERE w.planning_space_id = ? ORDER BY s.position, w.position, w.number",
-                (str(space["planning_space_id"]),),
-            )
+            for row, state in zip(rows, shown, strict=True)
         ]
     return {
         "space_ref": space_ref,

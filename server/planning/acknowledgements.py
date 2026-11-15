@@ -34,7 +34,9 @@ def _base(item: dict) -> dict:
     """Identity, the revision the next write must name, and who holds the item.
 
     `claim_state` says whether that holder's session is still there: `live`,
-    `stale` or `unconfirmed`, and null when nobody holds the item.
+    `stale` or `unconfirmed`, and null when nobody holds the item. `state` is the
+    record's: null for an accepted open goal or stage, whose `container_state`,
+    there alone, says what it derives; `open` says whether work on it is over.
     """
 
     state = item["state"]
@@ -43,14 +45,25 @@ def _base(item: dict) -> dict:
         "url": work_item_url(item["reference"]),
         "work_item_id": item["work_item_id"],
         "revision": item["revision"],
-        "state": {
+        "state": None
+        if state is None
+        else {
             "key": state["key"],
             "name": state["name"],
             "is_terminal": state["is_terminal"],
         },
+        "open": item["open"],
+        **_derived(item),
         "claim_ref": item["claim_ref"],
         "claim_state": item["claim_state"],
     }
+
+
+def _derived(item: Mapping[str, object]) -> dict:
+    """`container_state` where the item has one: a short answer leaves out the null."""
+
+    found = item.get("container_state")
+    return {} if found is None else {"container_state": found}
 
 
 def _moved(item: dict) -> dict:

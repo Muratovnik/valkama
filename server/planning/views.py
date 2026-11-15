@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import calls, leases, live_work, model, read_model, service, store
+from . import calls, item_tree, leases, live_work, model, read_model, service, states, store
 
 READ_MODEL_INTERFACE = f"{model.PLANNING_INTERFACE}-read-model"
 
@@ -90,7 +90,8 @@ def stale_claims(
         clauses.append("w.planning_space_id = ?")
         parameters.append(str(service.get_planning_space(conn, space)["planning_space_id"]))
     query = service.with_clauses(
-        "SELECT w.*, p.key || '-' || w.number AS reference, s.key AS state,"
+        "SELECT w.*, p.key || '-' || w.number AS reference, s.key, s.name, s.category,"
+        " s.is_terminal,"
         " c.identity_source AS claim_source,"
         " COALESCE(MAX(e.created_at), w.updated_at) AS last_event,"
         " CAST(julianday('now') - julianday(COALESCE(MAX(e.created_at), w.updated_at))"
@@ -117,7 +118,7 @@ def stale_claims(
                 "title": row["title"],
                 "claim_ref": row["claim_ref"],
                 "claim_state": claim_state,
-                "state": row["state"],
+                "state": (states.public_state(row) or {}).get("key"),
                 "last_event": row["last_event"],
                 "quiet_days": int(row["quiet_days"]),
             }
@@ -162,8 +163,15 @@ def activity_feed(conn: sqlite3.Connection, limit: int = 100) -> list[dict]:
 
 
 #: The shape a state's category gets in a Mermaid node, so a reader sees a
-#: finished item and a blocked one without reading the label.
-MERMAID_SHAPES = {"completed": ("([", "])"), "blocked": ("{{", "}}")}
+#: finished item and a blocked one without reading the label; an accepted open
+#: goal or stage takes the shape of what it derives.
+MERMAID_SHAPES = {
+    "completed": ("([", "])"),
+    "blocked": ("{{", "}}"),
+    "not_started": ("[[", "]]"),
+    "in_progress": ("[/", "/]"),
+    "awaiting_confirmation": ("[(", ")]"),
+}
 
 
 def graph_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict:
@@ -224,18 +232,19 @@ def graph_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict
                 "title": item["title"],
                 "kind": item["kind"],
                 "state": item["state"],
+                "open": item["open"],
+                "container_state": item["container_state"],
                 "priority": item["priority"],
                 "claim_ref": item["claim_ref"],
                 # A close ends the claim; these say when, and who held it then.
                 "closed_at": item["closed_at"],
                 "last_claim_ref": item["last_claim_ref"],
                 "parent_id": item["parent_id"],
-                # Both come from the item's own record: readiness is one
+                # It comes from the item's own record: readiness is one
                 # question with one answer, and the depth below is the only
                 # thing this projection adds to it.
-                "container": item["container"],
                 "depth": level,
-                "ready": item["ready"] and level == 0,
+                "workable": item["workable"] and level == 0,
             }
         )
     return {
@@ -251,7 +260,8 @@ def graph_mermaid(payload: dict) -> str:
 
     lines = ["flowchart LR"]
     for node in payload["nodes"]:
-        opening, closing = MERMAID_SHAPES.get(node["state"]["category"], ("[", "]"))
+        shape = node["state"]["category"] if node["state"] is not None else node["container_state"]
+        opening, closing = MERMAID_SHAPES.get(shape, ("[", "]"))
         title = str(node["title"]).replace('"', "'")[:60]
         lines.append(
             f'  {_mermaid_id(node["reference"])}{opening}"{node["reference"]} {title}"{closing}'
@@ -265,7 +275,7 @@ def graph_mermaid(payload: dict) -> str:
         lines.append(
             f"  {_mermaid_id(names[edge['from']])} {arrow} {_mermaid_id(names[edge['to']])}"
         )
-    frontier = [node["reference"] for node in payload["nodes"] if node["ready"]]
+    frontier = [node["reference"] for node in payload["nodes"] if node["workable"]]
     lines.extend(f"  class {_mermaid_id(reference)} ready" for reference in frontier)
     if frontier:
         lines.append("  classDef ready stroke-width:3px")
@@ -293,8 +303,7 @@ def _links(conn: sqlite3.Connection, planning_space_id: str) -> list[dict]:
     means the source is open. A chain's edges name their source the same way.
     """
 
-    found = []
-    for row in conn.execute(
+    rows = conn.execute(
         "SELECT l.from_id, l.to_id, l.kind, f.number, p.key AS space_key,"
         " s.name AS state_name, s.category AS state_category, s.is_terminal"
         " FROM work_item_links l"
@@ -305,17 +314,18 @@ def _links(conn: sqlite3.Connection, planning_space_id: str) -> list[dict]:
         " WHERE f.planning_space_id = ?"
         "  OR (t.planning_space_id = ? AND l.kind = 'blocks') ORDER BY l.id",
         (planning_space_id, planning_space_id),
-    ):
-        found.append(
-            {
-                "from": str(row["from_id"]),
-                "to": str(row["to_id"]),
-                "kind": str(row["kind"]),
-                "reference": model.human_id(str(row["space_key"]), int(row["number"])),
-                **read_model.end_state(row),
-            }
-        )
-    return found
+    ).fetchall()
+    ends = item_tree.below(conn, read_model.service_ends(rows, "from_id"))
+    return [
+        {
+            "from": str(row["from_id"]),
+            "to": str(row["to_id"]),
+            "kind": str(row["kind"]),
+            "reference": model.human_id(str(row["space_key"]), int(row["number"])),
+            **read_model.end_state(row, ends.container_state(str(row["from_id"]))),
+        }
+        for row in rows
+    ]
 
 
 def space_for_project(conn: sqlite3.Connection, project_id: str) -> dict | None:

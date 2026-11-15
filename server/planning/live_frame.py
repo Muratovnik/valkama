@@ -50,7 +50,7 @@ from ..projects import project_registry
 from ..store_identity.metadata import read_store_metadata
 from ..store_identity.primitives import ContractError
 from ..store_identity.refs import planning_space_ref
-from . import executors, live_sessions, live_work, read_model
+from . import executors, item_tree, live_sessions, live_work, model, read_model, states
 
 #: Every open item and every pinned one, with all their ancestors, in one read. Only a
 #: checklist a session's holder could stand in is parsed; the rest reads as no steps.
@@ -69,7 +69,8 @@ _ITEMS = (
     " WHERE w.parent_id IS NOT NULL)"
     " SELECT w.work_item_id, w.number, w.title, w.kind, w.parent_id, w.position, w.updated_at,"
     " CASE WHEN w.checklist LIKE '%(session %' THEN w.checklist ELSE '[]' END AS checklist,"
-    " p.key, s.name AS state_name, s.is_terminal, s.position AS state_position,"
+    " p.key, s.key AS state_key, s.name AS state_name, s.category AS state_category,"
+    " s.is_terminal, s.position AS state_position,"
     " EXISTS (SELECT 1 FROM pinned_work_items n WHERE n.work_item_id = w.work_item_id)"
     " AS pinned"
     " FROM lineage l JOIN work_items w ON w.work_item_id = l.id"
@@ -87,8 +88,12 @@ class _Item:
     kind: str
     parent: str | None
     pinned: bool
+    #: The name of the state it shows: empty for an accepted open goal or stage,
+    #: which shows what it derives instead.
     state_name: str
     is_terminal: bool
+    #: It stands in the service state: an accepted open goal or stage.
+    accepted_open: bool
     #: When the item last changed: only a write to it moves this.
     updated_at: str
     #: The order of work: the state's place in its workflow, then the item's in its state.
@@ -98,16 +103,25 @@ class _Item:
 
 def _item(row: sqlite3.Row) -> _Item:
     key, number = str(row["key"]), int(row["number"])
+    shown = states.public_state(
+        {
+            "key": row["state_key"],
+            "name": row["state_name"],
+            "category": row["state_category"],
+            "is_terminal": row["is_terminal"],
+        }
+    )
     return _Item(
         identity=str(row["work_item_id"]),
         key=key,
         reference=f"{key}-{number}",
         title=str(row["title"]),
-        kind=str(row["kind"]),
+        kind=read_model.outward_kind(row["kind"], row["parent_id"]),
         parent=None if row["parent_id"] is None else str(row["parent_id"]),
         pinned=bool(row["pinned"]),
-        state_name=str(row["state_name"]),
+        state_name="" if shown is None else str(shown["name"]),
         is_terminal=bool(row["is_terminal"]),
+        accepted_open=shown is None and str(row["kind"]) == model.CONTAINER_KIND,
         updated_at=str(row["updated_at"]),
         order=(float(row["state_position"]), float(row["position"]), number),
         number=number,
@@ -231,6 +245,7 @@ def _row(
     placement: live_work.Placement,
     parents: Mapping[str, str],
     executor_of: Mapping[str, dict],
+    derived: item_tree.Tree,
 ) -> dict:
     state = placement.live.get(item.identity)
     session = placement.shown_by.get(item.identity)
@@ -251,6 +266,8 @@ def _row(
         "pinned": item.pinned,
         "state_name": item.state_name,
         "is_terminal": item.is_terminal,
+        "open": not item.is_terminal,
+        "container_state": derived.container_state(item.identity),
         "updated_at": item.updated_at,
     }
 
@@ -294,6 +311,10 @@ def frame(conn: sqlite3.Connection) -> dict:
     for item in items:
         if item.identity in shown:
             by_space.setdefault(item.key, []).append(item)
+    # What the accepted open goals and stages shown derive, from what is under each.
+    derived = item_tree.below(
+        conn, [item.identity for item in items if item.identity in shown and item.accepted_open]
+    )
     names = {
         str(row["key"]): str(row["name"])
         for row in conn.execute("SELECT key, name FROM planning_spaces")
@@ -308,7 +329,7 @@ def frame(conn: sqlite3.Connection) -> dict:
             "name": names[key],
             "project_id": roots.bound.get(key),
             "rows": [
-                _row(item, placement, references, executor_of)
+                _row(item, placement, references, executor_of, derived)
                 for item in _ordered(by_space.get(key, []))
             ],
             "sessions": sessions.get(key, []),

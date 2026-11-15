@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import acknowledgements, calls, leases, model, read_model, requests, subscriptions
+from . import acknowledgements, calls, leases, model, read_model, requests, states, subscriptions
 
 CLAIM = "claim"
 STEP = "step"
@@ -80,14 +80,21 @@ def _stands(conn: sqlite3.Connection, session: str) -> bool:
 def _item(conn: sqlite3.Connection, row: sqlite3.Row, held_as: str) -> dict:
     reference = model.human_id(str(row["space_key"]), int(row["number"]))
     steps = model.checklist(row["checklist"])
-    return {
-        "reference": reference,
-        "title": row["title"],
-        "state": {
+    # Only open items are read, and nobody holds a container, so a state is always shown.
+    shown = states.public_state(
+        {
             "key": row["state_key"],
             "name": row["state_name"],
             "category": row["state_category"],
-        },
+            "is_terminal": 0,
+        }
+    )
+    return {
+        "reference": reference,
+        "title": row["title"],
+        "state": None
+        if shown is None
+        else {name: shown[name] for name in ("key", "name", "category")},
         "held_as": held_as,
         "steps": {"done": sum(1 for step in steps if step["done"]), "total": len(steps)},
         "pending_questions": len(requests.open_rows(conn, str(row["work_item_id"]))),

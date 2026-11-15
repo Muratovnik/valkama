@@ -145,7 +145,7 @@ class ItemAndAnalyticsTests(UsageStore):
         self.segment("s1", 100, 400, agent="w1", launch_class="build", item=children[1])
         self.segment("s1", 400, 450, item=children[1], cost=None, model="claude-new-9")
         self.segment("s1", 500, 900, item=outside, cost=0.5)
-        tab = self.item_usage(epic_reference, "epic")
+        tab = self.item_usage(epic_reference, "tree")
         covered = [line["work_item_id"] for line in tab["by_item"]]
         self.assertEqual({epic, *children}, set(covered))
         page = self.read(**PERIOD, work_item=",".join(covered))["total"]

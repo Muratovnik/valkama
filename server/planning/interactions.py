@@ -122,11 +122,15 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
                                 # kind and priority glyphs and the state's tone.
                                 "kind": item["kind"],
                                 "priority": item["priority"],
-                                "state": {
+                                "state": None
+                                if item["state"] is None
+                                else {
                                     "name": item["state"]["name"],
                                     "category": item["state"]["category"],
                                     "is_terminal": item["state"]["is_terminal"],
                                 },
+                                "open": item["open"],
+                                "container_state": item["container_state"],
                                 "claim_ref": item["claim_ref"],
                             },
                         }
