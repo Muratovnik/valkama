@@ -442,7 +442,7 @@ class Case(unittest.TestCase):
             client="claude",
         )
         with calls.bind(identity, "claim_work_item"):
-            planning.claim_work_item(self.conn, reference, move_state=False)
+            planning.claim_work_item(self.conn, reference)
         self.conn.commit()
         self.conn.execute(
             "UPDATE work_item_events SET created_at = ? WHERE id ="

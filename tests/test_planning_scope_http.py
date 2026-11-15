@@ -183,7 +183,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
                 conn, space="SAME", title="closed only", kind="bug", priority="urgent"
             )
             service.set_summary(conn, closed["reference"], {"done": "d", "next": "n"})
-            service.transition_work_item(conn, closed["reference"], "done")
+            service.transition_work_item(conn, closed["reference"], "done", acceptance="assignment")
             conn.commit()
         finally:
             conn.close()
@@ -217,7 +217,9 @@ class PlanningScopeHttpTests(unittest.TestCase):
                 blocker = service.create_work_item(conn, space="SAME", title="attached blocker")
                 service.link_work_items(conn, blocker["reference"], "SAME-1", "blocks")
                 service.set_summary(conn, blocker["reference"], {"done": "d", "next": "n"})
-                service.transition_work_item(conn, blocker["reference"], "done")
+                service.transition_work_item(
+                    conn, blocker["reference"], "done", acceptance="assignment"
+                )
                 conn.commit()
             finally:
                 conn.close()
@@ -921,7 +923,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
                     ),
                     "claim_work_item",
                 ):
-                    service.claim_work_item(conn, "SAME-1", move_state=False)
+                    service.claim_work_item(conn, "SAME-1")
                 now = normalize.timestamp(time.time_ns())
                 for uid, event, payload in (
                     (1, "subagent-start", {"agent_id": "agent-1", "agent_type": "Explore"}),
@@ -1152,7 +1154,9 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.addCleanup(conn.close)
         for number in range(999):
             service.create_work_item(conn, space="SAME", title=f"Triage {number}")
-        review = service.create_work_item(conn, space="SAME", title="Review me", state="review")
+        review = service.create_work_item(
+            conn, space="SAME", title="Review me", state="review", acceptance="assignment"
+        )
         conn.commit()
 
         status, payload = self.request(self.model_path("primary"))

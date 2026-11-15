@@ -157,6 +157,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 "workable": read_model.workable(
                     container=row["kind"] == model.CONTAINER_KIND,
                     claim_ref=row["claim_ref"],
+                    checklist=row["checklist"],
                     category=str(row["state_category"]),
                     blocked=partial(operator.contains, blocked, identity),
                 ),

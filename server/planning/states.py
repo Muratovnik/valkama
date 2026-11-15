@@ -58,55 +58,60 @@ def resolve(conn: sqlite3.Connection, workflow_id: str, reference: object) -> sq
 STARTABLE = frozenset({"triage", "deferred", "ready"})
 
 
-def start_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
-    """The state a claim starts this item in, or None when it has nowhere to go.
+def reachable(conn: sqlite3.Connection, row: sqlite3.Row, category: str) -> sqlite3.Row | None:
+    """The state of `category` the server puts this item in, or None when it has none.
 
-    The first `active` state in workflow order that the workflow lets the item
-    reach from where it stands. The caller decides whether the item is one that
-    starts at all; this only answers where it would go.
+    The first state of that category in workflow order that the workflow lets the
+    item reach from where it stands: the one rule for every state the server
+    chooses rather than the caller names.
     """
 
     found: sqlite3.Row | None = conn.execute(
         "SELECT s.* FROM workflow_states s JOIN workflow_transitions t"
         " ON t.workflow_id = s.workflow_id AND t.to_state_id = s.state_id"
-        " WHERE s.workflow_id = ? AND s.category = 'active' AND t.from_state_id = ?"
+        " WHERE s.workflow_id = ? AND s.category = ? AND t.from_state_id = ?"
         " ORDER BY s.position LIMIT 1",
-        (row["workflow_id"], row["state_id"]),
+        (row["workflow_id"], category, row["state_id"]),
     ).fetchone()
     return found
+
+
+def start_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
+    """The state a claim starts this item in: the first `active` one it can reach.
+
+    The caller decides whether the item is one that starts at all; this only
+    answers where it would go.
+    """
+
+    return reachable(conn, row, "active")
 
 
 def queue_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
-    """The state a released item goes back to, or None when it has nowhere to go.
+    """The state a task nobody holds any more goes back to: the first `ready` it can reach.
 
-    The first `ready` state in workflow order that the item can reach from
-    where it stands, or failing that the first reachable `triage` state: the
-    states the take-next queue takes work from.
+    Never a triage one instead: going back there would take its acceptance away
+    unseen, so a workflow with no ready state to reach leaves the item where it is.
     """
 
-    found: sqlite3.Row | None = conn.execute(
-        "SELECT s.* FROM workflow_states s JOIN workflow_transitions t"
-        " ON t.workflow_id = s.workflow_id AND t.to_state_id = s.state_id"
-        " WHERE s.workflow_id = ? AND s.category IN ('ready','triage') AND t.from_state_id = ?"
-        " ORDER BY CASE s.category WHEN 'ready' THEN 0 ELSE 1 END, s.position LIMIT 1",
-        (row["workflow_id"], row["state_id"]),
-    ).fetchone()
-    return found
+    return reachable(conn, row, "ready")
 
 
 def cancel_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
-    """The state a merged item closes in, or None when it has no way to close so.
+    """The state a merged item closes in: the first `cancelled` one it can reach.
 
-    The first `cancelled` state in workflow order that the item can reach from
-    where it stands: a duplicate is work that is not done, not work that is.
+    A duplicate is work that is not done, not work that is.
     """
 
+    return reachable(conn, row, "cancelled")
+
+
+def first_state(conn: sqlite3.Connection, workflow_id: str, category: str) -> sqlite3.Row | None:
+    """The first state of `category` in workflow order, where a new item of it is placed."""
+
     found: sqlite3.Row | None = conn.execute(
-        "SELECT s.* FROM workflow_states s JOIN workflow_transitions t"
-        " ON t.workflow_id = s.workflow_id AND t.to_state_id = s.state_id"
-        " WHERE s.workflow_id = ? AND s.category = 'cancelled' AND t.from_state_id = ?"
-        " ORDER BY s.position LIMIT 1",
-        (row["workflow_id"], row["state_id"]),
+        "SELECT * FROM workflow_states WHERE workflow_id = ? AND category = ?"
+        " ORDER BY position LIMIT 1",
+        (workflow_id, category),
     ).fetchone()
     return found
 

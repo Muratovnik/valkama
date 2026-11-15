@@ -296,11 +296,16 @@ class WhatCountsTests(Harness):
             ("/api/planning/work-item/transition", {"state": "ready"}, ["status"]),
             ("/api/planning/work-item/claim", {}, ["claimed", "status"]),
             ("/api/planning/work-item/claim", {"release": True}, ["released", "status"]),
-            ("/api/planning/work-item/checklist/claim", {"item_id": one}, ["step_claimed"]),
+            # A step claim starts the task the release put back; its release requeues it.
+            (
+                "/api/planning/work-item/checklist/claim",
+                {"item_id": one},
+                ["step_claimed", "status"],
+            ),
             (
                 "/api/planning/work-item/checklist/claim",
                 {"item_id": one, "release": True},
-                ["step_released"],
+                ["step_released", "status"],
             ),
             ("/api/planning/work-item/checklist/tick", {"item_id": one}, ["step_completed"]),
             (
@@ -486,7 +491,8 @@ class TheWindowTests(Harness):
         self.person("/api/planning/work-item/update", id=self.ref, title="Two")
         self.person("/api/planning/work-item/transition", id=self.ref, state="review", force=True)
         self.says("Three")
-        self.assertEqual(["comment", "edited", "status", "comment"], self.kinds())
+        # The move to review let the agent's claim go, and that is told too.
+        self.assertEqual(["comment", "edited", "status", "released", "comment"], self.kinds())
 
     def test_an_agents_write_that_logs_no_event_moves_it_too(self) -> None:
         for name, arguments in (
@@ -590,7 +596,10 @@ class ToldOnWriteTests(Harness):
         asked = [self.ask()["request_id"] for _ in range(2)]
         cases: list[tuple[str, dict]] = [
             ("apply_work_item_changes", {"id": self.ref, "update": {"priority": "high"}}),
-            ("apply_work_item_changes", {"id": self.ref, "transition": {"state": "ready"}}),
+            (
+                "apply_work_item_changes",
+                {"id": self.ref, "transition": {"state": "ready", "acceptance": "assignment"}},
+            ),
             ("claim_work_item", {"id": self.ref}),
             (
                 "apply_work_item_changes",
@@ -811,7 +820,9 @@ class CloseGuardTests(Harness):
     def test_the_runner_closing_outside_any_call_is_not_guarded(self) -> None:
         self.worked()
         self.says()
-        closed = service.transition_work_item(self.conn, self.ref, "done", author="runner")
+        closed = service.transition_work_item(
+            self.conn, self.ref, "done", author="runner", acceptance="assignment"
+        )
         self.conn.commit()
         self.assertEqual("done", closed["state"]["key"])
 

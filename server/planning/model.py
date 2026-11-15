@@ -45,6 +45,20 @@ STORED_CATEGORIES = (*PUBLIC_CATEGORIES, SERVICE_CATEGORY)
 #: The categories a container never stands in: work in them has a holder or waits
 #: on one, and a container is held by nobody.
 TASK_ONLY_CATEGORIES = ("ready", "active", "review", "blocked")
+#: Where accepted work stands: an item here has a basis, and the store refuses one
+#: without. Cancelled work may have one or not: it was accepted or it was not.
+ACCEPTED_CATEGORIES = ("ready", "active", "review", "blocked", "completed", SERVICE_CATEGORY)
+#: Where entering takes the basis away: work there is not accepted.
+UNACCEPTED_CATEGORIES = ("triage", "deferred")
+#: The only categories a holder stands in: a task at work, or one blocked at it.
+HELD_CATEGORIES = ("active", "blocked")
+#: Entering one of these is a start, recorded once: completed work was done even
+#: if nobody claimed it, and cancelled work was not.
+STARTING_CATEGORIES = ("active", "review", "completed")
+#: Where the take-next queue takes work from, and where an item is `workable`.
+WORKABLE_CATEGORIES = ("triage", "ready")
+#: Why nothing claims a goal or a stage, by any way in: work is held, a container is not.
+CONTAINER_UNHELD = "a goal or stage has no holder; claim a task under it"
 
 #: A container holds other work and is never worked itself. Outside the store it is
 #: a goal, or a stage when it stands under a parent.
@@ -60,6 +74,9 @@ _CONTAINER_WORDS = frozenset({"goal", "stage"})
 #: Why accepted work was accepted: the basis an acceptance records. `migrated` is
 #: the work-model migration's alone: no tool and no HTTP write takes it.
 ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "migrated")
+#: The one basis a caller names itself: an agent taking on work it was asked to do.
+#: A person's write is the owner's without naming it, and the rest the server gives.
+NAMED_BASIS = "assignment"
 
 #: The words an input no longer takes, each with the refusal that names what
 #: replaces it. A refusal, not a synonym: nothing reads one word as another. Every
@@ -211,6 +228,12 @@ class RevisionConflictError(PlanningError):
         self.actual = actual
 
 
+def container_unheld() -> WorkflowGuardError:
+    """The one refusal of a claim on a goal or stage, by whatever way in it came."""
+
+    return WorkflowGuardError(f"[container] {CONTAINER_UNHELD}")
+
+
 def new_id() -> str:
     return str(uuid4())
 
@@ -332,6 +355,19 @@ def state_category(value: object) -> str:
 
 def priority(value: object) -> str:
     return enum_field(value, _PRIORITY_SET, "work_item.priority")
+
+
+def named_basis(value: object) -> str | None:
+    """The basis a caller names for the work it accepts, or None when it names none."""
+
+    if value is None or value == "":
+        return None
+    if value != NAMED_BASIS:
+        raise PlanningError(
+            f"acceptance takes {NAMED_BASIS} alone: the owner accepts by their own write,"
+            " and the server gives the rest"
+        )
+    return NAMED_BASIS
 
 
 def public_kind(value: object) -> str:

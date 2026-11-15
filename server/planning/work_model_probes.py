@@ -41,9 +41,11 @@ _Statement = tuple[str, tuple[object, ...]]
 
 #: What SQLite's refusal of a CHECK starts with; the clause's own text follows it.
 CHECK_FAILED = "CHECK constraint failed: "
-#: What the two halves of `work_items_state_fits_kind` refuse with.
+#: What the two halves of `work_items_state_fits_kind` refuse with: two rules of a
+#: kind's states and the rule of a basis.
 TASK_IN_SERVICE = "only a container stands in the service state"
 CONTAINER_AT_WORK = "a container never stands in ready, active, review or blocked"
+ACCEPTED_WITHOUT_BASIS = "accepted work stands only with the basis it was accepted on"
 
 
 class _New:
@@ -442,27 +444,29 @@ def _trigger_probes() -> list[Probe]:
         for position, (category, state) in enumerate(states.items())
     )
 
-    def item(kind: str, category: str) -> tuple[str, _Statement]:
+    def item(kind: str, category: str, basis: str | None = "owner") -> tuple[str, _Statement]:
         identity = model.new_id()
         return identity, (
             "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
-            "kind,title,position) VALUES(?,?,1,?,?,?,'probe',0)",
-            (identity, model.new_id(), workflow, states[category], kind),
+            "kind,title,position,acceptance) VALUES(?,?,1,?,?,?,'probe',0,?)",
+            (identity, model.new_id(), workflow, states[category], kind, basis),
         )
 
-    def moved(kind: str, category: str, column: str, value: str) -> tuple[_Statement, ...]:
-        identity, inserted = item(kind, category)
+    def moved(
+        kind: str, category: str, column: str, value: object, basis: str | None = "owner"
+    ) -> tuple[_Statement, ...]:
+        identity, inserted = item(kind, category, basis)
         return (
             inserted,
             (
-                f"UPDATE work_items SET {column} = ? WHERE work_item_id = ?",  # noqa: S608 - one of two names
+                f"UPDATE work_items SET {column} = ? WHERE work_item_id = ?",  # noqa: S608 - one of three names
                 (value, identity),
             ),
         )
 
     probes = []
     for what, statements, refusal in (
-        ("inserting a task into triage", (item("task", "triage")[1],), None),
+        ("inserting a task into triage", (item("task", "triage", None)[1],), None),
         (
             "inserting a container into the service state",
             (item("container", "container")[1],),
@@ -474,7 +478,27 @@ def _trigger_probes() -> list[Probe]:
             TASK_IN_SERVICE,
         ),
         ("inserting a container into ready", (item("container", "ready")[1],), CONTAINER_AT_WORK),
+        (
+            "inserting a task into ready with no basis",
+            (item("task", "ready", None)[1],),
+            ACCEPTED_WITHOUT_BASIS,
+        ),
+        (
+            "inserting a container into the service state with no basis",
+            (item("container", "container", None)[1],),
+            ACCEPTED_WITHOUT_BASIS,
+        ),
         ("moving a task to ready", moved("task", "triage", "state_id", states["ready"]), None),
+        (
+            "moving a task to ready with no basis",
+            moved("task", "triage", "state_id", states["ready"], None),
+            ACCEPTED_WITHOUT_BASIS,
+        ),
+        (
+            "erasing the basis of a task in ready",
+            moved("task", "ready", "acceptance", None),
+            ACCEPTED_WITHOUT_BASIS,
+        ),
         (
             "moving a task into the service state",
             moved("task", "triage", "state_id", states["container"]),

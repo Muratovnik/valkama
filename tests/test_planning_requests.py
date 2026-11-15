@@ -221,7 +221,7 @@ class PlanningRequestTests(unittest.TestCase):
         state = service.get_planning_space(self.conn, "REQ")["workflow"]["states"]
         terminal = next(entry for entry in state if entry["is_terminal"])
         self.conn.execute(
-            "UPDATE work_items SET state_id=? WHERE work_item_id=?",
+            "UPDATE work_items SET state_id=?, acceptance='assignment' WHERE work_item_id=?",
             (terminal["state_id"], self.item["work_item_id"]),
         )
         self.assertEqual(
@@ -277,7 +277,7 @@ class PlanningRequestTests(unittest.TestCase):
             if state["is_terminal"]
         )
         self.conn.execute(
-            "UPDATE work_items SET state_id=? WHERE work_item_id=?",
+            "UPDATE work_items SET state_id=?, acceptance='assignment' WHERE work_item_id=?",
             (terminal["state_id"], self.item["work_item_id"]),
         )
         self.conn.commit()

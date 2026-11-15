@@ -373,11 +373,12 @@ OPENED = "accepted and open"
 #: Every move after a call of each item that blocks this one, with the state it
 #: reached, whether it is the blocker's last, and what its call proved. A transition
 #: logs the key of the state it reached, before `: ` and a note when there is one;
-#: an `opened` names no state, only a reason. The last move is the newest entry into
+#: an `opened` names no state, only a reason, and is told as `OPENED`, the query's first
+#: parameter. The last move is the newest entry into
 #: any state, an `opened` among them: a close that a reopening undid is not the last.
 _BLOCKER_CHANGES = (
     "SELECT s.key, b.number, b.title,"
-    " CASE WHEN e.action = 'opened' THEN 'accepted and open' ELSE COALESCE(st.name, e.detail) END,"
+    " CASE WHEN e.action = 'opened' THEN ? ELSE COALESCE(st.name, e.detail) END,"
     " e.created_at, e.call_id, c.identity_state, c.identity_source, c.tool, c.session_id,"
     " c.agent_id, COALESCE(st.is_terminal, 0), e.id = (SELECT MAX(t.id) FROM work_item_events t"
     # The actions of `model.STATE_ENTRY_ACTIONS`: this module imports nothing of the product.
@@ -410,7 +411,7 @@ def blocker_changes(
     """
 
     found = []
-    for row in conn.execute(_BLOCKER_CHANGES, (work_item_id, after)).fetchall():
+    for row in conn.execute(_BLOCKER_CHANGES, (OPENED, work_item_id, after)).fetchall():
         entry = _entry(
             "blocker_closed" if row[11] and row[12] else "blocker_changed",
             str(row[4]),

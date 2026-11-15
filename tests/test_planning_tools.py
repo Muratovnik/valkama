@@ -521,14 +521,18 @@ class PlanningAcknowledgementTests(unittest.TestCase):
 
     def test_a_forced_transition_still_reports_the_override(self) -> None:
         forced = self.call(
-            "apply_work_item_changes", id=self.ref, transition={"state": "dev", "force": True}
+            "apply_work_item_changes",
+            id=self.ref,
+            transition={"state": "blocked", "force": True, "acceptance": "assignment"},
         )
-        self.assertEqual("dev", forced["state"]["key"])
-        self.assertIn("executor", forced["overridden"])
+        self.assertEqual("blocked", forced["state"]["key"])
+        self.assertIn("blocker", forced["overridden"])
         # The busy item carries a commit ref; a bare one entering review does not.
         bare = self.call("create_work_item", space="QA", title="Bare")["reference"]
         warned = self.call(
-            "apply_work_item_changes", id=bare, transition={"state": "review", "force": True}
+            "apply_work_item_changes",
+            id=bare,
+            transition={"state": "review", "force": True, "acceptance": "assignment"},
         )
         self.assertRegex(warned["warnings"][0], "no session or commit ref")
         clean = self.call("apply_work_item_changes", id=self.ref, transition={"state": "review"})
@@ -611,7 +615,8 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 }
                 self.assertEqual(
                     stored,
-                    {k: v for k, v in body.items() if k not in ("warnings", "started")},
+                    # `released` names who the write let go: no field of the item.
+                    {k: v for k, v in body.items() if k not in ("warnings", "started", "released")},
                 )
 
 

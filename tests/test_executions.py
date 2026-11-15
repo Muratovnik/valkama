@@ -96,7 +96,9 @@ class LaunchHarness(unittest.TestCase):
         self._dir.cleanup()
 
     def item(self, title: str, state: str = "ready") -> str:
-        record = planning.create_work_item(self.conn, space="TST", title=title, state=state)
+        record = planning.create_work_item(
+            self.conn, space="TST", title=title, state=state, acceptance="assignment"
+        )
         self.conn.commit()
         return str(record["reference"])
 
@@ -223,13 +225,17 @@ class LaunchLifecycleTests(LaunchHarness):
     def test_stale_claims_surface_only_when_nothing_has_happened(self) -> None:
         fresh = self.item("busy")
         planning.claim_work_item(self.conn, fresh, author="codex")
-        planning.transition_work_item(self.conn, fresh, "dev", author="codex")
+        planning.transition_work_item(
+            self.conn, fresh, "dev", author="codex", acceptance="assignment"
+        )
         self.conn.commit()
         self.assertEqual([], planning_views.stale_claims(self.conn))
 
         old = self.item("abandoned")
         planning.claim_work_item(self.conn, old, author="ghost")
-        planning.transition_work_item(self.conn, old, "dev", author="ghost")
+        planning.transition_work_item(
+            self.conn, old, "dev", author="ghost", acceptance="assignment"
+        )
         self.conn.commit()
         identity = self.conn.execute(
             "SELECT w.work_item_id FROM work_items w"

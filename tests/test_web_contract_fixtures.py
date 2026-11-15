@@ -261,7 +261,7 @@ class _Scenario:
             service.set_checklist(conn, ref, ["An agent's", "A person's", "A digest's"])
             agent, person, digest = service.get_work_item(conn, ref)["checklist"]
             with calls.bind(who(session), "claim_work_item"):
-                service.claim_work_item(conn, ref, move_state=False)
+                service.claim_work_item(conn, ref)
             with calls.bind(who(session, "a4d2c8f1e0b3a297"), "claim_work_item_checklist_item"):
                 service.claim_checklist_item(conn, ref, agent["id"])
             service.claim_checklist_item(conn, ref, person["id"], author="the owner")
@@ -538,7 +538,7 @@ class _Scenario:
                 ),
                 "claim_work_item",
             ):
-                service.claim_work_item(conn, task, move_state=False)
+                service.claim_work_item(conn, task)
             sessions.record_place(
                 conn,
                 quiet,

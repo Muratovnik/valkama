@@ -334,7 +334,9 @@ class DoctorStoreTests(unittest.TestCase):
         self.conn.close()
 
     def test_an_attempt_with_no_end_is_reported_with_what_closes_it(self) -> None:
-        record = planning.create_work_item(self.conn, space="TST", title="left open", state="ready")
+        record = planning.create_work_item(
+            self.conn, space="TST", title="left open", state="ready", acceptance="assignment"
+        )
         self.conn.commit()
         execution_service.open_execution(
             self.conn,

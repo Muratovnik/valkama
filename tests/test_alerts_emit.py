@@ -89,7 +89,14 @@ class EmitHarness(unittest.TestCase):
         return work_item_id in self.visible
 
     def item(self, title: str, state: str = "dev") -> str:
-        record = service.create_work_item(self.conn, space="MAIN", title=title, state=state)
+        """An item asked for as work, at work by default: claimed, as work starts."""
+
+        filed = "ready" if state == "dev" else state
+        record = service.create_work_item(
+            self.conn, space="MAIN", title=title, state=filed, acceptance="assignment"
+        )
+        if state == "dev":
+            service.claim_work_item(self.conn, str(record["reference"]), author="worker")
         self.conn.commit()
         return str(record["reference"])
 

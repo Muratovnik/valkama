@@ -150,12 +150,12 @@ class AgentsCase(unittest.TestCase):
         second: int = 0,
     ) -> None:
         with calls.bind(who or coordinator(), "claim_work_item"):
-            service.claim_work_item(self.conn, reference, force=force, move_state=False)
+            service.claim_work_item(self.conn, reference, force=force)
         self._last_event_at(reference, minute, second)
 
     def release(self, reference: str, minute: int, who: calls.Identity | None = None) -> None:
         with calls.bind(who or coordinator(), "claim_work_item"):
-            service.claim_work_item(self.conn, reference, release=True, move_state=False)
+            service.claim_work_item(self.conn, reference, release=True)
         self._last_event_at(reference, minute)
 
     def write_as(self, who: calls.Identity, reference: str | None = None) -> None:

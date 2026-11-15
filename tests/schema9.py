@@ -143,6 +143,9 @@ def populate(conn: sqlite3.Connection) -> None:
             },
         }
         waiting = "triage"
+    # This build's store holds work at work to the basis it was accepted on.
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(work_items)")}
+    accepted, basis = (",acceptance", ",?") if "acceptance" in columns else ("", "")
     workflow = space
     states = space["states"]
     held = "11111111-1111-4111-8111-111111111111"
@@ -153,8 +156,8 @@ def populate(conn: sqlite3.Connection) -> None:
     ):
         conn.execute(
             "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
-            "claim_ref,title,position,revision,created_at,updated_at)"
-            " VALUES(?,?,?,?,?,?,?,?,3,?,?)",
+            f"claim_ref,title,position,revision,created_at,updated_at{accepted})"
+            f" VALUES(?,?,?,?,?,?,?,?,3,?,?{basis})",
             (
                 identity,
                 space["planning_space_id"],
@@ -166,6 +169,7 @@ def populate(conn: sqlite3.Connection) -> None:
                 float(number),
                 CREATED_AT,
                 CREATED_AT,
+                *(["assignment" if state == "dev" else None] if basis else []),
             ),
         )
     conn.execute("UPDATE planning_spaces SET next_number=3")

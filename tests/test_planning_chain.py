@@ -22,6 +22,7 @@ from unittest import mock
 from server import store
 from server.planning import api as planning_api
 from server.planning import chain, service
+from tests.planning_fixtures import basis_for
 
 CHAIN_PATH = "/api/planning/work-item/chain"
 
@@ -48,6 +49,7 @@ class ChainFixture(unittest.TestCase):
         self.refs: dict[str, str] = {}
 
         def make(name: str, *, state: str | None = None, **fields: object) -> None:
+            fields = {**basis_for(state), **fields}
             item = service.create_work_item(
                 self.conn, space=str(fields.pop("space", "QA")), title=name, state=state, **fields
             )
@@ -97,10 +99,17 @@ class ChainFixture(unittest.TestCase):
         service.claim_work_item(self.conn, self.refs["C3"], author="one")
         for name in ("C1", "E1"):
             service.set_summary(self.conn, self.refs[name], {"done": "d", "next": "n"})
-        service.transition_work_item(self.conn, self.refs["C1"], "dev", force=True)
-        service.transition_work_item(self.conn, self.refs["C1"], "done", force=True)
-        service.transition_work_item(self.conn, self.refs["E1"], "done", force=True)
-        service.transition_work_item(self.conn, self.refs["F"], "done", force=True)
+        # C1 is taken and closed; E1 is closed as work asked for, never taken.
+        service.claim_work_item(self.conn, self.refs["C1"], author="two")
+        service.transition_work_item(
+            self.conn, self.refs["C1"], "done", force=True, acceptance="assignment"
+        )
+        service.transition_work_item(
+            self.conn, self.refs["E1"], "done", force=True, acceptance="assignment"
+        )
+        service.transition_work_item(
+            self.conn, self.refs["F"], "done", force=True, acceptance="assignment"
+        )
 
         # Controlled clocks: when each item was created, when each transition
         # happened, and the one terminal item that has no transition at all.
@@ -510,7 +519,9 @@ class ChainBlockerSourceTests(ChainFixture):
         self.assertNotIn(("Z", "C1", "discovered-from"), self.edge_kinds())
 
         service.set_summary(self.conn, self.refs["Z"], {"done": "d", "next": "n"})
-        service.transition_work_item(self.conn, self.refs["Z"], "done", force=True)
+        service.transition_work_item(
+            self.conn, self.refs["Z"], "done", force=True, acceptance="assignment"
+        )
         self.assertEqual([("OTH-1", "Done", "completed", True, None)], self.blockers_of("D0"))
         self.assertTrue(self.ready("D0"))
 

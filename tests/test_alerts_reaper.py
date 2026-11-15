@@ -114,7 +114,9 @@ class ReviewAfterALaunchTests(ReaperHarness):
 
     def test_an_item_already_moved_out_of_active_is_nothing(self) -> None:
         reference = self.launch()
-        planning.transition_work_item(self.conn, reference, "review", author="agent")
+        planning.transition_work_item(
+            self.conn, reference, "review", author="agent", acceptance="assignment"
+        )
         self.conn.commit()
         self.finish(reference)
         self.reap()

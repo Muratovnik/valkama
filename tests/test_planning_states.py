@@ -16,6 +16,7 @@ from unittest import mock
 
 from server import store
 from server.planning import model, service
+from tests.planning_fixtures import basis_for
 
 
 class StateNameTests(unittest.TestCase):
@@ -33,6 +34,7 @@ class StateNameTests(unittest.TestCase):
         self.workflow_id = str(self.space["workflow"]["workflow_id"])
 
     def item(self, **kwargs: object) -> dict:
+        kwargs = {**basis_for(kwargs.get("state")), **kwargs}
         return service.create_work_item(
             self.conn, space=self.space["key"], title="Name a state", author="tester", **kwargs
         )
@@ -64,12 +66,20 @@ class StateNameTests(unittest.TestCase):
         created = self.item(state="ready")
         self.assertEqual("ready", created["state"]["key"])
         service.claim_work_item(self.conn, created["reference"], author="tester")
-        moved = service.transition_work_item(self.conn, created["reference"], "review")
+        moved = service.transition_work_item(
+            self.conn, created["reference"], "review", acceptance="assignment"
+        )
         self.assertEqual("review", moved["state"]["key"])
         blocked = service.transition_work_item(
-            self.conn, created["reference"], "blocked", reason="waiting on a vendor"
+            self.conn,
+            created["reference"],
+            "blocked",
+            reason="waiting on a vendor",
+            acceptance="assignment",
         )
         self.assertEqual("blocked", blocked["state"]["key"])
+        # Review let the holder go; work goes back to the active state held.
+        service.claim_work_item(self.conn, created["reference"], author="tester")
         active = service.transition_work_item(self.conn, created["reference"], "active")
         self.assertEqual("dev", active["state"]["key"])
 
@@ -84,7 +94,9 @@ class StateNameTests(unittest.TestCase):
         self.add_state("pairing", "active")
         created = self.item(state="review")
         with self.assertRaises(model.PlanningError) as refusal:
-            service.transition_work_item(self.conn, created["reference"], "active")
+            service.transition_work_item(
+                self.conn, created["reference"], "active", acceptance="assignment"
+            )
         message = str(refusal.exception)
         self.assertIn("category active names 2 states in this workflow: dev, pairing", message)
         self.assertIn("name one by its key", message)
@@ -97,7 +109,9 @@ class StateNameTests(unittest.TestCase):
         self.add_state("pairing", "active")
         created = self.item()
         with self.assertRaises(model.PlanningError) as refusal:
-            service.transition_work_item(self.conn, created["reference"], "in_progress")
+            service.transition_work_item(
+                self.conn, created["reference"], "in_progress", acceptance="assignment"
+            )
         message = str(refusal.exception)
         self.assertTrue(message.startswith("this workflow has no state named in_progress;"))
         for listed in (
