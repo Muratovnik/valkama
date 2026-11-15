@@ -2269,9 +2269,7 @@ class RankToolTests(WireCallTestCase):
     def order(self, state: str = "triage") -> list[str]:
         return [
             item["reference"]
-            for item in planning_service.list_work_items(
-                self.conn, space=SPACE_KEY, state_key=state
-            )
+            for item in planning_service.list_work_items(self.conn, space=SPACE_KEY, state=state)
         ]
 
     def test_the_writes_that_place_an_item_publish_rank_and_no_new_tool_does(self) -> None:

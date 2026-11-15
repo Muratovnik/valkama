@@ -57,7 +57,7 @@ class RankingTestCase(unittest.TestCase):
     def order(self, state: str = "triage") -> list[str]:
         return [
             item["reference"]
-            for item in service.list_work_items(self.conn, space=self.space["key"], state_key=state)
+            for item in service.list_work_items(self.conn, space=self.space["key"], state=state)
         ]
 
     def revisions(self) -> dict[str, int]:

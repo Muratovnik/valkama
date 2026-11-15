@@ -783,7 +783,7 @@ class OrderTests(BatchCase):
         self.assertIn("its own state", self.refused_single(UPDATE, id=self.twin, **rank)["message"])
         answer = self.apply(claim=True, update=rank)
         self.assertEqual("dev", answer["state"]["key"])
-        rows = service.list_work_items(self.conn, space="TALK", state_key="dev")
+        rows = service.list_work_items(self.conn, space="TALK", state="dev")
         self.assertEqual([self.ref, ahead], [row["reference"] for row in rows])
 
     def test_a_comment_reads_the_checklist_the_same_call_set(self) -> None:

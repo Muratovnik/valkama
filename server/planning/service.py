@@ -150,7 +150,7 @@ def list_work_items(
     conn: sqlite3.Connection,
     *,
     space: str | None = None,
-    state_key: str | None = None,
+    state: str | None = None,
     category: str | None = None,
     kind: str | None = None,
     owner: str | None = None,
@@ -178,13 +178,13 @@ def list_work_items(
     if space_id is not None:
         clauses.append("i.planning_space_id = ?")
         parameters.append(space_id)
-    if state_key is not None:
+    if state is not None:
         workflows = (
             [str(store.workflow_for_space(conn, space_id)["workflow_id"])]
             if space_id is not None
             else [str(row[0]) for row in conn.execute("SELECT workflow_id FROM workflows")]
         )
-        ids = states.filter_ids(conn, workflows, state_key)
+        ids = states.filter_ids(conn, workflows, state)
         placeholders = ",".join("?" * len(ids))
         clauses.append(f"i.state_id IN ({placeholders})" if ids else "1 = 0")
         parameters.extend(ids)
@@ -231,7 +231,7 @@ def list_work_items_page(
     conn: sqlite3.Connection,
     *,
     space: str | None = None,
-    state_key: str | None = None,
+    state: str | None = None,
     category: str | None = None,
     kind: str | None = None,
     owner: str | None = None,
@@ -245,7 +245,7 @@ def list_work_items_page(
     found = list_work_items(
         conn,
         space=space,
-        state_key=state_key,
+        state=state,
         category=category,
         kind=kind,
         owner=owner,

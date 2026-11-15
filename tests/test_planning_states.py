@@ -151,7 +151,7 @@ class StateNameTests(unittest.TestCase):
         ).fetchone()[0]
 
         def listed(name: str) -> list[str]:
-            rows = service.list_work_items(self.conn, space=self.space["key"], state_key=name)
+            rows = service.list_work_items(self.conn, space=self.space["key"], state=name)
             return [str(row["reference"]) for row in rows]
 
         by_key = listed("dev")
@@ -168,14 +168,14 @@ class StateNameTests(unittest.TestCase):
     def test_a_list_filter_refuses_an_unknown_name_and_a_retired_one(self) -> None:
         self.item(state="ready")
         with self.assertRaisesRegex(model.PlanningError, "no state named doing"):
-            service.list_work_items(self.conn, space=self.space["key"], state_key="doing")
+            service.list_work_items(self.conn, space=self.space["key"], state="doing")
         with self.assertRaisesRegex(model.PlanningError, "backlog is now triage"):
-            service.list_work_items(self.conn, space=self.space["key"], state_key="backlog")
+            service.list_work_items(self.conn, space=self.space["key"], state="backlog")
 
     def test_a_list_filter_refuses_a_category_two_states_share(self) -> None:
         self.add_state("pairing", "active")
         with self.assertRaisesRegex(model.PlanningError, "category active names 2 states"):
-            service.list_work_items(self.conn, space=self.space["key"], state_key="active")
+            service.list_work_items(self.conn, space=self.space["key"], state="active")
 
 
 if __name__ == "__main__":

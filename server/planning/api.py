@@ -255,7 +255,7 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
         **service.list_work_items_page(
             conn,
             space=_first(parameters, "space"),
-            state_key=_first(parameters, "state"),
+            state=_first(parameters, "state"),
             category=_first(parameters, "category"),
             kind=_first(parameters, "kind"),
             owner=_first(parameters, "owner"),
