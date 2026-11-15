@@ -1,7 +1,7 @@
 """What a reader is shown of goals, stages and tasks: the work model's read rules.
 
-Each test is one combination of the work model's table, named by its row, and its
-expectations are that table's, worked by hand, not the code's. G is an accepted
+Each test is one case of the work model's read rules, named by what it shows, and its
+expectations are the work model's, worked by hand, not the code's. G is an accepted
 goal, S and S2 stages, a and b tasks under S, c a task straight under G and X an
 item outside the tree. The trees are placed in SQL (`tests.planning_tree`): the
 writes that accept, start and move work have rules of their own.
@@ -72,52 +72,52 @@ class ReadCase(unittest.TestCase):
 
 
 class ContainerStateRowTests(ReadCase):
-    def test_row_01_a_goal_without_children_has_not_started(self) -> None:
+    def test_a_goal_without_children_has_not_started(self) -> None:
         self.goal()
         self.assert_derived(G="not_started")
 
-    def test_row_02_a_stage_without_children_and_its_goal_have_not_started(self) -> None:
+    def test_a_stage_without_children_and_its_goal_have_not_started(self) -> None:
         self.goal()
         self.stage()
         self.assert_derived(S="not_started", G="not_started")
 
-    def test_row_03_a_ready_task_never_started_starts_nothing(self) -> None:
+    def test_a_ready_task_never_started_starts_nothing(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="ready", parent="S")
         self.assert_derived(S="not_started", G="not_started")
 
-    def test_row_04_a_task_in_triage_starts_nothing(self) -> None:
+    def test_a_task_in_triage_starts_nothing(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", parent="S")
         self.assert_derived(S="not_started", G="not_started")
 
-    def test_row_05_a_deferred_task_starts_nothing(self) -> None:
+    def test_a_deferred_task_starts_nothing(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="deferred", parent="S")
         self.assert_derived(S="not_started", G="not_started")
 
-    def test_row_06_a_task_at_work_puts_the_stage_and_the_goal_in_progress(self) -> None:
+    def test_a_task_at_work_puts_the_stage_and_the_goal_in_progress(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="dev", parent="S", started=True)
         self.assert_derived(S="in_progress", G="in_progress")
 
-    def test_row_07_a_released_task_ready_and_started_keeps_them_in_progress(self) -> None:
+    def test_a_released_task_ready_and_started_keeps_them_in_progress(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="ready", parent="S", started=True)
         self.assert_derived(S="in_progress", G="in_progress")
 
-    def test_row_08_a_task_in_review_keeps_them_in_progress(self) -> None:
+    def test_a_task_in_review_keeps_them_in_progress(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="review", parent="S", started=True)
         self.assert_derived(S="in_progress", G="in_progress")
 
-    def test_row_09_a_blocked_task_is_started_only_if_it_was_at_work(self) -> None:
+    def test_a_blocked_task_is_started_only_if_it_was_at_work(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="blocked", parent="S")
@@ -125,13 +125,13 @@ class ContainerStateRowTests(ReadCase):
         self.tree.move("a", "blocked", started=True)
         self.assert_derived(S="in_progress")
 
-    def test_row_10_a_task_done_after_work_awaits_the_stages_confirmation(self) -> None:
+    def test_a_task_done_after_work_awaits_the_stages_confirmation(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="done", parent="S", started=True)
         self.assert_derived(S="awaiting_confirmation", G="in_progress")
 
-    def test_row_11_a_task_closed_unclaimed_was_started_by_its_close(self) -> None:
+    def test_a_task_closed_unclaimed_was_started_by_its_close(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="ready", parent="S")
@@ -145,7 +145,7 @@ class ContainerStateRowTests(ReadCase):
         self.assertIsNotNone(self.record("a")["started_at"])
         self.assert_derived(S="awaiting_confirmation", G="in_progress")
 
-    def test_row_12_a_lone_task_cancelled_unstarted_awaits_the_stage_but_starts_no_goal(
+    def test_a_lone_task_cancelled_unstarted_awaits_the_stage_but_starts_no_goal(
         self,
     ) -> None:
         self.goal()
@@ -153,28 +153,28 @@ class ContainerStateRowTests(ReadCase):
         self.tree.add("a", state="cancelled", parent="S")
         self.assert_derived(S="awaiting_confirmation", G="not_started")
 
-    def test_row_13_one_task_done_and_one_ready_is_in_progress(self) -> None:
+    def test_one_task_done_and_one_ready_is_in_progress(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="done", parent="S", started=True)
         self.tree.add("b", state="ready", parent="S")
         self.assert_derived(S="in_progress", G="in_progress")
 
-    def test_row_14_a_cancelled_and_a_ready_task_never_started_have_not_started(self) -> None:
+    def test_a_cancelled_and_a_ready_task_never_started_have_not_started(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="cancelled", parent="S")
         self.tree.add("b", state="ready", parent="S")
         self.assert_derived(S="not_started", G="not_started")
 
-    def test_row_15_a_stage_whose_only_child_left_awaits_its_confirmation(self) -> None:
+    def test_a_stage_whose_only_child_left_awaits_its_confirmation(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", parent="S")
         self.tree.leave("a")
         self.assert_derived(S="awaiting_confirmation", G="not_started")
 
-    def test_row_16_a_child_that_left_beside_an_unstarted_one_starts_nothing(self) -> None:
+    def test_a_child_that_left_beside_an_unstarted_one_starts_nothing(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="dev", parent="S", started=True)
@@ -182,34 +182,34 @@ class ContainerStateRowTests(ReadCase):
         self.tree.leave("a")
         self.assert_derived(S="not_started")
 
-    def test_row_17_a_closed_stage_started_its_goal_beside_an_open_task(self) -> None:
+    def test_a_closed_stage_started_its_goal_beside_an_open_task(self) -> None:
         self.goal()
         self.tree.add("S", kind="stage", state="done", parent="G")
         self.tree.add("a", state="done", parent="S", started=True)
         self.tree.add("c", state="ready", parent="G")
         self.assert_derived(G="in_progress", S=None)
 
-    def test_row_18_a_goal_whose_only_stage_closed_awaits_its_confirmation(self) -> None:
+    def test_a_goal_whose_only_stage_closed_awaits_its_confirmation(self) -> None:
         self.goal()
         self.tree.add("S", kind="stage", state="done", parent="G")
         self.tree.add("a", state="done", parent="S", started=True)
         self.assert_derived(G="awaiting_confirmation")
 
-    def test_row_19_a_cancelled_stage_and_a_task_done_await_the_goals_confirmation(self) -> None:
+    def test_a_cancelled_stage_and_a_task_done_await_the_goals_confirmation(self) -> None:
         self.goal()
         self.tree.add("S", kind="stage", state="cancelled", parent="G")
         self.tree.add("a", state="cancelled", parent="S")
         self.tree.add("c", state="done", parent="G", started=True)
         self.assert_derived(G="awaiting_confirmation")
 
-    def test_row_20_a_stage_not_accepted_shows_triage_and_derives_nothing(self) -> None:
+    def test_a_stage_not_accepted_shows_triage_and_derives_nothing(self) -> None:
         self.goal()
         self.tree.add("S", kind="stage", parent="G")
         self.tree.add("a", parent="S")
         self.assert_derived(S=None, G="not_started")
         self.assertEqual("triage", self.record("S")["state"]["category"])
 
-    def test_row_21_a_deferred_stage_shows_deferred_and_the_goal_goes_by_its_done_task(
+    def test_a_deferred_stage_shows_deferred_and_the_goal_goes_by_its_done_task(
         self,
     ) -> None:
         self.goal()
@@ -218,14 +218,14 @@ class ContainerStateRowTests(ReadCase):
         self.assert_derived(S=None, G="in_progress")
         self.assertEqual("deferred", self.record("S")["state"]["category"])
 
-    def test_row_22_a_stage_awaiting_confirmation_is_open_work_of_its_goal(self) -> None:
+    def test_a_stage_awaiting_confirmation_is_open_work_of_its_goal(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="done", parent="S", started=True)
         self.tree.add("c", state="dev", parent="G", started=True)
         self.assert_derived(S="awaiting_confirmation", G="in_progress")
 
-    def test_row_23_a_task_taken_by_number_accepts_no_container_above_it(self) -> None:
+    def test_a_task_taken_by_number_accepts_no_container_above_it(self) -> None:
         self.tree.add("G", kind="goal")
         self.tree.add("S", kind="stage", parent="G")
         self.tree.add("a", parent="S")
@@ -245,7 +245,7 @@ class ContainerStateRowTests(ReadCase):
                 self.assertEqual("triage", self.record(name)["state"]["category"])
                 self.assertIsNone(self.record(name)["acceptance"])
 
-    def test_row_24_nothing_is_filed_or_moved_under_a_closed_goal(self) -> None:
+    def test_nothing_is_filed_or_moved_under_a_closed_goal(self) -> None:
         self.tree.add("G", kind="goal", state="done")
         self.tree.add("a")
         self.conn.commit()
@@ -259,7 +259,7 @@ class ContainerStateRowTests(ReadCase):
         self.assertIsNone(self.record("a")["parent_id"])
         self.assertEqual(2, len(service.list_work_items(self.conn, space=self.tree.key)))
 
-    def test_row_25_work_four_levels_down_puts_every_level_in_progress(self) -> None:
+    def test_work_four_levels_down_puts_every_level_in_progress(self) -> None:
         self.goal()
         self.stage()
         self.stage("S2", parent="S")
@@ -268,7 +268,7 @@ class ContainerStateRowTests(ReadCase):
 
 
 class MarkRowTests(ReadCase):
-    def test_row_26_an_open_blocker_of_a_goal_is_waited_for_and_derives_nothing(self) -> None:
+    def test_an_open_blocker_of_a_goal_is_waited_for_and_derives_nothing(self) -> None:
         self.goal()
         self.tree.add("X")
         self.tree.block("X", "G")
@@ -278,7 +278,7 @@ class MarkRowTests(ReadCase):
         self.assertEqual([], self.record("G")["waits_for"])
         self.assert_derived(G="not_started")
 
-    def test_row_27_a_ready_task_waits_for_its_open_blocker_and_is_not_workable(self) -> None:
+    def test_a_ready_task_waits_for_its_open_blocker_and_is_not_workable(self) -> None:
         self.tree.add("a", state="ready")
         self.tree.add("X")
         self.tree.block("X", "a")
@@ -288,7 +288,7 @@ class MarkRowTests(ReadCase):
         record = self.record("a")
         self.assertEqual(([], True), (record["waits_for"], record["workable"]))
 
-    def test_row_28_a_start_is_kept_wherever_the_task_goes_back_to(self) -> None:
+    def test_a_start_is_kept_wherever_the_task_goes_back_to(self) -> None:
         self.tree.add("a", state="ready", started=True)
         started = self.record("a")["started_at"]
         self.assertIsNotNone(started)
@@ -313,7 +313,7 @@ class MarkRowTests(ReadCase):
 
 
 class ServiceStateRowTests(ReadCase):
-    def test_row_64_an_accepted_goal_is_in_no_category_and_shows_what_it_derives(self) -> None:
+    def test_an_accepted_goal_is_in_no_category_and_shows_what_it_derives(self) -> None:
         self.goal()
         self.tree.add("a", state="ready")
         listed = service.list_work_items(self.conn, space=self.tree.key, category="ready")
@@ -324,7 +324,7 @@ class ServiceStateRowTests(ReadCase):
             (record["state"], record["open"], record["container_state"], record["kind"]),
         )
 
-    def test_row_65_every_reader_of_any_kind_returns_accepted_goals_and_stages(self) -> None:
+    def test_every_reader_of_any_kind_returns_accepted_goals_and_stages(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="ready", parent="S")
@@ -354,7 +354,7 @@ class ServiceStateRowTests(ReadCase):
             with self.subTest(item=name):
                 self.assertEqual(self.tree.refs[name], self.record(name)["reference"])
 
-    def test_row_68_an_accepted_stage_blocks_like_open_work_until_it_is_confirmed(self) -> None:
+    def test_an_accepted_stage_blocks_like_open_work_until_it_is_confirmed(self) -> None:
         self.goal()
         self.stage()
         self.tree.add("a", state="ready")

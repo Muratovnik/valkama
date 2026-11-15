@@ -5,8 +5,8 @@ no reader is shown its key, its category or its name. Each surface answers on on
 tree with accepted goals and stages at every depth (`tests.planning_tree.oracle`),
 and every answer is read whole: no value in it is `container`, no text in it holds
 the service state's name, and a record of an accepted open goal or stage shows no
-state and the `container_state` the table gives it, while every other record shows
-its state.
+state and the `container_state` the work model gives it, while every other record
+shows its state.
 
 The surfaces are taken from the registries that publish them: the MCP tools, the
 Planning reads and writes over HTTP, the Exact Project routes and the views the
@@ -73,8 +73,8 @@ ACCEPTING = frozenset(
     {
         "a goal or stage accepted: moved from triage to the service state",
         "a goal or stage confirmed: moved from the service state to completed",
-        "a goal created that stands accepted at once (row 73)",
-        "a closed goal or stage opened again by a move to ready (row 74)",
+        "a goal created that stands accepted at once",
+        "a closed goal or stage opened again by a move to ready",
         "an item filed under a stage",
     }
 )
@@ -164,7 +164,7 @@ MCP_WRITES: dict[str, list[Args]] = {
             new="not_started",
         ),
         _Accepting(
-            "a goal created that stands accepted at once (row 73)",
+            "a goal created that stands accepted at once",
             lambda _case: {
                 "space": KEY,
                 "title": "A goal asked of an agent",
@@ -194,7 +194,7 @@ MCP_WRITES: dict[str, list[Args]] = {
             K=None,
         ),
         _Accepting(
-            "a closed goal or stage opened again by a move to ready (row 74)",
+            "a closed goal or stage opened again by a move to ready",
             _with(_ids(id="D"), transition={"state": "ready"}),
             D="awaiting_confirmation",
         ),
@@ -253,7 +253,7 @@ HTTP_WRITES: dict[str, list[Args]] = {
             new="not_started",
         ),
         _Accepting(
-            "a goal created that stands accepted at once (row 73)",
+            "a goal created that stands accepted at once",
             lambda _case: {"space": KEY, "title": "The owner's goal", "kind": "goal"},
             new="not_started",
         ),
@@ -271,7 +271,7 @@ HTTP_WRITES: dict[str, list[Args]] = {
             E="not_started",
         ),
         _Accepting(
-            "a closed goal or stage opened again by a move to ready (row 74)",
+            "a closed goal or stage opened again by a move to ready",
             _with(_ids(id="D"), state="ready"),
             D="awaiting_confirmation",
         ),
@@ -720,14 +720,14 @@ class Surfaces(unittest.TestCase):
 
     # -- the answers ------------------------------------------------------------
 
-    def test_row_72_the_mcp_tools_show_no_service_state(self) -> None:
+    def test_the_mcp_tools_show_no_service_state(self) -> None:
         def run(conn: sqlite3.Connection, name: str, arguments: dict) -> object:
             return mcp_surface.call_tool(conn, name, arguments)
 
         self.each(MCP_READS, run)
         self.each(MCP_WRITES, run)
 
-    def test_row_72_planning_over_http_shows_no_service_state(self) -> None:
+    def test_planning_over_http_shows_no_service_state(self) -> None:
         self.each(HTTP_READS, lambda conn, path, query: api.handle_get(conn, path, query))
 
         def write(conn: sqlite3.Connection, path: str, payload: dict) -> object:
@@ -736,7 +736,7 @@ class Surfaces(unittest.TestCase):
 
         self.each(HTTP_WRITES, write)
 
-    def test_row_72_the_exact_project_routes_show_no_service_state(self) -> None:
+    def test_the_exact_project_routes_show_no_service_state(self) -> None:
         def read(conn: sqlite3.Connection, path: str, query: dict) -> object:
             return exact_api.handle_get(
                 conn,
@@ -755,7 +755,7 @@ class Surfaces(unittest.TestCase):
         self.each(EXACT_READS, read)
         self.each(EXACT_WRITES, write)
 
-    def test_row_72_the_streamed_views_show_no_service_state(self) -> None:
+    def test_the_streamed_views_show_no_service_state(self) -> None:
         for view, compute in STREAMED.items():
             with self.subTest(view=view), self.copy() as conn:
                 answer = compute(conn)
@@ -764,7 +764,7 @@ class Surfaces(unittest.TestCase):
                 for held in STREAMED_HOLDS.get(view, ()):
                     self.assertIn(held(self), found, view)
 
-    def test_row_72_what_reaches_a_reader_by_no_registry_shows_no_service_state(self) -> None:
+    def test_what_reaches_a_reader_by_no_registry_shows_no_service_state(self) -> None:
         with self.copy() as conn:
             graph = views.graph_payload(conn, space=KEY)
             outside: dict[str, object] = {
