@@ -15,9 +15,12 @@ names fails it. What reaches a reader by no registry is listed by hand: the hook
 events, the summary, the release check, the federated search, the export and the
 Mermaid graph.
 
-Each write runs on its own copy of the tree. The writes that accept a goal or a
-stage, open it again or create one already accepted are not called here: they
-need the write rules of the work model, and `LEFT_FOR_THE_WRITE_RULES` names them.
+Each write runs on its own copy of the tree. A write that changes which goals and
+stages stand accepted and open says so (`_Accepting`): one that accepts a goal or a
+stage, confirms one, creates one already accepted, opens a closed one again or
+files work under a stage is read against the tree as that write leaves it, and
+`ACCEPTING` names the five. The Planning routes write as the owner's interface
+does, bound as the person's writes; the MCP tools as an agent's.
 """
 
 from __future__ import annotations
@@ -43,6 +46,7 @@ from server.hooks import notify
 from server.ops import export
 from server.planning import (
     api,
+    calls,
     exact_api,
     held,
     item_tree,
@@ -64,16 +68,38 @@ KEY = "OR"
 PROJECT = "or"
 SESSION = "019a3c2e-7777-7c11-9e0f-2f4b6d8a1c3e"
 
-#: The writes no surface is called with here, and the rule each needs first.
-LEFT_FOR_THE_WRITE_RULES = {
-    "a goal or stage accepted: moved from triage to the service state": "acceptance",
-    "a goal or stage confirmed: moved from the service state to completed": "acceptance",
-    "a person creating a goal that stands accepted at once (row 73)": "acceptance",
-    "a closed goal opened again by a move to ready (row 74)": "acceptance",
-    "an item filed under a stage: the hierarchy is still one level deep": "parents",
-}
+#: The writes that change which goals and stages stand accepted and open.
+ACCEPTING = frozenset(
+    {
+        "a goal or stage accepted: moved from triage to the service state",
+        "a goal or stage confirmed: moved from the service state to completed",
+        "a goal created that stands accepted at once (row 73)",
+        "a closed goal or stage opened again by a move to ready (row 74)",
+        "an item filed under a stage",
+    }
+)
+#: The name `_Accepting` gives the item its write creates.
+NEW = "new"
 
 Args = Callable[["Surfaces"], dict]
+
+
+class _Accepting:
+    """A write's arguments, and what the goals and stages it changes then derive.
+
+    `derived` maps a name of the tree, or `NEW` for the item the write creates, to
+    what that item derives once the write is made, or to None when it stands
+    accepted and open no more.
+    """
+
+    def __init__(self, write: str, build: Args, **derived: str | None) -> None:
+        assert write in ACCEPTING, write
+        self.write = write
+        self.build = build
+        self.derived = derived
+
+    def __call__(self, case: Surfaces) -> dict:
+        return self.build(case)
 
 
 def _ids(**names: str) -> Args:
@@ -127,6 +153,26 @@ MCP_WRITES: dict[str, list[Args]] = {
     "create_planning_space": [lambda _case: {"project_id": "other", "name": "Other", "key": "OX"}],
     "create_work_item": [
         lambda case: {"space": KEY, "title": "Under the goal", "parent": case.refs["G"]},
+        _Accepting(
+            "an item filed under a stage",
+            lambda case: {
+                "space": KEY,
+                "title": "A stage under a stage",
+                "kind": "stage",
+                "parent": case.refs["S2"],
+            },
+            new="not_started",
+        ),
+        _Accepting(
+            "a goal created that stands accepted at once (row 73)",
+            lambda _case: {
+                "space": KEY,
+                "title": "A goal asked of an agent",
+                "kind": "goal",
+                "acceptance": "assignment",
+            },
+            new="not_started",
+        ),
     ],
     "claim_work_item": [_ids(id="b")],
     "claim_ready_work_item": [lambda _case: {"space": KEY}],
@@ -137,6 +183,21 @@ MCP_WRITES: dict[str, list[Args]] = {
         _with(_ids(id="S"), summary=SUMMARY, update={"labels_add": ["stage"]}),
         _with(_ids(id="b"), claim=True, checklist=[{"text": "One step"}]),
         _with(_ids(id="z"), transition={"state": "blocked", "reason": "waits"}),
+        _Accepting(
+            "a goal or stage accepted: moved from triage to the service state",
+            _with(_ids(id="E"), transition={"state": "ready", "acceptance": "assignment"}),
+            E="not_started",
+        ),
+        _Accepting(
+            "a goal or stage confirmed: moved from the service state to completed",
+            _with(_ids(id="K"), summary=SUMMARY, transition={"state": "done"}),
+            K=None,
+        ),
+        _Accepting(
+            "a closed goal or stage opened again by a move to ready (row 74)",
+            _with(_ids(id="D"), transition={"state": "ready"}),
+            D="awaiting_confirmation",
+        ),
     ],
     "delete_work_item": [_ids(id="u")],
     "create_work_item_request": [
@@ -180,14 +241,41 @@ HTTP_READS: dict[str, list[Args]] = {
 HTTP_WRITES: dict[str, list[Args]] = {
     "/api/planning/spaces": [lambda _case: {"project_id": "other", "name": "Other", "key": "OX"}],
     "/api/planning/work-items": [
-        lambda case: {"space": KEY, "title": "Under the goal", "parent": case.refs["G"]}
+        lambda case: {"space": KEY, "title": "Under the goal", "parent": case.refs["G"]},
+        _Accepting(
+            "an item filed under a stage",
+            lambda case: {
+                "space": KEY,
+                "title": "A stage under a stage",
+                "kind": "stage",
+                "parent": case.refs["S2"],
+            },
+            new="not_started",
+        ),
+        _Accepting(
+            "a goal created that stands accepted at once (row 73)",
+            lambda _case: {"space": KEY, "title": "The owner's goal", "kind": "goal"},
+            new="not_started",
+        ),
     ],
     "/api/planning/work-item/update": [
         _with(_ids(id="G"), title="The goal, renamed"),
         _with(_ids(id="S2"), priority="high"),
     ],
     "/api/planning/work-item/delete": [_ids(id="u")],
-    "/api/planning/work-item/transition": [_with(_ids(id="z"), state="blocked", reason="waits")],
+    "/api/planning/work-item/transition": [
+        _with(_ids(id="z"), state="blocked", reason="waits"),
+        _Accepting(
+            "a goal or stage accepted: moved from triage to the service state",
+            _with(_ids(id="E"), state="ready"),
+            E="not_started",
+        ),
+        _Accepting(
+            "a closed goal or stage opened again by a move to ready (row 74)",
+            _with(_ids(id="D"), state="ready"),
+            D="awaiting_confirmation",
+        ),
+    ],
     "/api/planning/work-item/claim": [_ids(id="b")],
     "/api/planning/work-item/claim-ready": [lambda _case: {"space": KEY}],
     "/api/planning/work-item/checklist": [_with(_ids(id="b"), items=[{"text": "Another"}])],
@@ -220,7 +308,12 @@ HTTP_WRITES: dict[str, list[Args]] = {
         _with(_ids(id="S"), kind="url", value="https://example.invalid/stage")
     ],
     "/api/planning/work-item/apply": [
-        _with(_ids(id="G"), comment={"body": "A note"}, summary=SUMMARY)
+        _with(_ids(id="G"), comment={"body": "A note"}, summary=SUMMARY),
+        _Accepting(
+            "a goal or stage confirmed: moved from the service state to completed",
+            _with(_ids(id="K"), summary=SUMMARY, transition={"state": "done"}),
+            K=None,
+        ),
     ],
     "/api/planning/work-item/request": [
         _with(_ids(id="G"), kind="question", prompt="Go on?", fields=FIELDS)
@@ -300,6 +393,13 @@ STREAMED: dict[str, Callable[[sqlite3.Connection], object]] = {
     "activity": views.activity_feed,
     "live": live_frame.frame,
 }
+#: What a view holds that its check reads, by the last key of where it is and its value.
+STREAMED_HOLDS: dict[str, tuple[Callable[[Surfaces], tuple[str, object]], ...]] = {
+    "activity": (lambda _case: ("action", "opened"),),
+    "live": tuple(
+        lambda case, name=name: ("reference", case.refs[name]) for name in ("G", "S", "S2")
+    ),
+}
 
 
 #: Every place a state leaves the server, by how it gives it: 13 build it through
@@ -353,6 +453,7 @@ def _walk(value: object, path: str = "") -> Iterator[tuple[str, object]]:
 
 class Surfaces(unittest.TestCase):
     refs: dict[str, str]
+    accepted: dict[str, str]
     pending: str
     answered: str
     step: str
@@ -420,6 +521,11 @@ class Surfaces(unittest.TestCase):
             cls._git("commit", "--allow-empty", "-m", f"feat: the work of {name}")
             commits[name] = cls._git("rev-parse", "HEAD")
             service.attach_ref(conn, tree.refs[name], "commit", commits[name][:12])
+        # The live frame shows what holds live work and what is pinned, and no session
+        # holds anything here: pinned, the goal and its stages are its rows.
+        for name in ("G", "S", "S2"):
+            service.pin_work_item(conn, tree.refs[name], True)
+        cls._told(conn, tree.ids)
         # Its name is in no answer: it is the one text an answer cannot hold by chance.
         conn.execute(
             "UPDATE workflow_states SET name = ? WHERE category = ?",
@@ -440,6 +546,44 @@ class Surfaces(unittest.TestCase):
             ],
         )
         cls.registry = registry_bytes([entry])
+
+    @staticmethod
+    def _told(conn: sqlite3.Connection, ids: dict[str, str]) -> None:
+        """A history every reader of it tells something of: an agent's write, then a person's.
+
+        The tree is placed in SQL, so no call made its events. These are written as a
+        call writes them, each beside the call row that proved who made it: S, which
+        blocks y, and G come to stand accepted and open by an agent's write, which
+        also moves X, which blocks G, and claims a; then the person moves y and a and
+        opens G.
+        """
+
+        def call(source: str, tool: str) -> int:
+            return int(
+                conn.execute(
+                    "INSERT INTO execution_events(event_uid, kind, identity_state,"
+                    " identity_source, tool, session_id) VALUES (?, 'tool_call', 'confirmed',"
+                    " ?, ?, ?)",
+                    (str(uuid.uuid4()), source, tool, SESSION if source == "mcp" else None),
+                ).lastrowid
+            )
+
+        def event(name: str, action: str, detail: str, made: int) -> None:
+            conn.execute(
+                "INSERT INTO work_item_events(work_item_id, action, detail, author, call_id)"
+                " VALUES (?, ?, ?, 'history', ?)",
+                (ids[name], action, detail, made),
+            )
+
+        agent = call("mcp", "apply_work_item_changes")
+        event("S", "opened", "", agent)
+        event("G", "opened", "accepted as asked", agent)
+        event("X", "transitioned", "triage: put back", agent)
+        event("a", "claimed", "worker of a", agent)
+        person = call("browser", "/api/planning/work-item/transition")
+        event("y", "transitioned", "ready", person)
+        event("a", "transitioned", "dev", person)
+        event("G", "opened", "confirmed by the owner", person)
 
     @classmethod
     def _git(cls, *args: str) -> str:
@@ -498,14 +642,20 @@ class Surfaces(unittest.TestCase):
             return
         names = ("state", "state_name", "state_category", "state_key")
         reference = record.get("reference")
-        if reference is None and isinstance(record.get("work_item_ref"), dict):
+        exact = reference is None and isinstance(record.get("work_item_ref"), dict)
+        if exact:
             # Exact Project names its item by a ref; its `state` is the answer's envelope.
             reference = record["work_item_ref"].get("reference")
             names = ("state_name", "state_category", "state_key")
         shown = [key for key in names if key in record]
         if reference not in self.accepted or not shown:
-            if reference in self.refs.values() and "state" in shown and "title" in record:
-                self.assertIsNotNone(record["state"], f"{where}: {reference} shows its state")
+            if reference in self.refs.values() and "title" in record:
+                # Any other item of the tree shows the state it stands in.
+                key = "state_key" if exact else "state"
+                if key in shown:
+                    self.assertNotIn(
+                        record[key], (None, ""), f"{where}: {reference} shows its state"
+                    )
             return
         derived = self.accepted[reference]
         if "container_state" not in record:
@@ -524,7 +674,29 @@ class Surfaces(unittest.TestCase):
                 where = f"{name} #{index}"
                 with self.subTest(surface=where), self.copy() as conn:
                     answer = run(conn, name, build(self))
-                    self.shows_no_service_state(answer, where)
+                    self.accepted = self.after(build, answer, where)
+                    try:
+                        self.shows_no_service_state(answer, where)
+                    finally:
+                        del self.accepted
+
+    def after(self, build: Args, answer: object, where: str) -> dict[str, str]:
+        """What the accepted open goals and stages derive once the write `build` names is made."""
+
+        accepted = dict(type(self).accepted)
+        if not isinstance(build, _Accepting):
+            return accepted
+        for name, derived in build.derived.items():
+            reference = (
+                planning_model.human_id(KEY, len(self.refs) + 1) if name == NEW else self.refs[name]
+            )
+            # The item the write changed is in its answer, or the check reads nothing of it.
+            self.assertIn(f'"{reference}"', json.dumps(answer, default=str), where)
+            if derived is None:
+                accepted.pop(reference)
+            else:
+                accepted[reference] = derived
+        return accepted
 
     # -- the registries ---------------------------------------------------------
 
@@ -557,7 +729,12 @@ class Surfaces(unittest.TestCase):
 
     def test_row_72_planning_over_http_shows_no_service_state(self) -> None:
         self.each(HTTP_READS, lambda conn, path, query: api.handle_get(conn, path, query))
-        self.each(HTTP_WRITES, lambda conn, path, payload: api.handle_post(conn, path, payload))
+
+        def write(conn: sqlite3.Connection, path: str, payload: dict) -> object:
+            with calls.bind(calls.browser(), path):
+                return api.handle_post(conn, path, payload)
+
+        self.each(HTTP_WRITES, write)
 
     def test_row_72_the_exact_project_routes_show_no_service_state(self) -> None:
         def read(conn: sqlite3.Connection, path: str, query: dict) -> object:
@@ -581,7 +758,11 @@ class Surfaces(unittest.TestCase):
     def test_row_72_the_streamed_views_show_no_service_state(self) -> None:
         for view, compute in STREAMED.items():
             with self.subTest(view=view), self.copy() as conn:
-                self.shows_no_service_state(compute(conn), view)
+                answer = compute(conn)
+                self.shows_no_service_state(answer, view)
+                found = [(path.rsplit(".", 1)[-1], value) for path, value in _walk(answer)]
+                for held in STREAMED_HOLDS.get(view, ()):
+                    self.assertIn(held(self), found, view)
 
     def test_row_72_what_reaches_a_reader_by_no_registry_shows_no_service_state(self) -> None:
         with self.copy() as conn:
@@ -598,6 +779,7 @@ class Surfaces(unittest.TestCase):
             )
             outside["release check"] = report
             outside["release check, as text"] = released.render(report)
+            telling: set[tuple[str, str]] = set()
             for name in ("y", "a", "G"):
                 identity = conn.execute(
                     "SELECT work_item_id FROM work_items WHERE planning_space_id ="
@@ -616,6 +798,8 @@ class Surfaces(unittest.TestCase):
                     ),
                 ):
                     told = [entry for _call, entry in entries]
+                    if told:
+                        telling.add((reader, name))
                     outside[f"{reader} events of {name}"] = told
                     outside[f"{reader} events of {name}, as the hook prints them"] = [
                         notify._thread(entry) for entry in told
@@ -630,6 +814,25 @@ class Surfaces(unittest.TestCase):
                 item["reference"] for item in report["items"] if item["reference"] in self.accepted
             ),
             "the goals and stages that name a commit are in the release check",
+        )
+        self.assertEqual(
+            {
+                ("blocker", "y"),
+                ("blocker", "G"),
+                ("agents", "a"),
+                ("agents", "G"),
+                ("person", "y"),
+                ("person", "a"),
+                ("person", "G"),
+            },
+            telling,
+            "each reader of the history tells what it has to",
+        )
+        # S opened, and it blocks y: the blocker reader tells that opening by the word
+        # the person reader tells one by, as the state the blocker reached.
+        self.assertIn(
+            (self.refs["S"], person_events.OPENED),
+            [(entry["blocker"], entry["state"]) for entry in outside["blocker events of y"]],
         )
         for name, answer in outside.items():
             with self.subTest(surface=name):
@@ -721,8 +924,15 @@ class Surfaces(unittest.TestCase):
             ).fetchone()[0]
         )
 
-    def test_the_writes_left_for_the_write_rules_are_named(self) -> None:
-        self.assertEqual({"acceptance", "parents"}, set(LEFT_FOR_THE_WRITE_RULES.values()))
+    def test_each_write_that_accepts_is_called_through_the_mcp_tools_and_over_http(self) -> None:
+        for registry in (MCP_WRITES, HTTP_WRITES):
+            called = {
+                build.write
+                for arguments in registry.values()
+                for build in arguments
+                if isinstance(build, _Accepting)
+            }
+            self.assertEqual(ACCEPTING, called)
 
 
 if __name__ == "__main__":
