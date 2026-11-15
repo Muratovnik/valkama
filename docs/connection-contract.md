@@ -144,7 +144,9 @@ answers with the full item.
 `list_work_items` and `search_work_items` answer one compact row per item:
 `reference`, `title`, `kind`, `state` (the key), `priority`, `parent` (a
 reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
-`summary_hit` on a search that matched there. Without a `limit` they return at most 50 rows.
+`summary_hit` on a search that matched there. The row of an accepted open goal or
+stage has `state` `null` and adds its `container_state` (see
+[The work model](#the-work-model)). Without a `limit` they return at most 50 rows.
 A search reads its query as words: an item matches when its title, description,
 labels, source, summary, comments, decisions or questions hold every word, in
 any order and across fields, each word matched by its first five letters as a
@@ -230,6 +232,78 @@ past its deadline or on a finished execution has lapsed, and a
 A session nothing names answers with no items. A missing or blank `session` is
 refused with `invalid_request` and status 400.
 
+### The work model
+
+Since 3.0 every work item is one of five kinds, and its state is one of eight
+categories or, for an accepted open goal or stage, what it derives from the work
+under it.
+
+| `kind` | What it is |
+| --- | --- |
+| `task`, `bug`, `improvement` | work an agent takes, holds and finishes |
+| `goal` | work that holds other work and stands under no parent |
+| `stage` | work that holds other work and stands under a goal or another stage, at any depth |
+
+A goal or a stage is never claimed or worked itself: what stands under it is. A
+`kind` sent as `goal` with a parent is read as `stage`; `stage` without one is
+refused. An edit changes a kind only among `task`, `bug` and `improvement`.
+`list_work_items` with `kind=goal` lists the goals, with `kind=stage` the stages.
+
+| Category | The work in it |
+| --- | --- |
+| `triage` | not yet decided on: nobody has accepted it |
+| `deferred` | put off |
+| `ready` | accepted and waiting for someone to take it |
+| `active` | being worked: it always has a holder |
+| `review` | done and waiting for the owner's answer |
+| `completed` | done |
+| `blocked` | waiting on something else |
+| `cancelled` | not to be done |
+
+Every item record -- `get_work_item`, `GET /api/planning/work-item`, an item of a
+list, a chain member, a write's answer -- carries these fields of the model:
+
+| Field | What it holds |
+| --- | --- |
+| `state` | `key`, `name`, `category` and `is_terminal` of its workflow state; `null` exactly for an accepted open goal or stage |
+| `open` | whether its work is still open: false in a `completed` or `cancelled` state. A reader decides openness by it, since an accepted open goal or stage has no `state` to read `is_terminal` from |
+| `container_state` | for an accepted open goal or stage, `not_started`, `in_progress` or `awaiting_confirmation`; `null` for every other item, a goal or stage in `triage`, `deferred`, `completed` or `cancelled` included, whose `state` says where it stands |
+| `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule` or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
+| `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
+| `waits_for` | the open items that block it |
+| `workable` | whether it may be taken now: a task, held by nobody, in `triage` or `ready`, with nothing unfinished blocking it. It is the rule `claim_ready_work_item` takes work by |
+
+A goal or stage derives its `container_state` from the items under it. It is
+`awaiting_confirmation` when it has had children and none of them is open,
+`in_progress` when one is open and work has started on something under it at any
+depth, and `not_started` otherwise, a goal with no children included. A child
+moved out still counts as one it had.
+
+`basis` `assignment` is the one an agent names, as `acceptance: "assignment"` on
+`create_work_item` and in the `transition` group of `apply_work_item_changes`.
+Work under an accepted open goal or stage is accepted as part of it, `inherited`,
+whatever the call says. `migrated` is the basis the 3.0 migration gives work
+accepted before it, and no write takes it. A goal or stage is accepted by a
+transition to `ready`; it then stands in no state a reader sees, and shows
+`state` `null` and its `container_state`.
+
+A record carries no `container` and no `ready` field: `kind` says which items
+hold others, and `workable` which may be taken.
+
+#### Retired words
+
+The words of the model 3.0 replaced are refused wherever an input took them,
+with `invalid_request` and before anything is written. The refusal names what
+replaces the word; none is read as its replacement.
+
+| Input | Word | The refusal says |
+| --- | --- | --- |
+| `kind` of a creation, an edit and a list | `epic` | `kind epic is retired: a container is kind goal, or stage under a parent` |
+| `scope` of a chain and of an item's usage | `epic` | `scope epic is retired: scope tree reads the item and everything under it` |
+| `category` of a list, and `state` wherever it is named | `backlog`, `queued` | `backlog is now triage` or `queued is now ready`, then what the input takes: the categories, or the workflow's states as an unknown name lists them |
+| `state` wherever it is named | `todo` | what an unknown state name gets, listing the workflow's states |
+| `category` of a list, and `state` wherever it is named | `container` | `container is not a category: an accepted goal or stage shows container_state; accept one with ready` |
+
 ### Naming a state
 
 A workflow's states are rows, so their keys belong to the space: the default
@@ -259,7 +333,9 @@ state has it: triage, deferred, ready, active, review, completed, blocked, cance
 
 Both refusals come before any guard and write nothing. Reads keep their two
 filters apart: `list_work_items` takes `state` as a key and `category` as a
-category.
+category. A `state` key that no workflow of the spaces read has is refused the
+same way, listing their states, rather than answered with an empty list; a
+retired name is refused as [Retired words](#retired-words) says.
 
 ### The order of work
 
@@ -342,7 +418,7 @@ places the item in the state it moves to; the anchor must then be in that state.
 Without `rank` a moved item goes last in its new state, as it did before
 placements existed, and a new item goes last in its first state.
 
-`claim_ready_work_item` takes the first ready item in that order: an item in a
+`claim_ready_work_item` takes the first `workable` task in that order: one in a
 `ready` state before one in a `triage` state, then the states in the
 workflow's order, then the place inside the state. Priority only breaks a tie
 between two items at the same place, which a store written before placements
@@ -816,14 +892,14 @@ the same way: `item` carries `kind` and `priority`, and `item.state` carries
 
 ### Reading a chain of work
 
-An epic's children are the work that was planned. Work found while doing them is
+A goal's tree is the work that was planned. Work found while doing it is
 linked `discovered-from` the item it was found from, and often lands under
-another epic or under none, so an epic can be closed with every child done while
+another goal or under none, so a goal can be closed with all its work done while
 the work it started is still growing. A chain follows that growth.
 
 For a root item and a scope, the members are:
 
-- `epic`: the items whose parent is the root.
+- `tree`: every item under the root, at any depth.
 - `chain`, the default: the root's children, then, repeated until nothing new is
   found, every item linked `discovered-from` the root or a member, and every
   child of a member.
@@ -833,26 +909,26 @@ The walk goes downward only. It never adds a member's parent and never follows
 `relates-to`, `duplicates` and `blocks` never add a member. The root is never a
 member, and members are always in the root's planning space.
 
-`GET /api/planning/work-item/chain?id=<reference or work_item_id>&scope=chain|epic`
+`GET /api/planning/work-item/chain?id=<reference or work_item_id>&scope=chain|tree`
 answers with `interface_version` and `chain`:
 
 | Field | What it holds |
 | --- | --- |
-| `root` | `work_item_id`, `reference`, `title`, `kind`, `has_children`, true when any item names the root as its parent, and `totals`, how many members each scope holds (`chain`, `epic`) whichever scope was asked; the root's children are always members of its chain, so equal totals mean the two scopes answer the same members |
-| `scope` | `chain` or `epic` |
-| `total`, `closed`, `open`, `ready` | how many members there are, how many are in a terminal state, how many are not, and how many are ready |
-| `by_category` | members per workflow category, for the categories that have any |
+| `root` | `work_item_id`, `reference`, `title`, `kind`, `has_children`, true when any item names the root as its parent, and `totals`, how many members each scope holds (`chain`, `tree`) whichever scope was asked; everything under the root is always a member of its chain, so equal totals mean the two scopes answer the same members |
+| `scope` | `chain` or `tree` |
+| `total`, `closed`, `open`, `workable` | how many members there are, how many are closed, how many are open, and how many are `workable` |
+| `by_category` | members per workflow category, for the categories that have any; an accepted open goal or stage has no category and is counted only in `by_container_state` |
+| `by_container_state` | the accepted open goals and stages among the members, per `container_state` |
 | `origins` | members grouped by their parent: `parent_reference` and `parent_title` (`null` for members without a parent), `count` and `open`. The root's own children come first, then the larger groups |
 | `series` | one entry per UTC day on which a member was created or closed, oldest first: `day` (`YYYY-MM-DD`), `created`, `closed`, and the running totals `total` and `closed_total` |
 | `recent` | the last 7 UTC days, today included: `days` (7), `created`, `closed`, and `trend`, which is `growing` when more were created than closed, `converging` when fewer, and `steady` otherwise |
-| `members` | every member, by number: `work_item_id`, `reference`, `title`, `state` (`key`, `name`, `category`, `is_terminal`), `claim_ref`, `claim_state`, `parent_reference`, `created_at`, `closed_at`, `ready` and `rank` |
-| `edges` | the `discovered-from` links whose two ends are the root or members, and every `blocks` link into the root or a member, wherever its source lives: `from`, `to` (work item ids), `kind`, and the source's `reference`, `state_name`, `state_category`, `is_terminal` and `state_unavailable` |
+| `members` | every member, by number: `work_item_id`, `reference`, `title`, `kind`, `state` (`key`, `name`, `category`, `is_terminal`, or `null`), `open`, `container_state`, `claim_ref`, `claim_state`, `parent_reference`, `created_at`, `closed_at`, `workable` and `rank` |
+| `edges` | the `discovered-from` links whose two ends are the root or members, and every `blocks` link into the root or a member, wherever its source lives: `from`, `to` (work item ids), `kind`, and the source's `reference`, `state_name`, `state_category`, `is_terminal`, `state_unavailable` and `container_state` |
 
 A member's `closed_at` is when it last changed state, if its state is terminal:
 the time of its latest transition, or of its last update when it never had one.
-It is `null` for an open member. `ready` is the rule every work item record
-uses: unheld, not a parent, in a state work can start from, and not blocked by
-anything unfinished.
+It is `null` for an open member. `workable` is the rule every work item record
+uses (see [The work model](#the-work-model)).
 
 An edge names its source because a member waits on its blocker whether or not
 that blocker belongs to the chain, or to the space, so `from` need not be a
@@ -868,15 +944,17 @@ states, then the place inside a state, as described in
 the chain, so two members' ranks are compared and never counted between: a gap
 means work outside the chain stands between them.
 
-A `scope` other than `chain` or `epic` is refused with `invalid_request`; an
-unknown item is `not_found` (404), as on `GET /api/planning/work-item`.
+A `scope` other than `chain` or `tree` is refused with `invalid_request`, and
+`epic` names `tree` in its refusal; an unknown item is `not_found` (404), as on
+`GET /api/planning/work-item`.
 
 The MCP tool `get_work_item_chain` takes `id`, `scope`, `offset` and `limit`, and
 answers with the same fields except `members` and `edges`, with only the newest
 30 entries of `series`. In their place it carries `open_members`, one compact
-row per open member: `reference`, `title`, `state` (the key), `claim_ref`,
-`ready`, `parent_reference` and `rank`. They come in the order a reader acts on
-them: active members, then members in review, then ready ones, then the rest,
+row per open member: `reference`, `title`, `state` (the key, or `null`),
+`container_state` when it has one, `claim_ref`, `workable`, `parent_reference` and
+`rank`. They come in the order a reader acts on them: active members, then
+members in review, then workable ones, then the rest,
 each group in the order of work. The rows are paged like a list: at most `limit` per answer, 50
 by default and at most 200, with `truncated` and `next_offset`.
 
@@ -944,15 +1022,15 @@ a colon, and keeps the first one recorded. What a transcript does not say, or sa
 something other than a short label, stays unknown. An item's read below returns the
 account, the launch class, the effort and who did the work; the session's read does not.
 
-`GET /api/planning/work-item/usage?id=<reference or work_item_id>&scope=item|chain|epic`
-reads one item, or with `chain` or `epic` the item with the members
+`GET /api/planning/work-item/usage?id=<reference or work_item_id>&scope=item|chain|tree`
+reads one item, or with `chain` or `tree` the item with the members
 [its chain](#reading-a-chain-of-work) has in that scope. `GET
 /api/planning/session/usage?session_id=<id>` reads one session with its subagents. Each
 answers with `interface_version` and `usage`:
 
 | Field | What it holds |
 | --- | --- |
-| `elapsed_seconds` | the union of the rows: two agents working one hour side by side on one item took one hour. Between items an overlap is real parallel work, so items may add up to more than their session or epic |
+| `elapsed_seconds` | the union of the rows: two agents working one hour side by side on one item took one hour. Between items an overlap is real parallel work, so items may add up to more than their session or goal |
 | `agent_seconds` | the sum of the rows: those two agents spent two hours. This one always adds up |
 | `tokens` | `input`, `cached_read`, `cache_write_5m`, `cache_write_1h`, `output` and `reasoning`, each `null` when no request reported that kind. `input` excludes the cache at both clients. `reasoning` is the part of `output` spent on reasoning. `cache_write_5m` holds a client's shorter cache retention and `cache_write_1h` its longer |
 | `estimated_api_cost_usd` | what the requests would cost at public API prices, per request, since a price depends on a request's size; `null` when no request has a known price |
@@ -1503,10 +1581,11 @@ transcript or falling silent, and with a session's title. Attached stores are no
 ```json
 {"spaces": [{"key": "MAIN", "name": "Main", "project_id": "example-project",
    "rows": [
-     {"reference": "MAIN-4", "title": "Structured answers", "kind": "epic", "parent": null,
+     {"reference": "MAIN-4", "title": "Structured answers", "kind": "goal", "parent": null,
       "state": null, "agents": 0, "long": false, "asks": false, "since": null,
-      "quiet_since": null, "executor": null, "pinned": false, "state_name": "Dev",
-      "is_terminal": false, "updated_at": "2026-10-28T08:00:00Z"},
+      "quiet_since": null, "executor": null, "pinned": false, "state_name": "",
+      "is_terminal": false, "open": true, "container_state": "in_progress",
+      "updated_at": "2026-10-28T08:00:00Z"},
      {"reference": "MAIN-12", "title": "Answer a review in one form", "kind": "task",
       "parent": "MAIN-4", "state": "working", "agents": 2, "long": false, "asks": false,
       "since": "2026-11-04T10:08:12Z", "quiet_since": null,
@@ -1514,6 +1593,7 @@ transcript or falling silent, and with a session's title. Attached stores are no
                    "opened_in": "ide", "opened_host": "vscode", "family": "claude",
                    "state": "live"},
       "pinned": false, "state_name": "Dev", "is_terminal": false,
+      "open": true, "container_state": null,
       "updated_at": "2026-11-04T10:15:00Z"},
      {"reference": "MAIN-15", "title": "Read the answers back", "kind": "task",
       "parent": "MAIN-4", "state": "waiting", "agents": 0, "long": false, "asks": true,
@@ -1522,6 +1602,7 @@ transcript or falling silent, and with a session's title. Attached stores are no
                    "opened_in": "terminal", "opened_host": "", "family": "claude",
                    "state": "live"},
       "pinned": false, "state_name": "Dev", "is_terminal": false,
+      "open": true, "container_state": null,
       "updated_at": "2026-11-04T10:05:00Z"},
      {"reference": "MAIN-13", "title": "Tell other work", "kind": "task",
       "parent": "MAIN-4", "state": "quiet", "agents": 0, "long": false, "asks": false,
@@ -1530,11 +1611,13 @@ transcript or falling silent, and with a session's title. Attached stores are no
                    "opened_in": "", "opened_host": "", "family": "claude",
                    "state": "live"},
       "pinned": false, "state_name": "Dev", "is_terminal": false,
+      "open": true, "container_state": null,
       "updated_at": "2026-11-03T17:40:00Z"},
      {"reference": "MAIN-7", "title": "Old migration", "kind": "task", "parent": null,
       "state": null, "agents": 0, "long": false, "asks": false, "since": null,
       "quiet_since": null, "executor": null, "pinned": true, "state_name": "Done",
-      "is_terminal": true, "updated_at": "2026-10-02T12:00:00Z"}],
+      "is_terminal": true, "open": false, "container_state": null,
+      "updated_at": "2026-10-02T12:00:00Z"}],
    "sessions": [
      {"session": "6f1c2a8e-0000-4000-8000-000000000001", "title": "Compare two exports",
       "folder": "example-project", "state": "working", "long": false, "asks": false,
@@ -1561,7 +1644,8 @@ transcript or falling silent, and with a session's title. Attached stores are no
 | `quiet_since` | for a `quiet` row, when its session last gave a sign of life; `null` otherwise. It does not move while the row stays quiet |
 | `executor` | the session the row's state comes from, as a holder is read (see [Who holds a claim or a step](#who-holds-a-claim-or-a-step)), so a client can open that session from the row; `null` for a row with no live work and for one only an attempt Valkama runs moves |
 | `pinned` | whether a person pinned the item |
-| `state_name`, `is_terminal` | the item's workflow state, as a link names the state of its other end |
+| `state_name`, `is_terminal` | the item's workflow state, as a link names the state of its other end; an accepted open goal or stage has an empty `state_name` |
+| `open`, `container_state` | as an item record has them (see [The work model](#the-work-model)) |
 | `updated_at` | when the item last changed, as its card says it. Only a write to the item moves it, so a frame read again over an unchanged store keeps it |
 
 A session of `sessions` or `elsewhere`:
@@ -1582,8 +1666,8 @@ A session of `sessions` or `elsewhere`:
 `quiet`; a pinned item, open or closed, whatever its state; and every parent of
 those, so that `parent` always names a row. A `quiet` row is one whose session has
 been silent for more than a day; it is shown, muted, so a claim nobody works on is
-seen. Each item is one row, so an epic that is itself at work is its group's
-heading with its own state. A space with no rows and no sessions is not in the
+seen. Each item is one row, so a goal or stage is its group's heading with its
+own state. A space with no rows and no sessions is not in the
 frame.
 
 **Which sessions.** A session that is active, was heard from within the last day,
@@ -1737,7 +1821,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
-| `transition` | `{state, reason?, force?, rank?}` | `/transition` |
+| `transition` | `{state, reason?, force?, rank?, acceptance?}` | `/transition` |
 
 Each path in the last column is under `POST /api/planning/work-item`.
 
@@ -1857,12 +1941,14 @@ stands:
 
 ### Creating an item with its claim, steps and links
 
-`create_work_item` (`POST /api/planning/work-items`) also takes three optional
-arguments that act on the item it creates:
+`create_work_item` (`POST /api/planning/work-items`) takes `kind` as
+[The work model](#the-work-model) names it, `acceptance: "assignment"` to accept
+the new work on the owner's word, and three optional arguments that act on the
+item it creates:
 
 | Argument | Shape | Works as |
 | --- | --- | --- |
-| `claim` | `true` | `claim_work_item`; `false` is no change |
+| `claim` | `true` | `claim_work_item`, refused for a goal or stage; `false` is no change |
 | `checklist` | the steps' list or `{items}`, as the batch's group takes it, without `force` | the batch's `checklist` |
 | `links` | list of `{other, kind}`, linking from the new item, at most 100 | the batch's `links` |
 
@@ -2119,7 +2205,7 @@ otherwise. It answers how long a session that shows no sign of life keeps a live
 lease, and promises nothing about a session that ends: from that moment the lease
 is `stale`, `expires_at` is `null`, and the grace above applies. `claim` is
 `null` when nobody holds the item. Every item record, full
-or listed, carries `claim_state`; `claim_ref` and `ready` mean what they meant.
+or listed, carries `claim_state`; `claim_ref` means what it meant.
 
 ### Who holds a claim or a step
 
@@ -2225,44 +2311,50 @@ never its name. The rule holds for every write that claims: `claim_work_item`,
 `claim_ready_work_item`, the `claim` of `create_work_item` and of
 `apply_work_item_changes`, their HTTP writes, the browser, and a launch.
 
-| The item is in | A claim (a take or a takeover) | A release (by its holder, `force`, or lease expiry) |
+Only a task is held. A claim of a goal or stage, or of one of its steps, is
+refused: `a goal or stage has no holder; claim a task under it`.
+
+| The task is in | A claim (a take or a takeover) | A release (by its holder, `force`, or lease expiry) |
 | --- | --- | --- |
-| a `backlog` or `queued` state | moves it to the first `active` state, in workflow order, that a transition of the workflow reaches from where it stands | moves nothing |
-| an `active` state | moves nothing | moves it to the first reachable `queued` state, or failing that the first reachable `backlog` state |
-| a `review`, `blocked`, `completed` or `cancelled` state | moves nothing | moves nothing |
+| a `triage`, `deferred` or `ready` state | moves it to the first `active` state, in workflow order, that a transition of the workflow reaches from where it stands; from `triage` or `deferred` it is accepted, `inherited` under an accepted open goal or stage and `assignment` otherwise | moves nothing |
+| an `active` state | moves nothing | moves it to the first reachable `ready` state |
+| a `blocked` state | moves nothing | moves nothing; the holder is gone |
+| a `review` state | refused: the owner's answer returns it to `ready` | moves nothing |
+| a `completed` or `cancelled` state | refused: reopen it first | moves nothing |
+
+A claim of a step of a task in `triage`, `deferred` or `ready` starts the task as
+a claim of the task does.
 
 A move is the transition a `transition` group of `apply_work_item_changes`
 makes: the workflow's guards judge it, it writes a `transitioned` event whose
-detail is the new key and the reason (`dev: claimed`, `todo: released`,
-`todo: session-ended`, `dev: launched` for a launch), it bumps the revision once
+detail is the new key and the reason (`dev: claimed`, `ready: released`,
+`ready: session-ended`, `dev: launched` for a launch), it bumps the revision once
 more, and the item goes last in its new state. A claim's move needs no further
 executor, because the claim is it. Its answer, full or acknowledged, adds
-`started: {"from": "backlog", "to": "dev"}`; a release's adds
-`requeued: {"from": "dev", "to": "todo"}`; and the move's warnings, such as a
+`started: {"from": "triage", "to": "dev"}`; a release's adds
+`requeued: {"from": "dev", "to": "ready"}`; and the move's warnings, such as a
 claim no session confirmed, arrive in `warnings`.
 
 Three cases keep the state where it is:
 
 - A startable item whose workflow lets it reach no active state is claimed and
-  stays put, with a warning: `MAIN-12 stays in Backlog: its workflow has no
+  stays put, with a warning: `MAIN-12 stays in Triage: its workflow has no
   active state it can move to`.
 - An active item whose checklist still has a claimed step is released and stays
   active, because that step's holder is still its executor.
-- An active item with no reachable queued or backlog state is released and
-  stays.
+- An active item with no reachable `ready` state is released and stays: a
+  return to `triage` would undo its acceptance.
 
-A review or blocked item says something a claim does not undo, and finished
-work is reopened by a transition of its own, so a claim takes those over
-without moving them. Release requeues because a claim starts its item: without
-it, a released or expired claim would leave work in an active state that is not
-`ready`, so `claim_ready_work_item` never offers it again, and not held, so
-`stale_claims` does not list it either. A requeued item keeps its checklist,
-comments and history, and goes to the queued state rather than the backlog it
-may have come from, so the queue offers it before new backlog work.
+A blocked task says something a claim does not undo, so a claim takes it over
+without moving it. Release requeues because a claim starts its item: without it,
+a released or expired claim would leave work in an active state with no holder,
+which the model never allows, that `claim_ready_work_item` never offers again. A
+requeued task keeps its checklist, comments and history, and goes to `ready`,
+never back to `triage`, so the queue offers it before work nobody has accepted.
 
 `transition` sent beside `claim` in one `apply_work_item_changes` call applies
 after the claim's move: `{"claim": true, "transition": {"state": "review"}}`
-moves a backlog item to `dev` and then to `review`.
+moves a task in `triage` to `dev` and then to `review`.
 
 ### A close ends the claims
 
