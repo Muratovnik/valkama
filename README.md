@@ -29,8 +29,8 @@ directory, and the MCP server only exists while a client is talking to it.
   they share one icon; bugs are rose, improvements turquoise and tasks grey-blue, on a
   type's icon and word only: state colours stay as they are. Change them under
   Settings → General → Task type colors, where goals and stages are the one row
-  "Goal and stage"; a change applies at once. The choice is kept in `localStorage`, on the device, so a browser and the desktop
-  app each remember their own.
+  "Goal and stage"; a change applies at once. The choice is kept in `localStorage`, on
+  the device, so a browser and the desktop app each remember their own.
 - **Names for accounts.** The usage records hold only the id of the organization work
   was billed to. Under Settings → General → Accounts, each account the past year saw is
   listed with its id and its share of agent time, and you can give it a name or clear
@@ -587,8 +587,8 @@ card in its parent's lane and, once it holds work, heads a lane of its own. Lane
 open work come first, and the work under no parent comes last, in a lane of its own.
 A lane with nothing open starts folded, and the board remembers the lanes you fold or
 unfold, per space, in the browser. A lane's Chain action narrows the board to the
-chain of the goal or stage heading it,
-and the chain stays when you switch to List or Graph; its chip leaves it in every view.
+chain of the goal or stage heading it, and the chain stays when you switch to List or
+Graph; its chip leaves it in every view.
 
 ### Migrating an older store
 
