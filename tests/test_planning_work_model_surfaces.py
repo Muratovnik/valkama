@@ -31,6 +31,7 @@ import inspect
 import io
 import json
 import os
+import re
 import shutil
 import sqlite3
 import sys
@@ -933,6 +934,66 @@ class Surfaces(unittest.TestCase):
                 if isinstance(build, _Accepting)
             }
             self.assertEqual(ACCEPTING, called)
+
+
+#: Every word a list of categories may hold, a retired one included, so that a list
+#: of the earlier model is found and refused rather than passed over.
+CATEGORY_WORDS = frozenset(
+    {*planning_model.PUBLIC_CATEGORIES, "backlog", "queued", "todo", "container"}
+)
+#: A list in prose: words in parentheses, separated by commas.
+LISTED = re.compile(r"\(([a-z_]+(?:, [a-z_]+)+)\)")
+
+
+def _category_lists(text: str) -> list[list[str]]:
+    """The lists in a text that name categories: two or more of their words."""
+
+    found = []
+    for listed in LISTED.finditer(text):
+        words = listed.group(1).split(", ")
+        if len(CATEGORY_WORDS.intersection(words)) >= 2:
+            found.append(words)
+    return found
+
+
+class PublishedCategoriesTests(unittest.TestCase):
+    """What an agent reads of the categories, in prose and in the schemas, is the eight.
+
+    The tool descriptions and the handshake text are prose a client sends a model
+    whole, and no constant guards a sentence: a list written there once stayed the
+    earlier model's after the model changed.
+    """
+
+    def published_texts(self) -> dict[str, str]:
+        texts = {"handshake": mcp_surface.PLANNING_INSTRUCTIONS}
+        for tool in mcp_surface.catalogue():
+            for path, value in _walk(tool):
+                if isinstance(value, str) and path.endswith((".description", ".title")):
+                    texts[f"{tool['name']}{path}"] = value
+        return texts
+
+    def test_every_list_of_categories_in_the_prose_is_the_eight(self) -> None:
+        named = set()
+        for where, text in self.published_texts().items():
+            for words in _category_lists(text):
+                with self.subTest(text=where):
+                    self.assertEqual(sorted(planning_model.PUBLIC_CATEGORIES), sorted(words))
+                    named.add(where)
+        self.assertIn("handshake", named, "the handshake names the eight categories")
+        self.assertTrue(
+            any(where.endswith(".state.description") for where in named),
+            "a state argument names the categories it takes",
+        )
+
+    def test_every_enumeration_of_categories_in_the_schemas_is_the_eight(self) -> None:
+        listed = 0
+        for tool in mcp_surface.catalogue():
+            for path, value in _walk(tool):
+                if path.endswith(".enum") and CATEGORY_WORDS.intersection(value):
+                    with self.subTest(argument=f"{tool['name']}{path}"):
+                        self.assertEqual(list(planning_model.PUBLIC_CATEGORIES), value)
+                        listed += 1
+        self.assertGreater(listed, 0)
 
 
 if __name__ == "__main__":

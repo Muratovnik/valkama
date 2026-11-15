@@ -42,20 +42,23 @@ splitting one, or handing items to other agents.
    "done when" and its verify command. A plan in the repository is referenced
    by `source` (`docs/plan.md#kb:a7f3`), not copied, and a file the
    description names is written as Naming a file says. Umbrella work is
-   `kind: epic`, its children name it as `parent`; the hierarchy is one level
-   deep. Pass `claim: true` and `checklist` when you take it at once. Link the
-   related items your search found (`relates-to`, `blocks`) and name the epic
-   whose scope covers it as `parent`. A decision the owner must make is a
+   `kind: goal`, or `stage` under a parent at any depth; children name it as
+   `parent`, and nobody claims it. Work filed outside an accepted goal or stage
+   starts in triage: send `acceptance: "assignment"` only on the owner's word.
+   Pass `claim: true` and `checklist` when you take a task at once. Link the
+   related items your search found (`relates-to`, `blocks`) and name the goal or
+   stage whose scope covers it as `parent`. A decision the owner must make is a
    question on the new item (see Asking the owner), with each option, what it
    costs and your recommendation, not a list of options in the description.
    The answer's `similar` names up to three open items that read like it:
    merge the new item into one that is the same change (`merge_work_items`)
    and link a related one; an empty `similar` does not rule out a duplicate.
 4. **Claim before working.** `claim_work_item`, or `claim_ready_work_item` to
-   take the next ready item of a space. A claim is atomic and refuses naming
-   the holder when someone else has the item. It also starts the work: an
-   item in a backlog or queued state moves to the first active state, and the
+   take the next workable task of a space. A claim is atomic and refuses naming
+   the holder when someone else has the item. It also starts the work: a task
+   in a triage, deferred or ready state moves to the first active state, and the
    acknowledgement's `started` says so. Send no separate transition to start.
+   A goal or stage is never claimed: claim a task under it.
 
 The holder is the session your client proved, written as
 `claim_ref: "codex (session <id>)"`; `author` is the name the history records
@@ -68,9 +71,9 @@ was proved. A stale claim is taken over without `force`; a live one is
 someone's work, so take it over only on an instruction that says so. A session
 that ended keeps its claims for 12 hours: resuming it makes them `live` again,
 and `claim_ready_work_item` does not hand them out until then.
-`release: true` gives an item back and requeues it from the active state,
-unless a checklist step of it is still claimed. Closing an item releases it:
-send no release after the closing transition.
+`release: true` gives an item back and returns it from the active state to a
+ready one, unless a checklist step of it is still claimed; a blocked one stays.
+Closing an item releases it: send no release after the closing transition.
 
 ## Work the item
 
@@ -216,7 +219,7 @@ take no mark.
 **Links.** The batch's `links` take `kind`:
 
 - `blocks` carries readiness: an item that something unfinished blocks is not
-  ready, and the take-next queue skips it;
+  workable, and the take-next queue skips it;
 - `discovered-from` records work found while doing another item. File it in the
   `create_work_item` call itself:
   `links: [{"other": "MAIN-12", "kind": "discovered-from"}]`;
@@ -445,7 +448,7 @@ you did about it (a comment is enough), then close; a comment in the same call
 as the close does not count. `force: true` carries a refusal through and records
 it as `overridden`: use it only when the record would still be true.
 
-**Closing a release.** Before closing the release's epic, run
+**Closing a release.** Before closing the release's goal, run
 `valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It
 lists the open items whose commit refs went into that range, including a change
 that arrived under another hash, and it changes nothing. Check each one and close

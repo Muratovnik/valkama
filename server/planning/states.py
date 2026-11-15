@@ -28,29 +28,76 @@ def resolve(conn: sqlite3.Connection, workflow_id: str, reference: object) -> sq
 
     Only a state of the eight categories answers. The service state is not one a
     caller names, by id, key or category: `container` is refused with the word that
-    replaces it, and its id is a state this workflow does not list.
+    replaces it, and its id is a state this workflow does not list. A retired name
+    (`backlog`, `queued`, `todo`) is refused before it is looked up, with its
+    replacement and the workflow's states.
     """
 
     text = model.text_field(reference, "workflow state", limit=64)
-    model.refuse_retired(text)
+    model.refuse_retired("state", text, lambda: _unknown(text, public_states(conn, workflow_id)))
+    row = _named(conn, workflow_id, text)
+    if row is None:
+        raise model.PlanningError(_unknown(text, public_states(conn, workflow_id)))
+    return row
+
+
+def _named(conn: sqlite3.Connection, workflow_id: str, text: str) -> sqlite3.Row | None:
+    """The state one workflow gives the name `text`, or None when it gives it none.
+
+    The state's id or its key, and failing both a category, which names a state
+    only when exactly one state of the workflow has it. Two states sharing the
+    category refuse, naming both, since the caller must then name one by its key.
+    """
+
     row = conn.execute(
         "SELECT * FROM workflow_states WHERE workflow_id = ? AND (state_id = ? OR key = ?)"
         " AND category != ?",
         (workflow_id, text, text, model.SERVICE_CATEGORY),
     ).fetchone()
-    if row is not None:
+    if row is not None or text not in model.PUBLIC_CATEGORIES:
         return row
-    states = public_states(conn, workflow_id)
-    if text in model.PUBLIC_CATEGORIES:
-        matching = [state for state in states if state["category"] == text]
-        if len(matching) == 1:
-            return matching[0]
-        if matching:
-            raise model.PlanningError(
-                f"category {text} names {len(matching)} states in this workflow:"
-                f" {', '.join(str(state['key']) for state in matching)}; name one by its key"
-            )
-    raise model.PlanningError(f"this workflow has no state named {text}; {_listing(states)}")
+    matching = [state for state in public_states(conn, workflow_id) if state["category"] == text]
+    if len(matching) == 1:
+        return matching[0]
+    if matching:
+        raise model.PlanningError(
+            f"category {text} names {len(matching)} states in this workflow:"
+            f" {', '.join(str(state['key']) for state in matching)}; name one by its key"
+        )
+    return None
+
+
+def filter_ids(conn: sqlite3.Connection, workflow_ids: list[str], reference: object) -> list[str]:
+    """The state ids a list keeps: the state each workflow it reads gives the name, or refused.
+
+    A list filter names a state the way a write does, by `_named` in each workflow
+    of the spaces it reads, so a key, a state id and a category one state has all
+    keep the same items. A name none of them gives, a retired one among them, is
+    refused as a write naming it would be, rather than answered with an empty list
+    that reads as no work.
+    """
+
+    text = model.text_field(reference, "workflow state", limit=64)
+    known: dict[str, sqlite3.Row] = {}
+    for workflow_id in workflow_ids:
+        for state in public_states(conn, workflow_id):
+            known.setdefault(str(state["key"]), state)
+    listed = list(known.values())
+    model.refuse_retired("state", text, lambda: _unknown(text, listed))
+    found = [
+        str(row["state_id"])
+        for workflow_id in workflow_ids
+        if (row := _named(conn, workflow_id, text)) is not None
+    ]
+    if not found and workflow_ids:
+        raise model.PlanningError(_unknown(text, listed))
+    return found
+
+
+def _unknown(text: str, states: list[sqlite3.Row]) -> str:
+    """The refusal of a state name the workflow does not have, listing what it has."""
+
+    return f"this workflow has no state named {text}; {_listing(states)}"
 
 
 #: The categories work is started from. Coming back to active from review or

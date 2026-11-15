@@ -164,7 +164,9 @@ def list_work_items(
     `kind` is named as a caller names it: `goal` keeps the containers under no
     parent and `stage` those under one. The service state is no state and no
     category a caller names: `container` is refused for either with the word that
-    replaces it.
+    replaces it, as is every retired word (`kind=epic`, `category=backlog`), and a
+    `state` name no workflow of the spaces read gives (by key, state id or a category
+    one state has) is refused with their states.
 
     Nothing here caps the count: a caller that wants a bounded page with an
     honest account of what it left out asks `list_work_items_page`.
@@ -172,13 +174,20 @@ def list_work_items(
 
     clauses: list[str] = []
     parameters: list[object] = []
-    if space is not None:
+    space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
+    if space_id is not None:
         clauses.append("i.planning_space_id = ?")
-        parameters.append(str(_space_row(conn, space)["planning_space_id"]))
+        parameters.append(space_id)
     if state_key is not None:
-        model.refuse_retired(state_key)
-        clauses.append("s.key = ?")
-        parameters.append(model.state_key(state_key))
+        workflows = (
+            [str(store.workflow_for_space(conn, space_id)["workflow_id"])]
+            if space_id is not None
+            else [str(row[0]) for row in conn.execute("SELECT workflow_id FROM workflows")]
+        )
+        ids = states.filter_ids(conn, workflows, state_key)
+        placeholders = ",".join("?" * len(ids))
+        clauses.append(f"i.state_id IN ({placeholders})" if ids else "1 = 0")
+        parameters.extend(ids)
     if category is not None:
         clauses.append("s.category = ?")
         parameters.append(model.state_category(category))
