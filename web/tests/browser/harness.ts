@@ -89,8 +89,12 @@ const testItem: WorkItemBrief = {
   // tame fixture is why no test ever saw it.
   labels: ['example-project', 'design-system', 'accessibility'],
   source: '',
-  container: false,
-  ready: false,
+  open: true,
+  container_state: null,
+  acceptance: null,
+  started_at: null,
+  waits_for: [],
+  workable: false,
   checklist: Array.from({ length: 7 }, (_, index) => ({
     id: `00000000-0000-4000-8000-00000000030${index}`,
     text: `Шаг ${index + 1}`,

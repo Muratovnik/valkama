@@ -172,7 +172,7 @@ test('a later read that fails keeps the numbers, says so and reads again on requ
 })
 
 /**
- * The runs under an epic's children. Its whole read counts them, and no row of its own names
+ * The runs under a goal's children. Its whole read counts them, and no row of its own names
  * them: their share stands under their titles in the chain.
  */
 const CHILD_RUNS: ItemUsage['agents'] = [
@@ -195,19 +195,19 @@ const CHILD_RUNS: ItemUsage['agents'] = [
 ]
 
 /**
- * An epic card: the whole scope answers `epic`, the item's own runs answer `item`, and a null
+ * A goal card: the whole scope answers `goal`, the item's own runs answer `item`, and a null
  * answer fails that read.
  */
-async function serveEpic(page: Page, whole: ItemUsage, own: () => ItemUsage | null) {
+async function serveGoal(page: Page, whole: ItemUsage, own: () => ItemUsage | null) {
   const asked: string[] = []
   await installBackend(page, {
     agents: () => [named],
-    card: (read) => ({ ...read, kind: 'epic' }),
+    card: (read) => ({ ...read, kind: 'goal' }),
   })
   await page.route('**/api/planning/work-item/usage?*', (route) => {
     const scope = new URL(route.request().url()).searchParams.get('scope') ?? ''
     asked.push(scope)
-    const usage = scope === 'epic' ? whole : own()
+    const usage = scope === 'tree' ? whole : own()
     return usage
       ? route.fulfill({
           contentType: 'application/json',
@@ -224,11 +224,11 @@ async function serveEpic(page: Page, whole: ItemUsage, own: () => ItemUsage | nu
   return asked
 }
 
-test('an epic’s tab lists its own agents, and its counter counts only them', async ({ page }) => {
-  const asked = await serveEpic(
+test('a goal’s tab lists its own agents, and its counter counts only them', async ({ page }) => {
+  const asked = await serveGoal(
     page,
     richUsage({
-      scope: 'epic',
+      scope: 'tree',
       agent_seconds: 60_000,
       agents: [...richUsage().agents, ...CHILD_RUNS],
     }),
@@ -244,25 +244,25 @@ test('an epic’s tab lists its own agents, and its counter counts only them', a
   await expect(rows.nth(0)).toContainText('Build the export')
   await expect(rows.nth(0)).toContainText('≈\u{A0}8\u{A0}h\u{A0}20\u{A0}min')
   await expect(rows.nth(1)).toContainText('The session itself')
-  // The children's runs have no row on the epic, so no short id stands in for them.
+  // The children's runs have no row on the goal, so no short id stands in for them.
   await expect(section).not.toContainText('a3a79fc9')
   await expect(section).not.toContainText('a58241d0')
-  // The summary keeps the whole of the epic, the children's time included.
+  // The summary keeps the whole of the goal, the children's time included.
   await expect(section.locator('.work-usage-figures').getByRole('button').nth(1)).toHaveText(
     'All agents ≈\u{A0}16\u{A0}h\u{A0}40\u{A0}min',
   )
-  expect(asked).toEqual(expect.arrayContaining(['epic', 'item']))
+  expect(asked).toEqual(expect.arrayContaining(['tree', 'item']))
 })
 
-test('an epic whose own runs did not read says so on the tab and reads them on request', async ({
+test('a goal whose own runs did not read says so on the tab and reads them on request', async ({
   page,
 }, info) => {
   await page.setViewportSize({ width: 390, height: 900 })
   let answering = false
-  await serveEpic(
+  await serveGoal(
     page,
     richUsage({
-      scope: 'epic',
+      scope: 'tree',
       agent_seconds: 60_000,
       agents: [...richUsage().agents, ...CHILD_RUNS],
     }),

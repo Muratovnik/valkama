@@ -159,7 +159,7 @@ function walk(event: KeyboardEvent) {
 <style scoped>
 /* A ground like a column's. A cell with no tile drawn keeps its place, so a tile
    can still be dropped there, but takes no ground and no floor until a tile of its
-   lane is dragged and could land in it: at rest a row of epics drew five grey
+   lane is dragged and could land in it: at rest a row of goals drew five grey
    boxes for every lane, the loudest thing on a board of mostly empty cells. */
 .lane-cell {
   display: flex;

@@ -6,19 +6,23 @@
  */
 import { describe, expect, it } from 'vitest'
 
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
+
 import { validateReadModel } from '@/shared/api/planningModel.ts'
 import type { PlanningReadModel, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 import { placedSample } from './fixtures/graphSample.ts'
 import { broadSpace, deepSpace, liveWorkFor } from './fixtures/graphSpaces.ts'
 
-const open = (item: WorkItemBrief) => !item.state.is_terminal
+const open = (item: WorkItemBrief) => item.open
+const holds = (item: WorkItemBrief | undefined) =>
+  item !== undefined && WORK_ITEM_TREE.isContainer(item)
 
 function shape(model: PlanningReadModel) {
   const items = model.work_items
   const byId = new Map(items.map((item) => [item.work_item_id, item]))
-  const groups = items.filter((item) => item.container)
-  const work = items.filter((item) => !item.container)
+  const groups = items.filter((item) => holds(item))
+  const work = items.filter((item) => !holds(item))
   const openWorkUnder = (group: WorkItemBrief) =>
     work.some((item) => item.parent_id === group.work_item_id && open(item))
   const children = groups.map((group) =>
@@ -30,15 +34,14 @@ function shape(model: PlanningReadModel) {
   return {
     items: [items.length, items.filter((item) => open(item)).length],
     openWork: openWork.length,
-    epics: [
+    goals: [
       groups.length,
       groups.filter((group) => open(group)).length,
       groups.filter((group) => open(group) && openWorkUnder(group)).length,
     ],
-    closedEpicsWithOpenWork: groups.filter((group) => !open(group) && openWorkUnder(group)).length,
-    nested: groups.filter(
-      (group) => group.parent_id !== null && byId.get(group.parent_id)?.container,
-    ).length,
+    closedGoalsWithOpenWork: groups.filter((group) => !open(group) && openWorkUnder(group)).length,
+    nested: groups.filter((group) => group.parent_id !== null && holds(byId.get(group.parent_id)))
+      .length,
     looseOpen: openWork.filter((item) => item.parent_id === null).length,
     largest: [largest.length, largest.filter((item) => open(item)).length],
     links: [kinds('discovered-from'), kinds('blocks'), kinds('relates-to'), kinds('duplicates')],
@@ -57,9 +60,9 @@ describe('the spaces the graph of frames is tested on', () => {
     expect(shape(model)).toEqual({
       items: [1397, 352],
       openWork: 311,
-      epics: [165, 41, 38],
-      closedEpicsWithOpenWork: 4,
-      // The one nested epic is the fixture's own addition.
+      goals: [165, 41, 38],
+      closedGoalsWithOpenWork: 4,
+      // The one nested goal is the fixture's own addition.
       nested: 1,
       looseOpen: 158,
       largest: [54, 21],
@@ -74,8 +77,8 @@ describe('the spaces the graph of frames is tested on', () => {
     expect(shape(model)).toEqual({
       items: [1120, 175],
       openWork: 167,
-      epics: [25, 8, 8],
-      closedEpicsWithOpenWork: 0,
+      goals: [25, 8, 8],
+      closedGoalsWithOpenWork: 0,
       nested: 0,
       looseOpen: 46,
       largest: [273, 100],
@@ -84,14 +87,14 @@ describe('the spaces the graph of frames is tested on', () => {
     })
   })
 
-  it('the broad space links work to epics the way the frames must draw', () => {
+  it('the broad space links work to goals the way the frames must draw', () => {
     const { model, lone } = broadSpace()
     const byId = new Map(model.work_items.map((item) => [item.work_item_id, item]))
-    const isEpic = (id: string) => byId.get(id)?.container === true
-    const touching = model.links.filter((link) => isEpic(link.from) || isEpic(link.to))
+    const isGoal = (id: string) => holds(byId.get(id))
+    const touching = model.links.filter((link) => isGoal(link.from) || isGoal(link.to))
     const openWorkEnd = (id: string) => {
       const item = byId.get(id)
-      return item !== undefined && !item.container && !item.state.is_terminal
+      return item !== undefined && !holds(item) && item.open
     }
     const toOpen = touching.filter((link) => openWorkEnd(link.from) || openWorkEnd(link.to))
     const own = toOpen.filter(
@@ -100,13 +103,13 @@ describe('the spaces the graph of frames is tested on', () => {
     )
     expect([touching.length, toOpen.length, own.length]).toEqual([87, 33, 5])
     expect(model.links.filter((link) => !byId.has(link.from) || !byId.has(link.to))).toHaveLength(2)
-    // The item whose only link is to its own epic, in an epic small enough to stay open.
+    // The item whose only link is to its own goal, in a goal small enough to stay open.
     expect(lone).not.toBeNull()
     const mine = model.links.filter(
       (link) => link.from === lone?.item.work_item_id || link.to === lone?.item.work_item_id,
     )
     expect(mine.map((link) => [link.from, link.to])).toEqual([
-      [lone?.item.work_item_id, lone?.epic.work_item_id],
+      [lone?.item.work_item_id, lone?.goal.work_item_id],
     ])
   })
 

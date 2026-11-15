@@ -20,7 +20,7 @@
  * and the highlighted row keeps an edge in a forced palette, where it clears every fill.
  * The popup is ChoiceSelect's surface at the field's own width, so it never reaches past
  * the dialog the field stands in. A long option wraps inside it at a space, a hyphen or
- * after a `/` (`slashBreaks.ts`): an epic's option is its title, and a label is as often
+ * after a `/` (`slashBreaks.ts`): a goal's option is its title, and a label is as often
  * a path of words such as `area/web`, so every option breaks the way a title does.
  */
 import { computed, ref, useTemplateRef, watch } from 'vue'

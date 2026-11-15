@@ -6,9 +6,9 @@
  * a session's a button; the row gives it its tag, its address or busy state and its press.
  *
  * The number's column is as wide as the list's longest number and the session's glyph, so
- * the titles start at one x and the second lines under them. The epic's title is the row's
+ * the titles start at one x and the second lines under them. The goal's title is the row's
  * context, not its name: on one line it gives way first, never taking more than two fifths of
- * the room, and the row's own title keeps the rest. The title, the epic, the second line and a
+ * the room, and the row's own title keeps the rest. The title, the goal, the second line and a
  * closed state's word each have their own hint, which says that text whole only while it is cut
  * (`clipped`), whatever else in the row is cut.
  *
@@ -23,10 +23,10 @@ import VIcon from '@/shared/ui/VIcon.vue'
 const props = defineProps<{
   /** The state, how long and where the row belongs; empty on a row of one line. */
   detail: string
-  /** The parent's title before the row's own, on a row of one line. */
-  epic: string | null
   /** A session's row: its glyph stands where an item's number does. */
   glyph: boolean
+  /** The parent's title before the row's own, on a row of one line. */
+  goal: string | null
   /** A closed item's state, or how many agents are on the row. */
   meta: { agents: boolean; word: string } | null
   number: string
@@ -36,8 +36,8 @@ const props = defineProps<{
   widest: string
 }>()
 
-/** How many letters the epic's title has: a short one keeps no more room than its letters. */
-const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.length ?? 0}ch` }))
+/** How many letters the goal's title has: a short one keeps no more room than its letters. */
+const goalStyle = computed(() => ({ '--nav-row-goal-letters': `${props.goal?.length ?? 0}ch` }))
 </script>
 
 <template>
@@ -64,15 +64,15 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
       >
     </span>
     <span class="nav-row-words">
-      <template v-if="epic">
+      <template v-if="goal">
         <span
-          v-tooltip:right.clipped="epic"
-          class="nav-row-epic trimmed-word one-line"
-          :style="epicStyle"
-          >{{ epic }}</span
+          v-tooltip:right.clipped="goal"
+          class="nav-row-goal trimmed-word one-line"
+          :style="goalStyle"
+          >{{ goal }}</span
         >
         <span
-          class="nav-row-epic-mark trimmed-word"
+          class="nav-row-goal-mark trimmed-word"
           aria-hidden="true"
           >›</span
         >
@@ -191,17 +191,17 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
    times as fast as the row's own title, down to a few letters of it that the hint completes
    (or all of a shorter one), and never takes more than two fifths of the words. Cut sideways
    only, like every word of the row (`.trimmed-word`). */
-.nav-row-epic {
-  --nav-row-epic-letters: 3ch;
+.nav-row-goal {
+  --nav-row-goal-letters: 3ch;
 
   position: relative;
   flex: 0 6 auto;
-  min-width: min(3ch, var(--nav-row-epic-letters));
+  min-width: min(3ch, var(--nav-row-goal-letters));
   max-width: 40%;
   color: var(--nav-row-aside-ink, var(--color-navigation-text-muted));
 }
 
-.nav-row-epic-mark {
+.nav-row-goal-mark {
   flex: none;
   color: var(--nav-row-aside-ink, var(--color-navigation-text-muted));
 }

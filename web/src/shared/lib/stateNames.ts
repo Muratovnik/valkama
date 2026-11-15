@@ -27,11 +27,13 @@ export interface NamedState {
 
 /**
  * The workflow the server gives a new space (`DEFAULT_STATES` in `server/planning/model.py`):
- * each key with its name, compared exactly, and its category.
+ * each key with its name, compared exactly, and its category. Its service state, where an
+ * accepted open goal or stage stands, is not here: no answer names it.
  */
 const STANDARD_STATES: ReadonlyMap<string, { category: string; name: string }> = new Map([
-  ['backlog', { name: 'Backlog', category: 'backlog' }],
-  ['todo', { name: 'Todo', category: 'queued' }],
+  ['triage', { name: 'Triage', category: 'triage' }],
+  ['deferred', { name: 'Deferred', category: 'deferred' }],
+  ['ready', { name: 'Ready', category: 'ready' }],
   ['dev', { name: 'Dev', category: 'active' }],
   ['review', { name: 'Review', category: 'review' }],
   ['done', { name: 'Done', category: 'completed' }],

@@ -1,5 +1,5 @@
 /**
- * The searching field the new-task dialog chooses its epic and its labels with.
+ * The searching field the new-task dialog chooses its goal and its labels with.
  *
  * One value: typing only searches, and only an option becomes the value; the words in
  * the field go back to the chosen option's once the list is left. Several: chips that a
@@ -15,8 +15,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
-const EPICS: ChoiceOption[] = [
-  { value: '', label: 'No epic' },
+const GOALS: ChoiceOption[] = [
+  { value: '', label: 'No goal' },
   { value: 'MAIN-12', label: 'MAIN-12 · Parser rework', description: 'Dev' },
   { value: 'MAIN-30', label: 'MAIN-30 · Search', description: 'Backlog' },
 ]
@@ -46,7 +46,7 @@ function host<T extends string | string[]>(start: T, extra: Record<string, unkno
           h(SearchCombobox, {
             'label': 'Field',
             'emptyLabel': 'Nothing here',
-            'options': Array.isArray(start) ? LABELS : EPICS,
+            'options': Array.isArray(start) ? LABELS : GOALS,
             'modelValue': value.value,
             'onUpdate:modelValue': (next: string | string[]) => {
               value.value = next as T
@@ -84,9 +84,9 @@ afterEach(() => {
 })
 
 describe('SearchCombobox with one value', () => {
-  it('finds an epic by its number and by its title, and Enter takes it', async () => {
+  it('finds a goal by its number and by its title, and Enter takes it', async () => {
     const { input, value } = host('')
-    expect(input.element.value).toBe('No epic')
+    expect(input.element.value).toBe('No goal')
     await type(input, '30')
     expect(optionNames()).toEqual(['MAIN-30 · SearchBacklog'])
     await type(input, 'pars')
@@ -116,14 +116,14 @@ describe('SearchCombobox with one value', () => {
     expect(again.defaultPrevented).toBe(false)
   })
 
-  it('goes back to no epic through its own option, by the arrows', async () => {
+  it('goes back to no goal through its own option, by the arrows', async () => {
     const { input, value } = host('MAIN-30')
     await press(input, 'ArrowDown')
     expect(optionNames()).toHaveLength(3)
     await press(input, 'Home')
     await press(input, 'Enter')
     expect(value.value).toBe('')
-    expect(input.element.value).toBe('No epic')
+    expect(input.element.value).toBe('No goal')
   })
 
   it('is named by its label and described by its hint', () => {

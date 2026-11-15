@@ -20,7 +20,7 @@
  * or its sign and its words where the host says so. A press that was meant for something that
  * stood here before reaches neither the trigger nor an entry (`strayPress`).
  */
-import { computed, ref, useTemplateRef, watch } from 'vue'
+import { computed, ref, useId, useTemplateRef, watch } from 'vue'
 
 import {
   DropdownMenuCheckboxItem,
@@ -57,7 +57,21 @@ const props = withDefaults(
   { align: 'end', icon: 'more', size: 'default', words: false },
 )
 
+const emit = defineEmits<{
+  /** The menu went, whichever way it was closed. */
+  close: []
+}>()
+
 const open = ref(false)
+watch(open, (now) => {
+  if (!now) emit('close')
+})
+
+/** A note says what the menu has to say before its entries, so the open menu is described by it. */
+const noteId = useId()
+const described = computed(() =>
+  props.entries.some((entry) => entry.kind === 'note') ? noteId : undefined,
+)
 
 /**
  * Over the card or the dialog it stands in, as every list portalled out of one is: Reka lifts
@@ -144,6 +158,7 @@ function closed(event: Event) {
         :align="align"
         :side-offset="4"
         :collision-padding="12"
+        :aria-describedby="described"
         loop
         @close-auto-focus="closed"
       >
@@ -192,6 +207,13 @@ function closed(event: Event) {
                 />
               </DropdownMenuItemIndicator>
             </DropdownMenuCheckboxItem>
+            <DropdownMenuLabel
+              v-else-if="entry.kind === 'note'"
+              :id="noteId"
+              class="menu-note"
+            >
+              {{ entry.label }}
+            </DropdownMenuLabel>
             <template v-else>
               <DropdownMenuSeparator
                 v-if="ruledOff(index)"
@@ -306,6 +328,13 @@ function closed(event: Event) {
 .menu-caption {
   padding: var(--space-2) var(--space-2) var(--space-1);
   color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+/* A note is read, not chosen: plain words, wrapping within the menu's own width. */
+.menu-note {
+  padding: var(--space-2);
+  color: var(--color-text);
   font: var(--font-detail);
 }
 

@@ -25,7 +25,7 @@ export const NESTED = `# The counts
 |  | MAIN | OTHER |
 | --- | ---: | ---: |
 | Tasks / open | 120 / 31 | 64 / 9 |
-| Open work (not epics) | 27 | 8 |
-| Epics: all / open / with open work | 14 / 6 / 5 | 3 / 1 / 1 |
+| Open work (not goals) | 27 | 8 |
+| Goals: all / open / with open work | 14 / 6 / 5 | 3 / 1 / 1 |
 | Links: discovered-from / blocks / relates-to / duplicates | 40 / 12 / 30 / 2 | 5 / 1 / 4 / 0 |
 `

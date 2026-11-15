@@ -1,24 +1,26 @@
 /**
- * The board read by epic: one lane per epic, holding its children, and one lane
+ * The board read by goal: one lane per goal, holding its children, and one lane
  * for the work filed under none.
  *
  * Three sets go in because a lane answers three questions. Which lanes there are
  * and what each counts comes from the board's scope — the space, or the chain it
  * is narrowed to — before any queue or search filter, because a lane's counts
- * describe its epic and not the filter. Which tiles a lane draws comes from the
- * filtered items. And an epic is named from the whole space, because a chain can
- * hold an item whose epic is not itself in the chain.
+ * describe its goal and not the filter. Which tiles a lane draws comes from the
+ * filtered items. And a goal is named from the whole space, because a chain can
+ * hold an item whose goal is not itself in the chain.
  *
- * An epic is the lane, not a tile in it: its title heads the lane and its state
+ * A goal is the lane, not a tile in it: its title heads the lane and its state
  * is marked there, and its card is one click away. Drawing it again among its
  * own children would put the same item twice on one screen.
  */
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
+
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
-export type BoardGrouping = 'epic' | 'none'
+export type BoardGrouping = 'goal' | 'none'
 
-/** The lane of the work filed under no epic. */
-export const NO_EPIC = 'none'
+/** The lane of the work filed under no goal. */
+export const NO_PARENT = 'none'
 
 /** Tiles a lane cell draws before it asks to show the rest. */
 const CELL_LIMIT = 3
@@ -33,27 +35,27 @@ export function drawnInCell(state: { is_terminal: boolean }): number {
 
 export interface BoardLane {
   closed: number
-  /** The epic heading the lane; null for the work under none. */
-  epic: WorkItemBrief | null
-  /** The epic's work item id, or `NO_EPIC`. */
+  /** The goal heading the lane; null for the work under none. */
+  goal: WorkItemBrief | null
+  /** The goal's work item id, or `NO_PARENT`. */
   id: string
   /** The tiles the lane draws, in the order the server listed them. */
   items: WorkItemBrief[]
   open: number
 }
 
-/** An item that heads a lane: something's parent, or an epic, and nobody's child. */
+/** An item that heads a lane: something's parent, or a goal, and nobody's child. */
 function headsLane(item: WorkItemBrief): boolean {
-  return item.parent_id === null && (item.container || item.kind === 'epic')
+  return item.parent_id === null && WORK_ITEM_TREE.isContainer(item)
 }
 
 /**
  * The lanes, in reading order: those with open work first, then those without,
- * each in the order the space lists its epics, and the work under no epic last.
+ * each in the order the space lists its goals, and the work under no goal last.
  *
  * Under a filter a lane with nothing to draw is left out, or a search would
- * answer with a column of empty lane headings; without one every epic keeps its
- * lane, an empty one included, so a new epic is visible before it holds work.
+ * answer with a column of empty lane headings; without one every goal keeps its
+ * lane, an empty one included, so a new goal is visible before it holds work.
  */
 export function boardLanes(input: {
   filtered: boolean
@@ -66,12 +68,12 @@ export function boardLanes(input: {
   const lanes = new Map<string, BoardLane>()
   const laneOf = (item: WorkItemBrief): string | null => {
     if (headsLane(item)) return null
-    return item.parent_id !== null && byId.has(item.parent_id) ? item.parent_id : NO_EPIC
+    return item.parent_id !== null && byId.has(item.parent_id) ? item.parent_id : NO_PARENT
   }
   const lane = (id: string): BoardLane => {
     let found = lanes.get(id)
     if (found === undefined) {
-      found = { id, epic: byId.get(id) ?? null, items: [], open: 0, closed: 0 }
+      found = { id, goal: byId.get(id) ?? null, items: [], open: 0, closed: 0 }
       lanes.set(id, found)
     }
     return found
@@ -83,21 +85,21 @@ export function boardLanes(input: {
       continue
     }
     const counted = lane(id)
-    if (item.state.is_terminal) counted.closed += 1
-    else counted.open += 1
+    if (WORK_ITEM_TREE.isOpen(item)) counted.open += 1
+    else counted.closed += 1
   }
   for (const item of input.visible) {
     const id = laneOf(item)
     if (id !== null) lane(id).items.push(item)
   }
   const rank = (entry: BoardLane) =>
-    entry.id === NO_EPIC ? Number.POSITIVE_INFINITY : (order.get(entry.id) ?? 0)
+    entry.id === NO_PARENT ? Number.POSITIVE_INFINITY : (order.get(entry.id) ?? 0)
   return [...lanes.values()]
     .filter((entry) => !input.filtered || entry.items.length > 0)
-    .filter((entry) => entry.id !== NO_EPIC || entry.open + entry.closed > 0)
+    .filter((entry) => entry.id !== NO_PARENT || entry.open + entry.closed > 0)
     .sort(
       (left, right) =>
-        Number(left.id === NO_EPIC) - Number(right.id === NO_EPIC) ||
+        Number(left.id === NO_PARENT) - Number(right.id === NO_PARENT) ||
         Number(left.open === 0) - Number(right.open === 0) ||
         rank(left) - rank(right),
     )

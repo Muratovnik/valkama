@@ -1,5 +1,5 @@
 /**
- * How a workflow state is named on screen. The server gives a new space seven states
+ * How a workflow state is named on screen. The server gives a new space eight states
  * (`DEFAULT_STATES` in `server/planning/model.py`); one of those, under the name it was given,
  * reads in the interface's language, and every other state reads as its workflow writes it.
  */
@@ -22,8 +22,9 @@ const ru = words('ru')
 
 /** The workflow a new space is given, as the server writes it: key, name, category. */
 const DEFAULT_WORKFLOW = [
-  ['backlog', 'Backlog', 'backlog', 'Бэклог'],
-  ['todo', 'Todo', 'queued', 'К работе'],
+  ['triage', 'Triage', 'triage', 'Не разобрано'],
+  ['deferred', 'Deferred', 'deferred', 'Отложено'],
+  ['ready', 'Ready', 'ready', 'Готово к работе'],
   ['dev', 'Dev', 'active', 'В работе'],
   ['review', 'Review', 'review', 'Проверка'],
   ['done', 'Done', 'completed', 'Выполнено'],
@@ -42,7 +43,9 @@ describe('a state under the translated setting', () => {
   it('reads in English in the category’s own words', () => {
     const en = words('en')
     expect(stateName({ key: 'dev', name: 'Dev' }, 'translated', en)).toBe('In progress')
-    expect(stateName({ key: 'todo', name: 'Todo' }, 'translated', en)).toBe('Queued')
+    expect(stateName({ key: 'ready', name: 'Ready' }, 'translated', en)).toBe('Ready')
+    // A key the former workflow had is no standard one now, so it reads as written.
+    expect(stateName({ key: 'todo', name: 'Todo' }, 'translated', en)).toBe('Todo')
   })
 
   it('renamed, reads as written, however close the new name is', () => {

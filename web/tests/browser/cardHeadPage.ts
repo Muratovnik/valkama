@@ -89,7 +89,7 @@ export function measure(page: Page, spec: Spec): Promise<Measured> {
 export interface Head {
   asking?: boolean
   /** The reference of the item's parent, which is a link among the facts. */
-  epic?: string
+  goal?: string
   /** A session of Claude's holds it, opening in VS Code: the holder is that session's button. */
   held?: boolean
   kind?: string
@@ -102,13 +102,13 @@ export interface Head {
   state?: string
 }
 
-export const FULL_HEAD: Head = { asking: true, epic: 'MAIN-12', kind: 'epic', priority: 'high' }
+export const FULL_HEAD: Head = { asking: true, goal: 'MAIN-12', kind: 'goal', priority: 'high' }
 
 /**
  * What no fixture card shows: a question waiting, a parent and a pasted picture. A session
  * holds it, as the hint walk's card is held; the walk opens it with a plain holder too.
  */
-export const ASKING_HEAD: Head = { asking: true, epic: 'MAIN-12', held: true, picture: true }
+export const ASKING_HEAD: Head = { asking: true, goal: 'MAIN-12', held: true, picture: true }
 
 /** The picture's name, which its button says. */
 export const PICTURE = 'screen.png'
@@ -123,7 +123,7 @@ const PICTURE_PNG =
  * The item under its parent: the card's read says the id, the space's whose reference and kind
  * that is.
  */
-function inEpic(model: Record<string, unknown>, reference: string, kind?: string) {
+function inGoal(model: Record<string, unknown>, reference: string, kind?: string) {
   const items = model.work_items as { reference: string; work_item_id: string }[]
   return {
     ...model,
@@ -146,7 +146,7 @@ export async function openCard(page: Page, locale: 'ru' | 'en', width: number, h
 
 /** The same card, at the language and the width the page already has. */
 export async function openHead(page: Page, head: Head = {}) {
-  const { asking, epic, held, kind, parentKind, picture, priority, state = 'Review' } = head
+  const { asking, goal, held, kind, parentKind, picture, priority, state = 'Review' } = head
   await installBackend(page, {
     openPlan: openPlanFor,
     card: (read) => ({
@@ -154,10 +154,10 @@ export async function openHead(page: Page, head: Head = {}) {
       state: { ...(read.state as object), key: 'review', name: state, category: 'review' },
       ...(kind ? { kind } : {}),
       ...(priority ? { priority } : {}),
-      ...(epic ? { parent_id: blockedWorkItem.work_item_id } : {}),
+      ...(goal ? { parent_id: blockedWorkItem.work_item_id } : {}),
       ...(picture ? { description: `${String(read.description)}\n\n${PICTURED}` } : {}),
     }),
-    ...(epic ? { space: (model) => inEpic(model, epic, parentKind) } : {}),
+    ...(goal ? { space: (model) => inGoal(model, goal, parentKind) } : {}),
   })
   if (asking) await installQuestions(page, [asked()])
   if (picture)
@@ -170,7 +170,7 @@ export async function openHead(page: Page, head: Head = {}) {
   await expect(drawer.locator('.card-identity')).toBeVisible()
   await expect(drawer).toHaveCSS('transform', 'none')
   if (asking) await expect(drawer.locator('.card-question')).toBeVisible()
-  if (epic) await expect(drawer.getByText(epic, { exact: true }).first()).toBeVisible()
+  if (goal) await expect(drawer.getByText(goal, { exact: true }).first()).toBeVisible()
   if (picture)
     await expect(drawer.locator('button.rich-image img')).toHaveJSProperty('complete', true)
   return drawer

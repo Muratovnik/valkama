@@ -95,8 +95,8 @@ const outcome = useOutcomeDraft()
  */
 const waitingMove = computed(() => {
   const move = closing.value
-  const { state, summary } = props.item
-  return !move || move.key === state.key || state.is_terminal || summary ? null : move
+  const { open, state, summary } = props.item
+  return !move || move.key === state?.key || !open || summary ? null : move
 })
 const outcomeForm = ref<InstanceType<typeof InspectorOutcomeForm> | null>(null)
 const thread = ref<InstanceType<typeof InspectorThread> | null>(null)

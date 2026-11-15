@@ -38,7 +38,7 @@ describe('the order of the list', () => {
     const { wrapper } = rail(
       liveFrame([
         liveSpace('MAIN', [
-          liveRow('MAIN-4', { kind: 'epic', title: 'Earlier epic' }),
+          liveRow('MAIN-4', { kind: 'goal', title: 'Earlier goal' }),
           liveRow('MAIN-2', { state: 'waiting', updated_at: '2026-11-09T07:00:00Z' }),
           liveRow('MAIN-12', {
             parent: 'MAIN-4',
@@ -68,10 +68,10 @@ describe('the order of the list', () => {
     expect(wrapper.findAll(`${main} .nav-fold`)).toHaveLength(3)
     expect(within(wrapper, `${main} .nav-fold`)).toEqual(['MAIN-8', 'MAIN-9', 'MAIN-6'])
     expect(within(wrapper, `${main} .nav-tree-pinned`)).toEqual(['MAIN-20', 'MAIN-21'])
-    // The epic is no row of its own: its title is said on its item's second line.
+    // The goal is no row of its own: its title is said on its item's second line.
     expect(drawn(wrapper)).not.toContain('MAIN-4')
     expect(row(wrapper, 'MAIN-12').querySelector('.nav-row-detail')?.textContent).toMatch(
-      / · Earlier epic$/u,
+      / · Earlier goal$/u,
     )
     expect(wrapper.findAll('.nav-tree-space-name').map((name) => name.text())).toEqual([
       'MAIN · MAIN space',
@@ -353,7 +353,7 @@ describe('the count on a phone’s rail', () => {
   it('counts the rows to follow now, items and sessions, and nothing folded or pinned', async () => {
     const { store, wrapper } = rail(busyFrame())
     const count = () => wrapper.get('.nav-work-rail').attributes('aria-label')
-    // On view: the epic at work, MAIN-12, MAIN-31 and NEXT-5, the session in MAIN and the one
+    // On view: the goal at work, MAIN-12, MAIN-31 and NEXT-5, the session in MAIN and the one
     // outside any space. The held MAIN-13, the quiet rows and the pinned ones are not counted.
     expect(count()).toBe('Work going on now: 6')
     const dropped = busyFrame()

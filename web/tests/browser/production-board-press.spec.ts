@@ -87,14 +87,14 @@ test('a press on a tile in a lane just back in view opens its card, with focus h
 
 test('a press on what a lane says keeps focus in that lane, with no ring', async ({ page }) => {
   await board(page)
-  const epic = page.locator('.board-lane.open').first()
-  const { x, y } = await centre(epic.locator('.lane-counts'))
+  const goal = page.locator('.board-lane.open').first()
+  const { x, y } = await centre(goal.locator('.lane-counts'))
   await page.mouse.click(x, y)
-  await expect(epic).toBeFocused()
+  await expect(goal).toBeFocused()
   await page.keyboard.press('Shift')
-  await expect(epic).toHaveCSS('outline-style', 'none')
+  await expect(goal).toHaveCSS('outline-style', 'none')
   await page.keyboard.press('Tab')
-  expect(await epic.evaluate((node) => node.contains(document.activeElement))).toBe(true)
+  expect(await goal.evaluate((node) => node.contains(document.activeElement))).toBe(true)
 })
 
 /** The card is open and the keys that read it work, so focus is still inside it. */

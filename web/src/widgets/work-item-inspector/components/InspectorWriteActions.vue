@@ -2,8 +2,8 @@
 /**
  * The one thing to do about an item from its head, or why there is nothing.
  *
- * Who holds the item decides it. Nobody: «Взять», unless the item is an epic,
- * whose work is its tasks, or waits on an open blocker — then the reason stands
+ * Who holds the item decides it. Nobody: «Взять», unless the item is a goal or a
+ * stage, whose work is its tasks, or waits on an open blocker — then the reason stands
  * where the action would, so the head never offers a take its own facts argue
  * against. This client: «Отпустить». Another holder: a takeover, and the host asks
  * once before the override is sent; release on someone else's claim was a button
@@ -30,6 +30,8 @@ import { useI18n } from 'vue-i18n'
 
 import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.ts'
 
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
+
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
@@ -55,35 +57,39 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-type Action = 'claim' | 'release' | 'takeover' | 'stale' | 'epic' | 'waiting'
+type Action = 'claim' | 'release' | 'takeover' | 'stale' | 'container' | 'waiting'
 
 /** The reference of an open item this one waits on, or null for none. */
 const waitingOn = computed(() => openBlockers(props.item)[0]?.reference ?? null)
 
 const action = computed<Action | null>(() => {
   const { item } = props
-  if (item.state.is_terminal) return null
+  if (!item.open) return null
   if (item.claim_ref) {
     if (isWebAuthor(item.claim_ref)) return 'release'
     return item.claim_state === 'stale' ? 'stale' : 'takeover'
   }
-  if (item.container) return 'epic'
+  if (WORK_ITEM_TREE.isContainer(item)) return 'container'
   return waitingOn.value ? 'waiting' : 'claim'
 })
 
 const shown = computed(
   () =>
     action.value !== null &&
-    (props.reasons || (action.value !== 'epic' && action.value !== 'waiting')),
+    (props.reasons || (action.value !== 'container' && action.value !== 'waiting')),
 )
 
-/** A wait on a blocker carries the readiness facet's tone; an epic carries none. */
+/** A wait on a blocker carries the readiness facet's tone; a goal or a stage carries none. */
 const WAITING_TONE = semanticStatePresentation({
   dimension: 'work-item-readiness',
   state: 'blocked',
 }).tone
 const waitingText = computed(() =>
   t('workItem.facet.waiting', { reference: waitingOn.value ?? '' }),
+)
+/** A goal or a stage is worked through what it holds: the head says which it is. */
+const containerText = computed(() =>
+  t(props.item.kind === 'stage' ? 'workItem.head.stage' : 'workItem.head.goal'),
 )
 /** A stale claim is taken as a plain claim, but it is still a takeover to the reader. */
 const claimLabel = computed(() =>
@@ -132,17 +138,17 @@ function press() {
       />
     </p>
     <p
-      v-else-if="action === 'epic'"
+      v-else-if="action === 'container'"
       class="write-reason"
     >
       <VIcon
         class="write-reason-glyph"
-        data-kind="epic"
-        name="kind-epic"
+        name="kind-container"
+        :data-kind="item.kind"
         :size="14"
         :stroke-width="2"
       />
-      {{ t('workItem.head.epic') }}
+      {{ containerText }}
     </p>
     <VButton
       v-else

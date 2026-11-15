@@ -8,7 +8,7 @@ import { projectScope } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { test } from './test.ts'
 
-/** From now on every read of the space carries one more open item, under no epic. */
+/** From now on every read of the space carries one more open item, under no goal. */
 async function arriveWithOneMore(page: Page) {
   await page.route('**/api/planning?*', async (route) => {
     const response = planningReadFor(new URL(route.request().url()).searchParams)

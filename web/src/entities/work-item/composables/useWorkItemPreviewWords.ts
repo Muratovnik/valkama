@@ -43,7 +43,7 @@ const FACTS: readonly FacetId[] = ['holder', 'steps']
 
 const context = (subject: WorkItemPreviewSubject) => ({ waitingOn: subject.waitingOn ?? null })
 
-const staleClaim = (item: WorkItemBrief) => item.claim_state === 'stale' && !item.state.is_terminal
+const staleClaim = (item: WorkItemBrief) => item.claim_state === 'stale' && item.open
 
 const headMarks = (subject: WorkItemPreviewSubject, item: WorkItemBrief) =>
   surfaceMarks('preview', item, context(subject), HEAD)
@@ -59,7 +59,7 @@ export function useWorkItemPreviewWords() {
    * The year only when it is not this one, as the list says it.
    */
   function when(item: WorkItemBrief): { closed: boolean; iso: string; text: string } {
-    const closed = item.state.is_terminal && Boolean(item.closed_at)
+    const closed = !item.open && Boolean(item.closed_at)
     const iso = (closed ? item.closed_at : null) ?? item.updated_at
     const date = new Date(iso)
     if (Number.isNaN(date.valueOf())) return { closed, iso, text: iso }
@@ -88,10 +88,7 @@ export function useWorkItemPreviewWords() {
     const sentences = [
       ...headMarks(subject, item).map((mark) => said(mark)),
       item.title,
-      holder &&
-        (item.state.is_terminal
-          ? said(holder)
-          : t('workItem.preview.held', { holder: said(holder) })),
+      holder && (item.open ? t('workItem.preview.held', { holder: said(holder) }) : said(holder)),
       staleClaim(item) && t('workItem.lease.mark'),
       steps && t('workItem.preview.steps', stepCount(item)),
       subject.project && t('workItem.preview.project', { project: subject.project }),

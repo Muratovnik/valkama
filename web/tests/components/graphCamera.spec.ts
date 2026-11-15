@@ -26,6 +26,8 @@ vi.mock('@vue-flow/core', async (original) => ({
   useVueFlow: () => ({ ...camera, ...zoomLimits, dimensions, viewport }),
 }))
 
+import { stateOf } from '../fixtures/workItem.ts'
+
 /** The layouts under way, so a test waits for them to end rather than for a time. */
 const layouts = vi.hoisted(() => new Set<Promise<unknown>>())
 
@@ -68,12 +70,16 @@ const item: WorkItemBrief = {
   title: 'Readable work',
   kind: 'task',
   priority: 'medium',
-  state: { state_id: 'todo', key: 'todo', name: 'Todo', category: 'queued', is_terminal: false },
+  state: { state_id: 'todo', key: 'todo', name: 'Todo', category: 'ready', is_terminal: false },
   claim_ref: '',
   claim_state: null,
   parent_id: null,
-  container: false,
-  ready: true,
+  open: true,
+  container_state: null,
+  acceptance: null,
+  started_at: null,
+  waits_for: [],
+  workable: true,
   labels: [],
   source: '',
   checklist: [],
@@ -88,7 +94,7 @@ async function openGraph(items = [item], space = 'space-1') {
     props: {
       items,
       edges: [],
-      epicId: null,
+      scopeRootId: null,
       open: true,
       scopeKind: 'all',
       space,
@@ -206,8 +212,9 @@ describe('graph camera ownership', () => {
     const done = {
       ...item,
       work_item_id: 'done-1',
-      ready: false,
-      state: { ...item.state, name: 'Done', category: 'completed' as const, is_terminal: true },
+      workable: false,
+      open: false,
+      state: { ...stateOf(item), name: 'Done', category: 'completed' as const, is_terminal: true },
     }
     const graph = await openGraph([item, done])
     const flow = graph.findComponent({ name: 'VueFlow' }).vm

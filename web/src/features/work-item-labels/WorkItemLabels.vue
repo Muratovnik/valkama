@@ -63,7 +63,7 @@ async function openPicker() {
   field.value?.show()
 }
 
-async function closePicker(refocus: boolean) {
+async function dismissPicker(refocus: boolean) {
   editing.value = false
   if (!refocus) return
   await nextTick()
@@ -81,14 +81,14 @@ function keydown(event: KeyboardEvent) {
   if (event.key !== 'Escape' || event.defaultPrevented) return
   event.preventDefault()
   event.stopPropagation()
-  void closePicker(true)
+  void dismissPicker(true)
 }
 
 /** Focus gone somewhere else on the page: the picker goes, and the «+» stays where focus is not. */
 function focusout(event: FocusEvent) {
   const next = event.relatedTarget as Node | null
   if (next && (event.currentTarget as HTMLElement).contains(next)) return
-  void closePicker(false)
+  void dismissPicker(false)
 }
 </script>
 

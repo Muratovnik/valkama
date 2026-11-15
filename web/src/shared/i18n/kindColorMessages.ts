@@ -4,6 +4,13 @@ export const kindColorMessages = {
   en: {
     title: 'Task type colors',
     kept: 'Kept on this device: a browser and the desktop app each remember their own.',
+    // A row's word: a kind's own, but for the one colour a goal and a stage share.
+    name: {
+      bug: 'Bug',
+      container: 'Goal and stage',
+      improvement: 'Improvement',
+      task: 'Task',
+    },
     pick: '{kind} color',
     reset: 'Reset',
     resetName: 'Reset the {kind} color',
@@ -13,6 +20,12 @@ export const kindColorMessages = {
   ru: {
     title: 'Цвета типов задач',
     kept: 'Хранится на этом устройстве: браузер и приложение помнят его отдельно.',
+    name: {
+      bug: 'Дефект',
+      container: 'Цель и этап',
+      improvement: 'Улучшение',
+      task: 'Задача',
+    },
     pick: 'Цвет типа «{kind}»',
     reset: 'Сбросить',
     resetName: 'Сбросить цвет типа «{kind}»',

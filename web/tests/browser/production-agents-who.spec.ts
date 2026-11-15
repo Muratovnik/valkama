@@ -249,9 +249,9 @@ for (const width of [1440, 1024, 390]) {
     await page.screenshot(shot(info, `agents-roles-${width}.png`))
   })
 
-  test(`the way to an epic's own work stands whole at ${width}px`, async ({ page }, info) => {
+  test(`the way to a goal's own work stands whole at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 1000 })
-    // Six items do not fit in the page's address, so the link opens the epic's own work.
+    // Six items do not fit in the page's address, so the link opens the goal's own work.
     const usage = whoUsage()
     const [own] = usage.by_item
     await serve(page, {
@@ -266,7 +266,7 @@ for (const width of [1440, 1024, 390]) {
     })
     await page.goto(CARD)
     const section = await openAgents(page)
-    const link = section.getByRole('link', { name: 'Open the epic’s own work in Analytics' })
+    const link = section.getByRole('link', { name: 'Open its own work in Analytics' })
     await link.scrollIntoViewIfNeeded()
     const { box, list, size } = await link.evaluate((element) => {
       const lists = element.closest('.work-usage')?.querySelector('.work-usage-grid')
@@ -285,6 +285,6 @@ for (const width of [1440, 1024, 390]) {
       description: `R4 own ${width}px: list ${brief(list)}, link ${brief(box)} h ${tenth(box.bottom - box.top)} (${lines} line)`,
     })
     console.log(info.annotations.at(-1)?.description)
-    await expectNoSilentClipping(page, `the way to the epic's own work at ${width}px`)
+    await expectNoSilentClipping(page, `the way to the goal's own work at ${width}px`)
   })
 }

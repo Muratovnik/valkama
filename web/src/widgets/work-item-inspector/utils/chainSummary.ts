@@ -10,6 +10,7 @@ import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS, chainGroup, groupStateNames } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { NamedState } from '@/shared/lib/stateNames.ts'
+import type { StandingItem } from '@/shared/lib/useStateName.ts'
 
 /** How a state is named on screen: `useStateName`, or a plain stand-in where no screen is. */
 type StateName = (state: NamedState) => string
@@ -90,9 +91,9 @@ export function groupLabels(
 export function rowStateName(
   label: GroupLabel,
   member: ChainMember,
-  stateName: StateName,
+  standingName: (item: StandingItem) => string,
 ): string | null {
-  return label.state ? null : stateName(member.state)
+  return label.state ? null : standingName(member)
 }
 
 /** The day a series point names, read as a calendar date wherever the reader is. */

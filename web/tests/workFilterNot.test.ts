@@ -56,7 +56,7 @@ describe('which items a negated value keeps out', () => {
   test('a value negated keeps out every item that carries it, in each facet', () => {
     assert.deepEqual(passing({ text: '', not: { kind: ['bug'] } }), [2, 4])
     assert.deepEqual(passing({ text: '', not: { priority: ['high', 'low'] } }), [2])
-    assert.deepEqual(passing({ text: '', not: { category: ['backlog'] } }), [2, 3, 4])
+    assert.deepEqual(passing({ text: '', not: { category: ['triage'] } }), [2, 3, 4])
     // An item that carries one of the labels named is out.
     assert.deepEqual(passing({ text: '', not: { labels: ['ui'] } }), [3, 4])
   })
@@ -133,11 +133,11 @@ describe('a negated value in the address', () => {
       category: ['review'],
       labels: ['ui'],
       labelsMatch: 'any',
-      not: { kind: ['epic'], labels: ['agent', '%-odd,one'], holder: ['codex'] },
+      not: { kind: ['goal'], labels: ['agent', '%-odd,one'], holder: ['codex'] },
     }
     const { complete, state } = writeWorkFilter({ view: 'kanban' }, filter, MAX)
     assert.equal(complete, true)
-    assert.equal(state[WORK_FILTER_STATE_KEYS.kind], '%-epic')
+    assert.equal(state[WORK_FILTER_STATE_KEYS.kind], '%-goal')
     assert.equal(state[WORK_FILTER_STATE_KEYS.labels], '%any,ui,%-agent,%-%25-odd%2Cone')
     assert.deepEqual(readWorkFilter(route(state)), filter)
   })

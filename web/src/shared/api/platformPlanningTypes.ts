@@ -1,6 +1,6 @@
 /** Planning-owned space/work-item wire types. */
 
-import type { WorkflowState, WorkItem } from '@/shared/api/planningModel.ts'
+import type { ContainerState, WorkflowState, WorkItem } from '@/shared/api/planningModel.ts'
 import type { BindingState } from '@/shared/api/platformApiTypes.ts'
 import type { PlanningSpaceRef, WorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
@@ -18,11 +18,12 @@ export const PLANNING_WORK_ITEM_INTERFACE = 'valkama-planning-work-item' as cons
  */
 type PlanningWorkItemSummary = {
   claim_ref: string
+  container_state: ContainerState | null
   labels: string[]
   priority: WorkItem['priority']
   revision: number
-  state_category: WorkflowState['category']
-  state_key: string
+  state_category: WorkflowState['category'] | null
+  state_key: string | null
   title: string
   updated_at: string
   work_item_ref: WorkItemRef

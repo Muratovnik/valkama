@@ -41,7 +41,7 @@ const usage = computed(() => {
   return answer && saysAnything({ ...answer, seconds: answer.agent_seconds }) ? answer : null
 })
 const failed = computed(() => Boolean(read?.failed.value))
-/** An epic's rows read their own runs; when those fail, the rows say so and Retry reads both. */
+/** A goal's rows read their own runs; when those fail, the rows say so and Retry reads both. */
 const runsFailed = computed(() => Boolean(runs?.failed.value))
 const retry = () => {
   read?.read()

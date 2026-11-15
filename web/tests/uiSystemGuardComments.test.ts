@@ -11,7 +11,7 @@ const FILE = 'widgets/future/Panel.vue'
  * component it stands in: the template, the script or the style block.
  */
 const TRIGGERS: { code: string; part: 'script' | 'style' | 'template' }[] = [
-  { part: 'style', code: '.card { background: var(--color-kind-epic); }' },
+  { part: 'style', code: '.card { background: var(--color-kind-goal); }' },
   { part: 'template', code: '<select></select>' },
   { part: 'script', code: "import { SelectRoot } from 'reka-ui'" },
   { part: 'template', code: '<div role="listbox"></div>' },

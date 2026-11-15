@@ -14,8 +14,8 @@ export const identity = (n: number) =>
 /** A workflow of six states, as wide a board as a desktop column is narrow. */
 const STATES = (
   [
-    ['backlog', 'Backlog', 'backlog', false],
-    ['todo', 'Todo', 'queued', false],
+    ['backlog', 'Backlog', 'triage', false],
+    ['todo', 'Todo', 'ready', false],
     ['dev', 'Dev', 'active', false],
     ['review', 'Review', 'review', false],
     ['blocked', 'Blocked', 'blocked', false],
@@ -54,13 +54,14 @@ export function brief(number: number, state: ReturnType<typeof stateOf>, extra: 
     number,
     title: `Work item ${number} with a title long enough to take two lines`,
     state,
+    open: !state.is_terminal,
     kind: 'task',
     priority: 'medium',
     claim_ref: '',
     claim_state: null,
     parent_id: null,
     labels: [],
-    ready: false,
+    workable: false,
     checklist: [],
     revision: 1,
     ...extra,

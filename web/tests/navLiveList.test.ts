@@ -160,37 +160,37 @@ describe('the pinned items', () => {
   })
 })
 
-describe('an epic', () => {
+describe('a goal', () => {
   it('is said with its items’ rows and is no row while it is only their parent', () => {
     const list = liveList([
-      shown('MAIN-4', { kind: 'epic', title: 'Structured answers' }),
+      shown('MAIN-4', { kind: 'goal', title: 'Structured answers' }),
       shown('MAIN-12', { parent: 'MAIN-4', state: 'working' }),
       shown('MAIN-13', { parent: 'MAIN-4', state: 'held' }),
       shown('MAIN-20', { parent: 'MAIN-4', pinned: true }),
     ])
     const all = [...list.live, ...list.held, ...list.pinned]
     expect(names(all)).toEqual(['MAIN-12', 'MAIN-13', 'MAIN-20'])
-    expect(all.map((entry) => entry.kind === 'item' && entry.epic)).toEqual([
+    expect(all.map((entry) => entry.kind === 'item' && entry.goal)).toEqual([
       'Structured answers',
       'Structured answers',
       'Structured answers',
     ])
   })
 
-  it('is a row of its own when it is at work itself, and its own row has no epic', () => {
+  it('is a row of its own when it is at work itself, and its own row has no goal', () => {
     const list = liveList([
       shown('MAIN-4', {
-        kind: 'epic',
-        title: 'Epic',
+        kind: 'goal',
+        title: 'Goal',
         state: 'working',
         updated_at: '2026-11-09T01:00:00Z',
       }),
       shown('MAIN-12', { parent: 'MAIN-4', state: 'working', updated_at: '2026-11-09T02:00:00Z' }),
     ])
     expect(
-      list.live.map((entry) => entry.kind === 'item' && [entry.row.reference, entry.epic]),
+      list.live.map((entry) => entry.kind === 'item' && [entry.row.reference, entry.goal]),
     ).toEqual([
-      ['MAIN-12', 'Epic'],
+      ['MAIN-12', 'Goal'],
       ['MAIN-4', null],
     ])
   })

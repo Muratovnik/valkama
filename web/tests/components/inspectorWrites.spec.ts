@@ -54,7 +54,7 @@ describe('inspector writes and their refusals', () => {
     const writes = serveWrites({
       '/api/planning/work-item/transition': (body) =>
         body.force === true
-          ? json({ ...item, state: DONE, revision: 5 })
+          ? json({ ...item, open: false, state: DONE, revision: 5 })
           : json({ error: { code: 'workflow_guard', message: SUMMARY_REFUSAL } }, 409),
     })
     const wrapper = mountInspector(item)
@@ -100,7 +100,7 @@ describe('inspector writes and their refusals', () => {
     const writes = serveWrites({
       '/api/planning/work-item/transition': () =>
         summary
-          ? json({ ...item, state: DONE, revision: 6 })
+          ? json({ ...item, open: false, state: DONE, revision: 6 })
           : json({ error: { code: 'workflow_guard', message: SUMMARY_REFUSAL } }, 409),
       '/api/planning/work-item/report': (body) => {
         summary = body.report

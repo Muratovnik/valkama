@@ -27,11 +27,11 @@ function serve(payload: unknown, status = 200) {
 
 describe('an item’s usage', () => {
   it('is read on the planning prefix, by the item and the scope, with no data scope', async () => {
-    const asked = serve(usageAnswer(richUsage({ scope: 'epic' })))
-    const usage = await fetchItemUsage('MAIN-12', 'epic')
+    const asked = serve(usageAnswer(richUsage({ scope: 'tree' })))
+    const usage = await fetchItemUsage('MAIN-12', 'tree')
     expect(asked.map((url) => url.pathname)).toEqual(['/api/planning/work-item/usage'])
-    expect(Object.fromEntries(asked[0].searchParams)).toEqual({ id: 'MAIN-12', scope: 'epic' })
-    expect(usage.scope).toBe('epic')
+    expect(Object.fromEntries(asked[0].searchParams)).toEqual({ id: 'MAIN-12', scope: 'tree' })
+    expect(usage.scope).toBe('tree')
   })
 
   it('keeps a kind nobody reported null', async () => {

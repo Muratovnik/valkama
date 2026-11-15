@@ -36,7 +36,7 @@ const PRIORITIES = [
 /** The kinds in the model's order; a plain task has no glyph. */
 const KINDS = [
   { word: 'Bug', glyph: true },
-  { word: 'Epic', glyph: true },
+  { word: 'Goal', glyph: true },
   { word: 'Improvement', glyph: true },
   { word: 'Task', glyph: false },
 ]

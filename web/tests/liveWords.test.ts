@@ -34,17 +34,17 @@ const words: Words = {
       : i18n.global.t(key, values ?? {}, plural),
 }
 
-/** An item of the frame, with the epic of its parent when it has one. */
-function item(reference: string, epic: string | null, overrides = {}): ItemEntry {
+/** An item of the frame, with the goal of its parent when it has one. */
+function item(reference: string, goal: string | null, overrides = {}): ItemEntry {
   return {
-    epic,
+    goal,
     kind: 'item',
     row: { ...liveRow(reference, overrides), fading: false } as ItemEntry['row'],
   }
 }
 
 describe('the hint a row adds to what it draws', () => {
-  it('says a one-line row’s state with how long, and not its epic, which the row draws', () => {
+  it('says a one-line row’s state with how long, and not its goal, which the row draws', () => {
     const entry = item('MAIN-1', 'Structured answers', {
       state: 'working',
       since: ago(5 * MINUTE),
@@ -53,7 +53,7 @@ describe('the hint a row adds to what it draws', () => {
     expect(rowHidden(words, entry, NOW, 1)).toBe('working · 5\u{A0}min')
   })
 
-  it('says nothing for a two-line row, which draws its state and its epic on its second line', () => {
+  it('says nothing for a two-line row, which draws its state and its goal on its second line', () => {
     const entry = item('MAIN-1', 'Structured answers', {
       state: 'working',
       since: ago(5 * MINUTE),
@@ -69,7 +69,7 @@ describe('the hint a row adds to what it draws', () => {
 
   it('says that a row the frame dropped ended its work, since its row draws no state', () => {
     const entry: ItemEntry = {
-      epic: 'Structured answers',
+      goal: 'Structured answers',
       kind: 'item',
       row: {
         ...liveRow('MAIN-5', { state: 'working', since: ago(5 * MINUTE), agents: 2 }),
@@ -118,7 +118,7 @@ describe('the hint a row adds to what it draws', () => {
 })
 
 describe('the accessible name of a row', () => {
-  it('keeps every fact the row says: its number, title, epic, state, how long and agents', () => {
+  it('keeps every fact the row says: its number, title, goal, state, how long and agents', () => {
     const entry = item('MAIN-1', 'Structured answers', {
       state: 'working',
       since: ago(5 * MINUTE),

@@ -90,8 +90,8 @@ test('a choice is made, closes the menu, gives focus back and is checked next ti
     'aria-checked',
     'true',
   )
-  await page.getByRole('menuitemradio', { name: 'Epic' }).click()
-  await expect(page.locator('.menu-said')).toHaveText('group epic')
+  await page.getByRole('menuitemradio', { name: 'Goal' }).click()
+  await expect(page.locator('.menu-said')).toHaveText('group goal')
   await expect(trigger).toBeFocused()
 })
 

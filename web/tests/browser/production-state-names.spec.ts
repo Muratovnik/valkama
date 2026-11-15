@@ -61,7 +61,7 @@ const brief = (number: number, key: string) =>
     number,
     title: `Work in ${key}`,
     state: stateOf(key),
-    ready: false,
+    workable: false,
     claim_ref: '',
     claim_state: null,
     parent_id: null,
@@ -85,7 +85,7 @@ function finderAnswer() {
       title: item.title,
       kind: item.kind,
       priority: item.priority,
-      state: { name: item.state.name, category: item.state.category, is_terminal: false },
+      state: { name: item.state?.name, category: item.state?.category, is_terminal: false },
       claim_ref: '',
     },
   })

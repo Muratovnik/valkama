@@ -41,7 +41,7 @@ export const MenuSurface = defineComponent({
         value: grouping.value,
         options: [
           { value: 'none', label: 'Nothing' },
-          { value: 'epic', label: 'Epic' },
+          { value: 'goal', label: 'Goal' },
           { value: 'state', label: 'State' },
         ],
         select: (value) => {

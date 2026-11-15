@@ -18,6 +18,7 @@ import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shar
 import {
   blankable,
   CLAIM_STATES,
+  CONTAINER_STATES,
   linkEndState,
   linkEndStateSaid,
   readRefusal,
@@ -30,7 +31,7 @@ import {
 import { enumField, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
-const CHAIN_SCOPES = ['chain', 'epic'] as const
+const CHAIN_SCOPES = ['chain', 'tree'] as const
 export type ChainScope = (typeof CHAIN_SCOPES)[number]
 
 const count = () => positiveInt(true)
@@ -48,7 +49,7 @@ const rootSchema = strictObject({
    * How many members each scope holds, whichever was asked. The root's children are
    * always members of its chain, so equal totals mean both scopes answer the same work.
    */
-  totals: strictObject({ chain: count(), epic: count() }),
+  totals: strictObject({ chain: count(), tree: count() }),
 })
 
 const originSchema = strictObject({
@@ -70,18 +71,22 @@ const memberSchema = strictObject({
   work_item_id: boundedText(UUID, 36),
   reference: reference(),
   title: title(),
+  kind: enumField(WORK_ITEM_KINDS),
+  /** Null for an accepted open goal or stage, which derives `container_state` instead. */
   state: strictObject({
     key: boundedText(STATE_KEY, 32),
     name: title(),
     category: enumField(STATE_CATEGORIES),
     is_terminal: z.boolean(),
-  }),
+  }).nullable(),
+  open: z.boolean(),
+  container_state: enumField(CONTAINER_STATES).nullable(),
   claim_ref: blankable(128),
   claim_state: enumField(CLAIM_STATES).nullable(),
   parent_reference: reference().nullable(),
   created_at: boundedText(ISO, 96),
   closed_at: boundedText(ISO, 96).nullable(),
-  ready: z.boolean(),
+  workable: z.boolean(),
   /** The member's place in its space's order of work, 1 first: compare, never count. */
   rank: positiveInt(),
 })
@@ -105,8 +110,11 @@ const chainSchema = strictObject({
   total: count(),
   closed: count(),
   open: count(),
-  ready: count(),
+  workable: count(),
+  /** The members that stand in a state, by its category; accepted open containers are not here. */
   by_category: z.partialRecord(enumField(STATE_CATEGORIES), count()),
+  /** The accepted open goals and stages among the members, by what each derives. */
+  by_container_state: z.partialRecord(enumField(CONTAINER_STATES), count()),
   // A chain is as large as the work it grew into; the server caps none of these.
   origins: z.array(originSchema),
   series: z

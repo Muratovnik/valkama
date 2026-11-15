@@ -127,6 +127,7 @@ test('planning accepts only sparse exact work-item summaries', () => {
     title: 'Acceptance /context all',
     state_key: 'dev',
     state_category: 'active',
+    container_state: null,
     priority: 'high',
     labels: ['platform'],
     claim_ref: 'codex',

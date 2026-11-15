@@ -28,9 +28,7 @@ export interface Executor {
 }
 
 /** The part of an item an executor is read from. */
-type Claim = Partial<Pick<WorkItemBrief, 'claim_ref' | 'claim_state'>> & {
-  state: { is_terminal?: boolean }
-}
+type Claim = Partial<Pick<WorkItemBrief, 'claim_ref' | 'claim_state'>> & Pick<WorkItemBrief, 'open'>
 
 /**
  * The executor behind an open item's claim, or null where none stands behind it: a live
@@ -41,7 +39,7 @@ type Claim = Partial<Pick<WorkItemBrief, 'claim_ref' | 'claim_state'>> & {
  */
 export function executorOf(item: Claim, live: LiveWork | null | undefined): Executor | null {
   const holder = item.claim_ref ?? ''
-  if (!holder || item.state.is_terminal) return null
+  if (!holder || !item.open) return null
   const stale = item.claim_state === 'stale'
   const doing = live ? liveSign(live.state, live.state === 'waiting' && live.asks) : null
   const session = stale || doing === null || doing === 'quiet' ? null : doing

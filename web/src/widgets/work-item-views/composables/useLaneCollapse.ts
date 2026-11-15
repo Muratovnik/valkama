@@ -1,7 +1,7 @@
 /**
  * Which board lanes the operator folded or opened, per planning space.
  *
- * A lane starts folded when nothing in it is open, so a board of forty epics
+ * A lane starts folded when nothing in it is open, so a board of forty goals
  * opens on the dozen with work left. Only what the operator chose against that
  * is kept (`useFoldChoices`): a lane nobody touched follows its work and opens
  * again when work arrives, and a choice survives a reload.

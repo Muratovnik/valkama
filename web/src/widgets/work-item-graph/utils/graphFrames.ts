@@ -2,7 +2,7 @@
  * Which frames a space's graph draws, what each holds, and which lines run
  * between what is drawn.
  *
- * An epic — or any item that grew children — is drawn as a frame round its
+ * A goal or a stage is drawn as a frame round its
  * work rather than as a card, and the work under none has a frame of its own,
  * so every open item stands somewhere on the field. A frame folds to its header
  * alone. Whether it starts folded follows from its structure only — how much
@@ -11,26 +11,28 @@
  * inside it has nothing to unfold, so it stays folded whatever was stored for
  * it, until the view can draw something there.
  *
- * A link is drawn between the drawn ends it reaches: a card itself, an epic's
+ * A link is drawn between the drawn ends it reaches: a card itself, a goal's
  * frame, or the folded frame a card stands in. Several links between one pair
  * of drawn ends are one line, solid when any of them blocks. A link between a
  * card and its own frame is not drawn — the frame already says so — nor one
  * whose end is hidden finished work or lives in another space.
  *
- * The counts of a frame describe its epic, not the view: every item under it,
+ * The counts of a frame describe its goal, not the view: every item under it,
  * open and closed, whatever is drawn or a filter lets through.
  */
 
-import { NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { FrameProgress } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { RoutedEdge } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import { chainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 /**
- * A frame holding more open work than this starts folded, and so does an epic
- * holding none: the field opens on the links of the epics in between, and a
+ * A frame holding more open work than this starts folded, and so does a goal
+ * holding none: the field opens on the links of the goals in between, and a
  * large frame shows its progress in its header instead. The work under none
  * with nothing open folds only past this many drawn cards, so «All» on a space
  * with a few finished items draws them.
@@ -54,10 +56,10 @@ interface ProjectedFrame {
   cards: WorkItemBrief[]
   /** Whether it is folded when the operator chose nothing. */
   defaultFolded: boolean
-  epic: WorkItemBrief | null
   /** Unfolding it would draw a card or a frame standing in it. */
   foldable: boolean
   folded: boolean
+  goal: WorkItemBrief | null
   id: string
   /** Open and closed work under it, nested frames' included. */
   members: string[]
@@ -80,10 +82,10 @@ export interface FrameProjection {
   key: string
 }
 
-/** An item drawn as a frame: an epic, or anything that grew children. */
-const isFrame = (item: WorkItemBrief) => item.container || item.kind === 'epic'
+/** An item drawn as a frame: a goal or a stage, as the tree of work reads one. */
+const isFrame = (item: WorkItemBrief) => WORK_ITEM_TREE.isContainer(item)
 
-const open = (item: WorkItemBrief) => !item.state.is_terminal
+const open = (item: WorkItemBrief) => WORK_ITEM_TREE.isOpen(item)
 
 const byNumber = (left: WorkItemBrief, right: WorkItemBrief) => left.number - right.number
 
@@ -91,8 +93,9 @@ function progressOf(members: readonly WorkItemBrief[]): FrameProgress {
   const progress = { active: 0, ahead: 0, blocked: 0, done: 0, review: 0, total: members.length }
   for (const member of members) {
     const group = chainGroup(member)
-    if (group === 'queued' || group === 'backlog') progress.ahead += 1
-    else progress[group] += 1
+    if (group === 'active' || group === 'review' || group === 'blocked' || group === 'done')
+      progress[group] += 1
+    else progress.ahead += 1
   }
   return progress
 }
@@ -104,14 +107,14 @@ function frameTree(items: readonly WorkItemBrief[]) {
   )
   const parentOf = (item: WorkItemBrief) =>
     item.parent_id !== null && frames.has(item.parent_id) ? item.parent_id : null
-  /** The frame an item stands in: its epic, or the work under none. */
-  const home = (item: WorkItemBrief) => parentOf(item) ?? NO_EPIC_FRAME
+  /** The frame an item stands in: its goal, or the work under none. */
+  const home = (item: WorkItemBrief) => parentOf(item) ?? NO_PARENT_FRAME
   const lineage = (frameId: string): string[] => {
     const chain: string[] = []
     for (let at: string | null = frameId; at !== null && !chain.includes(at);) {
       chain.push(at)
-      const epic = frames.get(at)
-      at = epic ? parentOf(epic) : null
+      const goal = frames.get(at)
+      at = goal ? parentOf(goal) : null
     }
     return chain
   }
@@ -132,8 +135,8 @@ type FrameTree = ReturnType<typeof frameTree>
 /**
  * Every frame the field could draw, folded or open, with the cards each draws.
  * Under a filter only a frame the filter found something in is drawn, as a
- * board lane is; without one, a frame with open work, an open epic, and in
- * «All» every epic.
+ * board lane is; without one, a frame with open work, an open goal, and in
+ * «All» every goal.
  */
 function frameCandidates(
   input: FrameProjectionInput,
@@ -141,25 +144,28 @@ function frameCandidates(
   drawable: (item: WorkItemBrief) => boolean,
 ): Map<string, ProjectedFrame> {
   const filtered = Boolean(input.shown)
-  const ids = [...tree.frames.keys(), ...(tree.members.has(NO_EPIC_FRAME) ? [NO_EPIC_FRAME] : [])]
+  const ids = [
+    ...tree.frames.keys(),
+    ...(tree.members.has(NO_PARENT_FRAME) ? [NO_PARENT_FRAME] : []),
+  ]
   const candidates = new Map<string, ProjectedFrame>()
   for (const id of ids) {
-    const epic = tree.frames.get(id) ?? null
+    const goal = tree.frames.get(id) ?? null
     const members = tree.members.get(id) ?? []
     const visible = members.filter((item) => drawable(item))
     const openWork = visible.filter((item) => open(item)).length
     const wanted = filtered
       ? visible.length > 0
-      : openWork > 0 || input.showDone || (epic !== null && open(epic))
+      : openWork > 0 || input.showDone || (goal !== null && open(goal))
     if (!wanted) continue
-    // An epic with nothing open folds; the work under none is no epic to
+    // A goal with nothing open folds; the work under none is no goal to
     // summarise, so in «All» it folds only when its finished work is large too.
-    const idle = epic !== null || visible.length === 0 || visible.length > FOLD_ABOVE
+    const idle = goal !== null || visible.length === 0 || visible.length > FOLD_ABOVE
     const defaultFolded = openWork > FOLD_ABOVE || (openWork === 0 && idle)
     candidates.set(id, {
       id,
-      epic,
-      parentId: epic ? tree.parentOf(epic) : null,
+      goal,
+      parentId: goal ? tree.parentOf(goal) : null,
       defaultFolded,
       folded: input.choices?.[id] ?? defaultFolded,
       foldable: true,
@@ -268,9 +274,9 @@ export function frameProjection(input: FrameProjectionInput): FrameProjection {
   return { frames, cards, edges, key: structureKey(input.showDone, frames, edges) }
 }
 
-/** Epics in the order the space numbers them, the work under none last. */
+/** Goals in the order the space numbers them, the work under none last. */
 function frameRank(frame: ProjectedFrame): number {
-  return frame.epic?.number ?? Number.POSITIVE_INFINITY
+  return frame.goal?.number ?? Number.POSITIVE_INFINITY
 }
 
 function linkOrder(left: { from: string; to: string }, right: { from: string; to: string }) {

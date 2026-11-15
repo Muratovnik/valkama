@@ -1,27 +1,41 @@
 /**
  * The colour of each work item kind, as the owner set it.
  *
- * A kind's colour is one custom property, `--color-kind-<kind>`, whose default is
- * the stylesheet's. A choice lands on the document's root over it, so every mark
+ * A colour is one custom property, `--color-kind-<colour>`, whose default is the
+ * stylesheet's. A choice lands on the document's root over it, so every mark
  * follows at once without being drawn again, and taking the choice off is what
  * brings the default back. Only a choice is stored: a default moved in a later
  * build reaches everyone who never chose.
+ *
+ * A goal and a stage are one colour, as they are one glyph: a stage is a goal
+ * standing under another. A stored colour of a kind this build does not have is
+ * not read, so its colour starts from the default.
  */
-import { WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
+import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
-type WorkItemKind = (typeof WORK_ITEM_KINDS)[number]
+type WorkItemKind = WorkItemBrief['kind']
 
-/** The kinds the owner has chosen a colour for; the others keep the default. */
-export type KindColors = Partial<Record<WorkItemKind, string>>
+/** The colours a choice is made for, each the colour of the kinds it lists. */
+export const KIND_COLOR_KINDS = {
+  bug: ['bug'],
+  container: ['goal', 'stage'],
+  improvement: ['improvement'],
+  task: ['task'],
+} as const satisfies Record<string, readonly WorkItemKind[]>
+export type KindColor = keyof typeof KIND_COLOR_KINDS
+const KIND_COLOR_KEYS = Object.keys(KIND_COLOR_KINDS) as KindColor[]
+
+/** The colours the owner has chosen; the others keep the default. */
+export type KindColors = Partial<Record<KindColor, string>>
 
 /**
- * The token each kind renders as.
+ * The token each colour renders as.
  *
  * @public read as source text by `scripts/sync-tokens.mjs`, which no import graph can see.
  */
-const KIND_TOKENS: Record<WorkItemKind, string> = {
+const KIND_TOKENS: Record<KindColor, string> = {
   bug: '--color-kind-bug',
-  epic: '--color-kind-epic',
+  container: '--color-kind-container',
   improvement: '--color-kind-improvement',
   task: '--color-kind-task',
 }
@@ -30,9 +44,9 @@ const KIND_TOKENS: Record<WorkItemKind, string> = {
  * The defaults as literals, for a colour field, which resolves no `var()`. This is a
  * mirror of `tokens.css`, which `sync-tokens.mjs` rewrites: the palette to edit is there.
  */
-export const DEFAULT_KIND_COLORS: Record<WorkItemKind, string> = {
+export const DEFAULT_KIND_COLORS: Record<KindColor, string> = {
   bug: '#ff9db5',
-  epic: '#cfa0ff',
+  container: '#cfa0ff',
   improvement: '#7defdc',
   task: '#b4c6e0',
 }
@@ -46,19 +60,19 @@ const LIGHTEST_MARK_GROUND = '#464646'
 
 const RGB_HEX = /^#[0-9a-f]{6}$/iu
 
-/** What was stored, kept only where it is a `#rrggbb` of a kind this build has. */
+/** What was stored, kept only where it is a `#rrggbb` of a colour this build has. */
 export function readKindColors(raw: unknown): KindColors {
   const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
   const colors: KindColors = {}
-  for (const kind of WORK_ITEM_KINDS) {
-    const value = source[kind]
-    if (typeof value === 'string' && RGB_HEX.test(value)) colors[kind] = value.toLowerCase()
+  for (const color of KIND_COLOR_KEYS) {
+    const value = source[color]
+    if (typeof value === 'string' && RGB_HEX.test(value)) colors[color] = value.toLowerCase()
   }
   return colors
 }
 
-export function kindColor(colors: KindColors, kind: WorkItemKind): string {
-  return colors[kind] ?? DEFAULT_KIND_COLORS[kind]
+export function kindColor(colors: KindColors, color: KindColor): string {
+  return colors[color] ?? DEFAULT_KIND_COLORS[color]
 }
 
 /** Puts the choices on the root, and takes off whatever is no longer chosen. */
@@ -66,10 +80,10 @@ export function applyKindColors(
   colors: KindColors,
   root: HTMLElement = document.documentElement,
 ): void {
-  for (const kind of WORK_ITEM_KINDS) {
-    const color = colors[kind]
-    if (color) root.style.setProperty(KIND_TOKENS[kind], color)
-    else root.style.removeProperty(KIND_TOKENS[kind])
+  for (const key of KIND_COLOR_KEYS) {
+    const color = colors[key]
+    if (color) root.style.setProperty(KIND_TOKENS[key], color)
+    else root.style.removeProperty(KIND_TOKENS[key])
   }
 }
 

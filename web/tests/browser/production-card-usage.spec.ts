@@ -221,18 +221,18 @@ function workUnderWay(chain: ReturnType<typeof largeChainHere>) {
   return member
 }
 
-test('an epic reads its whole scope, and each member of its chain says its share', async ({
+test('a goal reads its whole scope, and each member of its chain says its share', async ({
   page,
 }) => {
   const chain = largeChainHere()
   const member = workUnderWay(chain)
-  await installBackend(page, { card: (read) => ({ ...read, kind: 'epic' }) })
+  await installBackend(page, { card: (read) => ({ ...read, kind: 'goal' }) })
   await serve(page, chain)
   const asked = await serveUsage(
     page,
     fulfil(
       richUsage({
-        scope: 'epic',
+        scope: 'tree',
         by_item: [
           ...richUsage().by_item,
           {
@@ -250,10 +250,10 @@ test('an epic reads its whole scope, and each member of its chain says its share
     ),
   )
   await page.goto(CARD)
-  await expect(line(page)).toContainText('Work on the epic')
+  await expect(line(page)).toContainText('Work with its contents')
   // The whole scope for the summary and the chain; the item's own runs for the agents' rows.
   expect(asked.map((url) => url.searchParams.get('scope'))).toEqual(
-    expect.arrayContaining(['epic', 'item']),
+    expect.arrayContaining(['tree', 'item']),
   )
   await showChain(page)
   const row = page.locator(`.drawer .chain-row[data-reference="${member.reference}"]`)
@@ -265,7 +265,7 @@ test('an epic reads its whole scope, and each member of its chain says its share
 })
 
 /**
- * The Agents tab of an item three agents worked on, said the way the read says the owner's epic:
+ * The Agents tab of an item three agents worked on, said the way the read says the owner's goal:
  * the work split by effort into rows of one role and class, and rows of under a minute with no
  * tokens. The figures are synthetic.
  */
@@ -398,7 +398,7 @@ test('at 1440×900 the tab shows the figures and the way to Analytics without a 
   await expect(rows).toHaveCount(3)
   await expect(head).not.toContainText(/under a minute\s*no data/u)
   // The two halves of the subagent's work are one row again, as much as the read's whole row.
-  await expect(rows.nth(0)).toContainText('Subagent · bero')
+  await expect(rows.nth(0)).toContainText('Subagent · build')
   await expect(rows.nth(0)).toContainText('8\u{A0}h\u{A0}20\u{A0}min')
   await expect(rows.nth(0)).toContainText('≈\u{A0}$180.00')
   // The one line of notes stands under the link, and every line starts at one edge.

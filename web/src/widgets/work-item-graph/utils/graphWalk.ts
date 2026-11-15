@@ -10,8 +10,8 @@
  * left to right.
  *
  * A target is one button with one action: a card, or one of the two in a
- * frame's header — fold or open on its left, and the epic itself across the
- * rest. The work under none has only the first: there is no epic to open.
+ * frame's header — fold or open on its left, and the goal itself across the
+ * rest. The work under none has only the first: there is no goal to open.
  */
 
 import type { PlacedFrame, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
@@ -39,7 +39,7 @@ const FOLD_TARGET_WIDTH = 44
 
 /** The header button that folds or opens frame `frameId`. */
 export const foldTarget = (frameId: string) => `frame:${frameId}:fold`
-/** The header button that opens frame `frameId`'s epic. */
+/** The header button that opens frame `frameId`'s goal. */
 export const frameTarget = (frameId: string) => `frame:${frameId}`
 /** The frame whose fold button `id` is, or null when it is no fold. */
 export const foldOf = (id: string): string | null => /^frame:(.+):fold$/u.exec(id)?.[1] ?? null
@@ -67,16 +67,16 @@ export function headerBox(frame: PlacedFrame): Box {
 /**
  * Whether a frame's fold button is drawn and is a target. A frame with nothing
  * to unfold has none. Zoomed out to the overview a header is a band, and its
- * fold is hidden where the epic's own button stands beside it; a header with no
+ * fold is hidden where the goal's own button stands beside it; a header with no
  * other button — the work under none — keeps it, or a field of that frame alone
  * would take no focus at all. The header's view reads this, so what is drawn and
  * what the keyboard can reach are one rule.
  */
 export function foldIsTarget(
-  frame: Pick<PlacedFrame, 'epic' | 'foldable'>,
+  frame: Pick<PlacedFrame, 'goal' | 'foldable'>,
   overview: boolean,
 ): boolean {
-  return frame.foldable && (!overview || frame.epic === null)
+  return frame.foldable && (!overview || frame.goal === null)
 }
 
 /**
@@ -109,7 +109,7 @@ export function walkTargets(
       width: FOLD_TARGET_WIDTH,
     }
     const folds = foldIsTarget(frame, overview) ? [fold] : []
-    if (frame.epic === null) return folds
+    if (frame.goal === null) return folds
     const rest = header.width - FOLD_TARGET_WIDTH
     const open = { ...header, id: frameTarget(frame.id), frameId: frame.id }
     return [...folds, { ...open, x: header.x + FOLD_TARGET_WIDTH, width: rest }]

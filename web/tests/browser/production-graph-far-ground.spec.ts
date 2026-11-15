@@ -1,7 +1,7 @@
 /**
- * Far out, the ground of an open frame is its epic's target. From a distance a header is a
+ * Far out, the ground of an open frame is its goal's target. From a distance a header is a
  * few pixels and the frame round it is what the eye and the hand find, so a press there
- * opens the epic as the header's own button does; a drag from there still moves the field.
+ * opens the goal as the header's own button does; a drag from there still moves the field.
  * The cards stay on top, a frame inside a frame answers for itself, nothing new takes Tab,
  * and nearer in the ground is field again.
  *
@@ -111,7 +111,7 @@ async function nearerOn(page: Page, frame: Locator, zoom: number) {
 
 const openGround = (page: Page) => page.locator('.graph-frame.far:not(.folded):not(.nested)')
 
-/** An open frame with an epic whose ground stands in sight, and where. */
+/** An open frame with a goal whose ground stands in sight, and where. */
 async function groundInSight(frames: Locator) {
   for (const candidate of await frames.all()) {
     if ((await candidate.locator('button.graph-frame-open').count()) === 0) continue
@@ -123,7 +123,7 @@ async function groundInSight(frames: Locator) {
   throw new Error('no open frame shows its ground')
 }
 
-test('a press on an open frame’s ground far out opens its epic', async ({ page }) => {
+test('a press on an open frame’s ground far out opens its goal', async ({ page }) => {
   await farField(page)
   const { frame, id, point } = await groundInSight(openGround(page))
   await page.mouse.move(point.x, point.y)
@@ -133,7 +133,7 @@ test('a press on an open frame’s ground far out opens its epic', async ({ page
   await expect.poll(() => openedReference(page)).toBe(referenceOf(id))
 })
 
-test('a press on a frame inside a frame opens that frame’s epic, and its parent’s ground its parent’s', async ({
+test('a press on a frame inside a frame opens that frame’s goal, and its parent’s ground its parent’s', async ({
   page,
 }) => {
   await farField(page)
@@ -228,7 +228,7 @@ test('a drag from the ground moves the field and opens nothing', async ({ page }
   expect(openedReference(page)).toBeNull()
 })
 
-test('the work under no epic has nothing to open, and its ground stays field', async ({ page }) => {
+test('the work under no goal has nothing to open, and its ground stays field', async ({ page }) => {
   await openBroadField(page, 1500)
   await fitWhole(page)
   await expect(page.locator('.graph-frame.far').first()).toBeVisible()
@@ -289,7 +289,7 @@ async function fingerTap(page: Page, point: { x: number; y: number }) {
 test.describe('under a finger', () => {
   test.use({ hasTouch: true })
 
-  test('a tap on the ground opens the epic at a phone’s width, with a card in the finger’s reach', async ({
+  test('a tap on the ground opens the goal at a phone’s width, with a card in the finger’s reach', async ({
     page,
   }) => {
     await farField(page, 390)

@@ -36,7 +36,7 @@ interface MoveOptions {
 export function usePlanningMoves(options: MoveOptions) {
   const pending = shallowRef<BoardMove[]>([])
   /** What the store said about an item after a move, until the next read says it. */
-  const answered = new Map<string, { revision: number; state: string }>()
+  const answered = new Map<string, { revision: number; state: string | null }>()
   let queue: Promise<void> = Promise.resolve()
   let refused = false
 
@@ -56,7 +56,7 @@ export function usePlanningMoves(options: MoveOptions) {
     if (item === undefined) return
     const known = answered.get(move.reference)
     const revision = Math.max(item.revision, known?.revision ?? item.revision)
-    const reorder = (known?.state ?? item.state.key) === move.state
+    const reorder = (known ? known.state : (item.state?.key ?? null)) === move.state
     if (reorder && move.rank === undefined) return
     try {
       const answer =
@@ -68,7 +68,7 @@ export function usePlanningMoves(options: MoveOptions) {
               rank: move.rank,
               expected_revision: revision,
             })
-      answered.set(move.reference, { revision: answer.revision, state: answer.state.key })
+      answered.set(move.reference, { revision: answer.revision, state: answer.state?.key ?? null })
     } catch (error) {
       refused = true
       options.notice(error instanceof Error ? error.message : String(error))

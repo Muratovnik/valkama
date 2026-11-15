@@ -2,12 +2,12 @@
  * A long-running chain as the graph receives it: six hundred and nine members,
  * four in five of them closed, with the shape a real one grows into.
  *
- * The root epic closed with its 270 children done. One child led to a second
- * epic, still open, that collected 240 items of its own (90 open); another led to
- * a follow-up epic that has closed while 3 of its 12 children are still open; a
- * third led to an epic that closed with all 8 of its children done; and 76 more
+ * The root goal closed with its 270 children done. One child led to a second
+ * goal, still open, that collected 240 items of its own (90 open); another led to
+ * a follow-up goal that has closed while 3 of its 12 children are still open; a
+ * third led to a goal that closed with all 8 of its children done; and 76 more
  * items (26 open) were discovered from the root's children and filed under no
- * epic. That is 609 members: 489 closed and 120 open.
+ * goal. That is 609 members: 489 closed and 120 open.
  *
  * Built rather than written out, so the counts above are arithmetic a reader can
  * check, and so a test can ask what the default leaves out without a 609-row
@@ -17,14 +17,14 @@ import type { GraphScope, GraphSource } from '@/widgets/work-item-graph/utils/gr
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
-const OPEN: WorkItemBrief['state'] = {
+const OPEN: NonNullable<WorkItemBrief['state']> = {
   state_id: 'todo',
   key: 'todo',
   name: 'Todo',
-  category: 'queued',
+  category: 'ready',
   is_terminal: false,
 }
-const DONE: WorkItemBrief['state'] = {
+const DONE: NonNullable<WorkItemBrief['state']> = {
   state_id: 'done',
   key: 'done',
   name: 'Done',
@@ -46,14 +46,18 @@ function brief(
     reference: `LONG-${n}`,
     number: n,
     title: `Chain item ${n}`,
-    kind: container ? 'epic' : 'task',
+    kind: container ? 'goal' : 'task',
     priority: 'medium',
     state: closed ? DONE : OPEN,
     claim_ref: '',
     claim_state: null,
     parent_id: parent,
-    container,
-    ready: !closed,
+    open: !closed,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: !closed,
     labels: [],
     source: '',
     checklist: [],
@@ -70,29 +74,29 @@ function batch(start: number, count: number, open: number, parent: string | null
 }
 
 export function longChainSpace(): {
-  closedEpic: WorkItemBrief
-  doneEpic: WorkItemBrief
-  openEpic: WorkItemBrief
+  closedGoal: WorkItemBrief
+  doneGoal: WorkItemBrief
+  openGoal: WorkItemBrief
   root: WorkItemBrief
   scope: GraphScope
   source: GraphSource
 } {
   const root = brief(1, true, null, true)
   const children = batch(10, 270, 0, root.work_item_id)
-  const openEpic = brief(2, false, null, true)
-  const second = batch(1000, 240, 90, openEpic.work_item_id)
-  const closedEpic = brief(3, true, null, true)
-  const followUps = batch(2000, 12, 3, closedEpic.work_item_id)
-  const doneEpic = brief(4, true, null, true)
-  const finished = batch(2100, 8, 0, doneEpic.work_item_id)
+  const openGoal = brief(2, false, null, true)
+  const second = batch(1000, 240, 90, openGoal.work_item_id)
+  const closedGoal = brief(3, true, null, true)
+  const followUps = batch(2000, 12, 3, closedGoal.work_item_id)
+  const doneGoal = brief(4, true, null, true)
+  const finished = batch(2100, 8, 0, doneGoal.work_item_id)
   const loose = batch(3000, 76, 26, null)
   const members = [
     ...children,
-    openEpic,
+    openGoal,
     ...second,
-    closedEpic,
+    closedGoal,
     ...followUps,
-    doneEpic,
+    doneGoal,
     ...finished,
     ...loose,
   ]
@@ -102,9 +106,9 @@ export function longChainSpace(): {
     kind: 'discovered-from',
   })
   const edges: PlanningEdge[] = [
-    discovered(openEpic, children[0]),
-    discovered(closedEpic, children[1]),
-    discovered(doneEpic, children[3]),
+    discovered(openGoal, children[0]),
+    discovered(closedGoal, children[1]),
+    discovered(doneGoal, children[3]),
     ...loose.map((item, index) => discovered(item, children[(index * 7) % children.length])),
     ...second.slice(0, 80).flatMap((item, index) =>
       index % 2 === 0
@@ -130,13 +134,13 @@ export function longChainSpace(): {
   edges.push(discovered(outside, children[2]))
   return {
     root,
-    openEpic,
-    closedEpic,
-    doneEpic,
+    openGoal,
+    closedGoal,
+    doneGoal,
     source: { nodes: [root, ...members, outside], edges },
     scope: {
       kind: 'chain',
-      epicId: root.work_item_id,
+      scopeRootId: root.work_item_id,
       members: members.map((item) => item.work_item_id),
     },
   }

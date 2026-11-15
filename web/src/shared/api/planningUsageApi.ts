@@ -13,7 +13,7 @@ import { TITLE, WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
 import { enumField, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
-const SCOPES = ['item', 'chain', 'epic'] as const
+const SCOPES = ['item', 'chain', 'tree'] as const
 export type UsageScope = (typeof SCOPES)[number]
 
 const RUN_TEXT = /^[^\u{0}]{1,200}$/u

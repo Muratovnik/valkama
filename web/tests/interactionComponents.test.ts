@@ -293,12 +293,13 @@ test('Planning components carry presentation tones instead of remapping operatio
   assert.doesNotMatch(card, /box-shadow: inset|data-tone/)
   assert.doesNotMatch(card, /data-priority/)
 
-  assert.match(graphNode, /if \(ready\) return 'ready'/)
-  assert.match(graphNode, /node\.claim_ref && !node\.state\.is_terminal/)
+  assert.match(graphNode, /if \(ready\) return 'workable'/)
+  assert.match(graphNode, /node\.claim_ref && node\.open/)
   assert.match(graphNode, /statePresentation\('work-item-node-marker', markerState\)\.tone/)
   assert.doesNotMatch(graphNode, /class="claimed"|'claimed':/)
 
-  assert.match(drawerFacts, /dimension="work-item-state"[\s\S]*:state="item\.state\.category"/)
+  assert.match(drawerFacts, /dimension="work-item-state"[\s\S]*:state="standing"/)
+  assert.match(drawerFacts, /const standing = computed\(\(\) => standingOf\(props\.item\)\)/)
   assert.match(drawerDetails, /<style scoped src="\.\/InspectorOverview\.css">/)
   assert.match(
     drawerDetailsCss,

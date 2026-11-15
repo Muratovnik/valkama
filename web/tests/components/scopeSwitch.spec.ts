@@ -17,7 +17,7 @@ import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { projectScope, workItemRef } from '../browser/planningFixtures.ts'
 
-const looked = { view: 'graph', group: 'epic', query: 'gateway', chain: 'MAIN-264', ready: true }
+const looked = { view: 'graph', group: 'goal', query: 'gateway', chain: 'MAIN-264', ready: true }
 
 /** The navigation standing on this route, and what the address says after a move. */
 async function standingOn(route: PlatformRoute) {
@@ -46,7 +46,7 @@ describe('a change of scope', () => {
     expect(address()).toEqual({
       module_id: 'planning',
       scope: { kind: 'project', project_ref: { project_id: 'other' } },
-      state: { view: 'graph', group: 'epic' },
+      state: { view: 'graph', group: 'goal' },
     })
     stop()
   })
@@ -62,7 +62,7 @@ describe('a change of scope', () => {
     expect(address()).toEqual({
       module_id: 'planning',
       scope: { kind: 'global' },
-      state: { view: 'graph', group: 'epic' },
+      state: { view: 'graph', group: 'goal' },
     })
     stop()
   })

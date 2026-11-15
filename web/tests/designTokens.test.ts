@@ -461,7 +461,7 @@ test('a control fill stands above every static ground, and its states run upward
 
 test('a label chip stands above every ground it lies on, and lifts again when pointed at', () => {
   // A chip lies on more grounds than a control: a card, a hovered card, a list
-  // row and its hover, a card in an epic well. Its face was the resting
+  // row and its hover, a card in a goal well. Its face was the resting
   // control's grey, which is the tone a hovered card lifts to, so the chips on
   // a pointed-at tile stood at 1.00:1 on it and vanished.
   //

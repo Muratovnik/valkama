@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 
-import { chainResponse, largeEpicChain } from '../fixtures/chain.ts'
+import { chainResponse, largeGoalChain } from '../fixtures/chain.ts'
 import { showChain, workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { withSecurityBootstrap } from '../support/request.ts'
@@ -24,7 +24,7 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   fetchWorkItem: vi.fn(),
 }))
 
-const ROOT = { ...workItemFixture('Planning rethink', 1), container: true }
+const ROOT = { ...workItemFixture('Planning rethink', 1), kind: 'goal' as const }
 
 /** A block into `to` from an item of another space, open or finished. */
 function outsideBlock(to: string, number: number, open: boolean): WorkItemChain['edges'][number] {
@@ -44,9 +44,9 @@ describe('the chain section of a card, blocked from outside the chain', () => {
   useInspectorHarness()
 
   it('names the open blocker a member waits on, and not a finished one', async () => {
-    const chain = largeEpicChain()
-    const [waiting, unblocked] = chain.members.filter((member) => member.state.key === 'todo')
-    waiting.ready = false
+    const chain = largeGoalChain()
+    const [waiting, unblocked] = chain.members.filter((member) => member.state.key === 'ready')
+    waiting.workable = false
     const edges = [
       outsideBlock(waiting.work_item_id, 7, true),
       outsideBlock(unblocked.work_item_id, 8, false),

@@ -2,7 +2,7 @@
  * The list of work going on now follows running work at a glance: in each space what a
  * session is working on or has waited at for a short while, items and sessions in one run,
  * the one changed last first, each on two lines, the second saying the state, how long and
- * the epic; three folded rows for the rest, each opening in place; the pinned items in a
+ * the goal; three folded rows for the rest, each opening in place; the pinned items in a
  * group of their own; and the sessions under no space after the spaces.
  *
  * Measured on the rail at 1280 and in the phone's panel at 390, in English and in Russian:
@@ -23,9 +23,9 @@ import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: globalScope })
-const EPIC = 'Structured answers in one review form'
+const GOAL = 'Structured answers in one review form'
 
-/** Running, waiting, held, quiet, pinned and closed work, an epic that is only a parent,
+/** Running, waiting, held, quiet, pinned and closed work, a goal that is only a parent,
  * sessions on no item in a space, one of them waiting for hours, and one under no space. */
 function seededFrame() {
   return liveFrame(
@@ -33,7 +33,7 @@ function seededFrame() {
       liveSpace(
         'MAIN',
         [
-          liveRow('MAIN-4', { kind: 'epic', title: EPIC }),
+          liveRow('MAIN-4', { kind: 'goal', title: GOAL }),
           liveRow('MAIN-5', {
             title: 'Older work',
             state: 'working',
@@ -119,7 +119,7 @@ interface Line {
   left: number
   /** Lines of text the row's words take: one each. */
   lines: number[]
-  /** Where the row's number and its words start: its title, or its epic before it. */
+  /** Where the row's number and its words start: its title, or its goal before it. */
   number: number
   title: number
   top: number
@@ -136,7 +136,7 @@ function measure(list: Locator) {
         const box = node.getBoundingClientRect()
         const words = [
           ...node.querySelectorAll<HTMLElement>(
-            '.nav-row-title, .nav-row-epic, .nav-row-detail, .nav-fold-words, .nav-tree-space-name',
+            '.nav-row-title, .nav-row-goal, .nav-row-detail, .nav-fold-words, .nav-tree-space-name',
           ),
         ]
         const left = (selector: string) =>
@@ -243,26 +243,26 @@ async function opensInPlace(list: Locator, rowHeight: number) {
     near(same?.left ?? 0, line.left, `${line.key} left`)
     near(same?.width ?? 0, line.width, `${line.key} width`)
   }
-  // The held row stands right under its fold, on one line, its epic before its title.
+  // The held row stands right under its fold, on one line, its goal before its title.
   const at = after.findIndex((line) => line.fold)
   expect(after[at + 1].key).toBe('MAIN-13')
   expect(Math.abs(after[at + 1].top - (after[at].top + after[at].height))).toBeLessThanOrEqual(2)
   await expect(
     list
       .locator('.nav-row', { has: list.page().locator('[aria-label^="MAIN-13 "]') })
-      .locator('.nav-row-epic'),
-  ).toHaveText(EPIC)
+      .locator('.nav-row-goal'),
+  ).toHaveText(GOAL)
   const folded = list.locator('.nav-fold-toggle[aria-expanded="false"]')
   while ((await folded.count()) > 0) await folded.first().click()
   await list.page().mouse.move(0, 0)
   holdsTheGrid(await measure(list), rowHeight)
 }
 
-/** The epic is said on its item's second line, not as a row of its own nor before the title. */
-async function epicOnSecondLine(list: Locator) {
+/** The goal is said on its item's second line, not as a row of its own nor before the title. */
+async function goalOnSecondLine(list: Locator) {
   const row = list.locator('.nav-row', { has: list.page().locator('[aria-label^="MAIN-12 "]') })
-  await expect(row.locator('.nav-row-detail')).toContainText(EPIC)
-  await expect(row.locator('.nav-row-epic')).toHaveCount(0)
+  await expect(row.locator('.nav-row-detail')).toContainText(GOAL)
+  await expect(row.locator('.nav-row-goal')).toHaveCount(0)
   await expect(list.locator('[aria-label^="MAIN-4 "]')).toHaveCount(0)
 }
 
@@ -314,7 +314,7 @@ for (const { locale, words } of [
     }) => {
       const list = await openRail(page)
       expect(await shownLines(list)).toEqual(shown)
-      await epicOnSecondLine(list)
+      await goalOnSecondLine(list)
       holdsTheGrid(await measure(list), 28)
       await opensInPlace(list, 28)
     })
@@ -322,7 +322,7 @@ for (const { locale, words } of [
     test('does the same in the phone’s panel, at 390', async ({ page }) => {
       const body = await openPanel(page)
       expect(await shownLines(body)).toEqual(shown)
-      await epicOnSecondLine(body)
+      await goalOnSecondLine(body)
       holdsTheGrid(await measure(body), 44)
       await opensInPlace(body, 44)
     })

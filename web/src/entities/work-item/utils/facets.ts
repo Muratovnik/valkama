@@ -21,6 +21,8 @@
 
 import { executorOf, executorWords, holderGlyph } from '@/entities/work-item/utils/facetExecutor.ts'
 import type { Executor, SessionDoing } from '@/entities/work-item/utils/facetExecutor.ts'
+import { stateMark } from '@/entities/work-item/utils/standingMark.ts'
+import type { StateSubject } from '@/entities/work-item/utils/standingMark.ts'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
@@ -31,7 +33,7 @@ import type { IconName, SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 
 /**
  * `chain` is a member row of a card's chain: a list of items that holds no facets
- * but readiness. `lane` is the head of an epic's row on the grouped board.
+ * but readiness. `lane` is the head of a goal's row on the grouped board.
  * `preview` is the card that a reference in text shows while the pointer rests on
  * it: nothing beside the reference says anything about the item, so it answers
  * what the item is and where it stands, and every mark keeps its word, because
@@ -49,9 +51,9 @@ export type FacetId =
  * nothing else. A fact the subject does not carry prints nothing rather than a
  * default it would be mistaken for.
  */
-export type FacetSubject = Pick<WorkItemBrief, 'kind' | 'priority'> & {
-  state: Pick<WorkItemBrief['state'], 'name' | 'category'> & { is_terminal?: boolean; key?: string }
-} & Partial<
+export type FacetSubject = Pick<WorkItemBrief, 'kind' | 'priority'> &
+  StateSubject &
+  Partial<
     Pick<
       WorkItemBrief,
       | 'checklist'
@@ -60,13 +62,13 @@ export type FacetSubject = Pick<WorkItemBrief, 'kind' | 'priority'> & {
       | 'labels'
       | 'last_claim_ref'
       | 'parent_id'
-      | 'ready'
+      | 'workable'
     >
   >
 
 /** What a surface knows about an item that the item itself does not carry. */
 export interface FacetContext {
-  /** The board is grouped by epic, so the lane already names the parent. */
+  /** The board is grouped by goal, so the lane already names the parent. */
   grouped?: boolean
   /**
    * How many label chips the surface measured room for on its one line. The
@@ -81,7 +83,7 @@ export interface FacetContext {
   live?: LiveWork | null
   /**
    * The parent's kind, from the same record the reference comes from: any item may hold
-   * others, so the card names the parent by what it is rather than calling every one an epic.
+   * others, so the card names the parent by what it is rather than by one word for them all.
    */
   parentKind?: WorkItemBrief['kind'] | null
   /** The parent's reference, which the brief carries only as an id. */
@@ -103,7 +105,7 @@ export interface FacetContext {
  * label chips and `action` means the surface says it through its primary
  * action rather than a mark.
  */
-type FacetForm = 'glyph' | 'word' | 'glyph-word' | 'chips' | 'action'
+export type FacetForm = 'glyph' | 'word' | 'glyph-word' | 'chips' | 'action'
 
 export interface FacetRule {
   form: FacetForm
@@ -149,6 +151,11 @@ export interface FacetRule {
   terse?: boolean
 }
 
+/** The kinds a surface marks with a glyph: a plain task is the norm and has none. */
+const GLYPH_KINDS = ['bug', 'goal', 'stage', 'improvement']
+/** The categories that say work has moved; a goal derives two more of its own. */
+const MOVED_STATES = ['active', 'review', 'blocked', 'completed', 'cancelled']
+
 /**
  * Which surface prints which facet, and how. A surface that has no cell for a
  * facet never prints it. This is the table of the design specification's
@@ -158,12 +165,12 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
   // Kind carries no tone, only its own ink. A plain task is the norm, so it has
   // no glyph and only the card names it in words.
   kind: {
-    tile: { form: 'glyph', only: ['bug', 'epic', 'improvement'], plain: true },
-    list: { form: 'glyph', only: ['bug', 'epic', 'improvement'] },
-    graph: { form: 'glyph', only: ['bug', 'epic', 'improvement'], plain: true },
+    tile: { form: 'glyph', only: GLYPH_KINDS, plain: true },
+    list: { form: 'glyph', only: GLYPH_KINDS },
+    graph: { form: 'glyph', only: GLYPH_KINDS, plain: true },
     card: { form: 'glyph-word' },
-    finder: { form: 'glyph', only: ['bug', 'epic', 'improvement'] },
-    preview: { form: 'glyph-word', only: ['bug', 'epic', 'improvement'] },
+    finder: { form: 'glyph', only: GLYPH_KINDS },
+    preview: { form: 'glyph-word', only: GLYPH_KINDS },
   },
   // Medium is the default and is not news on a tile, a node or a finder row.
   // The list keeps it as a quiet word, because a blank cell in a sortable
@@ -178,11 +185,11 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     // A preview leads with what is news about an item; low, like medium, is not.
     preview: { form: 'glyph-word', only: ['high', 'urgent'] },
   },
-  // The board's column already says the state. An epic is no tile, so its row's
-  // head says it, but only once it has moved: an epic not started is the norm of
+  // The board's column already says the state. A goal is no tile, so its row's
+  // head says it, but only once it has moved: a goal not started is the norm of
   // a board that holds a hundred of them, and a word per row said nothing.
   state: {
-    lane: { form: 'glyph-word', only: ['active', 'review', 'blocked', 'completed', 'cancelled'] },
+    lane: { form: 'glyph-word', only: [...MOVED_STATES, 'in_progress', 'awaiting_confirmation'] },
     list: { form: 'glyph-word', always: true },
     graph: { form: 'glyph-word', always: true },
     card: { form: 'glyph-word', always: true },
@@ -227,9 +234,9 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     preview: { form: 'glyph-word' },
   },
   // The card's row is named «Родитель» and draws the parent's own kind, as a tile of that
-  // item does — the epic's sign for an epic, the generic parent's for a plain task — before
-  // the reference, which the card draws as a link to it. Any item may hold others, one level
-  // deep, and the row called every parent «Эпик» with the epic's sign.
+  // item does — the goal's sign for a goal or a stage, the generic parent's for a plain
+  // task — before the reference, which the card draws as a link to it. The row once called
+  // every parent by the one container word with its sign, whatever the parent was.
   parent: {
     tile: { form: 'glyph-word', flatOnly: true },
     graph: { form: 'glyph-word' },
@@ -313,7 +320,8 @@ const PLAIN: SemanticStatePair = { dimension: 'work-item-facet', state: 'plain' 
 const KIND_GLYPHS: Record<WorkItemBrief['kind'], IconName | null> = {
   task: null,
   bug: 'kind-bug',
-  epic: 'kind-epic',
+  goal: 'kind-container',
+  stage: 'kind-container',
   improvement: 'kind-improvement',
 }
 
@@ -334,13 +342,13 @@ const PRIORITY_GLYPHS: Record<WorkItemBrief['priority'], IconName | null> = {
  * chain member carries exactly these, so it needs no kind or priority to be
  * given a readiness mark.
  */
-export type ReadinessSubject = Pick<FacetSubject, 'state' | 'ready'>
+export type ReadinessSubject = Pick<FacetSubject, 'open' | 'workable'>
 
 /** Readiness as a facet value: startable, waiting on an open blocker, or neither. */
 export function readinessOf(item: ReadinessSubject, context: FacetContext = {}): string | null {
-  if (item.state.is_terminal) return null
+  if (!item.open) return null
   if (context.waitingOn) return 'waiting'
-  return item.ready ? 'ready' : null
+  return item.workable ? 'ready' : null
 }
 
 /**
@@ -372,7 +380,7 @@ function steps(item: FacetSubject) {
 function valueOf(facet: FacetId, item: FacetSubject, context: FacetContext): string | null {
   if (facet === 'kind') return item.kind
   if (facet === 'priority') return item.priority
-  if (facet === 'state') return item.state.category
+  if (facet === 'state') return item.state?.category ?? item.container_state ?? null
   if (facet === 'readiness') return readinessOf(item, context)
   if (facet === 'labels') return item.labels?.length ? item.labels.join(',') : null
   if (facet === 'holder') return holderRef(item) || null
@@ -410,7 +418,7 @@ export function printsFacet(
   const rule = FACET_RULES[facet][surface]
   if (!rule) return false
   if (rule.minWidth !== undefined && (context.width ?? Infinity) < rule.minWidth) return false
-  if (rule.openOnly && item.state.is_terminal) return false
+  if (rule.openOnly && !item.open) return false
   if (rule.flatOnly && context.grouped) return false
   const value = valueOf(facet, item, context)
   if (value === null) return rule.always === true
@@ -441,7 +449,7 @@ function parentMark(surface: FacetSurface, form: FacetForm, context: FacetContex
   const value = context.parentReference ?? ''
   const mark = { facet: 'parent', value, form, tone: PLAIN, filter: null, quiet: false } as const
   if (surface !== 'card') return { ...mark, glyph: 'parent', text: { literal: value } }
-  // A parent the card cannot place is still a parent, never an epic it may not be; a plain
+  // A parent the card cannot place is still a parent, never a goal it may not be; a plain
   // task has no sign of its own and takes the generic parent's, in the task's ink.
   const kind = context.parentKind ?? undefined
   const text = { key: kind ? `workItem.kind.${kind}` : 'workItem.parent' }
@@ -461,21 +469,6 @@ export function priorityMark(
     tone: { dimension: 'work-item-priority', state: priority },
     filter: plain ? null : { facet: 'priority', value: priority },
     quiet: priority === 'medium',
-  }
-}
-
-export function stateMark(state: FacetSubject['state'], form: FacetForm): FacetMark {
-  return {
-    facet: 'state',
-    value: state.category,
-    form,
-    glyph: state.category === 'cancelled' ? 'state-cancelled' : null,
-    text: { state },
-    tone: { dimension: 'work-item-state', state: state.category },
-    // The card's state is its transition menu, so a click there moves the
-    // item; state filters come from the bar's menu instead.
-    filter: null,
-    quiet: false,
   }
 }
 
@@ -512,7 +505,7 @@ function holderText(
   // A glyph alone says its words on hover, where a bare name would not say what it is.
   if (holder && surface === 'tile')
     return { key: executorWords(executor), params: { holder: holderName(holder) } }
-  if (holder && item.state.is_terminal)
+  if (holder && !item.open)
     return { key: 'workItem.previousHolder', params: { holder: holderName(holder) } }
   if (holder) return { literal: holderName(holder) }
   return surface === 'list' ? { literal: '—' } : { key: 'workItem.noClaim' }
@@ -526,7 +519,7 @@ function holderText(
  */
 export function holderRef(item: FacetSubject): string {
   const current = item.claim_ref ?? ''
-  return item.state.is_terminal ? item.last_claim_ref || current : current
+  return item.open ? current : item.last_claim_ref || current
 }
 
 function holderMark(
@@ -535,7 +528,7 @@ function holderMark(
   surface: FacetSurface,
   context: FacetContext,
 ): FacetMark {
-  const stale = item.claim_state === 'stale' && !item.state.is_terminal
+  const stale = item.claim_state === 'stale' && item.open
   const holder = holderRef(item)
   const executor = rule.executor ? executorOf(item, context.live) : null
   return {
@@ -605,7 +598,7 @@ export function facetMarks(
   const { form } = rule
   if (facet === 'kind') return [kindMark(item.kind, rule)]
   if (facet === 'priority') return [priorityMark(item.priority, rule)]
-  if (facet === 'state') return [stateMark(item.state, form)]
+  if (facet === 'state') return [stateMark(item, form)]
   if (facet === 'labels') return labelMarks(item, rule, context)
   if (facet === 'holder') return [holderMark(item, rule, surface, context)]
   if (facet === 'readiness') return readinessMarks(item, surface, context)

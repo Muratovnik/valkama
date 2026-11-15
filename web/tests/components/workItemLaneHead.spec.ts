@@ -1,5 +1,5 @@
 /**
- * The head of an epic's row on the grouped board: what it prints on its one line.
+ * The head of a goal's row on the grouped board: what it prints on its one line.
  * That its actions come up under a pointer and a key is the browser suite's, which
  * has both.
  */
@@ -20,7 +20,7 @@ function head(state: 'backlog' | 'todo' | 'dev' | 'done') {
       bodyId: 'lane-body',
       lane: {
         closed: 12,
-        epic: boardItem(1, state, { kind: 'epic', title: 'An epic' }),
+        goal: boardItem(1, state, { kind: 'goal', title: 'A goal' }),
         id: 'lane',
         items: [],
         open: 1,
@@ -33,13 +33,13 @@ function head(state: 'backlog' | 'todo' | 'dev' | 'done') {
   })
 }
 
-describe('an epic’s row', () => {
-  it.each(['dev', 'done'] as const)('says the state of an epic that has moved (%s)', (state) => {
+describe('a goal’s row', () => {
+  it.each(['dev', 'done'] as const)('says the state of a goal that has moved (%s)', (state) => {
     expect(head(state).get('.lane-state').classes()).not.toContain('visually-hidden')
   })
 
   it.each(['backlog', 'todo'] as const)(
-    'keeps the state of an epic not started for a screen reader (%s)',
+    'keeps the state of a goal not started for a screen reader (%s)',
     (state) => {
       const row = head(state)
       expect(row.get('.lane-state').classes()).toContain('visually-hidden')
@@ -47,7 +47,7 @@ describe('an epic’s row', () => {
     },
   )
 
-  it('keeps its actions in the document, named for the epic, whatever shows them', () => {
+  it('keeps its actions in the document, named for the goal, whatever shows them', () => {
     const names = head('backlog')
       .findAll('.lane-actions button')
       .map((button) => button.attributes('aria-label'))

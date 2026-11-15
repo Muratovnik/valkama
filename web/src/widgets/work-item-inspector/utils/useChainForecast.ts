@@ -39,7 +39,7 @@ const moved = (current: WorkItemChain) => current.recent.created + current.recen
  * Both scopes count the same thing — members created inside the window, and
  * members closed inside it — so both say it in the same words. The chain scope
  * used to call its new work "discovered", which a child filed as planned is
- * not, and the epic scope "added", for one and the same count.
+ * not, and the goal scope "added", for one and the same count.
  */
 export function useChainForecast(chain: () => WorkItemChain | null) {
   const { t, locale } = useI18n()

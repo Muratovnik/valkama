@@ -15,7 +15,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
-import { LONG_EPIC } from './boardFixtures.ts'
+import { LONG_GOAL } from './boardFixtures.ts'
 import { cell, lane, openBoard, serve, tiles } from './boardPage.ts'
 import { test } from './test.ts'
 
@@ -110,7 +110,7 @@ const REORDER = '/api/planning/work-item/update'
 
 for (const shape of [
   { name: 'a column', state: {}, where: (page: Page) => page.locator('.work-item-board') },
-  { name: 'a lane’s cell', state: undefined, where: (page: Page) => lane(page, LONG_EPIC) },
+  { name: 'a lane’s cell', state: undefined, where: (page: Page) => lane(page, LONG_GOAL) },
 ]) {
   test.describe(`let go over ${shape.name}`, () => {
     test('a tile lands there after only passing another', async ({ page }) => {
@@ -236,12 +236,12 @@ for (const shape of [
 
 test('a tile let go over its own glide lands in the stack beneath it', async ({ page }) => {
   const { writes } = await board(page)
-  const epic = lane(page, LONG_EPIC)
-  const held = epic.locator('li[data-reference="MAIN-402"]')
+  const goal = lane(page, LONG_GOAL)
+  const held = goal.locator('li[data-reference="MAIN-402"]')
   const left = await point(held, 'lower')
 
   await pickUp(page, held)
-  const { x, y } = await point(cell(epic, 'dev'), 'upper')
+  const { x, y } = await point(cell(goal, 'dev'), 'upper')
   await page.mouse.move(x, y)
   // Just read, the element starts its glide from the cell it left and, a lane's cells
   // clipping nothing, lies over it, under a pointer come back there. Read and released
@@ -257,7 +257,7 @@ test('a tile let go over its own glide lands in the stack beneath it', async ({ 
   await expect(page.locator('.work-item-board')).not.toHaveClass(/dragging/u)
   await expect(said(page)).not.toContainText('in Dev')
   expect(writes.filter((write) => write.body.state === 'dev')).toHaveLength(0)
-  await expect.poll(() => tiles(cell(epic, 'backlog'))).toContain('MAIN-402')
+  await expect.poll(() => tiles(cell(goal, 'backlog'))).toContain('MAIN-402')
 })
 
 test('a Done tile carried away and back asks for nothing and keeps its place', async ({ page }) => {
@@ -281,8 +281,8 @@ test('a tile let go over another lane stays with what the board read of its own'
   page,
 }) => {
   const { writes } = await board(page)
-  const epic = lane(page, LONG_EPIC)
-  const tile = (reference: string) => epic.locator(`li[data-reference="${reference}"]`)
+  const goal = lane(page, LONG_GOAL)
+  const tile = (reference: string) => goal.locator(`li[data-reference="${reference}"]`)
   const loose = page.locator('li[data-reference="MAIN-430"]')
 
   // With nothing read, the tile is still home: the other lane does not take it.
@@ -293,7 +293,7 @@ test('a tile let go over another lane stays with what the board read of its own'
   expect(writes).toHaveLength(0)
 
   await pickUp(page, tile('MAIN-402'))
-  await pass(page, cell(epic, 'dev'))
+  await pass(page, cell(goal, 'dev'))
   await letGo(page, loose, 'upper')
   await expect.poll(() => writes.length).toBe(1)
   expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-402', state: 'dev' }))
@@ -381,10 +381,10 @@ test.describe('let go over a column’s head', () => {
 
   test('the head above a board’s lanes answers nothing: every lane shares it', async ({ page }) => {
     const { writes } = await board(page)
-    const epic = lane(page, LONG_EPIC)
+    const goal = lane(page, LONG_GOAL)
 
-    await pickUp(page, epic.locator('li[data-reference="MAIN-402"]'))
-    await pass(page, cell(epic, 'dev'))
+    await pickUp(page, goal.locator('li[data-reference="MAIN-402"]'))
+    await pass(page, cell(goal, 'dev'))
     await letGo(page, page.locator('.lanes-state').last(), 'upper')
     await expect.poll(() => writes.length).toBe(1)
     expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-402', state: 'dev' }))

@@ -11,12 +11,12 @@ import { test } from './test.ts'
 
 /**
  * The parent's row: any item may hold others, so the row is «Parent» and its sign is the
- * parent's own kind, in that kind's ink — the epic's for an epic, the generic parent's for a
+ * parent's own kind, in that kind's ink — the goal's for a goal, the generic parent's for a
  * plain task — at the size a facet's glyph is drawn at, as the priority's beside it, and on the
- * middle of the reference's capitals, as every sign of the facts stands. Every parent was called «Epic» under the epic's sign, a task holding others too.
+ * middle of the reference's capitals, as every sign of the facts stands. Every parent was called «Goal» under the goal's sign, a task holding others too.
  */
 const PARENT_SIGNS = {
-  epic: { icon: 'lucide-layers', ink: '--color-kind-epic' },
+  goal: { icon: 'lucide-layers', ink: '--color-kind-goal' },
   task: { icon: 'lucide-corner-down-right', ink: '--color-kind-task' },
 } as const
 const PARENT_ROW = { ru: 'Родитель', en: 'Parent' } as const
@@ -27,10 +27,10 @@ for (const locale of ['ru', 'en'] as const) {
       test(`a ${parentKind} parent is named a parent and drawn by its own kind, ${locale} at ${width}px`, async ({
         page,
       }) => {
-        const drawer = await openCard(page, locale, width, { epic: 'MAIN-12', parentKind })
+        const drawer = await openCard(page, locale, width, { goal: 'MAIN-12', parentKind })
         const names = await drawer.locator('.card-row-label').allTextContents()
         expect(names.map((name) => name.trim())).toContain(PARENT_ROW[locale])
-        expect(names.map((name) => name.trim())).not.toContain(locale === 'ru' ? 'Эпик' : 'Epic')
+        expect(names.map((name) => name.trim())).not.toContain(locale === 'ru' ? 'Эпик' : 'Goal')
         const mark = drawer.locator('.card-parent [data-facet="parent"]')
         await expect(mark).toHaveAttribute('data-kind', parentKind)
         const glyph = mark.locator('svg')

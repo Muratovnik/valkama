@@ -5,7 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { graphRoute, longChainHere, routeState, serve, smallChain } from './chainFixtures.ts'
-import { blockedWorkItem, projectScope } from './planningFixtures.ts'
+import { blockedWorkItem, doneState, projectScope } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { test } from './test.ts'
 
@@ -69,12 +69,8 @@ async function addTerminalGraphWork(page: Page, terminalOnly = false) {
         number: 5000,
         reference: 'MAIN-5000',
         title: 'Finished context remains visible when All is selected',
-        state: {
-          ...model.work_items[0].state,
-          name: 'Done',
-          category: 'completed' as const,
-          is_terminal: true,
-        },
+        state: { ...doneState },
+        open: false,
       }
       model.work_items = terminalOnly ? [terminal] : [...model.work_items, terminal]
       model.links = terminalOnly

@@ -21,7 +21,7 @@ import { test } from './test.ts'
 const SCROLLS = [60, 120, 300, 600]
 
 /**
- * The index of the epic heading held at the top of the board, under the row of state names, with
+ * The index of the goal heading held at the top of the board, under the row of state names, with
  * its lane running on well below it; -1 where none is.
  */
 const heldHeading = (board: HTMLElement) => {

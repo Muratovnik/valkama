@@ -52,11 +52,11 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 /** What the host is showing, read fresh on every change. */
 type ProjectionInput = () => {
   edges: GraphSource['edges']
-  epicId: string | null
   /** What the field draws from: the whole space, or what a queue or search let through. */
   nodes: GraphSource['nodes']
   open: boolean
   scopeKind: GraphScope['kind']
+  scopeRootId: string | null
   space: string
   version: number
   /** The server's `live_work`: the items an agent's session is working on now. */
@@ -65,7 +65,7 @@ type ProjectionInput = () => {
   members?: readonly string[]
   /**
    * The whole space, when `nodes` is what a filter let through: a frame counts
-   * its epic's work, not the filter's.
+   * its goal's work, not the filter's.
    */
   spaceItems?: GraphSource['nodes']
 }
@@ -138,7 +138,7 @@ function decorate(
     frames: geometry.frames.map((frame) => {
       const now = frames.get(frame.id)
       return now
-        ? { ...frame, epic: now.epic, progress: now.progress, members: now.members }
+        ? { ...frame, goal: now.goal, progress: now.progress, members: now.members }
         : frame
     }),
     edges: geometry.edges.map((edge) => ({
@@ -182,13 +182,13 @@ export function useGraphProjection(
     return now.open && now.space ? { nodes: now.nodes, edges: now.edges } : null
   })
 
-  // The graph follows the epic rail: the selected scope decides what is drawn,
+  // The graph follows the scope rail: the selected scope decides what is drawn,
   // so the heading above and the field below never disagree.
   const scope = computed<GraphScope>(() => {
     const now = input()
     return now.scopeKind === 'chain'
-      ? { kind: now.scopeKind, epicId: now.epicId, members: now.members ?? [] }
-      : { kind: now.scopeKind, epicId: now.epicId }
+      ? { kind: now.scopeKind, scopeRootId: now.scopeRootId, members: now.members ?? [] }
+      : { kind: now.scopeKind, scopeRootId: now.scopeRootId }
   })
 
   /**
@@ -316,7 +316,7 @@ export function useGraphProjection(
   // a source of its own: one getter returning a fresh array would count every
   // new frame of the stream as a change.
   watch(
-    [() => input().open, () => input().space, () => input().scopeKind, () => input().epicId],
+    [() => input().open, () => input().space, () => input().scopeKind, () => input().scopeRootId],
     resetFocus,
   )
   // A new layout of the same field keeps what is lit while it is still drawn.

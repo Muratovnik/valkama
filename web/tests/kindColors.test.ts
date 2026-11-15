@@ -1,5 +1,5 @@
 /**
- * The colours of the four work item kinds: what a stored value may be, what the
+ * The colours of the work item kinds, a goal and a stage sharing one: what a stored value may be, what the
  * defaults are held to, and how an owner's choice reaches the document. The
  * thresholds are WCAG's; the colour-vision matrices are Machado, Oliveira and
  * Fernandes (2009) at full severity, the distance is OKLab's. Neither is the
@@ -22,7 +22,7 @@ import { scanUiSources } from '../scripts/ui-system/styles.mjs'
 import type { Vision } from './paletteColors.ts'
 import { apart, contrast, linear, token, VISION } from './paletteColors.ts'
 
-const KINDS = ['bug', 'epic', 'improvement', 'task'] as const
+const KINDS = ['bug', 'container', 'improvement', 'task'] as const
 const kindTokens = () => KINDS.map((kind) => token(`--color-kind-${kind}`))
 
 describe('the stored choice', () => {
@@ -30,7 +30,7 @@ describe('the stored choice', () => {
     const merged = mergeSettings({
       kindColors: {
         bug: '#123abc',
-        epic: 'red',
+        container: 'red',
         improvement: '#12345',
         task: 7,
         nonsense: '#000000',
@@ -38,9 +38,17 @@ describe('the stored choice', () => {
     })
     assert.deepEqual(merged.kindColors, { bug: '#123abc' })
     for (const value of ['#12345g', '#1234567', ' #123456', 'rgb(1,2,3)', null, ['#123456']])
-      assert.deepEqual(mergeSettings({ kindColors: { epic: value } }).kindColors, {})
-    assert.equal(kindColor(merged.kindColors, 'epic'), token('--color-kind-epic'))
+      assert.deepEqual(mergeSettings({ kindColors: { container: value } }).kindColors, {})
+    assert.equal(kindColor(merged.kindColors, 'container'), token('--color-kind-container'))
     assert.equal(kindColor(merged.kindColors, 'bug'), '#123abc')
+  })
+
+  test('a colour stored for a kind this build does not have is not read, so its row starts from the default', () => {
+    // A build that named the goal and stage colour after a former kind stored it under that
+    // kind's name; the row that took its place reads the default until a new choice is made.
+    const former = mergeSettings({ kindColors: { former: '#112233', bug: '#445566' } })
+    assert.deepEqual(former.kindColors, { bug: '#445566' })
+    assert.equal(kindColor(former.kindColors, 'container'), DEFAULT_KIND_COLORS.container)
   })
 
   test('a colour keeps one spelling, so a stored one compares with what a picker reports', () => {
@@ -104,9 +112,12 @@ describe('the defaults', () => {
       }
   })
 
-  test('the epic is a purple: its blue leads, then its red, well above its green', () => {
-    const [red, green, blue] = linear(token('--color-kind-epic'))
-    assert.ok(blue > red && red > green * 1.5, 'an epic that does not read as purple')
+  test('the goal and stage colour is a purple: its blue leads, then its red, well above its green', () => {
+    const [red, green, blue] = linear(token('--color-kind-container'))
+    assert.ok(
+      blue > red && red > green * 1.5,
+      'a goal and stage colour that does not read as purple',
+    )
   })
 })
 
@@ -116,14 +127,17 @@ const scan = (css: string) =>
 test('the guard refuses a kind colour on a surface and lets it draw a mark', () => {
   const refused = /never a surface/u
   assert.match(scan('.tile { background: var(--color-kind-ink); }'), refused)
-  assert.match(scan('.tile { color: red; background-color: var(--color-kind-epic); }'), refused)
+  assert.match(
+    scan('.tile { color: red; background-color: var(--color-kind-container); }'),
+    refused,
+  )
   assert.doesNotMatch(scan('.glyph { color: var(--color-kind-ink); }'), refused)
 })
 
 describe('the hint', () => {
   test('falls under 3:1 on the lightest ground a mark stands on, and every default clears it', () => {
     for (const kind of KINDS) assert.equal(readsPoorly(DEFAULT_KIND_COLORS[kind]), false, kind)
-    // The canonical epic purple stands at 1.93:1 on that ground, black at 2.22:1.
+    // The canonical game-item purple stands at 1.93:1 on that ground, black at 2.22:1.
     assert.equal(readsPoorly('#a335ee'), true)
     assert.equal(readsPoorly('#000000'), true)
     assert.equal(readsPoorly('#ffffff'), false)
@@ -151,13 +165,13 @@ function fakeRoot() {
 describe('applying the choice', () => {
   test('a chosen kind overrides its variable and the others keep the stylesheet', () => {
     const { root, written } = fakeRoot()
-    applyKindColors({ epic: '#112233' }, root)
-    assert.deepEqual([...written], [['--color-kind-epic', '#112233']])
+    applyKindColors({ container: '#112233' }, root)
+    assert.deepEqual([...written], [['--color-kind-container', '#112233']])
   })
 
   test('a kind reset takes its override off the document, which is how the default returns', () => {
     const { root, written } = fakeRoot()
-    applyKindColors({ epic: '#112233', bug: '#445566' }, root)
+    applyKindColors({ container: '#112233', bug: '#445566' }, root)
     applyKindColors({ bug: '#445566' }, root)
     assert.deepEqual([...written], [['--color-kind-bug', '#445566']])
     applyKindColors({}, root)

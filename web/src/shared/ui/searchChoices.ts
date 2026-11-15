@@ -1,7 +1,7 @@
 /**
  * What `SearchCombobox` lists for what was typed, and how its values travel through Reka.
  *
- * Reka keeps '' for "nothing chosen", and an option may mean nothing by it ("no epic"),
+ * Reka keeps '' for "nothing chosen", and an option may mean nothing by it ("no goal"),
  * so every value reaches Reka as a token; typed words offered as a new value are a token
  * of their own kind, which no option can spell.
  */

@@ -12,7 +12,7 @@ import { useI18n } from 'vue-i18n'
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
-import { useStateName } from '@/shared/lib/useStateName.ts'
+import { useStandingName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
@@ -24,13 +24,13 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const stateName = useStateName()
-const state = computed(() => stateName(props.member.state))
+const standingName = useStandingName()
+const state = computed(() => standingName(props.member))
 
 /** Who holds the task, then where it stands in its lane. */
 const meta = computed(() => {
   const place = t('workItem.chain.map.position', { position: props.position, total: props.total })
-  const held = !props.member.state.is_terminal && props.member.claim_ref
+  const held = props.member.open && props.member.claim_ref
   return held ? `${holderName(props.member.claim_ref)} · ${place}` : place
 })
 </script>

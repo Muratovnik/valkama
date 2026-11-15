@@ -40,7 +40,7 @@ function bar(
     attachTo: document.body,
     props: {
       'busy': false,
-      'categories': ['backlog', 'active'] as const,
+      'categories': ['triage', 'active'] as const,
       'chain': null,
       'counts': COUNTS,
       'exclusion': null,
@@ -94,7 +94,7 @@ describe('the work bar', () => {
     expect(menu.compareDocumentPosition(field)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     // No preset and no grouping stands in the row as a button of its own.
     const buttons = row.findAll('button').map((button) => button.text())
-    for (const word of ['Workable', 'Has an assignee', 'Has a holder', 'Assigned', 'By parent'])
+    for (const word of ['Workable', 'Has an assignee', 'Has a holder', 'Assigned', 'By goal'])
       expect(buttons).not.toContain(word)
     // The one primary action ends the row, not the line of state under it.
     expect(row.get('.workspace-action').text()).toBe('+New work item')
@@ -104,16 +104,16 @@ describe('the work bar', () => {
   })
 
   it('offers the grouping in the view’s menu only while the board is on the stage', async () => {
-    const wrapper = bar({ grouping: 'epic' })
+    const wrapper = bar({ grouping: 'goal' })
     const { grouping } = viewMenu(wrapper)
-    expect(grouping).toMatchObject({ label: 'Grouping', value: 'epic' })
-    expect(grouping?.options.map((option) => option.label)).toEqual(['No grouping', 'By parent'])
+    expect(grouping).toMatchObject({ label: 'Grouping', value: 'goal' })
+    expect(grouping?.options.map((option) => option.label)).toEqual(['No grouping', 'By goal'])
     grouping?.select('none')
     expect(wrapper.emitted('group')).toEqual([['none']])
     await wrapper.setProps({ grouping: 'none' })
     expect(viewMenu(wrapper).grouping?.value).toBe('none')
-    viewMenu(wrapper).grouping?.select('epic')
-    expect(wrapper.emitted('group')).toEqual([['none'], ['epic']])
+    viewMenu(wrapper).grouping?.select('goal')
+    expect(wrapper.emitted('group')).toEqual([['none'], ['goal']])
     // The list and the graph are not grouped: the menu says nothing of it there.
     await wrapper.setProps({ grouping: null })
     expect(viewMenu(wrapper).grouping).toBeUndefined()
@@ -140,9 +140,9 @@ describe('the work bar', () => {
     ['ru', 21, '21\u{A0}родитель строкой'],
   ] as const)(
     'says how many parents the grouped board draws as rows (%s, %i)',
-    (locale, epics, text) => {
+    (locale, goals, text) => {
       const wrapper = bar(
-        { grouping: 'epic', exclusion: { kind: 'lane-heads', count: epics } },
+        { grouping: 'goal', exclusion: { kind: 'lane-heads', count: goals } },
         locale,
       )
       // Unfiltered, the rows come last on the counts line: no Reset follows them.
@@ -267,8 +267,8 @@ describe('the work bar', () => {
     expect(wrapper.emitted<[WorkFilter]>('update:filter')?.at(-1)?.[0]).toEqual({ text: '' })
   })
 
-  it('leaves the grouped board’s epics to the lanes, and says nothing is left out of the graph', async () => {
-    const wrapper = bar({ grouping: 'epic' })
+  it('leaves the grouped board’s goals to the lanes, and says nothing is left out of the graph', async () => {
+    const wrapper = bar({ grouping: 'goal' })
     expect(wrapper.find('.workspace-left-out').exists()).toBe(false)
     await wrapper.setProps({ grouping: null, view: 'graph', exclusion: null })
     expect(wrapper.find('.workspace-left-out').exists()).toBe(false)

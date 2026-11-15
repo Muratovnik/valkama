@@ -73,6 +73,8 @@ function found(reference: string): GlobalPlanningSearch['items'][number] {
       reference,
       title: 'Parser',
       state: { name: 'Dev' },
+      open: true,
+      container_state: null,
       claim_ref: '',
     },
   }

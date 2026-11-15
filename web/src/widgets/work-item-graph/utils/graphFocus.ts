@@ -4,9 +4,9 @@
  * or done-filter projection.
  */
 export interface GraphFocusContext {
-  epicId: string | null
   open: boolean
-  scopeKind: 'all' | 'chain' | 'epic' | 'none'
+  scopeKind: 'all' | 'chain' | 'none' | 'tree'
+  scopeRootId: string | null
   showDone: boolean
   space: string
   version: number
@@ -34,7 +34,7 @@ export function graphFocusContextKey(context: GraphFocusContext): string {
     context.space,
     context.version,
     context.scopeKind,
-    context.epicId ?? '',
+    context.scopeRootId ?? '',
     context.showDone ? 'all' : 'open',
   ].join('|')
 }

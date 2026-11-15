@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { countedGroups } from '@/widgets/work-item-graph/utils/graphFrames.ts'
-import { NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { FrameHead } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 interface FrameWordsInput {
@@ -20,16 +20,16 @@ interface FrameWordsInput {
 export function useGraphFrameWords(input: FrameWordsInput) {
   const { t } = useI18n()
 
-  /** The epic to open; the work under no epic has none. */
-  const epic = computed(() => (input.frame().id === NO_EPIC_FRAME ? null : input.frame().epic))
-  /** An epic says it is one; an item that grew children says it is an item. */
-  const isEpic = computed(() => epic.value?.kind === 'epic')
+  /** The goal to open; the work under no goal has none. */
+  const goal = computed(() => (input.frame().id === NO_PARENT_FRAME ? null : input.frame().goal))
+  /** A frame says which it is: a stage stands under a parent, a goal under none. */
+  const isStage = computed(() => goal.value?.kind === 'stage')
   const named = computed(() =>
-    epic.value ? { reference: epic.value.reference, title: epic.value.title } : null,
+    goal.value ? { reference: goal.value.reference, title: goal.value.title } : null,
   )
 
   /**
-   * What a fold hides: the epic's open work, whatever a filter let through, or
+   * What a fold hides: the goal's open work, whatever a filter let through, or
    * where none is open its closed work. Nothing when the frame is open or has
    * nothing to unfold.
    */
@@ -63,12 +63,12 @@ export function useGraphFrameWords(input: FrameWordsInput) {
   })
 
   /**
-   * What the fold does and what it hides. Over the work under no epic the fold is the
-   * header's one button, so it says the work moving under it too, as the epic's does.
+   * What the fold does and what it hides. Over the work under no goal the fold is the
+   * header's one button, so it says the work moving under it too, as the goal's does.
    */
   const foldLabel = computed(() => {
     const verb = input.frame().folded ? 'unfold' : 'fold'
-    const kind = isEpic.value ? 'Epic' : 'Parent'
+    const kind = isStage.value ? 'Stage' : 'Goal'
     const action = named.value
       ? t(`graph.frame.${verb}${kind}`, named.value)
       : t(`graph.frame.${verb}None`)
@@ -78,8 +78,8 @@ export function useGraphFrameWords(input: FrameWordsInput) {
   /** What a reader hears for the open target: the same facts the header shows. */
   const openLabel = computed(() => {
     const { progress } = input.frame()
-    const kind = isEpic.value ? 'epic' : 'parent'
-    const head = named.value ? t(`graph.frame.${kind}`, named.value) : t('graph.frame.noEpic')
+    const kind = isStage.value ? 'stage' : 'goal'
+    const head = named.value ? t(`graph.frame.${kind}`, named.value) : t('graph.frame.noParent')
     const { done, total } = progress
     const standing = total ? t('graph.frame.doneOf', { done, total }) : t('graph.frame.noTasks')
     const groups = countedGroups(progress).map(({ group, count }) => {
@@ -89,5 +89,5 @@ export function useGraphFrameWords(input: FrameWordsInput) {
     return [head, standing, ...groups, ...insideWhole.value, ...live.value].join(' · ')
   })
 
-  return { epic, foldLabel, inside, insideShown, openLabel }
+  return { goal, foldLabel, inside, insideShown, openLabel }
 }

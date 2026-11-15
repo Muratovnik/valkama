@@ -1,5 +1,5 @@
 /**
- * An epic's header as tall as its title: one to three lines of it, the counts right under
+ * A goal's header as tall as its title: one to three lines of it, the counts right under
  * the last, and no band of empty header between them. Everything in a header starts at one
  * left edge, the one its frame's cards start at. Zoomed out, the band's grown words stay
  * inside the header they were given.
@@ -23,9 +23,9 @@ test.use({ locale: 'ru-RU' })
 const { model } = broadSpace()
 const identity = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
-function stateOf(key: string): WorkItemBrief['state'] {
-  const found = model.work_items.find((entry) => entry.state.key === key)
-  if (!found) throw new Error(`the broad space has no item in ${key}`)
+function stateOf(key: string): NonNullable<WorkItemBrief['state']> {
+  const found = model.work_items.find((entry) => entry.state?.key === key)
+  if (!found?.state) throw new Error(`the broad space has no item in ${key}`)
   return found.state
 }
 
@@ -37,7 +37,11 @@ function item(n: number, key: string, overrides: Partial<WorkItemBrief> = {}): W
     number: n,
     title: `Item ${n}`,
     kind: 'task',
-    container: false,
+    open: true,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
     parent_id: null,
     state: stateOf(key),
     claim_ref: '',
@@ -46,29 +50,29 @@ function item(n: number, key: string, overrides: Partial<WorkItemBrief> = {}): W
   }
 }
 
-const epic = (n: number, title: string) => item(n, 'dev', { kind: 'epic', container: true, title })
+const goal = (n: number, title: string) => item(n, 'dev', { kind: 'goal', title })
 const under = (parent: number, from: number, keys: readonly string[]) =>
   keys.map((key, index) => item(from + index, key, { parent_id: identity(parent) }))
 
-/** Open epics whose titles take one, two and three lines, each over the same two tasks. */
+/** Open goals whose titles take one, two and three lines, each over the same two tasks. */
 const TITLED = { 1: 1, 10: 2, 20: 3 } as const
 const SPACE: WorkItemBrief[] = [
-  epic(1, 'Connect the release'),
+  goal(1, 'Connect the release'),
   ...under(1, 2, ['todo', 'done']),
-  epic(10, 'Reconcile the release notes with the installer'),
+  goal(10, 'Reconcile the release notes with the installer'),
   ...under(10, 11, ['todo', 'done']),
-  epic(20, 'Reconcile the release notes with what the installer actually ships to the desktop'),
+  goal(20, 'Reconcile the release notes with what the installer actually ships to the desktop'),
   ...under(20, 21, ['todo', 'done']),
   // Folded, with every group in its counts and what the fold hides under its edge.
-  epic(40, 'Crowded'),
+  goal(40, 'Crowded'),
   ...under(40, 100, [
     ...Array.from({ length: 30 }, () => 'done'),
     ...Array.from({ length: 25 }, () => 'review'),
     'blocked',
     'dev',
   ]),
-  // An epic nothing was filed under, and the work under none.
-  item(60, 'review', { kind: 'epic', title: 'Plan the next release' }),
+  // A goal nothing was filed under, and the work under none.
+  item(60, 'review', { kind: 'goal', title: 'Plan the next release' }),
   ...Array.from({ length: 3 }, (_, index) => item(400 + index, 'todo')),
 ]
 
@@ -109,7 +113,7 @@ function readHeaders(page: Page) {
           bottom: (part.bottom - box.top) / scale,
         }
       }
-      // The epic's title under the reference line; the work under no epic names itself on it.
+      // The goal's title under the reference line; the work under no goal names itself on it.
       const title = [...frame.querySelectorAll<HTMLElement>('.graph-frame-title')].find(
         (element) => !element.closest('.graph-frame-line'),
       )
@@ -223,10 +227,10 @@ for (const width of [1280, 390]) {
   })
 }
 
-/** The same space among enough other epics that its whole field is zoomed out. */
+/** The same space among enough other goals that its whole field is zoomed out. */
 const AMONG_MANY: WorkItemBrief[] = [
   ...SPACE,
-  ...Array.from({ length: 90 }, (_, index) => item(1000 + index, 'review', { kind: 'epic' })),
+  ...Array.from({ length: 90 }, (_, index) => item(1000 + index, 'review', { kind: 'goal' })),
 ]
 
 /**

@@ -5,12 +5,14 @@
  * is running, and never as a sign alone or a number cut. The header keeps its height, and its name
  * and its hover text say the whole phrase.
  *
- * Served the broad synthetic space with half of the work filed under an epic being worked on,
- * three items under no epic as well, and one epic given the longest reference a space can
- * have. Over the work under no epic the fold is the header's one button, so the fold says it.
+ * Served the broad synthetic space with half of the work filed under a goal being worked on,
+ * three items under no goal as well, and one goal given the longest reference a space can
+ * have. Over the work under no goal the fold is the header's one button, so the fold says it.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
+
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
@@ -23,13 +25,13 @@ const LONGEST = 'WWWWWWWW-888888888'
 
 async function serve(page: Page, width = 1500, height = 900) {
   const { model } = broadSpace()
-  const filed = model.work_items.filter((item) => !item.state.is_terminal && item.parent_id)
+  const filed = model.work_items.filter((item) => !item.state?.is_terminal && item.parent_id)
   const unfiled = model.work_items.filter(
-    (item) => !item.state.is_terminal && !item.parent_id && !item.container && item.kind !== 'epic',
+    (item) => !item.state?.is_terminal && !item.parent_id && !WORK_ITEM_TREE.isContainer(item),
   )
   const working = [...filed.filter((_, index) => index % 2 === 0), ...unfiled.slice(0, 3)]
   const live = Object.fromEntries(working.map((item) => [item.work_item_id, { state: 'working' }]))
-  // The epic of the first worked-on item takes the longest reference.
+  // The goal of the first worked-on item takes the longest reference.
   const renamed = working[0]?.parent_id
   const items = model.work_items.map((item) =>
     item.work_item_id === renamed ? { ...item, reference: LONGEST } : item,
@@ -82,7 +84,7 @@ interface Mark {
   header: number
   /** What the pointer is told on the header. */
   hint: string
-  /** What a reader hears for the header's button: the epic's, or the fold under no epic. */
+  /** What a reader hears for the header's button: the goal's, or the fold under no goal. */
   name: string
   /** The words drawn stand over the reference beside them. */
   overReference: boolean
@@ -173,7 +175,7 @@ function headerHeights(page: Page) {
 function expectHonest(seen: Mark[], near: Record<string, number>) {
   expect(seen.length).toBeGreaterThan(2)
   for (const mark of seen) {
-    const where = `the mark of ${mark.reference || 'the work under no epic'}`
+    const where = `the mark of ${mark.reference || 'the work under no goal'}`
     // Whole, or its count beside the sign: never gone, never a sign alone or a number cut.
     expect(mark.shown, where).toMatch(/^\d+(?: working)?$/u)
     expect(mark.shownWhole, `${where} says it in sight`).toBe(true)
@@ -208,7 +210,7 @@ for (const { band, ceiling, height, width } of [
     expect(seen.map((mark) => mark.reference)).toContain(LONGEST)
     expect(
       seen.map((mark) => mark.frame),
-      'the work under no epic',
+      'the work under no goal',
     ).toContain('none')
   })
 }
@@ -221,7 +223,7 @@ test('close up the mark says its words beside its sign, and names no hover text'
   expect(seen.length).toBeGreaterThan(0)
   expect(
     seen.map((mark) => mark.frame),
-    'the work under no epic',
+    'the work under no goal',
   ).toContain('none')
   for (const mark of seen) {
     expect(mark.shown).toMatch(/^\d+ working$/u)

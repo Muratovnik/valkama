@@ -19,7 +19,7 @@ import { boardRoute, openList } from './boardPage.ts'
 import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 import { breaksOf } from './titleBreaks.ts'
-import { linkedTo, routeFinder, routePicker } from './titleSurfaces.ts'
+import { linkedTo, routeFinder, routeParentMenu } from './titleSurfaces.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
@@ -175,7 +175,7 @@ test("a found item's title is named as written in the finder", async ({ page }) 
 
 test("a candidate's title is named as written in the picker of related work", async ({ page }) => {
   await installBackend(page)
-  await routePicker(page, workItem.title)
+  await routeParentMenu(page, workItem.title)
   const drawer = await openCard(page)
   await drawer.getByRole('tab', { name: /Relations/iu }).click()
   await drawer.getByRole('button', { name: 'Add link', exact: true }).click()

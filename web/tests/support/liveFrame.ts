@@ -24,6 +24,8 @@ export function liveRow(reference: string, overrides: Partial<Row> = {}): Row {
     pinned: false,
     state_name: 'Dev',
     is_terminal: false,
+    open: !overrides.is_terminal,
+    container_state: null,
     updated_at: '2026-11-01T09:00:00Z',
     ...overrides,
   } as Row
@@ -68,7 +70,7 @@ export function liveFrame(spaces: Space[], elsewhere: LiveSession[] = []): LiveF
 }
 
 /**
- * A busy frame: two spaces, an epic at work heading its own group, every live state, a
+ * A busy frame: two spaces, a goal at work heading its own group, every live state, a
  * quiet row, a pinned row with no work, a pinned closed row, sessions on no row in a space
  * and under none, and numbers of one, two and three digits side by side at both levels.
  */
@@ -79,7 +81,7 @@ export function busyFrame(): LiveFrame {
       liveSpace(
         'MAIN',
         [
-          liveRow('MAIN-4', { kind: 'epic', title: 'Structured answers', state: 'working' }),
+          liveRow('MAIN-4', { kind: 'goal', title: 'Structured answers', state: 'working' }),
           liveRow('MAIN-9', { parent: 'MAIN-4', title: 'Name the form', ...silent }),
           liveRow('MAIN-12', {
             parent: 'MAIN-4',
@@ -123,7 +125,7 @@ export function busyFrame(): LiveFrame {
 }
 
 /**
- * The busy frame with closed rows: a closed parent of an open item, a pinned closed epic with an
+ * The busy frame with closed rows: a closed parent of an open item, a pinned closed goal with an
  * item at work under it, a closed item a session is still on, and closed items the frame holds
  * only as parents, at the second and the third level.
  */
@@ -132,7 +134,7 @@ export function closedFrame(): LiveFrame {
   frame.spaces[0].rows.push(
     liveRow('MAIN-50', {
       parent: 'MAIN-4',
-      title: 'Closed child of the epic',
+      title: 'Closed child of the goal',
       is_terminal: true,
       state_name: 'Done',
     }),
@@ -149,15 +151,15 @@ export function closedFrame(): LiveFrame {
       state_name: 'Done',
     }),
     liveRow('MAIN-70', {
-      kind: 'epic',
-      title: 'Pinned closed epic',
+      kind: 'goal',
+      title: 'Pinned closed goal',
       pinned: true,
       is_terminal: true,
       state_name: 'Done',
     }),
     liveRow('MAIN-71', {
       parent: 'MAIN-70',
-      title: 'Open child of the pinned epic',
+      title: 'Open child of the pinned goal',
       state: 'waiting',
     }),
     liveRow('MAIN-51', {

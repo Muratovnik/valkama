@@ -13,7 +13,7 @@ import type { FrameProjection } from '@/widgets/work-item-graph/utils/graphFrame
 import {
   FRAME_HEADER,
   MARGIN,
-  NO_EPIC_FRAME,
+  NO_PARENT_FRAME,
 } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
@@ -174,7 +174,7 @@ describe('the order and the shelves the root packs components on', () => {
     expect(holdsOpen(projection, read[0]), read[0].id).toBe(true)
   })
 
-  it('shelves a space with many lone open epics: lone open, then linked open, then finished', () => {
+  it('shelves a space with many lone open goals: lone open, then linked open, then finished', () => {
     const projection = projectionOf(broadSpace)
     const graph = frameGraph(projection)
     expect(
@@ -218,11 +218,11 @@ describe('the order and the shelves the root packs components on', () => {
     const empty = points.filter(
       (point) => !top.some((frame) => within({ ...point, width: 0, height: 0 }, frame)),
     )
-    // A strip of small epics over empty field left 56 % of it empty.
+    // A strip of small goals over empty field left 56 % of it empty.
     expect(empty.length / points.length).toBeLessThan(0.5)
   })
 
-  it('packs the components of a space with few lone open epics at the root, open work first', () => {
+  it('packs the components of a space with few lone open goals at the root, open work first', () => {
     const projection = projectionOf(deepSpace)
     const graph = frameGraph(projection)
     expect(graph.children?.every((node) => node.id.startsWith('component:'))).toBe(true)
@@ -233,15 +233,15 @@ describe('the order and the shelves the root packs components on', () => {
   })
 })
 
-describe('lines to an epic', () => {
-  it('route a link from open work to another epic up to that epic’s frame', async () => {
-    const { model, epics } = broadSpace()
+describe('lines to a goal', () => {
+  it('route a link from open work to another goal up to that goal’s frame', async () => {
+    const { model, goals } = broadSpace()
     const field = await layout({ nodes: model.work_items, edges: model.links }, engine)
-    const epicIds = new Set(epics.map((epic) => epic.work_item_id))
+    const goalIds = new Set(goals.map((goal) => goal.work_item_id))
     const frames = new Map(field.frames.map((frame) => [frame.id, frame]))
-    const toEpic = field.edges.filter((edge) => epicIds.has(edge.target))
-    expect(toEpic.length).toBeGreaterThan(0)
-    for (const edge of toEpic) {
+    const toGoal = field.edges.filter((edge) => goalIds.has(edge.target))
+    expect(toGoal.length).toBeGreaterThan(0)
+    for (const edge of toGoal) {
       const frame = frames.get(edge.target)
       expect(frame, edge.id).toBeDefined()
       if (frame) expect(onBorder(edge.points.at(-1) ?? edge.points[0], frame), edge.id).toBe(true)
@@ -280,12 +280,12 @@ describe('the options a hierarchical layout is given', () => {
     const { model } = broadSpace()
     const open = Object.fromEntries(
       frameProjection({ items: model.work_items, links: model.links, showDone: true }).frames.map(
-        (frame) => [frame.id, frame.id === NO_EPIC_FRAME],
+        (frame) => [frame.id, frame.id === NO_PARENT_FRAME],
       ),
     )
     const field = await layout({ nodes: model.work_items, edges: model.links }, engine, true, {
       kind: 'all',
-      epicId: null,
+      scopeRootId: null,
       frames: { choices: open },
     })
     expect(field.frames.some((frame) => frame.parentId !== null)).toBe(true)

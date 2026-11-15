@@ -23,7 +23,7 @@ async function serveWorking(page: Page, working = Number.POSITIVE_INFINITY) {
   const linked = new Set(model.links.flatMap((link) => [link.from, link.to]))
   const open = model.work_items
     .filter(
-      (item) => !item.state.is_terminal && (working === Infinity || linked.has(item.work_item_id)),
+      (item) => !item.state?.is_terminal && (working === Infinity || linked.has(item.work_item_id)),
     )
     .slice(0, working)
   const live: Record<string, LiveWork> = Object.fromEntries(

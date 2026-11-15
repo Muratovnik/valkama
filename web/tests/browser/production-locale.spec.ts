@@ -182,7 +182,7 @@ test('Russian Work bar keeps its controls on one row, and the former presets are
       'Можно брать',
       'Назначено',
       'По эпикам',
-      'По родителю',
+      'По цели',
       'Группировать доску по эпикам',
     ])
       await expect(page.getByRole('button', { name: gone, exact: true })).toHaveCount(0)

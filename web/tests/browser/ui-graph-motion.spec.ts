@@ -6,7 +6,7 @@
  *
  * Drawn on the harness's sample layout, where the first card is being worked
  * on and the second has fallen silent; `live=folded` also puts work under way
- * inside the folded largest epic.
+ * inside the folded largest goal.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -45,7 +45,7 @@ test('a comet runs only on a line that reaches work being done now', async ({ pa
   await page.goto(surface())
   await settled(page)
   // The line between the two cards reaches the one being worked on; the line
-  // folded onto the largest epic reaches only the silent one.
+  // folded onto the largest goal reaches only the silent one.
   expect(await comets(page)).toEqual([
     { live: true, comet: true },
     { live: false, comet: false },

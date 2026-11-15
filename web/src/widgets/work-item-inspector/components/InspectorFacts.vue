@@ -3,8 +3,8 @@
  * What holds for an item, under its title, as rows that each say what they are: the label in
  * the quiet ink at the start of the row, in a column of its own, and the fact after it. Its
  * priority, the state, its labels, who is on it, who else follows it and its parent are each a
- * row, in the registry's order (`ROWS`). They used to share three unlabelled rows, the state, the priority and the epic in one,
- * so the epic's arrow read as a next task and nothing said which word was which.
+ * row, in the registry's order (`ROWS`). They used to share three unlabelled rows, the state, the priority and the parent in one,
+ * so the parent's arrow read as a next task and nothing said which word was which.
  *
  * The state and the priority are each said once, by the control that changes them: the chip is
  * the menu. A refused write is the host's to show; the chip keeps naming what the item has, so
@@ -12,7 +12,7 @@
  * filters the Work view and ends in a × that takes it off, and a «+» attaches another.
  *
  * Every mark is the facet registry's, so the priority carries its glyph and its hue here as it
- * does on a tile. The parent is its own kind's sign — the epic's for an epic, the generic
+ * does on a tile. The parent is its own kind's sign — the goal's for a goal, the generic
  * parent's for a plain task — and its reference as an item link, the same link a number in
  * text is: a press opens it through the card's own departure (its draft guard, its Back), and
  * resting on it shows its hover card. Any item may hold others, so the row is «Parent». The holder's words are bare, a way to the session where there is one: a plate
@@ -57,7 +57,7 @@ import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { actorSession, holderName, sessionStart } from '@/shared/lib/actor.ts'
 import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
-import { useStateName } from '@/shared/lib/useStateName.ts'
+import { standingOf, useStandingName } from '@/shared/lib/useStateName.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -110,23 +110,28 @@ const ROW_FACETS: ReadonlySet<FacetId> = new Set([
 const ROWS = FACET_ORDER.filter((facet) => ROW_FACETS.has(facet))
 
 const { t, d } = useI18n()
-const stateName = useStateName()
-/** Where the item stands, as the owner has states named. */
-const here = computed(() => stateName(props.item.state))
+const standingName = useStandingName()
+/**
+ * Where the item stands, as the owner has states named, or, for an accepted open goal or
+ * stage, what it derives from the work under it: it stands in no state, so no move is offered.
+ */
+const here = computed(() => standingName(props.item))
+const standing = computed(() => standingOf(props.item))
 /** The action's place on the card, which the bar takes over from once it has scrolled away. */
 const actionCell = ref<HTMLElement | null>(null)
 
 const facetChoices = useFacetChoices()
-const stateChoice = (state: Pick<WorkItem['state'], 'key' | 'name' | 'category'>) =>
+const stateChoice = (state: Pick<NonNullable<WorkItem['state']>, 'key' | 'name' | 'category'>) =>
   ({ facet: 'state', value: state.key, state }) as const
 
 /** The states this item may move to, which is the workflow's answer, not a list. */
 const moves = computed(() => {
   const workflow = props.workflow
-  if (!workflow) return []
+  const from = props.item.state
+  if (!workflow || !from) return []
   const allowed = new Set(
     workflow.transitions
-      .filter((transition) => transition.from === props.item.state.state_id)
+      .filter((transition) => transition.from === from.state_id)
       .map((transition) => transition.to),
   )
   return facetChoices(
@@ -140,12 +145,16 @@ const moves = computed(() => {
  * The menu names where the item is, checked and not choosable, above where it can go; each
  * with its dot, as the chip draws the state it is in.
  */
-const stateOptions = computed(() => [
-  ...facetChoices([stateChoice(props.item.state)]).map((here) => ({ ...here, disabled: true })),
-  ...moves.value,
-])
+const stateOptions = computed(() => {
+  const { state } = props.item
+  const current = state ? facetChoices([stateChoice(state)]) : []
+  return [...current.map((here) => ({ ...here, disabled: true })), ...moves.value]
+})
 const movable = computed(
-  () => props.writable && (moves.value.length > 0 || (props.spaceReading && !props.workflow)),
+  () =>
+    props.writable &&
+    props.item.state !== null &&
+    (moves.value.length > 0 || (props.spaceReading && !props.workflow)),
 )
 
 /**
@@ -154,7 +163,7 @@ const movable = computed(
  * the reader. A move asked during another write is not sent.
  */
 function move(stateKey: string) {
-  if (!props.busy && stateKey !== props.item.state.key) emit('fact', { state: stateKey })
+  if (!props.busy && stateKey !== props.item.state?.key) emit('fact', { state: stateKey })
 }
 
 /**
@@ -207,7 +216,7 @@ provideReferenceLinks((reference, parent) => {
  */
 const lease = computed(() => {
   const claim = props.item.claim
-  return props.item.state.is_terminal || !claim || isWebAuthor(claim.holder) ? null : claim
+  return !props.item.open || !claim || isWebAuthor(claim.holder) ? null : claim
 })
 const leaseText = computed(() => {
   const claim = lease.value
@@ -222,7 +231,7 @@ const leaseText = computed(() => {
 const holder = computed(() => holderRef(props.item))
 /** What the row calls its holder: who is on it, or on finished work who was. */
 const holderLabel = computed(() =>
-  props.item.state.is_terminal ? t('workItem.previousOwner') : t('workItem.head.holder'),
+  props.item.open ? t('workItem.head.holder') : t('workItem.previousOwner'),
 )
 /**
  * A name's hint says what the line does not: the whole session id where the line prints its
@@ -238,7 +247,7 @@ const holderHint = computed(() => nameHint(holder.value ?? '', leaseText.value))
 
 /** The session behind the holder: its claim's, or on finished work its last claim's. */
 const holderExecutor = computed(() =>
-  props.item.state.is_terminal ? props.item.last_claim_executor : props.item.claim?.executor,
+  props.item.open ? props.item.claim?.executor : props.item.last_claim_executor,
 )
 
 /**
@@ -287,7 +296,7 @@ defineExpose({ actionCell })
             v-if="movable"
             class="card-state"
             size="compact"
-            :model-value="item.state.key"
+            :model-value="item.state?.key ?? ''"
             :options="stateOptions"
             :label="t('workItem.head.state', { state: here })"
             @update:model-value="move"
@@ -298,7 +307,7 @@ defineExpose({ actionCell })
             <template #value>
               <SemanticState
                 dimension="work-item-state"
-                :state="item.state.category"
+                :state="standing"
                 :label="here"
               />
             </template>
@@ -310,7 +319,7 @@ defineExpose({ actionCell })
             <SemanticState
               class="card-state"
               dimension="work-item-state"
-              :state="item.state.category"
+              :state="standing"
               :label="here"
             />
           </span>

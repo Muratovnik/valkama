@@ -22,7 +22,7 @@ afterEach(() => {
 function frame(id: string, folded: boolean, parentId: string | null = null): PlacedFrame {
   return {
     id,
-    epic: { ...boardItem(1, 'backlog'), work_item_id: id },
+    goal: { ...boardItem(1, 'backlog'), work_item_id: id },
     parentId,
     folded,
     foldable: true,
@@ -127,7 +127,7 @@ describe('the Tab stop as frames fold', () => {
     expect(keys.isTabStop(foldTarget('I'))).toBe(true)
   })
 
-  it('gives way from a fold the overview hides to the epic button beside it, and back', async () => {
+  it('gives way from a fold the overview hides to the goal button beside it, and back', async () => {
     const { keys, overview } = keyboard(frameTarget('I'))
     keys.onFocus(foldTarget('O'))
     await nextTick()

@@ -55,7 +55,7 @@ const props = defineProps<{
   writable: boolean
   /** The chain the views are narrowed to, when the owner asked to see one. */
   chain?: WorkItemChain | null
-  /** The branch of the chain the graph is framed on: an epic's reference, `''` for no epic. */
+  /** The branch of the chain the graph is framed on: a goal's reference, `''` for no goal. */
   chainBranch?: string | null
   /** The graph draws the chain's closed members too; the route keeps it. */
   chainClosed?: boolean
@@ -138,7 +138,7 @@ const {
   maxBytes: () => props.stateBytes,
   write: (state) => emit('state', state),
 })
-const boardGrouping = computed(() => (props.grouping === 'epic' ? 'epic' : 'none'))
+const boardGrouping = computed(() => (props.grouping === 'goal' ? 'goal' : 'none'))
 const census = usePlanningCensus(() => ({
   chain: props.chain ?? null,
   filter: filter.value,
@@ -184,7 +184,7 @@ const graphChain = computed(() =>
 
 /**
  * The branch of the chain the graph is framed on, as the chain's own answer
- * lists it — the members filed under that epic, or under none — and the epic
+ * lists it — the members filed under that goal, or under none — and the goal
  * itself, which heads it when it is in the chain.
  */
 const graphBranch = computed(() => {
@@ -225,14 +225,12 @@ const barGrouping = computed<ViewGrouping | null>(() => {
   if (stageView.value === 'list') return listTree.value ? 'goal' : 'none'
   return null
 })
-const barGroupings = computed<readonly ViewGrouping[]>(() =>
-  stageView.value === 'list' ? ['none', 'goal'] : ['none', 'epic'],
-)
+const barGroupings: readonly ViewGrouping[] = ['none', 'goal']
 /** The list's key, which makes it anew when it turns from a flat list to a tree. */
 const listKind = computed(() => (listTree.value ? 'tree' : 'flat'))
 /**
  * What the view leaves out of the counts: the graph's parents, which the bar
- * says as a sentence, and the grouped board's epics, which it says as rows.
+ * says as a sentence, and the grouped board's goals, which it says as rows.
  */
 const barExclusion = computed(() => census.exclusion.value)
 
@@ -346,7 +344,7 @@ defineExpose({ toggleFilter })
           :live="model.live_work"
           :selected-id="selectedId"
           :edges="graphEdges"
-          :epic-id="chain?.root.work_item_id ?? null"
+          :scope-root-id="chain?.root.work_item_id ?? null"
           :chain="graphChain"
           :filter="graphFilter"
           :branch="graphBranch"

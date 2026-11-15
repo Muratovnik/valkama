@@ -5,15 +5,15 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 /** What an agent's session behind an item is doing now: the read model's contract, as it is. */
 export type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 
-/** The frame of the work filed under no epic. */
-export const NO_EPIC_FRAME = 'none'
+/** The frame of the work filed under no goal. */
+export const NO_PARENT_FRAME = 'none'
 
 /**
  * A visible work item placed by the layout engine, as a box in the field's own
  * space: every reader measures the box it was given rather than a card size.
  */
 export interface PlacedNode extends WorkItemBrief {
-  /** The frame that holds it: an epic's id or `NO_EPIC_FRAME`. */
+  /** The frame that holds it: a goal's id or `NO_PARENT_FRAME`. */
   frameId: string
   height: number
   width: number
@@ -24,11 +24,11 @@ export interface PlacedNode extends WorkItemBrief {
 /**
  * How the work under a frame stands, by the groups a chain is read in. It
  * counts every item under the frame, open and closed, whatever the field draws
- * or a filter lets through: the counts describe the epic, not the view.
+ * or a filter lets through: the counts describe the goal, not the view.
  */
 export interface FrameProgress {
   active: number
-  /** Queued and backlog. */
+  /** Ready, untriaged and deferred. */
   ahead: number
   blocked: number
   done: number
@@ -37,18 +37,18 @@ export interface FrameProgress {
 }
 
 /**
- * An epic, an item that grew children, or the work under none, drawn as a
+ * A goal, an item that grew children, or the work under none, drawn as a
  * frame round its work — or, folded, as its header alone.
  */
 export interface PlacedFrame {
-  epic: WorkItemBrief | null
   /** Unfolding it would draw something; without that it stays folded and offers no fold. */
   foldable: boolean
   folded: boolean
+  goal: WorkItemBrief | null
   /** How tall its header is: the room the layout left for it, which is what is drawn. */
   header: number
   height: number
-  /** An epic's or container's `work_item_id`, or `NO_EPIC_FRAME`. */
+  /** A goal's or container's `work_item_id`, or `NO_PARENT_FRAME`. */
   id: string
   /** Open and closed work under it, nested frames' included, for live counts. */
   members: readonly string[]
@@ -61,7 +61,7 @@ export interface PlacedFrame {
 }
 
 /** What a frame's header shows, wherever the frame stands. */
-export type FrameHead = Pick<PlacedFrame, 'epic' | 'foldable' | 'folded' | 'id' | 'progress'>
+export type FrameHead = Pick<PlacedFrame, 'goal' | 'foldable' | 'folded' | 'id' | 'progress'>
 
 export const NODE_WIDTH = 264
 export const NODE_HEIGHT = 112
@@ -95,7 +95,7 @@ export function rowOrder(left: WorkItemBrief, right: WorkItemBrief): number {
   const leftParent = left.parent_id ?? ''
   const rightParent = right.parent_id ?? ''
   if (leftParent !== rightParent) {
-    // An item with no parent sorts after every grouped one, so the epics'
+    // An item with no parent sorts after every grouped one, so the goals'
     // children read as blocks rather than being split by loose work.
     if (leftParent === '') return 1
     if (rightParent === '') return -1

@@ -4,9 +4,11 @@
  */
 import { FACET_ORDER } from '@/entities/work-item/utils/facets.ts'
 import type { FacetId } from '@/entities/work-item/utils/facets.ts'
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { byUse } from '@/shared/lib/byUse.ts'
+import type { StandingItem } from '@/shared/lib/useStateName.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 
 /** The facets a new item is given in the dialog; the state is the workflow's to choose. */
@@ -25,7 +27,7 @@ export const COMPOSER_ROWS: readonly (readonly FacetId[])[] = (() => {
 })()
 
 /**
- * The items a new one may stand under: an epic, or an item already holding others, that
+ * The items a new one may stand under: a goal, that
  * is not inside one itself, since the hierarchy is one level deep. "No parent" leads, then
  * open work before closed and the newest first. An option is found by its number and its
  * title, and says its state as `stateName` names it.
@@ -33,21 +35,17 @@ export const COMPOSER_ROWS: readonly (readonly FacetId[])[] = (() => {
 export function parentChoices(
   items: readonly WorkItemBrief[],
   noParent: string,
-  stateName: (state: WorkItemBrief['state']) => string,
+  stateName: (item: StandingItem) => string,
 ): ChoiceOption[] {
   const parents = items
-    .filter((item) => (item.kind === 'epic' || item.container) && item.parent_id === null)
-    .sort(
-      (left, right) =>
-        Number(left.state.is_terminal) - Number(right.state.is_terminal) ||
-        right.number - left.number,
-    )
+    .filter((item) => WORK_ITEM_TREE.isContainer(item) && item.parent_id === null)
+    .sort((left, right) => Number(!left.open) - Number(!right.open) || right.number - left.number)
   return [
     { value: '', label: noParent },
     ...parents.map((item) => ({
       value: item.reference,
       label: `${item.reference} · ${item.title}`,
-      description: stateName(item.state),
+      description: stateName(item),
     })),
   ]
 }

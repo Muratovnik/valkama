@@ -1,7 +1,7 @@
 import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 
-import type { WorkItem } from '@/shared/api/planningModel.ts'
+import type { WorkItem, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 export function deferred<T>() {
   let resolve!: (value: T) => void
@@ -11,6 +11,15 @@ export function deferred<T>() {
     reject = onReject
   })
   return { promise, reject, resolve }
+}
+
+/**
+ * The state a test's item stands in. An accepted open goal or stage stands in none, and a
+ * test that reaches for its state has built the wrong item.
+ */
+export function stateOf(item: Pick<WorkItemBrief, 'state'>): NonNullable<WorkItemBrief['state']> {
+  if (item.state === null) throw new Error('the item stands in no state')
+  return item.state
 }
 
 const now = '2026-08-27T18:00:00Z'
@@ -45,8 +54,12 @@ export function workItemFixture(title: string, revision: number): WorkItem {
     revision,
     created_at: now,
     updated_at: now,
-    container: false,
-    ready: false,
+    open: true,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: false,
     comment_count: 0,
     claim: null,
     description: '',

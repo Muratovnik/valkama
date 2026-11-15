@@ -6,7 +6,7 @@ import { test } from 'vitest'
 import {
   FRAME_HEADER,
   MARGIN,
-  NO_EPIC_FRAME,
+  NO_PARENT_FRAME,
   NODE_HEIGHT,
   NODE_WIDTH,
 } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
@@ -29,13 +29,13 @@ const engine = new ELK()
 const layout = (
   source: GraphSource,
   showDone = false,
-  scope = { kind: 'all' as const, epicId: null } as Parameters<typeof computeLayout>[3],
+  scope = { kind: 'all' as const, scopeRootId: null } as Parameters<typeof computeLayout>[3],
 ) => computeLayout(source, engine, showDone, scope)
 /** The work under none drawn open, however much of it there is. */
 const UNFOLDED = {
   kind: 'all' as const,
-  epicId: null,
-  frames: { choices: { [NO_EPIC_FRAME]: false } },
+  scopeRootId: null,
+  frames: { choices: { [NO_PARENT_FRAME]: false } },
 }
 /**
  * A stable identity per number, so the cases below can keep naming items 1, 2,
@@ -50,7 +50,7 @@ const STATES = {
     state_id: identity(900),
     key: 'todo',
     name: 'Todo',
-    category: 'queued',
+    category: 'ready',
     is_terminal: false,
   },
   done: {
@@ -76,8 +76,12 @@ function node(id: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief
     claim_ref: '',
     claim_state: null,
     parent_id: null,
-    container: false,
-    ready: true,
+    open: !(overrides.state ?? STATES.todo).is_terminal,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: true,
     labels: [],
     source: '',
     checklist: [],
@@ -197,7 +201,7 @@ test('cycles, parallel context and long links route around unrelated cards', asy
   ]
   const chain = {
     kind: 'chain' as const,
-    epicId: null,
+    scopeRootId: null,
     members: nodes.map((item) => item.work_item_id),
   }
   const placed = await layout({ nodes, edges }, false, chain)
@@ -257,7 +261,7 @@ test('small disconnected chains stay compact with consistent card geometry', asy
 test('a container is a frame round its work, and closed work returns only on demand', async () => {
   const payload = {
     nodes: [
-      node(10, { container: true }),
+      node(10, { kind: 'goal' }),
       node(1, { parent_id: identity(10) }),
       node(2, { state: STATES.done }),
     ],
@@ -285,7 +289,7 @@ test('a container is a frame round its work, and closed work returns only on dem
     full.frames.map((frame) => [frame.id, frame.folded]),
     [
       [identity(10), false],
-      [NO_EPIC_FRAME, false],
+      [NO_PARENT_FRAME, false],
     ],
   )
   assert.deepEqual(
@@ -309,15 +313,15 @@ test('scope trims cards, counts and edges exactly', async () => {
     ],
     edges: [edge(1, 2), edge(1, 999)],
   }
-  const scope = { kind: 'epic' as const, epicId: identity(20) }
-  const epic = await layout(payload, false, scope)
+  const scope = { kind: 'tree' as const, scopeRootId: identity(20) }
+  const goal = await layout(payload, false, scope)
   assert.deepEqual(
-    epic.nodes.map((item) => numberOf(item)),
+    goal.nodes.map((item) => numberOf(item)),
     [1],
   )
-  assert.equal(epic.edges.length, 0)
+  assert.equal(goal.edges.length, 0)
   assert.equal(doneCount(payload, scope), 1)
-  const strays = await layout(payload, false, { kind: 'none', epicId: null })
+  const strays = await layout(payload, false, { kind: 'none', scopeRootId: null })
   assert.deepEqual(
     strays.nodes.map((item) => numberOf(item)),
     [3],
@@ -366,8 +370,8 @@ test('frontier uses the server workable flag and focus retains transitive cycles
   const source = {
     nodes: [
       node(1),
-      node(2, { ready: false, claim_ref: 'codex' }),
-      node(3, { ready: false }),
+      node(2, { workable: false, claim_ref: 'codex' }),
+      node(3, { workable: false }),
       node(4),
     ],
     edges: [edge(1, 2), edge(2, 3), edge(3, 2, 'discovered-from')],

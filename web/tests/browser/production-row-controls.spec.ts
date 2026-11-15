@@ -6,7 +6,7 @@
  * 36px and «На графе» beside it 28px; a label in the card was a face as tall as its words
  * beside a 28px «+»; and the new-task dialog's labels field grew from 40px to 52px once a
  * label was chosen, because the chip's remove button took the base rule's 40px, so the field
- * stood 12px taller than the epic beside it. The labels field's hint stood under one field of
+ * stood 12px taller than the goal beside it. The labels field's hint stood under one field of
  * its pair; it is the field's placeholder now.
  */
 import { expect } from '@playwright/test'
@@ -38,13 +38,13 @@ const WORDS = {
   en: {
     create: 'New work item',
     labels: 'Labels',
-    epic: 'Parent',
+    goal: 'Parent',
     hint: 'pick one, or type a new one',
   },
   ru: {
     create: 'Новая работа',
     labels: 'Метки',
-    epic: 'Родитель',
+    goal: 'Родитель',
     hint: 'выберите или введите новую',
   },
 } as const
@@ -146,7 +146,7 @@ for (const width of [1280, 390])
 
       // A field with a chip in it keeps the field's height; side by side the two share a top.
       const fields = await edges(dialog.locator('.combo-box'))
-      for (const field of fields) expect(field.height, 'labels and epic').toBeCloseTo(FIELD, 1)
+      for (const field of fields) expect(field.height, 'labels and goal').toBeCloseTo(FIELD, 1)
       // Side by side on a desktop the two share a top edge; on a phone one stands under the other.
       expect(Math.abs(fields[1].top - fields[0].top) < 1).toBe(width >= 1280)
     })

@@ -227,7 +227,7 @@ defineExpose({ revealQuestion })
           :ref="(card) => (cards[row.key] = card as CardHandle | null)"
           :entry="row.entry"
           :draft="draftFor(row.entry)"
-          :item-closed="item.state.is_terminal"
+          :item-closed="!item.open"
           :suggest="suggest"
           @update:draft="drafts[requestIdentity(row.entry)] = $event"
           @updated="emit('answered', $event)"
@@ -286,7 +286,7 @@ defineExpose({ revealQuestion })
             <CommentList
               :entry="row.list"
               :draft="draftFor(row.list)"
-              :item-closed="item.state.is_terminal"
+              :item-closed="!item.open"
               :suggest="suggest"
               @update:draft="keepDraft(row.list, $event)"
               @updated="emit('answered', $event)"

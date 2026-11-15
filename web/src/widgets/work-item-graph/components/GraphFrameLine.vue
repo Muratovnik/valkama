@@ -3,7 +3,7 @@
  * A frame header's first line, as a card's is: what it is and its reference, its
  * state once it has moved, and at the far end the work moving under it. The state
  * gives way first when the line is full, then the reference; the header's button
- * keeps both whole in its name. Over the work under no epic the line is its name.
+ * keeps both whole in its name. Over the work under no goal the line is its name.
  * Zoomed out it is the reference and the work moving, the whole line grown with the
  * field by the `--grow` the header sets, and far out the reference gives way to what
  * a fold hides (`named`). There the work moving shortens to its count beside the sign
@@ -17,25 +17,25 @@ import { useResizeObserver } from '@vueuse/core'
 
 import GraphFrameWorking from '@/widgets/work-item-graph/components/GraphFrameWorking.vue'
 
-import { printsFacet } from '@/entities/work-item/utils/facets.ts'
+import { kindGlyph as kindGlyphOf, printsFacet } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { useStateName } from '@/shared/lib/useStateName.ts'
+import { standingOf, useStandingName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const {
-  epic,
+  goal,
   named = true,
   overview = false,
   working,
   wraps = false,
 } = defineProps<{
-  /** The epic the header opens; the work under no epic has none. */
-  epic: WorkItemBrief | null
-  /** What the work under no epic is called. */
+  /** The goal the header opens; the work under no goal has none. */
+  goal: WorkItemBrief | null
+  /** What the work under no goal is called. */
   title: string
   /** How many items under the frame an agent is working on now. */
   working: number
@@ -48,13 +48,13 @@ const {
   wraps?: boolean
 }>()
 
-/** An epic says it is one; an item that grew children says it is an item. */
-const kindGlyph = computed(() => (epic?.kind === 'epic' ? 'kind-epic' : 'parent'))
-const kindInk = computed(() => (epic?.kind === 'epic' ? 'epic' : undefined))
-/** The epic's state, said once it has moved, as a board's lane says it. */
-const stateShown = computed(() => (epic ? printsFacet('state', 'lane', epic) : false))
-const stateName = useStateName()
-const epicState = computed(() => (epic ? stateName(epic.state) : ''))
+/** A goal or a stage says what it is, in its kind's sign and colour. */
+const kindGlyph = computed(() => (goal ? kindGlyphOf(goal.kind) : null) ?? 'parent')
+const kindInk = computed(() => goal?.kind)
+/** The goal's state, said once it has moved, as a board's lane says it. */
+const stateShown = computed(() => (goal ? printsFacet('state', 'lane', goal) : false))
+const stateName = useStandingName()
+const goalState = computed(() => (goal ? stateName(goal) : ''))
 
 const line = useTemplateRef<HTMLElement>('line')
 const name = useTemplateRef<HTMLElement>('name')
@@ -75,7 +75,7 @@ function fit() {
 }
 
 onMounted(fit)
-watch([() => overview, () => wraps, () => working, () => named, () => epic?.reference], fit, {
+watch([() => overview, () => wraps, () => working, () => named, () => goal?.reference], fit, {
   flush: 'post',
 })
 // The line's width follows the growth, and the name's the font it waited for.
@@ -92,7 +92,7 @@ useResizeObserver(
     :class="{ overview, wraps: overview && wraps }"
   >
     <VIcon
-      v-if="epic && !overview"
+      v-if="goal && !overview"
       class="graph-frame-kind"
       :data-kind="kindInk"
       :name="kindGlyph"
@@ -100,11 +100,11 @@ useResizeObserver(
     />
     <template v-if="named">
       <span
-        v-if="epic"
+        v-if="goal"
         ref="name"
-        v-tooltip.clipped="epic.reference"
+        v-tooltip.clipped="goal.reference"
         class="graph-frame-reference one-line"
-        >{{ epic.reference }}</span
+        >{{ goal.reference }}</span
       >
       <span
         v-else
@@ -116,12 +116,12 @@ useResizeObserver(
       />
     </template>
     <SemanticState
-      v-if="epic && stateShown && !overview"
+      v-if="goal && stateShown && !overview"
       class="graph-frame-state"
       dimension="work-item-state"
-      :class="{ closed: epic.state.is_terminal }"
-      :state="epic.state.category"
-      :label="epicState"
+      :class="{ closed: !goal.open }"
+      :state="standingOf(goal)"
+      :label="goalState"
     />
     <GraphFrameWorking
       v-if="working"
@@ -179,7 +179,7 @@ useResizeObserver(
   font: var(--font-row-title);
 }
 
-/* A closed epic still holding open work says so, quietly. */
+/* A closed goal still holding open work says so, quietly. */
 .graph-frame-state {
   flex: 0 1000 auto;
   min-width: 0;

@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 
-import { chainResponse, emptyChain, largeEpicChain } from '../fixtures/chain.ts'
+import { chainResponse, emptyChain, largeGoalChain } from '../fixtures/chain.ts'
 import { deferred, findTab, getButton, showChain, workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
@@ -24,9 +24,9 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   fetchWorkItem: vi.fn(),
 }))
 
-const ROOT = { ...workItemFixture('Planning rethink', 1), container: true }
+const ROOT = { ...workItemFixture('Planning rethink', 1), kind: 'goal' as const }
 /** The standard queued state, read in the interface's words, heads its fourteen items. */
-const QUEUED = 'Queued · 14'
+const QUEUED = 'Ready · 14'
 
 /** Answer every chain read with the next response, and record what was asked. */
 function serveChain(...answers: Response[]) {
@@ -86,7 +86,7 @@ describe('the chain section of a card', () => {
   useInspectorHarness()
 
   it('reads a MAIN-384-shaped chain as a map first, then one line, its verdict and the groups', async () => {
-    const asked = serveChain(json(chainResponse(largeEpicChain())))
+    const asked = serveChain(json(chainResponse(largeGoalChain())))
     const wrapper = await open()
     const chain = section(wrapper)
     expect(chain.exists()).toBe(true)
@@ -110,7 +110,7 @@ describe('the chain section of a card', () => {
     // nor does a bare count: the totals line is the section's one number for the chain, and it
     // says what it counts. The action wears its short word under its whole name.
     expect(chain.element.firstElementChild?.classList).toContain('chain-actions')
-    expect(chain.get('.chain-actions').text()).toBe('EpicChainOn graph')
+    expect(chain.get('.chain-actions').text()).toBe('ContentsChainOn graph')
     expect(chain.find('h3, .section-header').exists()).toBe(false)
     expect(getButton(wrapper, 'On graph').attributes('aria-label')).toBe('Show on graph')
     // The map's key says what stands where, in the board's own state names —
@@ -123,7 +123,7 @@ describe('the chain section of a card', () => {
     // included, which the board's chain chip does include. Workable counts the
     // backlog too, so it outnumbers the 14 to do, and it says so.
     const line = chain.get('.chain-summary-line').text()
-    for (const word of ['Under the root', 'Open', 'Workable', 'backlog included'])
+    for (const word of ['Under the root', 'Open', 'Workable', 'untriaged work included'])
       expect(line).toContain(word)
     expect(stats(wrapper)).toEqual(['616', '133', '115'])
     // 53 added against 42 done: the open part grows unless more than
@@ -156,7 +156,7 @@ describe('the chain section of a card', () => {
     ])
 
     const headings = chain.findAll('.chain-group-title').map((heading) => heading.text())
-    expect(headings).toEqual(['Development · 11', 'Code review · 1', QUEUED, 'Backlog · 107'])
+    expect(headings).toEqual(['Development · 11', 'Code review · 1', QUEUED, 'Triage · 107'])
     // Finished work is one folded group, closed until asked.
     expect(getButton(wrapper, 'Done · 483').attributes('aria-expanded')).toBe('false')
     expect(chain.findAll('.chain-row.is-done')).toHaveLength(0)
@@ -167,7 +167,7 @@ describe('the chain section of a card', () => {
   })
 
   it('calls each group one thing in the key and the headings, and says each figure once', async () => {
-    const mixed = largeEpicChain()
+    const mixed = largeGoalChain()
     // The open items under MAIN-900 wait in a second backlog state, so the
     // backlog spans two states and is named by the group's own word everywhere.
     for (const member of mixed.members.filter(
@@ -182,18 +182,18 @@ describe('the chain section of a card', () => {
       .findAll('.chain-group-title, .chain-done-toggle')
       .map((heading) => heading.text().replace(/ · \d+$/u, ''))
     const line = chain.get('.chain-summary-line').text().replaceAll('\u{A0}', ' ')
-    expect(legend).toEqual(['Done', 'Code review', 'Development', 'Queued', 'Backlog'])
+    expect(legend).toEqual(['Done', 'Code review', 'Development', 'Ready', 'Triage'])
     expect(new Set(headings)).toEqual(new Set(legend))
     // The line under the map is what the key does not say.
     for (const word of legend) expect(line).not.toContain(word)
     // Narrowing the list to a lane in one backlog state keeps the chain's word.
     await getButton(wrapper, 'MAIN-779').trigger('click')
-    expect(group(wrapper, 'Backlog')?.get('.chain-group-title').text()).toBe('Backlog · 74')
-    expect(new Set(details(wrapper, 'Backlog'))).toEqual(new Set(['Backlog']))
+    expect(group(wrapper, 'Triage')?.get('.chain-group-title').text()).toBe('Triage · 74')
+    expect(new Set(details(wrapper, 'Triage'))).toEqual(new Set(['Triage']))
   })
 
   it('names a row state only where its group heading does not', async () => {
-    const mixed = largeEpicChain()
+    const mixed = largeGoalChain()
     // The three open items under MAIN-900 wait in a second backlog state, and
     // the first two closed ones were cancelled rather than done.
     for (const member of mixed.members.filter(
@@ -203,20 +203,20 @@ describe('the chain section of a card', () => {
     for (const member of mixed.members.slice(0, 2))
       Object.assign(member.state, { key: 'cancelled', name: 'Cancelled', category: 'cancelled' })
     Object.assign(mixed.by_category, { completed: 481, cancelled: 2 })
-    serveChain(json(chainResponse(largeEpicChain())), json(chainResponse(mixed)))
+    serveChain(json(chainResponse(largeGoalChain())), json(chainResponse(mixed)))
     // One state per group: the heading names it, and the rows do not repeat it.
     const single = await open()
-    expect(details(single, 'Queued')).toEqual(eight(null))
+    expect(details(single, 'Ready')).toEqual(eight(null))
     await getButton(single, 'Done · 483').trigger('click')
     expect(details(single, 'Done')).toEqual(eight(null))
     single.unmount()
 
     // A group that mixes states is headed by its category, and each row names its own.
     const several = await open()
-    expect(group(several, 'Backlog')?.get('.chain-group-title').text()).toBe('Backlog · 107')
+    expect(group(several, 'Triage')?.get('.chain-group-title').text()).toBe('Triage · 107')
     await getButton(several, 'Show all · 107').trigger('click')
-    const backlog = details(several, 'Backlog') ?? []
-    expect(new Set(backlog)).toEqual(new Set(['Backlog', 'Icebox']))
+    const backlog = details(several, 'Triage') ?? []
+    expect(new Set(backlog)).toEqual(new Set(['Triage', 'Icebox']))
     expect(backlog.filter((name) => name === 'Icebox')).toHaveLength(3)
     await getButton(several, 'Done · 483').trigger('click')
     expect(new Set(details(several, 'Done'))).toEqual(new Set(['Done', 'Cancelled']))
@@ -225,12 +225,12 @@ describe('the chain section of a card', () => {
   })
 
   it('stops a long group after eight rows and shows the rest on request', async () => {
-    serveChain(json(chainResponse(largeEpicChain())))
+    serveChain(json(chainResponse(largeGoalChain())))
     const wrapper = await open()
     const backlog = () =>
       section(wrapper)
         .findAll('section.chain-group')
-        .find((group) => group.attributes('aria-label') === 'Backlog')
+        .find((group) => group.attributes('aria-label') === 'Triage')
     expect(backlog()?.findAll('.chain-row')).toHaveLength(8)
     await getButton(wrapper, 'Show all · 107').trigger('click')
     expect(backlog()?.findAll('.chain-row')).toHaveLength(107)
@@ -240,9 +240,9 @@ describe('the chain section of a card', () => {
   })
 
   it('opens a long group and closes it again, and focus never falls out of the list', async () => {
-    serveChain(json(chainResponse(largeEpicChain())))
+    serveChain(json(chainResponse(largeGoalChain())))
     const wrapper = await open()
-    const backlog = () => group(wrapper, 'Backlog')
+    const backlog = () => group(wrapper, 'Triage')
     const toggle = () => backlog()?.get('.chain-more')
     const list = backlog()?.get('ul')
     // Closed: it says how many the group holds, and which list it opens.
@@ -271,13 +271,13 @@ describe('the chain section of a card', () => {
     expect(toggle()?.attributes('aria-expanded')).toBe('false')
   })
 
-  it('asks again with scope=epic when the scope toggle says Epic', async () => {
-    const epic = { ...largeEpicChain(), scope: 'epic' as const }
-    const asked = serveChain(json(chainResponse(largeEpicChain())), json(chainResponse(epic)))
+  it('asks again with scope=tree when the scope toggle says Contents', async () => {
+    const goal = { ...largeGoalChain(), scope: 'tree' as const }
+    const asked = serveChain(json(chainResponse(largeGoalChain())), json(chainResponse(goal)))
     const wrapper = await open()
-    await getButton(wrapper, 'Epic').trigger('click')
+    await getButton(wrapper, 'Contents').trigger('click')
     await flushPromises()
-    expect(asked.map((query) => query.get('scope'))).toEqual(['chain', 'epic'])
+    expect(asked.map((query) => query.get('scope'))).toEqual(['chain', 'tree'])
     await getButton(wrapper, 'Chart and pace').trigger('click')
     expect(section(wrapper).get('.chain-pace').text()).toContain('+53 added, −42 done')
   })
@@ -301,7 +301,7 @@ describe('the chain section of a card', () => {
     // card has one status region for its waits.
     expect(section(wrapper).get('.chain-quiet').text()).toBe('')
     expect(section(wrapper).find('[role="status"]').exists()).toBe(false)
-    answer.resolve(json(chainResponse(largeEpicChain())))
+    answer.resolve(json(chainResponse(largeGoalChain())))
     await flushPromises()
     expect(section(wrapper).attributes('aria-busy')).toBeUndefined()
     expect(section(wrapper).find('.chain-quiet').exists()).toBe(false)
@@ -321,7 +321,7 @@ describe('the chain section of a card', () => {
   it('says a failed read failed, and a retry that succeeds shows the chain', async () => {
     const asked = serveChain(
       json({ error: { code: 'invalid_request', message: 'no work item' } }, 400),
-      json(chainResponse(largeEpicChain())),
+      json(chainResponse(largeGoalChain())),
     )
     const wrapper = await open()
     expect(section(wrapper).get('[role="alert"]').text()).toContain(
@@ -335,14 +335,14 @@ describe('the chain section of a card', () => {
   })
 
   it('refuses a payload whose counts disagree with its members', async () => {
-    serveChain(json(chainResponse({ ...largeEpicChain(), total: 617, open: 134 })))
+    serveChain(json(chainResponse({ ...largeGoalChain(), total: 617, open: 134 })))
     const wrapper = await open()
     expect(section(wrapper).find('[role="alert"]').exists()).toBe(true)
     expect(section(wrapper).find('.chain-summary-line').exists()).toBe(false)
   })
 
-  it('opens a member, or a lane’s epic, through the card navigation', async () => {
-    serveChain(json(chainResponse(largeEpicChain())))
+  it('opens a member, or a lane’s goal, through the card navigation', async () => {
+    serveChain(json(chainResponse(largeGoalChain())))
     const wrapper = await open()
     const row = section(wrapper).findAll('.chain-row')[0]
     const reference = row.get('.chain-row-reference').text()
@@ -358,7 +358,7 @@ describe('the chain section of a card', () => {
   })
 
   it('narrows the member list to the lane chosen on the map, and widens it back', async () => {
-    serveChain(json(chainResponse(largeEpicChain())))
+    serveChain(json(chainResponse(largeGoalChain())))
     const wrapper = await open()
     const headings = () =>
       section(wrapper)
@@ -370,7 +370,7 @@ describe('the chain section of a card', () => {
     await getButton(wrapper, 'MAIN-779').trigger('click')
     expect(chip().text()).toBe('Lane MAIN-779')
     expect(chip().attributes('aria-label')).toBe('Lane MAIN-779: show every lane')
-    expect(headings()).toEqual(['Development · 11', 'Code review · 1', QUEUED, 'Backlog · 74'])
+    expect(headings()).toEqual(['Development · 11', 'Code review · 1', QUEUED, 'Triage · 74'])
     expect(getButton(wrapper, 'Done · 142').exists()).toBe(true)
     // The narrowed list follows the map and its line directly; the whole
     // chain's history moves below it, so the rows the choice narrowed are not
@@ -396,7 +396,7 @@ describe('the chain section of a card', () => {
     // Another lane takes its place; the lane of no parent has no parent to open.
     await getButton(wrapper, 'no parent').trigger('click')
     expect(chip().text()).toBe('Lane no parent')
-    expect(headings()).toEqual(['Backlog · 30'])
+    expect(headings()).toEqual(['Triage · 30'])
     expect(wrapper.findAll('button').some((button) => button.text().startsWith('Open '))).toBe(
       false,
     )
@@ -404,32 +404,32 @@ describe('the chain section of a card', () => {
     // The chip widens the list back, and so does the same label again.
     await chip().trigger('click')
     expect(chip().exists()).toBe(false)
-    expect(headings()).toEqual(['Development · 11', 'Code review · 1', QUEUED, 'Backlog · 107'])
+    expect(headings()).toEqual(['Development · 11', 'Code review · 1', QUEUED, 'Triage · 107'])
     await getButton(wrapper, 'MAIN-900').trigger('click')
     await getButton(wrapper, 'MAIN-900').trigger('click')
     expect(chip().exists()).toBe(false)
   })
 
   it('forgets a chosen lane the next answer does not have', async () => {
-    // The epic scope is the root's own children: one lane, and no MAIN-900 in it.
-    const whole = largeEpicChain()
-    const epic = {
+    // The goal scope is the root's own children: one lane, and no MAIN-900 in it.
+    const whole = largeGoalChain()
+    const goal = {
       ...whole,
-      scope: 'epic' as const,
+      scope: 'tree' as const,
       members: whole.members.filter((member) => member.parent_reference === 'MAIN-384'),
       total: 273,
       closed: 273,
       open: 0,
-      ready: 0,
+      workable: 0,
       by_category: { completed: 273 },
       origins: whole.origins.slice(0, 1),
       edges: [],
     }
-    serveChain(json(chainResponse(whole)), json(chainResponse(epic)))
+    serveChain(json(chainResponse(whole)), json(chainResponse(goal)))
     const wrapper = await open()
     await getButton(wrapper, 'MAIN-900').trigger('click')
     expect(section(wrapper).find('.chain-lane-chip').exists()).toBe(true)
-    await getButton(wrapper, 'Epic').trigger('click')
+    await getButton(wrapper, 'Contents').trigger('click')
     await flushPromises()
     expect(
       section(wrapper)
@@ -440,7 +440,7 @@ describe('the chain section of a card', () => {
   })
 
   it('hands the chain it shows to the graph', async () => {
-    serveChain(json(chainResponse(largeEpicChain())))
+    serveChain(json(chainResponse(largeGoalChain())))
     const wrapper = await open()
     await getButton(wrapper, 'On graph').trigger('click')
     const [[shown, branch]] = wrapper.emitted('chain') as [
@@ -453,7 +453,7 @@ describe('the chain section of a card', () => {
   })
 
   it('hands the graph the branch chosen on the map', async () => {
-    serveChain(json(chainResponse(largeEpicChain())))
+    serveChain(json(chainResponse(largeGoalChain())))
     const wrapper = await open()
     await getButton(wrapper, 'MAIN-900').trigger('click')
     await getButton(wrapper, 'On graph').trigger('click')
@@ -463,7 +463,7 @@ describe('the chain section of a card', () => {
   })
 
   it('reads once per open and once per refresh, and never for an attached store', async () => {
-    const asked = serveChain(json(chainResponse(largeEpicChain())))
+    const asked = serveChain(json(chainResponse(largeGoalChain())))
     const wrapper = await open()
     expect(asked).toHaveLength(1)
     await wrapper.setProps({ refreshToken: 1 })

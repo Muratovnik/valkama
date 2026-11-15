@@ -141,10 +141,10 @@ describe('a chain the address names that cannot be read', () => {
 
 describe('«Show on graph»', () => {
   it('names the chain beside the graph view, and closes the card once the address has it', async () => {
-    const run = surface({ view: 'kanban', group: 'epic' }, 'ru', 'MAIN-264')
+    const run = surface({ view: 'kanban', group: 'goal' }, 'ru', 'MAIN-264')
     const chain = emptyChain('MAIN-264') as WorkItemChain
     run.view().show(chain)
-    const named = { view: 'graph', group: 'epic', chain: 'MAIN-264', chain_scope: 'chain' }
+    const named = { view: 'graph', group: 'goal', chain: 'MAIN-264', chain_scope: 'chain' }
     expect(run.written).toEqual([named])
     // Not in the same tick: the route has not moved yet, and closing now would
     // write the old state back over the chain.

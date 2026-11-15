@@ -33,7 +33,7 @@ export const now = '2026-08-13T09:00:00Z'
 export const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`
 
 const STATES = [
-  { key: 'backlog', name: 'Backlog', category: 'backlog', terminal: false },
+  { key: 'backlog', name: 'Backlog', category: 'triage', terminal: false },
   { key: 'dev', name: 'Dev', category: 'active', terminal: false },
   { key: 'done', name: 'Done', category: 'completed', terminal: true },
 ] as const
@@ -61,7 +61,7 @@ const workflow = {
 // the workflow's declaration of the state, not to an item sitting in it.
 const { position: _devPosition, ...DEV_STATE } = workflow.states[1]
 const { position: _donePosition, ...doneState } = workflow.states[2]
-export { doneState }
+export { DEV_STATE as devState, doneState }
 
 export const planningSpace = {
   planning_space_id: identity(800),
@@ -86,8 +86,12 @@ export const blockedWorkItem: BriefFields = {
   parent_id: null,
   labels: [],
   source: '',
-  container: false,
-  ready: false,
+  open: true,
+  container_state: null,
+  acceptance: null,
+  started_at: null,
+  waits_for: [],
+  workable: false,
   checklist: [],
   revision: 1,
   created_at: now,
@@ -112,9 +116,13 @@ const briefFields: BriefFields = {
   claim_state: 'unconfirmed' as const,
   parent_id: null,
   labels: ['platform', 'phase-1'],
-  source: 'docs/plans/platform.md#kb:arch-plan',
-  container: false,
-  ready: false,
+  source: 'docs/plans/platform.md#kb:architecture',
+  open: true,
+  container_state: null,
+  acceptance: null,
+  started_at: null,
+  waits_for: [],
+  workable: false,
   checklist: [
     {
       id: identity(300),

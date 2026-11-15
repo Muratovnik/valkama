@@ -29,7 +29,7 @@ export function mountSummary(usage: ItemUsage) {
   const Host = defineComponent({
     setup() {
       provideInspectorUsage({
-        isEpic: computed(() => false),
+        isContainer: computed(() => false),
         read,
         rows: computed(() => answer.value),
         runs: read,

@@ -513,18 +513,18 @@ class _Scenario:
             return self.http("/api/analytics/quota?utc_offset=180")
 
     def live_frame(self) -> dict:
-        """The frame a pin answers with: the pinned card, a waiting row, a quiet one under an epic."""
+        """The frame a pin answers with: the pinned card, a waiting row, a quiet one under a goal."""
 
         quiet = "6f1c2a8e-0000-4000-8000-000000000004"
         conn = store.connect()
         try:
-            epic = str(
-                service.create_work_item(conn, space=SPACE, title="Live epic", kind="goal")[
+            goal = str(
+                service.create_work_item(conn, space=SPACE, title="Live goal", kind="goal")[
                     "reference"
                 ]
             )
             task = str(
-                service.create_work_item(conn, space=SPACE, title="Quiet task", parent=epic)[
+                service.create_work_item(conn, space=SPACE, title="Quiet task", parent=goal)[
                     "reference"
                 ]
             )

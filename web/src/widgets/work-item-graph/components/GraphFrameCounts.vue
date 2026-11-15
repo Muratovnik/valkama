@@ -2,8 +2,8 @@
 /**
  * How the work under a frame stands, in words, each number beside its word
  * rather than inside it. The counts are never cut: they take a second line
- * first. They count the epic, not the view, so what a filter or «Open» hides is
- * in these numbers too, and only an epic nothing was filed under says it has no
+ * first. They count the goal, not the view, so what a filter or «Open» hides is
+ * in these numbers too, and only a goal nothing was filed under says it has no
  * tasks.
  */
 import { computed } from 'vue'
@@ -17,7 +17,7 @@ import CountBadge from '@/shared/ui/CountBadge.vue'
 const { progress } = defineProps<{ progress: FrameProgress }>()
 const { t } = useI18n()
 
-/** A frame's counts are its epic's whole size, which no badge's «99+» may round off. */
+/** A frame's counts are its goal's whole size, which no badge's «99+» may round off. */
 const WHOLE = Number.MAX_SAFE_INTEGER
 
 const groups = computed(() => countedGroups(progress))

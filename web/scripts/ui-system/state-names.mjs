@@ -21,11 +21,7 @@ import { uncommented } from './comments.mjs'
 export const STATE_NAME_READS = new Map([
   ['shared/lib/stateNames.ts state.name', 'the one function: it decides what the name reads as'],
   [
-    'shared/api/planningChainGroups.ts member.state.name',
-    'compares two members for one state; the name it shows comes from the function',
-  ],
-  [
-    'shared/api/planningChainGroups.ts first.state.name',
+    'shared/api/planningChainGroups.ts member.state?.name',
     'compares two members for one state; the name it shows comes from the function',
   ],
   [

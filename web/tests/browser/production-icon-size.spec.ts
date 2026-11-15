@@ -89,7 +89,7 @@ async function withLiveWork(page: Page, open: () => Promise<void>) {
 async function board(page: Page) {
   await installBackend(page)
   await serve(page)
-  await withLiveWork(page, () => openBoard(page, { group: 'epic', labels: 'coordinator,ui' }))
+  await withLiveWork(page, () => openBoard(page, { group: 'goal', labels: 'coordinator,ui' }))
   await expect(page.locator('.workspace-chips .filter-chip').first()).toBeVisible()
   const fold = page.locator('.nav-fold-toggle').first()
   if (await fold.isVisible()) {
@@ -98,11 +98,11 @@ async function board(page: Page) {
   }
 }
 
-/** The board showing one epic's chain, which its scope chip says and leaves. */
+/** The board showing one goal's chain, which its scope chip says and leaves. */
 async function chain(page: Page) {
   await installBackend(page)
   await serve(page)
-  await openBoard(page, { group: 'epic', chain: 'MAIN-401', chain_scope: 'chain' })
+  await openBoard(page, { group: 'goal', chain: 'MAIN-401', chain_scope: 'chain' })
   await expect(page.locator('.scope-chip')).toBeVisible()
 }
 

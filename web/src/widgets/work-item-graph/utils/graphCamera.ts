@@ -83,7 +83,7 @@ export function graphWholeView(
     : null
 }
 
-/** A branch of a chain the field is framed on: its drawn nodes, and the epic that heads it. */
+/** A branch of a chain the field is framed on: its drawn nodes, and the goal that heads it. */
 export interface GraphBranchFrame {
   headId: string | null
   ids: ReadonlySet<string>
@@ -97,7 +97,7 @@ interface AnchorOptions {
 
 /**
  * The work of the branch the card chose, as the field reads it: top to bottom,
- * then left to right. Its epic is lit with it but drawn wherever its own chain
+ * then left to right. Its goal is lit with it but drawn wherever its own chain
  * puts it, often far from its work, so it is framed only when nothing else of
  * the branch is drawn.
  */
@@ -235,7 +235,7 @@ function holdsOpenWork(graph: GraphLayout): (target: WalkTarget) => boolean {
   const frames = new Map(graph.frames.map((frame) => [frame.id, frame]))
   return (target) => {
     const card = cards.get(target.id)
-    if (card) return !card.state.is_terminal
+    if (card) return card.open
     const frame = frames.get(target.frameId)
     return frame !== undefined && frame.progress.total > frame.progress.done
   }

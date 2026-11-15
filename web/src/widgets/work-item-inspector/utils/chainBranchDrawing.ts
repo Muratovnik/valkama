@@ -80,8 +80,10 @@ const TIP_GAP = 4
  */
 const PAINT_ORDER: readonly ChainGroup[] = [
   'done',
-  'backlog',
-  'queued',
+  'deferred',
+  'triage',
+  'ready',
+  'containers',
   'active',
   'review',
   'blocked',

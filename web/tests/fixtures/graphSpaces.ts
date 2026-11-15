@@ -2,27 +2,29 @@
  * Two whole spaces as the graph receives them, shaped like the spaces the graph
  * of frames was designed against, with invented names and numbers.
  *
- * The broad space has many epics with a little open work each: 1397 items, 352
+ * The broad space has many goals with a little open work each: 1397 items, 352
  * open, of which 311 are work rather than grouping. 165 items group others —
- * 164 epics and one task that grew children — 41 of them open, 38 of those with
- * open work under them, and 4 closed epics still holding open work. 158 open
- * items are filed under no epic. The largest epic holds 54 items, 21 of them
+ * 164 goals and one task that grew children — 41 of them open, 38 of those with
+ * open work under them, and 4 closed goals still holding open work. 158 open
+ * items are filed under no goal. The largest goal holds 54 items, 21 of them
  * open; one other holds 13 open, among them an item whose only link is to that
- * epic. One epic stands inside another, which the space it imitates did not
+ * goal. One goal stands inside another, which the space it imitates did not
  * have, so the frame inside a frame is drawn by something real.
  *
- * The deep space has one epic that dwarfs the rest: 1120 items, 175 open, 25
- * epics of which 8 are open and all 8 hold open work, one of them 273 items with
- * 100 open, and 46 open items under no epic.
+ * The deep space has one goal that dwarfs the rest: 1120 items, 175 open, 25
+ * goals of which 8 are open and all 8 hold open work, one of them 273 items with
+ * 100 open, and 46 open items under no goal.
  *
  * The links follow the same shape: in the broad space 360 discovered-from, 177
- * blocks and 106 relates-to, of which 87 touch an epic — 5 from open work to its
- * own epic, 28 between open work and another epic — and 2 reach another space.
+ * blocks and 106 relates-to, of which 87 touch a goal — 5 from open work to its
+ * own goal, 28 between open work and another goal — and 2 reach another space.
  *
  * Built rather than written out, from a fixed seed, so the counts above are
  * arithmetic a test can check and the same input arrives on every run.
  */
 import type { LiveWork } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { PlanningEdge, PlanningReadModel, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -32,8 +34,8 @@ type StateKey = keyof typeof STATES
 const identity = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 const STATES = {
-  backlog: { name: 'Backlog', category: 'backlog', is_terminal: false },
-  todo: { name: 'Todo', category: 'queued', is_terminal: false },
+  backlog: { name: 'Backlog', category: 'triage', is_terminal: false },
+  todo: { name: 'Todo', category: 'ready', is_terminal: false },
   dev: { name: 'Dev', category: 'active', is_terminal: false },
   review: { name: 'Review', category: 'review', is_terminal: false },
   blocked: { name: 'Blocked', category: 'blocked', is_terminal: false },
@@ -43,7 +45,7 @@ const STATES = {
 const STATE_KEYS = Object.keys(STATES) as StateKey[]
 const stateId = (key: StateKey) => identity(900 + STATE_KEYS.indexOf(key))
 
-function state(key: StateKey): WorkItemBrief['state'] {
+function state(key: StateKey): NonNullable<WorkItemBrief['state']> {
   return { state_id: stateId(key), key, ...STATES[key] }
 }
 
@@ -56,8 +58,8 @@ interface FramePlan {
   /** The grouping item is still open. */
   open: boolean
   openWork: number
-  kind?: 'epic' | 'task'
-  /** Holds the item whose one link is to this frame's epic. */
+  kind?: 'goal' | 'stage'
+  /** Holds the item whose one link is to this frame's goal. */
   lone?: true
   /** The frame, by its index in the plan, this one stands inside. */
   parent?: number
@@ -72,11 +74,11 @@ interface ShapePlan {
   kinds: Record<LinkKind, number>
   /** How many links of each pattern; every other link is between closed work. */
   links: {
-    epicOther: number
-    foreignEpic: number
+    foreignGoal: number
+    goalOther: number
     openClosed: number
     openOpen: number
-    ownEpic: number
+    ownGoal: number
   }
   loose: { closed: number; open: number }
   name: string
@@ -108,11 +110,11 @@ function shuffled<T>(values: readonly T[], next: () => number): T[] {
 
 interface Built {
   /** The grouping items, in plan order. */
-  epics: WorkItemBrief[]
+  goals: WorkItemBrief[]
   items: WorkItemBrief[]
   links: PlanningEdge[]
-  /** The item whose only link is to its own epic, and that epic. */
-  lone: { epic: WorkItemBrief; item: WorkItemBrief } | null
+  /** The item whose only link is to its own goal, and that goal. */
+  lone: { goal: WorkItemBrief; item: WorkItemBrief } | null
 }
 
 /** Numbers items in the order they are made, as a space does. */
@@ -138,8 +140,12 @@ function maker(plan: ShapePlan) {
       claim_ref: '',
       claim_state: null,
       parent_id: parent,
-      container: false,
-      ready: false,
+      open: !closed,
+      container_state: null,
+      acceptance: null,
+      started_at: null,
+      waits_for: [],
+      workable: false,
       labels: [],
       source: '',
       checklist: [],
@@ -177,23 +183,25 @@ function hold(plan: ShapePlan, openWork: readonly WorkItemBrief[], next: () => n
     } else {
       Object.assign(item, { state: state(RESTING[index % RESTING.length]) })
     }
-    item.ready = item.claim_ref === '' && ['backlog', 'queued'].includes(item.state.category)
+    item.workable =
+      item.claim_ref === '' && ['ready', 'triage'].includes(item.state?.category ?? '')
   }
 }
 
 function build(plan: ShapePlan): Built {
   const next = random(plan.seed)
   const make = maker(plan)
-  const epics: WorkItemBrief[] = []
+  const goals: WorkItemBrief[] = []
   for (const frame of plan.frames) {
-    const parent = frame.parent === undefined ? null : epics[frame.parent].work_item_id
+    const parent = frame.parent === undefined ? null : goals[frame.parent].work_item_id
     const title = frame.title ?? 'Synthetic stream #'
-    epics.push(make(frame.open ? 'dev' : 'done', parent, frame.kind ?? 'epic', title))
+    const kind = frame.kind ?? (parent === null ? 'goal' : 'stage')
+    goals.push(make(frame.open ? 'dev' : 'done', parent, kind, title))
   }
   const openWork: WorkItemBrief[] = []
   const work: WorkItemBrief[] = []
   for (const [index, frame] of plan.frames.entries()) {
-    const id = epics[index].work_item_id
+    const id = goals[index].work_item_id
     openWork.push(...times(frame.openWork, () => make('todo', id, 'task', 'Open piece #')))
     work.push(...times(frame.closedWork, () => make('done', id, 'task', 'Finished piece #')))
   }
@@ -201,22 +209,20 @@ function build(plan: ShapePlan): Built {
   work.push(...times(plan.loose.closed, () => make('done', null, 'task', 'Loose finished piece #')))
   hold(plan, openWork, next)
 
-  const items = [...epics, ...openWork, ...work].sort((left, right) => left.number - right.number)
-  const parents = new Set(items.map((item) => item.parent_id))
-  for (const item of items) item.container = parents.has(item.work_item_id)
+  const items = [...goals, ...openWork, ...work].sort((left, right) => left.number - right.number)
   const loneAt = plan.frames.findIndex((frame) => frame.lone)
-  const loneEpic = epics[loneAt] as WorkItemBrief | undefined
-  const loneItem = openWork.find((item) => item.parent_id === loneEpic?.work_item_id)
-  const lone = loneEpic && loneItem ? { epic: loneEpic, item: loneItem } : null
+  const loneGoal = goals[loneAt] as WorkItemBrief | undefined
+  const loneItem = openWork.find((item) => item.parent_id === loneGoal?.work_item_id)
+  const lone = loneGoal && loneItem ? { goal: loneGoal, item: loneItem } : null
   return {
-    epics,
+    goals,
     items,
     lone,
-    links: wire(plan, { epics, items, loneItem: loneItem ?? null, next }),
+    links: wire(plan, { goals, items, loneItem: loneItem ?? null, next }),
   }
 }
 
-/** The epic an item stands in, and each epic that one stands in. */
+/** The goal an item stands in, and each goal that one stands in. */
 function ancestors(item: WorkItemBrief, byId: Map<string, WorkItemBrief>): Set<string> {
   const found = new Set<string>()
   for (let at = item.parent_id; at !== null && !found.has(at); at = byId.get(at)?.parent_id ?? null)
@@ -227,17 +233,17 @@ function ancestors(item: WorkItemBrief, byId: Map<string, WorkItemBrief>): Set<s
 function wire(
   plan: ShapePlan,
   built: {
-    epics: WorkItemBrief[]
+    goals: WorkItemBrief[]
     items: WorkItemBrief[]
     loneItem: WorkItemBrief | null
     next: () => number
   },
 ): PlanningEdge[] {
-  const { epics, items, loneItem, next } = built
+  const { goals, items, loneItem, next } = built
   const byId = new Map(items.map((item) => [item.work_item_id, item]))
-  const isWork = (item: WorkItemBrief) => !item.container && item !== loneItem
-  const open = items.filter((item) => isWork(item) && !item.state.is_terminal)
-  const closed = items.filter((item) => isWork(item) && item.state.is_terminal)
+  const isWork = (item: WorkItemBrief) => !WORK_ITEM_TREE.isContainer(item) && item !== loneItem
+  const open = items.filter((item) => isWork(item) && item.open)
+  const closed = items.filter((item) => isWork(item) && !item.open)
   const pick = <T>(list: readonly T[]) => list[Math.floor(next() * list.length)]
   const seen = new Set<string>()
   const pairs: { from: string; to: string; kind?: LinkKind }[] = []
@@ -266,23 +272,23 @@ function wire(
 
   const filed = open.filter((item) => item.parent_id !== null)
   if (loneItem?.parent_id) {
-    const epic = byId.get(loneItem.parent_id)
-    if (epic) add(1, () => [loneItem, epic], 'discovered-from')
+    const goal = byId.get(loneItem.parent_id)
+    if (goal) add(1, () => [loneItem, goal], 'discovered-from')
   }
   add(
-    plan.links.ownEpic - (loneItem ? 1 : 0),
+    plan.links.ownGoal - (loneItem ? 1 : 0),
     () => {
       const item = pick(filed)
       return [item, byId.get(item.parent_id ?? '') ?? item]
     },
     'discovered-from',
   )
-  add(plan.links.foreignEpic, () => {
+  add(plan.links.foreignGoal, () => {
     const item = pick(open)
-    const epic = pick(epics)
-    return ancestors(item, byId).has(epic.work_item_id) ? null : flip([item, epic])
+    const goal = pick(goals)
+    return ancestors(item, byId).has(goal.work_item_id) ? null : flip([item, goal])
   })
-  add(plan.links.epicOther, () => flip([pick(epics), next() < 0.7 ? pick(closed) : pick(epics)]))
+  add(plan.links.goalOther, () => flip([pick(goals), next() < 0.7 ? pick(closed) : pick(goals)]))
   add(plan.links.openOpen, () => [pick(open), pick(open)])
   add(plan.links.openClosed, () => flip([pick(open), pick(closed)]))
   const total = Object.values(plan.kinds).reduce((sum, count) => sum + count, 0)
@@ -313,9 +319,9 @@ function wire(
       to: pair.to,
       kind,
       reference: source?.reference ?? 'EXT-9',
-      state_name: source?.state.name ?? 'Todo',
-      state_category: source?.state.category ?? 'queued',
-      is_terminal: source?.state.is_terminal ?? false,
+      state_name: source?.state?.name ?? 'Todo',
+      state_category: source?.state?.category ?? 'ready',
+      is_terminal: source?.state?.is_terminal ?? false,
       state_unavailable: null,
     }
   })
@@ -329,7 +335,7 @@ function readModel(plan: ShapePlan, built: Built): PlanningReadModel {
     key: plan.key,
     provider_kind: 'local' as const,
   }
-  const open = built.items.filter((item) => !item.state.is_terminal)
+  const open = built.items.filter((item) => item.open)
   return {
     interface_version: 'valkama-planning-read-model',
     planning_spaces: [
@@ -337,7 +343,7 @@ function readModel(plan: ShapePlan, built: Built): PlanningReadModel {
         ...space,
         work_items: built.items.length,
         open: open.length,
-        active: open.filter((item) => item.state.category === 'active').length,
+        active: open.filter((item) => item.state?.category === 'active').length,
         completed: built.items.length - open.length,
         updated_at: '2026-10-20T10:00:00Z',
       },
@@ -369,7 +375,7 @@ const BROAD: ShapePlan = {
     { open: true, openWork: 13, closedWork: 2, lone: true, title: 'A stream with one lone link #' },
     { open: true, openWork: 3, closedWork: 2, title: 'A stream another stands in #' },
     { open: true, openWork: 3, closedWork: 2, parent: 2, title: 'A stream inside another #' },
-    { open: true, openWork: 3, closedWork: 2, kind: 'task', title: 'A task that grew children #' },
+    { open: true, openWork: 3, closedWork: 2, title: 'A stream of three open pieces #' },
     {
       open: true,
       openWork: 2,
@@ -395,7 +401,7 @@ const BROAD: ShapePlan = {
   loose: { open: 158, closed: 300 },
   claims: { live: 16, unconfirmed: 78 },
   kinds: { 'discovered-from': 360, 'blocks': 177, 'relates-to': 106, 'duplicates': 0 },
-  links: { ownEpic: 5, foreignEpic: 28, epicOther: 54, openOpen: 67, openClosed: 62 },
+  links: { ownGoal: 5, foreignGoal: 28, goalOther: 54, openOpen: 67, openClosed: 62 },
 }
 
 const DEEP: ShapePlan = {
@@ -410,25 +416,25 @@ const DEEP: ShapePlan = {
   loose: { open: 46, closed: 380 },
   claims: { live: 7, unconfirmed: 0 },
   kinds: { 'discovered-from': 658, 'blocks': 148, 'relates-to': 358, 'duplicates': 11 },
-  links: { ownEpic: 3, foreignEpic: 15, epicOther: 22, openOpen: 60, openClosed: 100 },
+  links: { ownGoal: 3, foreignGoal: 15, goalOther: 22, openOpen: 60, openClosed: 100 },
 }
 
 export interface GraphSpace {
   /** The grouping items, in the order the space was built: the largest first. */
-  epics: WorkItemBrief[]
-  lone: { epic: WorkItemBrief; item: WorkItemBrief } | null
+  goals: WorkItemBrief[]
+  lone: { goal: WorkItemBrief; item: WorkItemBrief } | null
   model: PlanningReadModel
 }
 
 function space(plan: ShapePlan): GraphSpace {
   const built = build(plan)
-  return { epics: built.epics, lone: built.lone, model: readModel(plan, built) }
+  return { goals: built.goals, lone: built.lone, model: readModel(plan, built) }
 }
 
-/** Many epics with a little open work each; see the module comment for its counts. */
+/** Many goals with a little open work each; see the module comment for its counts. */
 export const broadSpace = (): GraphSpace => space(BROAD)
 
-/** One epic far larger than the rest; see the module comment for its counts. */
+/** One goal far larger than the rest; see the module comment for its counts. */
 export const deepSpace = (): GraphSpace => space(DEEP)
 
 /**

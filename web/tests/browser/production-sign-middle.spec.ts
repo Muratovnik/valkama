@@ -252,7 +252,7 @@ for (const locale of ['ru', 'en'] as const) {
       await expect(rows.first()).toBeVisible()
       const offsets = await signOffsets(rows, [['.nav-row-sign > *', '.nav-row-number']])
       console.info(`nav ${at}`, JSON.stringify(offsets))
-      // Working, held and waiting, and the epic at work.
+      // Working, held and waiting, and the goal at work.
       expectOnTheMiddle(offsets, 4)
     })
 

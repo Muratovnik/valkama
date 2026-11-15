@@ -28,7 +28,7 @@ const PARTS = [
   ['review', 'review'],
   ['active', 'active'],
   ['blocked', 'blocked'],
-  ['ahead', 'queued'],
+  ['ahead', 'ready'],
 ] as const satisfies readonly (readonly [keyof FrameProgress, ChainGroup])[]
 
 const parts = computed(() =>

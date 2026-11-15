@@ -9,7 +9,7 @@ import type { Locator, Page } from '@playwright/test'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { chainResponse, largeEpicChain } from '../fixtures/chain.ts'
+import { chainResponse, largeGoalChain } from '../fixtures/chain.ts'
 import { longChainSpace } from '../fixtures/chainSpace.ts'
 import {
   planningReadModel,
@@ -25,8 +25,8 @@ const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(
 /** The large chain, renamed into this suite's space and rooted at its item. */
 export function largeChainHere() {
   const chain = JSON.parse(
-    JSON.stringify(largeEpicChain()).replaceAll('MAIN-384', 'MAIN-264'),
-  ) as ReturnType<typeof largeEpicChain>
+    JSON.stringify(largeGoalChain()).replaceAll('MAIN-384', 'MAIN-264'),
+  ) as ReturnType<typeof largeGoalChain>
   return { ...chain, root: { ...chain.root, work_item_id: workItem.work_item_id } }
 }
 
@@ -36,7 +36,7 @@ const [BACKLOG, DEV, DONE] = planningReadModel.workflow.states.map(
 
 /**
  * A chain small enough to draw legibly: six children of MAIN-264, four of them
- * closed, and ten items discovered from them, filed under no epic.
+ * closed, and ten items discovered from them, filed under no goal.
  */
 export function smallChain() {
   const brief = (number: number, state: typeof DEV, parent: string | null) => ({
@@ -49,7 +49,8 @@ export function smallChain() {
     claim_ref: state === DEV ? 'codex' : '',
     claim_state: state === DEV ? ('unconfirmed' as const) : null,
     parent_id: parent,
-    ready: state === BACKLOG,
+    open: !state.is_terminal,
+    workable: state === BACKLOG,
   })
   const children = [DONE, DONE, DONE, DONE, DEV, BACKLOG].map((state, index) =>
     brief(1001 + index, state, workItem.work_item_id),
@@ -72,16 +73,17 @@ export function smallChain() {
       work_item_id: workItem.work_item_id,
       reference: workItemRef.reference,
       title: workItem.title,
-      kind: 'epic' as const,
+      kind: 'goal' as const,
       has_children: true,
-      totals: { chain: items.length, epic: 6 },
+      totals: { chain: items.length, tree: 6 },
     },
     scope: 'chain' as const,
     total: items.length,
     closed,
     open: items.length - closed,
-    ready: items.filter((item) => item.ready).length,
+    workable: items.filter((item) => item.workable).length,
     by_category: {},
+    by_container_state: {},
     origins: [
       { parent_reference: workItemRef.reference, parent_title: null, count: 6, open: 2 },
       { parent_reference: null, parent_title: null, count: 10, open: 7 },
@@ -95,18 +97,21 @@ export function smallChain() {
       work_item_id: item.work_item_id,
       reference: item.reference,
       title: item.title,
+      kind: item.kind,
       state: {
         key: item.state.key,
         name: item.state.name,
         category: item.state.category,
         is_terminal: item.state.is_terminal,
       },
+      open: item.open,
+      container_state: null,
       claim_ref: item.claim_ref,
       claim_state: item.claim_state,
       parent_reference: item.parent_id ? workItemRef.reference : null,
       created_at: '2026-10-01T10:00:00Z',
       closed_at: item.state.is_terminal ? '2026-10-20T10:00:00Z' : null,
-      ready: item.ready,
+      workable: item.workable,
       rank: index + 1,
     })),
     edges,
@@ -147,12 +152,12 @@ export function longChainHere() {
     number: 10_000 + node.number,
     title: node.title,
     kind: node.kind,
-    state: node.state.is_terminal ? DONE : BACKLOG,
+    state: node.state?.is_terminal ? DONE : BACKLOG,
     claim_ref: '',
     claim_state: null,
     parent_id: parentId(node.parent_id),
-    container: node.container,
-    ready: !node.state.is_terminal,
+    open: !node.state?.is_terminal,
+    workable: !node.state?.is_terminal,
   }))
   const edges = source.edges
     .filter((edge) => members.has(edge.from) && members.has(edge.to))
@@ -168,25 +173,28 @@ export function longChainHere() {
     total,
     closed,
     open: total - closed,
-    ready: items.filter((item) => item.ready).length,
+    workable: items.filter((item) => item.workable).length,
     origins: [],
     series: [{ day: '2026-10-20', created: total, closed, total, closed_total: closed }],
     members: nodes.map((node, index) => ({
       work_item_id: items[index].work_item_id,
       reference: items[index].reference,
       title: node.title,
+      kind: node.kind,
       state: {
         key: items[index].state.key,
         name: items[index].state.name,
         category: items[index].state.category,
         is_terminal: items[index].state.is_terminal,
       },
+      open: items[index].open,
+      container_state: null,
       claim_ref: '',
       claim_state: null,
       parent_reference: parentReference(node.parent_id),
       created_at: '2026-10-01T10:00:00Z',
-      closed_at: node.state.is_terminal ? '2026-10-20T10:00:00Z' : null,
-      ready: items[index].ready,
+      closed_at: node.state?.is_terminal ? '2026-10-20T10:00:00Z' : null,
+      workable: items[index].workable,
       rank: index + 1,
     })),
     edges,

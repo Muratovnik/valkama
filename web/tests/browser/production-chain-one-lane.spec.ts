@@ -31,7 +31,9 @@ for (const width of [1280, 390]) {
     await installBackend(page)
     await serve(
       page,
-      chainOf(ROOT, [mapMember('MAIN-1401', 'backlog', null, { ready: true, title: 'One task' })]),
+      chainOf(ROOT, [
+        mapMember('MAIN-1401', 'triage', null, { workable: true, title: 'One task' }),
+      ]),
     )
     await page.goto(
       serializePlatformRoute({
@@ -51,8 +53,8 @@ for (const width of [1280, 390]) {
       for (const hidden of copy.querySelectorAll('.visually-hidden')) hidden.remove()
       return copy.textContent
     })
-    expect(seen.match(/backlog/giu)).toHaveLength(1)
-    await expect(section.locator('.chain-group-title')).toHaveText('Backlog · 1')
+    expect(seen.match(/triage/giu)).toHaveLength(1)
+    await expect(section.locator('.chain-group-title')).toHaveText('Triage · 1')
 
     // The lane is named and offers nothing: no control, and the pointer does not say otherwise.
     const name = section.locator('.branch-map-label')

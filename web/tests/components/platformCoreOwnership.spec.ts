@@ -52,7 +52,7 @@ const TODO = {
   state_id: identity(900),
   key: 'todo',
   name: 'Todo',
-  category: 'queued' as const,
+  category: 'ready' as const,
   is_terminal: false,
 }
 
@@ -88,8 +88,12 @@ function readModel(space: PlanningSpaceRef) {
         claim_ref: '',
         claim_state: null,
         parent_id: null,
-        container: false,
-        ready: true,
+        open: true,
+        container_state: null,
+        acceptance: null,
+        started_at: null,
+        waits_for: [],
+        workable: true,
         labels: [],
         source: '',
         checklist: [],

@@ -15,7 +15,7 @@
  *
  * The line under it answers the filter: how much of the open work it lets
  * through, with the way back out of it. The held count rides its condition in the
- * filter's menu. On the grouped board the line also says how many epics are drawn
+ * filter's menu. On the grouped board the line also says how many goals are drawn
  * as rows, the one thing its columns do not count.
  */
 import { computed, useTemplateRef } from 'vue'
@@ -50,7 +50,7 @@ const props = defineProps<{
   /** A refresh is in flight. */
   busy: boolean
   /** The states the workflow has, by category, for the filter menu. */
-  categories: readonly WorkItemBrief['state']['category'][]
+  categories: readonly NonNullable<WorkItemBrief['state']>['category'][]
   /** The chain the board or the list is narrowed to; the graph names its own. */
   chain: string | null
   counts: { held: number; matchedClosed: number; matchedOpen: number; open: number; total: number }
@@ -128,13 +128,13 @@ const closedText = computed(() => {
     : ''
 })
 /**
- * The epics the grouped board draws as rows, counted by the census exclusion the
+ * The goals the grouped board draws as rows, counted by the census exclusion the
  * counts already use: the board's columns do not hold them.
  */
 const rowsText = computed(() => {
   const left = props.exclusion
-  return props.grouping === 'epic' && left?.kind === 'lane-heads'
-    ? t('workItem.countsExclude.laneHeads', { epics: left.count }, left.count)
+  return props.grouping === 'goal' && left?.kind === 'lane-heads'
+    ? t('workItem.countsExclude.laneHeads', { goals: left.count }, left.count)
     : ''
 })
 
@@ -435,7 +435,7 @@ function removeChip(token: WorkFilterToken) {
     min-block-size: var(--size-control-inline);
   }
 
-  /* The closed items and the epics drawn as rows are facts the wide bar has room
+  /* The closed items and the goals drawn as rows are facts the wide bar has room
      for: on a phone the line keeps the counts and the reset, and a third
      fact would make the bar taller while a filter turns on. */
   .workspace-closed,

@@ -1,7 +1,7 @@
 /**
- * An epic's frame on the graph, as the reader meets its header: how its work
+ * A goal's frame on the graph, as the reader meets its header: how its work
  * stands in words with each number beside its word, what folding and opening
- * it are called, and the work under no epic, which has nothing to open.
+ * it are called, and the work under no goal, which has nothing to open.
  */
 import { createI18n } from 'vue-i18n'
 
@@ -9,7 +9,7 @@ import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import GraphFrame from '@/widgets/work-item-graph/components/GraphFrame.vue'
-import { NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { FrameProgress, PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
@@ -20,9 +20,8 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-const EPIC = boardItem(12, 'dev', {
-  kind: 'epic',
-  container: true,
+const GOAL = boardItem(12, 'dev', {
+  kind: 'goal',
   title: 'Frames on the graph',
 })
 
@@ -34,8 +33,8 @@ const progress = (counts: Partial<FrameProgress>): FrameProgress => {
 
 function frame(overrides: Partial<PlacedFrame> = {}): PlacedFrame {
   return {
-    id: EPIC.work_item_id,
-    epic: EPIC,
+    id: GOAL.work_item_id,
+    goal: GOAL,
     parentId: null,
     folded: false,
     foldable: true,
@@ -93,7 +92,7 @@ describe("a frame's header", () => {
     expect(badges).toEqual(['8', '21', '2', '1'])
   })
 
-  it('counts an epic far past a badge’s ninety-nine whole', () => {
+  it('counts a goal far past a badge’s ninety-nine whole', () => {
     const wrapper = header({ frame: frame({ progress: progress({ done: 300, ahead: 158 }) }) })
     expect(countsOf(wrapper)).toEqual(['300 of 458 done'])
   })
@@ -101,21 +100,21 @@ describe("a frame's header", () => {
   it('folds and opens with two buttons, each named for what it does', () => {
     const wrapper = header({ frame: frame() })
     const fold = wrapper.get('.graph-frame-fold')
-    expect(fold.attributes('aria-label')).toBe('Collapse epic MAIN-12 “Frames on the graph”')
+    expect(fold.attributes('aria-label')).toBe('Collapse goal MAIN-12 “Frames on the graph”')
     expect(fold.attributes('aria-expanded')).toBe('true')
-    expect(fold.attributes('data-walk-target')).toBe(`frame:${EPIC.work_item_id}:fold`)
+    expect(fold.attributes('data-walk-target')).toBe(`frame:${GOAL.work_item_id}:fold`)
     const open = wrapper.get('button.graph-frame-open')
     expect(open.attributes('aria-label')).toBe(
-      'Epic MAIN-12 “Frames on the graph” · 8 of 21 done · 2 in progress · 1 blocked',
+      'Goal MAIN-12 “Frames on the graph” · 8 of 21 done · 2 in progress · 1 blocked',
     )
-    expect(open.attributes('data-walk-target')).toBe(`frame:${EPIC.work_item_id}`)
+    expect(open.attributes('data-walk-target')).toBe(`frame:${GOAL.work_item_id}`)
   })
 
   it('hands its id to fold and its reference to open', async () => {
     const wrapper = header({ frame: frame() })
     await wrapper.get('.graph-frame-fold').trigger('click')
     await wrapper.get('button.graph-frame-open').trigger('click')
-    expect(wrapper.emitted('toggle')).toEqual([[EPIC.work_item_id]])
+    expect(wrapper.emitted('toggle')).toEqual([[GOAL.work_item_id]])
     expect(wrapper.emitted('open')).toEqual([['MAIN-12']])
   })
 
@@ -123,7 +122,7 @@ describe("a frame's header", () => {
     const wrapper = header({ frame: frame({ folded: true, width: 288, height: 72 }) }, 'ru')
     const fold = wrapper.get('.graph-frame-fold')
     expect(fold.attributes('aria-label')).toBe(
-      'Развернуть эпик MAIN-12 «Frames on the graph» · 13 открытых внутри',
+      'Развернуть цель MAIN-12 «Frames on the graph» · 13 открытых внутри',
     )
     expect(fold.attributes('aria-expanded')).toBe('false')
     expect(wrapper.get('.graph-frame').classes()).toContain('folded')
@@ -131,9 +130,9 @@ describe("a frame's header", () => {
     expect(wrapper.findAll('.frame-progress-part')).toHaveLength(4)
   })
 
-  it('over the work under no epic, folds and opens nothing', async () => {
+  it('over the work under no goal, folds and opens nothing', async () => {
     const wrapper = header({
-      frame: frame({ id: NO_EPIC_FRAME, epic: null, progress: progress({ ahead: 3 }) }),
+      frame: frame({ id: NO_PARENT_FRAME, goal: null, progress: progress({ ahead: 3 }) }),
     })
     expect(wrapper.find('button.graph-frame-open').exists()).toBe(false)
     expect(wrapper.find('[data-walk-target="frame:none"]').exists()).toBe(false)
@@ -146,19 +145,19 @@ describe("a frame's header", () => {
     expect(wrapper.emitted('open')).toBeUndefined()
   })
 
-  it('names an item that grew children as an item, not an epic', () => {
-    const parent = { ...EPIC, kind: 'task' as const }
-    const wrapper = header({ frame: frame({ epic: parent }) })
+  it('names a stage as a stage, not as the goal it stands under', () => {
+    const stage = { ...GOAL, kind: 'stage' as const, parent_id: boardItem(3).work_item_id }
+    const wrapper = header({ frame: frame({ goal: stage }) })
     expect(wrapper.get('.graph-frame-fold').attributes('aria-label')).toBe(
-      'Collapse item MAIN-12 “Frames on the graph”',
+      'Collapse stage MAIN-12 “Frames on the graph”',
     )
   })
 
-  it('says the epic’s state only once it has moved from where work starts', () => {
+  it('says the goal’s state only once it has moved from where work starts', () => {
     const moved = header({ frame: frame() })
     expect(moved.get('.graph-frame-state').text()).toBe('In progress')
     moved.unmount()
-    const resting = header({ frame: frame({ epic: { ...EPIC, state: boardItem(1).state } }) })
+    const resting = header({ frame: frame({ goal: { ...GOAL, state: boardItem(1).state } }) })
     expect(resting.find('.graph-frame-state').exists()).toBe(false)
   })
 
@@ -170,12 +169,12 @@ describe("a frame's header", () => {
   })
 
   it('lets the walk give Tab to either of its two targets', () => {
-    const wrapper = header({ frame: { ...frame(), id: EPIC.work_item_id } })
+    const wrapper = header({ frame: { ...frame(), id: GOAL.work_item_id } })
     expect(wrapper.get('.graph-frame-fold').attributes('tabindex')).toBe('-1')
     wrapper.unmount()
     const stop = mount(GraphFrame, {
       attachTo: document.body,
-      props: { frame: frame(), tabStop: `frame:${EPIC.work_item_id}` },
+      props: { frame: frame(), tabStop: `frame:${GOAL.work_item_id}` },
       global: {
         plugins: [createI18n({ legacy: false, locale: 'en', messages, pluralRules })],
         stubs: { Handle: true },
@@ -196,11 +195,11 @@ describe('a frame with nothing to unfold', () => {
     const en = header({ frame: empty() })
     expect(countsOf(en)).toEqual(['No tasks'])
     expect(en.get('button.graph-frame-open').attributes('aria-label')).toBe(
-      'Epic MAIN-12 “Frames on the graph” · No tasks',
+      'Goal MAIN-12 “Frames on the graph” · No tasks',
     )
   })
 
-  it('draws no empty edge and no fold, and still opens the epic', async () => {
+  it('draws no empty edge and no fold, and still opens the goal', async () => {
     const wrapper = header({ frame: empty() })
     expect(wrapper.find('.frame-progress').exists()).toBe(false)
     expect(wrapper.find('.graph-frame-fold').exists()).toBe(false)
@@ -223,7 +222,7 @@ describe('a frame with nothing to unfold', () => {
     expect(wrapper.find('.graph-frame-fold').exists()).toBe(false)
   })
 
-  it('that holds another epic and no tasks, says so and keeps the fold', () => {
+  it('that holds another goal and no tasks, says so and keeps the fold', () => {
     const wrapper = header({ frame: frame({ foldable: true, progress: progress({}) }) })
     expect(countsOf(wrapper)).toEqual(['No tasks'])
     expect(wrapper.find('.frame-progress').exists()).toBe(false)
@@ -253,11 +252,11 @@ describe('a folded frame', () => {
   it('tells the keyboard what the header shows, on each button and at every zoom', () => {
     const near = header({ frame: folded() })
     expect(near.get('.graph-frame-fold').attributes('aria-label')).toBe(
-      'Expand epic MAIN-12 “Frames on the graph” · 90 open inside',
+      'Expand goal MAIN-12 “Frames on the graph” · 90 open inside',
     )
     const far = header({ frame: folded(), overview: true, far: true })
     expect(far.get('button.graph-frame-open').attributes('aria-label')).toBe(
-      'Epic MAIN-12 “Frames on the graph” · 180 of 270 done · 90 in progress · 90 open inside',
+      'Goal MAIN-12 “Frames on the graph” · 180 of 270 done · 90 in progress · 90 open inside',
     )
   })
 
@@ -280,7 +279,7 @@ describe('a folded frame', () => {
     expect(nothing.find('.graph-frame-inside').exists()).toBe(false)
   })
 
-  it('far out gives its band to the count, and an epic with nothing hidden keeps its reference', () => {
+  it('far out gives its band to the count, and a goal with nothing hidden keeps its reference', () => {
     const counted = header({ frame: folded(), overview: true, far: true })
     expect(counted.find('.graph-frame-reference').exists()).toBe(false)
     const empty = header({

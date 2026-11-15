@@ -3,12 +3,12 @@
  * cards and lines, drawn with the product's components on a field the size the
  * browser gives it, with live work on it and the switch that stops it moving.
  *
- * The field is the sample layout (`placedSample`): the epic with the long
- * title open round two cards, the largest epic and the work under no epic
+ * The field is the sample layout (`placedSample`): the goal with the long
+ * title open round two cards, the largest goal and the work under no goal
  * folded, a line inside the open frame and one folded onto a frame. The first
  * card is being worked on and the second has fallen silent, so the line
- * between them runs and the one folded onto the largest epic does not.
- * `?live=folded` also puts an agent to work inside the largest epic, which
+ * between them runs and the one folded onto the largest goal does not.
+ * `?live=folded` also puts an agent to work inside the largest goal, which
  * runs that line too, and `?live=held` has the second card held by a session
  * that is working on something else. Folding a frame here turns its header and
  * nothing else.
@@ -40,7 +40,9 @@ import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { placedSample } from '../fixtures/graphSample.ts'
 
 const NO_NAMES = Object.fromEntries(
-  ['active', 'review', 'queued', 'backlog', 'blocked', 'done'].map((group) => [group, null]),
+  ['active', 'review', 'ready', 'triage', 'deferred', 'blocked', 'containers', 'done'].map(
+    (group) => [group, null],
+  ),
 ) as Record<ChainGroup, string | null>
 
 /** Who is at work on the sample, as the server's `live_work` would say it. */

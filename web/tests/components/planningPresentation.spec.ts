@@ -13,6 +13,7 @@ import type { WorkItem, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 
+import { stateOf } from '../fixtures/workItem.ts'
 import { hintOf } from '../support/hint.ts'
 
 function workItem(overrides: Partial<WorkItemBrief> = {}): WorkItemBrief {
@@ -40,8 +41,12 @@ function workItem(overrides: Partial<WorkItemBrief> = {}): WorkItemBrief {
     revision: 1,
     created_at: '2026-08-30T10:00:00Z',
     updated_at: '2026-08-30T10:00:00Z',
-    container: false,
-    ready: false,
+    open: true,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: false,
     comment_count: 0,
     ...overrides,
   }
@@ -80,7 +85,9 @@ describe('Planning semantic presentation', () => {
     // The list draws its rows once it has measured its own width.
     await flushPromises()
     expect(wrapper.get('.list-claim').text()).toBe('claude')
-    await wrapper.setProps({ items: [{ ...item, state: { ...item.state, is_terminal: true } }] })
+    await wrapper.setProps({
+      items: [{ ...item, open: false, state: { ...stateOf(item), is_terminal: true } }],
+    })
     expect(wrapper.get('.list-claim').text()).toBe('Previously responsible: claude')
     // The cell cuts a long holder, so the cell says it whole.
     expect(hintOf(wrapper.get('.list-holder'))).toBe('Previously responsible: claude')
@@ -111,7 +118,8 @@ describe('Planning semantic presentation', () => {
       item: workItem({
         claim_ref: 'codex',
         claim_state: 'stale',
-        state: { ...workItem().state, is_terminal: true },
+        open: false,
+        state: { ...stateOf(workItem()), is_terminal: true },
       }),
     })
     // Finished work: the claim is history, so the holder is not printed.
@@ -159,7 +167,7 @@ describe('Planning semantic presentation', () => {
   it('names an open blocker on the tile and never says the item is workable', async () => {
     const wrapper = mount(WorkItemTile, {
       props: {
-        item: workItem({ ready: true, state: { ...workItem().state, category: 'backlog' } }),
+        item: workItem({ workable: true, state: { ...stateOf(workItem()), category: 'triage' } }),
       },
       global: { plugins: [i18n()] },
     })
@@ -207,7 +215,8 @@ describe('Planning semantic presentation', () => {
       ready: false,
       node: placedNode({
         claim_ref: 'codex',
-        state: { ...workItem().state, is_terminal: true },
+        open: false,
+        state: { ...stateOf(workItem()), is_terminal: true },
       }),
     })
     expect(wrapper.get('.flow-node-card').attributes('data-tone')).toBe('danger')

@@ -1,6 +1,6 @@
 /**
  * The way from an item's Agents tab to the same work on the Analytics page. The tab's figures
- * cover every item its read lists — the item alone, or an epic with its children — over all the
+ * cover every item its read lists — the item alone, or a goal with its children — over all the
  * time that work took, so the link filters the page to all of them and sets its period to the
  * days from the first of that work to the last, and the page adds up to what the tab says. An
  * address holds only so much: when those items do not fit in it, the link filters to the item

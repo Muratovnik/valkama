@@ -8,20 +8,20 @@ import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vu
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
-import { boardEpic, boardItem, boardWorkflow } from '../fixtures/board.ts'
+import { boardGoal, boardItem, boardWorkflow } from '../fixtures/board.ts'
 
 export const i18n = () => createI18n({ legacy: false, locale: 'en', messages })
 
-export const epic = boardEpic(1)
-export const closedEpic = boardEpic(2, 'done')
+export const goal = boardGoal(1)
+export const closedGoal = boardGoal(2, 'done')
 export const space: WorkItemBrief[] = [
-  boardItem(10, 'backlog', { parent_id: epic.work_item_id }),
-  boardItem(11, 'backlog', { parent_id: epic.work_item_id }),
+  boardItem(10, 'backlog', { parent_id: goal.work_item_id }),
+  boardItem(11, 'backlog', { parent_id: goal.work_item_id }),
   boardItem(12, 'backlog'),
-  boardItem(13, 'todo', { parent_id: epic.work_item_id }),
-  epic,
-  boardItem(20, 'done', { parent_id: closedEpic.work_item_id }),
-  closedEpic,
+  boardItem(13, 'todo', { parent_id: goal.work_item_id }),
+  goal,
+  boardItem(20, 'done', { parent_id: closedGoal.work_item_id }),
+  closedGoal,
 ]
 
 export function board(props: Partial<InstanceType<typeof WorkItemBoard>['$props']> = {}) {

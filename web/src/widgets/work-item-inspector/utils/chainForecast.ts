@@ -26,7 +26,7 @@
  *   all is the plain case of this.
  * - More closed than added (`converging`).
  *
- * An epic's scope is its own children, read the same way: neither the
+ * A goal's scope is its own children, read the same way: neither the
  * arithmetic nor the words for it change, only which members it counts.
  *
  * Pure on purpose: `today` is an argument, so a test can stand on any date.

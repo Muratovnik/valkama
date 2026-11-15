@@ -34,7 +34,7 @@ import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
-  /** The branch of the chain the field is framed on: an epic's reference, `''` for none. */
+  /** The branch of the chain the field is framed on: a goal's reference, `''` for none. */
   branch: string | null
   chain: { reference: string; total: number } | null
   hiddenDone: number
@@ -53,7 +53,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const filter = computed(() => (props.showDone ? 'all' : 'open'))
 const branchName = computed(() =>
-  props.branch === '' ? t('workItem.chain.noEpic') : (props.branch ?? ''),
+  props.branch === '' ? t('workItem.chain.noParent') : (props.branch ?? ''),
 )
 const options = computed(() => [
   { value: 'open' as const, label: t('graph.openOnly', { count: props.openTotal }) },

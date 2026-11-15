@@ -26,7 +26,7 @@ import { actorName } from '@/shared/lib/actor.ts'
 import { byUse } from '@/shared/lib/byUse.ts'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
-type StateCategory = WorkItemBrief['state']['category']
+type StateCategory = NonNullable<WorkItemBrief['state']>['category']
 type ValueFacet = Exclude<WorkFilterToken['facet'], 'ready' | 'held'>
 
 type FilterGroupId = 'conditions' | 'facets' | 'everywhere' | ValueFacet
@@ -178,7 +178,7 @@ function valuesOf(
     default: {
       return byUse(
         items
-          .filter((item) => item.claim_ref !== '' && !item.state.is_terminal)
+          .filter((item) => item.claim_ref !== '' && item.open)
           .map((item) => actorName(item.claim_ref)),
       )
     }

@@ -18,7 +18,7 @@ import type { Executor } from '@/shared/api/executorModel.ts'
 import type { WorkItem, WorkItemAgent } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
-import { workItemFixture } from '../fixtures/workItem.ts'
+import { stateOf, workItemFixture } from '../fixtures/workItem.ts'
 import { hintOf } from '../support/hint.ts'
 
 const SESSION = '6f1c2a8e-0000-4000-8000-000000000001'
@@ -63,7 +63,11 @@ function facts(item: WorkItem) {
 }
 
 function closed(item: WorkItem): WorkItem {
-  return { ...item, state: { ...item.state, category: 'completed', is_terminal: true } }
+  return {
+    ...item,
+    open: false,
+    state: { ...stateOf(item), category: 'completed', is_terminal: true },
+  }
 }
 
 beforeEach(() => {

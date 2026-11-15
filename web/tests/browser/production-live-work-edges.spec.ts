@@ -3,7 +3,7 @@
  * at, the quiet rows opened: a row's words start at one x whatever its number's length, a
  * keyboard ring is whole with nothing drawn over it, the pin under the pointer covers
  * neither the title's ellipsis nor the count and stands where a pinned row's pin does, an
- * epic at work says so in the sign column every row does, the empty list and the panel's
+ * goal at work says so in the sign column every row does, the empty list and the panel's
  * heading start at an edge their surroundings have, and the panel's folds are a finger's
  * size.
  */
@@ -67,7 +67,7 @@ interface RowBoxes {
   reference: string
   sign: Box | null
   title: Box
-  /** Where the row's words start: its epic's title, or its own. */
+  /** Where the row's words start: its goal's title, or its own. */
   words: Box
 }
 
@@ -78,7 +78,7 @@ function rows(page: Page, within: string) {
       const parts = {
         sign: row.querySelector('.nav-row-sign, .nav-row-lead > :not(button), .nav-row-own > *'),
         title: row.querySelector('.nav-row-title'),
-        words: row.querySelector('.nav-row-epic, .nav-row-title'),
+        words: row.querySelector('.nav-row-goal, .nav-row-title'),
         meta: row.querySelector('.nav-row-meta'),
         pin: row.querySelector('.nav-row-pin'),
       }
@@ -171,10 +171,10 @@ for (const width of [1280, 390])
       .evaluate((root) =>
         [...root.querySelectorAll('.nav-row-number')].map((node) => node.textContent?.length),
       )
-    // The fixture puts numbers of one, two and three digits side by side, and an epic's
+    // The fixture puts numbers of one, two and three digits side by side, and a goal's
     // title before some rows' own.
     expect(new Set(numbers)).toEqual(new Set([1, 2, 3]))
-    expect(await page.locator(`${within} .nav-row-epic`).count()).toBeGreaterThan(0)
+    expect(await page.locator(`${within} .nav-row-goal`).count()).toBeGreaterThan(0)
     titlesOneEdge(all, width, await leadRoom(page, within))
   })
 
@@ -315,14 +315,14 @@ for (const width of [1280, 390])
 const signCentre = (row: RowBoxes) => (row.sign ? (row.sign.left + row.sign.right) / 2 : null)
 
 for (const width of [1280, 390])
-  test(`an epic at work carries its sign in the sign column every row does, at ${width}`, async ({
+  test(`a goal at work carries its sign in the sign column every row does, at ${width}`, async ({
     page,
   }) => {
     const within = await open(page, width)
     await page.mouse.move(width - 10, 10)
     const all = await rows(page, within)
-    const epic = all.find((row) => row.reference === 'MAIN-4')
-    expect(epic?.sign, 'the epic’s own sign').toBeTruthy()
+    const goal = all.find((row) => row.reference === 'MAIN-4')
+    expect(goal?.sign, 'the goal’s own sign').toBeTruthy()
     oneEdge(all, signCentre, 'sign')
     // It is a row like its tasks, with no fold of its own.
     await expect(liveRow(page, 'MAIN-4', within).locator('button:not(.nav-row-pin)')).toHaveCount(0)

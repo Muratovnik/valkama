@@ -1,9 +1,9 @@
 /**
  * The face a frame's fold draws under the pointer and the keyboard, read off the pixels it
  * paints: it never lies on another element's words or on the header's edge (the progress
- * bar), in a frame with an epic and in the work under no epic, at the scale the field opens
+ * bar), in a frame with a goal and in the work under no goal, at the scale the field opens
  * at and zoomed out to the band, at 390px and 1280px. Zoomed out, the band of the work under
- * no epic still answers a press anywhere over it and in the air above it.
+ * no goal still answers a press anywhere over it and in the air above it.
  *
  * Served the broad synthetic space.
  */
@@ -128,7 +128,7 @@ async function headsInSight(page: Page, selector: string) {
   return found
 }
 
-/** The band of the work under no epic, zoomed out, and its fold: the band's one button. */
+/** The band of the work under no goal, zoomed out, and its fold: the band's one button. */
 const BAND = '.vue-flow .graph-frame-head.overview:has(.graph-frame-fold[data-walk-target])'
 const BAND_FOLD = `${BAND} .graph-frame-fold`
 
@@ -158,7 +158,7 @@ async function toMiddle(page: Page, target: Locator) {
 }
 
 /**
- * Zoomed out: no band's words on its edge at rest, and the band of the work under no epic
+ * Zoomed out: no band's words on its edge at rest, and the band of the work under no goal
  * answering a press over its middle, its far corner and the air above it, with its fold's
  * face off its words and its edge.
  */
@@ -179,7 +179,7 @@ async function expectBand(page: Page, where: string) {
     ).toEqual([])
   }
   const [head] = await headsInSight(page, BAND)
-  expect(head, `${where}: the band of the work under no epic is in sight`).toBeDefined()
+  expect(head, `${where}: the band of the work under no goal is in sight`).toBeDefined()
   const band = (await head.boundingBox()) as { height: number; width: number; x: number; y: number }
   const middle: [number, number] = [band.x + band.width / 2, band.y + band.height / 2]
   // The air above at half the 36 field units the reach runs into, at the scale drawn.
@@ -215,7 +215,7 @@ for (const width of [390, 1280]) {
     for (const head of heads.slice(0, 3)) await expectEveryFace(page, head, `at ${width}px`)
   })
 
-  test(`at ${width}px, zoomed out, the fold of the work under no epic lies on none of its band's words and answers over the band, whose words keep off its edge`, async ({
+  test(`at ${width}px, zoomed out, the fold of the work under no goal lies on none of its band's words and answers over the band, whose words keep off its edge`, async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -250,12 +250,12 @@ for (const width of [390, 1280]) {
         await settledCamera(page)
         await painted(page)
         await expectGrown(await grownOf(head), `${where}, the fold`)
-        // An epic's band has no fold out here: its one button is the epic's, and rings so.
-        const epic = page.locator(EPIC_BAND).first()
-        await epic.locator('.graph-frame-open').focus()
+        // A goal's band has no fold out here: its one button is the goal's, and rings so.
+        const goal = page.locator(GOAL_BAND).first()
+        await goal.locator('.graph-frame-open').focus()
         await settledCamera(page)
         await painted(page)
-        await expectGrown(await grownOf(epic), `${where}, an epic's band`)
+        await expectGrown(await grownOf(goal), `${where}, a goal's band`)
         await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
         // The fold to the middle: an open band runs on past the window either way.
         await bandToMiddle(page, BAND_FOLD)
@@ -272,8 +272,8 @@ for (const width of [390, 1280]) {
 /** What the field draws at each level out. */
 const ZOOMED = { overview: '.graph-frame.overview', far: '.graph-frame-head.far' }
 
-/** An epic's band, zoomed out: its button spans it, and it has no fold. */
-const EPIC_BAND = '.vue-flow .graph-frame-head.overview:has(.graph-frame-open[data-walk-target])'
+/** A goal's band, zoomed out: its button spans it, and it has no fold. */
+const GOAL_BAND = '.vue-flow .graph-frame-head.overview:has(.graph-frame-open[data-walk-target])'
 
 /** Press «Zoom out» until the field draws `selector`. */
 async function zoomOutUntil(page: Page, selector: string) {
@@ -288,7 +288,7 @@ async function zoomOutUntil(page: Page, selector: string) {
 }
 
 /**
- * The keyboard brings the band of the work under no epic into sight, and a drag puts `middle`,
+ * The keyboard brings the band of the work under no goal into sight, and a drag puts `middle`,
  * the band or its fold, in the middle of the field.
  */
 async function bandToMiddle(page: Page, middle = BAND) {

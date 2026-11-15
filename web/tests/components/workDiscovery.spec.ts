@@ -17,6 +17,7 @@ import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planning
 import { i18n as appI18n, messages } from '@/shared/i18n/index.ts'
 
 import { planningReadModel, workItem } from '../browser/planningFixtures.ts'
+import { stateOf } from '../fixtures/workItem.ts'
 
 vi.mock('@/shared/api/memoryApi.ts', () => ({
   fetchMemoryProviders: vi.fn(),
@@ -125,12 +126,13 @@ describe('work discovery', () => {
       const item = data.work_items[0]
       if (!item) throw new Error('Expected fixture item')
       data.work_items = [
-        { ...item, claim_ref: 'Owner', state: { ...item.state, category: 'backlog' } },
+        { ...item, claim_ref: 'Owner', state: { ...stateOf(item), category: 'triage' } },
         {
           ...item,
           work_item_id: 'done',
           claim_ref: 'Owner',
-          state: { ...item.state, is_terminal: true, category: 'completed' },
+          open: false,
+          state: { ...stateOf(item), is_terminal: true, category: 'completed' },
         },
         { ...item, work_item_id: 'active', claim_ref: '' },
       ]

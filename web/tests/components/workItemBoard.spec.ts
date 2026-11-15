@@ -1,5 +1,5 @@
 /**
- * The board as the operator meets it: grouped by epic or not, lanes folded the
+ * The board as the operator meets it: grouped by goal or not, lanes folded the
  * way their work implies and the way the operator left them, and a tile moved
  * from the keyboard with the move said aloud.
  *
@@ -21,7 +21,7 @@ import VMenu from '@/shared/ui/VMenu.vue'
 
 import { boardId, boardItem, boardWorkflow } from '../fixtures/board.ts'
 import { emptyChain } from '../fixtures/chain.ts'
-import { board, epic, i18n, live, space, tile } from '../support/workItemBoardHarness.ts'
+import { board, goal, i18n, live, space, tile } from '../support/workItemBoardHarness.ts'
 
 beforeEach(() => {
   localStorage.clear()
@@ -45,9 +45,9 @@ const foreignBlock = (finished: boolean): PlanningEdge => ({
   is_terminal: finished,
 })
 
-describe('the board grouped by epic', () => {
-  it('heads each lane with its epic and its counts, the work under no epic last', () => {
-    const wrapper = board({ grouping: 'epic' })
+describe('the board grouped by goal', () => {
+  it('heads each lane with its goal and its counts, the work under no goal last', () => {
+    const wrapper = board({ grouping: 'goal' })
     const lanes = wrapper.findAll('.board-lane')
     expect(lanes.map((lane) => lane.attributes('aria-label'))).toEqual([
       'Item 1',
@@ -58,7 +58,7 @@ describe('the board grouped by epic', () => {
     expect(lanes[0].get('.lane-counts').text()).toBe('3 open · 0 closed')
     expect(lanes[0].get('.lane-state').text()).toBe('In progress')
     expect(lanes[1].get('.lane-counts').text()).toBe('0 open · 1 closed')
-    // The epic is the lane, never a tile in it.
+    // The goal is the lane, never a tile in it.
     expect(wrapper.find('[data-reference="MAIN-1"]').exists()).toBe(false)
     expect(lanes[0].findAll('[data-reference]').map((item) => item.text())).toEqual([
       expect.stringContaining('MAIN-10'),
@@ -68,7 +68,7 @@ describe('the board grouped by epic', () => {
   })
 
   it('folds a lane with nothing open, and remembers what the operator chose per space', async () => {
-    const wrapper = board({ grouping: 'epic' })
+    const wrapper = board({ grouping: 'goal' })
     const toggles = () => wrapper.findAll('.lane-toggle')
     expect(toggles().map((toggle) => toggle.attributes('aria-expanded'))).toEqual([
       'true',
@@ -87,20 +87,20 @@ describe('the board grouped by epic', () => {
     expect(wrapper.find('[data-reference="MAIN-10"]').exists()).toBe(false)
     wrapper.unmount()
 
-    const again = board({ grouping: 'epic' })
+    const again = board({ grouping: 'goal' })
     expect(
       again.findAll('.lane-toggle').map((toggle) => toggle.attributes('aria-expanded')),
     ).toEqual(['false', 'true', 'true'])
     again.unmount()
     // Another space has choices of its own.
-    const other = board({ grouping: 'epic', spaceId: 'space-b' })
+    const other = board({ grouping: 'goal', spaceId: 'space-b' })
     expect(
       other.findAll('.lane-toggle').map((toggle) => toggle.attributes('aria-expanded')),
     ).toEqual(['true', 'false', 'true'])
   })
 
-  it('asks for an epic’s chain on the board and opens its card from the lane', async () => {
-    const wrapper = board({ grouping: 'epic' })
+  it('asks for a goal’s chain on the board and opens its card from the lane', async () => {
+    const wrapper = board({ grouping: 'goal' })
     const lane = wrapper.findAll('.board-lane')[0]
     await lane.get('[aria-label="Show the chain of MAIN-1 on the board"]').trigger('click')
     await lane.get('[aria-label="Open MAIN-1"]').trigger('click')
@@ -110,8 +110,8 @@ describe('the board grouped by epic', () => {
 })
 
 describe('the order hint of the grouped board', () => {
-  it('says the order is shared by the whole board, one order per state, across epics', () => {
-    const wrapper = board({ grouping: 'epic' })
+  it('says the order is shared by the whole board, one order per state, across goals', () => {
+    const wrapper = board({ grouping: 'goal' })
     expect(wrapper.get('[id$="-reorder"]').text()).toBe(messages.en.workItem.order.hint)
     expect(messages.en.workItem.order.hint).toContain('one order per state, across all lanes')
     expect(messages.ru.workItem.order.hint).toContain('один порядок на состояние, для всех строк')
@@ -120,7 +120,7 @@ describe('the order hint of the grouped board', () => {
   it('shows a reorder made in a lane that the order is the whole board’s, for a few seconds', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
-      const wrapper = board({ grouping: 'epic' })
+      const wrapper = board({ grouping: 'goal' })
       const note = wrapper.get('.board-order-note')
       expect(note.classes()).not.toContain('shown')
       // Seen, not read twice: the tiles' description already carries it.
@@ -162,7 +162,7 @@ describe('moving a tile from the keyboard', () => {
   })
 
   it('moves it up with Alt+ArrowUp inside its lane, before the tile above it there', async () => {
-    const wrapper = board({ grouping: 'epic' })
+    const wrapper = board({ grouping: 'goal' })
     await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowUp', altKey: true })
     expect(wrapper.emitted('place')).toEqual([
       [{ reference: 'MAIN-11', state: 'backlog', rank: 'before:MAIN-10' }],
@@ -242,15 +242,15 @@ describe('the columns of the board', () => {
       position: 9,
     }
     const workflow = { ...boardWorkflow, states: [...boardWorkflow.states, blocked] }
-    const order = (grouping: 'epic' | 'none') => {
+    const order = (grouping: 'goal' | 'none') => {
       const wrapper = board({ workflow, grouping })
-      const row = grouping === 'epic' ? wrapper.findAll('.lane-cells')[0] : wrapper
+      const row = grouping === 'goal' ? wrapper.findAll('.lane-cells')[0] : wrapper
       return row
-        .findAll(grouping === 'epic' ? '.lane-cell' : '.work-item-column')
+        .findAll(grouping === 'goal' ? '.lane-cell' : '.work-item-column')
         .map((column) => column.attributes('data-state'))
     }
     expect(order('none')).toEqual(['backlog', 'todo', 'dev', 'blocked', 'done'])
-    expect(order('epic')).toEqual(['backlog', 'todo', 'dev', 'blocked', 'done'])
+    expect(order('goal')).toEqual(['backlog', 'todo', 'dev', 'blocked', 'done'])
   })
 })
 
@@ -360,7 +360,7 @@ describe('walking the board from the keyboard', () => {
   })
 
   it('crosses only between the cells of one lane, past the empty ones', async () => {
-    const wrapper = board({ grouping: 'epic' })
+    const wrapper = board({ grouping: 'goal' })
     tile(wrapper, 'MAIN-11').element.focus()
     await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowRight' })
     expect(focused()).toBe('MAIN-13')
@@ -376,25 +376,23 @@ function chainOf(members: WorkItemBrief[]): WorkItemChain {
   const chain = emptyChain()
   return {
     ...chain,
-    root: { ...chain.root, work_item_id: epic.work_item_id, reference: 'MAIN-1' },
+    root: { ...chain.root, work_item_id: goal.work_item_id, reference: 'MAIN-1' },
     total: members.length,
     open: members.length,
     members: members.map((member, index) => ({
       work_item_id: member.work_item_id,
       reference: member.reference,
       title: member.title,
-      state: {
-        key: member.state.key,
-        name: member.state.name,
-        category: member.state.category,
-        is_terminal: member.state.is_terminal,
-      },
+      kind: member.kind,
+      state: member.state,
+      open: member.open,
+      container_state: member.container_state,
       claim_ref: '',
       claim_state: null,
       parent_reference: 'MAIN-1',
       created_at: member.created_at,
       closed_at: null,
-      ready: member.ready,
+      workable: member.workable,
       rank: index + 1,
     })),
   }
@@ -454,8 +452,8 @@ describe('a chain narrows the board and the list', () => {
     const grouping = entries.find((entry) => entry.key === 'grouping')
     if (grouping?.kind !== 'choice') throw new Error('the grouping is a choice of the view’s menu')
     expect(grouping.value).toBe('none')
-    expect(grouping.options.map((option) => option.label)).toEqual(['No grouping', 'By parent'])
-    grouping.select('epic')
-    expect(wrapper.emitted('group')).toEqual([['epic']])
+    expect(grouping.options.map((option) => option.label)).toEqual(['No grouping', 'By goal'])
+    grouping.select('goal')
+    expect(wrapper.emitted('group')).toEqual([['goal']])
   })
 })

@@ -44,15 +44,15 @@ const ITEMS = [
   boardItem(1008, 'todo', {
     kind: 'improvement',
     priority: 'urgent',
-    ready: false,
+    workable: false,
     labels: ['agent-packets', 'coordinator', 'decision-review', 'ui'],
     claim_ref: 'claude (session 5937aa01-1234-4c00)',
     claim_state: 'stale',
     parent_id: '00000000-0000-4000-8000-000000000994',
     checklist: steps,
   }),
-  boardItem(1012, 'dev', { kind: 'bug', priority: 'high', ready: false, claim_ref: 'codex' }),
-  boardItem(263, 'backlog', { kind: 'epic', priority: 'low', labels: ['valkama'] }),
+  boardItem(1012, 'dev', { kind: 'bug', priority: 'high', workable: false, claim_ref: 'codex' }),
+  boardItem(263, 'backlog', { kind: 'goal', priority: 'low', labels: ['valkama'] }),
   boardItem(264, 'backlog'),
 ]
 

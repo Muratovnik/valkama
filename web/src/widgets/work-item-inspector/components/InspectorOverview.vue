@@ -104,7 +104,7 @@ provideEditorImages((file, signal) => uploadImage(props.item.work_item_id, file,
 // live instructions, and on a Done card they were stale ones.
 const blockers = computed(() => openBlockers(props.item))
 const nextStep = computed(() =>
-  props.item.state.is_terminal ? undefined : props.item.checklist.find((step) => !step.done),
+  props.item.open ? props.item.checklist.find((step) => !step.done) : undefined,
 )
 const steps = computed(() => checklistProgress(props.item))
 const stepCount = computed(() =>

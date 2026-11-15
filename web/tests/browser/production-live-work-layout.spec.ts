@@ -239,7 +239,7 @@ test('a phone opens the list in a panel over the page, with a finger’s rows an
   await expect(page.locator('.nav-work-list')).toBeHidden()
   await expect(page.locator('.nav-entry-fold')).toBeHidden()
   await expect(button).toBeVisible()
-  // Every row on view: in the busy frame the epic at work, two items and a session in the
+  // Every row on view: in the busy frame the goal at work, two items and a session in the
   // first space, one item in the second and the session under no space; and the twenty of the
   // third space. The held, quiet and pinned rows are not counted.
   await expect(button).toContainText('26')

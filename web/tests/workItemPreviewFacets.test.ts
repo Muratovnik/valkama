@@ -32,7 +32,7 @@ const values = (facet: Parameters<typeof facetMarks>[0], subject: WorkItemBrief,
 describe('the preview card', () => {
   test('names a kind only when it is not a plain task, glyph and word', () => {
     assert.deepEqual(values('kind', item({ kind: 'task' })), [])
-    for (const kind of ['bug', 'epic', 'improvement'] as const) {
+    for (const kind of ['bug', 'goal', 'improvement'] as const) {
       const [mark] = facetMarks('kind', 'preview', item({ kind }))
       assert.equal(mark?.form, 'glyph-word', kind)
       assert.deepEqual(mark?.text, { key: `workItem.kind.${kind}` })
@@ -67,7 +67,7 @@ describe('the preview card', () => {
       params: { reference: 'MAIN-7' },
     })
     assert.equal(waiting?.short, undefined, 'the whole words, not a short form with a hover')
-    assert.deepEqual(values('readiness', item({ ready: true }, 'todo')), [])
+    assert.deepEqual(values('readiness', item({ workable: true }, 'todo')), [])
     assert.deepEqual(values('readiness', item({}, 'done'), { waitingOn: 'MAIN-7' }), [])
   })
 

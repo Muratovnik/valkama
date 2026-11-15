@@ -242,7 +242,7 @@ const reaches = (head: Element) =>
   })
 
 /**
- * Every open epic lane's heading at `width`: its actions up and each reaching a finger's width.
+ * Every open goal lane's heading at `width`: its actions up and each reaching a finger's width.
  * A folded lane ends at its heading, and the next lane is drawn over the 4px of reach below it.
  */
 async function readReach(page: Page, width: number) {
@@ -346,29 +346,29 @@ async function tuck(page: Page, head: Locator, sheet: Locator, by: number) {
 }
 
 /** The references of a lane's first three tiles, in the order it draws them. */
-const order = (epic: Locator) =>
-  epic
+const order = (goal: Locator) =>
+  goal
     .locator('li[data-reference]')
     .evaluateAll((items) =>
       items.slice(0, 3).map((item) => (item as HTMLElement).dataset.reference),
     )
 
 /** Brings a tile in one of the board's ways, from MAIN-404 below MAIN-403 or on MAIN-403 itself. */
-async function bring(page: Page, epic: Locator, way: Way) {
-  const below = epic.locator('li[data-reference="MAIN-404"] .tile-open')
+async function bring(page: Page, goal: Locator, way: Way) {
+  const below = goal.locator('li[data-reference="MAIN-404"] .tile-open')
   if (way !== 'press') {
     await below.evaluate((node: HTMLElement) => {
       node.focus({ preventScroll: true })
     })
     await page.keyboard.press(way === 'walk' ? 'ArrowUp' : 'Alt+ArrowUp')
-    const tile = epic.locator(`li[data-reference="${BROUGHT[way]}"] .tile-open`)
+    const tile = goal.locator(`li[data-reference="${BROUGHT[way]}"] .tile-open`)
     await expect(tile).toBeFocused()
     if (way === 'move')
-      await expect.poll(() => order(epic)).toEqual(['MAIN-402', 'MAIN-404', 'MAIN-403'])
+      await expect.poll(() => order(goal)).toEqual(['MAIN-402', 'MAIN-404', 'MAIN-403'])
     return
   }
-  const box = await epic.locator('li[data-reference="MAIN-403"] .work-item-tile').boundingBox()
-  const heading = await epic.locator('.lane-head').boundingBox()
+  const box = await goal.locator('li[data-reference="MAIN-403"] .work-item-tile').boundingBox()
+  const heading = await goal.locator('.lane-head').boundingBox()
   if (!box || !heading) throw new Error('the tile is not on screen')
   await page.mouse.click(
     box.x + box.width / 2,
@@ -384,16 +384,16 @@ async function bring(page: Page, epic: Locator, way: Way) {
  */
 async function bringsTileIn(page: Page, way: Way) {
   const board = page.locator('.work-item-lanes')
-  const epic = page.locator('.board-lane.open', {
+  const goal = page.locator('.board-lane.open', {
     has: page.locator('li[data-reference="MAIN-404"]'),
   })
-  const head = epic.locator('.lane-head')
+  const head = goal.locator('.lane-head')
   const sheet = (reference: string) =>
-    epic.locator(`li[data-reference="${reference}"] .work-item-tile`)
+    goal.locator(`li[data-reference="${reference}"] .work-item-tile`)
   const normal = await gapUnder(head, sheet('MAIN-402'))
   await tuck(page, head, sheet('MAIN-403'), 12)
   const before = await gapUnder(head, sheet('MAIN-403'))
-  await bring(page, epic, way)
+  await bring(page, goal, way)
   await settle(board)
   await settle(board)
   const heading = await head.boundingBox()

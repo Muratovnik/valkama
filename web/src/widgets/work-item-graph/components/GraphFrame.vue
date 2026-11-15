@@ -1,31 +1,31 @@
 <script setup lang="ts">
 /**
- * An epic on the graph, as the frame round its work: or folded, its header
+ * A goal on the graph, as the frame round its work: or folded, its header
  * alone (`GraphFrameHead`), at the height the layout gave it.
  *
  * The frame is ground a step above the field and its cards a step above it, so
  * it is told by tone and draws no line. A folded frame says what it hides, in
- * words and as the sheets of a stack under it, counted by the epic and never by a
+ * words and as the sheets of a stack under it, counted by the goal and never by a
  * filter, at every zoom: «90 open inside», «90 inside» in the overview, and «+90»
  * where a word could no longer be read.
  *
  * Far out a header is a few pixels and the frame round it is what the hand finds, so
- * the ground of an open frame with an epic opens that epic too. It is a shortcut for
+ * the ground of an open frame with a goal opens that goal too. It is a shortcut for
  * the pointer alone: the header's button is the same action for the keyboard, so no
  * new stop stands here, and a drag from the ground moves the field and opens nothing. A
  * finger's tap the browser moves from the ground to a card nearby is given back to the
  * ground (`useGraphGroundTap`).
  *
- * The work under no epic is a frame too, with no epic to open. A frame inside
+ * The work under no goal is a frame too, with no goal to open. A frame inside
  * a frame is a well cut into it, a step below. Zoomed out past reading, the
- * header keeps the epic's reference and its edge, grown with the field.
+ * header keeps the goal's reference and its edge, grown with the field.
  */
 import { computed } from 'vue'
 
 import { Handle, Position } from '@vue-flow/core'
 
 import GraphFrameHead from '@/widgets/work-item-graph/components/GraphFrameHead.vue'
-import { NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 const {
@@ -58,15 +58,15 @@ const emit = defineEmits<{
   toggle: [id: string]
 }>()
 
-/** The epic to open; the work under no epic has none. */
-const epic = computed(() => (frame.id === NO_EPIC_FRAME ? null : frame.epic))
+/** The goal to open; the work under no goal has none. */
+const goal = computed(() => (frame.id === NO_PARENT_FRAME ? null : frame.goal))
 /** A frame inside a frame is a well cut into the one it stands in. */
 const nested = computed(() => frame.parentId !== null)
-/** Far out, the ground of an open frame opens its epic. A folded frame is all header. */
-const groundOpens = computed(() => far && !frame.folded && Boolean(epic.value))
+/** Far out, the ground of an open frame opens its goal. A folded frame is all header. */
+const groundOpens = computed(() => far && !frame.folded && Boolean(goal.value))
 
 function onGround() {
-  if (groundOpens.value && epic.value) emit('open', epic.value.reference)
+  if (groundOpens.value && goal.value) emit('open', goal.value.reference)
 }
 </script>
 

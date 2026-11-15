@@ -13,10 +13,26 @@
  * columns that fit fill the visible width exactly, and the next one starts at
  * the edge rather than across it.
  */
-import type { WorkflowState } from '@/shared/api/planningModel.ts'
+import type { PlanningWorkflow, WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 /** The narrowest a column is drawn; at 1440px five of them fit beside the rail. */
 export const COLUMN_FLOOR = 208
+
+/**
+ * The items grouped by state, in workflow order: the board's decision, not the model's. An
+ * accepted open goal or stage stands in no state, so it is in no column.
+ */
+export function byState(
+  workflow: PlanningWorkflow,
+  items: readonly WorkItemBrief[],
+): { items: WorkItemBrief[]; state: WorkflowState }[] {
+  return [...workflow.states]
+    .sort((left, right) => left.position - right.position)
+    .map((state) => ({
+      state,
+      items: items.filter((item) => item.state?.state_id === state.state_id),
+    }))
+}
 
 /** Columns already in workflow order, the terminal ones moved last and kept in that order. */
 export function terminalLast<Column extends { state: Pick<WorkflowState, 'is_terminal'> }>(

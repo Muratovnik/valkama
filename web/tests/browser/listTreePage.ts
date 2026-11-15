@@ -34,10 +34,15 @@ interface Card {
   updated?: string
 }
 
+/** A container is a goal, or a stage where it stands under another. */
+function kindOf(container: boolean, parent: number | undefined) {
+  if (!container) return 'task'
+  return parent === undefined ? 'goal' : 'stage'
+}
+
 function card(number: number, { closed, container = false, parent, updated = OLD }: Card) {
   return brief(number, closed ? DONE : stateOf(number), {
-    container,
-    kind: container ? 'epic' : 'task',
+    kind: kindOf(container, parent),
     parent_id: parent === undefined ? null : identity(parent),
     updated_at: updated,
   })

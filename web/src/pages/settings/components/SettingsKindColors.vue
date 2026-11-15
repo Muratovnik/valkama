@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * The colour of each work item kind: a row per kind, its glyph and word in the colour
- * they have now, the system's colour field, and a way back to the default.
+ * The colour of each work item kind: a row per colour, its glyph and word in the colour
+ * they have now, the system's colour field, and a way back to the default. A goal and a
+ * stage share one row, as they share one colour.
  *
  * The field is the platform's own: it opens the system picker, takes the keyboard and
  * reports `#rrggbb`, which is all this needs. A colour that reads poorly is said beside
@@ -18,15 +19,19 @@ import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
 
 import { kindGlyph } from '@/entities/work-item/utils/facets.ts'
 
-import { WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
-import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { DEFAULT_KIND_COLORS, kindColor, readsPoorly } from '@/shared/lib/kindColors.ts'
+import {
+  DEFAULT_KIND_COLORS,
+  KIND_COLOR_KINDS,
+  kindColor,
+  readsPoorly,
+} from '@/shared/lib/kindColors.ts'
+import type { KindColor } from '@/shared/lib/kindColors.ts'
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-type Kind = WorkItemBrief['kind']
+type Kind = KindColor
 
 const { t } = useI18n()
 const { settings } = storeToRefs(useSettingsStore())
@@ -34,14 +39,18 @@ const id = useId()
 
 const pickerId = (kind: Kind) => `${id}-${kind}`
 
+const COLORS = Object.keys(KIND_COLOR_KINDS) as Kind[]
+
 const rows = computed(() =>
-  WORK_ITEM_KINDS.map((kind) => {
+  COLORS.map((kind) => {
     const color = kindColor(settings.value.kindColors, kind)
+    const [sample] = KIND_COLOR_KINDS[kind]
     return {
       kind,
+      sample,
       color,
-      word: t(`workItem.kind.${kind}`),
-      glyph: kindGlyph(kind),
+      word: t(`settings.kindColors.name.${kind}`),
+      glyph: kindGlyph(sample),
       chosen: kind in settings.value.kindColors,
       hintId: readsPoorly(color) ? `${id}-${kind}-hint` : undefined,
     }
@@ -72,7 +81,7 @@ function reset(kind: Kind) {
 
 function resetAll() {
   settings.value.kindColors = {}
-  if (WORK_ITEM_KINDS[0]) focusField(WORK_ITEM_KINDS[0])
+  if (COLORS[0]) focusField(COLORS[0])
 }
 </script>
 
@@ -86,7 +95,7 @@ function resetAll() {
       <template #label>
         <span
           class="kind-color-name"
-          :data-kind="row.kind"
+          :data-kind="row.sample"
         >
           <VIcon
             v-if="row.glyph"

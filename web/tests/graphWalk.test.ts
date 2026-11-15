@@ -4,7 +4,7 @@ import { test } from 'vitest'
 
 import {
   FRAME_HEADER,
-  NO_EPIC_FRAME,
+  NO_PARENT_FRAME,
   NODE_HEIGHT,
   NODE_WIDTH,
 } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
@@ -36,7 +36,7 @@ function at(id: string, c: number, r: number): PlacedNode {
     y: r * ROW,
     width: NODE_WIDTH,
     height: NODE_HEIGHT,
-    frameId: NO_EPIC_FRAME,
+    frameId: NO_PARENT_FRAME,
   }
 }
 
@@ -96,7 +96,7 @@ function frame(
 ): PlacedFrame {
   return {
     id,
-    epic: id === NO_EPIC_FRAME ? null : { ...base, work_item_id: id },
+    goal: id === NO_PARENT_FRAME ? null : { ...base, work_item_id: id },
     parentId: null,
     folded,
     foldable: true,
@@ -113,7 +113,7 @@ const framed = walkTargets({
   frames: [
     frame('E', { x: 0, y: 0, width: 640, height: 200 }),
     frame('G', { x: 700, y: 0, width: 288, height: FRAME_HEADER }, true),
-    frame(NO_EPIC_FRAME, { x: 700, y: 400, width: 288, height: FRAME_HEADER }, true),
+    frame(NO_PARENT_FRAME, { x: 700, y: 400, width: 288, height: FRAME_HEADER }, true),
   ],
   nodes: [
     { ...at('P', 0, 0), x: 16, y: FRAME_HEADER + 16, frameId: 'E' },
@@ -129,7 +129,7 @@ test('a frame header has a fold and an open target, and the work under none only
       frameTarget('E'),
       foldTarget('G'),
       frameTarget('G'),
-      foldTarget(NO_EPIC_FRAME),
+      foldTarget(NO_PARENT_FRAME),
       'P',
       'Q',
     ],
@@ -150,12 +150,12 @@ test('from a card the arrows reach its frame header, and along the header from f
   assert.ok(up === foldTarget('E') || up === frameTarget('E'), String(up))
   assert.equal(graphWalk(framed, foldTarget('E'), 'ArrowRight'), frameTarget('E'))
   assert.equal(graphWalk(framed, frameTarget('E'), 'ArrowLeft'), foldTarget('E'))
-  assert.equal(graphWalk(framed, foldTarget(NO_EPIC_FRAME), 'ArrowUp'), foldTarget('G'))
+  assert.equal(graphWalk(framed, foldTarget(NO_PARENT_FRAME), 'ArrowUp'), foldTarget('G'))
 })
 
 test("Home goes to the first target as the field is read: the first frame's fold", () => {
   assert.equal(graphWalk(framed, 'Q', 'Home'), foldTarget('E'))
-  assert.equal(graphWalk(framed, foldTarget('E'), 'End'), foldTarget(NO_EPIC_FRAME))
+  assert.equal(graphWalk(framed, foldTarget('E'), 'End'), foldTarget(NO_PARENT_FRAME))
 })
 
 // A frame as wide as a long row of work: its open target's centre stands far to
@@ -172,11 +172,11 @@ test('along a header the arrows go from fold to open and back, however wide the 
   assert.equal(graphWalk(wide, foldTarget('W'), 'ArrowDown'), 'R')
 })
 
-test('zoomed out to the overview, an epic header has no fold target, and the work under none keeps it', () => {
+test('zoomed out to the overview, a goal header has no fold target, and the work under none keeps it', () => {
   const graph = {
     frames: [
       frame('E', { x: 0, y: 0, width: 640, height: 200 }),
-      frame(NO_EPIC_FRAME, { x: 700, y: 0, width: 288, height: FRAME_HEADER }, true),
+      frame(NO_PARENT_FRAME, { x: 700, y: 0, width: 288, height: FRAME_HEADER }, true),
     ],
     nodes: [{ ...at('P', 0, 0), x: 16, y: FRAME_HEADER + 16, frameId: 'E' }],
   }
@@ -184,7 +184,7 @@ test('zoomed out to the overview, an epic header has no fold target, and the wor
   // or a field of it alone would take no focus at all.
   assert.deepEqual(
     walkTargets(graph, { overview: true }).map((target) => target.id),
-    [frameTarget('E'), foldTarget(NO_EPIC_FRAME), 'P'],
+    [frameTarget('E'), foldTarget(NO_PARENT_FRAME), 'P'],
   )
   assert.deepEqual(
     walkTargets(graph, { overview: false }).map((target) => target.id),

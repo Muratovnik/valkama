@@ -1,5 +1,6 @@
 import { boundedText, strictObject, z } from '@/shared/api/contract.ts'
 import {
+  CONTAINER_STATES,
   PRIORITIES,
   STATE_CATEGORIES,
   WORK_ITEM_KINDS,
@@ -19,11 +20,14 @@ const resultSchema = strictObject({
     // The marks a result row draws; a server that predates them sends none.
     kind: enumField(WORK_ITEM_KINDS).optional(),
     priority: enumField(PRIORITIES).optional(),
+    // Null for an accepted open goal or stage, which derives `container_state` instead.
     state: strictObject({
       name: z.string().min(1).max(200),
       category: enumField(STATE_CATEGORIES).optional(),
       is_terminal: z.boolean().optional(),
-    }),
+    }).nullable(),
+    open: z.boolean(),
+    container_state: enumField(CONTAINER_STATES).nullable(),
     claim_ref: z.string().max(200),
   }),
 }).refine((result) => result.target.reference === result.item.reference, {

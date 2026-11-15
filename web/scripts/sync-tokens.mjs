@@ -153,7 +153,7 @@ const MIRRORS = [
     file: 'web/src/shared/lib/kindColors.ts',
     sites: [
       {
-        anchor: /const DEFAULT_KIND_COLORS: Record<WorkItemKind, string> = \{([^}]*)\}/,
+        anchor: /const DEFAULT_KIND_COLORS: Record<KindColor, string> = \{([^}]*)\}/,
         replace: (tokens, source) =>
           keyedLiterals(
             bodyOf(source, 'DEFAULT_KIND_COLORS'),

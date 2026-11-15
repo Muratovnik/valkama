@@ -12,14 +12,14 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { longChainSpace } from './fixtures/chainSpace.ts'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
-const OPEN: WorkItemBrief['state'] = {
+const OPEN: NonNullable<WorkItemBrief['state']> = {
   state_id: id(900),
   key: 'todo',
   name: 'Todo',
-  category: 'queued',
+  category: 'ready',
   is_terminal: false,
 }
-const DONE: WorkItemBrief['state'] = {
+const DONE: NonNullable<WorkItemBrief['state']> = {
   state_id: id(901),
   key: 'done',
   name: 'Done',
@@ -46,17 +46,21 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
     revision: 0,
     created_at: '2026-10-01T00:00:00Z',
     updated_at: '2026-10-01T00:00:00Z',
-    container: false,
-    ready: false,
+    open: !(overrides.state ?? OPEN).is_terminal,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: false,
     comment_count: 0,
     ...overrides,
   }
 }
 
-// A space: an epic root (1) with a closed child (2) and an open child (3); an
-// item discovered from the child (4) filed under no epic; and two items (5, 6)
+// A space: a goal root (1) with a closed child (2) and an open child (3); an
+// item discovered from the child (4) filed under no goal; and two items (5, 6)
 // outside the chain, one of them linked to the chain.
-const root = item(1, { kind: 'epic', container: true })
+const root = item(1, { kind: 'goal' })
 const space: GraphSource = {
   nodes: [
     root,
@@ -72,7 +76,7 @@ const space: GraphSource = {
     { from: id(3), to: id(1), kind: 'parent' },
   ],
 }
-const chain: GraphScope = { kind: 'chain', epicId: id(1), members: [id(2), id(3), id(4)] }
+const chain: GraphScope = { kind: 'chain', scopeRootId: id(1), members: [id(2), id(3), id(4)] }
 
 test('chain scope draws its open part by default and every member when closed work is asked for', () => {
   // 2 is closed and the parent of nothing drawn, so the default leaves it out.
@@ -104,15 +108,16 @@ test('the chain is laid out with only its own nodes, and a link to outside work 
   assert.equal(placed.edges.length, 1)
 })
 
-/** The group of an item in this category, ready to take or not. */
-function at(category: string, terminal = false, ready = false) {
-  const member = { ready, state: { category, is_terminal: terminal } }
+/** The group of an item in this category, workable or not. */
+function at(category: string, terminal = false, workable = false) {
+  const member = { open: !terminal, workable, state: { category, is_terminal: terminal } }
   return chainGroup(member)
 }
 
 test('a chain member is grouped by its workflow category, never by readiness', () => {
-  assert.equal(at('backlog', false, true), 'backlog')
-  assert.equal(at('queued', false, true), 'queued')
+  assert.equal(at('triage', false, true), 'triage')
+  assert.equal(at('deferred'), 'deferred')
+  assert.equal(at('ready', false, true), 'ready')
   assert.equal(at('active'), 'active')
   assert.equal(at('review'), 'review')
   assert.equal(at('blocked'), 'blocked')
@@ -120,31 +125,41 @@ test('a chain member is grouped by its workflow category, never by readiness', (
   assert.equal(at('cancelled', true), 'done')
 })
 
-test('a long chain draws the root, its open work and every epic its work is filed under', () => {
-  const { source, scope, root, openEpic, closedEpic, doneEpic } = longChainSpace()
+test('an accepted open goal or stage, which stands in no state, is grouped apart, and done once closed', () => {
+  // What it derives is no category: its work is counted where that work stands.
+  assert.equal(chainGroup({ open: true, state: null }), 'containers')
+  // Openness is the item's own word: a closed one is done whatever its state says.
+  assert.equal(chainGroup({ open: false, state: null }), 'done')
+  assert.equal(chainGroup({ open: false, state: { category: 'active' } }), 'done')
+  // A category this build does not know is refused rather than guessed.
+  assert.throws(() => chainGroup({ open: true, state: { category: 'queued' } }), /unknown/u)
+})
+
+test('a long chain draws the root, its open work and every goal its work is filed under', () => {
+  const { source, scope, root, openGoal, closedGoal, doneGoal } = longChainSpace()
   const all = workNodes(source, true, scope)
   // The whole chain: the root and its 609 members, the linked outsider left out;
   // the 489 closed members and the closed root.
   assert.equal(all.length, 610)
-  assert.equal(all.filter((node) => node.state.is_terminal).length, 490)
+  assert.equal(all.filter((node) => node.state?.is_terminal).length, 490)
 
   const drawn = workNodes(source, false, scope)
   const ids = new Set(drawn.map((node) => node.work_item_id))
-  // The 120 open members, the closed root, the closed epic three of them are
-  // still filed under, and the epic that closed with all of its work: an origin
+  // The 120 open members, the closed root, the closed goal three of them are
+  // still filed under, and the goal that closed with all of its work: an origin
   // of the chain is drawn whether or not anything under it is still open.
   // Nothing else that is closed.
   assert.equal(drawn.length, 123)
   assert.ok(ids.has(root.work_item_id))
-  assert.ok(ids.has(openEpic.work_item_id))
-  assert.ok(ids.has(closedEpic.work_item_id))
-  assert.ok(ids.has(doneEpic.work_item_id))
+  assert.ok(ids.has(openGoal.work_item_id))
+  assert.ok(ids.has(closedGoal.work_item_id))
+  assert.ok(ids.has(doneGoal.work_item_id))
   assert.deepEqual(
     drawn
-      .filter((node) => node.state.is_terminal)
+      .filter((node) => node.state?.is_terminal)
       .map((node) => node.reference)
       .sort((left, right) => left.localeCompare(right)),
-    [closedEpic.reference, doneEpic.reference, root.reference].sort((left, right) =>
+    [closedGoal.reference, doneGoal.reference, root.reference].sort((left, right) =>
       left.localeCompare(right),
     ),
   )
@@ -154,10 +169,10 @@ test('a long chain draws the root, its open work and every epic its work is file
 })
 
 test('a closed parent outside the chain does not come back with its open child', () => {
-  const outsider = item(20, { kind: 'epic', container: true, state: DONE })
+  const outsider = item(20, { kind: 'goal', state: DONE })
   const child = item(21, { parent_id: id(20) })
   const nodes = { nodes: [root, outsider, child], edges: [] }
-  const scope: GraphScope = { kind: 'chain', epicId: id(1), members: [id(21)] }
+  const scope: GraphScope = { kind: 'chain', scopeRootId: id(1), members: [id(21)] }
   assert.deepEqual(
     workNodes(nodes, false, scope).map((node) => node.reference),
     ['MAIN-1', 'MAIN-21'],

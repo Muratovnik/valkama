@@ -14,7 +14,7 @@ const context = (showDone = false, version = 1): GraphFocusContext => ({
   space: 'alpha',
   version,
   scopeKind: 'all',
-  epicId: null,
+  scopeRootId: null,
   showDone,
 })
 
@@ -47,8 +47,8 @@ test('space and scope changes reset a newer projection instead of carrying stale
   const next: GraphFocusContext = {
     ...context(true, 9),
     space: 'beta',
-    scopeKind: 'epic',
-    epicId: '42',
+    scopeKind: 'tree',
+    scopeRootId: '42',
   }
   state = reduceGraphFocus(state, { type: 'reset', context: next })
   assert.deepEqual(state, { ...next, focused: null })

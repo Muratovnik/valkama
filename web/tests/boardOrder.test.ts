@@ -21,6 +21,15 @@ const space = [
   boardItem(20, 'dev'),
 ]
 
+/** An accepted open goal: it stands in no state and derives one from its work. */
+const goal = (n: number) =>
+  boardItem(n, 'backlog', {
+    kind: 'goal',
+    state: null,
+    container_state: 'in_progress',
+    workable: false,
+  })
+
 describe('a move drawn on the board', () => {
   it('reorders inside a state exactly where the placement names', () => {
     for (const [rank, expected] of [
@@ -47,7 +56,7 @@ describe('a move drawn on the board', () => {
       'MAIN-2',
       'MAIN-20',
     ])
-    expect(last.find((item) => item.reference === 'MAIN-2')?.state.key).toBe('todo')
+    expect(last.find((item) => item.reference === 'MAIN-2')?.state?.key).toBe('todo')
     const placed = placeLocally(space, boardWorkflow, {
       reference: 'MAIN-2',
       state: 'todo',
@@ -64,6 +73,29 @@ describe('a move drawn on the board', () => {
     // Into a state that holds nothing yet.
     const empty = placeLocally(space, boardWorkflow, { reference: 'MAIN-1', state: 'done' })
     expect(references(empty).at(-1)).toBe('MAIN-1')
+  })
+
+  it('keeps the accepted open goals, which stand in no state, after the states and in their order', () => {
+    const withGoals = [goal(30), ...space, goal(31)]
+    const moved = placeLocally(withGoals, boardWorkflow, { reference: 'MAIN-1', state: 'todo' })
+    expect(references(moved)).toEqual([
+      'MAIN-2',
+      'MAIN-3',
+      'MAIN-10',
+      'MAIN-11',
+      'MAIN-1',
+      'MAIN-20',
+      'MAIN-30',
+      'MAIN-31',
+    ])
+  })
+
+  it('closes an item moved into a finishing state and opens one moved out of it', () => {
+    const closed = placeLocally(space, boardWorkflow, { reference: 'MAIN-1', state: 'done' })
+    expect(closed.find((item) => item.reference === 'MAIN-1')?.open).toBe(false)
+    const done = [boardItem(40, 'done'), ...space]
+    const opened = placeLocally(done, boardWorkflow, { reference: 'MAIN-40', state: 'dev' })
+    expect(opened.find((item) => item.reference === 'MAIN-40')?.open).toBe(true)
   })
 
   it('draws nothing for an item or a state the board does not know', () => {
@@ -107,7 +139,7 @@ describe('the order the board draws finished work in', () => {
 
   it('puts an item the board has just closed itself on top, and breaks a tie by number', () => {
     const moved = placeLocally(mixed, boardWorkflow, { reference: 'MAIN-2', state: 'done' })
-    const drawn = newestClosedFirst(moved).filter((item) => item.state.key === 'done')
+    const drawn = newestClosedFirst(moved).filter((item) => item.state?.key === 'done')
     expect(references(drawn)).toEqual(['MAIN-2', 'MAIN-31', 'MAIN-32', 'MAIN-30'])
     const tied = [done(40, '2026-10-30T09:00:00Z'), done(41, '2026-10-30T09:00:00Z')]
     expect(references(newestClosedFirst(tied))).toEqual(['MAIN-41', 'MAIN-40'])

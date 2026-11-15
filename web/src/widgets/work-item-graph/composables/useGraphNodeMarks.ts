@@ -31,12 +31,12 @@ import { useStateName } from '@/shared/lib/useStateName.ts'
 interface MarkInput {
   focusSet: Ref<ReturnType<typeof neighborhood> | null>
   placed: Ref<GraphLayout | null>
-  /** The chain's root in chain scope; otherwise whatever epic the scope names. */
-  epicId: () => string | null
   items: () => readonly WorkItemBrief[]
   /** The chain's members by id, closed ones included and the root not among them. */
   members: () => readonly string[] | undefined
   scopeKind: () => GraphScope['kind']
+  /** The chain's root in chain scope; otherwise whatever goal the scope names. */
+  scopeRootId: () => string | null
 }
 
 /** A frame's edge parts, in the order an edge runs, and the group whose key names each. */
@@ -45,7 +45,7 @@ const FRAME_PARTS = [
   ['review', 'review'],
   ['active', 'active'],
   ['blocked', 'blocked'],
-  ['ahead', 'queued'],
+  ['ahead', 'ready'],
 ] as const
 
 export function useGraphNodeMarks(input: MarkInput) {
@@ -59,13 +59,13 @@ export function useGraphNodeMarks(input: MarkInput) {
 
   /** The chain's root, which the field marks; a chain is the only field that has one. */
   function isChainRoot(node: PlacedNode): boolean {
-    return inChain.value && node.work_item_id === input.epicId()
+    return inChain.value && node.work_item_id === input.scopeRootId()
   }
 
   /** The parent's reference; none for a root, nor for the chain's root, which the chip names. */
   function parentReference(node: PlacedNode): string | undefined {
     if (node.parent_id === null) return undefined
-    if (inChain.value && node.parent_id === input.epicId()) return undefined
+    if (inChain.value && node.parent_id === input.scopeRootId()) return undefined
     return referenceById.value.get(node.parent_id)
   }
 
@@ -76,7 +76,7 @@ export function useGraphNodeMarks(input: MarkInput) {
    * from.
    */
   function isRecessed(node: PlacedNode): boolean {
-    if (inChain.value && node.state.is_terminal && !isChainRoot(node)) return true
+    if (inChain.value && !node.open && !isChainRoot(node)) return true
     const focused = input.focusSet.value
     return focused !== null && !focused.ids.has(node.work_item_id)
   }
@@ -113,8 +113,8 @@ export function useGraphNodeMarks(input: MarkInput) {
 
   /**
    * What the key names: in a chain, its groups as the cards are marked; over the
-   * whole space, the parts the frames' edges draw — «ahead» is queued and backlog
-   * together, as an edge draws them.
+   * whole space, the parts the frames' edges draw — «ahead» is ready, untriaged and
+   * deferred work together, as an edge draws them.
    */
   const legend = computed(() => {
     if (inChain.value) return { groups: chainLegend.value, names: chainLegendNames.value }
@@ -122,7 +122,7 @@ export function useGraphNodeMarks(input: MarkInput) {
     const groups = FRAME_PARTS.filter(([part]) => frames.some((frame) => frame.progress[part])).map(
       ([, group]) => group,
     )
-    return { groups, names: { ...chainLegendNames.value, queued: t('graph.legendAhead') } }
+    return { groups, names: { ...chainLegendNames.value, ready: t('graph.legendAhead') } }
   })
 
   return {

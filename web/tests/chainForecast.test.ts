@@ -114,10 +114,10 @@ describe('the forecast of a chain', () => {
     expect(forecastChain(answer(16, { 30: [20, 4] }), TODAY)).toEqual({ kind: 'quiet' })
   })
 
-  it('reads an epic’s scope by the same arithmetic as a chain’s', () => {
+  it('reads a goal’s scope by the same arithmetic as a chain’s', () => {
     const chain = answer(81, { ...BEFORE, ...everyDay(1, 10) })
-    const epic = { ...chain, scope: 'epic' as const }
-    expect(forecastChain(epic, TODAY)).toEqual(forecastChain(chain, TODAY))
+    const goal = { ...chain, scope: 'tree' as const }
+    expect(forecastChain(goal, TODAY)).toEqual(forecastChain(chain, TODAY))
   })
 })
 

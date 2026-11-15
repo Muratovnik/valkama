@@ -3,7 +3,7 @@
  * hint adds to what the row draws (`rowHidden`), and the sentence its accessible name says whole.
  *
  * The second line is what the session is doing, `working`, `asking` or `waiting`, then how
- * long, then after « · » where it belongs: the epic of an item, the folder of a session that
+ * long, then after « · » where it belongs: the goal of an item, the folder of a session that
  * has a title of its own. How long counts from when the session began what it does now, in
  * whole minutes under an hour and whole hours from one, and says nothing under a minute. A
  * row that left the frame says that its work ended instead.
@@ -54,9 +54,9 @@ function doing(t: Words['t'], live: Live): string {
   return sign === null ? '' : t(`liveWork.doing.${sign}`)
 }
 
-/** Where a row belongs, as its second line ends: an item's epic, a titled session's folder. */
+/** Where a row belongs, as its second line ends: an item's goal, a titled session's folder. */
 function context(entry: LiveEntry): string {
-  if (entry.kind === 'item') return entry.epic ?? ''
+  if (entry.kind === 'item') return entry.goal ?? ''
   return entry.session.title === null ? '' : entry.session.folder
 }
 
@@ -85,7 +85,7 @@ function subject(words: Words, entry: LiveEntry): string {
   if (entry.kind === 'item') {
     const { reference, title } = entry.row
     const own = `${reference} ${title}`
-    return entry.epic ? `${own}, ${t('liveWork.partOf', { title: entry.epic })}` : own
+    return entry.goal ? `${own}, ${t('liveWork.partOf', { title: entry.goal })}` : own
   }
   const { folder, title } = entry.session
   if (title !== null && folder) return t('liveWork.sessionIn', { name: title, folder })

@@ -30,31 +30,31 @@ const LONG_HOLDER_WHOLE = 'release-coordinator-operator-with-an-unusually-long-n
 const members = [
   mapMember('MAIN-998', 'active', workItemRef.reference, {
     holder: 'maintainer (session 674838a1-9c2e-4f5b-8d7a-0b1c2d3e4f50)',
-    ready: true,
+    workable: true,
     title: 'Still open',
   }),
   mapMember('MAIN-1080', 'active', workItemRef.reference, {
     holder: 'maintainer (session 674838a1-9c2e-4f5b-8d7a-0b1c2d3e4f50)',
-    ready: false,
+    workable: false,
     title: 'Gateway rejects unassigned exceptions',
   }),
   mapMember('MAIN-1081', 'active', workItemRef.reference, {
     holder: 'reviewer (session 1baa03d7-0c4e-7a11-9b2d-3f5e6a7b8c9d)',
-    ready: true,
+    workable: true,
     title: 'Short task',
   }),
   mapMember('MAIN-1082', 'active', workItemRef.reference, {
     holder: LONG_HOLDER,
-    ready: true,
+    workable: true,
     title: 'Move the export job to the new queue',
   }),
-  mapMember('MAIN-1133', 'backlog', workItemRef.reference, {
-    ready: false,
+  mapMember('MAIN-1133', 'triage', workItemRef.reference, {
+    workable: false,
     title: 'Waits on an open item',
   }),
-  mapMember('MAIN-1134', 'backlog', workItemRef.reference, {
-    ready: true,
-    title: 'Unblocked backlog item',
+  mapMember('MAIN-1134', 'triage', workItemRef.reference, {
+    workable: true,
+    title: 'Unblocked untriaged item',
   }),
 ]
 
@@ -123,7 +123,7 @@ for (const width of [1280, 390]) {
     await expect(section.locator('.chain-row')).toHaveCount(6)
     await expect(section.locator('.chain-group-title')).toHaveText([
       'Development · 4',
-      'Backlog · 2',
+      'Triage · 2',
     ])
     // Below 480px the holder is hidden and the state word keeps its place.
     const list = await section.locator('.chain-members').boundingBox()
@@ -154,11 +154,11 @@ const mixedChain = () =>
     [
       ...members,
       {
-        ...mapMember('MAIN-1135', 'backlog', workItemRef.reference, {
-          ready: false,
+        ...mapMember('MAIN-1135', 'triage', workItemRef.reference, {
+          workable: false,
           title: 'Says its own state and what it waits on',
         }),
-        state: { key: 'triage', name: 'Triage', category: 'backlog', is_terminal: false },
+        state: { key: 'triage', name: 'Triage', category: 'triage', is_terminal: false },
       },
     ],
     { edges: [...edges, { from: mapId(998), to: mapId(1135), kind: 'blocks' as const }] },

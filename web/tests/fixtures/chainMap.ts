@@ -2,9 +2,9 @@
  * Chains for the card's branch map, built rather than written out.
  *
  * `branchedChain` has the shape the map was designed against: 617 members, 132
- * of them open, in six lanes — 273 children of the root, 243 under an epic that
- * was itself discovered, 88 under no epic, 11 under a second discovered epic and
- * one each under two epics outside the chain. Discovery edges are dense and
+ * of them open, in six lanes — 273 children of the root, 243 under a goal that
+ * was itself discovered, 88 under no goal, 11 under a second discovered goal and
+ * one each under two goals outside the chain. Discovery edges are dense and
  * `blocks` links sparse, as they are in a space that has run for months.
  *
  * `smallBranchedChain` is 40 members in two lanes, 22 open: few enough that
@@ -14,7 +14,7 @@
  * can state a small case directly and the contract's sums still hold.
  */
 
-type Group = 'active' | 'backlog' | 'blocked' | 'done' | 'queued' | 'review'
+type Group = 'active' | 'blocked' | 'done' | 'ready' | 'review' | 'triage'
 
 const STATES: Record<Group, { category: string; is_terminal: boolean; key: string; name: string }> =
   {
@@ -22,8 +22,8 @@ const STATES: Record<Group, { category: string; is_terminal: boolean; key: strin
     review: { key: 'review', name: 'Code review', category: 'review', is_terminal: false },
     active: { key: 'dev', name: 'Development', category: 'active', is_terminal: false },
     blocked: { key: 'blocked', name: 'Blocked', category: 'blocked', is_terminal: false },
-    queued: { key: 'todo', name: 'Todo', category: 'queued', is_terminal: false },
-    backlog: { key: 'backlog', name: 'Backlog', category: 'backlog', is_terminal: false },
+    ready: { key: 'ready', name: 'Ready', category: 'ready', is_terminal: false },
+    triage: { key: 'triage', name: 'Triage', category: 'triage', is_terminal: false },
   }
 
 export function mapId(number: number): string {
@@ -42,8 +42,10 @@ interface MapMemberOptions {
   /** Hours after the fixture's start the member was created. */
   created?: number
   holder?: string
-  ready?: boolean
+  /** A goal or a stage, which the chain draws as the head of a lane; a task by default. */
+  kind?: 'goal' | 'stage' | 'task'
   title?: string
+  workable?: boolean
 }
 
 /** One member, identified by its reference; its id is derived from the number. */
@@ -60,13 +62,16 @@ export function mapMember(
     work_item_id: mapId(number),
     reference,
     title: options.title ?? `Chain step ${number}`,
+    kind: options.kind ?? ('task' as const),
     state: { ...state },
+    open: !state.is_terminal,
+    container_state: null,
     claim_ref: options.holder ?? '',
     claim_state: options.holder ? ('live' as const) : null,
     parent_reference: parent,
     created_at: stamp(created),
     closed_at: state.is_terminal ? stamp(options.closed ?? created + 24) : null,
-    ready: options.ready ?? false,
+    workable: options.workable ?? false,
   }
 }
 
@@ -92,11 +97,11 @@ interface ChainExtras {
     days: number
     trend: 'converging' | 'growing' | 'steady'
   }
-  scope?: 'chain' | 'epic'
-  /** Each parent epic's title, by reference. */
+  scope?: 'chain' | 'tree'
+  /** Each parent goal's title, by reference. */
   titles?: Record<string, string>
   /** What each scope holds, where the chain's members alone do not say it. */
-  totals?: { chain: number; epic: number }
+  totals?: { chain: number; tree: number }
 }
 
 function originsOf(root: MapRoot, members: MapMember[], titles: Record<string, string>) {
@@ -104,7 +109,7 @@ function originsOf(root: MapRoot, members: MapMember[], titles: Record<string, s
   for (const member of members) {
     const entry = byParent.get(member.parent_reference) ?? { count: 0, open: 0 }
     entry.count += 1
-    if (!member.state.is_terminal) entry.open += 1
+    if (member.open) entry.open += 1
     byParent.set(member.parent_reference, entry)
   }
   const own = (parent: string | null) => Number(parent === root.reference)
@@ -143,7 +148,16 @@ function seriesOf(members: MapMember[]) {
 }
 
 /** The order of work by state category, as the server ranks a chain's members. */
-const WORK_ORDER = ['active', 'review', 'queued', 'backlog', 'blocked', 'completed', 'cancelled']
+const WORK_ORDER = [
+  'active',
+  'review',
+  'ready',
+  'triage',
+  'deferred',
+  'blocked',
+  'completed',
+  'cancelled',
+]
 const numberOf = (member: MapMember) => Number(member.reference.split('-').at(-1))
 
 /**
@@ -162,7 +176,7 @@ function ranked(members: MapMember[]) {
 
 /** A chain answer for these members and edges, its counts derived from them. */
 export function chainOf(root: MapRoot, members: MapMember[], extras: ChainExtras = {}) {
-  const closed = members.filter((member) => member.state.is_terminal).length
+  const closed = members.filter((member) => !member.open).length
   const byCategory: Record<string, number> = {}
   for (const member of members)
     byCategory[member.state.category] = (byCategory[member.state.category] ?? 0) + 1
@@ -171,19 +185,20 @@ export function chainOf(root: MapRoot, members: MapMember[], extras: ChainExtras
       work_item_id: root.id,
       reference: root.reference,
       title: root.title ?? 'Root',
-      kind: 'epic' as const,
+      kind: 'goal' as const,
       has_children: members.some((member) => member.parent_reference === root.reference),
       totals: extras.totals ?? {
         chain: members.length,
-        epic: members.filter((member) => member.parent_reference === root.reference).length,
+        tree: members.filter((member) => member.parent_reference === root.reference).length,
       },
     },
     scope: extras.scope ?? 'chain',
     total: members.length,
     closed,
     open: members.length - closed,
-    ready: members.filter((member) => member.ready).length,
+    workable: members.filter((member) => member.workable).length,
     by_category: byCategory,
+    by_container_state: {},
     origins: originsOf(root, members, extras.titles ?? {}),
     series: seriesOf(members),
     recent: extras.recent ?? { days: 7, created: 0, closed: 0, trend: 'steady' as const },
@@ -245,13 +260,13 @@ const everyOtherDay = (index: number) => ({ created: index * 2, closed: index * 
 const daily = (index: number) => ({ created: index * 24, closed: index * 30 + 40 })
 
 /**
- * The large chain. Numbers: the root's children from 2000, the discovered epic's
- * children from 3000, no-epic members from 4000 (the two epics among them first),
- * the second epic's from 5000, and the one member under each outside epic at
+ * The large chain. Numbers: the root's children from 2000, the discovered goal's
+ * children from 3000, no-goal members from 4000 (the two goals among them first),
+ * the second goal's from 5000, and the one member under each outside goal at
  * 6001 and 6002.
  */
 export function branchedChain(root: MapRoot, key: string) {
-  const epic = `${key}-4000`
+  const goal = `${key}-4000`
   const second = `${key}-4001`
   const outside = [`${key}-7001`, `${key}-7002`]
   const own = laneOf(key, root.reference)
@@ -259,10 +274,10 @@ export function branchedChain(root: MapRoot, key: string) {
     ...own(2000, 263, 'done', everyOtherDay),
     ...own(2263, 1, 'review', () => ({ created: 1200, holder: 'claude' })),
     ...own(2264, 2, 'active', () => ({ created: 1210, holder: 'codex' })),
-    ...own(2266, 7, 'backlog', (index) => ({ created: 1300 + index, ready: true })),
+    ...own(2266, 7, 'triage', (index) => ({ created: 1300 + index, workable: true })),
   ]
-  const under = laneOf(key, epic)
-  const epicLane = [
+  const under = laneOf(key, goal)
+  const goalLane = [
     ...under(3000, 163, 'done', (index) => ({ created: 700 + index * 3, closed: 900 + index * 7 })),
     ...under(3163, 1, 'review', () => ({ created: 2000, holder: 'claude' })),
     ...under(3164, 8, 'active', (index) => ({
@@ -270,57 +285,57 @@ export function branchedChain(root: MapRoot, key: string) {
       holder: index % 2 ? 'codex (session 1baa03d7)' : 'claude',
     })),
     ...under(3172, 1, 'blocked', () => ({ created: 2020 })),
-    ...under(3173, 14, 'queued', (index) => ({ created: 2030 + index, ready: true })),
-    ...under(3187, 56, 'backlog', (index) => ({ created: 2100 + index, ready: index < 40 })),
+    ...under(3173, 14, 'ready', (index) => ({ created: 2030 + index, workable: true })),
+    ...under(3187, 56, 'triage', (index) => ({ created: 2100 + index, workable: index < 40 })),
   ]
   const loose = laneOf(key, null)
-  const noEpicLane = [
-    mapMember(epic, 'active', null, { created: 690, title: 'Second wave' }),
-    mapMember(second, 'backlog', null, { created: 1500, title: 'Follow-ups' }),
+  const noGoalLane = [
+    mapMember(goal, 'active', null, { created: 690, kind: 'goal', title: 'Second wave' }),
+    mapMember(second, 'triage', null, { created: 1500, kind: 'goal', title: 'Follow-ups' }),
     ...loose(4002, 53, 'done', (index) => ({ created: 400 + index * 9, closed: 500 + index * 20 })),
-    ...loose(4055, 5, 'queued', (index) => ({ created: 1800 + index, ready: true })),
-    ...loose(4060, 28, 'backlog', (index) => ({ created: 1900 + index, ready: true })),
+    ...loose(4055, 5, 'ready', (index) => ({ created: 1800 + index, workable: true })),
+    ...loose(4060, 28, 'triage', (index) => ({ created: 1900 + index, workable: true })),
   ]
   const after = laneOf(key, second)
   const secondLane = [
     ...after(5000, 6, 'done', (index) => ({ created: 1510 + index, closed: 1600 + index * 5 })),
-    ...after(5006, 5, 'backlog', (index) => ({ created: 1700 + index })),
+    ...after(5006, 5, 'triage', (index) => ({ created: 1700 + index })),
   ]
   const outsideLanes = [
-    mapMember(`${key}-6001`, 'backlog', outside[0], { created: 2400 }),
-    mapMember(`${key}-6002`, 'queued', outside[1], { created: 2410, ready: true }),
+    mapMember(`${key}-6001`, 'triage', outside[0], { created: 2400 }),
+    mapMember(`${key}-6002`, 'ready', outside[1], { created: 2410, workable: true }),
   ]
-  const [epicItem, secondItem] = noEpicLane
+  const [goalItem, secondItem] = noGoalLane
   const edges: MapEdge[] = [
-    // The discovered epic was found while doing the 121st closed child of the root.
-    found(epicItem, ownLane[120]),
-    // The second epic came out of the discovered epic's 50th closed child.
-    found(secondItem, epicLane[49]),
-    // Each of the discovered epic's children came out of an earlier sibling, and
+    // The discovered goal was found while doing the 121st closed child of the root.
+    found(goalItem, ownLane[120]),
+    // The second goal came out of the discovered goal's 50th closed child.
+    found(secondItem, goalLane[49]),
+    // Each of the discovered goal's children came out of an earlier sibling, and
     // the first three out of the root's children.
-    ...epicLane.map((member, index) =>
-      found(member, index < 3 ? ownLane[121 + index] : epicLane[index - 3]),
+    ...goalLane.map((member, index) =>
+      found(member, index < 3 ? ownLane[121 + index] : goalLane[index - 3]),
     ),
-    // No-epic work: the earliest from the root's 20th child, the rest from all over.
-    ...noEpicLane
+    // No-goal work: the earliest from the root's 20th child, the rest from all over.
+    ...noGoalLane
       .slice(2)
-      .map((member, index) => found(member, index % 2 ? epicLane[index * 2] : ownLane[19 + index])),
+      .map((member, index) => found(member, index % 2 ? goalLane[index * 2] : ownLane[19 + index])),
     ...secondLane.map((member, index) =>
-      found(member, index ? secondLane[index - 1] : epicLane[49]),
+      found(member, index ? secondLane[index - 1] : goalLane[49]),
     ),
     found(outsideLanes[0], ownLane[268]),
-    found(outsideLanes[1], epicLane[180]),
+    found(outsideLanes[1], goalLane[180]),
     // A second source for many: discovery is dense.
-    ...epicLane.slice(10, 150).map((member, index) => found(member, ownLane[(index * 7) % 263])),
-    ...noEpicLane.slice(30).map((member, index) => found(member, epicLane[(index * 5) % 163])),
+    ...goalLane.slice(10, 150).map((member, index) => found(member, ownLane[(index * 7) % 263])),
+    ...noGoalLane.slice(30).map((member, index) => found(member, goalLane[(index * 5) % 163])),
     // Two blocking links between open items.
-    { from: epicLane[171].work_item_id, to: epicLane[172].work_item_id, kind: 'blocks' },
-    { from: noEpicLane[0].work_item_id, to: epicLane[180].work_item_id, kind: 'blocks' },
+    { from: goalLane[171].work_item_id, to: goalLane[172].work_item_id, kind: 'blocks' },
+    { from: noGoalLane[0].work_item_id, to: goalLane[180].work_item_id, kind: 'blocks' },
   ]
-  return chainOf(root, [...ownLane, ...epicLane, ...noEpicLane, ...secondLane, ...outsideLanes], {
+  return chainOf(root, [...ownLane, ...goalLane, ...noGoalLane, ...secondLane, ...outsideLanes], {
     edges,
     titles: {
-      [epic]: 'Second wave',
+      [goal]: 'Second wave',
       [second]: 'Follow-ups',
       [outside[0]]: 'Old tooling',
       [outside[1]]: 'Docs pass',
@@ -335,19 +350,19 @@ export function smallBranchedChain(root: MapRoot, key: string) {
     ...own(1001, 12, 'done', daily),
     ...own(1013, 1, 'review', () => ({ created: 400, holder: 'claude' })),
     ...own(1014, 2, 'active', () => ({ created: 410, holder: 'codex' })),
-    ...own(1016, 5, 'backlog', (index) => ({ created: 420 + index, ready: true })),
+    ...own(1016, 5, 'triage', (index) => ({ created: 420 + index, workable: true })),
   ]
   const loose = laneOf(key, null)
-  const noEpicLane = [
+  const noGoalLane = [
     ...loose(1101, 6, 'done', (index) => ({ created: 100 + index * 20, closed: 200 + index * 30 })),
     ...loose(1107, 2, 'active', () => ({ created: 430, holder: 'codex' })),
     ...loose(1109, 1, 'blocked', () => ({ created: 440 })),
-    ...loose(1110, 3, 'queued', (index) => ({ created: 450 + index, ready: true })),
-    ...loose(1113, 8, 'backlog', (index) => ({ created: 460 + index })),
+    ...loose(1110, 3, 'ready', (index) => ({ created: 450 + index, workable: true })),
+    ...loose(1113, 8, 'triage', (index) => ({ created: 460 + index })),
   ]
   const edges: MapEdge[] = [
-    ...noEpicLane.map((member, index) => found(member, ownLane[3 + (index % 9)])),
-    { from: noEpicLane[6].work_item_id, to: noEpicLane[8].work_item_id, kind: 'blocks' },
+    ...noGoalLane.map((member, index) => found(member, ownLane[3 + (index % 9)])),
+    { from: noGoalLane[6].work_item_id, to: noGoalLane[8].work_item_id, kind: 'blocks' },
   ]
-  return chainOf(root, [...ownLane, ...noEpicLane], { edges })
+  return chainOf(root, [...ownLane, ...noGoalLane], { edges })
 }

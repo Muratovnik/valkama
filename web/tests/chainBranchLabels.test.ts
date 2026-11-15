@@ -86,17 +86,17 @@ describe('the words beside the lanes', () => {
         mapMember(`MAP-${100 + index}`, 'done', 'MAP-1', { closed: index }),
       ),
       ...Array.from({ length: 20 }, (_, index) =>
-        mapMember(`MAP-${200 + index}`, 'backlog', 'MAP-1', { created: 300 + index }),
+        mapMember(`MAP-${200 + index}`, 'triage', 'MAP-1', { created: 300 + index }),
       ),
     ]
     const late = Array.from({ length: 3 }, (_, index) =>
       mapMember(`MAP-${400 + index}`, 'done', 'MAP-90', { created: 500 + index, closed: 600 }),
     )
     const loose = Array.from({ length: 2 }, (_, index) =>
-      mapMember(`MAP-${450 + index}`, 'backlog', null, { created: 550 + index }),
+      mapMember(`MAP-${450 + index}`, 'triage', null, { created: 550 + index }),
     )
     const early = Array.from({ length: 2 }, (_, index) =>
-      mapMember(`MAP-${470 + index}`, 'backlog', 'MAP-91', { created: 560 + index }),
+      mapMember(`MAP-${470 + index}`, 'triage', 'MAP-91', { created: 560 + index }),
     )
     const layout = layoutBranches(
       asChain(
@@ -111,7 +111,7 @@ describe('the words beside the lanes', () => {
     )
     for (const width of [342, 620, 1100]) {
       const drawing = drawBranches(layout, width, (lane) => ({
-        name: lane.reference ?? 'no epic',
+        name: lane.reference ?? 'no goal',
         counts: `${lane.counts.done} of ${lane.members.length} done`,
       }))
       for (const lane of drawing.lanes) expectBesideItsLane(lane, width)

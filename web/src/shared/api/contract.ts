@@ -68,7 +68,7 @@ export function positiveInt(allowZero = false) {
 }
 
 /**
- * A card's epic, or none. One refusal names both shapes, because a value that
+ * A card's goal, or none. One refusal names both shapes, because a value that
  * fails is usually neither — while an absent key stays a missing field.
  */
 export function nullablePositiveInt() {

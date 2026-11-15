@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Kanban: one column per workflow state, over the same model the list and the
- * graph read — or, grouped by epic, one lane of those columns per epic.
+ * graph read — or, grouped by goal, one lane of those columns per goal.
  *
  * The columns come from `workflow.states`, in the order the workflow gives
  * them, the terminal states last. Nothing here knows there are six, or that one
@@ -11,7 +11,7 @@
  * lands, for the page to send. What the move did is said aloud here, because a
  * reader who moved a tile without looking needs to hear where it went.
  *
- * Grouped by epic, a lane shows only its own tiles of a state, but the order
+ * Grouped by goal, a lane shows only its own tiles of a state, but the order
  * it changes is the state's across the whole board: a tile moved above its
  * lane neighbour moves past every other lane's tile between them too. So each
  * reorder made in a lane, by drag or by Alt+↑/↓, shows that in a line at the
@@ -26,7 +26,7 @@ import WorkItemLanes from '@/widgets/work-item-views/components/WorkItemLanes.vu
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
 import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit.ts'
 import { clearOfHeading } from '@/widgets/work-item-views/composables/useLaneClearance.ts'
-import { terminalLast } from '@/widgets/work-item-views/utils/boardColumns.ts'
+import { byState, terminalLast } from '@/widgets/work-item-views/utils/boardColumns.ts'
 import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import { newestClosedFirst } from '@/widgets/work-item-views/utils/boardOrder.ts'
@@ -37,7 +37,6 @@ import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
-import { byState } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge, PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 
@@ -55,7 +54,7 @@ const props = withDefaults(
     live?: Readonly<Record<string, LiveWork>>
     /** The items the board is scoped to before any filter; `items` when absent. */
     scopeItems?: WorkItemBrief[]
-    /** The planning space, which names epics outside the scope and owns the folded lanes. */
+    /** The planning space, which names goals outside the scope and owns the folded lanes. */
     spaceId?: string
     spaceItems?: WorkItemBrief[]
     writable?: boolean
@@ -90,7 +89,7 @@ const states = computed(() => columns.value.map((column) => column.state))
 /** What each item waits on, judged against the whole space so a filtered-out blocker still counts. */
 const waiting = computed(() => waitingOn(props.links, props.spaceItems ?? props.items))
 const lanes = computed(() =>
-  props.grouping === 'epic'
+  props.grouping === 'goal'
     ? boardLanes({
         filtered: props.filtered,
         scope: props.scopeItems ?? props.items,
@@ -99,7 +98,7 @@ const lanes = computed(() =>
       })
     : [],
 )
-const grouped = computed(() => props.grouping === 'epic')
+const grouped = computed(() => props.grouping === 'goal')
 const hint = computed(() => (props.writable ? hintId : undefined))
 /** Flat, the columns are one row the arrows cross; grouped, each lane is its own. */
 const boardRow = computed(() => (grouped.value ? undefined : ''))

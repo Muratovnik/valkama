@@ -24,7 +24,7 @@
  * of the space, and what the card takes from the space — its parent's
  * reference, the states it may move to — comes in when the space does.
  * The route also holds how the space is looked at: the view, the chain every
- * view is narrowed to, whether the board is grouped by epic, and the filter,
+ * view is narrowed to, whether the board is grouped by goal, and the filter,
  * which the workspace owns and writes back within the manifest's bound. A saved
  * view is that state under a name, kept for the space it was saved in.
  *

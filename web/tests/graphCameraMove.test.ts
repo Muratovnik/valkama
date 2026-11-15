@@ -15,6 +15,7 @@ import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge } from '@/shared/api/planningModel.ts'
 
 import { workItem } from './browser/planningFixtures.ts'
+import { stateOf } from './fixtures/workItem.ts'
 
 /**
  * Where the camera goes, by cause. The camera is the operator's: the field
@@ -33,7 +34,7 @@ const dimensions = { width: 1200, height: 680 }
  */
 const flat = (nodes: readonly { work_item_id: string }[]) => ({
   kind: 'chain' as const,
-  epicId: null,
+  scopeRootId: null,
   members: nodes.map((node) => node.work_item_id),
 })
 
@@ -44,9 +45,13 @@ function chain(count: number) {
     reference: `TEST-${index + 1}`,
     number: index + 1,
     parent_id: null,
-    container: false,
-    ready: index === 0,
-    state: { ...base.state, is_terminal: false },
+    open: true,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: index === 0,
+    state: { ...stateOf(base), is_terminal: false },
   }))
   const edges: PlanningEdge[] = nodes.slice(1).map((node, index) => ({
     from: `work-${index + 1}`,

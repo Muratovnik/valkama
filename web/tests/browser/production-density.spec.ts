@@ -1,6 +1,6 @@
 /**
  * What a screen shows first, in the built application: one thing leads a tile, a
- * short title leaves no hole around it, an epic's row is one calm line with its
+ * short title leaves no hole around it, a goal's row is one calm line with its
  * actions a pointer or a key away, a finished cell is a line of text, the view's
  * menu is the control its neighbours are, and a chain's section reaches its list without
  * a chart in the way.
@@ -22,7 +22,7 @@ import { projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** The button that grouped the board before the view's menu held the grouping. */
-const GROUPING = 'Group the board by epic'
+const GROUPING = 'Group the board by goal'
 const VIEW = 'View'
 
 /** What a part of the page is drawn at. */
@@ -81,7 +81,7 @@ test('a list row starts at its own top, with its labels as one line of words', a
   await installBackend(page)
   await serve(page)
   await openList(page)
-  const row = page.locator('.work-item-list tbody tr', { hasText: 'Loose work under no epic' })
+  const row = page.locator('.work-item-list tbody tr', { hasText: 'Loose work under no goal' })
   await expect(row).toBeVisible()
   // The reference's button stood a control's height and moved the row's shared
   // baseline down, so every title stood lower than the air under it.
@@ -108,7 +108,7 @@ test('a list row starts at its own top, with its labels as one line of words', a
   await expect(page.locator('.workspace-figures')).toContainText('Reset')
 })
 
-test('an epic’s row is one calm line, its actions up under a pointer and from the keyboard', async ({
+test('a goal’s row is one calm line, its actions up under a pointer and from the keyboard', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -156,7 +156,7 @@ test('a press on the toggle with the pointer does not leave the row’s actions 
   await expect.poll(() => opacity(head.locator('.lane-actions'))).toBe(0)
 })
 
-test('an epic’s row says its state only once the epic has moved', async ({ page }) => {
+test('a goal’s row says its state only once the goal has moved', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
   await serve(page)
@@ -165,7 +165,7 @@ test('an epic’s row says its state only once the epic has moved', async ({ pag
     page
       .locator('.lane-head', { has: page.locator('.lane-reference', { hasText: reference }) })
       .locator('.lane-state')
-  // In progress, it says so; not started, the norm of a board's epics, it says
+  // In progress, it says so; not started, the norm of a board's goals, it says
   // nothing on screen, and the word is still there to be read out.
   await expect(stateOf('MAIN-401')).not.toHaveClass(/visually-hidden/u)
   await expect(stateOf('MAIN-410')).toHaveClass(/visually-hidden/u)
@@ -179,9 +179,9 @@ test('a finished cell is a line of text with no ground, until a tile can land th
   await installBackend(page)
   await serve(page)
   await openBoard(page)
-  const epic = lane(page, 'The first board')
-  await epic.locator('.lane-toggle').click()
-  const done = epic.locator('.lane-cell[data-state="done"]')
+  const goal = lane(page, 'The first board')
+  await goal.locator('.lane-toggle').click()
+  const done = goal.locator('.lane-cell[data-state="done"]')
   const more = done.locator('.lane-more')
   await expect(more).toBeVisible()
   await page.mouse.move(0, 0)
@@ -242,7 +242,7 @@ test('the view’s menu is the control its neighbours are, and holds how the vie
 
   // By the view, and before the field: Tab goes view, menu, field. The grouping is
   // chosen from the keyboard in the menu, and focus comes back to its button.
-  await groupFromKeyboard(page, 'By parent')
+  await groupFromKeyboard(page, 'By goal')
   await expect(viewMenu(page)).toBeFocused()
   await expect(page.locator('.board-lane').first()).toBeVisible()
   expect(new Set(await allOneRow(page)).size).toBe(1)
@@ -284,7 +284,7 @@ for (const width of [1680, 1440, 1260, 1024, 996, 960, 900, 760, 700, 390]) {
     await expect(viewMenu(page)).toBeVisible()
     const resting = await barControls(page)
     await viewMenu(page).click()
-    await page.getByRole('menuitemradio', { name: 'By parent' }).click()
+    await page.getByRole('menuitemradio', { name: 'By goal' }).click()
     await expect(page.locator('.board-lane').first()).toBeVisible()
     expect(await barControls(page)).toEqual(resting)
     await viewMenu(page).click()
@@ -374,7 +374,7 @@ test('a chain’s section reaches its list with no chart in the way', async ({ p
 test.describe('where nothing can hover', () => {
   test.use({ hasTouch: true, isMobile: true })
 
-  test('an epic’s row keeps its actions up, on a row of no more than two', async ({ page }) => {
+  test('a goal’s row keeps its actions up, on a row of no more than two', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await installBackend(page)
     await serve(page)

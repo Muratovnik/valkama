@@ -27,7 +27,7 @@ const QUEUED = {
   state_id: '00000000-0000-4000-8000-000000000004',
   key: 'todo',
   name: 'To do',
-  category: 'queued' as const,
+  category: 'ready' as const,
   is_terminal: false,
 }
 
@@ -135,19 +135,19 @@ describe('the one action a card offers', () => {
       says: 'Claim',
     },
     {
-      case: 'it is an epic',
-      record: item({ container: true }),
-      says: 'Epic — take a task from it',
+      case: 'it is a goal',
+      record: item({ kind: 'goal' }),
+      says: 'Goal — take a task from it',
     },
     {
-      case: 'another holds the epic',
-      record: item({ container: true, claim_ref: 'claude' }),
+      case: 'another holds the goal',
+      record: item({ claim_ref: 'claude' }),
       says: 'Take over',
     },
     { case: 'this client holds it', record: item({ claim_ref: 'user' }), says: 'Release' },
     {
       case: 'it is finished',
-      record: item({ state: { ...QUEUED, category: 'completed', is_terminal: true } }),
+      record: item({ open: false, state: { ...QUEUED, category: 'completed', is_terminal: true } }),
       says: null,
     },
   ])('says $says when $case', ({ record, says }) => {
@@ -155,7 +155,7 @@ describe('the one action a card offers', () => {
     expect(actionText(wrapper)).toBe(says)
     // A reason is not a button: nothing to press where the facts argue against it.
     const pressable = wrapper.findAll('.write-actions button').map((button) => button.text())
-    expect(pressable).toEqual(says && !/Waiting|Epic/u.test(says) ? [says] : [])
+    expect(pressable).toEqual(says && !/Waiting|Goal/u.test(says) ? [says] : [])
   })
 
   it('offers no action where the card cannot write', () => {
@@ -305,7 +305,7 @@ describe('each fact in a row that says what it is', () => {
         workflow,
         busy: false,
         writable: true,
-        parent: { reference: 'MAIN-9', kind: 'epic' },
+        parent: { reference: 'MAIN-9', kind: 'goal' },
       },
       global: {
         plugins: [createI18n({ legacy: false, locale: 'en', messages })],
@@ -341,18 +341,18 @@ describe('the marks beside the state', () => {
     expect(medium.classes()).toContain('quiet')
   })
 
-  it('names the epic where the host knows its reference', () => {
+  it('names the goal where the host knows its reference', () => {
     const record = item({ parent_id: '00000000-0000-4000-8000-000000000099' })
     expect(facts(record).find('[data-facet="parent"]').exists()).toBe(false)
   })
 
-  // The epic is an item link, as a number in text is: the address and the hover card of the
-  // layers above, a press through the card's own departure, and the epic's sign before it.
-  it('draws an epic parent as the epic sign and a link that opens through the card', async () => {
+  // The goal is an item link, as a number in text is: the address and the hover card of the
+  // layers above, a press through the card's own departure, and the goal's sign before it.
+  it('draws a goal parent as the goal sign and a link that opens through the card', async () => {
     const record = item({ parent_id: '00000000-0000-4000-8000-000000000099' })
-    const { elsewhere, wrapper } = linkedFacts(record, { reference: 'QA-9', kind: 'epic' })
+    const { elsewhere, wrapper } = linkedFacts(record, { reference: 'QA-9', kind: 'goal' })
     const sign = wrapper.get('[data-facet="parent"]')
-    expect(sign.attributes('data-kind')).toBe('epic')
+    expect(sign.attributes('data-kind')).toBe('goal')
     expect(sign.find('svg').classes()).toContain('lucide-layers')
     const link = wrapper.get('.card-parent a')
     expect(link.attributes('href')).toBe('/open/QA-9')
@@ -363,21 +363,21 @@ describe('the marks beside the state', () => {
   })
 
   // Any item may be a parent: a task holding others is named «Parent» and drawn by the
-  // parent's sign in the task's ink, never by the epic's.
+  // parent's sign in the task's ink, never by the goal's.
   it.each([
     { kind: 'task', icon: 'lucide-corner-down-right', word: 'Task' },
     { kind: 'bug', icon: 'lucide-bug', word: 'Bug' },
-  ] as const)('draws a $kind parent by its own kind, not as an epic', ({ kind, icon, word }) => {
+  ] as const)('draws a $kind parent by its own kind, not as a goal', ({ kind, icon, word }) => {
     const record = item({ parent_id: '00000000-0000-4000-8000-000000000099' })
     const { wrapper } = linkedFacts(record, { reference: 'QA-9', kind })
     const names = wrapper.findAll('.card-row-label').map((label) => label.text())
     expect(names).toContain('Parent')
-    expect(names).not.toContain('Epic')
+    expect(names).not.toContain('Goal')
     const sign = wrapper.get('[data-facet="parent"]')
     expect(sign.attributes('data-kind')).toBe(kind)
     expect(sign.find('svg').classes()).toContain(icon)
     expect(sign.find('svg').classes()).not.toContain('lucide-layers')
-    expect(sign.html()).not.toContain('Epic')
+    expect(sign.html()).not.toContain('Goal')
     expect(sign.html()).toContain(word)
   })
 

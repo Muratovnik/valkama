@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
  * Every number above the stage counts one population: the space, or a chain
  * with its root. A view that draws fewer items says what it leaves out, so the
  * reader can add the numbers on screen up to the counts line; the grouped
- * board's epics are said by its lanes, not by the bar. The filter is the
+ * board's goals are said by its lanes, not by the bar. The filter is the
  * workspace's: every view's `filter` event reaches it, and the address keeps it.
  */
 import { defineComponent, h, nextTick, shallowRef } from 'vue'
@@ -21,7 +21,7 @@ import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
-import { boardEpic, boardItem, boardWorkflow } from '../fixtures/board.ts'
+import { boardGoal, boardItem, boardWorkflow } from '../fixtures/board.ts'
 import { emptyChain } from '../fixtures/chain.ts'
 
 /** The graph as the workspace hands it over: the chain's name and the number on its chip. */
@@ -36,16 +36,16 @@ vi.mock('@/pages/planning/utils/graphView.ts', () => {
   }
 })
 
-const epic = boardEpic(1)
-const closedEpic = boardEpic(2, 'done')
+const goal = boardGoal(1)
+const closedGoal = boardGoal(2, 'done')
 const space: WorkItemBrief[] = [
-  boardItem(10, 'backlog', { parent_id: epic.work_item_id }),
-  boardItem(11, 'backlog', { parent_id: epic.work_item_id }),
+  boardItem(10, 'backlog', { parent_id: goal.work_item_id }),
+  boardItem(11, 'backlog', { parent_id: goal.work_item_id }),
   boardItem(12, 'backlog'),
-  boardItem(13, 'todo', { parent_id: epic.work_item_id }),
-  epic,
-  boardItem(20, 'done', { parent_id: closedEpic.work_item_id }),
-  closedEpic,
+  boardItem(13, 'todo', { parent_id: goal.work_item_id }),
+  goal,
+  boardItem(20, 'done', { parent_id: closedGoal.work_item_id }),
+  closedGoal,
 ]
 
 /** The chain rooted at MAIN-1 with two members; the root is not one of them. */
@@ -54,20 +54,23 @@ function chain(): WorkItemChain {
   const members = [space[0], space[3]]
   return {
     ...base,
-    root: { ...base.root, work_item_id: epic.work_item_id, reference: 'MAIN-1' },
+    root: { ...base.root, work_item_id: goal.work_item_id, reference: 'MAIN-1' },
     total: members.length,
     open: members.length,
     members: members.map((member, index) => ({
       work_item_id: member.work_item_id,
       reference: member.reference,
       title: member.title,
-      state: { ...member.state },
+      kind: member.kind,
+      state: member.state && { ...member.state },
+      open: member.open,
+      container_state: member.container_state,
       claim_ref: '',
       claim_state: null,
       parent_reference: 'MAIN-1',
       created_at: member.created_at,
       closed_at: null,
-      ready: member.ready,
+      workable: member.workable,
       rank: index + 1,
     })),
   }
@@ -139,18 +142,18 @@ describe('one population above the stage', () => {
     expect(wrapper.get('.workspace-figures').text()).toBe('3 of 3 open · Reset')
   })
 
-  it('says how many epics the grouped board draws as rows, and counts the rest in its columns', () => {
-    const wrapper = workspace({ grouping: 'epic' })
+  it('says how many goals the grouped board draws as rows, and counts the rest in its columns', () => {
+    const wrapper = workspace({ grouping: 'goal' })
     expect(countsLine(wrapper)).toBe('5 open of 7 · 2 parents as rows')
     const columns = wrapper
       .findAll('.lanes-state-count')
       .reduce((sum, count) => sum + Number(count.text()), 0)
-    // Two epics head lanes: the number the lanes' own head is to say.
+    // Two goals head lanes: the number the lanes' own head is to say.
     expect(columns + 2).toBe(7)
   })
 
   it('answers a filter with what it lets through of the open work', async () => {
-    const wrapper = workspace({ grouping: 'epic' })
+    const wrapper = workspace({ grouping: 'goal' })
     await wrapper.get('input[role="combobox"]').setValue('item 1')
     // MAIN-1 heads a lane; MAIN-10 to MAIN-13 are tiles; all five are open.
     expect(figures(wrapper)).toEqual(['5 of 5 open · 1 parent as a row · Reset'])
@@ -173,15 +176,15 @@ describe('one filter for every view', () => {
   it('takes a view’s filter event as a token, writes it to the address, and narrows', async () => {
     const wrapper = workspace({ view: 'list', routeState: { view: 'list' } })
     const list = wrapper.getComponent(WorkItemList)
-    list.vm.$emit('filter', { facet: 'kind', value: 'epic' })
+    list.vm.$emit('filter', { facet: 'kind', value: 'goal' })
     await nextTick()
-    expect(wrapper.emitted('state')?.at(-1)).toEqual([{ view: 'list', kind: 'epic' }])
+    expect(wrapper.emitted('state')?.at(-1)).toEqual([{ view: 'list', kind: 'goal' }])
     expect(list.props('items').map((item) => item.reference)).toEqual(['MAIN-1', 'MAIN-2'])
-    expect(wrapper.get('.workspace-chips .filter-chip').text()).toBe('Kind: Epic')
+    expect(wrapper.get('.workspace-chips .filter-chip').text()).toBe('Kind: Goal')
     // The list marks the glyph already in the filter as the way back out of it.
-    expect(list.props('filter')).toEqual({ text: '', kind: ['epic'] })
+    expect(list.props('filter')).toEqual({ text: '', kind: ['goal'] })
     // The same mark clicked again takes it out.
-    list.vm.$emit('filter', { facet: 'kind', value: 'epic' })
+    list.vm.$emit('filter', { facet: 'kind', value: 'goal' })
     await nextTick()
     expect(list.props('items')).toHaveLength(space.length)
   })

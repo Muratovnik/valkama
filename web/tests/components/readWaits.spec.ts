@@ -35,7 +35,7 @@ import type { ResolvedRef } from '@/shared/types/reference.ts'
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { boardItem, boardWorkflow } from '../fixtures/board.ts'
-import { largeEpicChain } from '../fixtures/chain.ts'
+import { largeGoalChain } from '../fixtures/chain.ts'
 import { finderResponse } from '../support/globalFinder.ts'
 
 vi.mock('@/shared/api/api.ts', async (load) => ({
@@ -95,7 +95,7 @@ interface Surface {
   word: (wrapper: VueWrapper) => string
 }
 
-const chain = largeEpicChain()
+const chain = largeGoalChain()
 /** The surface under test, and how its held read answers. */
 let current: VueWrapper | undefined
 let answerRead: () => void = () => {}
@@ -138,7 +138,11 @@ const surfaces: Surface[] = [
       mount(InspectorChain, {
         props: {
           chain: null,
-          container: true,
+          open: true,
+          container_state: null,
+          acceptance: null,
+          started_at: null,
+          waits_for: [],
           failed: false,
           loading: true,
           readable: true,

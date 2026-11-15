@@ -14,7 +14,7 @@ import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftG
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
-import { getButton } from '../fixtures/workItem.ts'
+import { getButton, stateOf } from '../fixtures/workItem.ts'
 import { requestEntry } from '../support/inputRequests.ts'
 import { card, plugins, root, track, unmountAll } from '../support/threadCard.ts'
 
@@ -77,7 +77,8 @@ describe('an answered question in the threaded feed', () => {
 
   it('offers no change of the answer on a closed task, and says how to get one', () => {
     const closed = card([root(1)])
-    closed.state = { ...closed.state, key: 'done', category: 'completed', is_terminal: true }
+    closed.state = { ...stateOf(closed), key: 'done', category: 'completed', is_terminal: true }
+    closed.open = false
     const { wrapper } = guarded(closed, [answered()])
     const question = wrapper.get('.thread-question')
     expect(question.find('[aria-label="Change answer"]').exists()).toBe(false)

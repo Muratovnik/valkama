@@ -163,7 +163,7 @@ async function afterTheFont(page: Page, width: number) {
   await serve(page)
   await serveWide(page)
   // A font held back holds the page's load event back with it.
-  await page.goto(boardRoute({ group: 'epic' }), { waitUntil: 'domcontentloaded' })
+  await page.goto(boardRoute({ group: 'goal' }), { waitUntil: 'domcontentloaded' })
   await expect(page.locator('.lane-head').first()).toBeVisible()
   const board = page.locator('.work-item-lanes')
   await board.evaluate(drawnHeads, ['start', PARTS] as [string, string[]])

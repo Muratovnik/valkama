@@ -27,11 +27,16 @@
         "priority": "medium",
         "state": {
           "state_id": "00000000-0000-4000-8000-000000000003",
-          "key": "backlog",
-          "name": "Backlog",
-          "category": "backlog",
+          "key": "triage",
+          "name": "Triage",
+          "category": "triage",
           "is_terminal": false
         },
+        "open": true,
+        "container_state": null,
+        "acceptance": null,
+        "started_at": null,
+        "waits_for": [],
         "claim_ref": "claude (session 00000000-0000-4000-8000-000000000011)",
         "claim_state": "live",
         "parent_id": null,
@@ -89,8 +94,7 @@
         "updated_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "last_claim_ref": null,
-        "container": false,
-        "ready": false,
+        "workable": false,
         "claim": {
           "holder": "claude (session 00000000-0000-4000-8000-000000000011)",
           "state": "live",
@@ -151,7 +155,7 @@
         "events": [
           {
             "action": "created",
-            "detail": "backlog",
+            "detail": "triage",
             "author": "agent",
             "at": "2026-01-02T03:04:05Z",
             "identity": {

@@ -4,15 +4,27 @@
  * cannot disagree about where a piece of work stands.
  *
  * Open work is grouped by its workflow category, in the order work moves
- * through it, and closed work is one group whatever state closed it. Readiness
- * is not a group: the space calls every unheld, unblocked backlog item workable,
- * so grouping by it would empty the backlog into "ready" and hide how much of
- * the chain is merely planned. It rides on a row as a mark instead.
+ * through it, and closed work is one group whatever state closed it. An accepted
+ * open goal or stage stands in no category: it derives its state from the work
+ * under it, and that work is counted where it stands, so the goals and stages are
+ * one group of their own rather than a category they are not in. Being workable
+ * is not a group: the space calls every unheld, unblocked untriaged item workable,
+ * so grouping by it would empty triage into "ready" and hide how much of the chain
+ * is merely planned. It rides on a row as a mark instead.
  */
 
 import type { NamedState } from '@/shared/lib/stateNames.ts'
 
-export const CHAIN_GROUPS = ['active', 'review', 'queued', 'backlog', 'blocked', 'done'] as const
+export const CHAIN_GROUPS = [
+  'active',
+  'review',
+  'ready',
+  'triage',
+  'deferred',
+  'blocked',
+  'containers',
+  'done',
+] as const
 export type ChainGroup = (typeof CHAIN_GROUPS)[number]
 
 /**
@@ -25,8 +37,10 @@ export const CHAIN_PROGRESS_ORDER: readonly ChainGroup[] = [
   'review',
   'active',
   'blocked',
-  'queued',
-  'backlog',
+  'containers',
+  'ready',
+  'triage',
+  'deferred',
 ]
 
 /** The open groups, in the order the card lists them. */
@@ -37,17 +51,25 @@ const OPEN_CHAIN_GROUPS = CHAIN_GROUPS.filter(
 const OPEN = new Set<string>(OPEN_CHAIN_GROUPS)
 
 interface Classifiable {
-  state: { category: string; is_terminal: boolean }
+  open: boolean
+  state: { category: string } | null
 }
 
+/**
+ * The group an item reads in. A category this build does not know names no group, and
+ * reading it as one it does know would misplace the item silently, so it is refused.
+ */
 export function chainGroup(item: Classifiable): ChainGroup {
+  if (!item.open) return 'done'
+  if (item.state === null) return 'containers'
   const category = item.state.category
-  if (item.state.is_terminal || category === 'completed' || category === 'cancelled') return 'done'
-  return OPEN.has(category) ? (category as ChainGroup) : 'backlog'
+  if (category === 'completed' || category === 'cancelled') return 'done'
+  if (OPEN.has(category)) return category as ChainGroup
+  throw new Error(`unknown state category: ${category}`)
 }
 
 interface Named {
-  state: NamedState
+  state: NamedState | null
 }
 
 /**
@@ -63,8 +85,9 @@ export function groupStateNames(
   return Object.fromEntries(
     CHAIN_GROUPS.map((group) => {
       const [first, ...rest] = groups[group]
-      const one = first && rest.every((member) => member.state.name === first.state.name)
-      return [group, one ? stateName(first.state) : null]
+      const named = first?.state
+      const one = named && rest.every((member) => member.state?.name === named.name)
+      return [group, one ? stateName(named) : null]
     }),
   ) as Record<ChainGroup, string | null>
 }

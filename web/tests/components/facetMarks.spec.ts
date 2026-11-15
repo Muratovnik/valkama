@@ -79,7 +79,7 @@ describe('FacetMarks', () => {
     expect(tone({ priority: 'urgent' }, 'priority')).toBe('danger')
     expect(tone({ priority: 'high' }, 'priority')).toBe('warning')
     expect(tone({ priority: 'medium' }, 'priority')).toBe('neutral')
-    expect(tone({ kind: 'epic' }, 'kind')).toBe('neutral')
+    expect(tone({ kind: 'goal' }, 'kind')).toBe('neutral')
   })
 
   it('names the kind on its mark, which is what its colour hangs on, and on no other', () => {
@@ -95,7 +95,7 @@ describe('FacetMarks', () => {
   })
 
   it('names what an item waits on, in both languages', () => {
-    const item = boardItem(1, 'todo', { ready: false })
+    const item = boardItem(1, 'todo', { workable: false })
     const context = { waitingOn: 'MAIN-7' }
     const en = marks({ item, context, surface: 'list', facets: ['readiness'] })
     expect(en.get('[data-facet="readiness"]').text()).toBe('Waiting on MAIN-7')
@@ -105,7 +105,7 @@ describe('FacetMarks', () => {
   })
 
   it('draws the reference on a tile and still says the whole sentence', () => {
-    const item = boardItem(1, 'todo', { ready: false })
+    const item = boardItem(1, 'todo', { workable: false })
     const context = { waitingOn: 'MAIN-7' }
     for (const [locale, sentence] of [
       ['en', 'Waiting on MAIN-7'],
@@ -126,7 +126,7 @@ describe('FacetMarks', () => {
   })
 
   it('folds a run that must keep one line, keeping the word as name and hover text', () => {
-    const item = boardItem(1, 'todo', { ready: false })
+    const item = boardItem(1, 'todo', { workable: false })
     const context = { waitingOn: 'MAIN-7' }
     const loose = marks({ item, context, surface: 'list', facets: ['readiness'] })
     expect(loose.get('.facet-marks').classes()).not.toContain('fold')
@@ -155,7 +155,7 @@ describe('FacetMarks', () => {
 
   it('draws a state as the shared state mark, dot and name', () => {
     const wrapper = marks({
-      item: boardItem(1, 'dev', { ready: false }),
+      item: boardItem(1, 'dev', { workable: false }),
       surface: 'list',
       facets: ['state'],
     })

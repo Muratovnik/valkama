@@ -1,11 +1,11 @@
 /**
  * The way from an item's Agents tab to the Analytics page: a real link whose target, read the way
  * the page reads its own address, is the page filtered to every item the tab's figures cover — the
- * item, or an epic with its children — over the days that work spans in the browser's own
+ * item, or a goal with its children — over the days that work spans in the browser's own
  * calendar, since the tab's figures cover all of it and the page's own period is this week. The
  * route holds a state string of at most 240 characters,
  * and the filter is one such string: `{"work_item":[…]}` is 15 characters and 39 more for each
- * item id, so five ids fit and six do not. Past that the link opens the epic's own work, and its
+ * item id, so five ids fit and six do not. Past that the link opens the goal's own work, and its
  * words say so.
  */
 import { afterEach, describe, expect, it } from 'vitest'
@@ -52,9 +52,9 @@ function tabUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
   }
 }
 
-/** An epic's read: its own line, then one for each child, as the read lists them. */
-function epicUsage(children: number): ItemUsage {
-  const usage = tabUsage({ scope: 'epic' })
+/** A goal's read: its own line, then one for each child, as the read lists them. */
+function goalUsage(children: number): ItemUsage {
+  const usage = tabUsage({ scope: 'tree' })
   const [own] = usage.by_item
   return {
     ...usage,
@@ -121,8 +121,8 @@ describe('the way to Analytics', () => {
     })
   })
 
-  it('opens an epic with a few children filtered to the epic and every child', () => {
-    const usage = epicUsage(2)
+  it('opens a goal with a few children filtered to the goal and every child', () => {
+    const usage = goalUsage(2)
     expect(follow(usage)).toEqual({
       view: filteredTo([usage.work_item_id, child(1), child(2)]),
       words: 'Open in Analytics',
@@ -130,7 +130,7 @@ describe('the way to Analytics', () => {
   })
 
   it('carries every item while they fit in the address, five ids', () => {
-    const usage = epicUsage(4)
+    const usage = goalUsage(4)
     const items = [usage.work_item_id, child(1), child(2), child(3), child(4)]
     // The filter of five ids stands within the route's 240 characters, and a sixth passes them.
     expect(JSON.stringify(filteredTo(items).filters)).toHaveLength(15 + 39 * 5)
@@ -139,11 +139,11 @@ describe('the way to Analytics', () => {
     expect(follow(usage)).toEqual({ view: filteredTo(items), words: 'Open in Analytics' })
   })
 
-  it('opens the epic’s own work, and says so, once they do not fit, six ids', () => {
-    const usage = epicUsage(5)
+  it('opens the goal’s own work, and says so, once they do not fit, six ids', () => {
+    const usage = goalUsage(5)
     expect(follow(usage)).toEqual({
       view: filteredTo([usage.work_item_id]),
-      words: 'Open the epic’s own work in Analytics',
+      words: 'Open its own work in Analytics',
     })
   })
 })

@@ -7,7 +7,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import card from '../fixtures/server/card.json' with { type: 'json' }
 import served from '../fixtures/server/requests.json' with { type: 'json' }
 import { asRoot } from '../support/threads.ts'
-import { doneState, workItem, workItemRef } from './planningFixtures.ts'
+import { devState, doneState, workItem, workItemRef } from './planningFixtures.ts'
 import { openQuestion, question } from './questionBackend.ts'
 
 type Request = InputRequestEntry['request']
@@ -63,15 +63,14 @@ export async function openList(page: Page, entries = [listEntry()]) {
   return { ...opened, article, list: article.locator('.comment-list') }
 }
 
-const DEV = { ...workItem.state }
-
 /** The item closes or opens again elsewhere, and the list reads as the server would say it. */
 export async function moveItem(
   opened: Awaited<ReturnType<typeof openList>>,
   closed: boolean,
   list: Partial<Request> = {},
 ) {
-  opened.backend.item.state = closed ? { ...doneState } : DEV
+  opened.backend.item.state = closed ? { ...doneState } : { ...devState }
+  opened.backend.item.open = !closed
   opened.backend.item.revision += 1
   opened.requests.settle(LIST_ID, list)
   await opened.stream.signal('agents')

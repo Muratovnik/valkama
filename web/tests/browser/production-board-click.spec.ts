@@ -140,7 +140,7 @@ async function expectCard(page: Page, reference: string) {
 
 for (const shape of [
   { name: 'on the flat board', state: {} as Record<string, string> },
-  { name: 'by epic', state: undefined },
+  { name: 'by goal', state: undefined },
 ]) {
   const whereOf = (page: Page) =>
     shape.state ? page.locator('.work-item-board') : page.locator('.board-lane').first()

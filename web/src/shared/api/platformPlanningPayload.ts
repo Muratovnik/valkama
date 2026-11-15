@@ -11,7 +11,12 @@ import {
   strictObject,
   z,
 } from '@/shared/api/contract.ts'
-import { validateWorkItemBrief, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
+import {
+  CONTAINER_STATES,
+  STATE_CATEGORIES,
+  validateWorkItemBrief,
+  validateWorkItemRecord,
+} from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import {
   BINDING_STATES,
@@ -57,18 +62,12 @@ const workItemRefSchema = strictObject({
 const workItemSummarySchema = strictObject({
   work_item_ref: workItemRefSchema,
   title: boundedText(/^[^\u{0}]{1,1000}$/u, 1000),
-  // The state is the space's own, so its key is text rather than one of six
+  // The state is the space's own, so its key is text rather than one of eight
   // names: a space that renames a state must not fall out of its own read model.
-  state_key: boundedText(/^[a-z][a-z0-9_-]{0,39}$/u, 40),
-  state_category: enumField([
-    'backlog',
-    'queued',
-    'active',
-    'review',
-    'completed',
-    'blocked',
-    'cancelled',
-  ] as const),
+  // An accepted open goal or stage names none and derives `container_state` instead.
+  state_key: boundedText(/^[a-z][a-z0-9_-]{0,39}$/u, 40).nullable(),
+  state_category: enumField(STATE_CATEGORIES).nullable(),
+  container_state: enumField(CONTAINER_STATES).nullable(),
   priority: enumField(['low', 'medium', 'high', 'urgent'] as const),
   labels: boundedList(boundedText(/^[^\u{0}]{1,160}$/u, 160), 128),
   // An unheld item carries an empty claim, so this is a string and not a

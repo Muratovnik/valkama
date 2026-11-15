@@ -86,18 +86,18 @@ for (const motion of ['paused', 'running'] as const) {
   })
 }
 
-/** The broad space's item linked only to its epic, and a working item under another epic. */
+/** The broad space's item linked only to its goal, and a working item under another goal. */
 function twoItems() {
   const { lone, model } = broadSpace()
   if (!lone) throw new Error('the broad space holds a lone item')
   const elsewhere = model.work_items.find(
     (item) =>
-      !item.state.is_terminal &&
-      item.kind !== 'epic' &&
+      !item.state?.is_terminal &&
+      item.kind !== 'goal' &&
       item.parent_id !== null &&
-      item.parent_id !== lone.epic.work_item_id,
+      item.parent_id !== lone.goal.work_item_id,
   )
-  if (!elsewhere) throw new Error('the broad space holds work under another epic')
+  if (!elsewhere) throw new Error('the broad space holds work under another goal')
   return { lone: lone.item, elsewhere }
 }
 

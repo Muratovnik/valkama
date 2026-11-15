@@ -1,10 +1,10 @@
-/* How much work an item took: its line on the card, the Agents tab and an epic's children. */
+/* How much work an item took: its line on the card, the Agents tab and the work a goal holds. */
 
 export const workItemUsageMessages = {
   en: {
     usage: {
       work: 'Work',
-      workEpic: 'Work on the epic',
+      workTree: 'Work with its contents',
       allAgents: 'All agents',
       cost: 'Cost',
       tokensLabel: 'Tokens',
@@ -32,14 +32,14 @@ export const workItemUsageMessages = {
       wholeSession: 'Whole session',
       noItem: 'No task',
       failed: 'Could not read how much work this took.',
-      rootOwn: 'The epic itself',
+      rootOwn: 'Its own work',
       accounts: 'By organization',
       accountUnknown: 'Unknown organization',
       accountShare: '{share} of the time',
       accountStart: 'From the start',
       accountChanges: 'Where the organization changed',
       inAnalytics: 'Open in Analytics',
-      inAnalyticsOwn: 'Open the epic’s own work in Analytics',
+      inAnalyticsOwn: 'Open its own work in Analytics',
       roles: 'Who did the work',
       role: { main: 'Main agent', subagent: 'Subagent', advisor: 'Adviser' },
       classNone: 'no launch class',
@@ -49,7 +49,7 @@ export const workItemUsageMessages = {
   ru: {
     usage: {
       work: 'Работа',
-      workEpic: 'Работа по эпику',
+      workTree: 'Работа вместе с составом',
       allAgents: 'Агенты вместе',
       cost: 'Стоимость',
       tokensLabel: 'Токены',
@@ -60,7 +60,7 @@ export const workItemUsageMessages = {
       lineMeaning:
         'Работа — время по часам: ожидание скриптов входит, ожидание человека и выключенный компьютер не входят.',
       lineAgents: 'Агенты вместе: {time}.',
-      lineChildren: 'Вместе с работой над задачами эпика.',
+      lineChildren: 'Вместе с работой над составом.',
       lineDetails: 'Подробности на вкладке «Агенты».',
       parallel:
         'Агенты работали параллельно: «Работа» — время по часам, «Агенты вместе» — сумма времени каждого.',
@@ -76,14 +76,14 @@ export const workItemUsageMessages = {
       wholeSession: 'Вся сессия',
       noItem: 'Без задачи',
       failed: 'Не удалось прочитать, сколько заняла работа.',
-      rootOwn: 'Сам эпик',
+      rootOwn: 'Своя работа',
       accounts: 'По организациям',
       accountUnknown: 'Неизвестная организация',
       accountShare: '{share} времени',
       accountStart: 'С начала',
       accountChanges: 'Где сменилась организация',
       inAnalytics: 'Открыть в аналитике',
-      inAnalyticsOwn: 'Открыть в аналитике работу самого эпика',
+      inAnalyticsOwn: 'Открыть в аналитике свою работу',
       roles: 'Кто работал',
       role: { main: 'Основной агент', subagent: 'Субагент', advisor: 'Советник' },
       classNone: 'без класса запуска',

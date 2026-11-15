@@ -166,7 +166,7 @@ const describedBy = computed(() => {
 <template>
   <div
     class="work-item-tile"
-    :class="{ finished: props.item.state.is_terminal }"
+    :class="{ finished: !props.item.open }"
   >
     <span class="tile-line">
       <component

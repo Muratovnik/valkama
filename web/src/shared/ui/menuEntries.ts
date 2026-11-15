@@ -8,6 +8,8 @@
  * - `toggle` turns one thing on or off and shows which: `menuitemcheckbox`, a check when on.
  * - `choice` picks one value of a few under its own caption: a group of `menuitemradio`,
  *   set apart from what stands before it by a rule.
+ * - `note` is a line of words with nothing to choose: what the menu has to say before its
+ *   entries, which the open menu gives as its description.
  */
 export type MenuEntry =
   | {
@@ -31,6 +33,11 @@ export type MenuEntry =
       disabled?: boolean
       icon?: string
       select: (checked: boolean) => void
+    }
+  | {
+      key: string
+      kind: 'note'
+      label: string
     }
   | {
       key: string

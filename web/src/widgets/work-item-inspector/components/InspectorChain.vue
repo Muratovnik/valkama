@@ -46,7 +46,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  /** The branch chosen on the map rides along: an epic's reference, `''` for no epic, or null. */
+  /** The branch chosen on the map rides along: a parent's reference, `''` for no parent, or null. */
   graph: [chain: WorkItemChain, branch: string | null]
   open: [reference: string]
   retry: []
@@ -85,18 +85,18 @@ const failureText = computed(() =>
 )
 
 const scopes = computed(() => [
-  { value: 'epic' as const, label: t('workItem.chain.scopeEpic') },
+  { value: 'tree' as const, label: t('workItem.chain.scopeTree') },
   { value: 'chain' as const, label: t('workItem.chain.scopeChain') },
 ])
 
 /**
- * Epic or Chain is a choice only where the two answer differently. Where the work grew
- * nothing past the root's children they are the same list, and where the root has no
- * children Epic is an empty one, so either way the switch would offer nothing to compare.
+ * Contents or Chain is a choice only where the two answer differently. Where the work grew
+ * nothing past what stands under the root they are the same list, and where nothing stands
+ * under it Contents is an empty one, so either way the switch would offer nothing to compare.
  */
 const twoScopes = computed(() => {
   const totals = props.chain?.root.totals
-  return totals !== undefined && totals.epic > 0 && totals.epic !== totals.chain
+  return totals !== undefined && totals.tree > 0 && totals.tree !== totals.chain
 })
 
 const groups = computed(() => (props.chain ? groupMembers(props.chain.members) : null))
@@ -132,12 +132,12 @@ const listed = computed(() => {
     ? groups.value
     : groupMembers(chain.members.filter((member) => laneOf(member) === lane.value))
 })
-const laneName = computed(() => lane.value || t('workItem.chain.noEpic'))
+const laneName = computed(() => lane.value || t('workItem.chain.noParent'))
 /**
- * The epic a narrowed lane came from, when it is another card to open: not the
- * root, which is this card, and not the lane of work filed under no epic.
+ * The parent a narrowed lane came from, when it is another card to open: not the
+ * root, which is this card, and not the lane of work filed under no parent.
  */
-const laneEpic = computed(() =>
+const laneParent = computed(() =>
   lane.value && lane.value !== props.chain?.root.reference ? lane.value : null,
 )
 
@@ -162,7 +162,7 @@ async function chooseLane(key: string) {
  * map's key above it, so no group is named twice on one screen.
  *
  * The workable figure is the read model's rule — unheld, unblocked, in any state
- * work can start from, the backlog included — so it may exceed the to-do group, and
+ * work can start from, untriaged work included — so it may exceed the ready group, and
  * its note says why rather than reading as one more category.
  *
  * The total is said as what it is — the work under the root, the root itself
@@ -178,7 +178,7 @@ const stats = computed<{ key: string; label: string; value: number | null; note?
     if (chain.open === 0)
       return [total, { key: 'none', label: t('workItem.chain.stat.noneOpen'), value: null }]
     const open = { key: 'open', label: t('workItem.chain.stat.open'), value: chain.open }
-    if (!chain.ready) return [total, open]
+    if (!chain.workable) return [total, open]
     // With all the work in one state there is no other group for the figure to exceed.
     const several = Object.values(groups.value ?? {}).filter((group) => group.length > 0).length > 1
     return [
@@ -187,7 +187,7 @@ const stats = computed<{ key: string; label: string; value: number | null; note?
       {
         key: 'workable',
         label: t('workItem.chain.stat.workable'),
-        value: chain.ready,
+        value: chain.workable,
         ...(several ? { note: t('workItem.chain.stat.workableNote') } : {}),
       },
     ]
@@ -236,7 +236,7 @@ defineExpose({ restore, reveal, view })
     <!-- No count here: the line under the map is the card's one number for the
          chain and says what it counts, the work under the root. A bare 306 stood
          beside the board's «Chain MAIN-1 · 307», which counts the root as well,
-         and in Epic scope it named a third population. -->
+         and in Contents scope it named a third population. -->
     <div
       v-if="chain && !firstHeld"
       class="chain-actions"
@@ -351,12 +351,12 @@ defineExpose({ restore, reveal, view })
           />
         </button>
         <VButton
-          v-if="laneEpic"
+          v-if="laneParent"
           variant="ghost"
           size="inline"
-          @click="emit('open', laneEpic)"
+          @click="emit('open', laneParent)"
         >
-          {{ t('workItem.chain.map.openEpic', { reference: laneEpic }) }}
+          {{ t('workItem.chain.map.openParent', { reference: laneParent }) }}
         </VButton>
       </div>
 
@@ -462,7 +462,7 @@ defineExpose({ restore, reveal, view })
 }
 
 /* The lane the list below is narrowed to: a filled chip that is the way back
-   to every lane, the whole of it one target, and the way into its epic. */
+   to every lane, the whole of it one target, and the way into its parent. */
 .chain-lane-filter {
   display: flex;
   flex-wrap: wrap;

@@ -1,6 +1,6 @@
 /**
  * A chain read end to end in the built application: the card's section for an
- * epic shaped like MAIN-384, its branch map for a six-lane chain and a small one,
+ * goal shaped like MAIN-384, its branch map for a six-lane chain and a small one,
  * the graph scoped to a chain and back, and the chain held in the address, so a
  * reload, a link and Back come back to the same field.
  *
@@ -281,7 +281,7 @@ test('Show on graph draws the open part of the chain, its root marked, and the r
   await expect(page.locator('.drawer')).toHaveCount(0)
   expect(await rootFramed(page)).toBe(true)
   // Its children are filed under the root, which the chip already names.
-  await expect(page.locator('.flow-node-epic')).toHaveCount(0)
+  await expect(page.locator('.flow-node-goal')).toHaveCount(0)
   await expect(page.locator('.flow-node-card.recessed')).toHaveCount(0)
   await page.locator('.graph').screenshot(shot(info, 'chain-graph-default.png'))
 
@@ -421,8 +421,8 @@ test('a long chain opened from a link draws its open part, and all of it on requ
   await page.goto(graphRoute({ chain: 'MAIN-264', chain_scope: 'chain' }))
   const chip = page.locator('.graph-chip')
   await expect(chip).toHaveText('Chain MAIN-264 · 610')
-  // The root, the 120 open members, the closed epic three of them are under and
-  // the epic that closed with all of its work.
+  // The root, the 120 open members, the closed goal three of them are under and
+  // the goal that closed with all of its work.
   await expect(page.locator('.flow-node-card')).toHaveCount(123)
   await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
   timings.push(`default, 123 nodes: link to settled ${Date.now() - started} ms`)

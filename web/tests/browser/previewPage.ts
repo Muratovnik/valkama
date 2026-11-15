@@ -55,7 +55,7 @@ export const SPACE: readonly Brief[] = [
     checklist: [STEP(true, 0), STEP(false, 1), STEP(false, 2)],
     updated_at: '2026-11-03T22:40:00Z',
   } as Partial<WorkItemBrief>),
-  held(13, 'Waits for the contract', { ready: false }),
+  held(13, 'Waits for the contract', { workable: false }),
   held(14, 'A closed one', {
     state: doneState,
     closed_at: '2026-11-02T18:05:00Z',
@@ -65,7 +65,7 @@ export const SPACE: readonly Brief[] = [
     claim_ref: 'codex (session 019e2b7c-5d1a-7c3e-9a10-0123456789ab)',
     claim_state: 'stale',
   } as Partial<WorkItemBrief>),
-  held(16, 'Ж'.repeat(200), { kind: 'epic', priority: 'urgent' }),
+  held(16, 'Ж'.repeat(200), { kind: 'goal', priority: 'urgent' }),
 ]
 
 const WAITING_LINK = {

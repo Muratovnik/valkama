@@ -26,7 +26,7 @@ colors:
   success: "#7bd6a1"
   warning: "#d9b06a"
   kind-bug: "#ff9db5"
-  kind-epic: "#cfa0ff"
+  kind-container: "#cfa0ff"
   kind-improvement: "#7defdc"
   kind-task: "#b4c6e0"
   series-1: "#3987e5"

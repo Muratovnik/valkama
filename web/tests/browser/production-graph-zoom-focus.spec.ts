@@ -1,7 +1,7 @@
 /**
  * The keyboard's place survives a zoom. Zoomed out past reading a header's fold
  * button is hidden, and focus on it used to drop to the page: the arrows did
- * nothing and the next Tab started over. Focus goes to the epic's button of the
+ * nothing and the next Tab started over. Focus goes to the goal's button of the
  * same header instead, and the camera stays where the zoom put it.
  *
  * Served the broad synthetic space; the zoom is the wheel's or the «Zoom out»
@@ -83,7 +83,7 @@ async function zoomOutPastReading(page: Page, how: Zoom) {
 
 for (const width of [1500, 390])
   for (const how of ['wheel', 'button'] as const)
-    test(`focus on a header's fold moves to its epic's button when a ${how} zoom hides the fold at ${width}px`, async ({
+    test(`focus on a header's fold moves to its goal's button when a ${how} zoom hides the fold at ${width}px`, async ({
       page,
     }) => {
       const fold = page.locator('.graph-frame:not(.folded) [data-walk-target$=":fold"]').first()
@@ -98,20 +98,20 @@ for (const width of [1500, 390])
       const target = (await fold.getAttribute('data-walk-target')) ?? ''
       await fold.focus()
       const camera = await zoomOutPastReading(page, how)
-      const epic = target.replace(/:fold$/u, '')
+      const goal = target.replace(/:fold$/u, '')
       const focused = () =>
         page.evaluate(() =>
           document.activeElement instanceof HTMLElement
             ? (document.activeElement.dataset.walkTarget ?? document.activeElement.tagName)
             : '',
         )
-      await expect.poll(focused).toBe(epic)
+      await expect.poll(focused).toBe(goal)
       // The camera is where the zoom alone put it.
       expect(camera).toBe(alone)
       await expect(pane(page)).toHaveAttribute('style', alone ?? '')
       // And the arrows still walk the field.
       await page.keyboard.press('ArrowDown')
-      await expect.poll(focused).not.toBe(epic)
+      await expect.poll(focused).not.toBe(goal)
       expect(
         await page.evaluate(() => Boolean(document.activeElement?.closest('.graph-flow'))),
       ).toBe(true)

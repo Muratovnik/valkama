@@ -95,19 +95,25 @@ export const STATE_PRESENTATION = {
    * focus. Moving is blue now, finished is green, and the queue says nothing.
    */
   'work-item-state': {
-    backlog: { tone: 'neutral', emphasis: 'quiet' },
-    queued: { tone: 'neutral', emphasis: 'quiet' },
+    triage: { tone: 'neutral', emphasis: 'quiet' },
+    deferred: { tone: 'neutral', emphasis: 'quiet' },
+    ready: { tone: 'neutral', emphasis: 'quiet' },
     active: { tone: 'info', emphasis: 'quiet' },
     review: { tone: 'warning', emphasis: 'quiet' },
     completed: { tone: 'success', emphasis: 'quiet' },
     blocked: { tone: 'danger', emphasis: 'strong' },
     cancelled: { tone: 'neutral', emphasis: 'quiet' },
+    // What an accepted open goal or stage derives, in the hues of the categories it
+    // reads like: work under way is blue, a close waiting on the owner is review's amber.
+    not_started: { tone: 'neutral', emphasis: 'quiet' },
+    in_progress: { tone: 'info', emphasis: 'quiet' },
+    awaiting_confirmation: { tone: 'warning', emphasis: 'quiet' },
   },
   /**
    * The facets of a work item that carry no meaning colour at all: its kind,
    * its labels, its parent, its steps and a holder whose claim is in order. A
    * kind is a type, not a state, and coloured it would read as one more alarm;
-   * the glyph tells a bug from an epic. Said here so a facet's colour has one
+   * the glyph tells a bug from a goal. Said here so a facet's colour has one
    * owner even when the answer is none.
    */
   'work-item-facet': {
@@ -124,32 +130,37 @@ export const STATE_PRESENTATION = {
    * groups head it and the graph marks it. A chain is read as progress, so
    * finished work is the green of something achieved and work under way is
    * blue; review is the amber of a decision waiting, and everything still
-   * ahead — queued or backlog — is the one grey of what remains, which is what
-   * makes a lane's tail read as its unfinished volume. These are the board's
-   * `work-item-state` tones for the same categories: a hue means one thing on
-   * every surface, so Dev is the same blue on a column head and on a lane.
+   * ahead — ready, untriaged or deferred — is the one grey of what remains, which
+   * is what makes a lane's tail read as its unfinished volume. These are the
+   * board's `work-item-state` tones for the same categories: a hue means one thing
+   * on every surface, so Dev is the same blue on a column head and on a lane. The
+   * goals and stages of a chain are grey too: their work is counted where it stands.
    */
   'work-item-chain-group': {
     done: { tone: 'success', emphasis: 'quiet' },
     active: { tone: 'info', emphasis: 'quiet' },
     review: { tone: 'warning', emphasis: 'quiet' },
-    queued: { tone: 'neutral', emphasis: 'quiet' },
-    backlog: { tone: 'neutral', emphasis: 'quiet' },
+    ready: { tone: 'neutral', emphasis: 'quiet' },
+    triage: { tone: 'neutral', emphasis: 'quiet' },
+    deferred: { tone: 'neutral', emphasis: 'quiet' },
     blocked: { tone: 'danger', emphasis: 'strong' },
+    containers: { tone: 'neutral', emphasis: 'quiet' },
   },
   // A held node is work moving, so it takes the hue of work under way. It was
   // green, which on the zoomed-out graph painted held work the colour of
   // finished work.
   'work-item-node-marker': {
-    ready: { tone: 'neutral', emphasis: 'quiet' },
+    workable: { tone: 'neutral', emphasis: 'quiet' },
     claimed: { tone: 'info', emphasis: 'quiet' },
-    backlog: { tone: 'neutral', emphasis: 'quiet' },
-    queued: { tone: 'neutral', emphasis: 'quiet' },
+    triage: { tone: 'neutral', emphasis: 'quiet' },
+    deferred: { tone: 'neutral', emphasis: 'quiet' },
+    ready: { tone: 'neutral', emphasis: 'quiet' },
     active: { tone: 'neutral', emphasis: 'quiet' },
     review: { tone: 'neutral', emphasis: 'quiet' },
     completed: { tone: 'neutral', emphasis: 'quiet' },
     cancelled: { tone: 'neutral', emphasis: 'quiet' },
     blocked: { tone: 'danger', emphasis: 'strong' },
+    containers: { tone: 'neutral', emphasis: 'quiet' },
   },
   'session': {
     // Waiting for a person is the ordinary resting state of an agent, not a
@@ -234,8 +245,8 @@ export const STATE_PRESENTATION = {
     unavailable: { tone: 'danger', emphasis: 'strong' },
   },
   /**
-   * Workable is the ordinary condition of open backlog, so it is quiet: green
-   * on every second card of a backlog column was the loudest colour on the
+   * Workable is the ordinary condition of untriaged and ready work, so it is quiet:
+   * green on every second card of a backlog column was the loudest colour on the
    * board and the one that meant least. Blocked is the exception it exists
    * to show.
    */
@@ -388,7 +399,7 @@ export type IconName =
   | 'client'
   // A work item's facets, named for what they mean rather than what they draw.
   | 'kind-bug'
-  | 'kind-epic'
+  | 'kind-container'
   | 'kind-improvement'
   | 'priority-urgent'
   | 'priority-high'

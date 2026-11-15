@@ -7,7 +7,7 @@
  * the cards nothing links in another. So the space is cut into components
  * before ELK sees it — the top-level frames joined by a drawn line, and every
  * other frame alone — each laid out hierarchically and packed by `box` at the
- * root, those holding open work first and, in a space with many lone epics, on
+ * root, those holding open work first and, in a space with many lone goals, on
  * shelves (`SHELF_FROM`); inside a frame, the cards no line touches are packed by
  * `box` too.
  *
@@ -191,20 +191,20 @@ function components(projection: FrameProjection): Frame[][] {
 /**
  * The priority of a component holding open work at the root. `box` places a
  * higher priority first and, within one, the smaller first; without it the
- * small folded frames of finished epics lead the field, and the open work
+ * small folded frames of finished goals lead the field, and the open work
  * stands a pan away from where the field is read.
  */
 const OPEN_FIRST = 1
 
 /**
- * From this many lone frames with open work — epics no drawn line joins to
+ * From this many lone frames with open work — goals no drawn line joins to
  * another — the root packs them on a shelf of their own. `box` lays its
  * children in rows as wide as its widest child and as tall as its tallest, so a
- * row of small lone epics beside a component of linked epics thousands of
+ * row of small lone goals beside a component of linked goals thousands of
  * pixels wide is one thin strip with empty field under it. Its grouping modes
  * stack small boxes to fill a row, but they ignore priorities, so each shelf is
- * a `box` of its own and only the shelves carry a priority: lone open epics,
- * then linked open work, then finished frames. With few lone epics the rows
+ * a `box` of its own and only the shelves carry a priority: lone open goals,
+ * then linked open work, then finished frames. With few lone goals the rows
  * are already full, and the root packs the components as they are.
  */
 export const SHELF_FROM = 5
@@ -328,7 +328,7 @@ export async function layoutFrames(
 
   const frames = projection.frames.map((frame): PlacedFrame => ({
     id: frame.id,
-    epic: frame.epic,
+    goal: frame.goal,
     parentId: frame.parentId,
     folded: frame.folded,
     foldable: frame.foldable,

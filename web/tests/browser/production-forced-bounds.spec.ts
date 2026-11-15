@@ -153,14 +153,14 @@ test('in the forced palette the board keeps the bounds its grounds drew', async 
   const surfaces = ['module-stage', 'work-item-column', 'work-item-tile']
   expect.soft(await drawnEdges(page, surfaces), 'edges drawn on the flat board').toEqual([])
 
-  // By epic: the cells that hold tiles.
+  // By goal: the cells that hold tiles.
   await page.emulateMedia({ forcedColors: 'none' })
   await openBoard(page)
   const lanes = await sweep(page)
   expect(lanes.kinds.join(' ')).toContain('lane-cell')
-  expect.soft(lanes.lost, 'the board by epic').toEqual([])
+  expect.soft(lanes.lost, 'the board by goal').toEqual([])
   const laneSurfaces = ['module-stage', 'lane-cell:not(.bare)', 'work-item-tile']
-  expect.soft(await drawnEdges(page, laneSurfaces), 'edges drawn by epic').toEqual([])
+  expect.soft(await drawnEdges(page, laneSurfaces), 'edges drawn by goal').toEqual([])
 
   // A label picked in the filter, and the menu's choice between all and any of them.
   await page.emulateMedia({ forcedColors: 'none' })
@@ -206,7 +206,7 @@ test('on a phone in the forced palette the board draws the same edges', async ({
   await openBoard(page)
   await page.mouse.move(0, 0)
   const lanes = ['module-stage', 'lane-cell:not(.bare)', 'work-item-tile']
-  expect.soft(await drawnEdges(page, lanes), 'the board by epic').toEqual([])
+  expect.soft(await drawnEdges(page, lanes), 'the board by goal').toEqual([])
 })
 
 test('in the forced palette the connection’s dot stays, the one mark of a narrow rail', async ({

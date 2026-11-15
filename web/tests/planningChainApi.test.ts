@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { fetchWorkItemChain } from '@/shared/api/planningChainApi.ts'
 
-import { chainResponse, largeEpicChain } from './fixtures/chain.ts'
+import { chainResponse, largeGoalChain } from './fixtures/chain.ts'
 import { requestUrl, withSecurityBootstrap } from './support/request.ts'
 
 function answer(payload: unknown, status = 200) {
@@ -19,24 +19,24 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('the chain read', () => {
   it('asks for one root in one scope and reads the planning envelope', async () => {
-    const fetchMock = answer(chainResponse(largeEpicChain()))
-    const chain = await fetchWorkItemChain('MAIN-384', 'epic')
+    const fetchMock = answer(chainResponse(largeGoalChain()))
+    const chain = await fetchWorkItemChain('MAIN-384', 'tree')
     const url = new URL(requestUrl(fetchMock.mock.calls.at(-1)?.[0] ?? ''), 'https://example.test')
     expect(url.pathname).toBe('/api/planning/work-item/chain')
-    expect(Object.fromEntries(url.searchParams)).toEqual({ id: 'MAIN-384', scope: 'epic' })
+    expect(Object.fromEntries(url.searchParams)).toEqual({ id: 'MAIN-384', scope: 'tree' })
     expect(chain.total).toBe(616)
     expect(chain.members).toHaveLength(616)
   })
 
   it('refuses a payload without the planning interface or with a field it does not know', async () => {
-    answer({ chain: largeEpicChain() })
+    answer({ chain: largeGoalChain() })
     await expect(fetchWorkItemChain('MAIN-384', 'chain')).rejects.toThrow(/interface_version/u)
-    answer(chainResponse({ ...largeEpicChain(), extra: 1 } as ReturnType<typeof largeEpicChain>))
+    answer(chainResponse({ ...largeGoalChain(), extra: 1 } as ReturnType<typeof largeGoalChain>))
     await expect(fetchWorkItemChain('MAIN-384', 'chain')).rejects.toThrow(/unknown field/u)
   })
 
   it('refuses days out of order and counts that do not add up', async () => {
-    const chain = largeEpicChain()
+    const chain = largeGoalChain()
     answer(chainResponse({ ...chain, series: [...chain.series].reverse() }))
     await expect(fetchWorkItemChain('MAIN-384', 'chain')).rejects.toThrow(/ascending days/u)
     answer(chainResponse({ ...chain, closed: 482 }))

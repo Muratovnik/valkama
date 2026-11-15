@@ -1,6 +1,6 @@
 /**
- * An epic's header as the built app lays it out: it is one header whether the
- * frame is folded or open, an epic with no tasks says so and offers nothing to
+ * A goal's header as the built app lays it out: it is one header whether the
+ * frame is folded or open, a goal with no tasks says so and offers nothing to
  * open, and the title is the thing a header leaves room for.
  *
  * Served a small space made for it, so that each case below is on the field by
@@ -22,9 +22,9 @@ test.use({ locale: 'ru-RU' })
 const { model } = broadSpace()
 const identity = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
-function stateOf(key: string): WorkItemBrief['state'] {
-  const found = model.work_items.find((entry) => entry.state.key === key)
-  if (!found) throw new Error(`the broad space has no item in ${key}`)
+function stateOf(key: string): NonNullable<WorkItemBrief['state']> {
+  const found = model.work_items.find((entry) => entry.state?.key === key)
+  if (!found?.state) throw new Error(`the broad space has no item in ${key}`)
   return found.state
 }
 
@@ -36,9 +36,9 @@ function item(n: number, key: string, overrides: Partial<WorkItemBrief> = {}): W
     number: n,
     title: `Item ${n}`,
     kind: 'task',
-    container: false,
     parent_id: null,
     state: stateOf(key),
+    open: !stateOf(key).is_terminal,
     claim_ref: '',
     claim_state: null,
     ...overrides,
@@ -53,45 +53,45 @@ const LONG_REFERENCE = 'LONGKEYS-123456789'
 /** An ordinary reference, on a card with work live on it. */
 const LIVE_REFERENCE = 'MAIN-123'
 
-/** An open epic with two open tasks among finished ones: it starts open. */
+/** An open goal with two open tasks among finished ones: it starts open. */
 const OPEN = 1
-/** An open epic nothing was ever filed under. */
+/** An open goal nothing was ever filed under. */
 const EMPTY = 10
-/** An open epic whose every task is finished: «Open» hides them all. */
+/** An open goal whose every task is finished: «Open» hides them all. */
 const FINISHED = 20
-/** An open epic with so much open work that it starts folded, and every group in its counts. */
+/** An open goal with so much open work that it starts folded, and every group in its counts. */
 const CROWDED = 40
 
-function underEpic(parent: number, from: number, keys: readonly string[]): WorkItemBrief[] {
+function underGoal(parent: number, from: number, keys: readonly string[]): WorkItemBrief[] {
   return keys.map((key, index) => item(from + index, key, { parent_id: identity(parent) }))
 }
 
 const repeat = (key: string, count: number) => Array.from({ length: count }, () => key)
 
 const SPACE: WorkItemBrief[] = [
-  item(OPEN, 'dev', { kind: 'epic', container: true, title: LONG_TITLE }),
+  item(OPEN, 'dev', { kind: 'goal', title: LONG_TITLE }),
   item(2, 'todo', { parent_id: identity(OPEN), reference: LONG_REFERENCE }),
   item(3, 'dev', { parent_id: identity(OPEN), reference: LIVE_REFERENCE }),
-  ...underEpic(OPEN, 4, ['done', 'done', 'done']),
-  item(EMPTY, 'review', { kind: 'epic', title: LONG_TITLE }),
-  item(FINISHED, 'dev', { kind: 'epic', container: true, title: 'Connect the release' }),
-  ...underEpic(FINISHED, 21, repeat('done', 7)),
-  item(CROWDED, 'dev', { kind: 'epic', container: true, title: LONG_TITLE }),
-  ...underEpic(CROWDED, 100, [
+  ...underGoal(OPEN, 4, ['done', 'done', 'done']),
+  item(EMPTY, 'review', { kind: 'goal', title: LONG_TITLE }),
+  item(FINISHED, 'dev', { kind: 'goal', title: 'Connect the release' }),
+  ...underGoal(FINISHED, 21, repeat('done', 7)),
+  item(CROWDED, 'dev', { kind: 'goal', title: LONG_TITLE }),
+  ...underGoal(CROWDED, 100, [
     ...repeat('done', 120),
     ...repeat('review', 12),
     ...repeat('dev', 12),
     ...repeat('blocked', 12),
     ...repeat('backlog', 30),
   ]),
-  // The work under no epic, past the threshold, so it starts folded with its one button.
+  // The work under no goal, past the threshold, so it starts folded with its one button.
   ...Array.from({ length: 25 }, (_, index) => item(400 + index, 'todo')),
 ]
 
-/** The same space among enough other epics that its whole field is far out. */
+/** The same space among enough other goals that its whole field is far out. */
 const AMONG_MANY: WorkItemBrief[] = [
   ...SPACE,
-  ...Array.from({ length: 90 }, (_, index) => item(1000 + index, 'review', { kind: 'epic' })),
+  ...Array.from({ length: 90 }, (_, index) => item(1000 + index, 'review', { kind: 'goal' })),
 ]
 
 async function serveSpace(page: Page, items = SPACE) {
@@ -175,7 +175,7 @@ async function toggleAndSettle(page: Page, n: number) {
 }
 
 for (const width of [1500, 390]) {
-  test(`folding an epic moves nothing in its header at ${width}px`, async ({ page }) => {
+  test(`folding a goal moves nothing in its header at ${width}px`, async ({ page }) => {
     await openField(page, width)
     const frame = frameOf(page, OPEN)
     await expect(frame).not.toHaveClass(/folded/u)
@@ -187,7 +187,7 @@ for (const width of [1500, 390]) {
     expectSamePlaces(open, await headerPlaces(frame), LIVE_PARTS)
   })
 
-  test(`an epic with no tasks says so, draws no edge and offers nothing to open at ${width}px`, async ({
+  test(`a goal with no tasks says so, draws no edge and offers nothing to open at ${width}px`, async ({
     page,
   }) => {
     await openField(page, width)
@@ -212,7 +212,7 @@ for (const width of [1500, 390]) {
   })
 }
 
-test('the keyboard walks past the fold an epic with no tasks does not have', async ({ page }) => {
+test('the keyboard walks past the fold a goal with no tasks does not have', async ({ page }) => {
   await openField(page)
   await page.locator(`[data-walk-target="frame:${identity(EMPTY)}"]`).focus()
   await page.keyboard.press('ArrowLeft')
@@ -262,7 +262,7 @@ test('work the view hides is still counted, and is offered once the view can dra
 }) => {
   await openField(page)
   const frame = frameOf(page, FINISHED)
-  // «Open» hides all seven finished tasks: the count stays the epic's own, the
+  // «Open» hides all seven finished tasks: the count stays the goal's own, the
   // edge full, and there is nothing to unfold until «All» draws them.
   await expect(frame.locator('.graph-frame-count')).toHaveText(['7 из 7 выполнено'])
   await expect(frame.locator('.frame-progress')).toHaveCount(1)
@@ -275,12 +275,12 @@ test('work the view hides is still counted, and is offered once the view can dra
   await expect(page.locator(`.flow-node-card[data-walk-target="${identity(21)}"]`)).toHaveCount(1)
 })
 
-test('a filter that finds nothing in an epic draws no «no tasks» for it', async ({ page }) => {
+test('a filter that finds nothing in a goal draws no «no tasks» for it', async ({ page }) => {
   await openField(page)
   await page.getByPlaceholder('Фильтр: номер, название…').fill(LIVE_REFERENCE)
   await expect(page.locator('.graph-flow .flow-node-card')).toHaveCount(1)
   await expect(page.getByText('Нет задач', { exact: true })).toHaveCount(0)
-  // The frame the filter found its card in still counts its whole epic.
+  // The frame the filter found its card in still counts its whole goal.
   await expect(
     frameOf(page, OPEN).locator('.graph-frame-counts .graph-frame-count').first(),
   ).toHaveText('3 из 5 выполнено')
@@ -400,13 +400,13 @@ test('zoomed out, a header is its reference and edge, in one place folded and op
     )
   })
   expect(whole).toBe(true)
-  // An epic with no tasks keeps its reference and draws no empty edge out here too.
+  // A goal with no tasks keeps its reference and draws no empty edge out here too.
   const empty = frameOf(page, EMPTY)
   await expect(empty.locator('.graph-frame-reference')).toBeVisible()
   await expect(empty.locator('.frame-progress')).toHaveCount(0)
 })
 
-test('a folded epic says what it hides, counted by the epic and not by a filter', async ({
+test('a folded goal says what it hides, counted by the goal and not by a filter', async ({
   page,
 }) => {
   await openField(page)
@@ -416,7 +416,7 @@ test('a folded epic says what it hides, counted by the epic and not by a filter'
   await expect(frame.locator('button.graph-frame-open')).toHaveAccessibleName(
     /· 66 открытых внутри$/u,
   )
-  // A filter opens the frame it found work in; folded again, it counts the epic.
+  // A filter opens the frame it found work in; folded again, it counts the goal.
   await page.getByPlaceholder('Фильтр: номер, название…').fill('MAIN-225')
   await expect(page.locator('.graph-frame')).toHaveCount(1)
   await toggleAndSettle(page, CROWDED)

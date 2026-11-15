@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import WorkItemLaneCell from '@/widgets/work-item-views/components/WorkItemLaneCell.vue'
 
 import { boardItem } from '../fixtures/board.ts'
-import { board, epic, tile } from '../support/workItemBoardHarness.ts'
+import { board, goal, tile } from '../support/workItemBoardHarness.ts'
 
 beforeEach(() => localStorage.clear())
 afterEach(() => {
@@ -18,13 +18,13 @@ const backlog = (wrapper: ReturnType<typeof board>) =>
 
 describe('a lane cell', () => {
   const crowded = [
-    epic,
+    goal,
     ...Array.from({ length: 5 }, (_, at) =>
-      boardItem(30 + at, 'backlog', { parent_id: epic.work_item_id }),
+      boardItem(30 + at, 'backlog', { parent_id: goal.work_item_id }),
     ),
-    boardItem(36, 'todo', { parent_id: epic.work_item_id }),
+    boardItem(36, 'todo', { parent_id: goal.work_item_id }),
   ]
-  const crowdedBoard = () => board({ grouping: 'epic', items: crowded, spaceItems: crowded })
+  const crowdedBoard = () => board({ grouping: 'goal', items: crowded, spaceItems: crowded })
 
   it('draws its first three tiles and offers the rest by their count', async () => {
     const wrapper = crowdedBoard()
@@ -155,19 +155,19 @@ const laneCells = (wrapper: ReturnType<typeof board>, lane: string) =>
 
 describe('an empty lane cell', () => {
   const twoLanes = [
-    epic,
-    boardItem(10, 'backlog', { parent_id: epic.work_item_id }),
+    goal,
+    boardItem(10, 'backlog', { parent_id: goal.work_item_id }),
     boardItem(12, 'backlog'),
   ]
-  const twoLaneBoard = () => board({ grouping: 'epic', items: twoLanes, spaceItems: twoLanes })
+  const twoLaneBoard = () => board({ grouping: 'goal', items: twoLanes, spaceItems: twoLanes })
 
   it('is marked empty, and only the cells a dragged tile could land in are marked landable', async () => {
     const wrapper = twoLaneBoard()
-    const own = laneCells(wrapper, epic.work_item_id)
+    const own = laneCells(wrapper, goal.work_item_id)
     const lanes = new Set(
       wrapper.findAllComponents(WorkItemLaneCell).map((cell) => cell.props('group')),
     )
-    const other = [...lanes].find((group) => group !== `lane:${epic.work_item_id}`) ?? ''
+    const other = [...lanes].find((group) => group !== `lane:${goal.work_item_id}`) ?? ''
     const elsewhere = laneCells(wrapper, other.slice('lane:'.length))
     const emptyTodo = own.find((cell) => cell.props('state').key === 'todo')
     expect(emptyTodo?.classes()).toContain('empty')
@@ -188,15 +188,15 @@ describe('an empty lane cell', () => {
   })
 })
 
-describe('a terminal cell of the board grouped by epic', () => {
+describe('a terminal cell of the board grouped by goal', () => {
   const finished = [
-    epic,
-    boardItem(10, 'backlog', { parent_id: epic.work_item_id }),
+    goal,
+    boardItem(10, 'backlog', { parent_id: goal.work_item_id }),
     ...Array.from({ length: 4 }, (_, at) =>
-      boardItem(40 + at, 'done', { parent_id: epic.work_item_id }),
+      boardItem(40 + at, 'done', { parent_id: goal.work_item_id }),
     ),
   ]
-  const finishedBoard = () => board({ grouping: 'epic', items: finished, spaceItems: finished })
+  const finishedBoard = () => board({ grouping: 'goal', items: finished, spaceItems: finished })
 
   it('draws none of its tiles, offers them by their count, and draws them on demand', async () => {
     const wrapper = finishedBoard()

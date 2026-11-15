@@ -198,7 +198,7 @@ describe('inspector drafts and the ways of leaving them', () => {
     expect(live.get('.next-step-text').text()).toBe(OPEN_STEP.text)
     live.unmount()
 
-    const closed = mountInspector({ ...open, state: DONE })
+    const closed = mountInspector({ ...open, open: false, state: DONE })
     await flushPromises()
     expect(closed.find('.blockers').exists()).toBe(false)
     expect(closed.find('.next-step').exists()).toBe(false)

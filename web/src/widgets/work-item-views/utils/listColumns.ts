@@ -10,6 +10,7 @@ import { holderRef } from '@/entities/work-item/utils/facets.ts'
 
 import { PRIORITIES } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type { StandingItem } from '@/shared/lib/useStateName.ts'
 
 export type SortKey =
   'reference' | 'title' | 'state' | 'priority' | 'claim' | 'checklist' | 'updated'
@@ -70,12 +71,12 @@ function stepsOf(item: WorkItemBrief): { done: number; total: number } {
 }
 
 /** How a row's state reads, which is what the state column sorts by. */
-type StateName = (state: WorkItemBrief['state']) => string
+type StateName = (item: StandingItem) => string
 
 function sortValue(item: WorkItemBrief, key: SortKey, stateName: StateName): number | string {
   if (key === 'reference') return item.number
   if (key === 'title') return item.title.toLocaleLowerCase()
-  if (key === 'state') return stateName(item.state).toLocaleLowerCase()
+  if (key === 'state') return stateName(item).toLocaleLowerCase()
   if (key === 'priority') return urgency.get(item.priority) ?? 0
   if (key === 'claim') return holderRef(item).toLocaleLowerCase()
   if (key === 'checklist') {

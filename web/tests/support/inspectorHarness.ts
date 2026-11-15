@@ -20,7 +20,7 @@ import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
-import { inspectorResourceRef as resourceRef } from '../fixtures/workItem.ts'
+import { inspectorResourceRef as resourceRef, stateOf } from '../fixtures/workItem.ts'
 import { requestBody, requestUrl, withSecurityBootstrap } from './request.ts'
 
 export const DONE = {
@@ -35,12 +35,12 @@ function workflowFor(item: WorkItem): PlanningWorkflow {
   return {
     workflow_id: 'workflow',
     name: 'Task workflow',
-    initial_state_id: item.state.state_id,
+    initial_state_id: stateOf(item).state_id,
     states: [
-      { ...item.state, position: 0 },
+      { ...stateOf(item), position: 0 },
       { ...DONE, position: 1 },
     ],
-    transitions: [{ from: item.state.state_id, to: DONE.state_id }],
+    transitions: [{ from: stateOf(item).state_id, to: DONE.state_id }],
   }
 }
 

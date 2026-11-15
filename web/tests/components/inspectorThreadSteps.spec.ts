@@ -20,7 +20,7 @@ import { provideCardSteps } from '@/widgets/work-item-inspector/utils/entrySteps
 import { setWorkItemChecklist } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
-import { getButton } from '../fixtures/workItem.ts'
+import { getButton, stateOf } from '../fixtures/workItem.ts'
 import {
   card,
   inThread,
@@ -274,7 +274,8 @@ describe('where the icon is not', () => {
     const item = card([root(1, { body: '- One' })])
     const closed: WorkItem = {
       ...item,
-      state: { ...item.state, category: 'completed', is_terminal: true },
+      open: false,
+      state: { ...stateOf(item), category: 'completed', is_terminal: true },
     }
     expect(action(open(closed))).toHaveLength(0)
 

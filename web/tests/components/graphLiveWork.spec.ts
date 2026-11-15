@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import GraphFrame from '@/widgets/work-item-graph/components/GraphFrame.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
-import { NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { LiveWork, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import { i18n } from '@/shared/i18n/index.ts'
@@ -28,7 +28,7 @@ const node = (overrides: Partial<PlacedNode> = {}): PlacedNode => ({
   y: 0,
   width: 264,
   height: 112,
-  frameId: NO_EPIC_FRAME,
+  frameId: NO_PARENT_FRAME,
   ...overrides,
 })
 
@@ -156,14 +156,14 @@ describe('a card with live work', () => {
 })
 
 describe('a frame with live work under it', () => {
-  const EPIC = boardItem(12, 'dev', { kind: 'epic', container: true, title: 'Frames' })
+  const GOAL = boardItem(12, 'dev', { kind: 'goal', title: 'Frames' })
   const frame = (working: number, still = false) =>
     mount(GraphFrame, {
       attachTo: document.body,
       props: {
         frame: {
-          id: EPIC.work_item_id,
-          epic: EPIC,
+          id: GOAL.work_item_id,
+          goal: GOAL,
           parentId: null,
           folded: true,
           foldable: true,
@@ -186,7 +186,7 @@ describe('a frame with live work under it', () => {
     const wrapper = frame(2)
     expect(wrapper.get('.graph-frame-working').text().replaceAll(/\s+/gu, ' ')).toBe('2 работают')
     expect(wrapper.get('button.graph-frame-open').attributes('aria-label')).toBe(
-      'Эпик MAIN-12 «Frames» · 1 из 3 выполнено · 2 в работе · 2 открытых внутри · 2 работают',
+      'Цель MAIN-12 «Frames» · 1 из 3 выполнено · 2 в работе · 2 открытых внутри · 2 работают',
     )
   })
 

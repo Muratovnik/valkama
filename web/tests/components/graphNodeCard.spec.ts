@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import {
-  NO_EPIC_FRAME,
+  NO_PARENT_FRAME,
   NODE_HEIGHT,
   NODE_WIDTH,
 } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
@@ -36,7 +36,7 @@ const node = (
   y: 0,
   width: NODE_WIDTH,
   height: NODE_HEIGHT,
-  frameId: NO_EPIC_FRAME,
+  frameId: NO_PARENT_FRAME,
   ...overrides,
 })
 
@@ -53,7 +53,7 @@ function card(props: Record<string, unknown> & { node: PlacedNode }) {
 
 describe('a graph node', () => {
   it('says workable quietly, in place of its state, and in no heavier ink', () => {
-    const wrapper = card({ node: node('backlog', { ready: true }), ready: true })
+    const wrapper = card({ node: node('backlog', { workable: true }), ready: true })
     const state = wrapper.get('.flow-node-state')
     expect(state.text()).toBe('Workable')
     expect(state.find('.semantic-state').exists()).toBe(false)
@@ -108,7 +108,7 @@ describe('a graph node', () => {
   it('draws its chain edge in the hue of its state’s dot', () => {
     for (const state of ['backlog', 'todo', 'dev', 'done'] as const) {
       // Not workable, so the state itself is what the node says.
-      const item = node(state, { ready: false })
+      const item = node(state, { workable: false })
       const wrapper = card({ node: item, chainGroup: chainGroup(item) })
       expect(wrapper.get('.flow-node-chain').attributes('data-tone'), state).toBe(
         wrapper.get('.flow-node-state .semantic-state').attributes('data-tone'),

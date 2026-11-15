@@ -15,13 +15,13 @@ import { planningReadModel, projectScope, spaceRef, workItem } from './planningF
 import { planningReadFor } from './planningReadFixture.ts'
 import { briefAnswer } from './previewPage.ts'
 
-export const KINDS = ['bug', 'epic', 'improvement', 'task'] as const
+export const KINDS = ['bug', 'goal', 'improvement', 'task'] as const
 export type Kind = (typeof KINDS)[number]
 
 /** The kinds' default colours, in the form a computed style reports them. */
 export const DEFAULTS: Record<Kind, string> = {
   bug: 'rgb(255, 157, 181)',
-  epic: 'rgb(207, 160, 255)',
+  goal: 'rgb(207, 160, 255)',
   improvement: 'rgb(125, 239, 220)',
   task: 'rgb(180, 198, 224)',
 }
@@ -38,7 +38,7 @@ const held = (number: number, kind: Kind, change: Partial<WorkItemBrief> = {}) =
     number,
     title: `A ${kind} to read`,
     kind,
-    ready: true,
+    workable: true,
     claim_ref: '',
     claim_state: null,
     ...change,
@@ -46,19 +46,19 @@ const held = (number: number, kind: Kind, change: Partial<WorkItemBrief> = {}) =
 
 const REFERENCE: Record<Kind, string> = {
   bug: 'MAIN-902',
-  epic: 'MAIN-901',
+  goal: 'MAIN-901',
   improvement: 'MAIN-903',
   task: 'MAIN-904',
 }
 
-const EPIC = boardId(901)
+const GOAL = boardId(901)
 
-/** The epic with a bug, an improvement and a task under it, and a loose epic on the board. */
+/** The goal with a bug, an improvement and a task under it, and a loose goal on the board. */
 const SPACE = [
-  held(901, 'epic', { container: true }),
-  held(902, 'bug', { parent_id: EPIC }),
-  held(903, 'improvement', { parent_id: EPIC }),
-  held(904, 'task', { parent_id: EPIC }),
+  held(901, 'goal', { kind: 'goal' }),
+  held(902, 'bug', { parent_id: GOAL }),
+  held(903, 'improvement', { parent_id: GOAL }),
+  held(904, 'task', { parent_id: GOAL }),
 ]
 
 /** A server for that space: its read model, and a card for whichever item is asked for. */
@@ -127,7 +127,7 @@ export const node = (page: Page, kind: Kind) =>
   page.locator('.flow-node-card').filter({
     has: page.locator('.flow-node-id').getByText(REFERENCE[kind], { exact: true }),
   })
-export const frame = (page: Page) => page.locator(`.graph-frame[data-frame="${EPIC}"]`)
+export const frame = (page: Page) => page.locator(`.graph-frame[data-frame="${GOAL}"]`)
 
 export const glyphIn = (where: Locator) => where.locator('[data-facet="kind"] .facet-glyph')
 export const wordIn = (where: Locator) => where.locator('[data-facet="kind"] .facet-word')

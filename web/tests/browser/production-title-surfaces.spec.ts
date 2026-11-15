@@ -4,7 +4,7 @@
  * A run of slash-joined words is one word to a browser, so a title such as
  * `…/acceptance/loading/empty/error/unavailable/permission-denied` broke wherever a line
  * ran out: «unavail» above «able/p» in the finder, «/empty» above «/error» on the graph's
- * frame, and in the new task's epic list after the rest had been mended. Each surface breaks
+ * frame, and in the new task's goal list after the rest had been mended. Each surface breaks
  * it at a space, after a `/` or a hyphen and nowhere else.
  *
  * One word wider than a line breaks inside, and stays in its box: the branch map's tip cut

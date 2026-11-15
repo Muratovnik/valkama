@@ -60,11 +60,11 @@ const space = (
   sessions: ReturnType<typeof liveSession>[] = [],
 ) => liveFrame([liveSpace('MAIN', rows, { sessions })])
 
-const EPIC = liveRow('MAIN-4', { kind: 'epic', title: 'Structured answers' })
+const GOAL = liveRow('MAIN-4', { kind: 'goal', title: 'Structured answers' })
 const states = () =>
   space(
     [
-      EPIC,
+      GOAL,
       liveRow('MAIN-1', { state: 'working', parent: 'MAIN-4', since: ago(5 * MINUTE) }),
       liveRow('MAIN-2', { state: 'waiting', asks: true, since: ago(3 * MINUTE) }),
       liveRow('MAIN-3', { state: 'waiting', since: ago(2 * 60 * MINUTE), agents: 2 }),
@@ -80,7 +80,7 @@ const states = () =>
   )
 
 describe('the second line', () => {
-  it('says each state in Russian, how long, and the epic or the folder after a dot', () => {
+  it('says each state in Russian, how long, and the goal or the folder after a dot', () => {
     const { wrapper } = rail(states(), 'ru')
     expect(
       ['MAIN-1', 'MAIN-2', 'MAIN-3', 'Compare two exports'].map((name) =>
@@ -92,8 +92,8 @@ describe('the second line', () => {
       'ждёт 2\u{A0}ч',
       'работает 25\u{A0}мин · example-project',
     ])
-    // The epic leaves the first line of a row with two.
-    expect(row(wrapper, 'MAIN-1').querySelector('.nav-row-epic')).toBeNull()
+    // The goal leaves the first line of a row with two.
+    expect(row(wrapper, 'MAIN-1').querySelector('.nav-row-goal')).toBeNull()
   })
 
   it('says each state in English', () => {
@@ -192,7 +192,7 @@ describe('the sentence a row says', () => {
 })
 
 describe('the hint a row shows', () => {
-  it('says a two-line row nothing: its state, how long and epic are on its line under the title', () => {
+  it('says a two-line row nothing: its state, how long and goal are on its line under the title', () => {
     const { wrapper } = rail(states())
     for (const name of ['MAIN-1', 'MAIN-2', 'MAIN-3', 'Compare two exports'])
       expect(tooltipOf(row(wrapper, name))).toBeUndefined()

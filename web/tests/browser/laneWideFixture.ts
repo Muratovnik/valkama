@@ -1,5 +1,5 @@
 /**
- * The board's space with a workflow wider than a desktop's board, and epics with work in the last
+ * The board's space with a workflow wider than a desktop's board, and goals with work in the last
  * state, out of sight to the right: the lane headings that name work out of sight.
  */
 import type { Page } from '@playwright/test'
@@ -32,7 +32,7 @@ type Model = Record<string, unknown> & {
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 /**
- * The board's space with a workflow wider than a desktop's board, and epics with work in
+ * The board's space with a workflow wider than a desktop's board, and goals with work in
  * the last state, out of sight to the right: the headings that once wrapped their hidden
  * actions, or their note of that work beside a title shown whole, onto a row of its own.
  */
@@ -66,8 +66,12 @@ function wideSpace(model: Model): Model {
       reference: `MAIN-${491 + 2 * index}`,
       number: 491 + 2 * index,
       title,
-      kind: 'epic',
-      container: true,
+      kind: 'goal',
+      open: true,
+      container_state: null,
+      acceptance: null,
+      started_at: null,
+      waits_for: [],
       parent_id: null,
     },
     {

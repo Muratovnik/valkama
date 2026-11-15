@@ -105,8 +105,10 @@
   --color-kind-ink: var(--color-kind-bug);
 }
 
-[data-kind='epic'] {
-  --color-kind-ink: var(--color-kind-epic);
+/* A goal and a stage are one colour, as they are one glyph. */
+[data-kind='goal'],
+[data-kind='stage'] {
+  --color-kind-ink: var(--color-kind-container);
 }
 
 [data-kind='improvement'] {

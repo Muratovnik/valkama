@@ -26,7 +26,7 @@ function link(reference: string, end: Partial<Link>): Link {
     reference,
     title: `Work of ${reference}`,
     state_name: 'Backlog',
-    state_category: 'backlog',
+    state_category: 'triage',
     is_terminal: false,
     state_unavailable: null,
     ...end,

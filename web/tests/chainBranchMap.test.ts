@@ -42,9 +42,9 @@ describe('the lanes of a chain', () => {
       mapMember('MAP-11', 'done', 'MAP-1', { closed: 20 }),
       mapMember('MAP-12', 'done', 'MAP-1', { closed: 30 }),
     ]
-    const early = mapMember('MAP-20', 'backlog', null)
-    const late = mapMember('MAP-30', 'backlog', 'MAP-99')
-    const nested = mapMember('MAP-40', 'backlog', 'MAP-98')
+    const early = mapMember('MAP-20', 'triage', null)
+    const late = mapMember('MAP-30', 'triage', 'MAP-99')
+    const nested = mapMember('MAP-40', 'triage', 'MAP-98')
     const chain = chainOf(ROOT, [...own, early, late, nested], {
       // `early` forks at the first child, `late` at the third, and `nested`
       // from `early`'s lane.
@@ -66,7 +66,7 @@ describe('the lanes of a chain', () => {
       mapMember(`MAP-${10 + index}`, 'done', 'MAP-1', { closed: index }),
     )
     const branch = Array.from({ length: 4 }, (_, index) =>
-      mapMember(`MAP-${20 + index}`, 'backlog', null, { created: 100 + index }),
+      mapMember(`MAP-${20 + index}`, 'triage', null, { created: 100 + index }),
     )
     const chain = chainOf(ROOT, [...own, ...branch], { edges: [found(branch[0], own[2])] })
     const { lanes, extent } = layoutBranches(asChain(chain))
@@ -78,19 +78,19 @@ describe('the lanes of a chain', () => {
     expect(extent).toBe(7)
   })
 
-  it('forks a lane where its own epic was discovered, when the epic is a member', () => {
+  it('forks a lane where its own goal was discovered, when the goal is a member', () => {
     const own = Array.from({ length: 6 }, (_, index) =>
       mapMember(`MAP-${10 + index}`, 'done', 'MAP-1', { closed: index }),
     )
-    // The epic lives in the root's lane and was discovered from its fifth child;
+    // The goal lives in the root's lane and was discovered from its fifth child;
     // one of its children was discovered earlier, from the first.
-    const epic = mapMember('MAP-50', 'active', 'MAP-1', { created: 1, closed: undefined })
+    const goal = mapMember('MAP-50', 'active', 'MAP-1', { created: 1, closed: undefined })
     const children = [
-      mapMember('MAP-51', 'backlog', 'MAP-50', { created: 0 }),
-      mapMember('MAP-52', 'backlog', 'MAP-50', { created: 5 }),
+      mapMember('MAP-51', 'triage', 'MAP-50', { created: 0 }),
+      mapMember('MAP-52', 'triage', 'MAP-50', { created: 5 }),
     ]
-    const chain = chainOf(ROOT, [...own, epic, ...children], {
-      edges: [found(epic, own[4]), found(children[0], own[0])],
+    const chain = chainOf(ROOT, [...own, goal, ...children], {
+      edges: [found(goal, own[4]), found(children[0], own[0])],
     })
     const { lanes } = layoutBranches(asChain(chain))
     const branch = lanes.find((lane) => lane.reference === 'MAP-50')
@@ -98,14 +98,14 @@ describe('the lanes of a chain', () => {
     expect(branch?.start).toBe(5)
   })
 
-  it('forks from the earliest discovered member when the lane’s epic is not a member', () => {
+  it('forks from the earliest discovered member when the lane’s goal is not a member', () => {
     const own = Array.from({ length: 6 }, (_, index) =>
       mapMember(`MAP-${10 + index}`, 'done', 'MAP-1', { closed: index }),
     )
     const lane = [
-      mapMember('MAP-60', 'backlog', 'MAP-77', { created: 40 }),
-      mapMember('MAP-61', 'backlog', 'MAP-77', { created: 20 }),
-      mapMember('MAP-62', 'backlog', 'MAP-77', { created: 30 }),
+      mapMember('MAP-60', 'triage', 'MAP-77', { created: 40 }),
+      mapMember('MAP-61', 'triage', 'MAP-77', { created: 20 }),
+      mapMember('MAP-62', 'triage', 'MAP-77', { created: 30 }),
     ]
     const chain = chainOf(ROOT, [...own, ...lane], {
       edges: [found(lane[0], own[1]), found(lane[1], own[3]), found(lane[2], own[5])],
@@ -117,7 +117,7 @@ describe('the lanes of a chain', () => {
 
   it('forks a lane discovered from the root itself at the start of the root’s lane', () => {
     const own = [mapMember('MAP-10', 'done', 'MAP-1'), mapMember('MAP-11', 'done', 'MAP-1')]
-    const direct = mapMember('MAP-20', 'backlog', null)
+    const direct = mapMember('MAP-20', 'triage', null)
     const chain = chainOf(ROOT, [...own, direct], {
       edges: [{ from: direct.work_item_id, to: ROOT.id, kind: 'discovered-from' }],
     })
@@ -128,7 +128,7 @@ describe('the lanes of a chain', () => {
 
   it('gives even a lane of one member a lane of its own', () => {
     const own = [mapMember('MAP-10', 'done', 'MAP-1')]
-    const single = mapMember('MAP-20', 'queued', 'MAP-88')
+    const single = mapMember('MAP-20', 'ready', 'MAP-88')
     const chain = chainOf(ROOT, [...own, single], { edges: [found(single, own[0])] })
     const { lanes } = layoutBranches(asChain(chain))
     expect(lanes.map((lane) => [lane.reference, lane.members.length])).toEqual([
@@ -139,9 +139,9 @@ describe('the lanes of a chain', () => {
 
   it('still draws a tree when two lanes were each discovered from the other', () => {
     const own = [mapMember('MAP-10', 'done', 'MAP-1')]
-    const left = mapMember('MAP-20', 'backlog', 'MAP-70', { created: 1 })
-    const right = mapMember('MAP-30', 'backlog', 'MAP-80', { created: 2 })
-    const other = mapMember('MAP-31', 'backlog', 'MAP-80', { created: 3 })
+    const left = mapMember('MAP-20', 'triage', 'MAP-70', { created: 1 })
+    const right = mapMember('MAP-30', 'triage', 'MAP-80', { created: 2 })
+    const other = mapMember('MAP-31', 'triage', 'MAP-80', { created: 3 })
     const chain = chainOf(ROOT, [...own, left, right, other], {
       edges: [found(left, right), found(right, left), found(other, own[0])],
     })
@@ -162,25 +162,25 @@ describe('the lanes of a chain', () => {
   })
 
   // The root is a task with no children of its own. X was found from it, the
-  // epic E from X, and Y from E's child E1, so each lane's best source is in the
+  // goal E from X, and Y from E's child E1, so each lane's best source is in the
   // other and neither stands alone by itself. The lane holding X, found from the
   // root, is the one drawn from the start, whichever the answer lists first.
   it.each([
     ['listed first', 1],
-    ['listed after a larger epic', 4],
+    ['listed after a larger goal', 4],
   ])(
-    'forks a lane off another when the root has no lane and the no-epic lane is %s',
+    'forks a lane off another when the root has no lane and the no-goal lane is %s',
     (_, children) => {
-      const first = mapMember('MAP-20', 'backlog', null, { created: 1 })
-      const epic = mapMember('MAP-21', 'backlog', null, { created: 2 })
-      const late = mapMember('MAP-22', 'backlog', null, { created: 9 })
+      const first = mapMember('MAP-20', 'triage', null, { created: 1 })
+      const goal = mapMember('MAP-21', 'triage', null, { created: 2 })
+      const late = mapMember('MAP-22', 'triage', null, { created: 9 })
       const below = Array.from({ length: children }, (_, index) =>
-        mapMember(`MAP-${30 + index}`, 'backlog', 'MAP-21', { created: 3 + index }),
+        mapMember(`MAP-${30 + index}`, 'triage', 'MAP-21', { created: 3 + index }),
       )
-      const chain = chainOf(ROOT, [first, epic, late, ...below], {
+      const chain = chainOf(ROOT, [first, goal, late, ...below], {
         edges: [
           { from: first.work_item_id, to: ROOT.id, kind: 'discovered-from' },
-          found(epic, first),
+          found(goal, first),
           found(late, below[0]),
         ],
       })
@@ -192,13 +192,13 @@ describe('the lanes of a chain', () => {
     },
   )
 
-  it('reads the epic scope as a single lane', () => {
+  it('reads the goal scope as a single lane', () => {
     const members = [
       mapMember('MAP-10', 'done', 'MAP-1'),
       mapMember('MAP-11', 'active', 'MAP-1', { holder: 'codex' }),
-      mapMember('MAP-12', 'backlog', 'MAP-1'),
+      mapMember('MAP-12', 'triage', 'MAP-1'),
     ]
-    const { lanes, extent } = layoutBranches(asChain(chainOf(ROOT, members, { scope: 'epic' })))
+    const { lanes, extent } = layoutBranches(asChain(chainOf(ROOT, members, { scope: 'tree' })))
     expect(lanes).toHaveLength(1)
     expect(lanes[0].own).toBe(true)
     expect(extent).toBe(3)
@@ -217,8 +217,8 @@ describe('the lanes of a chain', () => {
 describe('the order inside a lane', () => {
   it('runs finished by closing time, then review and in progress, then blocked, queued and backlog', () => {
     const members = [
-      mapMember('MAP-10', 'backlog', 'MAP-1', { created: 1 }),
-      mapMember('MAP-11', 'queued', 'MAP-1', { created: 2 }),
+      mapMember('MAP-10', 'triage', 'MAP-1', { created: 1 }),
+      mapMember('MAP-11', 'ready', 'MAP-1', { created: 2 }),
       mapMember('MAP-12', 'done', 'MAP-1', { created: 1, closed: 90 }),
       mapMember('MAP-13', 'active', 'MAP-1', { created: 3 }),
       mapMember('MAP-14', 'blocked', 'MAP-1', { created: 4 }),
@@ -235,24 +235,16 @@ describe('the order inside a lane', () => {
       'MAP-11',
       'MAP-10',
     ])
-    expect(lane.groups).toEqual([
-      'done',
-      'done',
-      'review',
-      'active',
-      'blocked',
-      'queued',
-      'backlog',
-    ])
+    expect(lane.groups).toEqual(['done', 'done', 'review', 'active', 'blocked', 'ready', 'triage'])
     expect(lane.counts).toEqual({ done: 2, current: 2, ahead: 3 })
   })
 
   it('puts ready work first inside a category, then the oldest', () => {
     const members = [
-      mapMember('MAP-10', 'backlog', 'MAP-1', { created: 1 }),
-      mapMember('MAP-11', 'backlog', 'MAP-1', { created: 3, ready: true }),
-      mapMember('MAP-12', 'backlog', 'MAP-1', { created: 2, ready: true }),
-      mapMember('MAP-13', 'backlog', 'MAP-1', { created: 0 }),
+      mapMember('MAP-10', 'triage', 'MAP-1', { created: 1 }),
+      mapMember('MAP-11', 'triage', 'MAP-1', { created: 3, workable: true }),
+      mapMember('MAP-12', 'triage', 'MAP-1', { created: 2, workable: true }),
+      mapMember('MAP-13', 'triage', 'MAP-1', { created: 0 }),
     ]
     const [lane] = layoutBranches(asChain(chainOf(ROOT, members))).lanes
     expect(refs(lane.members)).toEqual(['MAP-12', 'MAP-11', 'MAP-13', 'MAP-10'])
@@ -262,9 +254,9 @@ describe('the order inside a lane', () => {
     const cancelled = mapMember('MAP-10', 'done', 'MAP-1')
     Object.assign(cancelled.state, { key: 'cancelled', name: 'Cancelled', category: 'cancelled' })
     const [lane] = layoutBranches(
-      asChain(chainOf(ROOT, [cancelled, mapMember('MAP-11', 'backlog', 'MAP-1')])),
+      asChain(chainOf(ROOT, [cancelled, mapMember('MAP-11', 'triage', 'MAP-1')])),
     ).lanes
-    expect(lane.groups).toEqual(['done', 'backlog'])
+    expect(lane.groups).toEqual(['done', 'triage'])
   })
 })
 
@@ -293,7 +285,7 @@ describe('the drawing at a width', () => {
       [null, 88],
     ])
     expect(lanes.reduce((sum, lane) => sum + lane.counts.current + lane.counts.ahead, 0)).toBe(132)
-    // The discovered epic forks where it was found: the root's 121st closed child.
+    // The discovered goal forks where it was found: the root's 121st closed child.
     expect(lanes[2].fork).toEqual({ lane: lanes[0].key, index: 120 })
     expect(lanes[2].start).toBe(121)
   })
@@ -307,7 +299,7 @@ describe('the drawing at a width', () => {
       { group: 'done', from: 0, to: 263 },
       { group: 'review', from: 263, to: 264 },
       { group: 'active', from: 264, to: 266 },
-      { group: 'backlog', from: 266, to: 273 },
+      { group: 'triage', from: 266, to: 273 },
     ])
     const small = layoutBranches(asChain(smallBranchedChain(ROOT, 'MAP')))
     const wide = drawBranches(small, 620)
@@ -317,15 +309,15 @@ describe('the drawing at a width', () => {
 
   it('raises work under way in a dense lane as marks that keep apart and name their own tasks', () => {
     const drawing = drawBranches(layoutBranches(live), 342)
-    const epic = drawing.lanes[2]
-    expect(epic.lane.reference).toBe('MAP-4000')
+    const goal = drawing.lanes[2]
+    expect(goal.lane.reference).toBe('MAP-4000')
     // One review, eight in development and one blocked: under a pixel each.
-    expect(epic.pills.map((pill) => pill.group)).toEqual(['review', 'active', 'blocked'])
-    for (const [index, pill] of epic.pills.entries()) {
+    expect(goal.pills.map((pill) => pill.group)).toEqual(['review', 'active', 'blocked'])
+    for (const [index, pill] of goal.pills.entries()) {
       expect(pill.right - pill.left).toBeGreaterThanOrEqual(7)
-      if (index) expect(pill.left).toBeGreaterThan(epic.pills[index - 1].right)
+      if (index) expect(pill.left).toBeGreaterThan(goal.pills[index - 1].right)
       const middle = (pill.left + pill.right) / 2
-      expect(epic.lane.groups[taskAt(epic, middle, drawing.unit)]).toBe(pill.group)
+      expect(goal.lane.groups[taskAt(goal, middle, drawing.unit)]).toBe(pill.group)
     }
     // A lane wide enough to show every member needs none.
     const small = layoutBranches(asChain(smallBranchedChain(ROOT, 'MAP')))
@@ -385,7 +377,7 @@ describe('the drawing at a width', () => {
     const own = Array.from({ length: 300 }, (_, index) =>
       mapMember(`MAP-${1000 + index}`, 'done', 'MAP-1', { closed: index }),
     )
-    const last = mapMember('MAP-2000', 'backlog', 'MAP-90', { created: 400 })
+    const last = mapMember('MAP-2000', 'triage', 'MAP-90', { created: 400 })
     const layout = layoutBranches(
       asChain(chainOf(ROOT, [...own, last], { edges: [found(last, own[299])] })),
     )
@@ -419,7 +411,7 @@ describe('the task under the pointer', () => {
       mapMember(`MAP-${10 + index}`, 'done', 'MAP-1', { closed: index }),
     )
     const branch = Array.from({ length: 3 }, (_, index) =>
-      mapMember(`MAP-${20 + index}`, 'backlog', null, { created: 100 + index }),
+      mapMember(`MAP-${20 + index}`, 'triage', null, { created: 100 + index }),
     )
     const layout = layoutBranches(
       asChain(chainOf(ROOT, [...own, ...branch], { edges: [found(branch[0], own[1])] })),

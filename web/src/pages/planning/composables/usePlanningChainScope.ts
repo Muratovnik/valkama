@@ -19,11 +19,11 @@ type RouteState = Record<string, string | number | boolean>
 const CHAIN_KEYS = new Set(['chain', 'chain_scope', 'closed', 'branch'])
 
 /**
- * How the address spells the branch of work filed under no epic. A branch is
- * named by the epic its work was filed under, and that one has none, so it
+ * How the address spells the branch of work filed under no parent. A branch is
+ * named by the parent its work was filed under, and that one has none, so it
  * takes a word no reference can be.
  */
-const NO_EPIC_BRANCH = 'none'
+const NO_PARENT_BRANCH = 'none'
 
 /** What the route asks every view of the space to be scoped to. */
 export type ChainTarget =
@@ -60,7 +60,7 @@ export function chainTarget(state: RouteState | undefined): ChainTarget {
   if (reference === undefined && state?.chain_scope === undefined) return { status: 'none' }
   if (typeof reference !== 'string' || !WORK_ITEM_REFERENCE.test(reference))
     return { status: 'invalid', reference: String(reference ?? '') }
-  if (scope !== 'chain' && scope !== 'epic') return { status: 'invalid', reference }
+  if (scope !== 'chain' && scope !== 'tree') return { status: 'invalid', reference }
   return { status: 'chain', reference, scope }
 }
 
@@ -71,15 +71,14 @@ export function viewOf(state: RouteState | undefined): PlanningViewMode {
 }
 
 /**
- * How a view is grouped: the board into a lane per parent (`epic`), the list
- * into a tree by goal (`goal`), or not at all. Each view reads the one it
- * offers and draws any other as none.
+ * How a view is grouped: by goal (`goal`) — the board into a lane per goal, the
+ * list into a tree — or not at all.
  */
-export type ViewGrouping = 'epic' | 'goal' | 'none'
+export type ViewGrouping = 'goal' | 'none'
 
-/** The grouping as the route state carries it; anything else is none. */
+/** The grouping as the route state carries it; a value this build does not know is none. */
 export function groupingOf(state: RouteState | undefined): ViewGrouping {
-  return state?.group === 'epic' || state?.group === 'goal' ? state.group : 'none'
+  return state?.group === 'goal' ? 'goal' : 'none'
 }
 
 /**
@@ -113,21 +112,21 @@ export function withClosed(state: RouteState | undefined, closed: boolean): Rout
 }
 
 /**
- * The branch of the chain the address names: an epic's reference, `''` for the
- * work filed under no epic, null for none. A value that could name no branch is
+ * The branch of the chain the address names: a parent's reference, `''` for the
+ * work filed under no parent, null for none. A value that could name no branch is
  * `undefined`, so the surface can say the link was wrong and drop it.
  */
 export function branchOf(state: RouteState | undefined): string | null | undefined {
   const value = state?.branch
   if (value === undefined) return null
-  if (value === NO_EPIC_BRANCH) return ''
+  if (value === NO_PARENT_BRANCH) return ''
   return typeof value === 'string' && WORK_ITEM_REFERENCE.test(value) ? value : undefined
 }
 
 /** The same state naming this branch of its chain, or none when `branch` is null. */
 export function withBranch(state: RouteState | undefined, branch: string | null): RouteState {
   const rest = Object.fromEntries(Object.entries(state ?? {}).filter(([key]) => key !== 'branch'))
-  return branch === null ? rest : { ...rest, branch: branch === '' ? NO_EPIC_BRANCH : branch }
+  return branch === null ? rest : { ...rest, branch: branch === '' ? NO_PARENT_BRANCH : branch }
 }
 
 /** The same state naming this chain, or naming none when `chain` is null. */

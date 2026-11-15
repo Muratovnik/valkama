@@ -99,17 +99,17 @@ test('on a phone the finder takes the width too, and still stands just under the
 test('in a narrow window two fields side by side keep their inputs level, whatever their hints', async ({
   page,
 }) => {
-  // The narrowest window where Labels and Epic still share a row: on a phone they stand one
-  // above the other, so that an epic's title has the dialog's width.
+  // The narrowest window where Labels and Goal still share a row: on a phone they stand one
+  // above the other, so that a goal's title has the dialog's width.
   await page.setViewportSize({ width: 560, height: 844 })
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.getByRole('button', { name: 'New work item' }).click()
   const dialog = page.getByRole('dialog', { name: 'New work' })
   await expect(dialog).toHaveCSS('transform', 'none')
-  // The labels have a hint under them and the epic none.
+  // The labels have a hint under them and the goal none.
   const labels = await dialog.getByRole('combobox', { name: 'Labels' }).boundingBox()
-  const epic = await dialog.getByRole('combobox', { name: 'Parent' }).boundingBox()
-  expect(labels?.x ?? 0).toBeLessThan(epic?.x ?? 0)
-  expect(Math.round(labels?.y ?? -1)).toBe(Math.round(epic?.y ?? -2))
+  const goal = await dialog.getByRole('combobox', { name: 'Parent' }).boundingBox()
+  expect(labels?.x ?? 0).toBeLessThan(goal?.x ?? 0)
+  expect(Math.round(labels?.y ?? -1)).toBe(Math.round(goal?.y ?? -2))
 })

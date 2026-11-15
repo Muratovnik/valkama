@@ -1,7 +1,7 @@
 /**
  * The phone's list of work going on now with closed rows in it: a closed item a session is
  * still on keeps its lead column, since its sign stands there; a closed item with no sign, a
- * pinned closed epic among them, has no lead (`NavWorkRow`). A closed item that is in the
+ * pinned closed goal among them, has no lead (`NavWorkRow`). A closed item that is in the
  * frame only as the parent of others is no row at all: its title is said with its items' rows,
  * on the second line of a row to follow now and before the title of a row in a fold.
  */
@@ -55,12 +55,12 @@ test('at 390 a closed parent is no row: its title is said with the rows of its i
   await openPanel(page)
   for (const reference of ['MAIN-50', 'MAIN-60', 'MAIN-62'])
     await expect(liveRow(page, reference, PANEL), reference).toHaveCount(0)
-  await expect(liveRow(page, 'MAIN-61', PANEL).locator('.nav-row-epic')).toHaveText(
+  await expect(liveRow(page, 'MAIN-61', PANEL).locator('.nav-row-goal')).toHaveText(
     'Closed group with children',
   )
-  // A pinned closed epic is a row of its pinned group, and its item, which waits, says it on
+  // A pinned closed goal is a row of its pinned group, and its item, which waits, says it on
   // its second line.
   const waiting = liveRow(page, 'MAIN-71', PANEL)
-  await expect(waiting.locator('.nav-row-detail')).toContainText('Pinned closed epic')
-  await expect(waiting.locator('.nav-row-epic')).toHaveCount(0)
+  await expect(waiting.locator('.nav-row-detail')).toContainText('Pinned closed goal')
+  await expect(waiting.locator('.nav-row-goal')).toHaveCount(0)
 })

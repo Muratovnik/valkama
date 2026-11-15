@@ -178,7 +178,7 @@ const cells = (wrapper: Awaited<ReturnType<typeof rows>>, index: number) =>
 
 describe('the facets a list row prints', () => {
   it('says nobody holds an unheld item with a dash, never that it is workable', async () => {
-    const wrapper = await rows([boardItem(1, 'backlog', { ready: true })])
+    const wrapper = await rows([boardItem(1, 'backlog', { workable: true })])
     const holder = cells(wrapper, 0)[4]
     expect(holder.text()).toBe('—')
     expect(wrapper.get('tbody').text()).not.toContain('Workable')

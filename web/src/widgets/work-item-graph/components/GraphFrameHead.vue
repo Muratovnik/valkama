@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * A frame's header: two controls, each one button with one action as a card is. The
- * chevron folds or unfolds the frame, the rest opens the epic's card. The rest reads as a
+ * chevron folds or unfolds the frame, the rest opens the goal's card. The rest reads as a
  * card on the field does: the reference line with the state once it has moved, the title,
  * then how the work stands in words, and the 3px edge under it is the same count drawn.
  *
@@ -12,8 +12,8 @@
  * keeps, so folding moves nothing. The layout leaves the room the header takes, measured
  * from this same header (`GraphFrameHeads`), and that is the height it is drawn at.
  *
- * Zoomed out past reading, the header is a band: the epic's reference grown with the
- * field, and what a fold hides beside it. An epic nothing was filed under says so and
+ * Zoomed out past reading, the header is a band: the goal's reference grown with the
+ * field, and what a fold hides beside it. A goal nothing was filed under says so and
  * draws no edge; a frame with nothing to unfold has no chevron.
  *
  * Every control carries `data-walk-target`, the id the keyboard's walk knows it by:
@@ -69,7 +69,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-const { epic, foldLabel, inside, insideShown, openLabel } = useGraphFrameWords({
+const { goal, foldLabel, inside, insideShown, openLabel } = useGraphFrameWords({
   far: () => far,
   frame: () => frame,
   overview: () => overview,
@@ -77,23 +77,23 @@ const { epic, foldLabel, inside, insideShown, openLabel } = useGraphFrameWords({
 })
 
 const foldTarget = computed(() => `frame:${frame.id}:fold`)
-/** The keyboard's rule: hidden in the overview where the epic's button stands beside it. */
+/** The keyboard's rule: hidden in the overview where the goal's button stands beside it. */
 const foldShown = computed(() => foldIsTarget(frame, overview))
 const openTarget = computed(() => `frame:${frame.id}`)
 
-const title = computed(() => epic.value?.title ?? t('graph.frame.noEpic'))
+const title = computed(() => goal.value?.title ?? t('graph.frame.noParent'))
 /** Far out the count takes the band, and the reference stays in the button's name. */
 const referenceShown = computed(() => !(far && inside.value))
 /** Zoomed out the line holds the reference and the work moving; with neither it takes no row. */
 const lineShown = computed(() => !overview || referenceShown.value || working > 0)
 
 /**
- * The open target is a button only where there is an epic to open; over the
- * work under no epic the same row is plain text.
+ * The open target is a button only where there is a goal to open; over the
+ * work under no goal the same row is plain text.
  */
-const openTag = computed(() => (epic.value ? 'button' : 'span'))
+const openTag = computed(() => (goal.value ? 'button' : 'span'))
 /** What only the button carries: plain text has no type, name, walk target or stop. */
-const asButton = <T,>(value: T): T | undefined => (epic.value ? value : undefined)
+const asButton = <T,>(value: T): T | undefined => (goal.value ? value : undefined)
 /** What only a header on the field carries: one drawn to be measured is reached by nothing. */
 const walked = <T,>(value: T): T | undefined => (measure ? undefined : value)
 const openType = computed(() => asButton('button'))
@@ -102,10 +102,10 @@ const openWalk = computed(() => walked(asButton(openTarget.value)))
 const openTab = computed(() => asButton(tabIndex(openTarget.value)))
 /**
  * Zoomed out a header shows less than it is, so the pointer is told the rest, as a card is:
- * on the epic's button, or over the work under no epic on the fold, its one button.
+ * on the goal's button, or over the work under no goal on the fold, its one button.
  */
 const openHint = computed(() => (overview ? openName.value : undefined))
-const foldHint = computed(() => (overview && !epic.value ? foldLabel.value : undefined))
+const foldHint = computed(() => (overview && !goal.value ? foldLabel.value : undefined))
 
 const head = useTemplateRef<HTMLElement>('head')
 const { fit, secondRow } = useGraphBandFit({
@@ -139,15 +139,15 @@ function tabIndex(target: string): number {
 }
 
 function onOpen() {
-  if (epic.value) emit('open', epic.value.reference)
+  if (goal.value) emit('open', goal.value.reference)
 }
 
 function onOpenFocus() {
-  if (epic.value) emit('focus', openTarget.value)
+  if (goal.value) emit('focus', openTarget.value)
 }
 
 function onOpenBlur() {
-  if (epic.value) emit('blur', openTarget.value)
+  if (goal.value) emit('blur', openTarget.value)
 }
 </script>
 
@@ -187,7 +187,7 @@ function onOpenBlur() {
       <GraphFrameLine
         v-if="lineShown"
         :style="referenceWidth"
-        :epic="epic"
+        :goal="goal"
         :named="referenceShown"
         :overview="overview"
         :still="still"
@@ -196,7 +196,7 @@ function onOpenBlur() {
         :wraps="bandWraps"
       />
       <span
-        v-if="!overview && epic"
+        v-if="!overview && goal"
         v-slash-breaks="title"
         v-tooltip.clipped="title"
         class="graph-frame-title"
@@ -232,7 +232,7 @@ function onOpenBlur() {
 /* One column with the frame's cards: the chevron, the reference line beside it, the
    title and the counts under them, the edge across, and what a fold hides under that. */
 .graph-frame-head {
-  /* The chevron's corner the epic's button leaves to the fold: as wide as the chevron and
+  /* The chevron's corner the goal's button leaves to the fold: as wide as the chevron and
      the air after it, as tall as the reference line (`--font-detail`) and the air under it. */
   --notch-inline: calc(16px + var(--space-1));
   --notch-block: calc(var(--font-size-dense) * var(--line-height-snug) + var(--space-half));
@@ -287,7 +287,7 @@ function onOpenBlur() {
 
 /* Beside a fold, the button's face and ring follow what it draws, the reference line after
    the chevron and the title and the counts under both, and leave the chevron's corner to the
-   fold: a box's face and ring took the chevron in, as if it were the epic's. */
+   fold: a box's face and ring took the chevron in, as if it were the goal's. */
 .graph-frame-head:not(.overview) .graph-frame-open.folds[data-walk-target] {
   --ring-out: calc(var(--ring-air) + var(--ring));
 
@@ -382,7 +382,7 @@ function onOpenBlur() {
    grown with the field, as a zoomed-out card's are, over a thicker edge. The whole
    band is the one button, and its target runs on into the air above and below
    it, which the layout leaves empty: 36px, the least air between two frames, so
-   the target stops short of the next header. The work under no epic has no
+   the target stops short of the next header. The work under no goal has no
    reference, and keeps its name instead, and its fold, the one button its header
    has (`foldIsTarget`). */
 .graph-frame-head.overview {

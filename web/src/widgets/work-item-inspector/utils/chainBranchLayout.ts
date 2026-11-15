@@ -26,8 +26,10 @@ const STAGE: Record<ChainGroup, LaneStage> = {
   review: 'current',
   active: 'current',
   blocked: 'ahead',
-  queued: 'ahead',
-  backlog: 'ahead',
+  containers: 'ahead',
+  ready: 'ahead',
+  triage: 'ahead',
+  deferred: 'ahead',
 }
 
 /** The source of a fork: a lane and the index of the task in it, -1 for the root itself. */
@@ -42,7 +44,7 @@ export interface BranchLane {
   fork: LaneFork | null
   /** Each member's group, in the same order as `members`. */
   groups: ChainGroup[]
-  /** The lane's identity: its parent's reference, or the empty string for no epic. */
+  /** The lane's identity: its parent's reference, or the empty string for no goal. */
   key: string
   members: ChainMember[]
   /** The root's own children. */
@@ -80,7 +82,7 @@ function laneOrder(left: ChainMember, right: ChainMember): number {
   if (step) return step
   if (leftGroup === 'done')
     return (left.closed_at ?? '').localeCompare(right.closed_at ?? '') || byAge(left, right)
-  return Number(right.ready) - Number(left.ready) || byAge(left, right)
+  return Number(right.workable) - Number(left.workable) || byAge(left, right)
 }
 
 interface Lane extends BranchLane {
@@ -129,9 +131,9 @@ function sourcesOf(context: ForkContext, id: string): string[] {
 }
 
 /**
- * Where a lane may fork from, best first: where its own epic was discovered,
- * when that epic is in the chain; then where each of its members was, earliest
- * member first; then the epic's own place in its lane.
+ * Where a lane may fork from, best first: where its own goal was discovered,
+ * when that goal is in the chain; then where each of its members was, earliest
+ * member first; then the goal's own place in its lane.
  */
 function forkCandidates(lane: Lane, context: ForkContext): LaneFork[] {
   const candidates: LaneFork[] = []
@@ -143,11 +145,11 @@ function forkCandidates(lane: Lane, context: ForkContext): LaneFork[] {
     const at = context.placed.get(source)
     if (at && at.lane !== lane) candidates.push({ lane: at.lane.key, index: at.index })
   }
-  const epic = lane.reference === null ? undefined : findMember(context, lane.reference)
-  const discovered = [...(epic ? [epic] : []), ...[...lane.members].sort(byAge)]
+  const goal = lane.reference === null ? undefined : findMember(context, lane.reference)
+  const discovered = [...(goal ? [goal] : []), ...[...lane.members].sort(byAge)]
   for (const member of discovered)
     for (const source of sourcesOf(context, member.work_item_id)) add(source)
-  const home = epic && context.placed.get(epic.work_item_id)
+  const home = goal && context.placed.get(goal.work_item_id)
   if (home && home.lane !== lane) candidates.push({ lane: home.lane.key, index: home.index })
   return candidates
 }

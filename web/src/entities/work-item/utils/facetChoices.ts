@@ -3,8 +3,9 @@
  * card draws the chosen one. Kept apart from the facet registry it reads from, which is the
  * one place a mark is built.
  */
-import { kindMark, priorityMark, stateMark } from '@/entities/work-item/utils/facets.ts'
+import { kindMark, priorityMark } from '@/entities/work-item/utils/facets.ts'
 import type { FacetMark, FacetRule, FacetSubject } from '@/entities/work-item/utils/facets.ts'
+import { stateMark } from '@/entities/work-item/utils/standingMark.ts'
 
 import { PRIORITIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -17,7 +18,7 @@ export type FacetChoice =
   | { facet: 'kind'; value: WorkItemBrief['kind'] }
   | { facet: 'priority'; value: WorkItemBrief['priority'] }
   /** `value` is what the menu chooses: a workflow state's key, or a category. */
-  | { facet: 'state'; state: FacetSubject['state']; value: string }
+  | { facet: 'state'; state: NonNullable<FacetSubject['state']>; value: string }
 
 /** The kinds as a menu offers them, in the order of the model's vocabulary. */
 export const KIND_CHOICES: readonly FacetChoice[] = WORK_ITEM_KINDS.map((value) => ({
@@ -42,5 +43,5 @@ const CHOICE_RULE: FacetRule = { form: 'glyph-word', plain: true }
 export function choiceMark(choice: FacetChoice): FacetMark {
   if (choice.facet === 'kind') return kindMark(choice.value, CHOICE_RULE)
   if (choice.facet === 'priority') return priorityMark(choice.value, CHOICE_RULE)
-  return stateMark(choice.state, CHOICE_RULE.form)
+  return stateMark({ state: choice.state }, CHOICE_RULE.form)
 }

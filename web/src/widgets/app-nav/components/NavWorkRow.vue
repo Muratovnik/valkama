@@ -5,7 +5,7 @@
  * glyph, its title, and how many agents are on it. A row of the work to follow now has a
  * second line under the title, smaller and muted: the state in a word, how long, and where it
  * belongs (`secondLine`). A row in a fold or among the pinned keeps to one line, an item's
- * epic before its title.
+ * goal before its title.
  *
  * An item's row is one link to its card and a session's row is one button that opens the
  * session through the list's one opener (`useRowOpen`), whose panel outlives the row: its box
@@ -99,8 +99,8 @@ const sign = computed(() => {
 })
 
 const title = computed(() => rowTitle(t, props.entry))
-const epic = computed(() =>
-  props.entry.kind === 'item' && props.lines === 1 ? props.entry.epic : null,
+const goal = computed(() =>
+  props.entry.kind === 'item' && props.lines === 1 ? props.entry.goal : null,
 )
 const detail = computed(() => (props.lines === 2 ? secondLine(t, props.entry, now.value) : ''))
 const sentence = computed(() => rowSentence(words, props.entry, now.value))
@@ -211,7 +211,7 @@ function press(event: MouseEvent) {
       class="nav-row-link"
       :aria-label="sentence"
       :detail="detail"
-      :epic="epic"
+      :goal="goal"
       :meta="meta"
       :number="number"
       :title="title"

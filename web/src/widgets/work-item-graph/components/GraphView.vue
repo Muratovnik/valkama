@@ -58,15 +58,15 @@ import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 const props = defineProps<{
   edges: PlanningEdge[]
-  epicId: string | null
   items: WorkItemBrief[]
   open: boolean
   scopeKind: GraphScope['kind']
+  scopeRootId: string | null
   space: string
   version: number
   /**
-   * The branch of the chain the card chose: the epic it was filed under (`''`
-   * for none), its members, and that epic's own id when the chain holds it.
+   * The branch of the chain the card chose: the goal it was filed under (`''`
+   * for none), its members, and that goal's own id when the chain holds it.
    */
   branch?: { head: string | null; members: readonly string[]; reference: string } | null
   /** The chain this field is scoped to, named in its header chip. */
@@ -78,7 +78,7 @@ const props = defineProps<{
   /** What an agent's session is doing now on each item that has live work, by id. */
   live?: Readonly<Record<string, LiveWork>>
   selectedId?: string | null
-  /** The whole space, when `items` is what a filter let through: frames count their epic's work. */
+  /** The whole space, when `items` is what a filter let through: frames count their goal's work. */
   spaceItems?: WorkItemBrief[]
 }>()
 
@@ -109,7 +109,7 @@ const {
 } = useGraphProjection(
   () => ({
     edges: props.edges,
-    epicId: props.epicId,
+    scopeRootId: props.scopeRootId,
     live: props.live,
     members: props.chain?.members,
     nodes: props.items,
@@ -202,12 +202,12 @@ const liveSigns = computed(() =>
 )
 const liveOf = (node: PlacedNode) => live.value[node.work_item_id] ?? null
 
-/** A card standing in a drawn frame: the frame names its epic, so the card does not. */
+/** A card standing in a drawn frame: the frame names its goal, so the card does not. */
 const isFramed = (node: PlacedNode) => frameById.value.has(node.frameId)
 
 const { inChain, isChainRoot, isRecessed, legend, nodeChainGroup, parentReference, referenceById } =
   useGraphNodeMarks({
-    epicId: () => props.epicId,
+    scopeRootId: () => props.scopeRootId,
     focusSet,
     items: () => props.items,
     members: () => props.chain?.members,
@@ -215,7 +215,7 @@ const { inChain, isChainRoot, isRecessed, legend, nodeChainGroup, parentReferenc
     scopeKind: () => props.scopeKind,
   })
 
-/** The epic chip, on a card no frame round it names. */
+/** The goal chip, on a card no frame round it names. */
 function chipFor(node: PlacedNode): string | undefined {
   return isFramed(node) ? undefined : parentReference(node)
 }
@@ -237,12 +237,12 @@ const {
   branch: () => branchFrame.value,
   flowId: GRAPH_FLOW_ID,
   placed,
-  rootId: () => (inChain.value ? props.epicId : null),
+  rootId: () => (inChain.value ? props.scopeRootId : null),
   selectedId: () => props.selectedId ?? null,
   scopes: [
     () => props.space,
     () => props.scopeKind,
-    () => props.epicId,
+    () => props.scopeRootId,
     () => props.branch?.reference,
   ],
   narrowings: [() => props.filter, showDone],
@@ -257,7 +257,7 @@ const keepDone = computed(() => inChain.value && hiddenDone.value > 0)
  */
 const switchCounts = computed(() => {
   if (props.scopeKind !== 'all') return { open: openTotal.value, done: hiddenDone.value }
-  const open = props.items.filter((item) => !item.state.is_terminal).length
+  const open = props.items.filter((item) => item.open).length
   return { open, done: props.items.length - open }
 })
 const hasEdges = computed(() => Boolean(placed.value?.edges.length))

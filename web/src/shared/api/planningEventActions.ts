@@ -29,6 +29,9 @@ export const EVENT_ACTIONS = [
   'mentioned',
   'labels_changed',
   'overridden',
+  'accepted',
+  'opened',
+  'child_left',
 ] as const
 
 /** The longest detail any event but `labels_changed` carries. */

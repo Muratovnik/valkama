@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * One member's share of an epic's work, on its row of the epic's chain: the time on the clock
- * and the estimated cost, as the epic's own line says them. The share comes from the epic's own
+ * One member's share of a goal's work, on its row of the goal's chain: the time on the clock
+ * and the estimated cost, as the goal's own line says them. The share comes from the goal's own
  * usage read, which lists every item under it, so a row costs no read of its own; a member that
  * read does not list, or one nobody worked on, says nothing.
  */

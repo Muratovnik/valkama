@@ -18,7 +18,7 @@ import { messages } from '@/shared/i18n/index.ts'
 
 function member(
   number: number,
-  state: 'backlog' | 'done',
+  state: 'triage' | 'done',
   overrides: Partial<ChainMember> = {},
 ): ChainMember {
   const terminal = state === 'done'
@@ -26,18 +26,21 @@ function member(
     work_item_id: `00000000-0000-4000-8000-0000000000${String(number).padStart(2, '0')}`,
     reference: `MAIN-${number}`,
     title: `Chain item ${number}`,
+    kind: 'task',
     state: {
       key: state,
-      name: terminal ? 'Done' : 'Backlog',
-      category: terminal ? 'completed' : 'backlog',
+      name: terminal ? 'Done' : 'Triage',
+      category: terminal ? 'completed' : 'triage',
       is_terminal: terminal,
     },
+    open: !terminal,
+    container_state: null,
     claim_ref: '',
     claim_state: null,
     parent_reference: 'MAIN-1',
     created_at: '2026-10-20T10:00:00Z',
     closed_at: terminal ? '2026-10-29T10:00:00Z' : null,
-    ready: false,
+    workable: false,
     rank: number,
     ...overrides,
   }
@@ -62,8 +65,8 @@ function mountMembers(members: ChainMember[], waiting: Map<string, string>) {
 }
 
 describe('chain member rows', () => {
-  const workable = member(2, 'backlog', { ready: true })
-  const waiting = member(3, 'backlog', { ready: false })
+  const workable = member(2, 'triage', { workable: true })
+  const waiting = member(3, 'triage', { workable: false })
   const finished = member(4, 'done')
   const members = [workable, waiting, finished]
 

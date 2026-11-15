@@ -107,7 +107,7 @@ for (const width of [1440, 1024, 390]) {
     await expect(drawer.locator('.drawer-frame-content .ref-row')).toHaveCount(0)
     await expect(drawer.locator('.identity-source')).toHaveAttribute(
       'aria-label',
-      /docs\/plans\/platform\.md#kb:arch-plan$/u,
+      /docs\/plans\/platform\.md#kb:architecture$/u,
     )
 
     const overflow = await page.evaluate(
@@ -305,16 +305,20 @@ for (const width of [1440, 390]) {
 }
 
 /**
- * Where the head would give a reason in place of the action — an epic, an item
+ * Where the head would give a reason in place of the action — a goal, an item
  * waiting on a blocker — the reason is a fact and goes with the facts: the bar has
  * nothing to press, and the title keeps its room.
  */
-test('a read-down epic has no action in its bar and its reason goes with the facts', async ({
+test('a read-down goal has no action in its bar and its reason goes with the facts', async ({
   page,
 }) => {
-  const epic = {
+  const goal = {
     ...workItem,
-    container: true,
+    open: true,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
     claim: null,
     claim_ref: '',
     description: Array.from({ length: 40 }, (_, index) => `Paragraph ${index + 1}.`).join(
@@ -331,7 +335,7 @@ test('a read-down epic has no action in its bar and its reason goes with the fac
           state: {
             interface_version: 'valkama-ui-state',
             status: 'ready',
-            payload: { work_item: epic },
+            payload: { work_item: goal },
           },
         },
       }),

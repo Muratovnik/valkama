@@ -39,9 +39,7 @@ export function useEntrySteps(entry: () => ThreadComment, threadKey: () => strin
   const card = inject(CARD_STEPS, null)
   const forms = injectThreadForms()
   const points = computed(() => listPoints(textsOf(entry())))
-  const offered = computed(
-    () => card !== null && !card.item().state.is_terminal && points.value.length > 0,
-  )
+  const offered = computed(() => card !== null && card.item().open && points.value.length > 0)
   const open = computed(() => offered.value && forms.stepsOpen(threadKey(), entry().id))
   /** How many steps this entry's list gave in the last write, until something else opens. */
   const added = computed(() =>

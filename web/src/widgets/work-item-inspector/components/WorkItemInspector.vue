@@ -14,7 +14,7 @@
  *
  * The head scrolls with the content and reads as who the item is, then what holds
  * for it, then what to do: the identity line in the bar, the title under it, the
- * facts under that — the state as the menu that moves it, the priority and the epic,
+ * facts under that — the state as the menu that moves it, the priority and the parent,
  * then the holder with the one action at its end, then the labels — and the sections.
  * It used to put a full-width write row and a section before the facts, which started
  * half way down the drawer. The writes refuse rather than force: a refusal shows the
@@ -68,6 +68,7 @@ import { provideMissingPlaces } from '@/features/session-open/missingPlaces.ts'
 import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
 
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -164,7 +165,7 @@ const { offersExecution, section, sections, shownSection, tabs } = useInspectorS
   projectId: () => props.projectId,
   agents: () => (pending.value ? null : agentCount(item.value?.agents ?? [], spent.value)),
   // An item with children has a chain before it is read; another, once the read says so.
-  chained: () => (item.value ? item.value.container || chain.grown.value : null),
+  chained: () => item.value && (WORK_ITEM_TREE.isContainer(item.value) || chain.grown.value),
 })
 
 async function load() {

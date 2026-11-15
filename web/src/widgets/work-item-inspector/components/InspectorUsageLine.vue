@@ -35,7 +35,7 @@ function costWords(usage: ItemUsage): string {
 const facts = computed(() => {
   const shown = usage.value
   if (!shown) return []
-  const label = t(shown.scope === 'item' ? 'workItem.usage.work' : 'workItem.usage.workEpic')
+  const label = t(shown.scope === 'item' ? 'workItem.usage.work' : 'workItem.usage.workTree')
   return [
     { key: 'time', text: time(shown.elapsed_seconds, isEstimated(shown)) },
     { key: 'cost', text: costWords(shown) },

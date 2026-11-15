@@ -71,7 +71,7 @@ const groups = computed(() =>
 /**
  * A group of more than five links opens folded to its heading, which counts them by state,
  * so the groups after it and the references stand within reach; a shorter group opens. An
- * epic's fourteen «Led to» rows held everything under them a long scroll away.
+ * goal's fourteen «Led to» rows held everything under them a long scroll away.
  */
 const FOLD_PAST = 5
 const isOpen = (group: Group) => opened.value[group.key] ?? group.links.length <= FOLD_PAST

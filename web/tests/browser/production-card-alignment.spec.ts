@@ -120,7 +120,7 @@ for (const locale of ['ru', 'en'] as const) {
       }) => {
         await openCard(page, locale, width, { ...FULL_HEAD, priority })
         const words = await trimmedWords(page)
-        // State, question, priority and epic at least: a head cannot pass by trimming fewer.
+        // State, question, priority and goal at least: a head cannot pass by trimming fewer.
         expect(words.length).toBeGreaterThanOrEqual(4)
         expect(words.map(({ text }) => text)).toContain('MAIN-12')
         for (const { cuts, text } of words) expect(cuts, `the letters of “${text}”`).toEqual([])

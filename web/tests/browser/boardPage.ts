@@ -104,7 +104,7 @@ export const tiles = (where: Locator) =>
     .locator('li[data-reference]')
     .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.reference))
 
-export async function openBoard(page: Page, state: Record<string, string> = { group: 'epic' }) {
+export async function openBoard(page: Page, state: Record<string, string> = { group: 'goal' }) {
   await page.goto(boardRoute(state))
   await expect(page.locator('.work-item-board')).toBeVisible()
   await expect(page.locator('.work-item-board [data-reference]').first()).toBeVisible()

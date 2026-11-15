@@ -83,16 +83,16 @@ export function useGraphKeyboard(input: KeyboardInput) {
   const placedNode = (id: string | null) =>
     id === null ? undefined : targets.value.find((target) => target.id === id)
 
-  /** The epic's button beside a header's fold, while the fold itself is not drawn. */
+  /** The goal's button beside a header's fold, while the fold itself is not drawn. */
   function besideFold(id: string | null): string | null {
     const frameId = id === null ? null : foldOf(id)
-    const epic = frameId === null ? null : frameTarget(frameId)
-    return epic !== null && placedNode(epic) ? epic : null
+    const goal = frameId === null ? null : frameTarget(frameId)
+    return goal !== null && placedNode(goal) ? goal : null
   }
 
   /**
    * The stop: the target the keyboard stood on, while drawn; a header's fold the
-   * overview hides gives way to the epic's button beside it, and comes back at
+   * overview hides gives way to the goal's button beside it, and comes back at
    * reading size; once a fold hid the target, the fold button of the innermost
    * frame round it still drawn; else the anchor.
    */

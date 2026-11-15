@@ -60,7 +60,7 @@ describe('the branch map', () => {
     // names it, and so is every count: the key once said «In progress» over a
     // list headed «Development».
     expect(wrapper.get('figcaption').text()).toBe(
-      'Branch map: 2 lanes, 40 items; Done 18, Code review 1, Development 4, Blocked 1, Todo 3, Backlog 13.',
+      'Branch map: 2 lanes, 40 items; Done 18, Code review 1, Development 4, Blocked 1, Ready 3, Triage 13.',
     )
     // The key is where the section says what stands where, so each word has its figure.
     expect(
@@ -69,7 +69,7 @@ describe('the branch map', () => {
         .map(
           (entry) => `${entry.get('.state-label').text()} ${entry.get('.branch-key-count').text()}`,
         ),
-    ).toEqual(['Done 18', 'Code review 1', 'Development 4', 'Blocked 1', 'Todo 3', 'Backlog 13'])
+    ).toEqual(['Done 18', 'Code review 1', 'Development 4', 'Blocked 1', 'Ready 3', 'Triage 13'])
     expect(wrapper.findAll('.branch-map-label').map((label) => label.text())).toEqual([
       'MAP-1',
       'no parent',
@@ -80,8 +80,8 @@ describe('the branch map', () => {
       '6 of 20 done',
     ])
     expect(lanes(wrapper).map((lane) => lane.attributes('aria-label'))).toEqual([
-      'Lane MAP-1 Root: 20 items; Done 12, Code review 1, Development 2, Backlog 5',
-      'Lane no parent: 20 items; Done 6, Development 2, Blocked 1, Todo 3, Backlog 8',
+      'Lane MAP-1 Root: 20 items; Done 12, Code review 1, Development 2, Triage 5',
+      'Lane no parent: 20 items; Done 6, Development 2, Blocked 1, Ready 3, Triage 8',
     ])
     wrapper.unmount()
   })
@@ -90,14 +90,14 @@ describe('the branch map', () => {
     const chain = chainOf(ROOT, [
       mapMember('MAP-10', 'active', 'MAP-1', { holder: 'codex' }),
       mapMember('MAP-11', 'active', 'MAP-1'),
-      mapMember('MAP-12', 'backlog', 'MAP-1'),
+      mapMember('MAP-12', 'triage', 'MAP-1'),
     ])
     const [first] = chain.members
     Object.assign(first.state, { key: 'pairing', name: 'Pairing' })
     const wrapper = mountMap(chain)
     expect(wrapper.findAll('.branch-key .state-label').map((label) => label.text())).toEqual([
       'In progress',
-      'Backlog',
+      'Triage',
     ])
     wrapper.unmount()
   })
@@ -107,42 +107,39 @@ describe('the branch map', () => {
     const plain = chainOf(ROOT, [
       mapMember('MAP-10', 'done', 'MAP-1'),
       mapMember('MAP-11', 'active', 'MAP-1', { holder: 'codex' }),
-      mapMember('MAP-12', 'backlog', 'MAP-1'),
+      mapMember('MAP-12', 'triage', 'MAP-1'),
     ])
     const wrapper = mountMap(plain)
     const legend = wrapper.get('.branch-key')
     expect(legend.findAll('.state-label').map((label) => label.text())).toEqual([
       'Done',
       'Development',
-      'Backlog',
+      'Triage',
     ])
     // No key speaks for a state no member is in, the emphatic one least of all.
     expect(legend.find('[data-emphasis="strong"]').exists()).toBe(false)
     wrapper.unmount()
 
-    // Queued work is keyed as queued work, though it shares the backlog's grey.
+    // Ready work is keyed as ready work, though it shares the grey of untriaged work.
     const queued = mountMap(
-      chainOf(ROOT, [mapMember('MAP-10', 'queued', 'MAP-1'), mapMember('MAP-11', 'done', 'MAP-1')]),
+      chainOf(ROOT, [mapMember('MAP-10', 'ready', 'MAP-1'), mapMember('MAP-11', 'done', 'MAP-1')]),
     )
     expect(queued.findAll('.branch-key .state-label').map((label) => label.text())).toEqual([
       'Done',
-      'Todo',
+      'Ready',
     ])
     queued.unmount()
   })
 
   it('keeps no key for one state, however many lanes hold it', () => {
-    const loneLane = mountMap(chainOf(ROOT, [mapMember('MAP-10', 'backlog', null)]))
+    const loneLane = mountMap(chainOf(ROOT, [mapMember('MAP-10', 'triage', null)]))
     expect(loneLane.find('.branch-key').exists()).toBe(false)
     // The caption still says it: the key was only ever for the eye.
-    expect(loneLane.get('figcaption').text()).toContain('Backlog 1')
+    expect(loneLane.get('figcaption').text()).toContain('Triage 1')
     loneLane.unmount()
 
     const twoLanes = mountMap(
-      chainOf(ROOT, [
-        mapMember('MAP-10', 'backlog', null),
-        mapMember('MAP-11', 'backlog', 'MAP-1'),
-      ]),
+      chainOf(ROOT, [mapMember('MAP-10', 'triage', null), mapMember('MAP-11', 'triage', 'MAP-1')]),
     )
     expect(twoLanes.find('.branch-key').exists()).toBe(false)
     expect(twoLanes.findAll('button.branch-map-label')).toHaveLength(2)
@@ -151,7 +148,7 @@ describe('the branch map', () => {
 
   it('offers no choice of lane where there is one lane, and still names it', async () => {
     const wrapper = mountMap(
-      chainOf(ROOT, [mapMember('MAP-10', 'backlog', null), mapMember('MAP-11', 'done', null)]),
+      chainOf(ROOT, [mapMember('MAP-10', 'triage', null), mapMember('MAP-11', 'done', null)]),
     )
     expect(wrapper.find('button').exists()).toBe(false)
     const label = wrapper.get('.branch-map-label')
@@ -188,7 +185,7 @@ describe('the branch map', () => {
   it('opens the task a click lands on, through the same event as the member list', async () => {
     const wrapper = mountMap()
     await lanes(wrapper)[0].trigger('click', at(12))
-    // The no-epic lane starts four units in, after the task it was discovered from.
+    // The no-goal lane starts four units in, after the task it was discovered from.
     await lanes(wrapper)[1].trigger('click', at(4 + 8))
     expect(wrapper.emitted('open')).toEqual([['MAP-1013'], ['MAP-1109']])
     wrapper.unmount()
@@ -247,7 +244,7 @@ describe('the branch map', () => {
     expect(said()).toBe('MAP-1014 · Chain step 1014 · Development · codex')
     expect(trunk.attributes('aria-valuenow')).toBe('14')
     await trunk.trigger('keydown', { key: 'End' })
-    expect(said()).toBe('MAP-1020 · Chain step 1020 · Backlog')
+    expect(said()).toBe('MAP-1020 · Chain step 1020 · Triage')
     await trunk.trigger('keydown', { key: 'ArrowRight' })
     expect(trunk.attributes('aria-valuenow')).toBe('20')
     await trunk.trigger('keydown', { key: 'Home' })

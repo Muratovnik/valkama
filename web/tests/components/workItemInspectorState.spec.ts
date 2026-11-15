@@ -13,6 +13,15 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 
+import {
+  deferred,
+  getButton,
+  workItemFixture as record,
+  inspectorResourceRef as resourceRef,
+  stateOf,
+  value,
+} from '../fixtures/workItem.ts'
+
 // The card asks for its chain on every open; this spec is about something else.
 vi.mock('@/shared/api/planningChainApi.ts', async () => {
   const { noChainModule } = await import('../support/noChain.ts')
@@ -45,14 +54,6 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   selectWorkItemSummary: vi.fn(),
   updateWorkItemDescription: vi.fn(),
 }))
-
-import {
-  deferred,
-  getButton,
-  workItemFixture as record,
-  inspectorResourceRef as resourceRef,
-  value,
-} from '../fixtures/workItem.ts'
 
 const passThrough = { template: '<div><slot /></div>' }
 const drawerFrame = {
@@ -314,22 +315,23 @@ describe('WorkItemInspector resource state', () => {
     async ({ terminal, writable, holder, action }) => {
       const claimed = Boolean(holder)
       const item = record('Ownership task', 1)
-      item.state.is_terminal = terminal
+      item.state = { ...stateOf(item), is_terminal: terminal }
+      item.open = !terminal
       item.claim_ref = holder
       vi.mocked(fetchWorkItem).mockResolvedValue(item)
       const wrapper = mountInspector(true)
-      const nextState = { ...item.state, state_id: 'next-state', key: 'queued', name: 'Queued' }
+      const nextState = { ...stateOf(item), state_id: 'next-state', key: 'queued', name: 'Queued' }
       await wrapper.setProps({
         writable,
         workflow: {
           workflow_id: 'workflow',
           name: 'Task workflow',
-          initial_state_id: item.state.state_id,
+          initial_state_id: stateOf(item).state_id,
           states: [
-            { ...item.state, position: 0 },
+            { ...stateOf(item), position: 0 },
             { ...nextState, position: 1 },
           ],
-          transitions: [{ from: item.state.state_id, to: nextState.state_id }],
+          transitions: [{ from: stateOf(item).state_id, to: nextState.state_id }],
         },
       })
       await flushPromises()

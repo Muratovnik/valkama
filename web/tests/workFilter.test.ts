@@ -53,9 +53,9 @@ describe('which items pass', () => {
       priority: 'low',
       labels: ['board'],
       claim_ref: 'claude (session 5937aa01-1234)',
-      ready: false,
+      workable: false,
     }),
-    boardItem(4, 'done', { kind: 'task', priority: 'high', claim_ref: 'codex', ready: false }),
+    boardItem(4, 'done', { kind: 'task', priority: 'high', claim_ref: 'codex', workable: false }),
   ]
 
   test('an empty filter lets everything through', () => {
@@ -128,7 +128,7 @@ describe('changing the filter', () => {
 
   test('the filter is never changed in place', () => {
     const before: WorkFilter = { text: '', kind: ['bug'] }
-    addToken(before, { facet: 'kind', value: 'epic' })
+    addToken(before, { facet: 'kind', value: 'goal' })
     removeToken(before, { facet: 'kind', value: 'bug' })
     assert.deepEqual(before, { text: '', kind: ['bug'] })
   })
@@ -338,7 +338,7 @@ describe('the route state', () => {
       text: '看'.repeat(240),
       labels: wide('a'),
       holder: wide('h'),
-      kind: ['bug', 'epic'],
+      kind: ['bug', 'goal'],
     }
     const { complete, state } = writeWorkFilter(
       { view: 'kanban' },
@@ -352,7 +352,7 @@ describe('the route state', () => {
     // Each value fit on its own; together they did not, so whole labels went.
     assert.ok((read.labels?.length ?? 0) + (read.holder?.length ?? 0) < 16)
     // What was kept is a prefix of each list, and the short facets survive.
-    assert.deepEqual(read.kind, ['bug', 'epic'])
+    assert.deepEqual(read.kind, ['bug', 'goal'])
     assert.deepEqual(read.labels, filter.labels?.slice(0, read.labels?.length ?? 0))
     assert.deepEqual(read.holder, filter.holder?.slice(0, read.holder?.length ?? 0))
     assert.equal(read.text, filter.text)

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 import { boardItem } from '../fixtures/board.ts'
-import { board, closedEpic, tile } from '../support/workItemBoardHarness.ts'
+import { board, closedGoal, tile } from '../support/workItemBoardHarness.ts'
 
 beforeEach(() => localStorage.clear())
 afterEach(() => {
@@ -21,10 +21,10 @@ afterEach(() => {
  */
 const finished: WorkItemBrief[] = [
   boardItem(1, 'backlog'),
-  boardItem(20, 'done', { parent_id: closedEpic.work_item_id, closed_at: '2026-10-02T09:00:00Z' }),
-  boardItem(21, 'done', { parent_id: closedEpic.work_item_id, closed_at: '2026-10-31T09:00:00Z' }),
-  boardItem(22, 'done', { parent_id: closedEpic.work_item_id, closed_at: '2026-10-20T09:00:00Z' }),
-  { ...closedEpic, closed_at: '2026-09-01T09:00:00Z' },
+  boardItem(20, 'done', { parent_id: closedGoal.work_item_id, closed_at: '2026-10-02T09:00:00Z' }),
+  boardItem(21, 'done', { parent_id: closedGoal.work_item_id, closed_at: '2026-10-31T09:00:00Z' }),
+  boardItem(22, 'done', { parent_id: closedGoal.work_item_id, closed_at: '2026-10-20T09:00:00Z' }),
+  { ...closedGoal, closed_at: '2026-09-01T09:00:00Z' },
 ]
 
 const doneTiles = (wrapper: ReturnType<typeof board>) =>
@@ -33,11 +33,11 @@ const doneTiles = (wrapper: ReturnType<typeof board>) =>
     .map((node) => node.attributes('data-reference'))
 
 describe('the Done column', () => {
-  it('stands the most recently closed first, flat and in an epic’s lane', async () => {
+  it('stands the most recently closed first, flat and in a goal’s lane', async () => {
     const flat = board({ items: finished, spaceItems: finished })
     expect(doneTiles(flat)).toEqual(['MAIN-21', 'MAIN-22', 'MAIN-20', 'MAIN-2'])
 
-    const grouped = board({ items: finished, spaceItems: finished, grouping: 'epic' })
+    const grouped = board({ items: finished, spaceItems: finished, grouping: 'goal' })
     // A lane with nothing open is folded, and its Done cell draws on request.
     await grouped.get('.lane-toggle[aria-expanded="false"]').trigger('click')
     await grouped.get('.lane-cell[data-state="done"] .lane-more').trigger('click')

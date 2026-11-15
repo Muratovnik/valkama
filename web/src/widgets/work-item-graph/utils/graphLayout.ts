@@ -12,7 +12,7 @@ import { frameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import type { FrameProjectionInput } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import {
   MARGIN,
-  NO_EPIC_FRAME,
+  NO_PARENT_FRAME,
   NODE_HEIGHT,
   NODE_WIDTH,
   rowOrder,
@@ -20,7 +20,9 @@ import {
 import type { PlacedFrame, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { layoutFrames } from '@/widgets/work-item-graph/utils/graphLayoutTree.ts'
 
-import { readyIds } from '@/shared/api/planningModel.ts'
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
+
+import { workableIds } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 /** The slice of the read model a graph draws: items and the links between them. */
@@ -156,11 +158,11 @@ export function flowEdge(
 
 /**
  * Which slice of the space the graph draws. `chain` is one chain of work: its
- * root (in `epicId`) and the members the chain endpoint named, nothing else.
+ * root (in `scopeRootId`) and the members the chain endpoint named, nothing else.
  */
 export interface GraphScope {
-  epicId: string | null
-  kind: 'all' | 'chain' | 'epic' | 'none'
+  kind: 'all' | 'chain' | 'none' | 'tree'
+  scopeRootId: string | null
   /**
    * What the operator folded and a filter let through, read only in the
    * whole space, which stands in frames.
@@ -170,50 +172,46 @@ export interface GraphScope {
   members?: readonly string[]
 }
 
-const WHOLE_SPACE: GraphScope = { kind: 'all', epicId: null }
+const WHOLE_SPACE: GraphScope = { kind: 'all', scopeRootId: null }
 
 function inScope(node: WorkItemBrief, scope: GraphScope): boolean {
-  if (scope.kind === 'epic') return node.parent_id === scope.epicId
+  if (scope.kind === 'tree') return node.parent_id === scope.scopeRootId
   if (scope.kind === 'none') return node.parent_id === null
   return true
 }
 
 /**
  * The part of a chain the graph draws: its root, its open members, and every
- * member that is the parent of another member — the epics the chain's work was
- * filed under — so an origin epic stays on the field even once it and all of
+ * member that is the parent of another member — the goals the chain's work was
+ * filed under — so an origin goal stays on the field even once it and all of
  * its work closed. Closed work is most of a chain that has run for a while —
  * four in five, in one that started this — and laying it all out cost seconds
  * and drew a field too small to read, so it is drawn only when asked for. The
- * root and the epics are drawn whatever their state: they are the chain's
+ * root and the goals are drawn whatever their state: they are the chain's
  * shape, and without them the open work has nothing to stand on.
  */
 function chainNodes(source: GraphSource, scope: GraphScope, showDone: boolean): WorkItemBrief[] {
-  const chain = new Set([scope.epicId, ...(scope.members ?? [])])
+  const chain = new Set([scope.scopeRootId, ...(scope.members ?? [])])
   const members = source.nodes.filter((node) => chain.has(node.work_item_id))
   if (showDone) return members
   // Every in-chain ancestor of open work is some member's parent, so this one
-  // set also keeps the epics open work is filed under, however deep.
+  // set also keeps the goals open work is filed under, however deep.
   const parents = new Set(members.map((node) => node.parent_id))
   return members.filter(
     (node) =>
-      node.work_item_id === scope.epicId ||
-      !node.state.is_terminal ||
-      parents.has(node.work_item_id),
+      node.work_item_id === scope.scopeRootId || node.open || parents.has(node.work_item_id),
   )
 }
 
 /**
- * The items the graph draws. A container is not work: it becomes the group chip
- * on its children, never a node. Container is the fact the server computed —
- * being somebody's parent — rather than the declared kind, so an ordinary task
- * that acquired children is grouped like one instead of drawn twice. Items in a
+ * The items the graph draws. A goal or a stage is not work: it becomes the frame
+ * round its children, never a node, as the tree of work reads one. Items in a
  * terminal state are archaeology and hidden unless asked for; in a healthy space
  * they outnumber open work. Terminal is asked of the workflow rather than
  * matched against a state named "done", so a renamed or a second closing state
  * still counts.
  *
- * A chain is the exception to the container rule: its root and its epics are
+ * A chain is the exception to the container rule: its root and its goals are
  * the shape of the chain, so they are drawn as nodes — see `chainNodes`.
  */
 export function workNodes(
@@ -224,7 +222,10 @@ export function workNodes(
   return scope.kind === 'chain'
     ? chainNodes(source, scope, showDone)
     : source.nodes.filter(
-        (node) => !node.container && (showDone || !node.state.is_terminal) && inScope(node, scope),
+        (node) =>
+          !WORK_ITEM_TREE.isContainer(node) &&
+          (showDone || WORK_ITEM_TREE.isOpen(node)) &&
+          inScope(node, scope),
       )
 }
 
@@ -242,8 +243,8 @@ export function doneCount(source: GraphSource, scope: GraphScope = WHOLE_SPACE):
 /**
  * ELK owns ranking, cycle handling, component packing and obstacle routing.
  *
- * The whole space is drawn as frames round its epics (`graphFrames`,
- * `graphLayoutTree`); a chain keeps its flat drawing, its root and epics as
+ * The whole space is drawn as frames round its goals (`graphFrames`,
+ * `graphLayoutTree`); a chain keeps its flat drawing, its root and goals as
  * nodes, because its progress is the card's map and not the field's.
  */
 export async function layout(
@@ -319,7 +320,7 @@ export async function layout(
       y: position.y,
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
-      frameId: node.parent_id ?? NO_EPIC_FRAME,
+      frameId: node.parent_id ?? NO_PARENT_FRAME,
     }
   })
   const edges = visible.map((edge): RoutedEdge => {
@@ -349,7 +350,7 @@ export async function layout(
 
 /** Items nothing open is blocking, which is what can be started right now. */
 export function frontier(source: GraphSource): WorkItemBrief[] {
-  const ready = readyIds(source.nodes)
+  const ready = workableIds(source.nodes)
   return source.nodes.filter((node) => ready.has(node.work_item_id))
 }
 

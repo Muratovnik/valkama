@@ -40,7 +40,8 @@ function landing(items: readonly WorkItemBrief[], rank: string | undefined): num
 
 /**
  * The space's items with one move applied, in the order the server would list
- * them: states in workflow order, each in its own order.
+ * them: states in workflow order, each in its own order, then the accepted open goals
+ * and stages, which stand in no state the workflow lists and keep their place there.
  *
  * An item or state the model does not know leaves the items as they were, so a
  * move that raced a deletion draws nothing rather than something invented.
@@ -59,7 +60,7 @@ export function placeLocally(
       state.state_id,
       items.filter(
         (candidate) =>
-          candidate.state.state_id === state.state_id && candidate.reference !== move.reference,
+          candidate.state?.state_id === state.state_id && candidate.reference !== move.reference,
       ),
     ]),
   )
@@ -71,8 +72,14 @@ export function placeLocally(
     is_terminal: target.is_terminal,
   }
   const destination = groups.get(target.state_id) ?? []
-  destination.splice(landing(destination, move.rank), 0, { ...item, state })
-  return states.flatMap((entry) => groups.get(entry.state_id) ?? [])
+  // A move into a finishing state closes the item, as the server will say it did.
+  destination.splice(landing(destination, move.rank), 0, {
+    ...item,
+    state,
+    open: !target.is_terminal,
+  })
+  const derived = items.filter((candidate) => candidate.state === null)
+  return [...states.flatMap((entry) => groups.get(entry.state_id) ?? []), ...derived]
 }
 
 /**
@@ -82,8 +89,8 @@ export function placeLocally(
  * and no tile is placed by hand. A tile dropped there from another column is
  * still moved there; it lands on top.
  */
-export function ordersByClosing(state: Pick<WorkflowState, 'category'>): boolean {
-  return state.category === 'completed'
+export function ordersByClosing(state: Pick<WorkflowState, 'category'> | null): boolean {
+  return state?.category === 'completed'
 }
 
 /** When an item closed, in ms; an item with no closing time yet has only just closed. */

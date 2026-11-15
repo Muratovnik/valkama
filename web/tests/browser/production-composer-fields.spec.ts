@@ -1,7 +1,7 @@
 /**
- * The new-task dialog chooses its epic and its labels by searching what the space has.
+ * The new-task dialog chooses its goal and its labels by searching what the space has.
  *
- * Through the real dialog over the board's own read: an epic found by a word of its
+ * Through the real dialog over the board's own read: a goal found by a word of its
  * title, one label the space already uses and one typed new, and what the create call
  * then sent. The lists stand under their fields, as wide as they are, at a desktop's width and
  * at a phone's, where each field takes the dialog's whole width rather than half of it.
@@ -16,8 +16,8 @@ import { identity, projectScope, workItem } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
-/** As long as a real epic's: at a half-width field's 172px it took six lines. */
-const EPIC_TITLE = 'Parser rework: one grammar for tables, front matter, footnotes and fenced code'
+/** As long as a real goal's: at a half-width field's 172px it took six lines. */
+const GOAL_TITLE = 'Parser rework: one grammar for tables, front matter, footnotes and fenced code'
 
 /** Where a box stands; a box with none is a failure of its own. */
 async function measured(box: Locator) {
@@ -26,24 +26,24 @@ async function measured(box: Locator) {
   return bounds ?? { x: 0, y: 0, width: 0, height: 0 }
 }
 
-/** The space as the board reads it, with an epic and a label more. */
+/** The space as the board reads it, with a goal and a label more. */
 async function openComposer(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page, {
     space: (model) => {
       const items = model.work_items as Record<string, unknown>[]
-      const epic = {
+      const goal = {
         ...items[0],
         work_item_id: identity(12),
         reference: 'MAIN-12',
         number: 12,
-        title: EPIC_TITLE,
-        kind: 'epic',
+        title: GOAL_TITLE,
+        kind: 'goal',
         claim_ref: '',
         claim_state: null,
         labels: ['backend'],
       }
-      return { ...model, work_items: [...items, epic] }
+      return { ...model, work_items: [...items, goal] }
     },
   })
   const sent: Record<string, unknown>[] = []
@@ -58,21 +58,21 @@ async function openComposer(page: Page, width: number) {
   return { dialog, sent }
 }
 
-test('an item is created with an epic found by search, a label the space has and a new one', async ({
+test('an item is created with a goal found by search, a label the space has and a new one', async ({
   page,
 }) => {
   const { dialog, sent } = await openComposer(page, 1280)
   await dialog.getByRole('textbox', { name: 'Title' }).fill('Ship the parser')
 
-  const epic = dialog.getByRole('combobox', { name: 'Parent', exact: true })
-  await expect(epic).toHaveValue('No parent')
-  await epic.click()
+  const goal = dialog.getByRole('combobox', { name: 'Parent', exact: true })
+  await expect(goal).toHaveValue('No parent')
+  await goal.click()
   await page.keyboard.type('rework')
   const list = page.getByRole('listbox', { name: 'Parent' })
-  await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${EPIC_TITLE}In progress`])
+  await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${GOAL_TITLE}In progress`])
   await page.keyboard.press('Enter')
   await expect(list).toHaveCount(0)
-  await expect(epic).toHaveValue(`MAIN-12 · ${EPIC_TITLE}`)
+  await expect(goal).toHaveValue(`MAIN-12 · ${GOAL_TITLE}`)
 
   const labels = dialog.getByRole('combobox', { name: 'Labels', exact: true })
   await labels.click()
@@ -103,7 +103,7 @@ test('an item is created with an epic found by search, a label the space has and
 })
 
 // Side by side on a desktop; one above the other on a phone, where half the dialog left an
-// epic's title 172px in its field and in its list, six lines of it there.
+// goal's title 172px in its field and in its list, six lines of it there.
 for (const { width, alone } of [
   { width: 1280, alone: false },
   { width: 390, alone: true },
@@ -143,42 +143,42 @@ for (const { width, alone } of [
   })
 }
 
-test('a pointer opens the epic list over an empty search, the chosen epic standing in it', async ({
+test('a pointer opens the goal list over an empty search, the chosen goal standing in it', async ({
   page,
 }) => {
   const { dialog } = await openComposer(page, 1280)
-  const epic = dialog.getByRole('combobox', { name: 'Parent', exact: true })
-  await expect(epic).toHaveValue('No parent')
-  await epic.click()
+  const goal = dialog.getByRole('combobox', { name: 'Parent', exact: true })
+  await expect(goal).toHaveValue('No parent')
+  await goal.click()
   const list = page.getByRole('listbox', { name: 'Parent' })
   await expect(list).toBeVisible()
   // Nothing painted as selected: the whole value stood highlighted on every press. The words
   // stay in sight as the field's placeholder, and whatever is typed searches from nothing.
-  await expect(epic).toHaveValue('')
-  await expect(epic).toHaveAttribute('placeholder', 'No parent')
+  await expect(goal).toHaveValue('')
+  await expect(goal).toHaveAttribute('placeholder', 'No parent')
   await page.keyboard.type('rew')
-  await expect(epic).toHaveValue('rew')
-  await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${EPIC_TITLE}In progress`])
+  await expect(goal).toHaveValue('rew')
+  await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${GOAL_TITLE}In progress`])
   // Left without a choice, the field says what is still chosen.
   await dialog.getByRole('heading', { name: 'New work' }).click()
   await expect(list).toHaveCount(0)
-  await expect(epic).toHaveValue('No parent')
-  await expect(epic).not.toHaveAttribute('placeholder')
+  await expect(goal).toHaveValue('No parent')
+  await expect(goal).not.toHaveAttribute('placeholder')
 })
 
-test('an epic chosen with the pointer leaves the caret in its field, as one chosen by keys does', async ({
+test('a goal chosen with the pointer leaves the caret in its field, as one chosen by keys does', async ({
   page,
 }) => {
   const { dialog } = await openComposer(page, 1280)
-  const epic = dialog.getByRole('combobox', { name: 'Parent', exact: true })
-  await epic.click()
+  const goal = dialog.getByRole('combobox', { name: 'Parent', exact: true })
+  await goal.click()
   const list = page.getByRole('listbox', { name: 'Parent' })
-  await list.getByRole('option', { name: new RegExp(`^MAIN-12 · ${EPIC_TITLE}`, 'u') }).click()
+  await list.getByRole('option', { name: new RegExp(`^MAIN-12 · ${GOAL_TITLE}`, 'u') }).click()
   await expect(list).toHaveCount(0)
-  await expect(epic).toHaveValue(`MAIN-12 · ${EPIC_TITLE}`)
+  await expect(goal).toHaveValue(`MAIN-12 · ${GOAL_TITLE}`)
   // The pressed option took the focus and went with the list: it fell to the page, and the
   // next Tab started from the top of the document.
-  await expect(epic).toBeFocused()
+  await expect(goal).toBeFocused()
   await page.keyboard.press('Shift+Tab')
   await expect(dialog.getByRole('combobox', { name: 'Labels', exact: true })).toBeFocused()
 

@@ -29,15 +29,24 @@ export const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
 const PLANNING_API = 'valkama-planning-api' as const
 
 export const STATE_CATEGORIES = [
-  'backlog',
-  'queued',
+  'triage',
+  'deferred',
+  'ready',
   'active',
   'review',
   'completed',
   'blocked',
   'cancelled',
 ] as const
-export const WORK_ITEM_KINDS = ['bug', 'epic', 'improvement', 'task'] as const
+/** A task kind, or a container: a goal, or a stage when it stands under a parent. */
+export const WORK_ITEM_KINDS = ['bug', 'goal', 'improvement', 'stage', 'task'] as const
+/**
+ * What an accepted open goal or stage derives from the work under it, in the order the
+ * work goes through them. It stands in no state a reader sees: its `state` is null.
+ */
+export const CONTAINER_STATES = ['not_started', 'in_progress', 'awaiting_confirmation'] as const
+/** Why accepted work was accepted. */
+const ACCEPTANCE_BASES = ['owner', 'assignment', 'inherited', 'label_rule', 'migrated'] as const
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 export const LINK_KINDS = ['blocks', 'discovered-from', 'duplicates', 'relates-to'] as const
 const REF_KINDS = ['commit', 'memory', 'session', 'url'] as const
@@ -112,7 +121,20 @@ const workItemBriefShape = {
   title: boundedText(TITLE, 200),
   kind: enumField(WORK_ITEM_KINDS),
   priority: enumField(PRIORITIES),
-  state: stateSchema,
+  /** Null for an accepted open goal or stage, which says what it derives in `container_state`. */
+  state: stateSchema.nullable(),
+  /** Whether work on it is still to finish, whatever its kind; `state` may be null. */
+  open: z.boolean(),
+  container_state: enumField(CONTAINER_STATES).nullable(),
+  /** Why and when the work was accepted; null while it is not. */
+  acceptance: strictObject({
+    basis: enumField(ACCEPTANCE_BASES),
+    at: boundedText(ISO, 96),
+  }).nullable(),
+  /** When it started: a task's own start, a container's earliest descendant's. */
+  started_at: boundedText(ISO, 96).nullable(),
+  /** The open items that block it, by reference. */
+  waits_for: boundedList(boundedText(WORK_ITEM_REFERENCE, 20), 500),
   claim_ref: actor(),
   claim_state: claimStateField(),
   parent_id: boundedText(UUID, 36).nullable(),
@@ -122,10 +144,8 @@ const workItemBriefShape = {
   revision: positiveInt(true),
   created_at: boundedText(ISO, 96),
   updated_at: boundedText(ISO, 96),
-  /** Somebody's parent, so grouping rather than work in itself. */
-  container: z.boolean(),
-  /** Startable right now: unheld, uncontained, unblocked, not yet started. */
-  ready: z.boolean(),
+  /** Workable now, by the take-next queue's rule: a task, unheld, unblocked, in triage or ready. */
+  workable: z.boolean(),
   /**
    * When a finished item closed: its latest transition. Null for open work, and
    * absent from a server that predates it.
@@ -138,10 +158,17 @@ const workItemBriefShape = {
    */
   last_claim_ref: holderField().nullable().optional(),
 }
+/** A record stands in a state or derives one as an accepted open container: one of the two. */
+const stateOrDerived = [
+  (item: { container_state: unknown; state: unknown }) =>
+    (item.state === null) !== (item.container_state === null),
+  { message: 'expected a state or a container state' },
+] as const
+
 const workItemBriefSchema = strictObject({
   ...workItemBriefShape,
   comment_count: positiveInt(true),
-})
+}).refine(...stateOrDerived)
 
 const summarySchema = strictObject({
   done: blankable(4000),
@@ -164,19 +191,25 @@ export const linkEndState = {
   state_unavailable: enumField(['state_missing'] as const)
     .nullable()
     .optional(),
+  /** What an end that is an accepted open goal or stage derives; such an end names no state. */
+  container_state: enumField(CONTAINER_STATES).nullable().optional(),
 }
 
-/** A state is either known or said to be unavailable, never neither. */
+const linkEnd = z.object(linkEndState)
+
+/**
+ * A state is known, derived by an accepted open container, or said to be unavailable:
+ * always one of the three.
+ */
 export const linkEndStateSaid = [
-  (link: {
-    is_terminal?: boolean | null
-    state_category?: string | null
-    state_unavailable?: string | null
-  }) =>
-    link.state_category === undefined ||
-    (link.state_category === null
-      ? link.is_terminal === null && typeof link.state_unavailable === 'string'
-      : typeof link.is_terminal === 'boolean' && link.state_unavailable === null),
+  (link: z.infer<typeof linkEnd>) => {
+    if (link.state_category === undefined) return true
+    if (link.state_category !== null)
+      return typeof link.is_terminal === 'boolean' && link.state_unavailable === null
+    if (typeof link.container_state === 'string')
+      return link.is_terminal === false && link.state_unavailable === null
+    return link.is_terminal === null && typeof link.state_unavailable === 'string'
+  },
   { message: 'Link state is neither known nor said to be unavailable' },
 ] as const
 
@@ -397,7 +430,7 @@ const workItemSchema = strictObject({
   requeued: stateMoveSchema.optional(),
   // The holder whose claim a close ended.
   released: holderField().optional(),
-})
+}).refine(...stateOrDerived)
 
 const spaceIdentityShape = {
   planning_space_id: boundedText(UUID, 36),
@@ -479,8 +512,10 @@ const readModelSchema = strictObject({
   })
   .refine(
     (payload) =>
-      payload.work_items.every((item) =>
-        payload.workflow?.states.some((state) => state.state_id === item.state.state_id),
+      payload.work_items.every(
+        (item) =>
+          item.state === null ||
+          payload.workflow?.states.some((state) => state.state_id === item.state?.state_id),
       ),
     { message: 'every item names a state its workflow declares' },
   )
@@ -507,6 +542,7 @@ const pendingSchema = strictObject({
 })
 
 export type WorkflowState = z.infer<typeof workflowStateSchema>
+export type ContainerState = (typeof CONTAINER_STATES)[number]
 export type WorkItemBrief = z.infer<typeof workItemBriefSchema>
 export type WorkItem = z.infer<typeof workItemSchema>
 export type WorkItemAgent = z.infer<typeof workItemAgentSchema>
@@ -539,26 +575,13 @@ export function readPending(value: unknown): PlanningPending | null {
   return parsed.success ? parsed.data : null
 }
 
-/** Items grouped by state, which is a view's decision and not the model's. */
-export function byState(
-  workflow: PlanningWorkflow,
-  items: readonly WorkItemBrief[],
-): { items: WorkItemBrief[]; state: WorkflowState }[] {
-  return [...workflow.states]
-    .sort((left, right) => left.position - right.position)
-    .map((state) => ({
-      state,
-      items: items.filter((item) => item.state.state_id === state.state_id),
-    }))
-}
-
 /**
  * The items that can be started right now, as the server answered.
  *
- * Not recomputed here: readiness asks about a claim, a container and an open
+ * Not recomputed here: being workable asks about a claim, a container and an open
  * blocker, and the Board era had each view answer for itself, so a held item was
  * workable in one list and not in another.
  */
-export function readyIds(items: readonly WorkItemBrief[]): Set<string> {
-  return new Set(items.filter((item) => item.ready).map((item) => item.work_item_id))
+export function workableIds(items: readonly WorkItemBrief[]): Set<string> {
+  return new Set(items.filter((item) => item.workable).map((item) => item.work_item_id))
 }

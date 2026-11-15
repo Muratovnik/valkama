@@ -14,9 +14,7 @@ export type WaitingLink = Pick<PlanningEdge, 'from' | 'to' | 'kind'> &
   Partial<Pick<PlanningEdge, 'reference' | 'is_terminal'>>
 
 /** An item as the rule reads it: its id, its reference and whether it has finished. */
-export type WaitingItem = Pick<WorkItemBrief, 'work_item_id' | 'reference'> & {
-  state: Pick<WorkItemBrief['state'], 'is_terminal'>
-}
+export type WaitingItem = Pick<WorkItemBrief, 'work_item_id' | 'reference' | 'open'>
 
 /**
  * The open blocker each blocked item waits on, by the blocked item's id; the
@@ -40,7 +38,7 @@ export function waitingOn(
     const source = byId.get(link.from)
     const open =
       link.is_terminal === undefined
-        ? source !== undefined && !source.state.is_terminal
+        ? source !== undefined && source.open
         : link.is_terminal === false
     const reference = link.reference ?? source?.reference
     if (open && reference) waiting.set(link.to, reference)

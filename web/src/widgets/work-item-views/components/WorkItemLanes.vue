@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The board read by epic: a row of state columns per epic, and the states named
+ * The board read by goal: a row of state columns per goal, and the states named
  * once above them all.
  *
  * Every lane shares one set of column tracks, so a state stands at the same x in
@@ -9,7 +9,7 @@
  * sideways, because it is what says whose work a row is.
  *
  * A tile moves between the states of its own lane and nowhere else: moving it to
- * another lane would give it another epic, which is an edit of what the work is
+ * another lane would give it another goal, which is an edit of what the work is
  * part of, not of where it stands. Each lane's stacks therefore share a drop
  * group of their own.
  *
@@ -102,12 +102,16 @@ useLaneClearance(scroller)
 const draggingLane = ref<string | null>(null)
 const dragging = computed(() => draggingLane.value !== null)
 
-/** Each lane's tiles by state, read once per change rather than once per cell. */
+/**
+ * Each lane's tiles by state, read once per change rather than once per cell. An accepted
+ * open goal or stage stands in no state, so it has no column to stand in.
+ */
 const cells = computed(() => {
   const byLane = new Map<string, Map<string, WorkItemBrief[]>>()
   for (const lane of props.lanes) {
     const byState = new Map<string, WorkItemBrief[]>()
     for (const item of lane.items) {
+      if (!item.state) continue
       const held = byState.get(item.state.state_id)
       if (held === undefined) byState.set(item.state.state_id, [item])
       else held.push(item)
@@ -121,8 +125,8 @@ const cells = computed(() => {
 const stateCounts = computed(() => {
   const counts = new Map<string, number>()
   for (const lane of props.lanes)
-    for (const item of lane.items)
-      counts.set(item.state.state_id, (counts.get(item.state.state_id) ?? 0) + 1)
+    for (const { state } of lane.items)
+      if (state) counts.set(state.state_id, (counts.get(state.state_id) ?? 0) + 1)
   return counts
 })
 
@@ -143,7 +147,7 @@ function bodyId(lane: BoardLane): string {
 }
 
 function title(lane: BoardLane): string {
-  return lane.epic?.title ?? t('workItem.lanes.noEpic')
+  return lane.goal?.title ?? t('workItem.lanes.noParent')
 }
 
 function inState(lane: BoardLane, state: WorkflowState): WorkItemBrief[] {

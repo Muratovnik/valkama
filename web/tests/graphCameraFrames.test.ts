@@ -24,10 +24,10 @@ import { broadSpace } from './fixtures/graphSpaces.ts'
 
 const engine = new ELK()
 const dimensions = { width: 1200, height: 680 }
-const { model, epics } = broadSpace()
+const { model, goals } = broadSpace()
 const source = { nodes: model.work_items, edges: model.links }
 const space = (choices: Record<string, boolean> = {}) =>
-  layout(source, engine, false, { kind: 'all', epicId: null, frames: { choices } })
+  layout(source, engine, false, { kind: 'all', scopeRootId: null, frames: { choices } })
 
 /**
  * The same space packed without the priority that puts open work first: its
@@ -41,7 +41,7 @@ const unordered: GraphLayoutEngine = {
     return engine.layout(graph)
   },
 }
-const finishedFirst = () => layout(source, unordered, false, { kind: 'all', epicId: null })
+const finishedFirst = () => layout(source, unordered, false, { kind: 'all', scopeRootId: null })
 
 test('a field of frames too large to read opens on its first header at the top-left', async () => {
   const placed = await space()
@@ -122,7 +122,7 @@ for (const field of [
       const card = cards.get(id)
       const frame = frames.get(frameId)
       return card
-        ? !card.state.is_terminal
+        ? !card.state?.is_terminal
         : Boolean(frame && frame.progress.total > frame.progress.done)
     }
     const targets = walkTargets(placed).sort(readingOrder)
@@ -157,8 +157,8 @@ for (const [what, fold] of [
   ['opening a folded frame', false],
 ] as const) {
   test(`${what} keeps its header where it stood on the screen, at the same zoom`, async () => {
-    // The lone link's epic starts open, the largest one folded.
-    const frameId = fold ? epics[1].work_item_id : epics[0].work_item_id
+    // The lone link's goal starts open, the largest one folded.
+    const frameId = fold ? goals[1].work_item_id : goals[0].work_item_id
     const before = await space()
     const after = await space({ [frameId]: fold })
     assert.equal(after.frames.find((frame) => frame.id === frameId)?.folded, fold)
@@ -182,7 +182,7 @@ for (const [what, fold] of [
 }
 
 test('a fold that leaves the camera past the whole view comes up to it with its header held', async () => {
-  const frameId = epics[1].work_item_id
+  const frameId = goals[1].work_item_id
   const before = await space()
   const after = await space({ [frameId]: true })
   const whole = graphWholeView(after, dimensions)
@@ -209,7 +209,7 @@ test('a fold the camera holds nothing for moves nothing', async () => {
 /** One open frame much larger than the field, its one card at its top-left. */
 async function vastFrame() {
   const placed = await space()
-  const open = placed.frames.find((entry) => !entry.folded && entry.epic)
+  const open = placed.frames.find((entry) => !entry.folded && entry.goal)
   assert.ok(open)
   const card = placed.nodes.find((node) => node.frameId === open.id)
   assert.ok(card)

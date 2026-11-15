@@ -10,6 +10,7 @@ import { describe, test } from 'vitest'
 import {
   activeView,
   deleteView,
+  keepReadViews,
   readSavedViews,
   saveView,
   VIEW_NAME_CHARS,
@@ -21,7 +22,7 @@ import { DEFAULT_SETTINGS, mergeSettings } from '@/shared/lib/settings.ts'
 const MAIN = 'scope-a:MAIN'
 const OTHER = 'scope-b:MAIN'
 const MINE = { view: 'list', held: true, labels: 'ui,%-old' }
-const GROUPED = { group: 'epic', query: 'MAIN-2' }
+const GROUPED = { group: 'goal', query: 'MAIN-2' }
 
 describe('saved views', () => {
   test('a saved view is listed in its own space and in no other', () => {
@@ -115,6 +116,25 @@ describe('saved views', () => {
       ],
     })
     assert.deepEqual(read, { [OTHER]: [{ name: 'Kept', state: GROUPED }] })
+  })
+
+  test('only the views a reader rejects are taken out, from their own space alone', () => {
+    const views = saveView(
+      saveView(saveView({}, MAIN, 'Mine', MINE), MAIN, 'Grouped', GROUPED),
+      OTHER,
+      'Grouped',
+      GROUPED,
+    )
+    const grouped = (state: Record<string, unknown>) => state.group === undefined
+    const kept = keepReadViews(views, MAIN, grouped)
+    assert.deepEqual(kept.dropped, ['Grouped'])
+    assert.deepEqual(viewsOf(kept.views, MAIN), [{ name: 'Mine', state: MINE }])
+    assert.deepEqual(viewsOf(kept.views, OTHER), [{ name: 'Grouped', state: GROUPED }])
+    // A space left with none is dropped; one with nothing to take out is the same object.
+    assert.deepEqual(keepReadViews(views, OTHER, grouped).views[OTHER], undefined)
+    const none = keepReadViews(views, MAIN, () => true)
+    assert.deepEqual(none.dropped, [])
+    assert.equal(none.views, views)
   })
 
   test('the settings reader keeps saved views and reads a corrupt or missing value as none', () => {

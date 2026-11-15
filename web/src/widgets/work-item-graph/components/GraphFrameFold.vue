@@ -8,10 +8,10 @@
  * finger or on a phone's width. Sized in the field's units, the chevron's 36 by 26 were 27
  * by 19 pixels there. The square runs from the chevron's row up and back, over the header's
  * padding and out past the frame's corner into the air the layout leaves round a frame, and
- * stops short of the reference line beside it and the title under it, which are the epic's;
+ * stops short of the reference line beside it and the title under it, which are the goal's;
  * the header draws no taller for it. Its ring encloses the chevron and nothing else.
  *
- * Zoomed out past reading, the fold is the work under no epic's one button: its reach runs
+ * Zoomed out past reading, the fold is the work under no goal's one button: its reach runs
  * across its whole band and the air above and below it (`foldIsTarget`), and the fold
  * itself stays the chevron's square, so the face and the ring it draws under the pointer
  * and the keyboard cover the chevron and none of the band's words or its edge. Stretched

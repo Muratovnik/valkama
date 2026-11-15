@@ -27,11 +27,11 @@ const ROOT = { id: mapId(1), reference: 'MAIN-1', title: 'Root' }
  * A chain with `open` open members whose history is `changes`, keyed by days
  * before today, and whose seven-day window is summed from them.
  */
-function chainWith(open: number, changes: DayChanges, scope: 'chain' | 'epic' = 'chain') {
+function chainWith(open: number, changes: DayChanges, scope: 'chain' | 'tree' = 'chain') {
   const members = [
     mapMember('MAIN-10', 'done', ROOT.reference),
     ...Array.from({ length: open }, (_, index) =>
-      mapMember(`MAIN-${100 + index}`, 'backlog', ROOT.reference),
+      mapMember(`MAIN-${100 + index}`, 'triage', ROOT.reference),
     ),
   ]
   const { series, recent } = historyOf(TODAY, changes)
@@ -43,7 +43,11 @@ async function rendered(chain: unknown, locale: 'en' | 'ru') {
   const wrapper = mount(InspectorChain, {
     props: {
       chain: chain as WorkItemChain,
-      container: true,
+      open: true,
+      container_state: null,
+      acceptance: null,
+      started_at: null,
+      waits_for: [],
       failed: false,
       loading: false,
       readable: true,
@@ -176,17 +180,17 @@ describe('the forecast of a chain', () => {
     })
   })
 
-  it('says an epic’s count in the chain’s words, because it is the same measure', async () => {
+  it('says a goal’s count in the chain’s words, because it is the same measure', async () => {
     // Both scopes count the members created and closed in the window; only
     // which members differs, and the scope switch beside the heading says that.
     const days = { ...BEFORE, ...everyDay(1, 10) }
-    expect(await read(chainWith(81, days, 'epic'), 'en')).toEqual(
+    expect(await read(chainWith(81, days, 'tree'), 'en')).toEqual(
       await read(chainWith(81, days), 'en'),
     )
-    expect(await read(chainWith(81, days, 'epic'), 'ru')).toEqual(
+    expect(await read(chainWith(81, days, 'tree'), 'ru')).toEqual(
       await read(chainWith(81, days), 'ru'),
     )
-    expect(await read(chainWith(20, BEFORE, 'epic'), 'ru')).toEqual({
+    expect(await read(chainWith(20, BEFORE, 'tree'), 'ru')).toEqual({
       pace: 'За 7 дней ничего не добавлено и не выполнено',
       verdict: null,
     })

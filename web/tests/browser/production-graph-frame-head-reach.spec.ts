@@ -1,12 +1,12 @@
 /**
- * An epic frame's header as the hand and the keyboard meet it, at the scale the field opens
+ * A goal frame's header as the hand and the keyboard meet it, at the scale the field opens
  * at and in screen pixels, through the transform the page applies.
  *
  * The fold is a square target of 28px under a fine pointer and 44px under a finger or on a
- * phone's width, and reaches none of the epic's words; the epic's button is no smaller than
+ * phone's width, and reaches none of the goal's words; the goal's button is no smaller than
  * 24px either way. Each control's ring, read off the pixels it draws, encloses its own
  * drawing with air round it and never the other control, folded and open; at rest and under
- * the pointer neither draws one, and the epic's face under the pointer leaves the chevron
+ * the pointer neither draws one, and the goal's face under the pointer leaves the chevron
  * alone.
  *
  * Served the broad synthetic space, which opens at the least scale a field is read at.
@@ -76,7 +76,7 @@ function foldTarget(head: Locator) {
       }
     const width = seen.right - seen.left
     const height = seen.bottom - seen.top
-    // The epic's words: a press on any of them is never the fold's.
+    // The goal's words: a press on any of them is never the fold's.
     const open = element.querySelector('.graph-frame-open') as HTMLElement
     const words = [
       ...open.querySelectorAll('.graph-frame-reference, .graph-frame-title, .graph-frame-count'),
@@ -92,13 +92,13 @@ function foldTarget(head: Locator) {
       ]
       return points.some(([x, y]) => fold.contains(document.elementFromPoint(x, y)))
     })
-    const epic = open.getBoundingClientRect()
+    const goal = open.getBoundingClientRect()
     return {
       filled: hits / (width * height),
       height,
       width,
       stolen: stolen.map((word) => word.textContent?.trim() ?? ''),
-      epic: { width: epic.width, height: epic.height },
+      goal: { width: goal.width, height: goal.height },
     }
   })
 }
@@ -111,7 +111,7 @@ for (const { least, touch, width } of [
   test.describe(`${touch ? 'under a finger' : 'under a mouse'} at ${width}px`, () => {
     test.use({ hasTouch: touch })
 
-    test(`at ${width}px a fold is a ${least}px square at the opening scale, and the epic's words stay the epic's`, async ({
+    test(`at ${width}px a fold is a ${least}px square at the opening scale, and the goal's words stay the goal's`, async ({
       page,
     }) => {
       await openBroadField(page, width)
@@ -133,9 +133,9 @@ for (const { least, touch, width } of [
         expect(target.height, `${where}: down`).toBeGreaterThanOrEqual(least)
         // A square, not a ragged patch whose corners happen to span it.
         expect(target.filled, `${where}: filled`).toBeGreaterThan(0.98)
-        expect(target.stolen, `${where}: the epic's words`).toEqual([])
-        expect(target.epic.width).toBeGreaterThanOrEqual(24)
-        expect(target.epic.height).toBeGreaterThanOrEqual(24)
+        expect(target.stolen, `${where}: the goal's words`).toEqual([])
+        expect(target.goal.width).toBeGreaterThanOrEqual(24)
+        expect(target.goal.height).toBeGreaterThanOrEqual(24)
       }
     })
   })
@@ -170,7 +170,7 @@ function clearance(ring: [number, number][], box: Box) {
   )
 }
 
-/** The chevron as drawn, and each of the epic's words, read by a Range over them. */
+/** The chevron as drawn, and each of the goal's words, read by a Range over them. */
 function drawings(head: Locator) {
   return head.evaluate((element) => {
     const chevron = element.querySelector(
@@ -234,12 +234,12 @@ const painted = (page: Page) => frames(page.locator(':root'))
 
 /**
  * The header's rings and faces in one state: none at rest or under the pointer, where the
- * epic's face leaves the chevron alone, and each control's own, reached by the keyboard.
+ * goal's face leaves the chevron alone, and each control's own, reached by the keyboard.
  */
 async function expectRings(page: Page, head: Locator, state: string) {
   const fold = head.locator('.graph-frame-fold')
   const open = head.locator('.graph-frame-open')
-  // Under the pointer, no ring, and the epic's face leaves the chevron alone. Each face is
+  // Under the pointer, no ring, and the goal's face leaves the chevron alone. Each face is
   // what its ring is then read against, so the ring is all that a focus adds.
   await page.mouse.move(0, 0)
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
@@ -248,14 +248,14 @@ async function expectRings(page: Page, head: Locator, state: string) {
   const chevronAtRest = await picture(page, drawn.fold)
   await page.mouse.move(...centre(drawn.words[0].box))
   await painted(page)
-  expect(await ringStyle(open), `${state}: the epic hovered`).toEqual([])
+  expect(await ringStyle(open), `${state}: the goal hovered`).toEqual([])
   expect
     .soft(
       await movedSince(page, drawn.fold, [await picture(page, drawn.fold), chevronAtRest], false),
-      `${state}: the chevron under the epic's face`,
+      `${state}: the chevron under the goal's face`,
     )
     .toEqual([])
-  const epicFace = await picture(page, drawn.area)
+  const goalFace = await picture(page, drawn.area)
   await page.mouse.move(...centre(drawn.fold))
   await painted(page)
   expect(await ringStyle(fold), `${state}: the fold hovered`).toEqual([])
@@ -290,26 +290,26 @@ async function expectRings(page: Page, head: Locator, state: string) {
     ).toBeGreaterThanOrEqual(1)
   }
 
-  // The epic's button, reached by the keyboard.
+  // The goal's button, reached by the keyboard.
   await page.keyboard.press('ArrowRight')
   await expect(open).toBeFocused()
   expect(await open.evaluate((element) => element.matches(':focus-visible'))).toBe(true)
   await painted(page)
   drawn = await drawings(head)
-  ring = await ringSince(page, drawn.area, await picture(page, drawn.area), epicFace)
-  expect(ring.length, `${state}: the epic's ring`).toBeGreaterThan(0)
+  ring = await ringSince(page, drawn.area, await picture(page, drawn.area), goalFace)
+  expect(ring.length, `${state}: the goal's ring`).toBeGreaterThan(0)
   expect(
     enclosed(encloses(ring, centre(drawn.chevron))),
-    `${state}: the epic rings the chevron`,
+    `${state}: the goal rings the chevron`,
   ).toBe(false)
   expect(
     clearance(ring, drawn.chevron),
-    `${state}: the epic's ring off the chevron`,
+    `${state}: the goal's ring off the chevron`,
   ).toBeGreaterThanOrEqual(1)
   for (const word of drawn.words) {
     expect(
       enclosed(encloses(ring, centre(word.box))),
-      `${state}: the epic rings «${word.text}»`,
+      `${state}: the goal rings «${word.text}»`,
     ).toBe(true)
     expect(clearance(ring, word.box), `${state}: air round «${word.text}»`).toBeGreaterThanOrEqual(
       1,

@@ -23,7 +23,7 @@ import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
-import { useStateName } from '@/shared/lib/useStateName.ts'
+import { useStandingName } from '@/shared/lib/useStateName.ts'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
@@ -65,7 +65,7 @@ const {
 }>()
 const emit = defineEmits<{ blur: [id: string]; focus: [id: string] }>()
 const { t } = useI18n()
-const stateName = useStateName()
+const stateName = useStandingName()
 
 type WorkItemNodeMarkerState = Extract<
   SemanticStatePair,
@@ -78,9 +78,10 @@ type WorkItemNodeMarkerState = Extract<
  * category, and the shared UI system owns the resulting tone.
  */
 const markerState = computed<WorkItemNodeMarkerState>(() => {
-  if (ready) return 'ready'
-  if (node.claim_ref && !node.state.is_terminal) return 'claimed'
-  return node.state.category
+  if (ready) return 'workable'
+  if (node.claim_ref && node.open) return 'claimed'
+  // A chain draws its goals and stages as nodes; an accepted open one stands in no category.
+  return node.state?.category ?? 'containers'
 })
 
 /** What the registry needs beyond the node: what it waits on. */
@@ -88,13 +89,11 @@ const facetContext = computed(() => ({ waitingOn }))
 
 /** Workable or waiting, said in words, or nothing when it is neither. */
 const readinessLabel = computed(() => {
-  if (node.state.is_terminal) return null
+  if (!node.open) return null
   if (waitingOn) return t('workItem.facet.waiting', { reference: waitingOn })
   return ready ? t('workItem.facet.ready') : null
 })
-const ownerLabel = computed(() =>
-  t(node.state.is_terminal ? 'workItem.previousOwner' : 'graph.claimedBy'),
-)
+const ownerLabel = computed(() => t(node.open ? 'graph.claimedBy' : 'workItem.previousOwner'))
 /**
  * Who the foot names: the claim on open work, and on finished work whoever
  * held it when it closed, since a close ends the claim.
@@ -119,7 +118,7 @@ const liveWord = useLiveWord()
 const accessibleName = computed(() =>
   [
     `${node.reference} ${node.title}`,
-    stateName(node.state),
+    stateName(node),
     ...(readinessLabel.value ? [readinessLabel.value] : []),
     ...(holder.value ? [`${ownerLabel.value} ${holderName(holder.value)}`] : []),
     ...(live ? [liveWord(live)] : []),
@@ -154,7 +153,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
     :class="{
       ready,
       framed,
-      'is-terminal': node.state.is_terminal,
+      'is-terminal': !node.open,
       recessed,
       root,
       overview,
@@ -206,7 +205,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
         <span
           v-if="parentReference"
           v-tooltip.detail="{ text: t('workItem.parent'), words: parentReference }"
-          class="flow-node-epic one-line"
+          class="flow-node-goal one-line"
           >{{ parentReference }}</span
         >
       </span>
@@ -418,7 +417,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
   border-radius: var(--radius-status);
 }
 
-.flow-node-epic {
+.flow-node-goal {
   max-width: 80px;
   padding: var(--space-hair) var(--space-1);
   font-variant-numeric: tabular-nums;

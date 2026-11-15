@@ -12,10 +12,10 @@ type Link = WorkItem['links'][number]
  * than one shown that has already closed.
  */
 export function openBlockers(item: WorkItem): Link[] {
-  return item.state.is_terminal
-    ? []
-    : item.links.filter(
+  return item.open
+    ? item.links.filter(
         (link) =>
           link.kind === 'blocks' && link.direction === 'incoming' && link.is_terminal !== true,
       )
+    : []
 }

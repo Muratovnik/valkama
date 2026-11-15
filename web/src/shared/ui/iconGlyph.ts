@@ -148,7 +148,7 @@ const ICONS: Record<string, Component> = {
   'arrow-up': ArrowUp,
   'bell': Bell,
   'board': SquareKanban,
-  // An epic's card, opened beside the board, and its chain drawn on the board: a lane
+  // A goal's card, opened beside the board, and its chain drawn on the board: a lane
   // heading's two actions.
   'card': PanelRightOpen,
   'chain': Network,
@@ -240,7 +240,7 @@ const ICONS: Record<string, Component> = {
   // A work item's facets. A plain task and a medium priority have no glyph:
   // the norm is not drawn.
   'kind-bug': Bug,
-  'kind-epic': Layers,
+  'kind-container': Layers,
   'kind-improvement': TrendingUp,
   'priority-urgent': ChevronsUp,
   'priority-high': ChevronUp,

@@ -24,8 +24,8 @@ const CARD = serializePlatformRoute({
   entity: planningWorkItemEntity(workItemRef),
 })
 
-/** The card's item in an epic: its record names the parent by id, the space by reference. */
-const inEpic = (model: Record<string, unknown>) => ({
+/** The card's item in a goal: its record names the parent by id, the space by reference. */
+const inGoal = (model: Record<string, unknown>) => ({
   ...model,
   work_items: (model.work_items as { work_item_id: string }[]).map((item) =>
     item.work_item_id === workItem.work_item_id
@@ -112,7 +112,7 @@ for (const width of [1280, 390])
     await page.setViewportSize({ width, height: 900 })
     await installBackend(page, {
       card: (read) => ({ ...read, parent_id: blockedWorkItem.work_item_id }),
-      space: inEpic,
+      space: inGoal,
     })
     const late = await lateSpace(page)
     await page.goto(CARD)

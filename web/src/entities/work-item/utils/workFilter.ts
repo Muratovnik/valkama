@@ -91,13 +91,17 @@ function labelsHold(item: WorkItemBrief, filter: WorkFilter): boolean {
     : labels.every((label) => item.labels.includes(label))
 }
 
+/** An accepted open goal or stage stands in no category, so no category takes it in. */
+const inCategory = (item: WorkItemBrief, categories: readonly string[] | undefined) =>
+  item.state !== null && Boolean(categories?.includes(item.state.category))
+
 /**
  * Whether an item is any of the values the filter says it must not be. Work
  * nobody holds is not held by the holder named, so it passes «holder is not».
  */
 function excluded(item: WorkItemBrief, not: FacetValues | undefined): boolean {
   return (
-    Boolean(not?.category?.includes(item.state.category)) ||
+    inCategory(item, not?.category) ||
     Boolean(not?.kind?.includes(item.kind)) ||
     Boolean(not?.priority?.includes(item.priority)) ||
     Boolean(not?.labels?.some((label) => item.labels.includes(label))) ||
@@ -120,9 +124,9 @@ export function matchesWorkFilter(item: WorkItemBrief, filter: WorkFilter): bool
     !item.title.toLocaleLowerCase().includes(text)
   )
     return false
-  if (filter.ready && !item.ready) return false
-  if (filter.held && (item.claim_ref === '' || item.state.is_terminal)) return false
-  if (filter.category?.length && !filter.category.includes(item.state.category)) return false
+  if (filter.ready && !item.workable) return false
+  if (filter.held && (item.claim_ref === '' || !item.open)) return false
+  if (filter.category?.length && !inCategory(item, filter.category)) return false
   if (filter.kind?.length && !filter.kind.includes(item.kind)) return false
   if (filter.priority?.length && !filter.priority.includes(item.priority)) return false
   if (!labelsHold(item, filter)) return false
@@ -324,6 +328,26 @@ export function readWorkFilter(state: RouteState | undefined): WorkFilter {
     readFacet(filter, facet, raw)
   }
   return filter
+}
+
+/** A value of a filter key without the mark that negates it. */
+const withoutNotMark = (part: string) =>
+  part.startsWith(NOT_MARK) ? part.slice(NOT_MARK.length) : part
+
+/**
+ * Whether every value the state's filter keys hold is one this build reads: a category, a
+ * kind or a priority it knows, wherever it stands in its list or under a negation. A value
+ * it does not know is what `readWorkFilter` drops, so a state for which this says no reads
+ * as a narrower filter than the one it was written with.
+ */
+export function readsEveryFilterValue(state: RouteState | undefined): boolean {
+  return LIST_FACETS.every((facet) => {
+    const valid = VALID_VALUES[facet]
+    const raw = state?.[WORK_FILTER_STATE_KEYS[facet]]
+    if (valid === null || typeof raw !== 'string') return true
+    const values = raw.split(',').map((part) => unescapeValue(withoutNotMark(part)))
+    return values.every((value) => value === '' || valid(value))
+  })
 }
 
 /**

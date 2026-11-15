@@ -60,7 +60,7 @@ export function useInspectorSections(sources: SectionSources) {
           },
         ]
       : []),
-    // In Relations the chain stood after every link and reference, a long scroll down an epic.
+    // In Relations the chain stood after every link and reference, a long scroll down a goal.
     // A card Back returned to it keeps its tab until the read says there is no chain.
     ...(chained.value || (chained.value === null && section.value === 'chain')
       ? [{ value: 'chain' as const, label: t('workItem.chain.title') }]

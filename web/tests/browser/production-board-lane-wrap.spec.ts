@@ -1,6 +1,6 @@
 /**
- * A lane's heading that wraps starts its next row where its words start: under the epic's
- * number, or under the title of the lane with no epic, and never under the chevron or at
+ * A lane's heading that wraps starts its next row where its words start: under the goal's
+ * number, or under the title of the lane with no goal, and never under the chevron or at
  * the heading's own edge, where the counts once stood 4px left of the chevron and 28px left
  * of the number they count for.
  */
@@ -67,7 +67,7 @@ test('a lane heading that wraps at 390px starts its next row under its words', a
   )
 
   const wrapped = headings.filter((heading) => heading.rows.length > 1)
-  // An epic's lane, an empty one and a closed one each wrap here; a heading on one row
+  // A goal's lane, an empty one and a closed one each wrap here; a heading on one row
   // proves nothing about where a second one starts.
   expect(wrapped.length, 'lane headings that wrap').toBeGreaterThanOrEqual(3)
   for (const [index, heading] of wrapped.entries()) {
@@ -201,7 +201,7 @@ test('at 1280px a lane heading wraps only for want of room and keeps no blank ro
   await page.screenshot(shot(info, 'lane-heads-1280.png'))
 })
 
-test('at 1280px an epic heading keeps its actions in a place of their own on hover and focus', async ({
+test('at 1280px a goal heading keeps its actions in a place of their own on hover and focus', async ({
   page,
 }, info) => {
   await page.setViewportSize({ width: 1280, height: 900 })
@@ -211,11 +211,11 @@ test('at 1280px an epic heading keeps its actions in a place of their own on hov
   await serveWide(page)
   await openBoard(page)
 
-  const epics = page.locator('.lane-head', { has: page.locator('.lane-actions') })
-  const total = await epics.count()
-  expect(total, 'epic headings with actions').toBeGreaterThanOrEqual(3)
+  const goals = page.locator('.lane-head', { has: page.locator('.lane-actions') })
+  const total = await goals.count()
+  expect(total, 'goal headings with actions').toBeGreaterThanOrEqual(3)
   for (let index = 0; index < total; index += 1) {
-    const head = epics.nth(index)
+    const head = goals.nth(index)
     const said = `heading ${index}`
     const actions = head.locator('.lane-actions')
 

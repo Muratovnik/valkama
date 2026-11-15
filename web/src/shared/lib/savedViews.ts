@@ -105,6 +105,30 @@ export function deleteView(views: SavedViews, place: string, name: string): Save
   return next
 }
 
+/**
+ * The views of one place that `reads` reads as they were saved, and the names of those it
+ * does not, which are left out. A place left with none is dropped, as `deleteView` drops it.
+ */
+export function keepReadViews(
+  views: SavedViews,
+  place: string,
+  reads: (state: ViewState) => boolean,
+): { dropped: string[]; views: SavedViews } {
+  const list = viewsOf(views, place)
+  const dropped = list.filter((view) => !reads(view.state)).map((view) => view.name)
+  if (!dropped.length) return { dropped, views }
+  let next = views
+
+  for (const [index, name_] of dropped.entries()) {
+    if (!(index in dropped)) {
+      continue
+    }
+
+    next = deleteView(next, place, name_)
+  }
+  return { dropped, views: next }
+}
+
 /** The state to write back when the view is applied; null for a view the place does not have. */
 export function viewState(views: SavedViews, place: string, name: string): ViewState | null {
   const view = viewsOf(views, place).find((other) => other.name === name)

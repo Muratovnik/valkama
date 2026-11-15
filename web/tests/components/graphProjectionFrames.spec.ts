@@ -28,9 +28,15 @@ vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
 }))
 
 const STATES = {
-  todo: { state_id: 'todo', key: 'todo', name: 'Todo', category: 'queued', is_terminal: false },
+  todo: { state_id: 'todo', key: 'todo', name: 'Todo', category: 'ready', is_terminal: false },
   dev: { state_id: 'dev', key: 'dev', name: 'Dev', category: 'active', is_terminal: false },
 } as const
+
+/** A frame's item is a goal at the top and a stage inside another; the rest is work. */
+function kindOf(id: string, parent: string | null): WorkItemBrief['kind'] {
+  if (!id.startsWith('goal')) return 'task'
+  return parent === null ? 'goal' : 'stage'
+}
 
 function item(id: string, number: number, parent: string | null = null): WorkItemBrief {
   return {
@@ -39,14 +45,18 @@ function item(id: string, number: number, parent: string | null = null): WorkIte
     reference: `MAIN-${number}`,
     number,
     title: `Item ${number}`,
-    kind: parent === null && id.startsWith('epic') ? 'epic' : 'task',
+    kind: kindOf(id, parent),
     priority: 'medium',
     state: STATES.todo,
     claim_ref: '',
     claim_state: null,
     parent_id: parent,
-    container: id.startsWith('epic'),
-    ready: true,
+    open: true,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: true,
     labels: [],
     source: '',
     checklist: [],
@@ -57,11 +67,11 @@ function item(id: string, number: number, parent: string | null = null): WorkIte
   }
 }
 
-// An epic holding a and b, and c under none; a blocks c.
+// A goal holding a and b, and c under none; a blocks c.
 const space = () => [
-  item('epic-1', 1),
-  item('a', 2, 'epic-1'),
-  item('b', 3, 'epic-1'),
+  item('goal-1', 1),
+  item('a', 2, 'goal-1'),
+  item('b', 3, 'goal-1'),
   item('c', 4),
 ]
 const links: PlanningEdge[] = [{ from: 'a', to: 'c', kind: 'blocks' }]
@@ -111,7 +121,7 @@ function open() {
   const input = reactive({
     nodes: space(),
     edges: links,
-    epicId: null,
+    scopeRootId: null,
     open: true,
     scopeKind: 'all' as const,
     space: 'space-1',
@@ -149,7 +159,7 @@ describe('a frame that changes no structure', () => {
       expect(runs).toHaveLength(1)
       expect(projection.placed.value).toBe(placed)
       const drawnA = projection.drawn.value?.nodes.find((node) => node.work_item_id === 'a')
-      expect(drawnA).toMatchObject(change(item('a', 2, 'epic-1')))
+      expect(drawnA).toMatchObject(change(item('a', 2, 'goal-1')))
       scope.stop()
     },
   )
@@ -189,7 +199,7 @@ describe('a frame that changes no structure', () => {
     )
     await settle()
     expect(runs).toHaveLength(1)
-    expect(projection.frames.value.find((frame) => frame.id === 'epic-1')?.progress).toMatchObject({
+    expect(projection.frames.value.find((frame) => frame.id === 'goal-1')?.progress).toMatchObject({
       active: 1,
       ahead: 1,
     })
@@ -206,7 +216,7 @@ function filtered(nodes: (all: WorkItemBrief[]) => WorkItemBrief[], extra: WorkI
     nodes: nodes(all),
     spaceItems: all,
     edges: links,
-    epicId: null,
+    scopeRootId: null,
     open: true,
     scopeKind: 'all' as const,
     space: 'space-1',
@@ -224,21 +234,21 @@ describe('a filter beside the whole space', () => {
   })
 
   it('narrows nothing when it lets everything through, though the array is new', async () => {
-    // An open epic with nothing under it is drawn folded unless a filter narrows the field.
-    const { scope } = filtered((all) => [...all], [item('epic-2', 5)])
+    // An open goal with nothing under it is drawn folded unless a filter narrows the field.
+    const { scope } = filtered((all) => [...all], [item('goal-2', 5)])
     await settle()
-    expect(leaves(runs[0].graph)).toEqual(['a', 'b', 'c', 'epic-2'])
+    expect(leaves(runs[0].graph)).toEqual(['a', 'b', 'c', 'goal-2'])
     scope.stop()
   })
 
-  it('draws only what it let through, and a frame still counts its epic’s work', async () => {
+  it('draws only what it let through, and a frame still counts its goal’s work', async () => {
     const { projection, scope } = filtered((all) =>
       all.filter((entry) => entry.work_item_id === 'b'),
     )
     await finish()
     expect(leaves(runs[0].graph)).toEqual(['b'])
     expect(projection.frames.value.map((frame) => [frame.id, frame.progress.total])).toEqual([
-      ['epic-1', 2],
+      ['goal-1', 2],
     ])
     scope.stop()
   })
@@ -255,43 +265,43 @@ describe('folding a frame', () => {
     const first = open()
     await finish()
     expect(leaves(runs[0].graph)).toEqual(['a', 'b', 'c'])
-    first.projection.toggle('epic-1')
+    first.projection.toggle('goal-1')
     await settle()
     expect(runs).toHaveLength(2)
-    expect(leaves(runs[1].graph)).toEqual(['epic-1', 'c'])
-    expect(first.projection.folded('epic-1')).toBe(true)
+    expect(leaves(runs[1].graph)).toEqual(['goal-1', 'c'])
+    expect(first.projection.folded('goal-1')).toBe(true)
     first.scope.stop()
 
     runs.length = 0
     const again = open()
     await settle()
-    expect(leaves(runs[0].graph)).toEqual(['epic-1', 'c'])
-    expect(again.projection.folded('epic-1')).toBe(true)
+    expect(leaves(runs[0].graph)).toEqual(['goal-1', 'c'])
+    expect(again.projection.folded('goal-1')).toBe(true)
     again.scope.stop()
   })
 
   it('forgets a choice that matches what the frame would be untouched', async () => {
     const { projection, scope } = open()
     await finish()
-    projection.toggle('epic-1')
+    projection.toggle('goal-1')
     await settle()
-    expect(localStorage.getItem('valkama-graph-frames')).toContain('epic-1')
-    projection.toggle('epic-1')
+    expect(localStorage.getItem('valkama-graph-frames')).toContain('goal-1')
+    projection.toggle('goal-1')
     await settle()
-    expect(projection.folded('epic-1')).toBe(false)
-    expect(localStorage.getItem('valkama-graph-frames')).not.toContain('epic-1')
+    expect(projection.folded('goal-1')).toBe(false)
+    expect(localStorage.getItem('valkama-graph-frames')).not.toContain('goal-1')
     scope.stop()
   })
 
   it('stores nothing and lays nothing out for a frame with nothing to unfold', async () => {
-    const { projection, scope } = filtered((all) => [...all], [item('epic-2', 5)])
+    const { projection, scope } = filtered((all) => [...all], [item('goal-2', 5)])
     await settle()
     const before = runs.length
-    projection.toggle('epic-2')
+    projection.toggle('goal-2')
     await settle()
     expect(runs).toHaveLength(before)
-    expect(projection.folded('epic-2')).toBe(true)
-    expect(localStorage.getItem('valkama-graph-frames') ?? '').not.toContain('epic-2')
+    expect(projection.folded('goal-2')).toBe(true)
+    expect(localStorage.getItem('valkama-graph-frames') ?? '').not.toContain('goal-2')
     scope.stop()
   })
 
@@ -301,10 +311,10 @@ describe('folding a frame', () => {
     })
     const first = open()
     await finish()
-    first.projection.toggle('epic-1')
+    first.projection.toggle('goal-1')
     await settle()
-    expect(first.projection.folded('epic-1')).toBe(true)
-    expect(leaves(runs.at(-1)?.graph ?? { id: '' })).toEqual(['epic-1', 'c'])
+    expect(first.projection.folded('goal-1')).toBe(true)
+    expect(leaves(runs.at(-1)?.graph ?? { id: '' })).toEqual(['goal-1', 'c'])
     first.scope.stop()
   })
 })

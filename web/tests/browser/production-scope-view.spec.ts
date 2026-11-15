@@ -67,11 +67,11 @@ for (const view of ['graph', 'list'] as const) {
 
 test('the board’s grouping stays from one project to another', async ({ page }) => {
   await serveTwoProjects(page)
-  await page.goto(firstProject({ group: 'epic' }))
+  await page.goto(firstProject({ group: 'goal' }))
   /** The grouping the view's menu checks. */
   const grouped = async () => {
     await page.getByRole('button', { name: 'View', exact: true }).click()
-    const checked = page.getByRole('menuitemradio', { name: 'By parent' })
+    const checked = page.getByRole('menuitemradio', { name: 'By goal' })
     await expect(checked).toHaveAttribute('aria-checked', 'true')
     await page.keyboard.press('Escape')
     await expect(page.getByRole('menu')).toHaveCount(0)
@@ -80,7 +80,7 @@ test('the board’s grouping stays from one project to another', async ({ page }
   await chooseScope(page, SECOND_TITLE)
   await inSecond(page)
   await grouped()
-  expect(addressState(page)).toEqual({ group: 'epic' })
+  expect(addressState(page)).toEqual({ group: 'goal' })
 })
 
 /** The view the bar says is chosen, by its segments or, on a phone, by its menu. */
@@ -107,7 +107,7 @@ for (const [view, width] of [
       answer = done
     })
     await serveTwoProjects(page, () => held)
-    await page.goto(firstProject({ view, group: 'epic' }))
+    await page.goto(firstProject({ view, group: 'goal' }))
     const bar = page.locator('.workspace-head')
     await expect(
       page.locator('.workspace-stage > :not(.platform-state-panel, [role="status"])').first(),

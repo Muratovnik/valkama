@@ -198,7 +198,7 @@ for (const locale of ['en', 'ru'] as const) {
   // its name on the line, and its hint said that name again over the claim.
   test(`no hint on a card a plain executor holds says its name, ${locale}`, async ({ page }) => {
     await prepare(page, locale, 1280)
-    const drawer = await openHead(page, { asking: true, epic: 'MAIN-12', picture: true })
+    const drawer = await openHead(page, { asking: true, goal: 'MAIN-12', picture: true })
     const name = drawer.locator('.card-holder-name')
     await expect(name).toHaveText('codex')
     await pointAt(page, name)

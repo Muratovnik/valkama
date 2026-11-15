@@ -14,7 +14,7 @@
  * closes it again and returns focus to itself. The toggle stays mounted through
  * both, which is what kept focus from falling to the page when it vanished.
  *
- * On an epic a row says under its title that member's share of the epic's work.
+ * On a goal a row says under its title that member's share of the goal's work.
  */
 import { computed, nextTick, reactive, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -34,7 +34,7 @@ import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
-import { useStateName } from '@/shared/lib/useStateName.ts'
+import { useStandingName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -49,7 +49,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ open: [reference: string] }>()
 const { t } = useI18n()
-const stateName = useStateName()
+const standingName = useStandingName()
 
 const LIMIT = 8
 
@@ -165,7 +165,7 @@ function holderTitle(group: ChainGroup, member: ChainMember): string | undefined
  * the whole group is in. A closed one says how it ended on the same terms.
  */
 function stateWord(group: ChainGroup, member: ChainMember): string | null {
-  return holder(group, member) ? null : rowStateName(props.labels[group], member, stateName)
+  return holder(group, member) ? null : rowStateName(props.labels[group], member, standingName)
 }
 /** The readiness mark a member prints: the registry's rule, given what the member waits on. */
 function readinessFor(member: ChainMember): FacetMark[] {

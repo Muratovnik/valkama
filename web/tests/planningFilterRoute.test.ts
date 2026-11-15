@@ -68,10 +68,10 @@ describe('the filter and the address', () => {
   })
 
   test('a change shows at once and is written with the other keys kept', () => {
-    const { filter, writes } = harness({ view: 'list', group: 'epic' })
+    const { filter, writes } = harness({ view: 'list', group: 'goal' })
     filter.set({ text: '', labels: ['ui'] })
     expect(filter.filter.value.labels).toEqual(['ui'])
-    expect(writes).toEqual([{ view: 'list', group: 'epic', labels: 'ui' }])
+    expect(writes).toEqual([{ view: 'list', group: 'goal', labels: 'ui' }])
   })
 
   test('the answer to an older keystroke does not undo a newer one', async () => {

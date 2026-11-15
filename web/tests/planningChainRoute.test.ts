@@ -45,9 +45,9 @@ test('the planning manifest admits the chain, closed, branch and grouping keys a
   const state = {
     view: 'kanban',
     chain: 'MAIN-12',
-    chain_scope: 'epic',
+    chain_scope: 'tree',
     closed: true,
-    group: 'epic',
+    group: 'goal',
     branch: 'MAIN-40',
   }
   assert.deepEqual(validateManifestRouteState(planning, state), state)
@@ -58,10 +58,10 @@ test('the planning manifest admits the chain, closed, branch and grouping keys a
 })
 
 test('a chain is read out of every view, with the endpoint default for its scope', () => {
-  assert.deepEqual(chainTarget({ view: 'graph', chain: 'MAIN-12', chain_scope: 'epic' }), {
+  assert.deepEqual(chainTarget({ view: 'graph', chain: 'MAIN-12', chain_scope: 'tree' }), {
     status: 'chain',
     reference: 'MAIN-12',
-    scope: 'epic',
+    scope: 'tree',
   })
   assert.deepEqual(chainTarget({ view: 'graph', chain: 'MAIN-12' }), {
     status: 'chain',
@@ -85,14 +85,14 @@ test('a value the endpoint could never answer is invalid rather than sent', () =
     { view: 'graph', chain: 'main-384' },
     { view: 'graph', chain: 384 },
     { view: 'graph', chain: 'MAIN-12', chain_scope: 'space' },
-    { view: 'graph', chain_scope: 'epic' },
+    { view: 'graph', chain_scope: 'tree' },
   ]
   for (const state of states)
     assert.equal(chainTarget(state).status, 'invalid', JSON.stringify(state))
 })
 
 test('the grouping key names a grouping a view offers, and leaves the address without it otherwise', () => {
-  assert.equal(groupingOf({ view: 'kanban', group: 'epic' }), 'epic')
+  assert.equal(groupingOf({ view: 'kanban', group: 'goal' }), 'goal')
   assert.equal(groupingOf({ view: 'list', group: 'goal' }), 'goal')
   const ungrouped: Parameters<typeof groupingOf>[0][] = [
     { view: 'kanban' },
@@ -101,8 +101,8 @@ test('the grouping key names a grouping a view offers, and leaves the address wi
     undefined,
   ]
   for (const state of ungrouped) assert.equal(groupingOf(state), 'none', JSON.stringify(state))
-  const grouped = withGrouping({ view: 'kanban', chain: 'MAIN-12' }, 'epic')
-  assert.deepEqual(grouped, { view: 'kanban', chain: 'MAIN-12', group: 'epic' })
+  const grouped = withGrouping({ view: 'kanban', chain: 'MAIN-12' }, 'goal')
+  assert.deepEqual(grouped, { view: 'kanban', chain: 'MAIN-12', group: 'goal' })
   assert.deepEqual(withGrouping(grouped, 'none'), { view: 'kanban', chain: 'MAIN-12' })
   assert.deepEqual(withGrouping({ view: 'list' }, 'goal'), { view: 'list', group: 'goal' })
 })
@@ -110,14 +110,14 @@ test('the grouping key names a grouping a view offers, and leaves the address wi
 test('only how the operator is looking goes to another scope, and only as a value it can be', () => {
   const state = {
     view: 'graph',
-    group: 'epic',
+    group: 'goal',
     query: 'gateway',
     status: 'open',
     chain: 'MAIN-12',
-    chain_scope: 'epic',
+    chain_scope: 'tree',
     closed: true,
     branch: 'MAIN-3',
-    ready: true,
+    workable: true,
     held: true,
     cat: 'active',
     kind: 'bug',
@@ -125,7 +125,7 @@ test('only how the operator is looking goes to another scope, and only as a valu
     labels: 'one',
     holder: 'someone',
   }
-  assert.deepEqual(lookAcrossScopes(state), { view: 'graph', group: 'epic' })
+  assert.deepEqual(lookAcrossScopes(state), { view: 'graph', group: 'goal' })
   assert.deepEqual(lookAcrossScopes({ view: 'list' }), { view: 'list' })
   // The defaults, and what could name nothing, leave the address without the key.
   const looksLikeNothing: Parameters<typeof lookAcrossScopes>[0][] = [
@@ -148,23 +148,23 @@ test('withChain writes both keys and removes both, leaving every other key alone
   assert.deepEqual(withChain(undefined, null), {})
 })
 
-test('the branch is an epic of the chain or the work under none, and goes with the chain', () => {
+test('the branch is a goal of the chain or the work under none, and goes with the chain', () => {
   const named = { view: 'graph', chain: 'MAIN-12', chain_scope: 'chain' }
   assert.equal(branchOf(named), null)
-  const epic = withBranch(named, 'MAIN-40')
-  assert.deepEqual(epic, { ...named, branch: 'MAIN-40' })
-  assert.equal(branchOf(epic), 'MAIN-40')
-  // The work filed under no epic has a word of its own in the address.
+  const goal = withBranch(named, 'MAIN-40')
+  assert.deepEqual(goal, { ...named, branch: 'MAIN-40' })
+  assert.equal(branchOf(goal), 'MAIN-40')
+  // The work filed under no goal has a word of its own in the address.
   const none = withBranch(named, '')
   assert.deepEqual(none, { ...named, branch: 'none' })
   assert.equal(branchOf(none), '')
-  assert.deepEqual(withBranch(epic, null), named)
+  assert.deepEqual(withBranch(goal, null), named)
   // A value no branch could be is told apart from no branch at all.
   for (const value of ['main-40', 'everything', 40, true])
     assert.equal(branchOf({ ...named, branch: value }), undefined, String(value))
   // Leaving the chain, or naming another, lets the branch go with it.
-  assert.deepEqual(withChain({ ...epic, closed: true }, null), { view: 'graph' })
-  assert.deepEqual(withChain(epic, { reference: 'MAIN-13', scope: 'chain' }), {
+  assert.deepEqual(withChain({ ...goal, closed: true }, null), { view: 'graph' })
+  assert.deepEqual(withChain(goal, { reference: 'MAIN-13', scope: 'chain' }), {
     view: 'graph',
     chain: 'MAIN-13',
     chain_scope: 'chain',
@@ -192,7 +192,7 @@ test('the closed switch is kept beside the chain, absent when off, and goes with
 /** The root id every chain here shares, which is what the space holds. */
 const ROOT = emptyChain().root.work_item_id
 
-function chainOf(reference: string, scope: 'chain' | 'epic' = 'chain'): WorkItemChain {
+function chainOf(reference: string, scope: 'chain' | 'tree' = 'chain'): WorkItemChain {
   return { ...emptyChain(reference), scope } as WorkItemChain
 }
 
@@ -244,13 +244,13 @@ test('entering from the card holds its answer, so the route that follows costs n
 })
 
 test('a route opened cold reads the chain it names, and leaving drops it', async () => {
-  const chain = chainOf('MAIN-12', 'epic')
+  const chain = chainOf('MAIN-12', 'tree')
   fetchChain.mockResolvedValue(chain)
-  const run = harness({ status: 'chain', reference: 'MAIN-12', scope: 'epic' })
+  const run = harness({ status: 'chain', reference: 'MAIN-12', scope: 'tree' })
   active = run.scope
   assert.equal(run.held.pending.value, true)
   await settled()
-  assert.deepEqual(fetchChain.mock.calls[0].slice(0, 2), ['MAIN-12', 'epic'])
+  assert.deepEqual(fetchChain.mock.calls[0].slice(0, 2), ['MAIN-12', 'tree'])
   assert.equal(run.held.scoped.value, chain)
   assert.equal(run.held.pending.value, false)
 
@@ -259,7 +259,7 @@ test('a route opened cold reads the chain it names, and leaving drops it', async
   assert.equal(run.held.scoped.value, null)
   // Leaving let the answer go, so naming the same chain again reads it again
   // instead of drawing one nothing kept current while the route was elsewhere.
-  run.target.value = { status: 'chain', reference: 'MAIN-12', scope: 'epic' }
+  run.target.value = { status: 'chain', reference: 'MAIN-12', scope: 'tree' }
   await settled()
   assert.equal(fetchChain.mock.calls.length, 2)
   assert.equal(run.held.scoped.value, chain)
@@ -373,7 +373,7 @@ test('a held chain is not drawn for another chain the route names, before the ro
   fetchChain.mockReturnValue(new Promise(() => {}))
   for (const next of [
     { status: 'chain', reference: 'MAIN-500', scope: 'chain' },
-    { status: 'chain', reference: 'MAIN-12', scope: 'epic' },
+    { status: 'chain', reference: 'MAIN-12', scope: 'tree' },
   ] as const) {
     const run = harness({ status: 'none' })
     run.held.enter(chainOf('MAIN-12'))

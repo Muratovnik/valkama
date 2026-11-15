@@ -19,7 +19,7 @@ type CensusInput = () => {
   view: 'graph' | 'kanban' | 'list'
 }
 
-const isOpen = (item: WorkItemBrief) => !item.state.is_terminal
+const isOpen = (item: WorkItemBrief) => item.open
 
 /** Items the view on the stage leaves out of its own counts, and why. */
 export type CensusExclusion = { count: number; kind: 'lane-heads' }
@@ -78,15 +78,15 @@ export function usePlanningCensus(input: CensusInput) {
   })
 
   /**
-   * The board grouped by epic heads each lane with its epic, so its columns count
+   * The board grouped by goal heads each lane with its goal, so its columns count
    * every item but those; under a filter it describes what the filter let
    * through, as the board does. The graph leaves nothing out: the whole space
-   * draws each epic as the frame round its work, and a chain draws its parents.
+   * draws each goal and stage as the frame round its work, and a chain draws its parents.
    */
   const exclusion = computed<CensusExclusion | null>(() => {
     const { grouping, space, view } = input()
     const items = filtered.value ? matched.value : counted.value
-    if (view === 'kanban' && grouping === 'epic') {
+    if (view === 'kanban' && grouping === 'goal') {
       const tiles = boardLanes({
         filtered: filtered.value,
         scope: counted.value,

@@ -34,15 +34,15 @@ const PHONE = 390
 interface Opened {
   asking?: boolean
   closed?: boolean
-  epic?: boolean
+  goal?: boolean
   locale?: 'en' | 'ru'
   longRead?: boolean
   width?: number
   card?: (read: Record<string, unknown>) => object
 }
 
-/** The item in its epic: the card's read says its id, the space's whose reference that is. */
-const inEpic = (model: Record<string, unknown>) => ({
+/** The item in its goal: the card's read says its id, the space's whose reference that is. */
+const inGoal = (model: Record<string, unknown>) => ({
   ...model,
   work_items: (model.work_items as { work_item_id: string }[]).map((item) =>
     item.work_item_id === workItem.work_item_id
@@ -52,17 +52,17 @@ const inEpic = (model: Record<string, unknown>) => ({
 })
 
 async function openHead(page: Page, opened: Opened = {}) {
-  const { asking, card, closed, epic, locale = 'ru', longRead, width = WIDE } = opened
+  const { asking, card, closed, goal, locale = 'ru', longRead, width = WIDE } = opened
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page, {
-    card: epic
+    card: goal
       ? (read) => ({ ...(card?.(read) ?? read), parent_id: blockedWorkItem.work_item_id })
       : card,
     closedWith: closed ? 'It is done.' : undefined,
     longRead,
     openPlan: openPlanFor,
-    ...(epic ? { space: inEpic } : {}),
+    ...(goal ? { space: inGoal } : {}),
   })
   if (asking) await installQuestions(page, [asked()])
   await page.goto(CARD)
@@ -128,7 +128,7 @@ for (const width of [WIDE, PHONE]) {
     const drawer = await openHead(page, {
       asking: true,
       card: shortHolderCard,
-      epic: true,
+      goal: true,
       width,
     })
     await expect(drawer.locator('.card-question')).toBeVisible()

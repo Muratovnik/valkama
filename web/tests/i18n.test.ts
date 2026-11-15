@@ -172,7 +172,8 @@ test('a counted Russian message takes the form its number asks for, and English 
 
 test('readiness has one label in each language, wherever it is printed', () => {
   // It had three: «Готово к работе» in the queue, which also reads as done,
-  // «можно брать» on a tile and «Можно брать сейчас» on the graph.
+  // «можно брать» on a tile and «Можно брать сейчас» on the graph. «Готово к работе»
+  // is the name of a category now, and readiness keeps a word apart from it.
   const values = (catalog: unknown): string[] =>
     catalog && typeof catalog === 'object'
       ? Object.values(catalog as Record<string, unknown>).flatMap((child) => values(child))
@@ -181,12 +182,8 @@ test('readiness has one label in each language, wherever it is printed', () => {
     const catalog = messages[locale]
     const label = catalog.workItem.facet.ready
     assert.equal(catalog.graph.frontier, `${label} · {count}`, locale)
-    for (const retired of [
-      'Готово к работе',
-      'Можно брать сейчас',
-      'Workable now',
-      'Ready to work',
-    ])
+    assert.notEqual(label, catalog.workItem.category.ready, locale)
+    for (const retired of ['Можно брать сейчас', 'Workable now', 'Ready to work'])
       assert.ok(!values(catalog).some((value) => value.includes(retired)), `${locale}: ${retired}`)
     // A mark that reads as the label is the label, not a lowercase second copy
     // of it; inside a sentence the words stay lowercase («…; можно брать 3»).

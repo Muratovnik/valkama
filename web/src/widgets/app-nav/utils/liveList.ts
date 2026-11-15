@@ -15,7 +15,7 @@
  * as in the work on view, a row that asks a person stands first. A pinned item that is not
  * on view stands with the pinned, by number, since a person put it there to find it again.
  * An item that is in the frame only as the parent of others is no row of its own: its title
- * is said with its rows, which is where an epic's name helps. A row that left the frame and
+ * is said with its rows, which is where a goal's name helps. A row that left the frame and
  * fades keeps the place its last state gave it.
  */
 import type { LiveSession } from '@/shared/api/liveFrameModel.ts'
@@ -25,7 +25,7 @@ import type { ShownRow } from '@/shared/lib/liveWorkRows.ts'
 /** An item as the list draws it, with the title of the item it belongs to, if any. */
 export interface ItemEntry {
   /** The parent's title, said with the row's own; null for a row with no parent. */
-  epic: string | null
+  goal: string | null
   kind: 'item'
   row: ShownRow
 }
@@ -107,7 +107,7 @@ export function liveList(
     const entry: ItemEntry = {
       kind: 'item',
       row,
-      epic: row.parent === null ? null : (titles.get(row.parent) ?? null),
+      goal: row.parent === null ? null : (titles.get(row.parent) ?? null),
     }
     placeOf(list, row)?.push(entry)
   }

@@ -7,8 +7,8 @@ import type { PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel
 export const boardId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 const STATES = [
-  ['backlog', 'Backlog', 'backlog', false],
-  ['todo', 'Todo', 'queued', false],
+  ['backlog', 'Backlog', 'triage', false],
+  ['todo', 'Todo', 'ready', false],
   ['dev', 'Dev', 'active', false],
   ['done', 'Done', 'completed', true],
 ] as const
@@ -31,7 +31,7 @@ export const boardWorkflow: PlanningWorkflow = {
 export type BoardStateKey = (typeof STATES)[number][0]
 
 /** The state an item names: the workflow's, without the workflow's ordering. */
-export function boardState(key: BoardStateKey): WorkItemBrief['state'] {
+export function boardState(key: BoardStateKey): NonNullable<WorkItemBrief['state']> {
   const state = boardWorkflow.states.find((entry) => entry.key === key)
   if (state === undefined) throw new Error(`no state ${key}`)
   return {
@@ -66,20 +66,24 @@ export function boardItem(
     revision: 1,
     created_at: '2026-10-30T10:00:00Z',
     updated_at: '2026-10-30T10:00:00Z',
-    container: false,
-    ready: state === 'backlog' || state === 'todo',
+    open: !(overrides.state ?? boardState(state)).is_terminal,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: state === 'backlog' || state === 'todo',
     comment_count: 0,
     ...overrides,
   }
 }
 
-/** An epic with children, as the read model says one: a container of kind epic. */
-export function boardEpic(
+/** A goal with children, as the read model says one: a container of kind goal. */
+export function boardGoal(
   n: number,
   state: BoardStateKey = 'dev',
   overrides: Partial<WorkItemBrief> = {},
 ) {
-  return boardItem(n, state, { kind: 'epic', container: true, ready: false, ...overrides })
+  return boardItem(n, state, { kind: 'goal', workable: false, ...overrides })
 }
 
 /** References in the order they are listed. */

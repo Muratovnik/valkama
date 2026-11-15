@@ -1,8 +1,8 @@
 /**
- * A chain shaped like the one that started this view: MAIN-384, an epic closed
+ * A chain shaped like the one that started this view: MAIN-384, a goal closed
  * with all 273 children done, and 343 more items discovered from them — 242
- * under MAIN-779, 88 under no epic, 13 under MAIN-900. 133 of the 616 are open:
- * 11 in progress, 1 in review, 14 queued and 107 in the backlog, of which the
+ * under MAIN-779, 88 under no goal, 13 under MAIN-900. 133 of the 616 are open:
+ * 11 in progress, 1 in review, 14 ready and 107 untriaged, of which the
  * space calls 115 workable.
  *
  * Built rather than written out, so the counts are arithmetic a reader can
@@ -16,8 +16,8 @@ const STATES = {
   done: { key: 'done', name: 'Done', category: 'completed', is_terminal: true },
   active: { key: 'dev', name: 'Development', category: 'active', is_terminal: false },
   review: { key: 'review', name: 'Code review', category: 'review', is_terminal: false },
-  queued: { key: 'todo', name: 'Todo', category: 'queued', is_terminal: false },
-  backlog: { key: 'backlog', name: 'Backlog', category: 'backlog', is_terminal: false },
+  ready: { key: 'ready', name: 'Ready', category: 'ready', is_terminal: false },
+  triage: { key: 'triage', name: 'Triage', category: 'triage', is_terminal: false },
 } as const
 
 type StateName = keyof typeof STATES
@@ -28,20 +28,23 @@ function chainId(number: number): string {
 
 let next = 1000
 
-function member(state: StateName, parent: string | null, ready = false, claim = '') {
+function member(state: StateName, parent: string | null, workable = false, claim = '') {
   const number = next++
   const terminal = STATES[state].is_terminal
   return {
     work_item_id: chainId(number),
     reference: `MAIN-${number}`,
     title: `Chain item ${number}`,
+    kind: 'task' as const,
     state: { ...STATES[state] },
+    open: !terminal,
+    container_state: null,
     claim_ref: claim,
     claim_state: claim ? ('live' as const) : null,
     parent_reference: parent,
     created_at: '2026-10-20T10:00:00Z',
     closed_at: terminal ? '2026-10-29T10:00:00Z' : null,
-    ready,
+    workable,
     // The order of work follows the numbers here, so a group read by rank reads
     // the way it did by reference.
     rank: number,
@@ -52,18 +55,18 @@ function many(count: number, make: (index: number) => ReturnType<typeof member>)
   return Array.from({ length: count }, (_, index) => make(index))
 }
 
-export function largeEpicChain() {
+export function largeGoalChain() {
   next = 1000
   const members = [
     ...many(273, () => member('done', 'MAIN-384')),
     ...many(11, () => member('active', 'MAIN-779', false, 'codex (session 1baa03d7)')),
     ...many(1, () => member('review', 'MAIN-779', false, 'claude')),
-    ...many(14, () => member('queued', 'MAIN-779', true)),
-    ...many(74, (index) => member('backlog', 'MAIN-779', index < 71)),
+    ...many(14, () => member('ready', 'MAIN-779', true)),
+    ...many(74, (index) => member('triage', 'MAIN-779', index < 71)),
     ...many(142, () => member('done', 'MAIN-779')),
-    ...many(30, () => member('backlog', null, true)),
+    ...many(30, () => member('triage', null, true)),
     ...many(58, () => member('done', null)),
-    ...many(3, () => member('backlog', 'MAIN-900')),
+    ...many(3, () => member('triage', 'MAIN-900')),
     ...many(10, () => member('done', 'MAIN-900')),
   ]
   return {
@@ -71,16 +74,17 @@ export function largeEpicChain() {
       work_item_id: CHAIN_ROOT_ID,
       reference: 'MAIN-384',
       title: 'Planning rethink',
-      kind: 'epic' as const,
+      kind: 'goal' as const,
       has_children: true,
-      totals: { chain: 616, epic: 273 },
+      totals: { chain: 616, tree: 273 },
     },
     scope: 'chain' as const,
     total: 616,
     closed: 483,
     open: 133,
-    ready: 115,
-    by_category: { active: 11, backlog: 107, completed: 483, queued: 14, review: 1 },
+    workable: 115,
+    by_category: { active: 11, completed: 483, ready: 14, review: 1, triage: 107 },
+    by_container_state: {},
     origins: [
       { parent_reference: 'MAIN-384', parent_title: 'Planning rethink', count: 273, open: 0 },
       { parent_reference: 'MAIN-779', parent_title: 'Second wave', count: 242, open: 100 },
@@ -111,14 +115,15 @@ export function emptyChain(reference = 'QA-320', id = '00000000-0000-4000-8000-0
       title: 'Leaf',
       kind: 'task' as const,
       has_children: false,
-      totals: { chain: 0, epic: 0 },
+      totals: { chain: 0, tree: 0 },
     },
     scope: 'chain' as const,
     total: 0,
     closed: 0,
     open: 0,
-    ready: 0,
+    workable: 0,
     by_category: {},
+    by_container_state: {},
     origins: [],
     series: [],
     recent: { days: 7, created: 0, closed: 0, trend: 'steady' as const },

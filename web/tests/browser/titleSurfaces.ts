@@ -79,7 +79,7 @@ export const routeFinder = (page: Page, title: string) =>
   )
 
 /** The related-work picker's answer, one candidate under `title`. */
-export const routePicker = (page: Page, title: string) =>
+export const routeParentMenu = (page: Page, title: string) =>
   page.route('**/api/planning/search?*', (route) =>
     route.fulfill({
       json: {
@@ -105,7 +105,7 @@ export const linkedTo = (title: string) => ({
     links: workItem.links.map((link) => ({
       ...link,
       title,
-      state_category: 'backlog',
+      state_category: 'triage',
       state_name: 'Backlog',
       is_terminal: false,
       state_unavailable: null,
@@ -115,7 +115,7 @@ export const linkedTo = (title: string) => ({
 
 const identity = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
-/** An epic `MAIN-1` framing `MAIN-2` and `MAIN-3`, all three under `title`. */
+/** A goal `MAIN-1` framing `MAIN-2` and `MAIN-3`, all three under `title`. */
 async function serveGraph(page: Page, title: string) {
   const { model } = broadSpace()
   const item = (n: number, change: Record<string, unknown>) => ({
@@ -125,7 +125,11 @@ async function serveGraph(page: Page, title: string) {
     number: n,
     title,
     kind: 'task',
-    container: false,
+    open: true,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
     parent_id: null,
     claim_ref: '',
     claim_state: null,
@@ -138,7 +142,7 @@ async function serveGraph(page: Page, title: string) {
       const body = response.body as unknown as Record<string, unknown>
       body.workflow = model.workflow
       body.work_items = [
-        item(1, { kind: 'epic', container: true }),
+        item(1, { kind: 'goal' }),
         item(2, { parent_id: identity(1) }),
         item(3, { parent_id: identity(1) }),
       ]
@@ -186,7 +190,7 @@ export const TITLE_SURFACES: Record<string, (page: Page, title: string) => Promi
   },
   'the picker of related work': async (page, title) => {
     await installBackend(page)
-    await routePicker(page, title)
+    await routeParentMenu(page, title)
     const drawer = await openCard(page)
     await drawer.getByRole('tab', { name: /Relations/iu }).click()
     await drawer.getByRole('button', { name: 'Add link', exact: true }).click()
@@ -196,17 +200,17 @@ export const TITLE_SURFACES: Record<string, (page: Page, title: string) => Promi
     // The reference, its dot and the title: one line of words that breaks as one.
     return dialog.locator('.result-title')
   },
-  "the new task's epic list": async (page, title) => {
-    const epic = <Value>(model: Value) => {
+  "the new task's goal list": async (page, title) => {
+    const goal = <Value>(model: Value) => {
       const read = retitled(model, title) as Value & { work_items: Record<string, unknown>[] }
       read.work_items = read.work_items.map((item) =>
         item.reference === workItemRef.reference
-          ? { ...item, kind: 'epic', container: true, parent_id: null }
+          ? { ...item, kind: 'goal', parent_id: null }
           : item,
       )
       return read
     }
-    await installBackend(page, { space: epic })
+    await installBackend(page, { space: goal })
     await page.goto(boardRoute())
     await expect(page.locator('.work-item-board')).toBeVisible()
     await page

@@ -1,7 +1,7 @@
 /**
  * Where a card's chain stands and when it offers its two scopes: a tab of its own after
  * Overview, offered only where there is a chain, and neither on Overview nor in Relations;
- * and «Epic | Chain» only where the read says the two scopes hold different work.
+ * and «Goal | Chain» only where the read says the two scopes hold different work.
  */
 import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 
-import { chainResponse, emptyChain, largeEpicChain } from '../fixtures/chain.ts'
+import { chainResponse, emptyChain, largeGoalChain } from '../fixtures/chain.ts'
 import { deferred, showChain, showTab, workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
@@ -24,10 +24,10 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   fetchWorkItem: vi.fn(),
 }))
 
-const ROOT = { ...workItemFixture('Planning rethink', 1), container: true }
+const ROOT = { ...workItemFixture('Planning rethink', 1), kind: 'goal' as const }
 
-function serveChain(totals: { chain: number; epic: number }) {
-  const chain = largeEpicChain()
+function serveChain(totals: { chain: number; tree: number }) {
+  const chain = largeGoalChain()
   serve(json(chainResponse({ ...chain, root: { ...chain.root, totals } })))
 }
 
@@ -54,7 +54,7 @@ describe('a card’s chain', () => {
   useInspectorHarness()
 
   it('has a tab of its own after Overview, and stands neither on Overview nor in Relations', async () => {
-    serveChain({ chain: 616, epic: 273 })
+    serveChain({ chain: 616, tree: 273 })
     const wrapper = mountInspector(ROOT)
     await flushPromises()
     expect(vi.mocked(fetchWorkItem)).toHaveBeenCalled()
@@ -93,7 +93,7 @@ describe('a card’s chain', () => {
 
     const refreshed = deferred<Response>()
     serve(
-      json(chainResponse(largeEpicChain())),
+      json(chainResponse(largeGoalChain())),
       refreshed.promise,
       json(chainResponse(emptyChain())),
     )
@@ -105,7 +105,7 @@ describe('a card’s chain', () => {
     await grown.setProps({ refreshToken: 1 })
     await flushPromises()
     expect(tabNames(grown)).toContain('Chain')
-    refreshed.resolve(json(chainResponse(largeEpicChain())))
+    refreshed.resolve(json(chainResponse(largeGoalChain())))
     await flushPromises()
     await showChain(grown)
     await grown.setProps({ refreshToken: 2 })
@@ -114,13 +114,13 @@ describe('a card’s chain', () => {
     expect(grown.get('.inspector-tabs [aria-selected="true"]').text()).toBe('Overview')
   })
 
-  it('offers Epic and Chain only where the two scopes hold different work', async () => {
+  it('offers Goal and Chain only where the two scopes hold different work', async () => {
     const cases = [
-      { totals: { chain: 616, epic: 273 }, offered: true },
+      { totals: { chain: 616, tree: 273 }, offered: true },
       // The work grew nothing past the children: both scopes are one list.
-      { totals: { chain: 616, epic: 616 }, offered: false },
-      // No children: Epic would be an empty list.
-      { totals: { chain: 616, epic: 0 }, offered: false },
+      { totals: { chain: 616, tree: 616 }, offered: false },
+      // No children: Goal would be an empty list.
+      { totals: { chain: 616, tree: 0 }, offered: false },
     ]
     for (const { totals, offered } of cases) {
       serveChain(totals)

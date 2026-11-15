@@ -102,8 +102,9 @@ test('a hue on a work item means one thing, and ordinary work carries none', () 
     ['active', 'active'],
     ['review', 'review'],
     ['blocked', 'blocked'],
-    ['queued', 'queued'],
-    ['backlog', 'backlog'],
+    ['ready', 'ready'],
+    ['deferred', 'deferred'],
+    ['triage', 'triage'],
   ] as const) {
     assert.equal(statePresentation('work-item-chain-group', group).tone, tone(category), group)
   }

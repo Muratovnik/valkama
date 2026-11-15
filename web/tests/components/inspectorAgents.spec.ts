@@ -19,7 +19,7 @@ import type { Executor } from '@/shared/api/executorModel.ts'
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
-import { workItemFixture } from '../fixtures/workItem.ts'
+import { stateOf, workItemFixture } from '../fixtures/workItem.ts'
 import { hintOf } from '../support/hint.ts'
 
 // A group that can reach its session asks where a press on it would go. No server answers
@@ -431,7 +431,8 @@ function overview(agents: WorkItemAgent[] | undefined, closed = false) {
   const i18n = createI18n({ legacy: false, locale: 'en', messages, pluralRules })
   const item = workItemFixture('Item', 1)
   const finished = {
-    state: { ...item.state, is_terminal: true },
+    open: false,
+    state: { ...stateOf(item), is_terminal: true },
     summary: { done: 'Shipped', next: '' },
   }
   return mount(InspectorOverview, {

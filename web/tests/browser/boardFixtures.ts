@@ -1,6 +1,6 @@
 /**
- * The space the board suite serves: an epic with work in every state, an epic
- * with nothing under it yet, a closed epic and loose work under no epic. Titles
+ * The space the board suite serves: a goal with work in every state, a goal
+ * with nothing under it yet, a closed goal and loose work under no goal. Titles
  * are long where a lane head must shorten them.
  *
  * The double's own placement is here too, written from the contract rather than
@@ -17,12 +17,17 @@ export const [BACKLOG, DEV, DONE] = planningReadModel.workflow.states.map(
 )
 type State = typeof BACKLOG
 
-export const LONG_EPIC =
-  'Board lanes: read the space by chain, with each epic’s open and closed work counted where its lane begins'
-const EMPTY_EPIC =
-  'An epic opened yesterday and given nothing yet, titled long enough to need an ellipsis at every width'
+export const LONG_GOAL =
+  'Board lanes: read the space by chain, with each goal’s open and closed work counted where its lane begins'
+const EMPTY_GOAL =
+  'A goal opened yesterday and given nothing yet, titled long enough to need an ellipsis at every width'
 
-function brief(number: number, state: State, title: string, extra: Partial<WorkItemBrief> = {}) {
+function brief(
+  number: number,
+  state: State,
+  title: string,
+  extra: Partial<Omit<WorkItemBrief, 'state'>> = {},
+) {
   return {
     ...planningReadModel.work_items[1],
     work_item_id: identity(number),
@@ -34,7 +39,8 @@ function brief(number: number, state: State, title: string, extra: Partial<WorkI
     claim_ref: '',
     claim_state: null,
     parent_id: null,
-    ready: state === BACKLOG,
+    open: !state.is_terminal,
+    workable: state === BACKLOG,
     revision: 1,
     ...extra,
   }
@@ -42,7 +48,7 @@ function brief(number: number, state: State, title: string, extra: Partial<WorkI
 
 export type Brief = ReturnType<typeof brief>
 
-const under = (epic: number) => ({ parent_id: identity(epic) })
+const under = (goal: number) => ({ parent_id: identity(goal) })
 /**
  * When finished work closed, a day of October 2026. The space lists it in the
  * order of work, so the Done column's own order is not the list's.
@@ -54,30 +60,29 @@ const closedOn = (day: number) => ({
 /** The space in the order of work: the order a read of it lists, state by state. */
 export function boardSpace(): Brief[] {
   return [
-    brief(401, DEV, LONG_EPIC, { kind: 'epic', container: true, ready: false }),
+    brief(401, DEV, LONG_GOAL, { kind: 'goal', workable: false }),
     brief(402, BACKLOG, 'Persist the order of a column', under(401)),
     brief(403, BACKLOG, 'Place new work at the end of its state', under(401)),
     brief(404, BACKLOG, 'Take the next ready item by its place', under(401)),
     brief(405, DEV, 'Move a tile from the keyboard', under(401)),
     brief(406, DONE, 'Fold a lane with nothing open', { ...under(401), ...closedOn(21) }),
-    brief(410, BACKLOG, EMPTY_EPIC, { kind: 'epic', ready: false }),
+    brief(410, BACKLOG, EMPTY_GOAL, { kind: 'goal', workable: false }),
     brief(420, DONE, 'The first board', {
-      kind: 'epic',
-      container: true,
-      ready: false,
+      kind: 'goal',
+      workable: false,
       ...closedOn(5),
     }),
     brief(421, DONE, 'Columns by workflow state', { ...under(420), ...closedOn(3) }),
     brief(422, DONE, 'Drag between columns', { ...under(420), ...closedOn(25) }),
     // More labels than a column's line holds, so the line has a count to make room for.
-    brief(430, BACKLOG, 'Loose work under no epic', {
+    brief(430, BACKLOG, 'Loose work under no goal', {
       labels: ['agent-packets', 'coordinator', 'decision-review', 'ui'],
     }),
   ]
 }
 
 /** Where `rank` puts an item among the items of `state`, in a flat list grouped later. */
-export function insertAt(items: Brief[], state: Brief['state'], rank: unknown) {
+export function insertAt(items: Brief[], state: State, rank: unknown) {
   const peers = items.flatMap((item, at) => (item.state.key === state.key ? [at] : []))
   const anchor = typeof rank === 'string' ? /^(before|after):(.+)$/u.exec(rank) : null
   if (anchor) {
@@ -90,7 +95,16 @@ export function insertAt(items: Brief[], state: Brief['state'], rank: unknown) {
 
 /** The chain of MAIN-401 as the server answers it: its children, in the order of work. */
 export function chainOf(space: Brief[]) {
-  const order = ['active', 'review', 'queued', 'backlog', 'blocked', 'completed', 'cancelled']
+  const order = [
+    'active',
+    'review',
+    'ready',
+    'triage',
+    'deferred',
+    'blocked',
+    'completed',
+    'cancelled',
+  ]
   const members = space
     .filter((item) => item.parent_id === identity(401))
     .map((item, index) => ({ item, index }))
@@ -105,17 +119,18 @@ export function chainOf(space: Brief[]) {
     root: {
       work_item_id: identity(401),
       reference: 'MAIN-401',
-      title: LONG_EPIC,
-      kind: 'epic' as const,
+      title: LONG_GOAL,
+      kind: 'goal' as const,
       has_children: true,
-      totals: { chain: members.length, epic: members.length },
+      totals: { chain: members.length, tree: members.length },
     },
     scope: 'chain' as const,
     total: members.length,
     closed,
     open: members.length - closed,
-    ready: members.filter((item) => item.ready).length,
+    workable: members.filter((item) => item.workable).length,
     by_category: {},
+    by_container_state: {},
     origins: [
       {
         parent_reference: 'MAIN-401',
@@ -130,18 +145,21 @@ export function chainOf(space: Brief[]) {
       work_item_id: item.work_item_id,
       reference: item.reference,
       title: item.title,
+      kind: item.kind,
       state: {
         key: item.state.key,
         name: item.state.name,
         category: item.state.category,
         is_terminal: item.state.is_terminal,
       },
+      open: item.open,
+      container_state: item.container_state,
       claim_ref: '',
       claim_state: null,
       parent_reference: 'MAIN-401',
       created_at: '2026-10-20T10:00:00Z',
       closed_at: item.state.is_terminal ? '2026-10-21T10:00:00Z' : null,
-      ready: item.ready,
+      workable: item.workable,
       rank: index + 1,
     })),
     edges: [],

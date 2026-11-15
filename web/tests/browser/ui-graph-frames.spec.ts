@@ -1,5 +1,5 @@
 /**
- * An epic's frame as the browser paints it: its header gives up the title and
+ * A goal's frame as the browser paints it: its header gives up the title and
  * never a count, its lines run over it, its edge says how far the work has come
  * in a forced palette too, and zoomed out the header still reads.
  *
@@ -102,7 +102,7 @@ test('folding a frame turns its chevron and says it can be expanded', async ({ p
   await fold.click()
   const same = page.locator(`[data-walk-target="${target}"]`)
   await expect(same).toHaveAttribute('aria-expanded', 'false')
-  await expect(same).toHaveAccessibleName(/^Expand epic /u)
+  await expect(same).toHaveAccessibleName(/^Expand goal /u)
 })
 
 for (const scheme of ['light', 'dark'] as const) {
@@ -151,6 +151,6 @@ test('zoomed out, a header is its reference over a thicker edge', async ({ page 
     .evaluate((edge) => edge.getBoundingClientRect().height)
   // 12px in the field's units at a third of the size: the 3px edge would be one.
   expect(thickness).toBeGreaterThan(3)
-  // The work under no epic has no reference, so it keeps its name.
+  // The work under no goal has no reference, so it keeps its name.
   await expect(page.locator('[data-frame="none"] .graph-frame-title')).toBeVisible()
 })

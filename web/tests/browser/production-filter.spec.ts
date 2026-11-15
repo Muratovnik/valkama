@@ -33,7 +33,7 @@ async function open(page: Page, width = 1440, height = 900) {
 
 const field = (page: Page) => page.getByRole('combobox', { name: 'Filter work' })
 /** The board's grouping, chosen in the view's menu beside the view switch. */
-async function group(page: Page, choice: 'By parent' | 'No grouping') {
+async function group(page: Page, choice: 'By goal' | 'No grouping') {
   await page.getByRole('button', { name: 'View', exact: true }).click()
   await page.getByRole('menuitemradio', { name: choice }).click()
   await expect(page.getByRole('menu')).toHaveCount(0)
@@ -73,21 +73,21 @@ for (const width of [1440, 1024]) {
 test('the grouped board says its parents as rows on the counts line, where a phone has no room for it', async ({
   page,
 }) => {
-  // The board's own fixture has epics to draw as rows; the flat board is the start.
+  // The board's own fixture has goals to draw as rows; the flat board is the start.
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
   await serve(page)
   await openBoard(page, {})
   const rows = page.locator('.workspace-rows')
   await expect(rows).toBeHidden()
-  await group(page, 'By parent')
+  await group(page, 'By goal')
   await expect(rows).toBeVisible()
   await expect(rows).toContainText(/parents? as (rows|a row)/)
   await group(page, 'No grouping')
   await expect(rows).toBeHidden()
   // A phone keeps the line at its height: the rows are not drawn there at all.
   await page.setViewportSize({ width: 390, height: 844 })
-  await group(page, 'By parent')
+  await group(page, 'By goal')
   await expect(page.locator('.workspace-figures')).toBeVisible()
   await expect(rows).toBeHidden()
 })
@@ -195,7 +195,7 @@ for (const width of [1440, 1024, 390]) {
         scope: projectScope,
         state: {
           cat: 'backlog,queued,active,review,blocked,completed,cancelled',
-          kind: 'bug,task,epic,improvement',
+          kind: 'bug,task,goal,improvement',
           pri: 'low,medium,high,urgent',
         },
       }),

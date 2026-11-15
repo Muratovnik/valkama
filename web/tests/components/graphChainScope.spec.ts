@@ -40,14 +40,14 @@ vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
 }))
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
-const OPEN: WorkItemBrief['state'] = {
-  state_id: 'todo',
-  key: 'todo',
-  name: 'Todo',
-  category: 'queued',
+const OPEN: NonNullable<WorkItemBrief['state']> = {
+  state_id: 'ready',
+  key: 'ready',
+  name: 'Ready',
+  category: 'ready',
   is_terminal: false,
 }
-const DONE: WorkItemBrief['state'] = {
+const DONE: NonNullable<WorkItemBrief['state']> = {
   state_id: 'done',
   key: 'done',
   name: 'Done',
@@ -68,8 +68,12 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
     claim_ref: '',
     claim_state: null,
     parent_id: null,
-    container: false,
-    ready: false,
+    open: !(overrides.state ?? OPEN).is_terminal,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: false,
     labels: [],
     source: '',
     checklist: [],
@@ -81,10 +85,10 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
   }
 }
 
-// Root 1 (an epic) with children 2 (done) and 3; 4 discovered from 2; 5 and 6
+// Root 1 (a goal) with children 2 (done) and 3; 4 discovered from 2; 5 and 6
 // linked to each other outside the chain; 7 and 8 linked to nothing.
 const items = [
-  item(1, { kind: 'epic', container: true }),
+  item(1, { kind: 'goal' }),
   item(2, { parent_id: id(1), state: DONE }),
   item(3, { parent_id: id(1) }),
   item(4),
@@ -123,7 +127,7 @@ function openGraph(props: Record<string, unknown> = {}) {
     props: {
       items,
       edges: spaceEdges,
-      epicId: null,
+      scopeRootId: null,
       open: true,
       scopeKind: 'all',
       space: 'space-1',
@@ -149,7 +153,7 @@ async function drawn(graph: ReturnType<typeof openGraph>) {
 describe('the whole-space graph and the items no link touches', () => {
   it('draws every open item in its frame, with no switch to leave the unlinked out', async () => {
     const graph = openGraph()
-    // 3 is tied to nothing but its epic, 4 only to closed work hidden here, and
+    // 3 is tied to nothing but its goal, 4 only to closed work hidden here, and
     // 7 and 8 to nothing: each still stands in its frame.
     expect(await drawn(graph)).toEqual(['MAIN-3', 'MAIN-4', 'MAIN-5', 'MAIN-6', 'MAIN-7', 'MAIN-8'])
     expect(graph.find('[role="switch"]').exists()).toBe(false)
@@ -201,7 +205,7 @@ describe('the whole-space graph and the items no link touches', () => {
     const moving = (work: number) =>
       openGraph({
         scopeKind: 'chain',
-        epicId: id(1),
+        scopeRootId: id(1),
         chain,
         live: { [id(work)]: { state: 'working' } },
       })
@@ -225,7 +229,7 @@ describe('the graph scoped to one chain', () => {
   const chainEdges: PlanningEdge[] = [{ from: id(4), to: id(2), kind: 'discovered-from' }]
 
   it('draws the root and the open members, and the closed ones only when the switch is thrown', async () => {
-    const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
+    const graph = openGraph({ scopeKind: 'chain', scopeRootId: id(1), chain, edges: chainEdges })
     expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-3', 'MAIN-4'])
     // One switch, and it is the closed one: a chain has no unlinked toggle and
     // no open/all filter.
@@ -247,13 +251,13 @@ describe('the graph scoped to one chain', () => {
     expect(card('MAIN-2')?.props('recessed')).toBe(true)
     expect(card('MAIN-3')?.props('recessed')).toBe(false)
     expect(card('MAIN-2')?.props('chainGroup')).toBe('done')
-    expect(card('MAIN-3')?.props('chainGroup')).toBe('queued')
+    expect(card('MAIN-3')?.props('chainGroup')).toBe('ready')
   })
 
   it('takes the closed switch from its host, and hands a change back rather than keeping it', async () => {
     const graph = openGraph({
       scopeKind: 'chain',
-      epicId: id(1),
+      scopeRootId: id(1),
       chain,
       edges: chainEdges,
       showClosed: true,
@@ -268,11 +272,11 @@ describe('the graph scoped to one chain', () => {
 
   it('marks the root with a word and in its accessible name, closed or not', async () => {
     const closedRoot = items.map((entry) =>
-      entry.reference === 'MAIN-1' ? { ...entry, state: DONE } : entry,
+      entry.reference === 'MAIN-1' ? { ...entry, open: false, state: DONE } : entry,
     )
     const graph = openGraph({
       scopeKind: 'chain',
-      epicId: id(1),
+      scopeRootId: id(1),
       chain,
       edges: chainEdges,
       items: closedRoot,
@@ -290,13 +294,13 @@ describe('the graph scoped to one chain', () => {
   })
 
   it('leaves out the origin chip that would only repeat the root, and keeps any other', async () => {
-    // 3 is filed under the root itself; 4 under an epic outside the chain.
+    // 3 is filed under the root itself; 4 under a goal outside the chain.
     const filed = items.map((entry) =>
       entry.reference === 'MAIN-4' ? { ...entry, parent_id: id(5) } : entry,
     )
     const graph = openGraph({
       scopeKind: 'chain',
-      epicId: id(1),
+      scopeRootId: id(1),
       chain,
       edges: chainEdges,
       items: filed,
@@ -306,12 +310,12 @@ describe('the graph scoped to one chain', () => {
     const card = (reference: string) =>
       cards.find((entry) => entry.props('node').reference === reference)
     expect(card('MAIN-3')?.props('parentReference')).toBeUndefined()
-    expect(card('MAIN-3')?.find('.flow-node-epic').exists()).toBe(false)
-    expect(card('MAIN-4')?.get('.flow-node-epic').text()).toBe('MAIN-5')
+    expect(card('MAIN-3')?.find('.flow-node-goal').exists()).toBe(false)
+    expect(card('MAIN-4')?.get('.flow-node-goal').text()).toBe('MAIN-5')
   })
 
   it('names the chain in a chip that leads back to the whole space', async () => {
-    const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
+    const graph = openGraph({ scopeKind: 'chain', scopeRootId: id(1), chain, edges: chainEdges })
     await drawn(graph)
     const chip = graph.get('.graph-chip')
     expect(chip.text()).toBe('Chain MAIN-1 · 3')
@@ -329,7 +333,13 @@ describe('the graph scoped to one chain', () => {
       { from: id(9001), to: id(4), kind: 'blocks', reference: 'OTH-7', ...known(true) },
       { from: id(9002), to: id(1), kind: 'blocks', reference: 'OTH-8', ...known(false) },
     ]
-    const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges, showClosed: true })
+    const graph = openGraph({
+      scopeKind: 'chain',
+      scopeRootId: id(1),
+      chain,
+      edges,
+      showClosed: true,
+    })
     expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'])
     const cards = graph.findAllComponents(GraphNodeCard)
     const waiting = (reference: string) =>
@@ -348,22 +358,22 @@ describe('the graph scoped to one chain', () => {
   })
 
   it('names in its legend the groups it draws, and keeps the place of the one the switch adds', async () => {
-    const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
+    const graph = openGraph({ scopeKind: 'chain', scopeRootId: id(1), chain, edges: chainEdges })
     await drawn(graph)
     const key = '.graph-canvas .graph-legend-state'
     const named = () => graph.findAll(`${key}:not(.held)`).map((entry) => entry.text())
     const places = () => graph.findAll(key).map((entry) => entry.text())
     // Every open member is in the one queued state, so the key says its name,
     // as the board's column and the card's chain section do.
-    expect(named()).toEqual(['Queued'])
+    expect(named()).toEqual(['Ready'])
     // «Done» is not drawn, so it is not named; its place is kept, unseen, so
     // throwing the switch moves no word of the key.
-    expect(places()).toEqual(['Done', 'Queued'])
+    expect(places()).toEqual(['Done', 'Ready'])
     expect(graph.get(`${key}.held`).text()).toBe('Done')
     await graph.get('[role="switch"]').trigger('click')
     await drawn(graph)
-    expect(named()).toEqual(['Done', 'Queued'])
-    expect(places()).toEqual(['Done', 'Queued'])
+    expect(named()).toEqual(['Done', 'Ready'])
+    expect(places()).toEqual(['Done', 'Ready'])
     // The key lies on the field. The bar's options hold the same key for a
     // narrow workspace only, where the field's corner gives way to the count;
     // which one shows is the container's call (the browser spec at 390).
@@ -380,14 +390,14 @@ describe('the graph scoped to one chain', () => {
     )
     const graph = openGraph({
       scopeKind: 'chain',
-      epicId: id(1),
+      scopeRootId: id(1),
       chain,
       edges: chainEdges,
       items: mixed,
     })
     await drawn(graph)
     const named = graph.findAll('.graph-canvas .graph-legend-state:not(.held)')
-    expect(named.map((entry) => entry.text())).toEqual(['To do'])
+    expect(named.map((entry) => entry.text())).toEqual(['Ready'])
   })
 
   it('orders its legend as the card’s map runs a lane: finished, under way with review first, then ahead', async () => {
@@ -405,18 +415,18 @@ describe('the graph scoped to one chain', () => {
     })
     const graph = openGraph({
       scopeKind: 'chain',
-      epicId: id(1),
+      scopeRootId: id(1),
       chain,
       edges: chainEdges,
       items: staged,
     })
     await drawn(graph)
     const named = graph.findAll('.graph-canvas .graph-legend-state:not(.held)')
-    expect(named.map((entry) => entry.text())).toEqual(['Review', 'In progress', 'To do'])
+    expect(named.map((entry) => entry.text())).toEqual(['Review', 'In progress', 'Ready'])
   })
 
   it('draws each node as its colour and reference once the field is zoomed out past reading', async () => {
-    const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
+    const graph = openGraph({ scopeKind: 'chain', scopeRootId: id(1), chain, edges: chainEdges })
     await drawn(graph)
     expect(graph.find('.flow-node-overview').exists()).toBe(false)
     viewport.value = { x: 0, y: 0, zoom: 0.3 }
@@ -427,7 +437,7 @@ describe('the graph scoped to one chain', () => {
     expect(card?.get('.flow-node-overview').text()).toBe('MAIN-3')
     expect(card?.find('.flow-node-title').exists()).toBe(false)
     // Its accessible name still says everything the card does.
-    expect(card?.get('button').attributes('aria-label')).toBe('MAIN-3 item 3 · Queued')
+    expect(card?.get('button').attributes('aria-label')).toBe('MAIN-3 item 3 · Ready')
     viewport.value = { x: 0, y: 0, zoom: 1 }
     await flushPromises()
     expect(graph.find('.flow-node-overview').exists()).toBe(false)

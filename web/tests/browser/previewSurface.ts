@@ -68,11 +68,11 @@ const PREVIEW_STATES: Readonly<Record<string, WorkItemPreviewSubject>> = {
   long: {
     reference: 'MAIN-200',
     item: boardItem(200, 'todo', {
-      kind: 'epic',
+      kind: 'goal',
       priority: 'urgent',
       title: 'Ж'.repeat(200),
       updated_at: at(10, 29, 8, 30),
-      ready: false,
+      workable: false,
     }),
     waitingOn: 'MAIN-12',
   },

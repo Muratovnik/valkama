@@ -24,6 +24,7 @@ import { executorSchema } from '@/shared/api/executorModel.ts'
 import { TIMELESS_LIVE_STATES } from '@/shared/api/liveWorkModel.ts'
 import {
   blankable,
+  CONTAINER_STATES,
   SPACE_KEY,
   TITLE,
   WORK_ITEM_KINDS,
@@ -47,9 +48,14 @@ const rowShape = {
   /** The session the row's state comes from; null with no live work or only an attempt. */
   executor: executorSchema.nullable(),
   pinned: z.boolean(),
-  /** The item's workflow state, as a link names the state of its other end. */
-  state_name: boundedText(TITLE, 200),
+  /**
+   * The item's workflow state, as a link names the state of its other end; blank for an
+   * accepted open goal or stage, which derives `container_state` instead.
+   */
+  state_name: blankable(200),
   is_terminal: z.boolean(),
+  open: z.boolean(),
+  container_state: enumField(CONTAINER_STATES).nullable(),
   /** When the item last changed; only a write to it moves this. */
   updated_at: boundedText(ISO, 96),
 }

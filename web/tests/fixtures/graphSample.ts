@@ -7,12 +7,14 @@ import {
   FOLDED_WIDTH,
   FRAME_HEADER,
   FRAME_PADDING,
-  NO_EPIC_FRAME,
+  NO_PARENT_FRAME,
   NODE_HEIGHT,
   NODE_WIDTH,
 } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { FrameProgress, PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -21,26 +23,25 @@ import { broadSpace } from './graphSpaces.ts'
 /** How the work in `items` stands, counted the way a frame's header counts it. */
 function progressOf(items: readonly WorkItemBrief[]): FrameProgress {
   const count = (categories: readonly string[]) =>
-    items.filter((item) => !item.state.is_terminal && categories.includes(item.state.category))
-      .length
+    items.filter((item) => item.open && categories.includes(item.state?.category ?? 'none')).length
   return {
-    done: items.filter((item) => item.state.is_terminal).length,
+    done: items.filter((item) => !item.open).length,
     review: count(['review']),
     active: count(['active']),
     blocked: count(['blocked']),
-    ahead: count(['queued', 'backlog']),
+    ahead: count(['ready', 'triage', 'deferred', 'none']),
     total: items.length,
   }
 }
 
 function frame(
-  epic: WorkItemBrief | null,
+  goal: WorkItemBrief | null,
   members: WorkItemBrief[],
   box: Pick<PlacedFrame, 'folded' | 'height' | 'width' | 'x' | 'y'>,
 ): PlacedFrame {
   return {
-    id: epic?.work_item_id ?? NO_EPIC_FRAME,
-    epic,
+    id: goal?.work_item_id ?? NO_PARENT_FRAME,
+    goal,
     parentId: null,
     foldable: true,
     header: FRAME_HEADER,
@@ -51,20 +52,22 @@ function frame(
 }
 
 /**
- * A laid-out field to draw before the layout produces one: the epic with the
- * long title open round its two open cards, the largest epic and the work under
+ * A laid-out field to draw before the layout produces one: the goal with the
+ * long title open round its two open cards, the largest goal and the work under
  * none folded, a line inside the open frame and one folded onto the largest
- * epic's frame, which stands for two links, all as the layout sizes them.
+ * goal's frame, which stands for two links, all as the layout sizes them.
  */
 export function placedSample(): GraphLayout {
-  const { epics, model } = broadSpace()
-  const largest = epics[0]
-  const long = epics[5]
-  const under = (epic: WorkItemBrief) =>
-    model.work_items.filter((item) => item.parent_id === epic.work_item_id)
-  const loose = model.work_items.filter((item) => item.parent_id === null && !item.container)
-  const cards = under(long).filter((item) => !item.state.is_terminal)
-  const targets = under(largest).filter((item) => !item.state.is_terminal)
+  const { goals, model } = broadSpace()
+  const largest = goals[0]
+  const long = goals[5]
+  const under = (goal: WorkItemBrief) =>
+    model.work_items.filter((item) => item.parent_id === goal.work_item_id)
+  const loose = model.work_items.filter(
+    (item) => item.parent_id === null && !WORK_ITEM_TREE.isContainer(item),
+  )
+  const cards = under(long).filter((item) => item.open)
+  const targets = under(largest).filter((item) => item.open)
   const [first, second] = cards
   /** Where the open frame's cards stand, and how tall the frame is round them. */
   const cardY = FRAME_HEADER + FRAME_PADDING

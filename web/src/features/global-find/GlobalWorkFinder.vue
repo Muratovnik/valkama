@@ -21,7 +21,7 @@ import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
 import { projectTitle } from '@/shared/lib/projectTitles.ts'
-import { useStateName } from '@/shared/lib/useStateName.ts'
+import { useStandingName } from '@/shared/lib/useStateName.ts'
 import CommandList from '@/shared/ui/CommandList.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
@@ -40,7 +40,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ close: []; select: [target: PlanningTarget] }>()
 const { t } = useI18n()
-const stateName = useStateName()
+const stateName = useStandingName()
 const query = ref('')
 const retry = ref(0)
 const loading = ref(false)
@@ -146,9 +146,11 @@ type Found = GlobalPlanningSearch['items'][number]
 
 /** What the registry can print for a result: its kind, priority and state, when the server sent them. */
 function subjectOf({ item }: Found): FacetSubject | null {
-  const { kind, priority, state } = item
-  return kind && priority && state.category
-    ? { kind, priority, state: { ...state, category: state.category } }
+  const { kind, priority, state, open, container_state } = item
+  if (!kind || !priority) return null
+  if (state === null) return { kind, priority, open, container_state, state }
+  return state.category
+    ? { kind, priority, open, container_state, state: { ...state, category: state.category } }
     : null
 }
 
@@ -164,7 +166,7 @@ const choices = computed(() =>
       subject,
       // With its marks the state is drawn, so the words after it are the rest.
       place: [project, ...readonly].join(' · '),
-      detail: [project, stateName(entry.item.state), ...readonly].join(' · '),
+      detail: [project, stateName(entry.item), ...readonly].join(' · '),
     }
   }),
 )

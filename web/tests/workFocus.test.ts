@@ -16,6 +16,7 @@ import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { dataScopeId, planningReadModel, spaceRef } from './browser/planningFixtures.ts'
 import { planningReadFor } from './browser/planningReadFixture.ts'
+import { stateOf } from './fixtures/workItem.ts'
 const READY: WorkFilter = { text: '', ready: true }
 const HELD: WorkFilter = { text: '', held: true }
 const REVIEW: WorkFilter = { text: '', category: ['review'] }
@@ -47,29 +48,29 @@ test('the filter reads readiness, the claim and the workflow category as separat
     ).body,
   ).work_items[0]
   expect(item).toBeDefined()
-  expect(matchesWorkFilter({ ...item, ready: true }, READY)).toBe(true)
-  expect(matchesWorkFilter({ ...item, ready: false }, READY)).toBe(false)
+  expect(matchesWorkFilter({ ...item, workable: true }, READY)).toBe(true)
+  expect(matchesWorkFilter({ ...item, workable: false }, READY)).toBe(false)
   expect(
     matchesWorkFilter(
-      { ...item, claim_ref: 'owner', state: { ...item.state, is_terminal: false } },
+      { ...item, claim_ref: 'owner', state: { ...stateOf(item), is_terminal: false } },
       HELD,
     ),
   ).toBe(true)
   expect(
     matchesWorkFilter(
-      { ...item, claim_ref: 'owner', state: { ...item.state, is_terminal: true } },
+      { ...item, claim_ref: 'owner', open: false, state: { ...stateOf(item), is_terminal: true } },
       HELD,
     ),
   ).toBe(false)
   expect(
     matchesWorkFilter(
-      { ...item, state: { ...item.state, key: 'renamed', category: 'blocked' } },
+      { ...item, state: { ...stateOf(item), key: 'renamed', category: 'blocked' } },
       { text: '', category: ['blocked'] },
     ),
   ).toBe(true)
   expect(
     matchesWorkFilter(
-      { ...item, state: { ...item.state, key: 'renamed', category: 'review' } },
+      { ...item, state: { ...stateOf(item), key: 'renamed', category: 'review' } },
       REVIEW,
     ),
   ).toBe(true)

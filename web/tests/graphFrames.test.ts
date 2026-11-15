@@ -7,29 +7,31 @@ import { describe, expect, it } from 'vitest'
 
 import { FOLD_ABOVE, frameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import type { FrameProjectionInput } from '@/widgets/work-item-graph/utils/graphFrames.ts'
-import { NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 import { broadSpace } from './fixtures/graphSpaces.ts'
 
 const STATES = {
-  todo: { state_id: 'todo', key: 'todo', name: 'Todo', category: 'queued', is_terminal: false },
+  todo: { state_id: 'todo', key: 'todo', name: 'Todo', category: 'ready', is_terminal: false },
   dev: { state_id: 'dev', key: 'dev', name: 'Dev', category: 'active', is_terminal: false },
   done: { state_id: 'done', key: 'done', name: 'Done', category: 'completed', is_terminal: true },
 } as const
 
 const ids = {
-  E1: 'e1', // open epic: a1, a2, and the nested epic E4
-  E2: 'e2', // open epic: b1, b2 (finished), b3
-  E3: 'e3', // finished epic still holding c1
-  E4: 'e4', // epic inside E1, holding d1
+  E1: 'e1', // open goal: a1, a2, and the nested goal E4
+  E2: 'e2', // open goal: b1, b2 (finished), b3
+  E3: 'e3', // finished goal still holding c1
+  E4: 'e4', // goal inside E1, holding d1
 }
 
 function item(
   id: string,
   number: number,
-  options: { epic?: boolean; parent?: string; state?: keyof typeof STATES } = {},
+  options: { goal?: boolean; parent?: string; state?: keyof typeof STATES } = {},
 ): WorkItemBrief {
   return {
     work_item_id: id,
@@ -37,14 +39,18 @@ function item(
     reference: `MAIN-${number}`,
     number,
     title: `Item ${number}`,
-    kind: options.epic ? 'epic' : 'task',
+    kind: options.goal ? 'goal' : 'task',
     priority: 'medium',
     state: STATES[options.state ?? 'todo'],
     claim_ref: '',
     claim_state: null,
     parent_id: options.parent ?? null,
-    container: false,
-    ready: true,
+    open: !STATES[options.state ?? 'todo'].is_terminal,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: true,
     labels: [],
     source: '',
     checklist: [],
@@ -57,10 +63,10 @@ function item(
 
 function space(): WorkItemBrief[] {
   const items = [
-    item(ids.E1, 1, { epic: true }),
-    item(ids.E2, 2, { epic: true }),
-    item(ids.E3, 3, { epic: true, state: 'done' }),
-    item(ids.E4, 4, { epic: true, parent: ids.E1 }),
+    item(ids.E1, 1, { goal: true }),
+    item(ids.E2, 2, { goal: true }),
+    item(ids.E3, 3, { goal: true, state: 'done' }),
+    item(ids.E4, 4, { goal: true, parent: ids.E1 }),
     item('a1', 11, { parent: ids.E1 }),
     item('a2', 12, { parent: ids.E1, state: 'dev' }),
     item('b1', 21, { parent: ids.E2 }),
@@ -90,13 +96,13 @@ const lines = (projected: ReturnType<typeof project>) =>
 describe('lines between what is drawn', () => {
   it.each([
     [
-      'to another epic ends on its frame',
+      'to another goal ends on its frame',
       [link('a1', ids.E2)],
       {},
       [['a1', ids.E2, 'discovered-from', 1]],
     ],
-    ['to its own epic draws nothing', [link('a1', ids.E1)], {}, []],
-    ['to the epic round its own epic draws nothing', [link('d1', ids.E1)], {}, []],
+    ['to its own goal draws nothing', [link('a1', ids.E1)], {}, []],
+    ['to the goal round its own goal draws nothing', [link('d1', ids.E1)], {}, []],
     ['to hidden finished work draws nothing', [link('a1', 'b2')], {}, []],
     [
       'to finished work in «All» is drawn',
@@ -146,7 +152,7 @@ describe('lines between what is drawn', () => {
 })
 
 describe('frames and what they count', () => {
-  it('counts every item under an epic, nested work included, whatever a filter lets through', () => {
+  it('counts every item under a goal, nested work included, whatever a filter lets through', () => {
     const whole = project([])
     const filtered = project([], { shown: new Set(['a1']) })
     const progress = (projected: ReturnType<typeof project>, id: string) =>
@@ -163,7 +169,7 @@ describe('frames and what they count', () => {
     expect(progress(whole, ids.E2)).toMatchObject({ done: 1, ahead: 2, total: 3 })
   })
 
-  it('draws a finished epic that still holds open work, and a nested epic inside its own', () => {
+  it('draws a finished goal that still holds open work, and a nested goal inside its own', () => {
     const projected = project([])
     const frame = (id: string) => projected.frames.find((entry) => entry.id === id)
     expect(frame(ids.E3)?.cards.map((entry) => entry.work_item_id)).toEqual(['c1'])
@@ -172,7 +178,7 @@ describe('frames and what they count', () => {
     // A frame comes after the frame it stands in.
     const order = projected.frames.map((entry) => entry.id)
     expect(order.indexOf(ids.E4)).toBeGreaterThan(order.indexOf(ids.E1))
-    expect(order.at(-1)).toBe(NO_EPIC_FRAME)
+    expect(order.at(-1)).toBe(NO_PARENT_FRAME)
   })
 
   it('under a filter draws only the frames it found something in', () => {
@@ -196,18 +202,18 @@ describe('frames and what they count', () => {
       [ids.E2, true],
       [ids.E3, false],
       [ids.E4, false],
-      [NO_EPIC_FRAME, false],
+      [NO_PARENT_FRAME, false],
     ])
     expect(folded({ [ids.E2]: false, [ids.E1]: true })).toEqual([
       [ids.E1, true],
       [ids.E2, false],
       [ids.E3, false],
-      [NO_EPIC_FRAME, false],
+      [NO_PARENT_FRAME, false],
     ])
   })
 })
 
-/** `count` finished items under no epic. */
+/** `count` finished items under no goal. */
 const finished = (count: number) =>
   Array.from({ length: count }, (_, index) => item(`f${index}`, 200 + index, { state: 'done' }))
 
@@ -217,7 +223,7 @@ const noneFolded = (count: number, showDone: boolean) =>
     items: [...space(), ...finished(count)].filter((entry) => entry.work_item_id !== 'l1'),
     links: [],
     showDone,
-  }).frames.find((frame) => frame.id === NO_EPIC_FRAME)?.folded
+  }).frames.find((frame) => frame.id === NO_PARENT_FRAME)?.folded
 
 describe('the work under none with nothing open', () => {
   it('is drawn open in «All» while its finished work is small, and folds past the threshold', () => {
@@ -275,7 +281,7 @@ describe('the structural key', () => {
 })
 
 describe('the broad space', () => {
-  const { model, lone, epics } = broadSpace()
+  const { model, lone, goals } = broadSpace()
   const projected = frameProjection({
     items: model.work_items,
     links: model.links,
@@ -289,22 +295,22 @@ describe('the broad space', () => {
     expect(projected.cards).toHaveLength(132)
   })
 
-  it('folds the work under none, the largest epic and the open epics with nothing open', () => {
+  it('folds the work under none, the largest goal and the open goals with nothing open', () => {
     const folded = projected.frames.filter((frame) => frame.folded).map((frame) => frame.id)
     expect(folded.toSorted()).toEqual(
       [
-        NO_EPIC_FRAME,
-        epics[0].work_item_id,
-        ...epics
-          .filter((epic) => epic.title.startsWith('An open stream'))
-          .map((epic) => epic.work_item_id),
+        NO_PARENT_FRAME,
+        goals[0].work_item_id,
+        ...goals
+          .filter((goal) => goal.title.startsWith('An open stream'))
+          .map((goal) => goal.work_item_id),
       ].toSorted(),
     )
     expect(projected.frames).toHaveLength(46)
   })
 
-  it('shows the item whose only link is to its own epic, inside that epic, open', () => {
-    const frame = projected.frames.find((entry) => entry.id === lone?.epic.work_item_id)
+  it('shows the item whose only link is to its own goal, inside that goal, open', () => {
+    const frame = projected.frames.find((entry) => entry.id === lone?.goal.work_item_id)
     expect(frame?.folded).toBe(false)
     expect(frame?.cards.map((entry) => entry.work_item_id)).toContain(lone?.item.work_item_id)
     const touching = projected.edges.filter((edge) =>
@@ -315,20 +321,20 @@ describe('the broad space', () => {
     expect(touching).toHaveLength(0)
   })
 
-  it('draws every link from open work to another drawn epic as a line to its frame', () => {
+  it('draws every link from open work to another drawn goal as a line to its frame', () => {
     const drawn = new Set(projected.frames.map((frame) => frame.id))
-    const epicIds = new Set(epics.map((epic) => epic.work_item_id))
+    const goalIds = new Set(goals.map((goal) => goal.work_item_id))
     const byId = new Map(model.work_items.map((entry) => [entry.work_item_id, entry]))
     const foreign = model.links.filter((entry) => {
-      const [work, epic] = epicIds.has(entry.to) ? [entry.from, entry.to] : [entry.to, entry.from]
+      const [work, goal] = goalIds.has(entry.to) ? [entry.from, entry.to] : [entry.to, entry.from]
       const card = byId.get(work)
       return (
-        epicIds.has(epic) &&
-        drawn.has(epic) &&
+        goalIds.has(goal) &&
+        drawn.has(goal) &&
         card !== undefined &&
-        !card.container &&
-        !card.state.is_terminal &&
-        card.parent_id !== epic
+        !WORK_ITEM_TREE.isContainer(card) &&
+        card.open &&
+        card.parent_id !== goal
       )
     })
     expect(foreign.length).toBeGreaterThan(0)
@@ -337,7 +343,7 @@ describe('the broad space', () => {
         edge.links.some((one) => one.from === entry.from && one.to === entry.to),
       )
       expect(line, `${entry.from} → ${entry.to}`).toBeDefined()
-      expect([line?.source, line?.target]).toContain(epicIds.has(entry.to) ? entry.to : entry.from)
+      expect([line?.source, line?.target]).toContain(goalIds.has(entry.to) ? entry.to : entry.from)
     }
   })
 })
@@ -357,8 +363,8 @@ const heldKey = (items: WorkItemBrief[]) =>
   frameProjection({ items, links: [], showDone: false, choices: { held: true } }).key
 
 describe('whether a frame has anything to unfold', () => {
-  it('an epic nothing was filed under has not, and stays folded whatever was stored', () => {
-    const items = [...space(), item('empty', 50, { epic: true })]
+  it('a goal nothing was filed under has not, and stays folded whatever was stored', () => {
+    const items = [...space(), item('empty', 50, { goal: true })]
     const stored: Record<string, boolean>[] = [{}, { empty: false }]
     for (const choices of stored) {
       const frame = frameIn(items, { choices })('empty')
@@ -368,10 +374,10 @@ describe('whether a frame has anything to unfold', () => {
     }
   })
 
-  it('an epic whose work the view hides has not until the view draws it, and counts it all along', () => {
+  it('a goal whose work the view hides has not until the view draws it, and counts it all along', () => {
     const items = [
       ...space(),
-      item('finished', 60, { epic: true }),
+      item('finished', 60, { goal: true }),
       item('f1', 61, { parent: 'finished', state: 'done' }),
     ]
     const hidden = frameIn(items, { choices: { finished: false } })('finished')
@@ -381,11 +387,11 @@ describe('whether a frame has anything to unfold', () => {
     expect(drawn).toMatchObject({ foldable: true, folded: false })
   })
 
-  it('an epic holding only another epic has it to unfold, though it holds no tasks', () => {
+  it('a goal holding only another goal has it to unfold, though it holds no tasks', () => {
     const items = [
       ...space(),
-      item('outer', 70, { epic: true }),
-      item('inner', 71, { epic: true, parent: 'outer' }),
+      item('outer', 70, { goal: true }),
+      item('inner', 71, { goal: true, parent: 'outer' }),
     ]
     const outer = frameIn(items, { choices: { outer: false } })('outer')
     expect(outer).toMatchObject({ foldable: true, folded: false })
@@ -393,18 +399,18 @@ describe('whether a frame has anything to unfold', () => {
     expect(frameIn(items, { choices: { outer: false } })('inner').foldable).toBe(false)
   })
 
-  it('a frame a filter found work in has it to unfold; an empty epic is not drawn under one', () => {
-    const items = [...space(), item('empty', 50, { epic: true })]
+  it('a frame a filter found work in has it to unfold; an empty goal is not drawn under one', () => {
+    const items = [...space(), item('empty', 50, { goal: true })]
     const shown = new Set(['b1'])
     const projected = frameProjection({ items, links: [], showDone: false, shown })
     expect(projected.frames.map((frame) => frame.id)).toEqual([ids.E2])
     expect(projected.frames[0].foldable).toBe(true)
-    // The count stays the epic's own, not the filter's.
+    // The count stays the goal's own, not the filter's.
     expect(projected.frames[0].progress.total).toBeGreaterThan(1)
   })
 
   it('changes the field’s key, because the keyboard walks what the layout placed', () => {
-    const before = [...space(), item('held', 80, { epic: true })]
+    const before = [...space(), item('held', 80, { goal: true })]
     const after = [...before, item('h1', 81, { parent: 'held' })]
     expect(heldKey(before)).not.toBe(heldKey(after))
   })

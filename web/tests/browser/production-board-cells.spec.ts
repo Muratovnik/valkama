@@ -8,7 +8,7 @@
 import { expect } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
-import { LONG_EPIC } from './boardFixtures.ts'
+import { LONG_GOAL } from './boardFixtures.ts'
 import { cell, drag, lane, openBoard, serve, tiles } from './boardPage.ts'
 import { test } from './test.ts'
 
@@ -17,15 +17,15 @@ test('a tile dropped past what an open cell draws stays in sight', async ({ page
   await installBackend(page)
   const writes = await serve(page)
   await openBoard(page)
-  const epic = lane(page, LONG_EPIC)
+  const goal = lane(page, LONG_GOAL)
   // The Backlog cell draws three tiles; a tile dropped below them is the fourth.
   await expect
-    .poll(() => tiles(cell(epic, 'backlog')))
+    .poll(() => tiles(cell(goal, 'backlog')))
     .toEqual(['MAIN-402', 'MAIN-403', 'MAIN-404'])
   // Brought in level with the foot of the cell, below its last drawn tile.
   await drag(page, {
-    from: epic.locator('li[data-reference="MAIN-405"]'),
-    to: cell(epic, 'backlog'),
+    from: goal.locator('li[data-reference="MAIN-405"]'),
+    to: cell(goal, 'backlog'),
     where: 'bottom',
     level: true,
   })
@@ -35,10 +35,10 @@ test('a tile dropped past what an open cell draws stays in sight', async ({ page
     body: expect.objectContaining({ id: 'MAIN-405', state: 'backlog', rank: 'after:MAIN-404' }),
   })
   await expect
-    .poll(() => tiles(cell(epic, 'backlog')))
+    .poll(() => tiles(cell(goal, 'backlog')))
     .toEqual(['MAIN-402', 'MAIN-403', 'MAIN-404', 'MAIN-405'])
   // The cell is open now, so its toggle offers to close it again.
-  const toggle = epic.locator('.lane-cell[data-state="backlog"] .lane-more')
+  const toggle = goal.locator('.lane-cell[data-state="backlog"] .lane-more')
   await expect(toggle).toHaveText('Show fewer')
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
 })
@@ -50,19 +50,19 @@ test('a closed Done cell is reached by Tab, and its button shows the cards it co
   await installBackend(page)
   await serve(page)
   await openBoard(page)
-  const epic = lane(page, LONG_EPIC)
-  const more = epic.locator('.lane-cell[data-state="done"] .lane-more')
+  const goal = lane(page, LONG_GOAL)
+  const more = goal.locator('.lane-cell[data-state="done"] .lane-more')
   await expect(more).toHaveText('Show all · 1')
-  await expect(epic.locator('li[data-reference="MAIN-406"]')).toHaveCount(0)
+  await expect(goal.locator('li[data-reference="MAIN-406"]')).toHaveCount(0)
   // Tab from the lane's open tile reaches the button within a few stops.
-  await epic.locator('li[data-reference="MAIN-402"] .tile-open').focus()
+  await goal.locator('li[data-reference="MAIN-402"] .tile-open').focus()
   await expect(async () => {
     await page.keyboard.press('Tab')
     await expect(more).toBeFocused({ timeout: 200 })
   }).toPass({ intervals: [0], timeout: 5000 })
   await expect(more).toHaveAttribute('aria-expanded', 'false')
   await page.keyboard.press('Enter')
-  const revealed = epic.locator('li[data-reference="MAIN-406"] .tile-open')
+  const revealed = goal.locator('li[data-reference="MAIN-406"] .tile-open')
   await expect(revealed).toBeVisible()
   // Focus goes to the card it revealed, and the toggle now closes the cell.
   await expect(revealed).toBeFocused()
@@ -71,7 +71,7 @@ test('a closed Done cell is reached by Tab, and its button shows the cards it co
   await page.keyboard.press('ArrowDown')
   await expect(more).toBeFocused()
   await page.keyboard.press('Enter')
-  await expect(epic.locator('li[data-reference="MAIN-406"]')).toHaveCount(0)
+  await expect(goal.locator('li[data-reference="MAIN-406"]')).toHaveCount(0)
   await expect(more).toBeFocused()
   await expect(more).toHaveText('Show all · 1')
   // From the toggle the arrows lead back to the cards: no dead end.

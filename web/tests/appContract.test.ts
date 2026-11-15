@@ -43,7 +43,7 @@ test('platformRoute is the sole route owner for the six-module shell', () => {
   assert.match(nav, /navigation_group/)
   assert.match(nav, /platform\.navigation\.groups/)
   assert.doesNotMatch(app, /moduleRoute|kanban-scope:|improvements_scope/)
-  assert.doesNotMatch(nav, /useStorage|localStorage|navigation-collapsed|epic-index-collapsed/)
+  assert.doesNotMatch(nav, /useStorage|localStorage|navigation-collapsed|goal-index-collapsed/)
 })
 
 test('one explicit operating-scope grammar owns Global, Project, and neutral resources', () => {

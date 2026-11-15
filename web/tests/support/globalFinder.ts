@@ -28,6 +28,8 @@ export function finderResponse(query = 'needle'): GlobalPlanningSearch {
           kind: 'bug',
           priority: 'urgent',
           state: { name: 'In progress', category: 'active', is_terminal: false },
+          open: true,
+          container_state: null,
           claim_ref: '',
         },
       },

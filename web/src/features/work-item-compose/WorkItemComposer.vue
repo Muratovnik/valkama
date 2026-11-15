@@ -38,7 +38,7 @@ import { createWorkItem } from '@/shared/api/planningApi.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { mentionSuggest } from '@/shared/lib/mentionSuggest.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
-import { useStateName } from '@/shared/lib/useStateName.ts'
+import { useStandingName } from '@/shared/lib/useStateName.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
@@ -50,7 +50,7 @@ const props = withDefaults(
   defineProps<{
     open: boolean
     space: string
-    /** The space's work, whose epics and labels the dialog offers. */
+    /** The space's work, whose goals and labels the dialog offers. */
     items?: readonly WorkItemBrief[]
   }>(),
   { items: () => [] },
@@ -94,7 +94,7 @@ const facetChoices = useFacetChoices()
 const kindOptions = computed(() => facetChoices(KIND_CHOICES))
 const priorityOptions = computed(() => facetChoices(PRIORITY_CHOICES))
 
-const stateName = useStateName()
+const stateName = useStandingName()
 const parentOptions = computed(() => parentChoices(props.items, t('compose.noParent'), stateName))
 const labelOptions = computed(() => labelChoices(props.items))
 /** The row a parent's title stands in, which needs more than a phone's half. */
@@ -247,7 +247,7 @@ async function submit() {
 
   /* A parent's title and a row of labels need more than a phone's half: under 240px a column,
      the two stand one above the other, and each list opens as wide as its field. Side by side
-     at 172px an epic's title was cut to a few words in its field and took six lines in its
+     at 172px a goal's title was cut to a few words in its field and took six lines in its
      list. */
   &.has-titles {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));

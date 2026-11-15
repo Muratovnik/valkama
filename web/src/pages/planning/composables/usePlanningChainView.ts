@@ -156,7 +156,7 @@ export function usePlanningChainView(options: ChainViewOptions) {
       options.write(withChain(options.state(), chain)),
     closed: computed(() => closedOf(options.state())),
     setClosed: (closed: boolean) => options.write(withClosed(options.state(), closed)),
-    /** The branch of the chain the graph is framed on: a reference, `''` for no epic, or null. */
+    /** The branch of the chain the graph is framed on: a reference, `''` for no goal, or null. */
     branch: computed(() => branchOf(options.state()) ?? null),
     /** Widen the graph from the branch back to the whole chain. */
     exitBranch: () => options.write(withBranch(options.state(), null)),

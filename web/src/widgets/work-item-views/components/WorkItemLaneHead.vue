@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * A lane's heading: which epic the row is and how much it holds, on one calm
- * line. Its state is said only once the epic has moved; an epic not started
- * keeps the word for a screen reader. The epic's card and chain are one click
+ * A lane's heading: which goal the row is and how much it holds, on one calm
+ * line. Its state is said only once the goal has moved; a goal not started
+ * keeps the word for a screen reader. The goal's card and chain are one click
  * away and come up under the pointer or the keyboard, so a board of a hundred
- * epics does not stand two buttons per row; where nothing can hover they stay.
+ * goals does not stand two buttons per row; where nothing can hover they stay.
  *
  * It is held at the left edge of what the board shows, and at the top while its
  * lane passes under the row of state names, so a lane in view always says whose
@@ -18,7 +18,7 @@ import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
 import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
-import { useStateName } from '@/shared/lib/useStateName.ts'
+import { standingOf, useStandingName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -45,7 +45,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const title = computed(() => props.lane.epic?.title ?? t('workItem.lanes.noEpic'))
+const title = computed(() => props.lane.goal?.title ?? t('workItem.lanes.noParent'))
 const counts = computed(() =>
   t('workItem.lanes.counts', { open: props.lane.open, closed: props.lane.closed }),
 )
@@ -54,9 +54,9 @@ const toggleLabel = computed(() =>
   t(props.open ? 'workItem.lanes.fold' : 'workItem.lanes.unfold', { lane: title.value }),
 )
 const away = computed(() => props.left !== '' || props.right !== '')
-const stateShown = computed(() => props.lane.epic && printsFacet('state', 'lane', props.lane.epic))
-const reference = computed(() => props.lane.epic?.reference ?? '')
-const openLabel = computed(() => t('workItem.lanes.openEpic', { reference: reference.value }))
+const stateShown = computed(() => props.lane.goal && printsFacet('state', 'lane', props.lane.goal))
+const reference = computed(() => props.lane.goal?.reference ?? '')
+const openLabel = computed(() => t('workItem.lanes.openGoal', { reference: reference.value }))
 const chainLabel = computed(() => t('workItem.lanes.showChain', { reference: reference.value }))
 
 const head = ref<HTMLElement | null>(null)
@@ -64,9 +64,9 @@ const toggle = ref<HTMLElement | null>(null)
 const tail = ref<HTMLElement | null>(null)
 const actions = ref<HTMLElement | null>(null)
 const parts = { actions, head, tail, toggle }
-const stateName = useStateName()
-/** The epic's state as the owner has states named, which the line's room is measured with. */
-const named = () => (props.lane.epic ? stateName(props.lane.epic.state) : '')
+const standingName = useStandingName()
+/** The goal's state as the owner has states named, which the line's room is measured with. */
+const named = () => (props.lane.goal ? standingName(props.lane.goal) : '')
 const words = () => [props.left, props.right, counts.value, stateShown.value, title.value, named()]
 const { layout } = useLaneActionsPlace(parts, () => props.boardWidth, words)
 const crowded = computed(() => layout.value.place === 'beside')
@@ -86,7 +86,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   <header
     ref="head"
     class="lane-head reach-room reveal-row"
-    :class="{ acting: props.lane.epic, away, crowded, tied }"
+    :class="{ acting: props.lane.goal, away, crowded, tied }"
   >
     <button
       ref="toggle"
@@ -104,9 +104,9 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
       />
       <span class="lane-words">
         <span
-          v-if="props.lane.epic"
+          v-if="props.lane.goal"
           class="lane-reference"
-          >{{ props.lane.epic.reference }}</span
+          >{{ props.lane.goal.reference }}</span
         >
         <span
           v-tooltip.clipped="title"
@@ -116,10 +116,10 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
       </span>
     </button>
     <SemanticState
-      v-if="props.lane.epic && raised"
+      v-if="props.lane.goal && raised"
       class="lane-state"
       dimension="work-item-state"
-      :state="props.lane.epic.state.category"
+      :state="standingOf(props.lane.goal)"
       :label="named()"
     />
     <span
@@ -127,11 +127,11 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
       class="lane-tail"
     >
       <SemanticState
-        v-if="props.lane.epic && !raised"
+        v-if="props.lane.goal && !raised"
         class="lane-state"
         dimension="work-item-state"
         :class="{ 'visually-hidden': !stateShown }"
-        :state="props.lane.epic.state.category"
+        :state="standingOf(props.lane.goal)"
         :label="named()"
       />
       <span class="lane-counts">{{ counts }}</span>
@@ -153,7 +153,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
         class="lane-break"
       />
       <span
-        v-if="props.lane.epic"
+        v-if="props.lane.goal"
         ref="actions"
         class="lane-actions reveal"
       >
@@ -165,7 +165,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
           :aria-label="openLabel"
           icon
           reach
-          @click="emit('open', props.lane.epic.reference)"
+          @click="emit('open', props.lane.goal.reference)"
         >
           <VIcon
             name="card"
@@ -180,7 +180,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
           :aria-label="chainLabel"
           icon
           reach
-          @click="emit('chain', props.lane.epic.reference)"
+          @click="emit('chain', props.lane.goal.reference)"
         >
           <VIcon
             name="chain"
@@ -189,7 +189,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
         </VButton>
       </span>
       <span
-        v-if="props.lane.epic"
+        v-if="props.lane.goal"
         class="lane-room"
       />
     </span>
@@ -333,7 +333,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   font: var(--font-row-title);
 }
 
-/* The state, the counts, the note of work out of sight and an epic's actions: beside the title
+/* The state, the counts, the note of work out of sight and a goal's actions: beside the title
    while they fit there, else on the rows below, where they wrap part by part. The state leaves
    them for the title's line where it fits there and the heading takes a line fewer
    (`useLaneActionsPlace`): under a short title it and the counts left the actions a line of
@@ -358,7 +358,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
     flex-shrink: 1;
   }
 
-  /* The lane of work under no epic has no actions: its parts wrap one by one with the title's. */
+  /* The lane of work under no goal has no actions: its parts wrap one by one with the title's. */
   .lane-head:not(.acting) & {
     display: contents;
 

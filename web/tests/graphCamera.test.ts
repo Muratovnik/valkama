@@ -12,6 +12,7 @@ import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge } from '@/shared/api/planningModel.ts'
 
 import { workItem } from './browser/planningFixtures.ts'
+import { stateOf } from './fixtures/workItem.ts'
 
 // A graph node is a brief, and a brief always carries its comment count.
 const base = { ...validateWorkItemRecord(workItem), comment_count: 0 }
@@ -26,7 +27,7 @@ const nodeId = (number: number) => `work-${number}`
  */
 const flat = (nodes: readonly { work_item_id: string }[]) => ({
   kind: 'chain' as const,
-  epicId: null,
+  scopeRootId: null,
   members: nodes.map((node) => node.work_item_id),
 })
 function graph(count: number, fanout = false) {
@@ -36,9 +37,13 @@ function graph(count: number, fanout = false) {
     reference: `TEST-${index + 1}`,
     number: index + 1,
     parent_id: null,
-    container: false,
-    ready: index === 0,
-    state: { ...base.state, is_terminal: false },
+    open: true,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: index === 0,
+    state: { ...stateOf(base), is_terminal: false },
   }))
   const edges: PlanningEdge[] = Array.from({ length: count - 1 }, (_, index) => ({
     from: nodeId(fanout ? 1 : index + 1),
@@ -118,9 +123,13 @@ test('a narrowed field of unlinked work opens on its first node, with no empty g
     reference: `TEST-${index + 1}`,
     number: index + 1,
     parent_id: null,
-    container: false,
-    ready: true,
-    state: { ...base.state, is_terminal: false },
+    open: true,
+    container_state: null,
+    acceptance: null,
+    started_at: null,
+    waits_for: [],
+    workable: true,
+    state: { ...stateOf(base), is_terminal: false },
   }))
   const placed = await layout({ nodes, edges: [] }, engine, false, flat(nodes))
   // Where the grid reads whole, it is framed whole.
@@ -197,10 +206,10 @@ function firstRead(placed: Awaited<ReturnType<typeof graph>>, numbers: number[])
     .sort((left, right) => left.y - right.y || left.x - right.x)[0]
 }
 
-test('a branch the card chose is framed whole when it reads, its epic lit but not framed', async () => {
+test('a branch the card chose is framed whole when it reads, its goal lit but not framed', async () => {
   const placed = await graph(214)
   const work = [40, 41, 42]
-  // The epic heading the branch, drawn far from its work.
+  // The goal heading the branch, drawn far from its work.
   const branch = {
     headId: nodeId(200),
     ids: new Set([...work, 200].map((number) => nodeId(number))),
@@ -219,11 +228,11 @@ test('a branch the card chose is framed whole when it reads, its epic lit but no
     graphAnchor(placed, { branch, rootId: nodeId(150) })?.id,
     firstRead(placed, work).work_item_id,
   )
-  // A branch with nothing drawn but its epic is framed on the epic.
+  // A branch with nothing drawn but its goal is framed on the goal.
   const alone = { headId: nodeId(200), ids: new Set([nodeId(200)]) }
-  const epic = graphCameraView(placed, SIZE, { branch: alone })
-  assert.ok(epic)
-  inCamera(placed, 200, epic)
+  const goal = graphCameraView(placed, SIZE, { branch: alone })
+  assert.ok(goal)
+  inCamera(placed, 200, goal)
 })
 
 test('a branch too long to read at once opens on its beginning at reading size', async () => {

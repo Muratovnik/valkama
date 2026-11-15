@@ -23,7 +23,7 @@ import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import { boardItem } from './fixtures/board.ts'
 
 const SURFACES: readonly FacetSurface[] = ['tile', 'list', 'graph', 'card', 'finder']
-const KINDS = ['task', 'bug', 'epic', 'improvement'] as const
+const KINDS = ['task', 'bug', 'goal', 'stage', 'improvement'] as const
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 
 const item = (
@@ -53,12 +53,19 @@ describe('kind', () => {
   })
 
   test('any other kind is a glyph before the reference on every surface but the card', () => {
-    for (const kind of ['bug', 'epic', 'improvement'] as const) {
+    // A goal and a stage share the one sign of a container, as they share its colour.
+    const glyphs = {
+      bug: 'kind-bug',
+      goal: 'kind-container',
+      stage: 'kind-container',
+      improvement: 'kind-improvement',
+    } as const
+    for (const [kind, glyph] of Object.entries(glyphs) as [keyof typeof glyphs, string][]) {
       assert.deepEqual(printedOn('kind', item({ kind })), SURFACES, kind)
       for (const surface of ['tile', 'list', 'graph', 'finder'] as const) {
         const mark = only(facetMarks('kind', surface, item({ kind })))
         assert.equal(mark.form, 'glyph', `${kind} on ${surface}`)
-        assert.equal(mark.glyph, `kind-${kind}`)
+        assert.equal(mark.glyph, glyph)
       }
       // The card says it in words as well.
       assert.equal(only(facetMarks('kind', 'card', item({ kind }))).form, 'glyph-word')
@@ -135,7 +142,7 @@ describe('priority', () => {
 
 describe('state', () => {
   test('the board never prints it, because the column says it; everyone else does', () => {
-    const dev = item({ ready: false }, 'dev')
+    const dev = item({ workable: false }, 'dev')
     assert.deepEqual(printedOn('state', dev), ['list', 'graph', 'card', 'finder'])
     const mark = only(facetMarks('state', 'list', dev))
     // The state itself, which the screen names in the reader's language or as written.
@@ -160,14 +167,14 @@ describe('state', () => {
 })
 
 describe('readiness', () => {
-  const workable = item({ ready: true })
-  const waiting = item({ ready: false })
+  const workable = item({ workable: true })
+  const waiting = item({ workable: false })
   const blocker = { waitingOn: 'MAIN-7' }
 
   test('it is workable, waiting on an open blocker, or neither — and never on finished work', () => {
     assert.equal(readinessOf(workable), 'ready')
     assert.equal(readinessOf(waiting, blocker), 'waiting')
-    assert.equal(readinessOf(item({ ready: false }, 'dev')), null)
+    assert.equal(readinessOf(item({ workable: false }, 'dev')), null)
     assert.equal(readinessOf(item({}, 'done'), blocker), null)
   })
 
@@ -191,7 +198,7 @@ describe('readiness', () => {
     assert.deepEqual(tile.short, { literal: 'MAIN-7' })
     assert.deepEqual(tile.text, { key: 'workItem.facet.waiting', params: { reference: 'MAIN-7' } })
     // Every other surface draws its marks' whole words, as before.
-    const subject = item({ ready: false, kind: 'bug', priority: 'urgent', labels: ['a'] })
+    const subject = item({ workable: false, kind: 'bug', priority: 'urgent', labels: ['a'] })
     for (const surface of SURFACES.filter((name) => name !== 'tile')) {
       const shortened = surfaceMarks(surface, subject, { ...blocker, width: 900 }).filter(
         (mark) => mark.short !== undefined,
@@ -208,7 +215,7 @@ describe('readiness', () => {
     assert.equal(printsFacet('state', 'graph', workable), false)
     assert.equal(printsFacet('state', 'graph', waiting, blocker), false)
     // Work that is neither keeps its state word.
-    assert.equal(printsFacet('state', 'graph', item({ ready: false }, 'dev')), true)
+    assert.equal(printsFacet('state', 'graph', item({ workable: false }, 'dev')), true)
   })
 
   test('the card says it through its primary action, not a mark; the finder never', () => {
@@ -285,18 +292,14 @@ describe('labels', () => {
 })
 
 describe('holder', () => {
-  const held = item(
-    { claim_ref: 'claude (session 5937aa01-1234-4c00)', claim_state: 'live' },
-    'dev',
-  )
+  const claim = { claim_ref: 'claude (session 5937aa01-1234-4c00)', claim_state: 'live' } as const
+  const held = item(claim, 'dev')
+  /** The same claim on finished work. */
+  const finished = item(claim, 'done')
 
   test('the tile names the holder of open work, the list always, the finder never', () => {
     assert.deepEqual(printedOn('holder', held), ['tile', 'list', 'graph', 'card'])
-    assert.deepEqual(printedOn('holder', { ...held, state: boardItem(1, 'done').state }), [
-      'list',
-      'graph',
-      'card',
-    ])
+    assert.deepEqual(printedOn('holder', finished), ['list', 'graph', 'card'])
     assert.deepEqual(printedOn('holder', item()), ['list', 'card'])
   })
 
@@ -306,9 +309,8 @@ describe('holder', () => {
   })
 
   test('whoever held finished work is said to have held it before, not to hold it', () => {
-    const done = { ...held, state: boardItem(1, 'done').state }
     for (const surface of ['list', 'card'] as const)
-      assert.deepEqual(only(facetMarks('holder', surface, done)).text, {
+      assert.deepEqual(only(facetMarks('holder', surface, finished)).text, {
         key: 'workItem.previousHolder',
         params: { holder: 'claude · 5937aa01-1234' },
       })
@@ -414,6 +416,7 @@ test('a subject that knows only its kind, priority and state prints those and no
     kind: 'bug' as const,
     priority: 'urgent' as const,
     state: { name: 'Review', category: 'review' as const },
+    open: true,
   }
   assert.deepEqual(
     surfaceMarks('finder', found).map((mark) => `${mark.facet}:${mark.value}`),

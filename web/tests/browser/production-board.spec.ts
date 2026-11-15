@@ -1,7 +1,7 @@
 /**
- * The board read by epic in the built application: lanes with their counts, a
+ * The board read by goal in the built application: lanes with their counts, a
  * lane folded because nothing in it is open and one unfolded by hand, one
- * epic's chain on the board, and a column reordered by a drag and from the
+ * goal's chain on the board, and a column reordered by a drag and from the
  * keyboard.
  *
  * The server here is a double that keeps the order it is told, so what the
@@ -13,7 +13,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
-import { LONG_EPIC } from './boardFixtures.ts'
+import { LONG_GOAL } from './boardFixtures.ts'
 import { cell, centre, drag, lane, openBoard, routeState, serve, shot, tiles } from './boardPage.ts'
 import { overlaps } from './laneHeadGeometry.ts'
 import { readHeading } from './laneHeadRows.ts'
@@ -25,7 +25,7 @@ for (const [width, oneRow] of [
   [1024, true],
   [390, false],
 ] as const) {
-  test(`the board reads by epic at ${width}px`, async ({ page }, info) => {
+  test(`the board reads by goal at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 900 })
     await installBackend(page)
     await serve(page)
@@ -45,7 +45,7 @@ for (const [width, oneRow] of [
       .locator('.lane-toggle')
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-expanded')))
     expect(expanded).toEqual(['true', 'false', 'false', 'true'])
-    // The epic is the lane; its open children are its tiles. Its finished child
+    // The goal is the lane; its open children are its tiles. Its finished child
     // is counted in the Done cell and drawn only on request.
     await expect(tiles(lanes.nth(0))).resolves.toEqual([
       'MAIN-402',
@@ -58,10 +58,10 @@ for (const [width, oneRow] of [
     )
     await expect(page.locator('.work-item-board [data-reference="MAIN-401"]')).toHaveCount(0)
 
-    // Unfolded by hand, the empty epic says so instead of drawing three blank cells.
+    // Unfolded by hand, the empty goal says so instead of drawing three blank cells.
     await lanes.nth(1).locator('.lane-toggle').click()
     await expect(lanes.nth(1).locator('.lane-quiet')).toHaveText('Nothing under it yet.')
-    await expectNoSilentClipping(page, `board by epic at ${width}px`)
+    await expectNoSilentClipping(page, `board by goal at ${width}px`)
     const pageOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     )
@@ -114,7 +114,7 @@ for (const [width, oneRow] of [
 }
 
 /** The board's grouping, chosen in the view's menu beside the view switch. */
-async function chooseGrouping(page: Page, choice: 'By parent' | 'No grouping') {
+async function chooseGrouping(page: Page, choice: 'By goal' | 'No grouping') {
   await page.getByRole('button', { name: 'View', exact: true }).click()
   await page.getByRole('menuitemradio', { name: choice }).click()
   await expect(page.getByRole('menu')).toHaveCount(0)
@@ -125,7 +125,7 @@ test('a lane stays folded or unfolded the way it was left, across a reload', asy
   await installBackend(page)
   await serve(page)
   await openBoard(page)
-  const open = lane(page, LONG_EPIC).locator('.lane-toggle')
+  const open = lane(page, LONG_GOAL).locator('.lane-toggle')
   const closed = lane(page, 'The first board').locator('.lane-toggle')
   await open.click()
   await closed.click()
@@ -144,7 +144,7 @@ test('a lane stays folded or unfolded the way it was left, across a reload', asy
   await expect(page.locator('[data-reference="MAIN-402"]')).toBeVisible()
 })
 
-test('a lane shows its epic’s chain on the board, in every view, and the chip leaves it', async ({
+test('a lane shows its goal’s chain on the board, in every view, and the chip leaves it', async ({
   page,
 }, info) => {
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -154,7 +154,7 @@ test('a lane shows its epic’s chain on the board, in every view, and the chip 
   await page.getByRole('button', { name: 'Show the chain of MAIN-401 on the board' }).click()
   await expect
     .poll(() => routeState(page))
-    .toEqual({ view: 'kanban', group: 'epic', chain: 'MAIN-401', chain_scope: 'chain' })
+    .toEqual({ view: 'kanban', group: 'goal', chain: 'MAIN-401', chain_scope: 'chain' })
   const chip = page.locator('.workspace-chip')
   await expect(chip).toHaveText('Chain MAIN-401 · 6')
   await expect(page.locator('.board-lane')).toHaveCount(1)
@@ -184,8 +184,8 @@ test('a drag reorders a column and moves a tile across columns inside its lane',
   await installBackend(page)
   const writes = await serve(page)
   await openBoard(page)
-  const epic = lane(page, LONG_EPIC)
-  const tile = (reference: string) => epic.locator(`li[data-reference="${reference}"]`)
+  const goal = lane(page, LONG_GOAL)
+  const tile = (reference: string) => goal.locator(`li[data-reference="${reference}"]`)
 
   await drag(page, { from: tile('MAIN-404'), to: tile('MAIN-402'), where: 'top', midway: info })
   await expect.poll(() => writes.length).toBe(1)
@@ -198,11 +198,11 @@ test('a drag reorders a column and moves a tile across columns inside its lane',
     }),
   })
   await expect
-    .poll(() => tiles(cell(epic, 'backlog')))
+    .poll(() => tiles(cell(goal, 'backlog')))
     .toEqual(['MAIN-404', 'MAIN-402', 'MAIN-403'])
 
   // Into another column, dropped on the ground below its last tile.
-  await drag(page, { from: tile('MAIN-403'), to: cell(epic, 'dev'), where: 'bottom' })
+  await drag(page, { from: tile('MAIN-403'), to: cell(goal, 'dev'), where: 'bottom' })
   await expect.poll(() => writes.length).toBe(2)
   expect(writes[1]).toEqual({
     path: '/api/planning/work-item/transition',
@@ -213,14 +213,14 @@ test('a drag reorders a column and moves a tile across columns inside its lane',
       expected_revision: 1,
     }),
   })
-  await expect.poll(() => tiles(cell(epic, 'dev'))).toEqual(['MAIN-405', 'MAIN-403'])
-  await expect.poll(() => tiles(cell(epic, 'backlog'))).toEqual(['MAIN-404', 'MAIN-402'])
+  await expect.poll(() => tiles(cell(goal, 'dev'))).toEqual(['MAIN-405', 'MAIN-403'])
+  await expect.poll(() => tiles(cell(goal, 'backlog'))).toEqual(['MAIN-404', 'MAIN-402'])
   // A tile never crosses into another lane: the lanes do not share a list.
   const loose = page.locator('li[data-reference="MAIN-430"]')
   await drag(page, { from: tile('MAIN-402'), to: loose, where: 'top', refused: true })
   await expect(page.locator('.work-item-board')).not.toHaveClass(/dragging/u)
   expect(writes).toHaveLength(2)
-  await expect.poll(() => tiles(cell(epic, 'backlog'))).toEqual(['MAIN-404', 'MAIN-402'])
+  await expect.poll(() => tiles(cell(goal, 'backlog'))).toEqual(['MAIN-404', 'MAIN-402'])
 })
 
 test('a refused drop leaves the tile where it was and says why', async ({ page }) => {
@@ -229,17 +229,17 @@ test('a refused drop leaves the tile where it was and says why', async ({ page }
   const refuse = { message: 'MAIN-402 is at revision 2, not 1' as string | null }
   const writes = await serve(page, refuse)
   await openBoard(page)
-  const epic = lane(page, LONG_EPIC)
+  const goal = lane(page, LONG_GOAL)
   await drag(page, {
-    from: epic.locator('li[data-reference="MAIN-402"]'),
-    to: epic.locator('li[data-reference="MAIN-405"]'),
+    from: goal.locator('li[data-reference="MAIN-402"]'),
+    to: goal.locator('li[data-reference="MAIN-405"]'),
     where: 'bottom',
   })
   await expect.poll(() => writes.length).toBe(1)
   await expect(page.locator('.notice')).toContainText('MAIN-402 is at revision 2, not 1')
-  await expect.poll(() => tiles(cell(epic, 'dev'))).toEqual(['MAIN-405'])
+  await expect.poll(() => tiles(cell(goal, 'dev'))).toEqual(['MAIN-405'])
   await expect
-    .poll(() => tiles(cell(epic, 'backlog')))
+    .poll(() => tiles(cell(goal, 'backlog')))
     .toEqual(['MAIN-402', 'MAIN-403', 'MAIN-404'])
 })
 
@@ -250,9 +250,9 @@ test('Alt+Arrow moves a focused tile one place and the move is announced', async
   await installBackend(page)
   const writes = await serve(page)
   await openBoard(page)
-  const epic = lane(page, LONG_EPIC)
+  const goal = lane(page, LONG_GOAL)
   const live = page.locator('.work-item-board [role="status"]')
-  const focused = epic.locator('li[data-reference="MAIN-402"] .tile-open')
+  const focused = goal.locator('li[data-reference="MAIN-402"] .tile-open')
   await expect(focused).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown')
   await focused.focus()
   await page.keyboard.press('Alt+ArrowDown')
@@ -262,7 +262,7 @@ test('Alt+Arrow moves a focused tile one place and the move is announced', async
     expect.objectContaining({ id: 'MAIN-402', rank: 'after:MAIN-403', expected_revision: 1 }),
   )
   await expect
-    .poll(() => tiles(cell(epic, 'backlog')))
+    .poll(() => tiles(cell(goal, 'backlog')))
     .toEqual(['MAIN-403', 'MAIN-402', 'MAIN-404'])
   // Focus follows the tile it moved, so a second press moves it again.
   await expect(focused).toBeFocused()
@@ -270,7 +270,7 @@ test('Alt+Arrow moves a focused tile one place and the move is announced', async
   await page.keyboard.press('Alt+ArrowDown')
   await expect(live).toHaveText('MAIN-402 moved: 3 of 3 in Backlog')
   await expect
-    .poll(() => tiles(cell(epic, 'backlog')))
+    .poll(() => tiles(cell(goal, 'backlog')))
     .toEqual(['MAIN-403', 'MAIN-404', 'MAIN-402'])
   await expect(focused).toBeFocused()
   await page.keyboard.press('Alt+ArrowDown')
@@ -290,14 +290,14 @@ test('an empty cell draws no ground at rest, and its lane’s cells do while a t
   await installBackend(page)
   await serve(page)
   await openBoard(page)
-  const epic = lane(page, LONG_EPIC)
+  const goal = lane(page, LONG_GOAL)
   const loose = lane(page, 'No parent')
   await loose.scrollIntoViewIfNeeded()
   const empty = loose.locator('.lane-cell.empty').first()
   await expect(empty).toBeVisible()
   expect(await ground(empty)).toBe(clear)
   // A cell with tiles keeps its ground: the tiles lie on it.
-  expect(await ground(epic.locator('.lane-cell[data-state="backlog"]'))).not.toBe(clear)
+  expect(await ground(goal.locator('.lane-cell[data-state="backlog"]'))).not.toBe(clear)
   const lanes = page.locator('.work-item-lanes')
   /** Pick a tile up and hold it just off where it was, then check, then put it back. */
   const holding = async (tile: Locator, check: () => Promise<void>) => {
@@ -313,7 +313,7 @@ test('an empty cell draws no ground at rest, and its lane’s cells do while a t
     await expect(lanes).not.toHaveClass(/dragging/u)
   }
   // A tile of another lane cannot land here, so the empty cell stays clear.
-  await holding(epic.locator('li[data-reference="MAIN-402"]'), async () => {
+  await holding(goal.locator('li[data-reference="MAIN-402"]'), async () => {
     expect(await ground(empty)).toBe(clear)
   })
   // A tile of its own lane can, so the cell draws its ground for as long as it is held.
@@ -348,10 +348,10 @@ test('arrows walk the tiles, and a tile moved from the keyboard is brought into 
   await installBackend(page)
   await serve(page)
   await openBoard(page)
-  const epic = lane(page, LONG_EPIC)
-  const tile = (reference: string) => epic.locator(`li[data-reference="${reference}"] .tile-open`)
+  const goal = lane(page, LONG_GOAL)
+  const tile = (reference: string) => goal.locator(`li[data-reference="${reference}"] .tile-open`)
   // One Tab stop per cell; a bare arrow moves focus and nothing else.
-  await expect(cell(epic, 'backlog').locator('button[tabindex="0"]')).toHaveCount(1)
+  await expect(cell(goal, 'backlog').locator('button[tabindex="0"]')).toHaveCount(1)
   await tile('MAIN-402').focus()
   await page.keyboard.press('ArrowDown')
   await expect(tile('MAIN-403')).toBeFocused()
@@ -367,11 +367,11 @@ test('arrows walk the tiles, and a tile moved from the keyboard is brought into 
   const scroller = page.locator('.work-item-lanes')
   await page.keyboard.press('Alt+ArrowDown')
   await expect
-    .poll(() => tiles(cell(epic, 'backlog')))
+    .poll(() => tiles(cell(goal, 'backlog')))
     .toEqual(['MAIN-403', 'MAIN-402', 'MAIN-404'])
   await page.keyboard.press('Alt+ArrowDown')
   await expect
-    .poll(() => tiles(cell(epic, 'backlog')))
+    .poll(() => tiles(cell(goal, 'backlog')))
     .toEqual(['MAIN-403', 'MAIN-404', 'MAIN-402'])
   await expect(tile('MAIN-402')).toBeFocused()
   await expect
@@ -392,20 +392,20 @@ test('arrows walk the tiles, and a tile moved from the keyboard is brought into 
 test('a lane names the work it holds out of sight and keeps its heading while it is in view', async ({
   page,
 }, info) => {
-  // One column wide: the long epic's Backlog is in view, its Dev tile is not.
+  // One column wide: the long goal's Backlog is in view, its Dev tile is not.
   await page.setViewportSize({ width: 390, height: 700 })
   await installBackend(page)
   await serve(page)
   await openBoard(page)
-  const epic = lane(page, LONG_EPIC)
-  const note = epic.locator('.lane-elsewhere')
+  const goal = lane(page, LONG_GOAL)
+  const note = goal.locator('.lane-elsewhere')
   await expect(note).toHaveText(['To the right: 1 in In progress →'])
   // Finished work is counted in the heading already, so it is not named while
   // anything of the lane is in view.
   await expect(note).not.toContainText('Done')
 
   const scroller = page.locator('.work-item-lanes')
-  const dev = epic.locator('.lane-cell[data-state="dev"]')
+  const dev = goal.locator('.lane-cell[data-state="dev"]')
   await scroller.evaluate(
     (element, left) => element.scrollTo({ left }),
     await dev.evaluate((cell) => (cell as HTMLElement).offsetLeft),
@@ -415,13 +415,13 @@ test('a lane names the work it holds out of sight and keeps its heading while it
   // Scrolled down past the heading while the lane's cells are still in view,
   // the heading stays, held under the row of state names.
   await scroller.evaluate((element) => element.scrollTo({ left: 0 }))
-  const backlog = epic.locator('.lane-cell[data-state="backlog"]')
+  const backlog = goal.locator('.lane-cell[data-state="backlog"]')
   await backlog.evaluate((cell) => {
     const lanes = cell.closest('.work-item-lanes') as HTMLElement
     lanes.scrollTop += cell.getBoundingClientRect().top - lanes.getBoundingClientRect().top + 60
   })
   const [head, states, body] = await Promise.all([
-    epic.locator('.lane-head').boundingBox(),
+    goal.locator('.lane-head').boundingBox(),
     page.locator('.lanes-head').boundingBox(),
     backlog.boundingBox(),
   ])

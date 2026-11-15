@@ -102,8 +102,8 @@ for (const width of [1280, 390]) {
     const dialog = await openComposer(page)
     const kind = dialog.getByRole('combobox', { name: 'Kind', exact: true })
     const priority = dialog.getByRole('combobox', { name: 'Priority', exact: true })
-    await chooseWithPointer(page, kind, /^Epic$/u)
-    await expect(kind).toContainText('Epic')
+    await chooseWithPointer(page, kind, /^Goal$/u)
+    await expect(kind).toContainText('Goal')
     await chooseWithPointer(page, priority, /^High/u)
     await expect(priority).toContainText('High')
 

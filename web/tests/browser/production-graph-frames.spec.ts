@@ -1,13 +1,15 @@
 /**
- * The whole space's graph as frames: every epic with open work drawn round it,
+ * The whole space's graph as frames: every goal with open work drawn round it,
  * with its edge of progress, and no open item left out for being linked to its
- * own epic alone.
+ * own goal alone.
  *
- * Served the broad synthetic space, whose second epic holds an item whose only
- * link is to that epic: the graph used to leave it out as unlinked.
+ * Served the broad synthetic space, whose second goal holds an item whose only
+ * link is to that goal: the graph used to leave it out as unlinked.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
+
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
@@ -15,7 +17,7 @@ import { graphRoute } from './chainFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { test } from './test.ts'
 
-/** The broad space's item whose only link is to its own epic, and that epic. */
+/** The broad space's item whose only link is to its own goal, and that goal. */
 function loneItem() {
   const { lone } = broadSpace()
   if (!lone) throw new Error('the broad space holds a lone item')
@@ -43,7 +45,7 @@ async function serveBroadSpace(page: Page) {
 }
 
 for (const width of [1500, 390]) {
-  test(`an item linked only to its epic stands in that epic's frame at ${width}px`, async ({
+  test(`an item linked only to its goal stands in that goal's frame at ${width}px`, async ({
     page,
   }) => {
     const lone = loneItem()
@@ -51,13 +53,13 @@ for (const width of [1500, 390]) {
     await serveBroadSpace(page)
     await page.goto(graphRoute({}))
     await expect(page.locator('.graph-canvas.settled')).toBeVisible()
-    // Linked to nothing but its epic, it was left out as unlinked; it is drawn.
+    // Linked to nothing but its goal, it was left out as unlinked; it is drawn.
     const card = page.locator('.flow-node-card').filter({
       has: page.locator('.flow-node-id').getByText(lone.item.reference, { exact: true }),
     })
     await expect(card).toHaveCount(1, { timeout: 10_000 })
-    // And it stands in its epic's frame, which says how far the epic has come.
-    const frame = page.locator(`.graph-frame[data-frame="${lone.epic.work_item_id}"]`)
+    // And it stands in its goal's frame, which says how far the goal has come.
+    const frame = page.locator(`.graph-frame[data-frame="${lone.goal.work_item_id}"]`)
     await expect(frame).toHaveCount(1)
     await expect(frame.locator('.frame-progress')).toHaveCount(1)
     await expect(frame.locator('.graph-frame-count').first()).toHaveText(/^2 of 15 done$/u)
@@ -75,13 +77,13 @@ test('a frame header’s buttons are the field’s Tab stop once the keyboard st
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
   const stops = page.locator('.graph-flow [tabindex="0"]')
-  const frame = `frame:${lone.epic.work_item_id}`
+  const frame = `frame:${lone.goal.work_item_id}`
   const fold = page.locator(`[data-walk-target="${frame}:fold"]`)
   await fold.focus()
   // Focus on the fold button makes it the one stop of the field.
   await expect(fold).toHaveAttribute('tabindex', '0')
   await expect(stops).toHaveCount(1)
-  // The arrow across the header reaches the epic's button, which takes the stop.
+  // The arrow across the header reaches the goal's button, which takes the stop.
   await page.keyboard.press('ArrowRight')
   const open = page.locator(`[data-walk-target="${frame}"]`)
   await expect(open).toBeFocused()
@@ -167,16 +169,16 @@ function openTargets(): Set<string> {
   const byId = new Map(model.work_items.map((item) => [item.work_item_id, item]))
   const isFrame = (id: string) => {
     const item = byId.get(id)
-    return Boolean(item && (item.container || item.kind === 'epic'))
+    return Boolean(item && WORK_ITEM_TREE.isContainer(item))
   }
   const open = new Set<string>()
   for (const item of model.work_items) {
-    if (item.state.is_terminal || isFrame(item.work_item_id)) continue
+    if (item.state?.is_terminal || isFrame(item.work_item_id)) continue
     open.add(item.work_item_id)
     for (let at = item.parent_id; at !== null && isFrame(at); at = byId.get(at)?.parent_id ?? null)
       open.add(`frame:${at}`).add(`frame:${at}:fold`)
   }
-  // The work under no epic: its frame holds the open loose items.
+  // The work under no goal: its frame holds the open loose items.
   open.add('frame:none:fold')
   return open
 }
@@ -211,7 +213,7 @@ for (const width of [1500, 390]) {
     await page.goto(graphRoute({}))
     await expect(page.locator('.graph-canvas.settled')).toBeVisible()
     const open = openTargets()
-    // The broad space's smallest frames are finished epics' folded ones; the
+    // The broad space's smallest frames are finished goals' folded ones; the
     // field as it is read still begins with open work.
     const [first] = await walkTargets(page, false)
     expect(open.has(first)).toBe(true)
@@ -293,12 +295,12 @@ for (const width of [1500, 390]) {
   })
 }
 
-/** The suite's space holding only open work under no epic, too much of it to start open. */
+/** The suite's space holding only open work under no goal, too much of it to start open. */
 async function serveLooseSpace(page: Page) {
   const { model } = broadSpace()
   const loose = model.work_items
-    .filter((item) => item.parent_id === null && !item.container && item.kind !== 'epic')
-    .filter((item) => !item.state.is_terminal)
+    .filter((item) => item.parent_id === null && !WORK_ITEM_TREE.isContainer(item))
+    .filter((item) => !item.state?.is_terminal)
     .slice(0, 25)
   await installBackend(page)
   await page.route('**/api/planning?*', async (route) => {
@@ -353,7 +355,7 @@ test('the open-or-all switch counts the items the counts line counts', async ({ 
   await serveBroadSpace(page)
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
-  // «352 open of 1397»: every item, an epic heading its frame among them.
+  // «352 open of 1397»: every item, a goal heading its frame among them.
   const line = await page.locator('.workspace-figures').textContent()
   const figures = /(\d+) open of (\d+)/u.exec(line ?? '')
   expect(figures).not.toBeNull()

@@ -190,7 +190,7 @@ const brief = (number: number, fields: Partial<WorkItemBrief>): WorkItemBrief =>
   ...fields,
 })
 
-describe('WorkItemComposer epic and labels', () => {
+describe('WorkItemComposer goal and labels', () => {
   beforeEach(() => {
     vi.mocked(createWorkItem).mockReset()
     vi.mocked(createWorkItem).mockResolvedValue(validateWorkItemRecord(workItem))
@@ -208,39 +208,39 @@ describe('WorkItemComposer epic and labels', () => {
   })
 
   const items = [
-    brief(3, { kind: 'epic', title: 'Old release', state: doneState }),
-    brief(7, { kind: 'task', title: 'Holds two', container: true, labels: ['docs'] }),
-    brief(12, { kind: 'epic', title: 'Parser', labels: ['platform'] }),
+    brief(3, { kind: 'goal', title: 'Old release', open: false, state: doneState }),
+    brief(7, { kind: 'task', title: 'Holds two', labels: ['docs'] }),
+    brief(12, { kind: 'goal', title: 'Parser', labels: ['platform'] }),
     // Inside another item, so it cannot hold a new one: the hierarchy is one level deep.
-    brief(20, { kind: 'epic', title: 'Nested', parent_id: workItem.work_item_id }),
+    brief(20, { kind: 'stage', title: 'Nested', parent_id: workItem.work_item_id }),
     brief(21, { kind: 'task', title: 'Plain', labels: ['platform', 'docs', 'platform-ui'] }),
     brief(22, { kind: 'bug', title: 'Another', labels: ['platform'] }),
   ]
 
-  // Any item may hold others, one level deep, so the field offers parents and says so.
+  // A goal holds others, one level deep, so the field offers the goals and says so; a task
+  // holds none, whatever was filed under it before.
   it('offers the parents and the labels the space has, in the order they are reached for', async () => {
     const wrapper = open()
-    const [labels, epic] = wrapper.findAll('input[role="combobox"]')
-    await epic?.trigger('keydown', { key: 'ArrowDown' })
+    const [labels, goal] = wrapper.findAll('input[role="combobox"]')
+    await goal?.trigger('keydown', { key: 'ArrowDown' })
     await flushPromises()
     expect(optionNames()).toEqual([
       'No parent',
       'MAIN-12 · ParserIn progress',
-      'MAIN-7 · Holds twoIn progress',
       'MAIN-3 · Old releaseDone',
     ])
-    await epic?.trigger('keydown', { key: 'Escape' })
+    await goal?.trigger('keydown', { key: 'Escape' })
     await labels?.trigger('keydown', { key: 'ArrowDown' })
     await flushPromises()
     expect(optionNames()).toEqual(['platform', 'docs', 'platform-ui'])
   })
 
-  it('sends the chosen epic by its reference and the labels as a list', async () => {
+  it('sends the chosen goal by its reference and the labels as a list', async () => {
     const wrapper = open()
     await wrapper.get('input').setValue('Ship it')
-    const [labels, epic] = wrapper.findAll<HTMLInputElement>('input[role="combobox"]')
+    const [labels, goal] = wrapper.findAll<HTMLInputElement>('input[role="combobox"]')
     for (const [field, words] of [
-      [epic, 'pars'],
+      [goal, 'pars'],
       [labels, 'docs'],
       [labels, 'release'],
     ] as const) {
@@ -258,7 +258,7 @@ describe('WorkItemComposer epic and labels', () => {
     )
   })
 
-  it('sends no epic and no labels when none is chosen', async () => {
+  it('sends no goal and no labels when none is chosen', async () => {
     const wrapper = open()
     await wrapper.get('input').setValue('Ship it')
     await wrapper.get('form').trigger('submit')

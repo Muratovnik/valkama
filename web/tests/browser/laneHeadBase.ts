@@ -6,7 +6,7 @@
  * `<reading>*<n>` stands for n widths in a row that read alike. Keyed by locale, pointer or
  * touch, the board at its first states or its middle ones, and the lane's reference or name.
  *
- * The base drew the epic's state as the workflow writes it, «Dev». Read in the reader's language
+ * The base drew the goal's state as the workflow writes it, «Dev». Read in the reader's language
  * it is «In progress», and a heading on one line that does not wrap gives its title the room the
  * longer word takes, as only the title gives way there: those readings, and only those, keep
  * the letters measured with the translated name.

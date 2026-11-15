@@ -23,6 +23,7 @@ import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { i18n, messages } from '@/shared/i18n/index.ts'
 
+import { stateOf } from '../fixtures/workItem.ts'
 import { requestEntry, requestList } from '../support/inputRequests.ts'
 import { card, open, root, thread, unmountAll } from '../support/threadCard.ts'
 
@@ -83,7 +84,8 @@ const sent = (items: string[], change: Partial<InputRequestEntry['request']> = {
 const question = () => requestEntry()
 const closed = (item: WorkItem): WorkItem => ({
   ...item,
-  state: { ...item.state, key: 'done', category: 'completed', is_terminal: true },
+  open: false,
+  state: { ...stateOf(item), key: 'done', category: 'completed', is_terminal: true },
 })
 
 /** The discussion in a language, with the app's own time formats. */
