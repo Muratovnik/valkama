@@ -459,6 +459,12 @@ checkouts are therefore distinguishable even at the same version.
   directory, runs `npm ci` and every npm stage there, puts the web build in `web/dist`
   as before, and removes the copy when it ends, on a failure too. A `node_modules` in
   the checkout, a directory or a link, is left as it is and no longer refused.
+- **Open sessions move to a new release whose first open of the store takes seconds.**
+  A release opening a large store for the first time can run a one-time step, such as
+  this release's word index behind its verified recovery point, for several seconds,
+  and every other process opening the store waits for it. That wait gave up after five
+  seconds, so a session switching to the new release at that moment stayed on the one it
+  had, with a warning, until it was restarted. An open now waits up to a minute.
 
 ## [2.8.0](https://github.com/Muratovnik/valkama/compare/v2.7.0...v2.8.0) - 2026-11-11
 
