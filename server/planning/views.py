@@ -133,11 +133,14 @@ def activity_feed(conn: sqlite3.Connection, limit: int = 100) -> list[dict]:
     rows = conn.execute(
         # The category comes from the state the detail names, so a reader can
         # act on "this reached review" without knowing what that space calls it.
+        # Only `created` and `transitioned` name a state there: any other detail,
+        # an `opened` reason or a step's text among them, may read like a key.
         "SELECT e.*, i.number, i.title, p.key, s.category FROM work_item_events e"
         " JOIN work_items i ON i.work_item_id = e.work_item_id"
         " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
         " LEFT JOIN workflow_states s"
-        "  ON s.workflow_id = i.workflow_id"
+        "  ON e.action IN ('created', 'transitioned')"
+        "  AND s.workflow_id = i.workflow_id"
         "  AND s.key = CASE WHEN instr(e.detail, ':') > 0"
         "   THEN substr(e.detail, 1, instr(e.detail, ':') - 1) ELSE e.detail END"
         " ORDER BY e.id DESC LIMIT ?",

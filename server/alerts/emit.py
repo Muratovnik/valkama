@@ -50,7 +50,7 @@ from urllib.parse import urlencode
 
 from ..executions import results as execution_results
 from ..ops import configuration, toast
-from ..planning import calls, read_model, requests
+from ..planning import calls, model, read_model, requests
 from . import messages
 from . import settings as alert_settings
 
@@ -91,17 +91,19 @@ Due = Show | TakeBack
 def _category_before(conn: sqlite3.Connection, item: sqlite3.Row, first_move: int) -> str | None:
     """The category an item stood in before this call moved it, from its history.
 
-    Every state an item enters is written down as a `created` or `transitioned`
-    row whose detail starts with the state's key. A key cannot hold a colon, and
-    what follows one is the reason.
+    Every state an item enters is written down as one of `model.STATE_ENTRY_ACTIONS`.
+    A `created` or `transitioned` row's detail starts with the state's key; a key
+    cannot hold a colon, and what follows one is the reason. An `opened` row is a
+    container that came to stand accepted and open, in no category: its detail is
+    only a reason.
     """
 
     before = conn.execute(
-        "SELECT detail FROM work_item_events WHERE work_item_id=? AND id<?"
-        " AND action IN ('created','transitioned') ORDER BY id DESC LIMIT 1",
-        (item["work_item_id"], first_move),
+        "SELECT action, detail FROM work_item_events WHERE work_item_id=? AND id<?"
+        " AND action IN (SELECT value FROM json_each(?)) ORDER BY id DESC LIMIT 1",
+        (item["work_item_id"], first_move, json.dumps(model.STATE_ENTRY_ACTIONS)),
     ).fetchone()
-    if before is None:
+    if before is None or before["action"] == "opened":
         return None
     state = conn.execute(
         "SELECT category FROM workflow_states WHERE workflow_id=? AND key=?",

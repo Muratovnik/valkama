@@ -367,19 +367,28 @@ def _answers(row: tuple, session_id: str) -> bool:
     )
 
 
-#: Every transition after a call of each item that blocks this one, with the state it
+#: What a container that came to stand accepted and open is told as: `opened` names no
+#: state, and this reader loads nothing that could say what the container derives.
+OPENED = "accepted and open"
+#: Every move after a call of each item that blocks this one, with the state it
 #: reached, whether it is the blocker's last, and what its call proved. A transition
-#: logs the key of the state it reached, before `: ` and a note when there is one.
+#: logs the key of the state it reached, before `: ` and a note when there is one;
+#: an `opened` names no state, only a reason. The last move is the newest entry into
+#: any state, an `opened` among them: a close that a reopening undid is not the last.
 _BLOCKER_CHANGES = (
-    "SELECT s.key, b.number, b.title, COALESCE(st.name, e.detail), e.created_at, e.call_id,"
-    " c.identity_state, c.identity_source, c.tool, c.session_id, c.agent_id,"
-    " COALESCE(st.is_terminal, 0), e.id = (SELECT MAX(t.id) FROM work_item_events t"
-    " WHERE t.work_item_id = b.work_item_id AND t.action = 'transitioned')"
+    "SELECT s.key, b.number, b.title,"
+    " CASE WHEN e.action = 'opened' THEN 'accepted and open' ELSE COALESCE(st.name, e.detail) END,"
+    " e.created_at, e.call_id, c.identity_state, c.identity_source, c.tool, c.session_id,"
+    " c.agent_id, COALESCE(st.is_terminal, 0), e.id = (SELECT MAX(t.id) FROM work_item_events t"
+    # The actions of `model.STATE_ENTRY_ACTIONS`: this module imports nothing of the product.
+    " WHERE t.work_item_id = b.work_item_id AND t.action IN ('created', 'transitioned', 'opened'))"
     " FROM work_item_links l JOIN work_items b ON b.work_item_id = l.from_id"
     " JOIN planning_spaces s ON s.planning_space_id = b.planning_space_id"
-    " JOIN work_item_events e ON e.work_item_id = b.work_item_id AND e.action = 'transitioned'"
+    " JOIN work_item_events e ON e.work_item_id = b.work_item_id"
+    " AND e.action IN ('transitioned', 'opened')"
     " JOIN execution_events c ON c.id = e.call_id"
-    " LEFT JOIN workflow_states st ON st.workflow_id = b.workflow_id AND st.key ="
+    " LEFT JOIN workflow_states st ON e.action = 'transitioned'"
+    " AND st.workflow_id = b.workflow_id AND st.key ="
     " CASE WHEN instr(e.detail, ': ') > 0 THEN substr(e.detail, 1, instr(e.detail, ': ') - 1)"
     " ELSE e.detail END"
     " WHERE l.to_id = ? AND l.kind = 'blocks' AND e.call_id > ? ORDER BY e.call_id, e.id"
@@ -552,6 +561,9 @@ def _event_entry(conn: sqlite3.Connection, row: tuple, work_item_id: str) -> dic
         return _described(conn, at, detail.removeprefix(_IN_DESCRIPTION), work_item_id)
     if action == "mentioned":
         return _mentioned(conn, at, int(detail))
+    if action == "opened":
+        # The detail is a reason, if one was named, and never a state.
+        return _entry(kind, at, text=f"{OPENED}: {detail}" if detail else OPENED)
     return _entry(kind, at, text=detail)
 
 
