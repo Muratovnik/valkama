@@ -160,7 +160,8 @@ def list_work_items(
     `kind` is named as a caller names it: `goal` keeps the containers under no
     parent and `stage` those under one. The service state is no state and no
     category a caller names: `container` is refused for either with the word that
-    replaces it.
+    replaces it, as is every retired word (`kind=epic`, `category=backlog`), and a
+    `state` key no workflow of the spaces read has is refused with their states.
 
     Nothing here caps the count: a caller that wants a bounded page with an
     honest account of what it left out asks `list_work_items_page`.
@@ -168,13 +169,18 @@ def list_work_items(
 
     clauses: list[str] = []
     parameters: list[object] = []
-    if space is not None:
+    space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
+    if space_id is not None:
         clauses.append("i.planning_space_id = ?")
-        parameters.append(str(_space_row(conn, space)["planning_space_id"]))
+        parameters.append(space_id)
     if state_key is not None:
-        model.refuse_retired(state_key)
+        workflows = (
+            [str(store.workflow_for_space(conn, space_id)["workflow_id"])]
+            if space_id is not None
+            else [str(row[0]) for row in conn.execute("SELECT workflow_id FROM workflows")]
+        )
         clauses.append("s.key = ?")
-        parameters.append(model.state_key(state_key))
+        parameters.append(states.filter_key(conn, workflows, state_key))
     if category is not None:
         clauses.append("s.category = ?")
         parameters.append(model.state_category(category))
@@ -505,6 +511,8 @@ def create_work_item(
     parent: str | None = None,
     author: str | None = None,
 ) -> dict:
+    # Read before the number is taken: a refused kind spends nothing.
+    stored_kind = model.work_item_kind(kind)
     space_row = _space_row(conn, space)
     space_id = str(space_row["planning_space_id"])
     workflow = store.workflow_for_space(conn, space_id)
@@ -527,7 +535,7 @@ def create_work_item(
             number,
             str(workflow["workflow_id"]),
             str(target["state_id"]),
-            model.work_item_kind(kind),
+            stored_kind,
             str(parent_row["work_item_id"]) if parent_row is not None else None,
             model.priority(priority),
             model.text_field(title, "work_item.title"),

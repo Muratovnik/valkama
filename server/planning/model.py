@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from typing import NamedTuple
 from uuid import UUID, uuid4
 
 PLANNING_INTERFACE = "valkama-planning"
@@ -61,12 +62,49 @@ _CONTAINER_WORDS = frozenset({"goal", "stage"})
 #: the work-model migration's alone: no tool and no HTTP write takes it.
 ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "migrated")
 
-#: The words an input no longer takes, each with the refusal that names what
-#: replaces it. A refusal, not a synonym: nothing reads one word as another. Every
-#: refusal of such a word, from a tool or from HTTP, reads this one list.
-RETIRED_WORDS = {
-    "container": "container is not a category: an accepted goal or stage shows"
-    " container_state; accept one with ready",
+
+class RetiredWord(NamedTuple):
+    """What the refusal of a word an input no longer takes says.
+
+    `says` names what replaces the word, and is empty for a word whose refusal is
+    the one any name the input does not know gets. `lists` is whether that refusal,
+    which lists what the input does take, follows it.
+    """
+
+    says: str
+    lists: bool
+
+
+_RETIRED_STATE_WORDS = {
+    "backlog": RetiredWord("backlog is now triage", lists=True),
+    "queued": RetiredWord("queued is now ready", lists=True),
+    "container": RetiredWord(
+        "container is not a category: an accepted goal or stage shows container_state;"
+        " accept one with ready",
+        lists=False,
+    ),
+}
+#: The words an input no longer takes, by the input that took them, each with what
+#: its refusal says. A refusal, not a synonym: nothing reads one word as another,
+#: and a refused input writes nothing. Every refusal of such a word, from a tool or
+#: from HTTP, reads this one list.
+RETIRED_WORDS: dict[str, dict[str, RetiredWord]] = {
+    "kind": {
+        "epic": RetiredWord(
+            "kind epic is retired: a container is kind goal, or stage under a parent",
+            lists=False,
+        ),
+    },
+    "scope": {
+        "epic": RetiredWord(
+            "scope epic is retired: scope tree reads the item and everything under it",
+            lists=False,
+        ),
+    },
+    "category": _RETIRED_STATE_WORDS,
+    # `todo` was a key and no workflow has it now: its refusal is the one any
+    # unknown key gets, which lists the workflow's states.
+    "state": {**_RETIRED_STATE_WORDS, "todo": RetiredWord("", lists=True)},
 }
 PRIORITIES = ("low", "medium", "high", "urgent")
 _PRIORITY_SET = frozenset(PRIORITIES)
@@ -316,17 +354,29 @@ def state_key(value: object) -> str:
     return text
 
 
-def refuse_retired(value: object) -> None:
-    """Refuse a word the input no longer takes, naming what replaces it."""
+def refuse_retired(field: str, value: object, unknown: Callable[[], str] | None = None) -> None:
+    """Refuse a word `field` no longer takes, naming what replaces it.
 
-    if isinstance(value, str) and value.strip() in RETIRED_WORDS:
-        raise PlanningError(RETIRED_WORDS[value.strip()])
+    `unknown` gives the refusal a name the input does not know gets, which lists
+    what it takes; a retired word whose refusal lists it is refused with that after
+    its own words.
+    """
+
+    if not isinstance(value, str):
+        return
+    retired = RETIRED_WORDS[field].get(value.strip())
+    if retired is None:
+        return
+    told = [retired.says] if retired.says else []
+    if retired.lists and unknown is not None:
+        told.append(unknown())
+    raise PlanningError("; ".join(told))
 
 
 def state_category(value: object) -> str:
-    """One of the eight categories a caller names; the service one is refused."""
+    """One of the eight categories a caller names; a retired one is refused with its replacement."""
 
-    refuse_retired(value)
+    refuse_retired("category", value, lambda: f"the categories are {', '.join(PUBLIC_CATEGORIES)}")
     return enum_field(value, _PUBLIC_CATEGORY_SET, "workflow_state.category")
 
 
@@ -337,6 +387,7 @@ def priority(value: object) -> str:
 def public_kind(value: object) -> str:
     """The kind a caller named, as it named it: a task kind, `goal` or `stage`."""
 
+    refuse_retired("kind", value)
     return enum_field(value, frozenset(PUBLIC_KINDS), "work_item.kind")
 
 

@@ -79,7 +79,12 @@ class VocabularyTests(unittest.TestCase):
         self.assertEqual(("created", "transitioned", "opened"), model.STATE_ENTRY_ACTIONS)
 
     def test_container_is_a_retired_word_and_no_category(self) -> None:
-        self.assertEqual({"container": RETIRED_CONTAINER}, model.RETIRED_WORDS)
+        for field in ("category", "state"):
+            with self.subTest(field=field):
+                self.assertEqual(
+                    model.RetiredWord(RETIRED_CONTAINER, lists=False),
+                    model.RETIRED_WORDS[field]["container"],
+                )
         with self.assertRaises(model.PlanningError) as refusal:
             model.state_category("container")
         self.assertEqual(RETIRED_CONTAINER, str(refusal.exception))
