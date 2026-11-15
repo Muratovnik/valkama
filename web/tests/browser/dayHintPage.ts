@@ -17,7 +17,7 @@ export interface Box {
 
 export interface Shown {
   box: Box
-  /** Which element the hint is: a new one for each hint the host opened. */
+  /** Which element the hint is: the host keeps one while it shows, from one element to the next. */
   id: number
   text: string
 }
@@ -137,6 +137,41 @@ export function placeOf(hint: Box, parts: Parts) {
     covers: overlaps(hint, column) || overlaps(hint, slot) || overlaps(hint, stack),
   }
 }
+
+/**
+ * Where a day stands that holds a segment that does nothing when pressed, a hue only, and another
+ * segment beside it: that segment, the other one and the day's ground beside its stack.
+ */
+export const dayWithIdleSegment = (page: Page) =>
+  page.evaluate(() => {
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- runs in the page
+    const box = (element: Element): Box => {
+      const { left, top, right, bottom } = element.getBoundingClientRect()
+      return { left, top, right, bottom }
+    }
+    const slots = [...document.querySelectorAll('.spending-days .period-slot')]
+    for (const slot of slots) {
+      const segments = [...slot.querySelectorAll('.period-segment')].filter(
+        (one) => one.getBoundingClientRect().height > 6,
+      )
+      const idle = segments.find((one) => one.getAttribute('aria-hidden') === 'true')
+      const other = segments.find((one) => one !== idle)
+      const stack = slot.querySelector('.period-stack')
+      if (idle && other && stack)
+        return {
+          index: slots.indexOf(slot),
+          idle: box(idle),
+          other: box(other),
+          slot: box(slot),
+          stack: box(stack),
+        }
+    }
+    throw new Error('no day holds a segment that only shows beside another one')
+  })
+
+/** Real time passing in the page, past the hint's delay, while its frames are noted. */
+export const pastTheDelay = (page: Page) =>
+  page.evaluate(() => new Promise((done) => setTimeout(done, 800)))
 
 /** The days of the task section, drawn as a plot at `width`. */
 export async function openDays(page: Page, width: number, answer?: Answer) {

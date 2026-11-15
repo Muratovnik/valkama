@@ -4,7 +4,8 @@
  * middle of the gap before the next day, where the next day takes over: no point of the gap is
  * neither day's. The browser finds what a point is on in whole pixels, so that middle is held to
  * within a pixel. The hint keeps its element, its words and its place while the pointer crosses
- * the day, and the next day gives its own. Each segment once had a hint of its own and the day
+ * the day, and the next day gives its own words in the same element, placed beside its own column.
+ * Each segment once had a hint of its own and the day
  * another, so every crossing swapped both the words and the place, and the gap between two days
  * belonged to neither.
  *
@@ -18,14 +19,16 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { openReport, record } from './analyticsPage.ts'
-import type { Box, Parts, Shown } from './dayHintPage.ts'
+import type { Parts, Shown } from './dayHintPage.ts'
 import {
   dayParts,
+  dayWithIdleSegment,
   frames,
   hintFrames,
   hintsNow,
   middleOf,
   openDays,
+  pastTheDelay,
   placeOf,
   settledHint,
 } from './dayHintPage.ts'
@@ -195,7 +198,7 @@ for (const width of WIDTHS)
     expect(crossed.length, 'frames noted while crossing').toBeGreaterThan(0)
     // The day says each series' share of it, bare in the share column of its grid.
     expect(first.text).toMatch(/\d+\s?%/u)
-    expect(next.id, 'the next day is a hint of its own').not.toBe(first.id)
+    expect(next.text, 'the next day says its own words').not.toBe(first.text)
 
     for (const [day, where] of Object.entries(place)) {
       expect(where.side, `${day}: beside its column`).not.toBe('neither')
@@ -213,41 +216,6 @@ test(`the narrowest window that draws the days as a plot is ${NARROWEST}px`, asy
   const analytics = await openReport(page, NARROWEST - 1)
   await expect(analytics.locator('.spending-days')).toHaveAttribute('data-shown', 'table')
 })
-
-/**
- * Where a day stands that holds a segment that does nothing when pressed, a hue only, and another
- * segment beside it: that segment, the other one and the day's ground beside its stack.
- */
-const dayWithIdleSegment = (page: Page) =>
-  page.evaluate(() => {
-    // eslint-disable-next-line unicorn/consistent-function-scoping -- runs in the page
-    const box = (element: Element): Box => {
-      const { left, top, right, bottom } = element.getBoundingClientRect()
-      return { left, top, right, bottom }
-    }
-    const slots = [...document.querySelectorAll('.spending-days .period-slot')]
-    for (const slot of slots) {
-      const segments = [...slot.querySelectorAll('.period-segment')].filter(
-        (one) => one.getBoundingClientRect().height > 6,
-      )
-      const idle = segments.find((one) => one.getAttribute('aria-hidden') === 'true')
-      const other = segments.find((one) => one !== idle)
-      const stack = slot.querySelector('.period-stack')
-      if (idle && other && stack)
-        return {
-          index: slots.indexOf(slot),
-          idle: box(idle),
-          other: box(other),
-          slot: box(slot),
-          stack: box(stack),
-        }
-    }
-    throw new Error('no day holds a segment that only shows beside another one')
-  })
-
-/** Real time passing in the page, past the hint's delay, while its frames are noted. */
-const pastTheDelay = (page: Page) =>
-  page.evaluate(() => new Promise((done) => setTimeout(done, 800)))
 
 // The host opens a hint once per element until the pointer leaves it, and a day is one element
 // for it: a press closed the hint, and the rest of the day then showed none until the pointer left.

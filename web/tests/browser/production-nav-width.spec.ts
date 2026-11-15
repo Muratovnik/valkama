@@ -183,9 +183,12 @@ test('focus brought by a key shows an icon’s hint, and a press shows none', as
   await page.keyboard.press('Shift+Tab')
   await expect(fold).toBeFocused()
   await expect(words).toHaveText(label ?? '')
-  // Escape closes the hint and goes on to the list, which folds the space back.
+  // Escape closes the hint and goes no further; with no hint up, it reaches the list, which
+  // folds the space back.
   await page.keyboard.press('Escape')
   await expect(words).toHaveCount(0)
+  await expect(fold).toHaveAttribute('aria-expanded', 'true')
+  await page.keyboard.press('Escape')
   await expect(fold).toHaveAttribute('aria-expanded', 'false')
   await page.keyboard.press('Enter')
   await expect(fold).toHaveAttribute('aria-expanded', 'true')

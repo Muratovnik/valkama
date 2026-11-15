@@ -92,6 +92,11 @@ test('Escape in the card closes the card and takes the document with it', async 
   await expect(target).toBeFocused()
   await page.keyboard.press('F6')
   await expect(link).toBeFocused()
+  // F6 is a key that moves focus, so the link's hint shows, and Escape closes that hint alone.
+  await expect(page.getByRole('tooltip')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('tooltip')).toHaveCount(0)
+  await expect(pane).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(pane).toHaveCount(0)

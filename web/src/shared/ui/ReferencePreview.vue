@@ -51,6 +51,7 @@ import {
 } from 'reka-ui'
 
 import type { ReferencePreview } from '@/shared/lib/referenceLinks.ts'
+import { closeHint } from '@/shared/ui/hintManager.ts'
 import { overlayTop } from '@/shared/ui/overlayStack.ts'
 import {
   onPreviewAnchorGone,
@@ -368,6 +369,10 @@ useEventListener(
 )
 
 watch(overlayTop, dismiss)
+// One hover surface at a time: the card takes the reader from a hint as it opens.
+watch(open, (up) => {
+  if (up) closeHint()
+})
 
 const stopHearing = onPreviewAnchorGone((element) => {
   if (element === hovered) hovered = null

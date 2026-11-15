@@ -121,12 +121,13 @@ export const overlayTop = () => owners.value.at(-1)?.id ?? null
  * A popup open on the page: the control that owns it says it is expanded, as WAI-ARIA has
  * a combobox and every control with a popup say (Reka's menus, selects and comboboxes, and
  * a field driving a list of its own), or Reka's floating content says it is open. A
- * tooltip or a hover preview is no popup: its state is `delayed-open` or `instant-open`.
+ * hint or a hover preview is no popup: a hover preview's state is `delayed-open` or
+ * `instant-open`, and a hint's surface, open as it is, says it is one (`data-hint-surface`).
  */
 const OPEN_POPUP = [
   '[role="combobox"][aria-expanded="true"]',
   '[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"]',
-  '[data-reka-popper-content-wrapper] > [data-state="open"]',
+  '[data-reka-popper-content-wrapper] > [data-state="open"]:not([data-hint-surface])',
 ].join(', ')
 
 /**

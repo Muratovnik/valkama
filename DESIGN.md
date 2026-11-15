@@ -920,9 +920,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   closing it left the reader a module away from the figure they had pressed.
 - **Hints:** a hint is `vTooltip` and its one host, `TooltipHost`, never the
   `title` attribute, which the browser draws late, in its own font and colours, and
-  never for text cut short. It shows after a short rest of the pointer and at once on
-  focus a key brought, never for a finger, and goes with Escape, a press, the pointer
-  leaving or a scroll. It stands above its element unless the place asks for a side —
+  never for text cut short. When it shows and goes is kept by one hint manager for every
+  element: after half a second's rest of the pointer, at once while another hint is up or
+  has just gone, at once on focus a key brought, never for a finger. Enter, Space and Escape
+  bring none: the focus the page moves in answer, into what they opened or back from what they
+  closed, is the page's, and its hint would hold up the next Escape. It goes with a press,
+  a scroll, whose end asks again for what the pointer rests on, and the pointer leaving: a
+  hint the pointer raised can be entered and stays while the pointer is on it, going a
+  moment after the pointer leaves both. Escape closes the hint and nothing else, never the
+  drawer or menu under it; with no hint up it reaches them as before. A hint focus holds,
+  and a chart period's, lets the pointer and a press through to what it covers. It stands above its element unless the place asks for a side —
   the rail's hints stand to its right, clear of the rows, and a chart's period's to the
   right of its column, level with the plot's top — and flips where the window has no
   room; where neither side has room for it, it stands above. Every hint states its kind, and the kind says when it shows: `name` is

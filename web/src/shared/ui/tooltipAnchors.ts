@@ -4,9 +4,9 @@
  * browser draws in its own font and colours, late, and never when the text is cut short.
  *
  * The directive files the text against the element and marks it with the words, as
- * `data-tooltip`, and nothing more: no wrapper, no listener, no popup per element.
- * `TooltipHost` finds the marked element under the pointer or the focus from listeners of
- * its own, as `ReferencePreview` does.
+ * `data-tooltip`, and nothing more: no wrapper, no listener, no popup per element. The hint
+ * manager (`hintManager.ts`) hears the pointer and the focus for every hint, and finds the marked
+ * element through the rules below (`pointerAnchorOf`, `focusAnchorOf`).
  *
  *     <button v-tooltip.name="t('refresh.title')">            an icon's name, always, above
  *     <a v-tooltip:right.clipped="name">{{ name }}</a>      only while its text is cut, at the right
@@ -57,6 +57,7 @@ import { shallowReactive } from 'vue'
 import type { Directive, DirectiveBinding } from 'vue'
 
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
+import { hintAnchorGone } from '@/shared/ui/hintManager.ts'
 
 export type TooltipSide = 'top' | 'right' | 'bottom' | 'left'
 
@@ -131,7 +132,6 @@ const KINDS: readonly TooltipKind[] = ['name', 'clipped', 'detail']
 const tooltips = shallowReactive(new WeakMap<Element, Tooltip>())
 /** The hidden copies the host keeps, by id: an element is described by one of them. */
 export const tooltipDescriptions = shallowReactive(new Map<string, string>())
-let gone: ((element: HTMLElement) => void) | null = null
 let serial = 0
 
 const words = (text: string) =>
@@ -192,9 +192,7 @@ function forget(element: HTMLElement) {
   }
   delete element.dataset.tooltip
   delete element.dataset.tooltipKind
-  // A reference's preview marks the same attribute for the popup library; it keeps it.
-  if (!Object.hasOwn(element.dataset, 'referencePreview')) delete element.dataset.graceAreaTrigger
-  gone?.(element)
+  hintAnchorGone(element)
 }
 
 function file(
@@ -244,8 +242,6 @@ function file(
   }
   element.dataset.tooltip = said
   element.dataset.tooltipKind = kind
-  // The popup library closes a hint whose pointer, on the hint, stands over another one.
-  element.dataset.graceAreaTrigger = ''
   const body = detail ? (parts.body ?? null) : null
   tooltips.set(element, {
     align,
@@ -280,6 +276,23 @@ export function tooltipAnchorOf(target: EventTarget | null): HTMLElement | null 
 }
 
 /**
+ * The element whose hint the pointer on `target` asks for: its own, or, while its own is a
+ * `clipped` hint of words that stand whole, the hint of what holds it. A one-line word inside a
+ * control that has a hint of its own took the pointer from that hint everywhere it stood whole.
+ */
+export function pointerAnchorOf(target: EventTarget | null): HTMLElement | null {
+  const element = tooltipAnchorOf(target)
+  let speaker = element
+  while (speaker && tooltipOf(speaker)?.clipped && !textIsClipped(speaker)) {
+    const holder = tooltipAnchorOf(speaker.parentElement)
+    // Inside an area its one hint holds every part, its own element too.
+    if (holder === speaker) break
+    speaker = holder
+  }
+  return speaker ?? element
+}
+
+/**
  * The element whose hint focus on `target` shows: its own, or its area's. A control inside a
  * hinted element outside any area shows none: it is not that element.
  */
@@ -307,14 +320,6 @@ export function tooltipRowOf(anchor: HTMLElement, part: Element | null): string 
 
 /** What the element's hint says and how it shows, read reactively. */
 export const tooltipOf = (element: Element) => tooltips.get(element)
-
-/** Hear of an element that stopped showing a hint or left the page; returns the undo. */
-export function onTooltipAnchorGone(listen: (element: HTMLElement) => void): () => void {
-  gone = listen
-  return () => {
-    gone = null
-  }
-}
 
 /** Overflow under which a box shows less than it holds. `visible` lets it run on. */
 const CUTS = new Set(['hidden', 'clip', 'auto', 'scroll'])
