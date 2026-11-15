@@ -2763,12 +2763,18 @@ class ChainToolTests(WireCallTestCase):
                 "title": "claimed",
                 "state": "ready",
                 "claim_ref": "one",
+                # A claim that names no call is unconfirmed, as every record says.
+                "claim_state": "unconfirmed",
                 "workable": False,
                 "parent_reference": self.root,
                 "rank": ranks[self.children["claimed"]],
             },
             claimed,
         )
+        # Every row carries the lease state its HTTP member does, held or not.
+        states = {member["reference"]: member["claim_state"] for member in self.whole()["members"]}
+        for row in answer["open_members"]:
+            self.assertEqual(states[row["reference"]], row["claim_state"], row["reference"])
         self.assertIsNone(answer["open_members"][3]["parent_reference"])
         # Inside a group the rows follow the rank: the two ready ones, the rest.
         rows = answer["open_members"]

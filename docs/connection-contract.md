@@ -288,8 +288,8 @@ Four other answers carry only some of these fields:
   `waits_for`;
 - an MCP `get_work_item_chain` answers no members: its `open_members` are rows of
   `reference`, `title`, `state` (its key), `container_state` where the item has
-  one, `claim_ref`, `workable`, `parent_reference` and `rank`; none of `open`,
-  `acceptance`, `started_at` or `waits_for`;
+  one, `claim_ref`, `claim_state`, `workable`, `parent_reference` and `rank`;
+  none of `open`, `acceptance`, `started_at` or `waits_for`;
 - an MCP write acknowledgement carries `state` (`null` for an accepted open goal
   or stage), `open` and `container_state` where the item has one; none of
   `acceptance`, `started_at`, `waits_for` or `workable`.
@@ -2225,8 +2225,12 @@ has a `failed` one, which only a session start reopens.
 otherwise. It answers how long a session that shows no sign of life keeps a live
 lease, and promises nothing about a session that ends: from that moment the lease
 is `stale`, `expires_at` is `null`, and the grace above applies. `claim` is
-`null` when nobody holds the item. Every item record, full
-or listed, carries `claim_state`; `claim_ref` means what it meant.
+`null` when nobody holds the item. `claim_state` stands beside `claim_ref` in the
+full record, an item of an HTTP list, a compact row of `list_work_items` and
+`search_work_items`, an HTTP chain member, a row of `open_members` and a write
+acknowledgement; `claim_ref` means what it meant. Three projections carry
+`claim_ref` alone: a node of `GET /api/planning/graph`, a hit of the platform
+search and an item of the Exact Project read.
 
 ### Who holds a claim or a step
 

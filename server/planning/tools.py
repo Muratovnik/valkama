@@ -1482,6 +1482,7 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
                 else {}
             ),
             "claim_ref": member["claim_ref"],
+            "claim_state": member["claim_state"],
             "workable": member["workable"],
             "parent_reference": member["parent_reference"],
             "rank": member["rank"],
