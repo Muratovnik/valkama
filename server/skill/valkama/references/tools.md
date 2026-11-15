@@ -27,10 +27,15 @@ says what they mean together.
   `completed` or `cancelled` it shows its `state` like any item.
 - `acceptance` is why and when the work was accepted (`basis`: `owner`,
   `assignment`, `inherited`, `label_rule`, `migrated`; `at`), null while it is
-  not. Work under an accepted open goal or stage is accepted as part of it; other
-  work an agent files or moves out of `triage` or `deferred` needs
-  `acceptance: "assignment"`, sent on the owner's word, or it is refused with
-  `acceptance`. A goal or stage is accepted by a transition to `ready`.
+  not. Work under goals and stages that are all accepted and open is accepted as
+  part of them (`inherited`); a claim of any other work accepts it (`assignment`).
+  Other work an agent files without a `state` stays in `triage` unless it sends
+  `acceptance: "assignment"`, on the owner's word; an item with no basis moved to
+  `ready`, `active`, `review`, `blocked` or `completed` without it is refused with
+  `acceptance`, `force` or not. A move to `triage` takes the basis away. A goal or
+  stage is accepted by a transition to `ready`, and accepted out of `triage` or
+  `deferred` it accepts the work in `triage` under it, stopping at a deferred goal
+  or stage.
 - `started_at` is when work on it began, `waits_for` the open items blocking it,
   and `workable` whether a task may be taken now: unheld, in `triage` or
   `ready`, with nothing unfinished blocking it.
@@ -221,9 +226,10 @@ taken.
 | Moving to | Needs |
 | --- | --- |
 | an active state | a holder after the move: a claim on the item or on one of its steps; `force` does not carry this |
-| any state but triage, deferred or cancelled, from triage or deferred | a basis of acceptance (`acceptance`), which `force` does not carry |
+| ready, active, review, blocked or completed, for an item with no basis | a basis of acceptance (`acceptance`), which `force` does not carry |
 | a deferred state | refused: putting work off is its own action |
 | active, review or blocked, for a goal or stage | refused: a goal or stage is accepted (ready), completed or cancelled |
+| a triage state, for an accepted open goal or stage | refused: an accepted goal or stage is completed or cancelled |
 | a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
 | a completed state | every step done and a summary |
 | a cancelled state | a summary; open steps stay open |
@@ -249,7 +255,11 @@ with its claims in place: until then `claim_ready_work_item` does not hand the
 item out and a server start does not release it. The history names why a claim
 was released: `session-ended`, `session-missing` or `lease-expired`, the last for
 14 quiet days. `release: true` requeues an item that was
-in its active state unless one of its steps is still claimed.
+in its active state unless one of its steps is still claimed. A task at work stands
+held: with no ready state to requeue it in, a release, the tick or release of its
+last held step and a takeover of its stale claim are refused, and its lapsed lease
+is not released at all. Any transition but to an active or blocked state ends the
+item's claims, as a close does.
 `list_work_items` with `owner` set to a holder exactly as `claim_ref` spells it
 lists that holder's items.
 

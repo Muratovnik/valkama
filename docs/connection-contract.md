@@ -301,12 +301,32 @@ depth, and `not_started` otherwise, a goal with no children included. A child
 moved out still counts as one it had.
 
 `basis` `assignment` is the one an agent names, as `acceptance: "assignment"` on
-`create_work_item` and in the `transition` group of `apply_work_item_changes`.
-Work under an accepted open goal or stage is accepted as part of it, `inherited`,
-whatever the call says. `migrated` is the basis the 3.0 migration gives work
-accepted before it, and no write takes it. A goal or stage is accepted by a
-transition to `ready`; it then stands in no state a reader sees, and shows
-`state` `null` and its `container_state`.
+`create_work_item` and in the `transition` group of `apply_work_item_changes`,
+and on their HTTP writes. Any other value is refused. A write that accepts work
+gives the basis in one order, whoever makes it:
+
+1. work under goals and stages that are all accepted and open is `inherited`,
+   whatever the call says;
+2. otherwise a write the owner makes in the browser gives `owner`, and an agent's
+   gives the `acceptance` it sends; a claim gives `assignment` without one;
+3. otherwise the write is refused with the `acceptance` guard, which `force` does
+   not carry.
+
+A basis is given only to an item that has none: one in `triage` or `deferred`,
+or cancelled before it was accepted, when it moves to `ready`, `active`,
+`review`, `blocked` or `completed`, is created there, or is claimed. Accepted work
+keeps its basis through a close and a reopening; a move to `triage` takes it away.
+An agent's `create_work_item` with no `state` and no basis to give therefore
+files the item in `triage` rather than refusing it. `migrated` is the basis the
+3.0 migration gives work accepted before it, and no write takes it.
+
+A goal or stage is accepted by a transition to `ready`; it then stands in no
+state a reader sees, and shows `state` `null` and its `container_state`. Accepted
+out of `triage` or `deferred`, it accepts in the same write the work in `triage`
+under it: each task moves to the first `ready` state it can reach and each goal or
+stage stands accepted and is descended into, all `inherited`; one with nowhere to
+go stays in `triage`, named in `warnings`. A goal or stage in `deferred` stops the
+descent, and nothing under it changes.
 
 A record carries no `container` and no `ready` field: `kind` says which items
 hold others, and `workable` which may be taken.
@@ -2294,6 +2314,10 @@ Who may release or take over a claim follows the lease:
 - `claim_ready_work_item` first releases every stale lease in its space that is
   past its grace. It neither gives nor releases an item whose lease is in the
   grace, because nobody asked for that item in particular.
+- A task in an active state whose workflow lets it reach no `ready` state keeps
+  its stale lease: releasing it would leave work with no holder, so every sweep
+  skips it, and `claim_work_item` on it, a takeover included, is refused with
+  `[transition]` until the task is moved.
 - The release is a `released` event with the detail `<reason>: <holder>`, written
   by Valkama under its own call; an item it leaves unheld in an active state is
   put back in the queue under the same call, as any release does (see
@@ -2341,14 +2365,19 @@ refused: `a goal or stage has no holder; claim a task under it`.
 
 | The task is in | A claim (a take or a takeover) | A release (by its holder, `force`, or lease expiry) |
 | --- | --- | --- |
-| a `triage`, `deferred` or `ready` state | moves it to the first `active` state, in workflow order, that a transition of the workflow reaches from where it stands; from `triage` or `deferred` it is accepted, `inherited` under an accepted open goal or stage and `assignment` otherwise | moves nothing |
-| an `active` state | moves nothing | moves it to the first reachable `ready` state |
+| a `triage`, `deferred` or `ready` state | moves it to the first `active` state, in workflow order, that a transition of the workflow reaches from where it stands; from `triage` or `deferred` it is accepted, `inherited` under goals and stages that are all accepted and open, `owner` for a claim in the browser and `assignment` otherwise | moves nothing |
+| an `active` state | moves nothing | moves it to the first reachable `ready` state, unless a step of it is still claimed |
 | a `blocked` state | moves nothing | moves nothing; the holder is gone |
 | a `review` state | refused: the owner's answer returns it to `ready` | moves nothing |
 | a `completed` or `cancelled` state | refused: reopen it first | moves nothing |
 
 A claim of a step of a task in `triage`, `deferred` or `ready` starts the task as
-a claim of the task does.
+a claim of the task does, and is refused where a claim of the task is. The last
+hold on an active task ending -- its claim released or expired, or its last claimed
+step released or ticked, with nobody holding the item -- requeues it the same way.
+In `apply_work_item_changes` that is decided once, at the end of the batch: a
+batch that releases the last step and then moves the task to `review` moves it
+from work to review, not by way of `ready`.
 
 A move is the transition a `transition` group of `apply_work_item_changes`
 makes: the workflow's guards judge it, it writes a `transitioned` event whose
@@ -2360,15 +2389,20 @@ executor, because the claim is it. Its answer, full or acknowledged, adds
 `requeued: {"from": "dev", "to": "ready"}`; and the move's warnings, such as a
 claim no session confirmed, arrive in `warnings`.
 
-Three cases keep the state where it is:
+An active item whose checklist still has a claimed step is released and stays
+active, because that step's holder is still its executor. Two cases are refused
+with `workflow_guard` instead, before anything is written, because a holder stands
+only on work at work or blocked and work at work always has one:
 
-- A startable item whose workflow lets it reach no active state is claimed and
-  stays put, with a warning: `MAIN-12 stays in Triage: its workflow has no
-  active state it can move to`.
-- An active item whose checklist still has a claimed step is released and stays
-  active, because that step's holder is still its executor.
-- An active item with no reachable `ready` state is released and stays: a
-  return to `triage` would undo its acceptance.
+- A claim of a startable item whose workflow lets it reach no active state:
+  `[transition] MAIN-12 stays in Triage: its workflow has no active state it can
+  move to`.
+- A write that would end the last hold on an active item with no reachable
+  `ready` state, a return to `triage` being no way back since it would undo the
+  acceptance: `[transition] MAIN-12 would stand at work with nobody holding it:
+  its workflow lets it reach no ready state to go back to; move it first`. The
+  release, the step release or tick, and the takeover of a stale claim on it are
+  each refused; a lease sweep leaves its lease in place.
 
 A blocked task says something a claim does not undo, so a claim takes it over
 without moving it. Release requeues because a claim starts its item: without it,
@@ -2383,9 +2417,11 @@ moves a task in `triage` to `dev` and then to `review`.
 
 ### A close ends the claims
 
-A claim says somebody is working the item, and nobody works a closed one. So a
-transition into a terminal state -- `completed` or `cancelled`, by
-`is_terminal` -- releases the item's claim in the same write, whoever holds it.
+A claim says somebody is working the item, and nobody works a closed one, nor
+one in `triage`, `ready` or `review`. So a transition into any state but an
+`active` or `blocked` one -- a terminal state, `completed` or `cancelled` by
+`is_terminal`, among them -- releases the item's claim in the same write, whoever
+holds it.
 The rule is in the one transition every surface makes: the `transition` group
 of `apply_work_item_changes`, the HTTP transition, a
 drop on the board's Done column and the card's state menu. Closing therefore
@@ -2399,7 +2435,8 @@ and call: `transitioned` (`done`), then `released` with the holder's
 acknowledgement, the `verbose` record and the HTTP answer, and in
 `applied.transition` of a batch: `{"state": "done", "released": "codex (session 019a…)"}`.
 A close of an item nobody holds releases nothing and carries no `released`. A
-move between open states keeps the claim.
+move to `ready`, `triage` or `review` releases the same way; a move among the
+`active` and `blocked` states keeps the claim.
 
 A checklist step's claim ends too, recorded as `checklist_released` with the
 step's text. A completed close never has one: the guard requires every step

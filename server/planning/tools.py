@@ -219,16 +219,20 @@ _TRANSITION_FORM = (
     " when they apply. The one path a state changes by. The workflow's guards apply:"
     " an active state needs a holder after the write (executor), a terminal state needs"
     " every checklist step ticked and a closing summary, a blocked state needs a blocker"
-    " or a stated reason. Work leaving triage or deferred for any category but"
-    " cancelled needs a basis (acceptance): inherited under an accepted open goal or"
-    " stage, else the acceptance you send. A goal or stage is accepted by a move to"
-    " ready, after which it shows state null and its container_state; it moves to"
-    " completed or cancelled, never to active, review or blocked. Entering deferred is"
+    " or a stated reason. An item with no basis, in triage, deferred or cancelled out"
+    " of triage, moved to ready, active, review, blocked or completed needs one"
+    " (acceptance): inherited under goals and stages that are all accepted and open,"
+    " else the acceptance you send. A move to triage takes the basis away. A goal or"
+    " stage is accepted by a move to ready, after which it shows state null and its"
+    " container_state; accepted out of triage or deferred, it accepts the work in"
+    " triage under it, stopping at a deferred goal or stage. It then"
+    " moves to completed or cancelled, never to active, review, blocked or back to"
+    " triage, and one never accepted is cancelled, not completed. Entering deferred is"
     " refused."
     " A cancelled state needs only the summary, saying why the work stopped; its undone"
     " steps stay open. force carries a refusal through and records it, except executor,"
-    " acceptance, deferred and the refusals that keep a goal or stage out of work. A"
-    " terminal state"
+    " acceptance, deferred and the refusals that keep a goal or stage out of work. Any"
+    " state but an active or blocked one"
     " also ends the item's claim and any step claim, whoever holds them; the answer"
     " names the holder as released, and last_claim_ref keeps reading it. Reopening"
     " restores no claim. The item goes last in its new state unless rank places it. An"
@@ -358,9 +362,10 @@ TOOLS = [
         " takes, goal or stage for work that holds other work: a goal stands under no"
         " parent and a stage under one, at any depth. A goal or stage is never claimed or"
         " worked itself; once accepted it shows state null and its container_state."
-        " Without state, an item under an accepted open goal or stage starts in ready,"
-        " accepted as part of it; another an agent files starts in triage unless"
-        " acceptance accepts it into ready."
+        " Without state, an item under goals and stages that are all accepted and open"
+        " is accepted as part of them; another an agent files starts in triage unless"
+        " acceptance accepts it. Accepted, a task starts in ready and a goal or stage"
+        " stands accepted at once. A named state meets the refusals a move there does."
         " claim, checklist and links act on the new item in the same call, all or"
         " nothing: it is created, then claimed, then given its steps, then linked,"
         " each as the same group of apply_work_item_changes does. A refused step"
@@ -592,11 +597,15 @@ TOOLS = [
         " owner's answer returns it to ready), and a closed one until it is reopened."
         " Claiming a task in a triage, deferred or ready state starts it: it moves to the"
         " workflow's first active state it can reach, and the answer's started"
-        " names both states; one outside an accepted goal or stage is accepted by"
+        " names both states; with no active state to reach the claim is refused. One"
+        " not under goals and stages that are all accepted and open is accepted by"
         " assignment. A blocked task stays blocked. Releasing an active task puts it back"
         " in the first ready state, named in requeued, unless one of its checklist steps"
-        " is still claimed. Closing an item releases it already: no release is needed"
-        " after a transition to a terminal state. The answer carries from_person when"
+        " is still claimed; with no ready state to reach the release is refused, since"
+        " nothing at work stands unheld, and so is taking over a stale claim there. A"
+        " released blocked task stays blocked, held by nobody. A transition to any state"
+        " but an active or blocked one releases the item already: no release follows it."
+        " The answer carries from_person when"
         " a person acted on the item in the interface since an agent last wrote to it:"
         " their words about this work, to read before the next step.",
         WRITES,
@@ -619,7 +628,7 @@ TOOLS = [
         " in apply_work_item_changes's update); priority only breaks a tie. A goal, a stage"
         " and deferred work are never taken. The claim starts the item"
         " as claim_work_item does, so it answers in its active state with started."
-        " Answers with nothing when no item is ready.",
+        " Answers with nothing when no task is workable.",
         WRITES,
         {"space": _SPACE, "author": _AUTHOR},
     ),
@@ -627,9 +636,12 @@ TOOLS = [
         "claim_work_item_checklist_item",
         "Claim one checklist step",
         "Take one step so two agents can split an item without either inventing"
-        " a percentage. Refuses another holder's step unless force, and every step of a"
-        " goal or stage. Claiming a step of a task in a triage, deferred or ready state"
-        " starts the task as claiming it would.",
+        " a percentage. Refuses another holder's step unless force, and, as a claim of"
+        " the item does, every step of a goal or stage and of a task in review or closed."
+        " Claiming a step of a task in a triage, deferred or ready state starts the task"
+        " as claiming it would. When the last held step of an active task nobody holds"
+        " is released, the task goes back to the first ready state, named in requeued;"
+        " with no ready state to reach the release is refused.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -767,7 +779,9 @@ TOOLS = [
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
                 "description": "Steps to complete, or to reopen with done=false."
-                " Completion records who and clears the live claim.",
+                " Completion records who and clears the live claim; when that was the"
+                " last hold on an active task nobody holds, the batch's end puts the task"
+                " back in the first ready state, and with none to reach it is refused.",
                 "items": {
                     "type": "object",
                     "properties": {"item_id": _STR, "done": _BOOL, "force": _FORCE},

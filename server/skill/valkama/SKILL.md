@@ -43,8 +43,8 @@ splitting one, or handing items to other agents.
    by `source` (`docs/plan.md#kb:a7f3`), not copied, and a file the
    description names is written as Naming a file says. Umbrella work is
    `kind: goal`, or `stage` under a parent at any depth; children name it as
-   `parent`, and nobody claims it. Work filed outside an accepted goal or stage
-   starts in triage: send `acceptance: "assignment"` only on the owner's word.
+   `parent`, and nobody claims it. Work filed outside accepted open goals and
+   stages starts in triage: send `acceptance: "assignment"` only on the owner's word.
    Pass `claim: true` and `checklist` when you take a task at once. Link the
    related items your search found (`relates-to`, `blocks`) and name the goal or
    stage whose scope covers it as `parent`. A decision the owner must make is a
@@ -73,7 +73,8 @@ that ended keeps its claims for 12 hours: resuming it makes them `live` again,
 and `claim_ready_work_item` does not hand them out until then.
 `release: true` gives an item back and returns it from the active state to a
 ready one, unless a checklist step of it is still claimed; a blocked one stays.
-Closing an item releases it: send no release after the closing transition.
+With no ready state to return to, the release is refused: move the item first.
+A transition to any state but an active or blocked one releases it: no release.
 
 ## Work the item
 
@@ -119,9 +120,8 @@ call again exactly as it was, and for the rest of the session send Valkama calls
 a response of their own, with the other tools in the next one. Another client or
 permission mode needs no such care.
 
-**Refs.** The `refs` group records a `commit`, a
-`memory` record id materially used, or a `url`. Your own session needs no ref:
-Valkama records the session of every write.
+**Refs.** The `refs` group records a `commit`, a `memory` record id materially
+used, or a `url`. Your own session needs no ref: Valkama records every write's.
 
 **What a person said.** A write's answer carries `from_person` when the owner
 did something on the item in Valkama since an agent last wrote there: a comment,
@@ -210,11 +210,10 @@ twice, is refused. Tell an item only with news for the work there.
 
 **Resolved threads.** The batch's `resolutions` mark a thread's root resolved
 with a one-line decision, and `reopen: true` removes the mark, up to 100 roots in
-one call. Mark a thread only on the owner's
-decision, for example while reviewing a digest with them, and write that decision
-in `resolution`. A reply leaves the mark in place, so reopen the discussion of a
-resolved root by writing a new root that names it. A reply and a question's thread
-take no mark.
+one call. Mark a thread only on the owner's decision, for example while reviewing
+a digest with them, and write that decision in `resolution`. A reply leaves the
+mark in place, so reopen the discussion of a resolved root by writing a new root
+that names it. A reply and a question's thread take no mark.
 
 **Links.** The batch's `links` take `kind`:
 
@@ -405,8 +404,7 @@ review for instance; a call that writes a list and closes its item is refused. A
 list's compact form has `undecided`: `["items"]` while nothing on it is ticked, also
 once the person sent it with none ticked. Treat that as not decided, never as every
 option refused; `status` tells a list not sent yet (`pending`) from one sent empty
-(`answered`). The
-owner's own rules on where to ask come first.
+(`answered`). The owner's own rules on where to ask come first.
 
 ## Merging items that are one change
 
@@ -419,7 +417,7 @@ stays on the merged item with the report. A list goes with the comment it stands
 under, so a report's list stays with the report. Each merged item is linked
 `duplicates` to it, gets a summary naming it and closes in its cancelled state. It is refused, writing nothing,
 for an item another session holds (unless `force`), a closed item, an item in
-another space or a merged item with children. Merge before handing the work to
+another space, a goal or stage with a task, or a merged item with children. Merge before handing the work to
 anyone.
 
 ## Close
@@ -492,10 +490,11 @@ The delegating agent writes that report as the root of a thread on the item.
 | `revision_conflict` | Someone wrote since your read: read the item, then retry on the new `revision`. |
 | A claim held by another | Take other work, or take it over only on an instruction (`force: true`). |
 | `workflow_guard` with `[executor]` | Claim the item or a step before moving it to an active state. |
+| `workflow_guard` with `[acceptance]` | Send `acceptance: "assignment"` only on the owner's word; otherwise leave the item to the owner to accept. |
 | `workflow_guard` with `[checklist]` or `[summary]` | Tick what was done, move undone work to an item of its own, record the summary, then close. |
 | `workflow_guard` with `[blocker]` | Link the blocking item, or give the reason. |
 | `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
-| `workflow_guard` with `[transition]` | The workflow has no such move; go through a state it allows. |
+| `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |
 | A refused batch or creation step | The message starts with the group and index; correct that entry. |
 
