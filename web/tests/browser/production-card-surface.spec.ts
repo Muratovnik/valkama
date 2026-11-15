@@ -432,7 +432,7 @@ test('Back to a card read far down shows it at that place and at no other first'
   await page.goto(CARD)
   await showChain(page)
   const drawer = page.locator('.drawer')
-  const group = drawer.locator('section.chain-group[aria-label="Backlog"]')
+  const group = drawer.locator('section.chain-group[aria-label="Triage"]')
   await expect(drawer).toHaveCSS('transform', 'none')
   await group.locator('.chain-more').click()
   const row = group.locator('.chain-row').nth(20)

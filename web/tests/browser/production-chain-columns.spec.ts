@@ -158,7 +158,7 @@ const mixedChain = () =>
           workable: false,
           title: 'Says its own state and what it waits on',
         }),
-        state: { key: 'triage', name: 'Triage', category: 'triage', is_terminal: false },
+        state: { key: 'inbox', name: 'Inbox', category: 'triage', is_terminal: false },
       },
     ],
     { edges: [...edges, { from: mapId(998), to: mapId(1135), kind: 'blocks' as const }] },

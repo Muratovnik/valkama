@@ -118,6 +118,8 @@ test('an unsent comment survives browser Back, global search and a reload until 
               reference: blockedWorkItem.reference,
               title: blockedWorkItem.title,
               state: { name: 'Todo' },
+              open: true,
+              container_state: null,
               claim_ref: '',
             },
           },
@@ -337,7 +339,7 @@ for (const width of [1440, 390]) {
     page,
   }) => {
     const section = await openChain(page, width)
-    const group = section.locator('section.chain-group[aria-label="Backlog"]')
+    const group = section.locator('section.chain-group[aria-label="Triage"]')
     const toggle = group.locator('.chain-more')
     await expect(toggle).toHaveText('Show all · 107')
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
@@ -370,7 +372,7 @@ for (const width of [1440, 390]) {
     const section = await openChain(page, width)
     const drawer = page.locator('.drawer')
     const body = drawer.locator('.drawer-frame-body')
-    const group = section.locator('section.chain-group[aria-label="Backlog"]')
+    const group = section.locator('section.chain-group[aria-label="Triage"]')
     await group.locator('.chain-more').click()
     const row = group.locator('.chain-row').nth(20)
     const reference = (await row.getAttribute('data-reference')) ?? ''

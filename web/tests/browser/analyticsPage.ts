@@ -189,18 +189,15 @@ export async function serveTask(page: Page) {
         has_more: false,
         items: [
           {
-            target: {
-              project_id: projectId,
-              space_ref: spaceRef,
-              reference: 'MAIN-264',
-              writable: true,
-            },
+            target: { ...workItemRef, project_id: projectId, writable: true },
             item: {
               work_item_id: workItem.work_item_id,
               planning_space_id: workItem.planning_space_id,
               reference: 'MAIN-264',
               title: workItem.title,
               state: { name: 'Dev' },
+              open: true,
+              container_state: null,
               claim_ref: '',
             },
           },

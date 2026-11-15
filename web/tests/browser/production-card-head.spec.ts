@@ -314,6 +314,7 @@ test('a read-down goal has no action in its bar and its reason goes with the fac
 }) => {
   const goal = {
     ...workItem,
+    kind: 'goal',
     open: true,
     container_state: null,
     acceptance: null,
@@ -342,7 +343,7 @@ test('a read-down goal has no action in its bar and its reason goes with the fac
     ),
   )
   const reason = drawer.locator('.card-action')
-  await expect(reason).toContainText('Эпик')
+  await expect(reason).toContainText('Цель — возьмите задачу из неё')
   await toEnd(drawer)
   await settled(drawer)
   await expect(reason).not.toBeInViewport()

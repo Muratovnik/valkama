@@ -1,7 +1,7 @@
 /**
  * A card of an attached store, whose chain the chain read cannot reach: it asks for none,
- * offers no Chain tab where it has no children to say there is one, and where it has
- * children its Chain says where the chain is read.
+ * offers no Chain tab on a task, which has nothing to say there is one, and on a goal, which
+ * holds work, its Chain says where the chain is read.
  */
 import { expect } from '@playwright/test'
 
@@ -14,14 +14,14 @@ import { showChain } from './chainFixtures.ts'
 import { attachedWorkItemRef, projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-test('an attached store item asks for no chain, and with children says where it is read', async ({
+test('an attached store item asks for no chain, and as a goal says where it is read', async ({
   page,
 }, info) => {
   await page.setViewportSize({ width: 390, height: 1000 })
-  let children = false
+  let goal = false
   await installBackend(page, {
     includeAttachedDuplicate: true,
-    card: (read) => ({ ...read, container: children }),
+    card: (read) => ({ ...read, kind: goal ? 'goal' : 'task' }),
   })
   const asked: string[] = []
   page.on('request', (request) => {
@@ -32,12 +32,12 @@ test('an attached store item asks for no chain, and with children says where it 
     scope: projectScope,
     entity: planningWorkItemEntity(attachedWorkItemRef),
   })
-  // With no children it cannot be known to have a chain, so it has no tab for one.
+  // A task cannot be known to have a chain, so it has no tab for one.
   await page.goto(attached)
   const tabs = page.locator('.drawer .inspector-tabs')
   await expect(tabs.getByRole('tab', { name: 'Relations', exact: true })).toBeVisible()
   await expect(tabs.getByRole('tab', { name: 'Chain', exact: true })).toHaveCount(0)
-  children = true
+  goal = true
   await page.reload()
   await showChain(page)
   const section = page.locator('.drawer section.chain')

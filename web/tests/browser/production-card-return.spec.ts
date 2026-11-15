@@ -43,7 +43,7 @@ async function leftFromDepth(page: Page, comments?: unknown[]) {
   await showChain(page)
   const drawer = page.locator('.drawer')
   const body = drawer.locator('.drawer-frame-body')
-  const group = drawer.locator('section.chain-group[aria-label="Backlog"]')
+  const group = drawer.locator('section.chain-group[aria-label="Triage"]')
   await expect(drawer).toHaveCSS('transform', 'none')
   await group.locator('.chain-more').click()
   const row = group.locator('.chain-row').nth(20)

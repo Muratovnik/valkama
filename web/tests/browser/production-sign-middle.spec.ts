@@ -62,6 +62,8 @@ const FOUND = {
         kind: 'bug',
         priority: 'high',
         state: { name: 'Review', category: 'active' },
+        open: true,
+        container_state: null,
         claim_ref: '',
       },
     },

@@ -44,7 +44,7 @@ const DRESSED: Record<number, object> = {
     claim_ref: 'codex (session 7f3a)',
     labels: ['frontend', 'keyboard', 'search', 'quarterly'],
   },
-  1: { claim_ref: '', last_claim_ref: 'claude (session 9c1d)', state: CANCELLED },
+  1: { claim_ref: '', last_claim_ref: 'claude (session 9c1d)', state: CANCELLED, open: false },
 }
 /** The row that waits on an open one. */
 const WAITS = { blocked: 3, on: 5 }

@@ -17,10 +17,12 @@ export const [BACKLOG, DEV, DONE] = planningReadModel.workflow.states.map(
 )
 type State = typeof BACKLOG
 
+// These two titles keep the length, and no prefix drawn wider, of the titles the lane headings'
+// base was measured with (`laneHeadBase.ts`), which that base counts the letters of.
 export const LONG_GOAL =
-  'Board lanes: read the space by chain, with each goal’s open and closed work counted where its lane begins'
+  'Board lanes: read the space by chain, with each lane’s open and closed work counted where its lane begins'
 const EMPTY_GOAL =
-  'A goal opened yesterday and given nothing yet, titled long enough to need an ellipsis at every width'
+  'An idea opened yesterday and given nothing yet, titled long enough to need an ellipsis at every width'
 
 function brief(
   number: number,

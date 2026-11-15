@@ -254,6 +254,7 @@ export const planningReadyFor = (exactSpaceRef = spaceRef, includeUnboundProject
           title: workItemBrief.title,
           state_key: DEV_STATE.key,
           state_category: DEV_STATE.category,
+          container_state: null,
           priority: workItemBrief.priority,
           labels: workItemBrief.labels,
           claim_ref: workItemBrief.claim_ref,

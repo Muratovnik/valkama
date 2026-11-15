@@ -196,7 +196,7 @@ for (const width of [1500, 390]) {
     await expect(frame.locator('.frame-progress')).toHaveCount(0)
     await expect(foldOf(page, EMPTY)).toHaveCount(0)
     await expect(frame.locator('button.graph-frame-open')).toHaveAccessibleName(
-      `Эпик MAIN-${EMPTY} «${LONG_TITLE}» · Нет задач`,
+      `Цель MAIN-${EMPTY} «${LONG_TITLE}» · Нет задач`,
     )
     // As tall as its own lines: its counts and the header's padding, no room for an edge.
     const [height, lines] = await frame.evaluate((element) => {

@@ -56,6 +56,8 @@ test('root keyboard finder opens the exact attached result with partial coverage
               reference: 'MAIN-264',
               title: 'Attached duplicate task',
               state: { name: 'Dev' },
+              open: true,
+              container_state: null,
               claim_ref: '',
             },
           },

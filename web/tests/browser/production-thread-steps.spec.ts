@@ -31,7 +31,7 @@ async function openListed(page: Page, width = 1280, closed = false) {
     root(2, 'Nothing to list here, 1. not even this.'),
     reply(3, 2, '- A point from a reply'),
   )
-  if (closed) opened.backend.item.state = { ...doneState }
+  if (closed) Object.assign(opened.backend.item, { state: { ...doneState }, open: false })
   await page.reload()
   const { drawer } = opened
   await expect(drawer.locator('.thread-entry').first()).toBeVisible()

@@ -251,6 +251,7 @@ for (const [what, change, state] of [
     'closed the item',
     (item: WorkItem) => {
       item.state = { ...doneState }
+      item.open = false
       item.summary = { done: 'Agent shipped it', next: 'Agent watches it' }
     },
     'Done',
@@ -266,6 +267,7 @@ for (const [what, change, state] of [
     'moved it past the need for this move',
     (item: WorkItem) => {
       item.state = { ...doneState, key: 'cancelled', name: 'Cancelled' }
+      item.open = false
     },
     'Cancelled',
   ],

@@ -29,7 +29,7 @@ const LONG =
 const LINKS = [
   ['discovered-from', 'MAIN-777', SHORT, 'Dev', 'active'],
   ['discovered-from', 'MAIN-778', LONG, 'Done', 'completed'],
-  ['relates-to', 'MAIN-779', LONG, 'Backlog', 'backlog'],
+  ['relates-to', 'MAIN-779', LONG, 'Backlog', 'triage'],
   ['relates-to', 'MAIN-780', SHORT, 'Review', 'review'],
 ].map(([kind, reference, title, name, category], index) => ({
   kind,

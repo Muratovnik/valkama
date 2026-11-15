@@ -58,6 +58,7 @@ export const SPACE: readonly Brief[] = [
   held(13, 'Waits for the contract', { workable: false }),
   held(14, 'A closed one', {
     state: doneState,
+    open: false,
     closed_at: '2026-11-02T18:05:00Z',
     last_claim_ref: 'claude',
   } as Partial<WorkItemBrief>),

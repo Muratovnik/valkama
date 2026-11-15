@@ -298,6 +298,8 @@ function finderAnswer() {
           kind: 'task',
           priority: 'medium',
           state: { name: 'Dev', category: 'active', is_terminal: false },
+          open: true,
+          container_state: null,
           claim_ref: '',
         },
       },

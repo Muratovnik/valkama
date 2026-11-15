@@ -21,8 +21,9 @@ const identity = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12
 
 /** The workflow a new space is given, with Review renamed. */
 const STATES = [
-  ['backlog', 'Backlog', 'backlog', false],
-  ['todo', 'Todo', 'queued', false],
+  ['triage', 'Triage', 'triage', false],
+  ['deferred', 'Deferred', 'deferred', false],
+  ['ready', 'Ready', 'ready', false],
   ['dev', 'Dev', 'active', false],
   ['review', 'Code review', 'review', false],
   ['done', 'Done', 'completed', true],
@@ -61,13 +62,14 @@ const brief = (number: number, key: string) =>
     number,
     title: `Work in ${key}`,
     state: stateOf(key),
+    open: !stateOf(key).is_terminal,
     workable: false,
     claim_ref: '',
     claim_state: null,
     parent_id: null,
   }) as Brief
 
-const SPACE = [brief(11, 'todo'), brief(12, 'dev'), brief(13, 'review'), brief(14, 'done')]
+const SPACE = [brief(11, 'ready'), brief(12, 'dev'), brief(13, 'review'), brief(14, 'done')]
 
 /** What the finder answers: an item in Dev and one in the renamed state, with their marks. */
 function finderAnswer() {
@@ -86,6 +88,8 @@ function finderAnswer() {
       kind: item.kind,
       priority: item.priority,
       state: { name: item.state?.name, category: item.state?.category, is_terminal: false },
+      open: true,
+      container_state: null,
       claim_ref: '',
     },
   })
@@ -130,7 +134,7 @@ async function serveSpace(page: Page) {
 const column = (page: Page, key: string) =>
   page.locator(`.work-item-column[data-state="${key}"] .column-name .semantic-state`)
 const columnNames = (page: Page) =>
-  Promise.all(['todo', 'dev', 'review', 'done'].map((key) => column(page, key).textContent()))
+  Promise.all(['ready', 'dev', 'review', 'done'].map((key) => column(page, key).textContent()))
 
 /** The card of MAIN-12, opened from its tile; the state the card says. */
 async function cardState(page: Page): Promise<Locator> {
@@ -185,7 +189,12 @@ test.describe('in Russian', () => {
     await expect(column(page, 'dev')).toBeVisible()
 
     // The board's column heads.
-    expect(await columnNames(page)).toEqual(['К работе', 'В работе', 'Code review', 'Выполнено'])
+    expect(await columnNames(page)).toEqual([
+      'Готово к работе',
+      'В работе',
+      'Code review',
+      'Выполнено',
+    ])
 
     // A row of the list says its state.
     await page.goto(boardRoute({ view: 'list' }))
@@ -203,8 +212,8 @@ test.describe('in Russian', () => {
     await expect(await cardState(page)).toContainText('В работе')
     await closeCard(page)
     const offered = await filterStates(page)
-    expect(offered).toEqual(expect.arrayContaining(['К работе', 'В работе', 'Проверка']))
-    expect(offered.join(' ')).not.toMatch(/\b(?:Dev|Todo)\b/u)
+    expect(offered).toEqual(expect.arrayContaining(['Готово к работе', 'В работе', 'Проверка']))
+    expect(offered.join(' ')).not.toMatch(/\b(?:Dev|Ready)\b/u)
 
     // Ctrl K: the finder names a result's state as the board does.
     const found = await finderRows(page)
@@ -225,7 +234,7 @@ test.describe('in Russian', () => {
     await areas.getByRole('button', { name: 'Работа', exact: true }).click()
 
     await expect(column(page, 'dev')).toHaveText('Dev')
-    expect(await columnNames(page)).toEqual(['Todo', 'Dev', 'Code review', 'Done'])
+    expect(await columnNames(page)).toEqual(['Ready', 'Dev', 'Code review', 'Done'])
     await expect(await cardState(page)).toContainText('Dev')
     await closeCard(page)
     const written = await finderRows(page)

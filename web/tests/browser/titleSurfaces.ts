@@ -67,6 +67,8 @@ export const routeFinder = (page: Page, title: string) =>
               reference: workItem.reference,
               title,
               state: { name: 'Dev' },
+              open: true,
+              container_state: null,
               claim_ref: '',
             },
           },

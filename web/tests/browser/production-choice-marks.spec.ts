@@ -38,6 +38,7 @@ const KINDS = [
   { word: 'Bug', glyph: true },
   { word: 'Goal', glyph: true },
   { word: 'Improvement', glyph: true },
+  { word: 'Stage', glyph: true },
   { word: 'Task', glyph: false },
 ]
 

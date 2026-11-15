@@ -183,6 +183,8 @@ test('a search result leads with its kind in its colour, at rest and highlighted
             kind,
             priority: 'medium',
             state: { name: 'Dev', category: 'active' },
+            open: true,
+            container_state: null,
             claim_ref: '',
           },
         })),

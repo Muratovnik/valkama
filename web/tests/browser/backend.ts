@@ -376,7 +376,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           const read =
             closedWith === undefined
               ? told
-              : { ...told, state: doneState, summary: { done: closedWith, next: '' } }
+              : { ...told, state: doneState, open: false, summary: { done: closedWith, next: '' } }
           const stepped =
             stepText === undefined
               ? read

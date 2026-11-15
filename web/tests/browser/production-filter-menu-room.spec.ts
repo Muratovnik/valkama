@@ -13,9 +13,18 @@ import { boxOf, field, menu, openFacet, openSpace } from './filterPage.ts'
 import { identity } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-const CATEGORIES = ['backlog', 'queued', 'active', 'review', 'completed', 'blocked', 'cancelled']
+const CATEGORIES = [
+  'triage',
+  'deferred',
+  'ready',
+  'active',
+  'review',
+  'completed',
+  'blocked',
+  'cancelled',
+]
 
-/** A workflow of so many states, walking the seven categories over and over. */
+/** A workflow of so many states, walking the eight categories over and over. */
 const workflowOf = (count: number) => ({
   workflow_id: identity(700),
   name: 'Default',
@@ -45,7 +54,7 @@ const realSpace = () =>
     claim_ref: HOLDERS[index % HOLDERS.length],
   }))
 
-async function openMenu(page: Page, width: number, height: number, states = 7) {
+async function openMenu(page: Page, width: number, height: number, states = 8) {
   await openSpace(page, { height, items: realSpace(), width, workflow: workflowOf(states) })
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
   await field(page).click()
@@ -53,7 +62,7 @@ async function openMenu(page: Page, width: number, height: number, states = 7) {
 }
 
 /** The menu stepped into the labels. */
-async function openLabels(page: Page, width: number, height: number, states = 7) {
+async function openLabels(page: Page, width: number, height: number, states = 8) {
   await openMenu(page, width, height, states)
   await openFacet(page, 'Label')
 }
@@ -92,7 +101,7 @@ for (const [width, height] of [
   [1280, 420],
   [390, 480],
 ]) {
-  for (const states of [7, 14]) {
+  for (const states of [8, 16]) {
     test(`the facets stand whole and the labels can be seen to combine, nothing scrolled, ${states} states at ${width}x${height}`, async ({
       page,
     }) => {
@@ -107,10 +116,10 @@ for (const [width, height] of [
       // The scenario holds what a real space holds, or this says nothing.
       await openFacet(page, 'State')
       // The menu offers a state category once, however many states stand in it; and the way back.
-      await expect(list.getByRole('option')).toHaveCount(8)
+      await expect(list.getByRole('option')).toHaveCount(9)
       await list.getByRole('option', { name: 'Back to the facets' }).click()
       await openFacet(page, 'Kind')
-      await expect(list.getByRole('option')).toHaveCount(5)
+      await expect(list.getByRole('option')).toHaveCount(6)
       await list.getByRole('option', { name: 'Back to the facets' }).click()
 
       await openFacet(page, 'Label')

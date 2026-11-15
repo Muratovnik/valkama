@@ -33,6 +33,8 @@ async function serveSearch(page: Page, found: boolean, coverage: Coverage[]) {
                   reference: workItemRef.reference,
                   title: workItem.title,
                   state: { name: 'Dev', category: 'active', is_terminal: false },
+                  open: true,
+                  container_state: null,
                   claim_ref: '',
                 },
               },

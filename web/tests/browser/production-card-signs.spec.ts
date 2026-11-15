@@ -16,7 +16,7 @@ import { test } from './test.ts'
  * middle of the reference's capitals, as every sign of the facts stands. Every parent was called «Goal» under the goal's sign, a task holding others too.
  */
 const PARENT_SIGNS = {
-  goal: { icon: 'lucide-layers', ink: '--color-kind-goal' },
+  goal: { icon: 'lucide-layers', ink: '--color-kind-container' },
   task: { icon: 'lucide-corner-down-right', ink: '--color-kind-task' },
 } as const
 const PARENT_ROW = { ru: 'Родитель', en: 'Parent' } as const
@@ -30,7 +30,7 @@ for (const locale of ['ru', 'en'] as const) {
         const drawer = await openCard(page, locale, width, { goal: 'MAIN-12', parentKind })
         const names = await drawer.locator('.card-row-label').allTextContents()
         expect(names.map((name) => name.trim())).toContain(PARENT_ROW[locale])
-        expect(names.map((name) => name.trim())).not.toContain(locale === 'ru' ? 'Эпик' : 'Goal')
+        expect(names.map((name) => name.trim())).not.toContain(locale === 'ru' ? 'Цель' : 'Goal')
         const mark = drawer.locator('.card-parent [data-facet="parent"]')
         await expect(mark).toHaveAttribute('data-kind', parentKind)
         const glyph = mark.locator('svg')

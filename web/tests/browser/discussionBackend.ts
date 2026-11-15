@@ -162,6 +162,7 @@ export async function installDiscussionBackend(page: Page) {
         })
       }
       item.state = { ...doneState }
+      item.open = false
     } else if (path.endsWith('/checklist')) setChecklist(item, body)
     else if (path.endsWith('/update')) item.description = String(body.description)
     else if (path.endsWith('/summary/select')) selectSummary(item, body)

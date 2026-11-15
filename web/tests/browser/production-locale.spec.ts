@@ -51,7 +51,7 @@ test('Russian Settings names the task type colours and each colour field by its 
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
   await expect(page.getByRole('heading', { name: 'Цвета типов задач', exact: true })).toBeVisible()
-  for (const word of ['Дефект', 'Эпик', 'Улучшение', 'Задача'])
+  for (const word of ['Дефект', 'Цель и этап', 'Улучшение', 'Задача'])
     await expect(page.getByLabel(`Цвет типа «${word}»`, { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Сбросить все цвета', exact: true })).toBeDisabled()
 })

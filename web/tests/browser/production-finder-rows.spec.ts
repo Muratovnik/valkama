@@ -29,6 +29,8 @@ const rows = [LONG_TITLE, 'Follow-up', `Attached copy: ${LONG_TITLE}`].map((titl
     reference: `MAIN-${41 + index}`,
     title,
     state: { name: index % 2 ? 'Backlog' : 'Dev' },
+    open: true,
+    container_state: null,
     claim_ref: '',
   },
 }))

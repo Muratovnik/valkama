@@ -34,6 +34,8 @@ function finderRow({ project, reference, title, writable }: Row, n: number) {
       reference,
       title,
       state: { name: n % 2 ? 'Dev' : 'Backlog' },
+      open: true,
+      container_state: null,
       claim_ref: '',
     },
   }
