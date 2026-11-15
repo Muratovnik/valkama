@@ -861,6 +861,69 @@ def transition_work_item(
     hold against `force`.
     """
 
+    return _transition(
+        conn,
+        reference,
+        state,
+        reason=reason,
+        force=force,
+        rank=rank,
+        expected_revision=expected_revision,
+        author=author,
+        acceptance=acceptance,
+    )
+
+
+#: The refusal a launch's put-back is spared: it returns a task to where it stood.
+_PUT_BACK_SPARES = frozenset({"deferred"})
+
+
+def put_back_after_launch(
+    conn: sqlite3.Connection,
+    reference: str,
+    state: str,
+    *,
+    expected_revision: int,
+    author: str,
+) -> dict:
+    """Put a task a failed launch started back in the state the launch found it in.
+
+    The launch's claim moved the task to work and the client never started, so
+    nothing happened that the move could stand for. Going back is forced, as the
+    compensation always was, and it is the one write that may enter deferred: the
+    task is not being deferred, only put back where it stood. The move ends the
+    launch's claim like any move out of work, and a move back to triage or deferred
+    takes away the basis the claim gave. Nothing on a surface reaches this: a
+    create, a move and `force` keep refusing entry into deferred.
+    """
+
+    return _transition(
+        conn,
+        reference,
+        state,
+        reason="launch_failed",
+        force=True,
+        expected_revision=expected_revision,
+        author=author,
+        spared=_PUT_BACK_SPARES,
+    )
+
+
+def _transition(
+    conn: sqlite3.Connection,
+    reference: str,
+    state: str,
+    *,
+    reason: str = "",
+    force: bool = False,
+    rank: str | None = None,
+    expected_revision: int | None = None,
+    author: str | None = None,
+    acceptance: object = None,
+    spared: frozenset[str] = frozenset(),
+) -> dict:
+    """`transition_work_item`, sparing the refusals named in `spared`."""
+
     row = _row_for_write(conn, reference, expected_revision)
     named = model.named_basis(acceptance)
     identity = str(row["work_item_id"])
@@ -877,6 +940,7 @@ def transition_work_item(
     refusals, warnings = transitions.findings(
         conn, row, target, reason=reason, basis=row["acceptance"] or gives
     )
+    refusals = [finding for finding in refusals if finding[0] not in spared]
     transitions.refuse(refusals, force)
     position = (
         _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"]))

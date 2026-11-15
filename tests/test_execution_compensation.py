@@ -418,5 +418,98 @@ class LaunchCompensationTests(unittest.TestCase):
         self.assertEqual([], lifecycle.reap_launches(self.conn))
 
 
+class FailedLaunchPutsBackTests(unittest.TestCase):
+    """A launch whose client never starts leaves the task as the launch found it."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.repo = os.path.join(directory.name, "repo")
+        os.mkdir(self.repo)
+        environment = mock.patch.dict(
+            os.environ,
+            {
+                "VALKAMA_DB": os.path.join(directory.name, "test.sqlite3"),
+                "VALKAMA_CLAUDE_BIN": sys.executable,
+                "GIT_CEILING_DIRECTORIES": directory.name,
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        self.conn.commit()
+        original_runner = runner.RUNNER
+        self.addCleanup(setattr, runner, "RUNNER", original_runner)
+        runner.RUNNER = runner.Runner(
+            spawn=lambda *_args: (_ for _ in ()).throw(OSError("no client"))
+        )
+
+    def task(self, state: str) -> str:
+        """A task standing in `state` with the basis the work model gives it there."""
+
+        created = planning.create_work_item(self.conn, space="TST", title=f"From {state}")
+        reference = str(created["reference"])
+        if state == "ready":
+            planning.transition_work_item(self.conn, reference, "ready", acceptance="assignment")
+        elif state == "deferred":
+            # No write defers a task yet, so it is placed where the deferral will put it.
+            self.conn.execute(
+                "UPDATE work_items SET state_id = (SELECT s.state_id FROM workflow_states s"
+                " WHERE s.workflow_id = work_items.workflow_id AND s.key = 'deferred')"
+                " WHERE work_item_id = ?",
+                (created["work_item_id"],),
+            )
+        self.conn.commit()
+        return reference
+
+    def launch(self, reference: str) -> dict:
+        """Launch the task on a client that fails to start, and read the task back."""
+
+        mark = self.conn.execute("SELECT COALESCE(MAX(id), 0) FROM work_item_events").fetchone()[0]
+        with self.assertRaisesRegex(runner.LaunchError, "no client"):
+            lifecycle.launch_work_item(
+                self.conn, {"work_item": reference, "client": "claude", "repo": self.repo}
+            )
+        item = planning.get_work_item(self.conn, reference)
+        item["events_after_launch"] = [
+            str(row[0])
+            for row in self.conn.execute(
+                "SELECT action FROM work_item_events WHERE work_item_id = ? AND id > ? ORDER BY id",
+                (item["work_item_id"], mark),
+            )
+        ]
+        return item
+
+    def attempt(self, item: dict) -> dict:
+        return execution_service.executions_for_work_item(self.conn, str(item["work_item_id"]))[0]
+
+    def test_a_deferred_task_goes_back_to_deferred_unheld_and_unaccepted(self) -> None:
+        item = self.launch(self.task("deferred"))
+
+        self.assertEqual(
+            ("deferred", "", None),
+            (item["state"]["key"], item["claim_ref"], item["acceptance"]),
+        )
+        attempt = self.attempt(item)
+        self.assertEqual(("failed", "launch_failed"), (attempt["status"], attempt["outcome"]))
+        self.assertIn("restored", attempt["result"]["unresolved"])
+
+    def test_the_put_back_releases_the_launch_claim_once(self) -> None:
+        for state, basis in (("ready", "assignment"), ("triage", None)):
+            with self.subTest(state=state):
+                item = self.launch(self.task(state))
+                self.assertEqual(
+                    (state, "", basis),
+                    (
+                        item["state"]["key"],
+                        item["claim_ref"],
+                        None if item["acceptance"] is None else item["acceptance"]["basis"],
+                    ),
+                )
+                self.assertEqual(1, item["events_after_launch"].count("released"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -228,15 +228,18 @@ def workable(
     checklist: object,
     category: str,
     blocked: Callable[[], bool],
+    startable: Callable[[], bool],
 ) -> bool:
-    """Whether an item is workable now: a task, unheld, unblocked, in triage or ready.
+    """Whether an item is workable now: a task, unheld, unblocked, startable from triage or ready.
 
     The rule the take-next queue applies, stated once with its query's form
     (`WORKABLE_CLAUSES`), so a projection that loaded its facts in bulk answers it
     the way a single item's record does and the queue hands out what reads
     workable. A container is never workable: nobody holds one. Unheld is the item
-    and every step of it. `blocked` is asked last and only when the rest already
-    holds, because it is the one fact that may cost a query.
+    and every step of it. A task in a state with no way into work is not workable
+    either: a claim of it is refused, and a queue that offered it would stick on it.
+    `blocked` and `startable` are asked last and only when the rest already holds,
+    because they are the facts that may cost a query.
     """
 
     return (
@@ -245,7 +248,18 @@ def workable(
         and not any(step["claimed_by"] for step in model.checklist(checklist))
         and category in model.WORKABLE_CATEGORIES
         and not blocked()
+        and startable()
     )
+
+
+def startable(conn: sqlite3.Connection, row: sqlite3.Row, loaded: bool | None) -> bool:
+    """Whether a claim can start the item where it stands: what a read loaded, or asked now.
+
+    A read of many items loads it with their tree in the queue's own form
+    (`states.STARTS_CLAUSE`); one task's record asks `states.start_state`.
+    """
+
+    return states.start_state(conn, row) is not None if loaded is None else loaded
 
 
 #: `workable` as the take-next queue's conditions on an item `i` in its state `s`.
@@ -258,6 +272,7 @@ WORKABLE_CLAUSES = (
     "NOT EXISTS (SELECT 1 FROM work_item_links l JOIN work_items b"
     " ON b.work_item_id = l.from_id JOIN workflow_states bs ON bs.state_id = b.state_id"
     " WHERE l.to_id = i.work_item_id AND l.kind = 'blocks' AND bs.is_terminal = 0)",
+    states.STARTS_CLAUSE,
 )
 
 
@@ -815,6 +830,7 @@ def present(
         checklist=record["checklist"],
         category=str(state["category"]),
         blocked=lambda: bool(record["waits_for"]),
+        startable=lambda: startable(conn, row, facts.startable(identity)),
     )
     if not full:
         # A count, under its own name. Calling it `comments` in the brief and

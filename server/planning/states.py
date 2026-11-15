@@ -133,6 +133,16 @@ def start_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | Non
     return reachable(conn, row, "active")
 
 
+#: `start_state` as a condition on an item `i`: its workflow lets it reach an active
+#: state from where it stands. The take-next queue's form of what `start_state` finds.
+STARTS_CLAUSE = (
+    "EXISTS (SELECT 1 FROM workflow_transitions t JOIN workflow_states a"
+    " ON a.state_id = t.to_state_id AND a.workflow_id = t.workflow_id"
+    " WHERE t.workflow_id = i.workflow_id AND t.from_state_id = i.state_id"
+    " AND a.category = 'active')"
+)
+
+
 def queue_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
     """The state a task nobody holds any more goes back to: the first `ready` it can reach.
 
