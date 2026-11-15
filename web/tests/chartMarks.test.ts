@@ -22,6 +22,7 @@ import { namedHint, periodHint, seriesHint } from '@/shared/ui/markHints.ts'
 import { column, series, words } from './fixtures/periodChart.ts'
 
 const percent = (ratio: number) => `${Math.round(ratio * 100)}% of the total`
+const bare = (ratio: number) => `${Math.round(ratio * 100)}%`
 const every = () => true
 const bOnly = (segment: { series: PeriodSeries }) => segment.series.key === 'b'
 
@@ -37,7 +38,7 @@ describe('the hint of a mark', () => {
     assert.ok(one)
     // Each fact a line of its own; «so far» qualifies the sum it follows.
     assert.equal(
-      periodHint(one, said, String),
+      periodHint(one, { words: said, formatValue: String }).text,
       'd1: total 7 so far, period before 9\nSwitched to B\nAccount B 4\nAccount C 2\nAccount A 1',
     )
     // The whole text keeps the stack's order: it is the period's name for assistive technology.
@@ -59,7 +60,7 @@ describe('the hint of a mark', () => {
     const { columns } = stackColumns([column('d1', {})], series)
     const [one] = columns
     assert.ok(one)
-    assert.equal(periodHint(one, words, String), 'd1: total 0')
+    assert.equal(periodHint(one, { words, formatValue: String }).text, 'd1: total 0')
   })
 
   // A segment has no hint of its own: its period's says what the segment's did, its share too.
@@ -68,11 +69,14 @@ describe('the hint of a mark', () => {
     const [one] = columns
     assert.ok(one)
     assert.equal(
-      periodHint(one, words, String, percent),
+      periodHint(one, { words, formatValue: String, formatShare: percent }).text,
       'd1: total 4 so far\nAccount B 3, 75% of the total\nAccount A 1, 25% of the total',
     )
     // With no words for a share, none is said.
-    assert.equal(periodHint(one, words, String), 'd1: total 4 so far\nAccount B 3\nAccount A 1')
+    assert.equal(
+      periodHint(one, { words, formatValue: String }).text,
+      'd1: total 4 so far\nAccount B 3\nAccount A 1',
+    )
     // A segment's name says its share as well, between its figure and its period's sum.
     const [first] = one.segments
     assert.ok(first)
@@ -80,6 +84,67 @@ describe('the hint of a mark', () => {
       segmentSummary(one, first, { words, formatValue: String, formatShare: percent }),
       'd1: Account A 1, 25% of the total, total 4 so far',
     )
+  })
+
+  // The hint once ran every fact of a period together as lines of words that wrapped mid-phrase.
+  test('of a period, as a grid: its name and sum, the period before, its series with hue and bare share, its notes', () => {
+    const said = { ...words, before: 'period before' }
+    const { columns } = stackColumns(
+      [{ ...column('d1', { a: 1, b: 4, c: 2 }, true), before: 9 }],
+      series,
+      [{ at: 'd1', label: 'Switched to B' }],
+    )
+    const [one] = columns
+    assert.ok(one)
+    const hint = periodHint(one, { words: said, formatValue: String, formatPart: bare })
+    assert.deepEqual(hint.body, {
+      head: { name: 'd1', figure: '7 so far' },
+      quiet: [{ name: 'period before', figure: '9' }],
+      // Largest first: 4 of 7, 2 of 7, 1 of 7.
+      rows: [
+        { key: 'b', slot: 2, name: 'Account B', figure: '4', share: '57%' },
+        { key: 'c', slot: 3, name: 'Account C', figure: '2', share: '29%' },
+        { key: 'a', slot: 1, name: 'Account A', figure: '1', share: '14%' },
+      ],
+      notes: ['Switched to B'],
+    })
+    // The words are what they were: the bare share is the grid's alone.
+    assert.equal(
+      hint.text,
+      'd1: total 7 so far, period before 9\nSwitched to B\nAccount B 4\nAccount C 2\nAccount A 1',
+    )
+    // With no bare share, the rows have none, though the words say theirs.
+    const worded = periodHint(one, { words: said, formatValue: String, formatShare: percent })
+    assert.deepEqual(
+      worded.body.rows.map((row) => row.share),
+      [undefined, undefined, undefined],
+    )
+    assert.match(worded.text, /Account B 4, 57% of the total/u)
+  })
+
+  test('of a period with no sum to say, as a grid: its name alone, and why under it', () => {
+    const said = { ...words, absent: 'No price', pending: 'No data yet' }
+    const { columns } = stackColumns(
+      [
+        { ...column('d1', {}), absent: ['a'] },
+        { ...column('d2', {}), pending: true },
+      ],
+      series,
+    )
+    const [absent, pending] = columns
+    assert.ok(absent && pending)
+    assert.deepEqual(periodHint(absent, { words: said, formatValue: String }).body, {
+      head: { name: 'd1' },
+      quiet: [],
+      rows: [],
+      notes: ['No price: Account A'],
+    })
+    assert.deepEqual(periodHint(pending, { words: said, formatValue: String }).body, {
+      head: { name: 'd2' },
+      quiet: [],
+      rows: [],
+      notes: ['No data yet'],
+    })
   })
 
   test('of a legend entry: its series over every period, and its share of them all', () => {

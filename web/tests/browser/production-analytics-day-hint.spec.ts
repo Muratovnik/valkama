@@ -17,7 +17,18 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { openReport, record, serve } from './analyticsPage.ts'
+import { openReport, record } from './analyticsPage.ts'
+import type { Box, Parts, Shown } from './dayHintPage.ts'
+import {
+  dayParts,
+  frames,
+  hintFrames,
+  hintsNow,
+  middleOf,
+  openDays,
+  placeOf,
+  settledHint,
+} from './dayHintPage.ts'
 import { test } from './test.ts'
 
 /**
@@ -27,113 +38,6 @@ import { test } from './test.ts'
 const NARROWEST = 664
 
 const WIDTHS = [1440, 1280, NARROWEST]
-
-interface Box {
-  bottom: number
-  left: number
-  right: number
-  top: number
-}
-
-interface Shown {
-  box: Box
-  /** Which element the hint is: a new one for each hint the host opened. */
-  id: number
-  text: string
-}
-
-/** Where one day's parts stand, and where the next day's slot does. */
-const dayParts = (page: Page, index: number) =>
-  page.evaluate((at) => {
-    // This body runs in the page, so a helper at the module's own scope would not be there.
-    // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
-    const box = (element: Element | null | undefined): Box => {
-      const { left, top, right, bottom } = element?.getBoundingClientRect() ?? new DOMRect()
-      return { left, top, right, bottom }
-    }
-    const days = document.querySelector('.spending-days')
-    const slots = [...(days?.querySelectorAll('.period-slot') ?? [])]
-    const slot = slots[at]
-    return {
-      field: box(days?.querySelector('.period-field')),
-      slot: box(slot),
-      column: box(slot?.querySelector('.period-column')),
-      stack: box(slot?.querySelector('.period-stack')),
-      // From the foot of the stack up.
-      segments: [...(slot?.querySelectorAll('.period-segment') ?? [])]
-        .map((segment) => box(segment))
-        .sort((low, high) => high.bottom - low.bottom),
-      next: box(slots[at + 1]),
-    }
-  }, index)
-
-type Parts = Awaited<ReturnType<typeof dayParts>>
-
-/**
- * Teaches the page to note every hint it shows — which element it is, the words it shows and
- * its box — and, from then on, to note them every frame, so a hint that swapped for a frame and
- * back is noted too. The words leave out the copy the popup library keeps for a screen reader,
- * which can trail the words on screen by a render.
- */
-const noteHints = (page: Page) =>
-  page.evaluate(() => {
-    const host = window as unknown as { hintFrames?: Shown[][]; hintsNow?: () => Shown[] }
-    const ids = new WeakMap<Element, number>()
-    let count = 0
-    host.hintsNow = () =>
-      [...document.querySelectorAll('.tooltip-hint')].map((hint) => {
-        if (!ids.has(hint)) {
-          count += 1
-          ids.set(hint, count)
-        }
-        const shown = hint.cloneNode(true) as Element
-        for (const copy of shown.querySelectorAll('[role="tooltip"]')) copy.remove()
-        const { left, top, right, bottom } = hint.getBoundingClientRect()
-        return {
-          id: ids.get(hint) ?? 0,
-          text: shown.textContent ?? '',
-          box: { left, top, right, bottom },
-        }
-      })
-    host.hintFrames = []
-    const note = () => {
-      host.hintFrames?.push(host.hintsNow?.() ?? [])
-      requestAnimationFrame(note)
-    }
-    requestAnimationFrame(note)
-  })
-
-/** Every hint shown now (`noteHints`). */
-const hintsNow = (page: Page) =>
-  page.evaluate(() => (window as unknown as { hintsNow: () => Shown[] }).hintsNow())
-
-/** The hints noted every frame since the last call (`noteHints`). */
-const hintFrames = (page: Page) =>
-  page.evaluate(
-    () => (window as unknown as { hintFrames: Shown[][] }).hintFrames.splice(0) as Shown[][],
-  )
-
-/** Two frames, so what the last move asked for is drawn. */
-const frames = (page: Page) =>
-  page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
-
-/** The one hint shown, once it has stood still for two frames. */
-async function settledHint(page: Page): Promise<Shown> {
-  let last: Shown[] = []
-  await expect
-    .poll(async () => {
-      const shown = await hintsNow(page)
-      await frames(page)
-      last = await hintsNow(page)
-      return last.length === 1 && JSON.stringify(shown) === JSON.stringify(last)
-    }, 'one hint, standing still')
-    .toBe(true)
-  return last[0] as Shown
-}
-
-const middleOf = (box: Box) => ({ x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 })
 
 /**
  * Which day each point across the gap between day `index` and the next one is, from a pixel
@@ -172,40 +76,6 @@ function crossing(parts: Parts, gapEnd: number) {
     { name: 'out of the top of the stack', x: across, y: (field.top + stack.top) / 2 },
     { name: 'to its edge in the gap before the next day', x: gapEnd, y: middleOf(field).y },
   ]
-}
-
-const overlaps = (one: Box, other: Box) =>
-  one.left < other.right &&
-  other.left < one.right &&
-  one.top < other.bottom &&
-  other.top < one.bottom
-
-/** Where a hint stands against the day's column: beside it, and over none of it. */
-function placeOf(hint: Box, parts: Parts) {
-  const { column, slot, stack } = parts
-  let side = 'neither'
-  if (hint.left >= column.right) side = 'right'
-  else if (hint.right <= column.left) side = 'left'
-  return {
-    side,
-    // Beside means level with the column too, not over the plot or under it.
-    level: hint.top < column.bottom && hint.bottom > column.top,
-    covers: overlaps(hint, column) || overlaps(hint, slot) || overlaps(hint, stack),
-  }
-}
-
-/** The days of the task section, drawn as a plot at `width`. */
-async function openDays(page: Page, width: number) {
-  await serve(page)
-  const analytics = await openReport(page, width)
-  const days = analytics.locator('.spending-days')
-  await expect(days).toHaveAttribute('data-shown', 'chart')
-  // The plot in the middle of the window, so a hint has room over and under it.
-  await days
-    .locator('.period-field')
-    .evaluate((field) => field.scrollIntoView({ block: 'center', inline: 'nearest' }))
-  await noteHints(page)
-  return days
 }
 
 /** The day to cross: one with room over its stack, and a day after it. */
@@ -323,8 +193,8 @@ for (const width of WIDTHS)
       expect(step.hints[0]?.box, step.name).toEqual(first.box)
     }
     expect(crossed.length, 'frames noted while crossing').toBeGreaterThan(0)
-    // The day says each series' share of it.
-    expect(first.text).toMatch(/\d+\s?% of the total/u)
+    // The day says each series' share of it, bare in the share column of its grid.
+    expect(first.text).toMatch(/\d+\s?%/u)
     expect(next.id, 'the next day is a hint of its own').not.toBe(first.id)
 
     for (const [day, where] of Object.entries(place)) {
@@ -342,6 +212,85 @@ test(`the narrowest window that draws the days as a plot is ${NARROWEST}px`, asy
   await openDays(page, NARROWEST)
   const analytics = await openReport(page, NARROWEST - 1)
   await expect(analytics.locator('.spending-days')).toHaveAttribute('data-shown', 'table')
+})
+
+/**
+ * Where a day stands that holds a segment that does nothing when pressed, a hue only, and another
+ * segment beside it: that segment, the other one and the day's ground beside its stack.
+ */
+const dayWithIdleSegment = (page: Page) =>
+  page.evaluate(() => {
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- runs in the page
+    const box = (element: Element): Box => {
+      const { left, top, right, bottom } = element.getBoundingClientRect()
+      return { left, top, right, bottom }
+    }
+    const slots = [...document.querySelectorAll('.spending-days .period-slot')]
+    for (const slot of slots) {
+      const segments = [...slot.querySelectorAll('.period-segment')].filter(
+        (one) => one.getBoundingClientRect().height > 6,
+      )
+      const idle = segments.find((one) => one.getAttribute('aria-hidden') === 'true')
+      const other = segments.find((one) => one !== idle)
+      const stack = slot.querySelector('.period-stack')
+      if (idle && other && stack)
+        return {
+          index: slots.indexOf(slot),
+          idle: box(idle),
+          other: box(other),
+          slot: box(slot),
+          stack: box(stack),
+        }
+    }
+    throw new Error('no day holds a segment that only shows beside another one')
+  })
+
+/** Real time passing in the page, past the hint's delay, while its frames are noted. */
+const pastTheDelay = (page: Page) =>
+  page.evaluate(() => new Promise((done) => setTimeout(done, 800)))
+
+// The host opens a hint once per element until the pointer leaves it, and a day is one element
+// for it: a press closed the hint, and the rest of the day then showed none until the pointer left.
+test('after a press closes the day’s hint, another part of the day asks for it again', async ({
+  page,
+}, info) => {
+  await openDays(page, 1440)
+  const day = await dayWithIdleSegment(page)
+  const idle = middleOf(day.idle)
+  await page.mouse.move(0, 0)
+  await page.mouse.move(idle.x, idle.y)
+  const before = await settledHint(page)
+
+  // A press on what does nothing closes the hint, and resting there, even moving a little on
+  // what it pressed, past the delay, brings none back.
+  await page.mouse.down()
+  await page.mouse.up()
+  await expect(page.locator('.tooltip-hint')).toHaveCount(0)
+  await hintFrames(page)
+  await page.mouse.move(idle.x + 1, idle.y + 1)
+  await pastTheDelay(page)
+  const rested = await hintFrames(page)
+
+  // Onto another segment of the same day: its hint again.
+  const other = middleOf(day.other)
+  await page.mouse.move(other.x, other.y, { steps: 4 })
+  const again = await settledHint(page)
+
+  // Pressed once more, then onto the day's ground beside its stack: its hint again too.
+  await page.mouse.move(idle.x, idle.y, { steps: 4 })
+  await page.mouse.down()
+  await page.mouse.up()
+  await expect(page.locator('.tooltip-hint')).toHaveCount(0)
+  await page.mouse.move((day.slot.left + day.stack.left) / 2, idle.y, { steps: 4 })
+  const ground = await settledHint(page)
+  await record(info, 'day-hint-after-press', { day, before, rested, again, ground })
+
+  expect(
+    rested.filter((frame) => frame.length > 0),
+    'no hint while resting on what was pressed',
+  ).toEqual([])
+  expect(again.text, 'another segment: the day’s hint').toBe(before.text)
+  expect(ground.text, 'the day’s ground: the day’s hint').toBe(before.text)
 })
 
 test('focus on a day and on its segments shows the day’s one hint, and it stays put', async ({

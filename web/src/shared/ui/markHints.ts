@@ -12,10 +12,22 @@
  * period, whose hint says everything a segment's did, so pointing across a period never swaps
  * one hint for another. A share is said only where the caller says how it reads (`formatShare`):
  * the words are the caller's, never this module's.
+ *
+ * A period's hint is drawn as a grid (`TooltipBody`): its name and sum, the period compared with
+ * in the quiet ink, a row for each series with its hue, its figure and its bare share
+ * (`formatPart`), and what is said of it under the rows. Its words stay what they were, for
+ * assistive technology and the page's mark.
  */
-import type { PeriodWords, StackedColumn } from '@/shared/ui/chartGeometry.ts'
-import { columnHead, columnNotes, seriesParts, shareWords } from '@/shared/ui/chartGeometry.ts'
-import type { TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
+import type { PeriodChartProps, StackedColumn } from '@/shared/ui/chartGeometry.ts'
+import {
+  columnHead,
+  columnNotes,
+  periodName,
+  saysSum,
+  seriesParts,
+  shareWords,
+} from '@/shared/ui/chartGeometry.ts'
+import type { TooltipBody, TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
 
 type Format = (value: number) => string
 /** A share of a whole as the reader reads it, with what it is of: «42 % of the total». */
@@ -24,22 +36,55 @@ type ShareFormat = ((ratio: number) => string) | undefined
 const lines = (...parts: readonly (string | null | undefined)[]) =>
   parts.filter((part): part is string => Boolean(part)).join('\n')
 
+type PeriodHintChart = Pick<
+  PeriodChartProps,
+  'formatPart' | 'formatShare' | 'formatValue' | 'words'
+>
+
 /**
  * A period in its hint: its sum against the period before, what is said of it, and its series
- * largest first, each with its share of the period where the chart says how a share reads.
+ * largest first, each with its share of the period where the chart says how a share reads; and
+ * the same drawn as a grid, its notes under its series there.
  */
-export function periodHint(
-  stacked: StackedColumn,
-  words: PeriodWords,
-  format: Format,
-  share?: ShareFormat,
-): string {
+export function periodHint(stacked: StackedColumn, chart: PeriodHintChart) {
+  const { formatShare, formatValue: format, words } = chart
   const largest = [...stacked.segments].sort((left, right) => right.value - left.value)
-  return lines(
+  const notes = columnNotes(stacked, words, { withSum: true })
+  const text = lines(
     columnHead(stacked, words, format),
-    ...columnNotes(stacked, words, { withSum: true }),
-    ...seriesParts(largest, format, (segment) => shareWords(segment.value, stacked.total, share)),
+    ...notes,
+    ...seriesParts(largest, format, (segment) =>
+      shareWords(segment.value, stacked.total, formatShare),
+    ),
   )
+  return { text, body: periodBody(stacked, largest, notes, chart) } satisfies TooltipValue
+}
+
+/** A period's hint as a grid: its head, the period compared with, its series, its notes. */
+function periodBody(
+  stacked: StackedColumn,
+  largest: StackedColumn['segments'],
+  notes: string[],
+  { formatPart, formatValue: format, words }: PeriodHintChart,
+): TooltipBody {
+  const { before, incomplete } = stacked.column
+  const running = incomplete ? ` ${words.incomplete}` : ''
+  const sum = `${format(stacked.total)}${running}`
+  return {
+    head: { name: periodName(stacked), ...(saysSum(stacked) ? { figure: sum } : {}) },
+    quiet:
+      words.before && typeof before === 'number'
+        ? [{ name: words.before, figure: format(before) }]
+        : [],
+    rows: largest.map((segment) => ({
+      key: segment.series.key,
+      slot: segment.series.slot,
+      name: segment.series.label,
+      figure: format(segment.value),
+      share: shareWords(segment.value, stacked.total, formatPart) || undefined,
+    })),
+    notes,
+  }
 }
 
 /**

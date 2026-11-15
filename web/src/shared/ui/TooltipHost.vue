@@ -27,7 +27,14 @@
  * - A reference's preview wins: no hint shows on a reference, or while its card is up, and
  *   either one opening closes the other.
  * - Escape closes the hint and still does what it does where it was pressed; a press anywhere,
- *   a scroll of what holds the element and a surface opening over it close the hint too.
+ *   a scroll of what holds the element and a surface opening over it close the hint too. A hint
+ *   the pointer was on stays closed until the pointer leaves its element; inside an area, until
+ *   it moves onto another of the area's parts, which asks for the area's hint again: the whole of
+ *   a chart's period is one element here, and a press on one segment kept the period's hint from
+ *   every other segment.
+ * - A hint with a structure (`body`) is drawn as a grid (`TooltipBody`), its width estimated from
+ *   its widest cells before it opens, and the main row of the part of its area that the pointer or
+ *   the keyboard stands on (`data-tooltip-row`) is marked, without opening the hint again.
  * - A pointer at rest is pointing at whatever a scroll brings under it. The browser says so with
  *   a `pointerover` and no move, so that is heard as the pointer's arrival too; and a hint a
  *   scroll closed is asked for again when that scroll ends, for the element the pointer is on.
@@ -44,19 +51,22 @@ import {
   TooltipTrigger,
 } from 'reka-ui'
 
-import { drawnWidth } from '@/shared/lib/textWidth.ts'
 import { overlayTop } from '@/shared/ui/overlayStack.ts'
 import { previewAnchorOf } from '@/shared/ui/referencePreviewAnchors.ts'
 import type { TooltipAlign, TooltipSide } from '@/shared/ui/tooltipAnchors.ts'
 import {
   focusAnchorOf,
+  inTooltipArea,
   onTooltipAnchorGone,
   textIsClipped,
   tooltipAnchorOf,
   tooltipDescriptions,
   tooltipOf,
   tooltipReachOf,
+  tooltipRowOf,
 } from '@/shared/ui/tooltipAnchors.ts'
+import TooltipBody from '@/shared/ui/TooltipBody.vue'
+import { bodyWidth, hintWidth } from '@/shared/ui/tooltipWidth.ts'
 
 let root: ReturnType<typeof injectTooltipRootContext> | null = null
 
@@ -85,6 +95,30 @@ const whole = ref(false)
 const apart = ' '
 /** What the hint is placed against; the stub trigger stands nowhere. */
 const reference = computed(() => shown.value ?? undefined)
+/**
+ * What assistive technology reads of a hint drawn as a grid: its text, as for every hint. Left to
+ * the library, the copy was the grid's cells run together.
+ */
+const bodyCopy = computed(() =>
+  hint.value?.body ? [hint.value.text, hint.value.note].filter(Boolean).join('\n') : undefined,
+)
+
+/** The deepest element the pointer is on, and the one focus is on. */
+const pointed = shallowRef<Element | null>(null)
+const focused = shallowRef<Element | null>(null)
+/**
+ * The key of the main row the part under the pointer stands for, while the pointer is in the
+ * shown hint's area; else that of the part focus is on. Focus a key moves forgets where the
+ * pointer was, until it moves again, so the last of the two to move is the one marked.
+ */
+const current = computed(() => {
+  const element = shown.value
+  if (!element?.isConnected) return null
+  const part = pointed.value
+  return part && tooltipReachOf(element).contains(part)
+    ? tooltipRowOf(element, part)
+    : tooltipRowOf(element, focused.value)
+})
 
 /**
  * The widest a hint is drawn, as `--tooltip-widest` says in `.tooltip-hint`, and the narrowest it
@@ -106,19 +140,8 @@ interface Place {
 /** Where the shown hint stands, decided as it opens. */
 const place = ref<Place>({ align: 'center', side: 'top' })
 
-/**
- * How wide the hint's lines are drawn, its padding and its border (`.tooltip-hint`) included:
- * its element's own words first while they are cut, its text, its note.
- */
-function hintWidth(lines: readonly string[]): number {
-  const root = getComputedStyle(document.documentElement)
-  const font = root.getPropertyValue('--font-note').trim()
-  const inset = 2 * ((Number.parseFloat(root.getPropertyValue('--space-2')) || 0) + 1)
-  return Math.max(0, ...lines.map((line) => drawnWidth(line, font))) + inset
-}
-
-/** Where the hint of `element` stands: on the side it asks for, or where it has room. */
-function placeOf(element: HTMLElement, lines: readonly string[]): Place {
+/** Where the hint of `element` stands, `width` wide: on the side it asks for, or where it has room. */
+function placeOf(element: HTMLElement, width: number): Place {
   const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
   const { align = 'center', side = 'top' } = tooltipOf(element) ?? {}
   if (side !== 'left' && side !== 'right') return { align, side }
@@ -128,7 +151,7 @@ function placeOf(element: HTMLElement, lines: readonly string[]): Place {
     right: document.documentElement.clientWidth - box.right - OFFSET - EDGE,
   }
   const other = side === 'left' ? 'right' : 'left'
-  const need = Math.min(WIDEST * rem, hintWidth(lines))
+  const need = Math.min(WIDEST * rem, width)
   if (room[side] >= need) return { align, side }
   if (room[other] >= need) return { align, side: other }
   const roomier = room[other] > room[side] ? other : side
@@ -146,6 +169,11 @@ const widestStyle = computed(() =>
 let anchor: HTMLElement | null = null
 /** The element the pointer is on: it opens once, until the pointer has left it. */
 let hovered: HTMLElement | null = null
+/**
+ * The part of an area the pointer was on when a press or Escape closed the area's hint: the hint
+ * stays closed while the pointer rests there, and another part of the area asks for it again.
+ */
+let dismissedOn: Element | null = null
 /** A key, not a press, was the last input, so focus that moves is the reader's own. */
 let keyed = false
 /** Focus is what holds the hint up, not the pointer. */
@@ -213,7 +241,7 @@ function request(next: boolean) {
   whole.value = Boolean(tooltip?.words) && textIsClipped(element)
   const words = whole.value ? [tooltip?.words ?? ''] : []
   const lines = [...words, ...(tooltip?.text ?? '').split('\n'), tooltip?.note ?? '']
-  place.value = placeOf(element, lines)
+  place.value = placeOf(element, tooltip?.body ? bodyWidth(tooltip.body) : hintWidth(lines))
   open.value = true
 }
 
@@ -226,8 +254,19 @@ function close() {
   root?.onClose()
 }
 
+/**
+ * A press or Escape closes the hint; inside an area, where the pointer is (`part`) is noted, so
+ * that another part asks for the area's hint again. Elsewhere the hint waits for the pointer to
+ * leave its element, as it always has.
+ */
+function dismiss(part: EventTarget | null) {
+  dismissedOn = hovered && inTooltipArea(hovered) && part instanceof Element ? part : null
+  close()
+}
+
 function leave() {
   hovered = null
+  dismissedOn = null
   root?.onTriggerLeave()
 }
 
@@ -241,12 +280,20 @@ function enter(element: HTMLElement) {
 /** The pointer moved, or a scroll or a change of the page put another element under it. */
 function point(event: PointerEvent) {
   if (event.pointerType === 'touch') return
+  if (event.target instanceof Element) pointed.value = event.target
   if (event.buttons !== 0) {
     if (open.value && !heldByFocus) close()
     return
   }
   const element = tooltipAnchorOf(event.target)
-  if (element === hovered) return
+  if (element === hovered) {
+    // Another part of the area whose hint a press or Escape closed: its hint, asked for again.
+    if (element && dismissedOn && event.target !== dismissedOn) {
+      dismissedOn = null
+      enter(element)
+    }
+    return
+  }
   if (hovered) leave()
   if (!element) return
   hovered = element
@@ -267,9 +314,9 @@ useEventListener(
 useEventListener(
   document,
   'pointerdown',
-  () => {
+  (event: PointerEvent) => {
     keyed = false
-    if (open.value) close()
+    if (open.value) dismiss(event.target)
   },
   { capture: true },
 )
@@ -282,6 +329,9 @@ useEventListener(
   { capture: true },
 )
 useEventListener(document, 'focusin', (event: FocusEvent) => {
+  focused.value = event.target instanceof Element ? event.target : null
+  // Focus a key moved is where the reader stands now, not where the pointer rests.
+  if (keyed) pointed.value = null
   const element = focusAnchorOf(event.target)
   if (!element || !keyed) return
   pointAt(element)
@@ -289,6 +339,7 @@ useEventListener(document, 'focusin', (event: FocusEvent) => {
   root?.onOpen()
 })
 useEventListener(document, 'focusout', (event: FocusEvent) => {
+  focused.value = null
   const element = focusAnchorOf(event.target)
   if (!element || element !== anchor || !heldByFocus) return
   // Focus moving among the parts of the element's area keeps its hint where it stands.
@@ -334,7 +385,7 @@ useEventListener(
   (event: KeyboardEvent) => {
     if (event.key !== 'Escape' || event.isComposing) return
     heldByFocus = false
-    close()
+    dismiss(pointed.value)
   },
   { capture: true },
 )
@@ -375,6 +426,8 @@ onBeforeUnmount(stopHearing)
         <TooltipContent
           v-if="hint"
           class="tooltip-hint"
+          :class="{ 'tooltip-hint-body': hint.body }"
+          :aria-label="bodyCopy"
           :align="place.align"
           :side="place.side"
           :side-offset="OFFSET"
@@ -382,11 +435,17 @@ onBeforeUnmount(stopHearing)
           :style="widestStyle"
           hide-when-detached
         >
-          <template v-if="whole && hint.words">
-            <span class="tooltip-words">{{ hint.words }}</span
-            >{{ apart }} </template
-          >{{ hint.text
-          }}<span
+          <TooltipBody
+            v-if="hint.body"
+            :body="hint.body"
+            :current="current"
+          />
+          <template v-else>
+            <template v-if="whole && hint.words">
+              <span class="tooltip-words">{{ hint.words }}</span
+              >{{ apart }} </template
+            >{{ hint.text }}</template
+          ><span
             v-if="hint.note"
             class="tooltip-note"
           >
@@ -433,6 +492,12 @@ onBeforeUnmount(stopHearing)
   background: var(--color-tooltip-surface);
   border-radius: var(--radius-status);
   box-shadow: 0 8px 24px var(--color-shadow);
+}
+
+/* A hint drawn as a grid: its rows carry the rest of the inset, so a row's band reaches past
+   its words (`TooltipBody`). */
+.tooltip-hint-body {
+  padding-inline: var(--space-1);
 }
 
 /* The element's own words, whole while it shows them cut: their own line, over the detail. */

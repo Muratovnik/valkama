@@ -21,7 +21,9 @@
  * height and its half of the gap to each neighbour, its segments and the ground between them
  * (`data-tooltip-area`), so crossing it never swaps one hint for another. Its hint says each
  * series' share of it too, stands beside its column at the plot's top, to the right where there
- * is room, and stays put while focus climbs into its segments; a segment has none of its own.
+ * is room, and stays put while focus climbs into its segments; a segment has none of its own, and
+ * marks its series' row in the period's hint while the pointer or focus is on it
+ * (`data-tooltip-row`). The hint draws its shares bare where the chart says how (`formatPart`).
  * The time axis keeps its names apart, measured in the axis's own font (`dayTicks`).
  *
  * Presentational: data and words come in, a press goes out as what its mark is. A period that
@@ -93,7 +95,7 @@ const props = withDefaults(
       live?: boolean
     }
   >(),
-  { formatShare: undefined, marks: () => [], frames: false, live: false },
+  { formatPart: undefined, formatShare: undefined, marks: () => [], frames: false, live: false },
 )
 
 const emit = defineEmits<{
@@ -341,7 +343,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                 />
                 <component
                   :is="periodTag(one)"
-                  v-tooltip:right-start.detail="periodHint(one, words, formatValue, formatShare)"
+                  v-tooltip:right-start.detail="periodHint(one, $props)"
                   class="period-column"
                   v-bind="columnAttrs(one, index)"
                   @click="pressPeriod(one)"
@@ -361,6 +363,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                     class="period-segment series-fill"
                     :data-slot="segment.series.slot"
                     :data-series="segment.series.key"
+                    :data-tooltip-row="segment.series.key"
                     :style="segmentStyle(one, at)"
                     v-bind="segmentAttrs(one, index, at)"
                     @click="(event: MouseEvent) => pressSeries(segment.series, event)"

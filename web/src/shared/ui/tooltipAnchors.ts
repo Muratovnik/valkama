@@ -36,11 +36,17 @@
  * before the detail, since a cut word is not on the screen; while they are not, the hint is
  * the detail alone. With no detail to add it is the `clipped` hint of its words.
  *
+ * `{ text, body }` is a detail with a structure: the host draws the body as a grid of a head
+ * row, quiet rows, main rows and notes (`TooltipBody`), its figures and shares in columns of
+ * their own, and the text stays what assistive technology is given and the page marks.
+ *
  * An element marked `data-tooltip-area` speaks with the one hint it holds: the pointer anywhere
  * in it, and focus a key brings to anything in it, shows that hint, placed against the element
  * that carries it, and moving between its parts leaves the hint as it is. A chart's period is
  * one: the period carries the hint, and its segments, which stand beside it rather than in it
- * so that no control holds another, carry none.
+ * so that no control holds another, carry none. A part that stands for a main row of the body
+ * names that row's key as `data-tooltip-row`, and the row is marked while the pointer or the
+ * keyboard's focus is on that part.
  *
  * For assistive technology it does what `title` did. With nothing else naming the element
  * the hint is its name, as `aria-label`; otherwise it is its description, through
@@ -49,6 +55,8 @@
  */
 import { shallowReactive } from 'vue'
 import type { Directive, DirectiveBinding } from 'vue'
+
+import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 
 export type TooltipSide = 'top' | 'right' | 'bottom' | 'left'
 
@@ -61,10 +69,37 @@ type TooltipPlace = TooltipSide | `${TooltipSide}-start`
 /** What a hint is to its element, which decides when it shows (see above). */
 export type TooltipKind = 'name' | 'clipped' | 'detail'
 
+/** A line of a structured hint: a name, with a figure and a share in columns of their own. */
+interface TooltipLine {
+  name: string
+  figure?: string
+  share?: string
+}
+
+/** A main row of a structured hint: one series, its hue before its name. */
+export interface TooltipRow extends TooltipLine {
+  /** What the part of the area that stands for this row names as `data-tooltip-row`. */
+  key?: string
+  /** The hue of its series, as `seriesSlots()` gave it, drawn as the legend's swatch is. */
+  slot?: SeriesSlot
+}
+
+/**
+ * A hint drawn as a grid: what it is about with its figure, quiet rows in the quiet ink, a main
+ * row for each part, and notes under the rows, each a line of its own across the whole hint.
+ */
+export interface TooltipBody {
+  head: Omit<TooltipLine, 'share'>
+  rows: readonly TooltipRow[]
+  notes?: readonly string[]
+  quiet?: readonly Omit<TooltipLine, 'share'>[]
+}
+
 export type TooltipValue =
   | string
   | {
       text: string | null | undefined
+      body?: TooltipBody | null
       clipped?: boolean
       note?: string | null
       words?: string | null
@@ -74,6 +109,8 @@ export type TooltipValue =
 
 interface Tooltip {
   align: TooltipAlign
+  /** The text drawn as a grid, or null for the text as it reads. */
+  body: TooltipBody | null
   clipped: boolean
   /** The id of the hidden copy that describes the element, while it does. */
   describes: string | null
@@ -209,7 +246,19 @@ function file(
   element.dataset.tooltipKind = kind
   // The popup library closes a hint whose pointer, on the hint, stands over another one.
   element.dataset.graceAreaTrigger = ''
-  tooltips.set(element, { align, clipped, describes, kind, names, note, side, text: main, words })
+  const body = detail ? (parts.body ?? null) : null
+  tooltips.set(element, {
+    align,
+    body,
+    clipped,
+    describes,
+    kind,
+    names,
+    note,
+    side,
+    text: main,
+    words,
+  })
 }
 
 export const vTooltip: Directive<HTMLElement, TooltipValue, TooltipKind, TooltipPlace> = {
@@ -242,6 +291,19 @@ export function focusAnchorOf(target: EventTarget | null): HTMLElement | null {
 
 /** The element whose hover holds `anchor`'s hint up: its area, or itself. */
 export const tooltipReachOf = (anchor: HTMLElement) => areaOf(anchor) ?? anchor
+
+/** Whether the element stands in an area, which speaks with the one hint it holds. */
+export const inTooltipArea = (element: Element) => areaOf(element) !== null
+
+/**
+ * The key of the main row of `anchor`'s hint that `part` stands for (`data-tooltip-row`): only
+ * a part of the area `anchor` speaks for, and none for the area's own ground.
+ */
+export function tooltipRowOf(anchor: HTMLElement, part: Element | null): string | null {
+  const area = areaOf(anchor)
+  const row = part?.closest<HTMLElement>('[data-tooltip-row]')
+  return area && row && area.contains(row) ? (row.dataset.tooltipRow ?? null) : null
+}
 
 /** What the element's hint says and how it shows, read reactively. */
 export const tooltipOf = (element: Element) => tooltips.get(element)

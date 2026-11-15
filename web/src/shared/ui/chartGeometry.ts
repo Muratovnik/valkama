@@ -246,6 +246,13 @@ export interface PeriodChartProps {
    * value: a span of time in one unit (`durationAxis`).
    */
   valueAxis?: ValueAxis
+  /**
+   * A share as bare as a column of shares prints it, «42 %»: a period's hint draws each series'
+   * share in a column of its own (`periodHint`), where what it is a share of goes without saying.
+   * Without it that column is absent. The words of the hint, which assistive technology reads,
+   * keep `formatShare`, and so does a legend entry's hint.
+   */
+  formatPart?: (ratio: number) => string
   /** A share of a whole as the reader reads it, for the hints: «42 % of the total». */
   formatShare?: (ratio: number) => string
   /** A value as the reader reads it, for the scale, the hints, the names and the table. */
@@ -468,7 +475,8 @@ export function shareWords(
 }
 
 /** A period named in full, as its accessible name and its hint name it. */
-const periodName = (stacked: StackedColumn) => stacked.column.fullLabel ?? stacked.column.label
+export const periodName = (stacked: StackedColumn) =>
+  stacked.column.fullLabel ?? stacked.column.label
 
 /** What a period holds, in words: its sum, each series in it, and what is said of it. */
 export function columnSummary(stacked: StackedColumn, words: PeriodWords, format: Format): string {
@@ -493,7 +501,7 @@ export function columnHead(stacked: StackedColumn, words: PeriodWords, format: F
 }
 
 /** Whether words about a period say its sum: it has one, and its figures are in. */
-const saysSum = (stacked: StackedColumn) => hasSum(stacked) && !stacked.column.pending
+export const saysSum = (stacked: StackedColumn) => hasSum(stacked) && !stacked.column.pending
 
 /** A period's sum, «total 3 h», and «so far» after it while the period is still running. */
 function sumWords(stacked: StackedColumn, words: PeriodWords, format: Format) {

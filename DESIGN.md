@@ -986,7 +986,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   largest first, each with its share of the period. A segment has no hint of its own: the period
   is one place for the pointer, its whole height and its half of the gap to each neighbour, its
   segments and the ground between them included, and focus on a segment shows the period's hint
-  too. Crossing a period keeps its one hint, its words and its place; the next period's stands
+  too. The period's hint is a grid rather than lines of words: its name and sum in semibold, the
+  period before in the quiet ink, a row per series with the legend's swatch, its figure and its
+  bare share, figures and shares each in a right-aligned column of tabular figures that never
+  wraps, and what is said of it under the rows; its words stay what assistive technology reads.
+  The row of the segment the pointer or the keyboard stands on is marked by a band and a
+  semibold name, and the mark follows it without the hint opening again or moving. A press or
+  Escape closes the hint; resting on what was pressed brings none back, and another part of the
+  same period asks for it again. Crossing a period keeps its one hint, its words and its place; the next period's stands
   beside its own column at the same height, so moving along the plot moves the hint sideways
   only, and no hint covers the period it speaks for. Segments still lift under the pointer and
   act when pressed. The hint lies over the page, so pointing and leaving move nothing. Pressing a mark does what its entity

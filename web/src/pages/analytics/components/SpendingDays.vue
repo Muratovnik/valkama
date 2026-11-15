@@ -170,6 +170,7 @@ const chart = computed<PeriodChartProps>(() => ({
     ...actionOf(index),
   })),
   formatShare: words.markShare,
+  formatPart: words.share,
   marks:
     typeof props.accounts === 'object'
       ? accountChanges(props.accounts, props.measure).map((change) => ({

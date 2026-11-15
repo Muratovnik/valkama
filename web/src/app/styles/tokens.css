@@ -470,6 +470,10 @@
   --color-scrollbar-thumb: var(--color-gray-650);
   --color-scrollbar-thumb-hover: var(--color-gray-550);
 
+  /* The row of a hint that the part under the pointer or the keyboard stands for: a band a
+     step under the hint's own ground, which keeps its words at their full contrast. */
+  --color-tooltip-current: var(--color-gray-700);
+
   /* The two ladder *roles*, as distinct from the steps above them.
      A step says which tone; a role says where a thing stands, and a container
      may move a role without moving the palette. That is the whole difference,
