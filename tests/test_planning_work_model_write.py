@@ -921,5 +921,39 @@ class HolderRuleOverHttpTests(HolderRuleTests):
     via = "http"
 
 
+class QueueTests(WriteCase):
+    """The take-next queue and `workable` are one rule: it hands out what reads workable."""
+
+    def handed_out(self, answer: object) -> str | None:
+        if isinstance(answer, dict) and "work_item" in answer:
+            answer = answer["work_item"]
+        return None if answer is None else str(answer["reference"])  # type: ignore[index]
+
+    def test_the_queue_hands_out_exactly_what_reads_workable_and_never_a_container(self) -> None:
+        self.tree = oracle(self.conn, "WK")
+        # A ready task whose step is held is held: neither workable nor handed out.
+        self.tree.add("r", state="ready")
+        held = model.checklist([{"text": "Held", "claimed_by": "someone"}])
+        self.conn.execute(
+            "UPDATE work_items SET checklist = ? WHERE work_item_id = ?",
+            (json.dumps(held), self.tree.ids["r"]),
+        )
+        self.conn.commit()
+        workable = {name for name in self.tree.ids if self.record(name)["workable"]}
+        # Worked by hand from the tree: the unheld, unblocked tasks in triage or ready.
+        self.assertEqual({"b", "e", "k", "u", "X"}, workable)
+        by_ref = {ref: name for name, ref in self.tree.refs.items()}
+        handed: list[str] = []
+        while reference := self.handed_out(self.call("claim_ready", {"space": self.tree.key})):
+            handed.append(by_ref[reference])
+            self.assertLessEqual(len(handed), len(workable), handed)
+        self.assertEqual(sorted(workable), sorted(handed))
+        self.assertEqual(set(), {name for name in self.tree.ids if self.record(name)["workable"]})
+
+
+class QueueOverHttpTests(QueueTests):
+    via = "http"
+
+
 if __name__ == "__main__":
     unittest.main()

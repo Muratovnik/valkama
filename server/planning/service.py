@@ -1435,15 +1435,8 @@ def claim_ready_work_item(
     the last refusal is reported rather than looped on forever.
     """
 
-    clauses = [
-        "i.claim_ref = ''",
-        "s.category IN ('triage','ready')",
-        # A container is never worked: the store refuses it in an active state.
-        f"i.kind != '{model.CONTAINER_KIND}'",
-        "NOT EXISTS (SELECT 1 FROM work_item_links l JOIN work_items b"
-        " ON b.work_item_id = l.from_id JOIN workflow_states bs ON bs.state_id = b.state_id"
-        " WHERE l.to_id = i.work_item_id AND l.kind = 'blocks' AND bs.is_terminal = 0)",
-    ]
+    # What the queue hands out is exactly what reads `workable`: one rule, two forms.
+    clauses = list(read_model.WORKABLE_CLAUSES)
     parameters: list[object] = []
     space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
     if space_id is not None:
