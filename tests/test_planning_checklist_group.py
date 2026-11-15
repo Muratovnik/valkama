@@ -71,7 +71,8 @@ class ChecklistGroupTests(unittest.TestCase):
         )
         self.assertEqual(["write it", "test it"], [step["text"] for step in stored])
         self.assertEqual(
-            ["created", "claimed", "transitioned", "checklist_replaced"], self.actions()
+            ["created", "claimed", "accepted", "transitioned", "checklist_replaced"],
+            self.actions(),
         )
 
     def test_a_step_sent_done_is_the_history_of_a_set_and_a_tick(self) -> None:
@@ -86,7 +87,14 @@ class ChecklistGroupTests(unittest.TestCase):
         self.assertEqual((True, "agent"), (found["done"], found["done_by"]))
         self.assertEqual((False, ""), (fix["done"], fix["done_by"]))
         self.assertEqual(
-            ["created", "claimed", "transitioned", "checklist_replaced", "checklist_completed"],
+            [
+                "created",
+                "claimed",
+                "accepted",
+                "transitioned",
+                "checklist_replaced",
+                "checklist_completed",
+            ],
             self.actions(),
         )
 
@@ -148,6 +156,7 @@ class ChecklistGroupTests(unittest.TestCase):
             [
                 "created",
                 "claimed",
+                "accepted",
                 "transitioned",
                 "checklist_replaced",
                 "checklist_completed",
@@ -211,7 +220,8 @@ class ChecklistGroupTests(unittest.TestCase):
             [(old[0]["id"], True, "", "one"), (old[1]["id"], True, "", "one")],
             [(s["id"], s["done"], s["claimed_by"], s["done_by"]) for s in steps],
         )
-        self.assertEqual("checklist_completed", self.actions()[-1])
+        # Completing the step its holder held took the task's last holder: back to ready.
+        self.assertEqual(["checklist_completed", "transitioned"], self.actions()[-2:])
 
     def test_a_list_that_drops_an_engaged_step_names_it(self) -> None:
         old = service.set_checklist(self.conn, self.reference, ["keep", "done already"])

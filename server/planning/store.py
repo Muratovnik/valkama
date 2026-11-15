@@ -71,10 +71,15 @@ def _appended(table: str) -> str:
     return "".join(f",\n    {definition}" for _, definition in _THREAD_COLUMNS[table])
 
 
-#: Which states a kind may stand in, refused by the store as well as by the service:
-#: only a container stands in the service state, and a container never stands where
-#: work is held or waits on a holder. One body, two triggers, because a SQLite
-#: trigger stands on one event.
+_ACCEPTED_SQL = ",".join(f"'{category}'" for category in model.ACCEPTED_CATEGORIES)
+
+#: Which states an item may stand in, refused by the store as well as by the service.
+#: By its kind: only a container stands in the service state, and a container never
+#: stands where work is held or waits on a holder. By its basis: accepted work --
+#: ready, active, review, blocked, completed, or a container accepted and open -- has
+#: one. The service writes a state and its basis in one statement, which is the only
+#: way past this on every statement. One body, two triggers, because a SQLite trigger
+#: stands on one event.
 _STATE_FITS_KIND_RULES = f"""
     SELECT RAISE(ABORT, 'only a container stands in the service state')
     WHERE NEW.kind != '{model.CONTAINER_KIND}' AND EXISTS (
@@ -86,10 +91,15 @@ _STATE_FITS_KIND_RULES = f"""
         SELECT 1 FROM workflow_states s
         WHERE s.state_id = NEW.state_id AND s.category IN ({_TASK_ONLY_SQL})
     );
+    SELECT RAISE(ABORT, 'accepted work stands only with the basis it was accepted on')
+    WHERE NEW.acceptance IS NULL AND EXISTS (
+        SELECT 1 FROM workflow_states s
+        WHERE s.state_id = NEW.state_id AND s.category IN ({_ACCEPTED_SQL})
+    );
 """  # noqa: S608 - trigger DDL from the model's own constants, no value
 STATE_FITS_KIND_TRIGGERS = {
     "work_items_state_fits_kind_insert": "INSERT",
-    "work_items_state_fits_kind_update": "UPDATE OF state_id, kind",
+    "work_items_state_fits_kind_update": "UPDATE OF state_id, kind, acceptance",
 }
 #: Each trigger's statement: the base schema runs them, and so does the migration
 #: that carries an older store, once every item there stands where its kind may.

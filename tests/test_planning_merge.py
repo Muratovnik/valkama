@@ -30,6 +30,7 @@ EARLIER_ACTIONS = {
     "summarized",
     "transitioned",
     "released",
+    "checklist_released",
     "overridden",
 }
 
@@ -145,7 +146,8 @@ class MergeMovesTests(MergeTestCase):
         )
         carried = {step["id"]: step for step in steps}
         self.assertEqual(self.reproduce, carried[self.reproduce["id"]])
-        self.assertEqual("helper", carried[self.bisect["id"]]["claimed_by"])
+        # The survivor is not at work, so nobody holds a step of it any more.
+        self.assertEqual("", carried[self.bisect["id"]]["claimed_by"])
         self.assertEqual(self.again, carried[self.again["id"]])
         self.assertEqual([], self.get(self.first)["checklist"])
         # A step's holder finds it by the same id on the survivor.
@@ -300,7 +302,7 @@ class MergeRefusalTests(MergeTestCase):
         elsewhere = str(service.create_work_item(self.conn, space="FAR", title="Far")["reference"])
         closed = self.item("Closed")
         service.set_summary(self.conn, closed, {"done": "d", "next": "n"})
-        service.transition_work_item(self.conn, closed, "done")
+        service.transition_work_item(self.conn, closed, "done", acceptance="assignment")
         epic = self.item("Umbrella", kind="goal")
         self.item("Under it", parent=epic)
         for name, items, message in (
@@ -308,17 +310,27 @@ class MergeRefusalTests(MergeTestCase):
             ("twice", [self.first, self.first], "is named twice"),
             ("another space", [elsewhere], "lives in another planning space"),
             ("a closed item", [self.first, closed], "is already closed in Done"),
-            ("children", [epic], "has 1 child item(s)"),
+            ("another sort", [epic], "are not of one sort"),
             ("nothing", [], "items must list 1 to 20"),
             ("too many", [self.first] * 21, "items must list 1 to 20"),
             ("unknown", ["MRG-99"], "no work item MRG-99"),
         ):
             with self.subTest(name):
                 self.assertIn(message, self.refused(*items))
+        # A goal merges into a goal, and one with children is refused that way.
+        other_epic = self.item("Another umbrella", kind="goal")
+        before = self.snapshot()
+        with self.assertRaisesRegex(
+            (api.PlanningHttpError, model.PlanningError), r"has 1 child item\(s\)"
+        ):
+            api.handle_post(
+                self.conn, "/api/planning/work-item/merge", {"id": other_epic, "items": [epic]}
+            )
+        self.assertEqual(before, self.snapshot())
 
     def test_a_closed_survivor_is_reopened_first(self) -> None:
         service.set_summary(self.conn, self.survivor, {"done": "d", "next": "n"})
-        service.transition_work_item(self.conn, self.survivor, "done")
+        service.transition_work_item(self.conn, self.survivor, "done", acceptance="assignment")
         self.assertIn("is closed; reopen it", self.refused(self.first))
 
     def test_a_checklist_past_its_limit_is_refused(self) -> None:

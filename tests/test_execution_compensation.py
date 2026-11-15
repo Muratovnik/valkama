@@ -42,7 +42,7 @@ class LaunchCompensationTests(unittest.TestCase):
         self.addCleanup(self.conn.close)
         planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
         created = planning.create_work_item(
-            self.conn, space="TST", title="Contested launch", state="ready"
+            self.conn, space="TST", title="Contested launch", state="ready", acceptance="assignment"
         )
         self.reference = str(created["reference"])
         self.conn.commit()
@@ -58,11 +58,12 @@ class LaunchCompensationTests(unittest.TestCase):
         item = planning.get_work_item(self.conn, self.reference)
         return execution_service.executions_for_work_item(self.conn, str(item["work_item_id"]))[0]
 
-    def test_human_claim_and_review_survive_later_spawn_failure(self) -> None:
+    def test_human_claim_and_block_survive_later_spawn_failure(self) -> None:
         def fail_after_human_action(_argv: list[str], _cwd: str, _environment: dict) -> None:
             planning.claim_work_item(self.other, self.reference, author="human", force=True)
+            # Blocked keeps its holder, so both the move and the claim are the person's.
             planning.transition_work_item(
-                self.other, self.reference, "review", author="human", force=True
+                self.other, self.reference, "blocked", author="human", reason="waits"
             )
             self.other.commit()
             raise OSError("client unavailable")
@@ -72,7 +73,7 @@ class LaunchCompensationTests(unittest.TestCase):
             lifecycle.launch_work_item(self.conn, self.packet())
 
         item = planning.get_work_item(self.other, self.reference)
-        self.assertEqual("review", item["state"]["key"])
+        self.assertEqual("blocked", item["state"]["key"])
         self.assertEqual("human", item["claim_ref"])
         self.assertIn("compensation skipped", item["comments"][-1]["body"])
         attempt = self.attempt()
@@ -203,7 +204,7 @@ class LaunchCompensationTests(unittest.TestCase):
         def fail_schema(*_args: object, **_kwargs: object) -> None:
             planning.claim_work_item(self.other, self.reference, author="human", force=True)
             planning.transition_work_item(
-                self.other, self.reference, "review", author="human", force=True
+                self.other, self.reference, "blocked", author="human", reason="waits"
             )
             self.other.commit()
             raise OSError("schema write failed")
@@ -218,7 +219,7 @@ class LaunchCompensationTests(unittest.TestCase):
         self.assertEqual(1, len(runtime_paths))
         self.assertFalse(os.path.exists(runtime_paths[0]))
         item = planning.get_work_item(self.other, self.reference)
-        self.assertEqual("review", item["state"]["key"])
+        self.assertEqual("blocked", item["state"]["key"])
         self.assertEqual("human", item["claim_ref"])
         self.assertIn("compensation skipped", item["comments"][-1]["body"])
         attempt = self.attempt()

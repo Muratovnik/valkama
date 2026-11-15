@@ -61,7 +61,7 @@ class ExecutorCase(AgentsCase):
         """The executor of a claim the session takes, read back from the card."""
 
         with calls.bind(session_call(session), "claim_work_item"):
-            service.claim_work_item(self.conn, self.card, force=True, move_state=False)
+            service.claim_work_item(self.conn, self.card, force=True)
         return self.read()["claim"]["executor"]
 
     def session(self, session: str = PARENT, **columns: str) -> None:
@@ -91,7 +91,7 @@ class CardTests(ExecutorCase):
     def setUp(self) -> None:
         super().setUp()
         with calls.bind(session_call(), "claim_work_item"):
-            service.claim_work_item(self.conn, self.card, move_state=False)
+            service.claim_work_item(self.conn, self.card)
         self.started(5)
         self.claim_step(0, agent_call())
         self.started(6, agent=SIBLING)
@@ -330,7 +330,7 @@ class HolderTests(ExecutorCase):
         self.assertIsNone(self.read()["claim"])
 
     def test_a_claim_no_session_proved_has_no_session(self) -> None:
-        service.claim_work_item(self.conn, self.card, author="the owner", move_state=False)
+        service.claim_work_item(self.conn, self.card, author="the owner")
         self.assertEqual(NOBODY, self.read()["claim"]["executor"])
 
     def test_a_claim_an_unconfirmed_call_names_a_session_for_opens_nothing(self) -> None:
@@ -340,7 +340,7 @@ class HolderTests(ExecutorCase):
             state=calls.UNCONFIRMED, source=calls.CLAUDE_HOOK, session_id=OTHER_PARENT
         )
         with calls.bind(said, "claim_work_item"):
-            service.claim_work_item(self.conn, self.card, author="someone", move_state=False)
+            service.claim_work_item(self.conn, self.card, author="someone")
         self.assertEqual(NOBODY, self.read()["claim"]["executor"])
 
     def test_a_claim_whose_session_has_no_row_has_no_session(self) -> None:
@@ -365,7 +365,9 @@ class HolderTests(ExecutorCase):
     def test_who_last_held_a_finished_item_costs_no_statement_of_its_own(self) -> None:
         self.held_by()
         self.placed(PARENT, "ide", "vscode")
-        service.transition_work_item(self.conn, self.card, "done", force=True, author="agent")
+        service.transition_work_item(
+            self.conn, self.card, "done", force=True, author="agent", acceptance="assignment"
+        )
         record = {**self.read()}
         seen: list[str] = []
         self.conn.set_trace_callback(seen.append)
@@ -412,7 +414,9 @@ class LastHolderTests(ExecutorCase):
     """A close ends the claim, and the card can still reach whoever held it."""
 
     def close(self) -> dict:
-        service.transition_work_item(self.conn, self.card, "done", force=True, author="agent")
+        service.transition_work_item(
+            self.conn, self.card, "done", force=True, author="agent", acceptance="assignment"
+        )
         return self.read()
 
     def test_a_finished_item_names_who_held_it_and_where_it_was_opened(self) -> None:
@@ -443,7 +447,7 @@ class LastHolderTests(ExecutorCase):
         self.assertEqual(NOBODY, self.close()["last_claim_executor"])
 
     def test_a_person_who_held_it_has_no_session(self) -> None:
-        service.claim_work_item(self.conn, self.card, author="the owner", move_state=False)
+        service.claim_work_item(self.conn, self.card, author="the owner")
         self.assertEqual(NOBODY, self.close()["last_claim_executor"])
 
     def test_open_work_has_nobody_before_its_holder(self) -> None:

@@ -884,7 +884,7 @@ class AbandonedClaimTests(LeaseTestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        service.transition_work_item(self.conn, self.reference, "dev", force=True)
+        # Each test's claim starts the item: nothing is at work before somebody holds it.
         self.conn.commit()
 
     def abandoned(self) -> list[tuple[str, str | None]]:
@@ -934,12 +934,13 @@ class AbandonedClaimTests(LeaseTestCase):
 
 class ExecutorGuardTests(LeaseTestCase):
     def start(self) -> list[str]:
-        """Start the held item by hand, the path a claim an earlier build took still needs.
+        """Start the held item by hand, the path back to work from blocked still needs.
 
-        A claim starts its item itself, so the item is put back first.
+        A claim starts its item itself, so the item is blocked first, which keeps
+        its holder, and then moved back to work.
         """
 
-        service.transition_work_item(self.conn, self.reference, "triage")
+        service.transition_work_item(self.conn, self.reference, "blocked", reason="waits")
         moved = service.transition_work_item(self.conn, self.reference, "dev")
         self.conn.commit()
         return moved["warnings"]

@@ -202,6 +202,51 @@ def below(conn: sqlite3.Connection, identities: Iterable[str]) -> Tree:
     )
 
 
+#: An item and every item over it, nearest first: its id, its kind and its state's
+#: category. The climb stops after as many steps as its space has items, so a cycle
+#: in a damaged store ends instead of looping.
+_ABOVE = (
+    "WITH RECURSIVE above(id, depth) AS (SELECT ?, 0"
+    " UNION ALL SELECT w.parent_id, a.depth + 1 FROM above a"
+    " JOIN work_items w ON w.work_item_id = a.id"
+    " WHERE w.parent_id IS NOT NULL AND a.depth < (SELECT COUNT(*) FROM work_items"
+    "  WHERE planning_space_id = (SELECT planning_space_id FROM work_items WHERE work_item_id = ?)))"
+    " SELECT a.id, i.kind, s.category FROM above a JOIN work_items i ON i.work_item_id = a.id"
+    " JOIN workflow_states s ON s.state_id = i.state_id ORDER BY a.depth"
+)
+
+
+def above(conn: sqlite3.Connection, identity: str) -> list[tuple[str, str, str]]:
+    """`identity` and every item over it up to the root, nearest first, in one statement.
+
+    Each is its id, its stored kind and its state's category: what the rules of a
+    parent read, the cycle a new parent would close and the chain of accepted
+    containers an item inherits its acceptance from.
+    """
+
+    return [
+        (str(row[0]), str(row[1]), str(row[2]))
+        for row in conn.execute(_ABOVE, (identity, identity))
+    ]
+
+
+def accepted_chain(conn: sqlite3.Connection, parent_id: str | None) -> bool:
+    """Whether an item under `parent_id` stands in accepted open containers all the way up.
+
+    The owner's decision about a goal covers the work inside it, so work under such
+    a chain is accepted as part of it. One container above that is not accepted, or
+    no container at all, and the chain is not there.
+    """
+
+    if parent_id is None:
+        return False
+    chain = above(conn, parent_id)
+    return bool(chain) and all(
+        kind == model.CONTAINER_KIND and category == model.SERVICE_CATEGORY
+        for _identity, kind, category in chain
+    )
+
+
 def of_item(conn: sqlite3.Connection, row: sqlite3.Row, category: str) -> Tree:
     """One item and what is under it: all a record of that item derives from.
 

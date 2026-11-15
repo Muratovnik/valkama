@@ -66,6 +66,13 @@ _SPACE = {
     "type": "string",
     "description": "Planning space, by key (MAIN), name, or planning_space_id.",
 }
+#: The basis an agent names for accepted work it takes on.
+_ACCEPTANCE = {
+    "type": "string",
+    "enum": [model.NAMED_BASIS],
+    "description": "assignment: you accept this work as asked of you, where a move into"
+    " accepted work finds no basis. Work under an accepted goal or stage needs none.",
+}
 _STATE = {
     "type": "string",
     "description": "Workflow state, by key or state_id, or by a category ("
@@ -361,6 +368,7 @@ TOOLS = [
                 " comment; never copy the plan text into the item.",
             },
             "parent": WORK_ITEM_REFERENCE,
+            "acceptance": _ACCEPTANCE,
             "claim": {
                 "type": "boolean",
                 "description": "true claims the new item as claim_work_item does,"
@@ -857,6 +865,7 @@ TOOLS = [
                     "reason": _STR,
                     "force": _FORCE,
                     "rank": _RANK,
+                    "acceptance": _ACCEPTANCE,
                 },
                 "required": ["state"],
             },

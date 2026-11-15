@@ -413,7 +413,8 @@ def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         base: dict[str, object] = {"id": str(item["work_item_id"])}
         if "author" in payload:
             base["author"] = payload["author"]
-        findings, applied = _run_steps(conn, base, steps)
+        with service.one_write(conn):
+            findings, applied = _run_steps(conn, base, steps)
         answer = service.get_work_item(conn, str(item["work_item_id"]))
     return {**answer, **findings, "applied": applied}
 
@@ -431,6 +432,7 @@ def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         source=str(payload.get("source") or ""),
         parent=_optional_text(payload, "parent"),
         author=_author(payload),
+        acceptance=payload.get("acceptance"),
     )
 
 
@@ -488,6 +490,7 @@ def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict
         rank=_optional_text(payload, "rank"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
+        acceptance=payload.get("acceptance"),
     )
 
 
@@ -876,7 +879,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         frozenset({"kind", "prompt", "fields", "execution_id", "session_id", "expires_at"}),
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
-    ("transition", frozenset({"state", "reason", "force", "rank"})),
+    ("transition", frozenset({"state", "reason", "force", "rank", "acceptance"})),
 )
 #: What a creation may do to the item it just made, after making it and in this
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
@@ -1074,7 +1077,9 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         actual = int(read_model.item_row(conn, reference)["revision"])
         if expected is not None and expected != actual:
             raise model.RevisionConflictError(expected, actual)
-        findings, applied = _run_steps(conn, base, steps)
+        # One write: a task the batch leaves at work holds a holder at its end.
+        with service.one_write(conn):
+            findings, applied = _run_steps(conn, base, steps)
         answer = service.get_work_item(conn, reference)
         # A closed item takes no question or list, so one written here came before this close.
         if not answer["open"]:

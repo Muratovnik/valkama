@@ -83,7 +83,9 @@ class CloseReleasesTests(CloseTestCase):
     def test_a_completed_close_releases_the_claim_and_records_the_release(self) -> None:
         reference = self.held_item()
 
-        closed = service.transition_work_item(self.conn, reference, "done", author="agent")
+        closed = service.transition_work_item(
+            self.conn, reference, "done", author="agent", acceptance="assignment"
+        )
 
         self.assertEqual(("", None), (closed["claim_ref"], closed["claim_state"]))
         self.assertIsNone(closed["claim"])
@@ -99,7 +101,9 @@ class CloseReleasesTests(CloseTestCase):
         service.tick_checklist_item(self.conn, reference, steps[0]["id"], author="agent")
         service.claim_checklist_item(self.conn, reference, steps[1]["id"], author="helper")
 
-        closed = service.transition_work_item(self.conn, reference, "cancelled", author="agent")
+        closed = service.transition_work_item(
+            self.conn, reference, "cancelled", author="agent", acceptance="assignment"
+        )
 
         self.assertEqual("", closed["claim_ref"])
         # The undone step stays undone: cancelling claims no work. Only its claim ends.
@@ -122,7 +126,7 @@ class CloseReleasesTests(CloseTestCase):
         service.claim_checklist_item(self.conn, reference, step, author="agent")
 
         closed = service.transition_work_item(
-            self.conn, reference, "done", force=True, author="agent"
+            self.conn, reference, "done", force=True, author="agent", acceptance="assignment"
         )
 
         self.assertEqual(["checklist"], closed["overridden"])
@@ -141,7 +145,9 @@ class CloseReleasesTests(CloseTestCase):
     def test_a_close_releases_whoever_holds_the_item(self) -> None:
         reference = self.held_item()
 
-        closed = service.transition_work_item(self.conn, reference, "done", author="owner")
+        closed = service.transition_work_item(
+            self.conn, reference, "done", author="owner", acceptance="assignment"
+        )
 
         self.assertEqual(("", "agent"), (closed["claim_ref"], closed["released"]))
         self.assertEqual(("released", "agent"), self.tail(reference, 1)[0])
@@ -150,27 +156,36 @@ class CloseReleasesTests(CloseTestCase):
         reference = service.create_work_item(self.conn, space=self.key, title="Work")["reference"]
         service.set_summary(self.conn, reference, SUMMARY, author="owner")
 
-        closed = service.transition_work_item(self.conn, reference, "cancelled", author="owner")
+        closed = service.transition_work_item(
+            self.conn, reference, "cancelled", author="owner", acceptance="assignment"
+        )
 
         self.assertNotIn("released", closed)
         self.assertEqual([("transitioned", "cancelled")], self.tail(reference, 1))
         self.assertIsNone(closed["last_claim_ref"])
 
-    def test_a_move_between_open_states_keeps_the_claim(self) -> None:
+    def test_a_move_to_blocked_keeps_the_claim_and_one_to_review_ends_it(self) -> None:
         reference = self.held_item()
 
-        moved = service.transition_work_item(self.conn, reference, "review", author="agent")
+        moved = service.transition_work_item(
+            self.conn, reference, "blocked", reason="waits", author="agent"
+        )
 
         self.assertEqual("agent", moved["claim_ref"])
         self.assertNotIn("released", moved)
+        # Review waits on the owner's answer, and nobody holds work there.
+        reviewed = service.transition_work_item(self.conn, reference, "review", author="agent")
+        self.assertEqual(("", "agent"), (reviewed["claim_ref"], reviewed["released"]))
 
     def test_reopening_a_closed_item_does_not_restore_the_claim(self) -> None:
         reference = self.held_item()
-        service.transition_work_item(self.conn, reference, "done", author="agent")
+        service.transition_work_item(
+            self.conn, reference, "done", author="agent", acceptance="assignment"
+        )
 
-        reopened = service.transition_work_item(self.conn, reference, "dev", author="agent")
+        reopened = service.transition_work_item(self.conn, reference, "ready", author="agent")
 
-        self.assertEqual("dev", reopened["state"]["key"])
+        self.assertEqual("ready", reopened["state"]["key"])
         self.assertEqual(("", None), (reopened["claim_ref"], reopened["claim"]))
         # Open again, it names no former holder: that was about its close.
         self.assertEqual((None, None), (reopened["closed_at"], reopened["last_claim_ref"]))
@@ -180,7 +195,9 @@ class CloseReleasesTests(CloseTestCase):
 class LastHolderTests(CloseTestCase):
     def test_a_closed_item_names_its_last_holder_and_when_it_closed(self) -> None:
         reference = self.held_item()
-        service.transition_work_item(self.conn, reference, "done", author="agent")
+        service.transition_work_item(
+            self.conn, reference, "done", author="agent", acceptance="assignment"
+        )
         closing = next(
             event
             for event in reversed(self.item(reference)["events"])
@@ -250,13 +267,17 @@ class LastHolderTests(CloseTestCase):
         reference = self.held_item()
         service.claim_work_item(self.conn, reference, author="agent", release=True)
 
-        closed = service.transition_work_item(self.conn, reference, "cancelled", author="owner")
+        closed = service.transition_work_item(
+            self.conn, reference, "cancelled", author="owner", acceptance="assignment"
+        )
 
         self.assertIsNone(closed["last_claim_ref"])
 
     def test_the_board_read_model_carries_the_closing_of_each_item(self) -> None:
         closed = self.held_item()
-        service.transition_work_item(self.conn, closed, "done", author="agent")
+        service.transition_work_item(
+            self.conn, closed, "done", author="agent", acceptance="assignment"
+        )
         open_item = self.held_item()
 
         payload = views.planning_payload(self.conn, space=self.key)
@@ -274,7 +295,9 @@ class BulkClosingTests(CloseTestCase):
 
     def histories(self) -> list[str]:
         closed = self.held_item()
-        service.transition_work_item(self.conn, closed, "done", author="agent")
+        service.transition_work_item(
+            self.conn, closed, "done", author="agent", acceptance="assignment"
+        )
         older = self.held_item()
         self.close_as_an_older_build(older)
         two_calls = self.held_item()
@@ -282,7 +305,9 @@ class BulkClosingTests(CloseTestCase):
         service.claim_work_item(self.conn, two_calls, author="agent", release=True)
         unheld = service.create_work_item(self.conn, space=self.key, title="Work")["reference"]
         service.set_summary(self.conn, unheld, SUMMARY, author="owner")
-        service.transition_work_item(self.conn, unheld, "cancelled", author="owner")
+        service.transition_work_item(
+            self.conn, unheld, "cancelled", author="owner", acceptance="assignment"
+        )
         return [closed, older, two_calls, unheld, self.held_item()]
 
     def facts(self, item: dict) -> tuple[object, object]:
@@ -303,7 +328,9 @@ class BulkClosingTests(CloseTestCase):
 
     def test_the_list_asks_for_the_closings_once_however_many_items_closed(self) -> None:
         for _ in range(12):
-            service.transition_work_item(self.conn, self.held_item(), "done", author="agent")
+            service.transition_work_item(
+                self.conn, self.held_item(), "done", author="agent", acceptance="assignment"
+            )
         statements: list[str] = []
         self.conn.set_trace_callback(statements.append)
         self.addCleanup(self.conn.set_trace_callback, None)
@@ -316,7 +343,9 @@ class BulkClosingTests(CloseTestCase):
 class SurfaceTests(CloseTestCase):
     def test_the_graph_names_who_held_a_closed_item(self) -> None:
         closed = self.held_item()
-        service.transition_work_item(self.conn, closed, "done", author="agent")
+        service.transition_work_item(
+            self.conn, closed, "done", author="agent", acceptance="assignment"
+        )
         open_item = self.held_item()
 
         nodes = {

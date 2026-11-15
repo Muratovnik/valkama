@@ -90,7 +90,9 @@ class PlanningDomainTests(unittest.TestCase):
     def test_a_state_the_workflow_does_not_have_is_refused(self) -> None:
         created = self.item("Land the planning domain")
         with self.assertRaisesRegex(model.PlanningError, "no state named shipped"):
-            service.transition_work_item(self.conn, created["reference"], "shipped")
+            service.transition_work_item(
+                self.conn, created["reference"], "shipped", acceptance="assignment"
+            )
 
     def test_a_transition_the_workflow_lacks_is_refused_by_its_own_guard(self) -> None:
         created = self.item("Land the planning domain")
@@ -106,16 +108,22 @@ class PlanningDomainTests(unittest.TestCase):
             (state["triage"], state["ready"]),
         )
         with self.assertRaisesRegex(model.WorkflowGuardError, r"\[transition\]"):
-            service.transition_work_item(self.conn, created["reference"], "ready")
+            service.transition_work_item(
+                self.conn, created["reference"], "ready", acceptance="assignment"
+            )
 
     # -- guards --------------------------------------------------------------
 
     def test_starting_an_item_needs_an_executor(self) -> None:
         created = self.item("Land the planning domain")
         with self.assertRaisesRegex(model.WorkflowGuardError, r"\[executor\]"):
-            service.transition_work_item(self.conn, created["reference"], "dev")
+            service.transition_work_item(
+                self.conn, created["reference"], "dev", acceptance="assignment"
+            )
         service.claim_work_item(self.conn, created["reference"], author="tester")
-        moved = service.transition_work_item(self.conn, created["reference"], "dev")
+        moved = service.transition_work_item(
+            self.conn, created["reference"], "dev", acceptance="assignment"
+        )
         self.assertEqual("dev", moved["state"]["key"])
 
     def test_a_claimed_checklist_step_is_an_executor_too(self) -> None:
@@ -124,14 +132,18 @@ class PlanningDomainTests(unittest.TestCase):
         service.claim_checklist_item(
             self.conn, created["reference"], with_steps["checklist"][0]["id"], author="tester"
         )
-        moved = service.transition_work_item(self.conn, created["reference"], "dev")
+        moved = service.transition_work_item(
+            self.conn, created["reference"], "dev", acceptance="assignment"
+        )
         self.assertEqual("dev", moved["state"]["key"])
 
     def test_closing_needs_every_step_ticked_and_a_summary(self) -> None:
         created = self.item("Land the planning domain")
         with_steps = service.set_checklist(self.conn, created["reference"], ["write it"])
         with self.assertRaises(model.WorkflowGuardError) as refusal:
-            service.transition_work_item(self.conn, created["reference"], "done")
+            service.transition_work_item(
+                self.conn, created["reference"], "done", acceptance="assignment"
+            )
         self.assertIn("[checklist]", str(refusal.exception))
         self.assertIn("[summary]", str(refusal.exception))
         service.tick_checklist_item(
@@ -140,14 +152,18 @@ class PlanningDomainTests(unittest.TestCase):
         service.set_summary(
             self.conn, created["reference"], {"done": "it is written", "next": "the surfaces"}
         )
-        closed = service.transition_work_item(self.conn, created["reference"], "done")
+        closed = service.transition_work_item(
+            self.conn, created["reference"], "done", acceptance="assignment"
+        )
         self.assertTrue(closed["state"]["is_terminal"])
 
     def test_cancelling_needs_a_summary_and_leaves_undone_steps_open(self) -> None:
         created = self.item("Land the planning domain")
         service.set_checklist(self.conn, created["reference"], ["write it", "test it"])
         with self.assertRaises(model.WorkflowGuardError) as refusal:
-            service.transition_work_item(self.conn, created["reference"], "cancelled")
+            service.transition_work_item(
+                self.conn, created["reference"], "cancelled", acceptance="assignment"
+            )
         self.assertIn("[summary]", str(refusal.exception))
         self.assertNotIn("[checklist]", str(refusal.exception))
         service.set_summary(
@@ -155,22 +171,34 @@ class PlanningDomainTests(unittest.TestCase):
             created["reference"],
             {"done": "Not needed: the surfaces already cover it", "next": "nothing"},
         )
-        cancelled = service.transition_work_item(self.conn, created["reference"], "cancelled")
+        cancelled = service.transition_work_item(
+            self.conn, created["reference"], "cancelled", acceptance="assignment"
+        )
         self.assertEqual("cancelled", cancelled["state"]["category"])
         self.assertTrue(cancelled["state"]["is_terminal"])
         self.assertEqual([False, False], [step["done"] for step in cancelled["checklist"]])
         self.assertEqual([], cancelled.get("overridden", []))
         # Done still refuses the same open steps: only cancelling may leave them.
-        reopened = service.transition_work_item(self.conn, created["reference"], "triage")
+        reopened = service.transition_work_item(
+            self.conn, created["reference"], "triage", acceptance="assignment"
+        )
         with self.assertRaisesRegex(model.WorkflowGuardError, r"\[checklist\]"):
-            service.transition_work_item(self.conn, reopened["reference"], "done")
+            service.transition_work_item(
+                self.conn, reopened["reference"], "done", acceptance="assignment"
+            )
 
     def test_blocking_needs_a_blocker_or_a_reason(self) -> None:
         created = self.item("Land the planning domain")
         with self.assertRaisesRegex(model.WorkflowGuardError, r"\[blocker\]"):
-            service.transition_work_item(self.conn, created["reference"], "blocked")
+            service.transition_work_item(
+                self.conn, created["reference"], "blocked", acceptance="assignment"
+            )
         with_reason = service.transition_work_item(
-            self.conn, created["reference"], "blocked", reason="waiting on the owner"
+            self.conn,
+            created["reference"],
+            "blocked",
+            reason="waiting on the owner",
+            acceptance="assignment",
         )
         self.assertEqual("blocked", with_reason["state"]["key"])
 
@@ -180,7 +208,7 @@ class PlanningDomainTests(unittest.TestCase):
         # reason may use what the state key leaves: 512 - len("blocked: ") = 503.
         reason = ("0123456789" * 60)[: 512 - len("blocked: ")]
         moved = service.transition_work_item(
-            self.conn, created["reference"], "blocked", reason=reason
+            self.conn, created["reference"], "blocked", reason=reason, acceptance="assignment"
         )
         self.assertEqual("blocked", moved["state"]["key"])
         (detail,) = self.conn.execute(
@@ -203,7 +231,11 @@ class PlanningDomainTests(unittest.TestCase):
             model.PlanningError, r"^reason must be at most 503 characters$"
         ):
             service.transition_work_item(
-                self.conn, created["reference"], "blocked", reason="x" * (503 + 1)
+                self.conn,
+                created["reference"],
+                "blocked",
+                reason="x" * (503 + 1),
+                acceptance="assignment",
             )
         after = service.get_work_item(self.conn, created["reference"])
         self.assertEqual(before["state"]["key"], after["state"]["key"])
@@ -216,10 +248,14 @@ class PlanningDomainTests(unittest.TestCase):
 
     def test_review_warns_without_evidence_instead_of_refusing(self) -> None:
         created = self.item("Land the planning domain")
-        moved = service.transition_work_item(self.conn, created["reference"], "review")
+        moved = service.transition_work_item(
+            self.conn, created["reference"], "review", acceptance="assignment"
+        )
         self.assertEqual(["QA-1 enters Review with no session or commit ref"], moved["warnings"])
         service.attach_ref(self.conn, created["reference"], "commit", "abc1234", author="tester")
-        again = service.transition_work_item(self.conn, created["reference"], "ready")
+        again = service.transition_work_item(
+            self.conn, created["reference"], "ready", acceptance="assignment"
+        )
         self.assertEqual([], again["warnings"])
 
     def test_review_takes_a_confirmed_write_as_evidence_of_its_session(self) -> None:
@@ -228,23 +264,32 @@ class PlanningDomainTests(unittest.TestCase):
             service.comment_work_item(
                 self.conn, unconfirmed["reference"], "started", author="tester"
             )
-        warned = service.transition_work_item(self.conn, unconfirmed["reference"], "review")
+        warned = service.transition_work_item(
+            self.conn, unconfirmed["reference"], "review", acceptance="assignment"
+        )
         self.assertEqual(1, len(warned["warnings"]))
 
         confirmed = self.item("Written by a confirmed session")
         with calls.bind(calls.Identity("confirmed", "claude-hook", session_id="s-2"), "comment"):
             service.comment_work_item(self.conn, confirmed["reference"], "started", author="tester")
-        moved = service.transition_work_item(self.conn, confirmed["reference"], "review")
+        moved = service.transition_work_item(
+            self.conn, confirmed["reference"], "review", acceptance="assignment"
+        )
         self.assertEqual([], moved["warnings"])
 
     def test_force_carries_a_refusal_through_and_records_the_override(self) -> None:
         created = self.item("Land the planning domain")
         forced = service.transition_work_item(
-            self.conn, created["reference"], "dev", force=True, author="tester"
+            self.conn,
+            created["reference"],
+            "blocked",
+            force=True,
+            author="tester",
+            acceptance="assignment",
         )
-        self.assertEqual(["executor"], forced["overridden"])
+        self.assertEqual(["blocker"], forced["overridden"])
         actions = [event["action"] for event in forced["events"]]
-        self.assertEqual(["created", "transitioned", "overridden"], actions)
+        self.assertEqual(["created", "accepted", "transitioned", "overridden"], actions)
 
     # -- claims and revisions ------------------------------------------------
 
@@ -317,7 +362,9 @@ class PlanningDomainTests(unittest.TestCase):
             service.update_work_item(self.conn, created["reference"], title="Renamed")["revision"]
         )
         revisions.append(
-            service.transition_work_item(self.conn, created["reference"], "dev")["revision"]
+            service.transition_work_item(
+                self.conn, created["reference"], "dev", acceptance="assignment"
+            )["revision"]
         )
         self.assertEqual(revisions, sorted(revisions))
         self.assertEqual(len(revisions), len(set(revisions)))
@@ -356,7 +403,9 @@ class PlanningDomainTests(unittest.TestCase):
         blocker = self.item("The blocker")
         service.link_work_items(self.conn, blocker["reference"], blocked["reference"], "blocks")
         service.set_summary(self.conn, blocker["reference"], {"done": "d", "next": "n"})
-        service.transition_work_item(self.conn, blocker["reference"], "done")
+        service.transition_work_item(
+            self.conn, blocker["reference"], "done", acceptance="assignment"
+        )
         graph = views.graph_payload(self.conn)
         ready = {node["reference"]: node["workable"] for node in graph["nodes"]}
         self.assertTrue(ready[blocked["reference"]])
@@ -493,9 +542,9 @@ class PlanningDomainTests(unittest.TestCase):
         created = self.item("First")
         service.claim_work_item(self.conn, created["reference"], author="tester")
         feed = views.activity_feed(self.conn, limit=10)
-        # The claim started the item, so its transition is the newest entry.
+        # The claim accepted and started the item, so its transition is the newest entry.
         self.assertEqual(
-            ["transitioned", "claimed", "created"], [entry["action"] for entry in feed]
+            ["transitioned", "accepted", "claimed", "created"], [entry["action"] for entry in feed]
         )
         self.assertEqual("QA-1", feed[0]["reference"])
 
@@ -510,16 +559,19 @@ class PlanningDomainTests(unittest.TestCase):
 
     # -- hierarchy and links -------------------------------------------------
 
-    def test_a_hierarchy_is_one_level_deep(self) -> None:
+    def test_a_goal_and_a_stage_hold_children_at_any_depth_and_a_task_holds_none(self) -> None:
         epic = self.item("The epic", kind="goal")
-        child = self.item("The child", parent=epic["reference"])
-        self.assertEqual(epic["work_item_id"], child["parent_id"])
-        with self.assertRaisesRegex(model.PlanningError, "one level deep"):
+        stage = self.item("The stage", kind="stage", parent=epic["reference"])
+        child = self.item("The child", parent=stage["reference"])
+        self.assertEqual(
+            (epic["work_item_id"], stage["work_item_id"]), (stage["parent_id"], child["parent_id"])
+        )
+        with self.assertRaisesRegex(model.PlanningError, "a task holds no children"):
             self.item("The grandchild", parent=child["reference"])
 
     def test_an_item_cannot_be_its_own_parent(self) -> None:
-        item = self.item("Self")
-        with self.assertRaisesRegex(model.PlanningError, "its own parent"):
+        item = self.item("Self", kind="goal")
+        with self.assertRaisesRegex(model.PlanningError, "would close a cycle"):
             service.update_work_item(self.conn, item["reference"], parent=item["reference"])
         self.assertIsNone(service.get_work_item(self.conn, item["reference"])["parent_id"])
 
@@ -533,26 +585,25 @@ class PlanningDomainTests(unittest.TestCase):
             service.update_work_item(self.conn, item["reference"], parent=foreign["reference"])
         self.assertIsNone(service.get_work_item(self.conn, item["reference"])["parent_id"])
 
-    def test_reparenting_refuses_a_parent_that_is_itself_a_child(self) -> None:
+    def test_reparenting_under_a_stage_that_is_itself_a_child_is_allowed(self) -> None:
         epic = self.item("The epic", kind="goal")
-        child = self.item("The child", parent=epic["reference"])
+        stage = self.item("The stage", kind="stage", parent=epic["reference"])
         item = self.item("Loose")
-        with self.assertRaisesRegex(model.PlanningError, "one level deep"):
-            service.update_work_item(self.conn, item["reference"], parent=child["reference"])
+        moved = service.update_work_item(self.conn, item["reference"], parent=stage["reference"])
+        self.assertEqual(stage["work_item_id"], moved["parent_id"])
 
-    def test_reparenting_refuses_an_item_that_already_has_children(self) -> None:
+    def test_a_goal_with_children_moves_under_another_and_stands_there_as_a_stage(self) -> None:
         epic = self.item("The epic", kind="goal")
         middle = self.item("The middle", kind="goal")
         self.item("The grandchild", parent=middle["reference"])
-        with self.assertRaisesRegex(model.PlanningError, "with children"):
-            service.update_work_item(self.conn, middle["reference"], parent=epic["reference"])
-        self.assertIsNone(service.get_work_item(self.conn, middle["reference"])["parent_id"])
+        moved = service.update_work_item(self.conn, middle["reference"], parent=epic["reference"])
+        self.assertEqual((epic["work_item_id"], "stage"), (moved["parent_id"], moved["kind"]))
 
     def test_a_parent_cycle_is_refused_in_either_direction(self) -> None:
-        first = self.item("First")
-        second = self.item("Second")
+        first = self.item("First", kind="goal")
+        second = self.item("Second", kind="goal")
         service.update_work_item(self.conn, first["reference"], parent=second["reference"])
-        with self.assertRaisesRegex(model.PlanningError, "one level deep"):
+        with self.assertRaisesRegex(model.PlanningError, "would close a cycle"):
             service.update_work_item(self.conn, second["reference"], parent=first["reference"])
         self.assertIsNone(service.get_work_item(self.conn, second["reference"])["parent_id"])
 
@@ -705,7 +756,7 @@ class PlanningDomainTests(unittest.TestCase):
 
     def close(self, reference: str, state: str) -> None:
         service.set_summary(self.conn, reference, {"done": "d", "next": "n"})
-        service.transition_work_item(self.conn, reference, state)
+        service.transition_work_item(self.conn, reference, state, acceptance="assignment")
 
     @staticmethod
     def other_end(links: list[dict]) -> dict[str, tuple]:
@@ -735,7 +786,11 @@ class PlanningDomainTests(unittest.TestCase):
             self.conn, project_id="other-project", name="Other Space", key="OTH"
         )
         foreign = service.create_work_item(
-            self.conn, space=other_space["key"], title="Elsewhere", state="review"
+            self.conn,
+            space=other_space["key"],
+            title="Elsewhere",
+            state="review",
+            acceptance="assignment",
         )
         for blocker in (open_blocker, done_blocker, cancelled_blocker, foreign):
             service.link_work_items(self.conn, blocker["reference"], blocked["reference"], "blocks")
@@ -820,7 +875,11 @@ class PlanningDomainTests(unittest.TestCase):
             self.conn, project_id="other-project", name="Other Space", key="OTH"
         )
         foreign = service.create_work_item(
-            self.conn, space=other_space["key"], title="Elsewhere", state="review"
+            self.conn,
+            space=other_space["key"],
+            title="Elsewhere",
+            state="review",
+            acceptance="assignment",
         )
         service.link_work_items(self.conn, foreign["reference"], blocked["reference"], "blocks")
         # Another kind of link from there stays that space's to show.

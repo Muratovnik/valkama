@@ -125,8 +125,10 @@ class LifetimeTests(PinCase):
     def test_a_pin_outlives_the_close_and_the_reopening(self) -> None:
         reference = self.item()
         self.post({"id": reference, "pinned": True})
-        service.transition_work_item(self.conn, reference, "done", force=True)
-        service.transition_work_item(self.conn, reference, "dev", force=True)
+        service.transition_work_item(
+            self.conn, reference, "done", force=True, acceptance="assignment"
+        )
+        service.transition_work_item(self.conn, reference, "ready", force=True)
         self.assertEqual({self.identity(reference)}, set(self.pins()))
 
     def test_a_deleted_item_takes_its_pin_with_it(self) -> None:
@@ -167,7 +169,9 @@ class ExportTests(PinCase):
         elsewhere = str(service.create_work_item(self.conn, space="OTH", title="x")["reference"])
         self.post({"id": reference, "pinned": True})
         self.post({"id": elsewhere, "pinned": True})
-        service.transition_work_item(self.conn, reference, "done", force=True)
+        service.transition_work_item(
+            self.conn, reference, "done", force=True, acceptance="assignment"
+        )
         pins = self.pins()
         everything = export.export_installation(self.conn)["planning"]["pins"]
         self.assertEqual(

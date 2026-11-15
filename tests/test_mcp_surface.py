@@ -43,7 +43,7 @@ from server.planning import chain as planning_chain
 from server.planning import model as planning_model
 from server.planning import service as planning_service
 from server.planning import tools as planning_tools
-from tests.planning_fixtures import bulk_items
+from tests.planning_fixtures import basis_for, bulk_items
 
 SPACE_NAME = "Wire Surface"
 SPACE_KEY = "WIR"
@@ -1790,6 +1790,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertEqual(
             [
                 "claimed",
+                "accepted",
                 "transitioned",
                 "checklist_completed",
                 "checklist_completed",
@@ -1798,7 +1799,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "transitioned",
                 "released",
             ],
-            [event["action"] for event in item["events"]][-8:],
+            [event["action"] for event in item["events"]][-9:],
         )
 
     def test_one_batch_is_one_call_and_every_row_points_at_it(self) -> None:
@@ -2099,7 +2100,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
         )
         # The history is the single tools' history, in the order they apply.
         self.assertEqual(
-            ["created", "claimed", "transitioned", "linked", "linked"],
+            ["created", "claimed", "accepted", "transitioned", "linked", "linked"],
             [event["action"] for event in item["events"]],
         )
         # One call, recorded once, and every row it wrote points at it: the new
@@ -2261,7 +2262,7 @@ class RankToolTests(WireCallTestCase):
             for title in ("First", "Second", "Third")
         ]
         self.queued = planning_service.create_work_item(
-            self.conn, space=SPACE_KEY, title="Queued", state="ready"
+            self.conn, space=SPACE_KEY, title="Queued", state="ready", acceptance="assignment"
         )["reference"]
         self.conn.commit()
 
@@ -2294,14 +2295,21 @@ class RankToolTests(WireCallTestCase):
     def test_a_transition_and_a_batch_place_the_item_in_its_new_state(self) -> None:
         self.answer(
             "apply_work_item_changes",
-            {"id": self.items[0], "transition": {"state": "ready", "rank": "first"}},
+            {
+                "id": self.items[0],
+                "transition": {"state": "ready", "rank": "first", "acceptance": "assignment"},
+            },
         )
         self.assertEqual([self.items[0], self.queued], self.order("ready"))
         answer = self.answer(
             "apply_work_item_changes",
             {
                 "id": self.items[1],
-                "transition": {"state": "ready", "rank": f"after:{self.items[0]}"},
+                "transition": {
+                    "state": "ready",
+                    "rank": f"after:{self.items[0]}",
+                    "acceptance": "assignment",
+                },
             },
         )
         self.assertEqual({"transition": {"state": "ready"}}, answer["applied"])
@@ -2332,7 +2340,8 @@ class CompactWorkItemReadTests(WireCallTestCase):
         )["reference"]
         for number in range(7):
             planning_service.comment_work_item(self.conn, self.reference, f"note {number}")
-        # Each claim starts the item and each release requeues it: four events a round.
+        # Each claim starts the item and each release requeues it: four events a round,
+        # and the first claim, out of triage, accepts the item as well.
         for _ in range(6):
             planning_service.claim_work_item(self.conn, self.reference, author="one")
             planning_service.claim_work_item(self.conn, self.reference, author="one", release=True)
@@ -2351,7 +2360,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
         )
         self.assertEqual(self.complete["events"][-10:], answer["events"])
         self.assertEqual(
-            (7, 7, 25, True),
+            (7, 7, 26, True),
             (
                 answer["comments_total"],
                 answer["threads_total"],
@@ -2389,7 +2398,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
         self.assertLess(5, len(answer["comments"]))
         self.assertEqual(self.complete["events"][-10:], answer["events"])
         self.assertEqual(
-            (len(comments), 25, True),
+            (len(comments), 26, True),
             (answer["comments_total"], answer["events_total"], answer["history_truncated"]),
         )
 
@@ -2453,7 +2462,9 @@ class CompactWorkItemReadTests(WireCallTestCase):
         blocker = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Blocker")
         planning_service.link_work_items(self.conn, blocker["reference"], self.reference, "blocks")
         planning_service.set_summary(self.conn, blocker["reference"], {"done": "d", "next": "n"})
-        planning_service.transition_work_item(self.conn, blocker["reference"], "done")
+        planning_service.transition_work_item(
+            self.conn, blocker["reference"], "done", acceptance="assignment"
+        )
         self.conn.commit()
         (link,) = self.answer("get_work_item", {"id": self.reference})["links"]
         self.assertEqual(
@@ -2568,7 +2579,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
         assert handled is not None
         self.assertEqual(complete, handled[1]["work_item"])
         self.assertEqual(8, len(complete["comments"]))
-        self.assertEqual(25, len(complete["events"]))
+        self.assertEqual(26, len(complete["events"]))
         for added in ("sessions", "comments_total", "events_total", "history_truncated"):
             self.assertNotIn(added, complete)
 
@@ -2635,22 +2646,36 @@ class ChainToolTests(WireCallTestCase):
         for name, state in (
             ("ready", None),
             ("held", "blocked"),
-            ("active", "dev"),
+            ("active", "ready"),
             ("review", "review"),
             ("claimed", "ready"),
         ):
             self.children[name] = planning_service.create_work_item(
-                self.conn, space=SPACE_KEY, title=name, state=state, parent=self.root
+                self.conn,
+                space=SPACE_KEY,
+                title=name,
+                state=state,
+                parent=self.root,
+                **basis_for(state),
             )["reference"]
-        # Held in Ready, as a claim an earlier build took left it: a claim now
-        # starts its item, and this one stands for work held but not started.
-        planning_service.claim_work_item(
-            self.conn, self.children["claimed"], author="one", move_state=False
+        # A claim starts its item: the active child is the one taken.
+        planning_service.claim_work_item(self.conn, self.children["active"], author="worker")
+        # Held in Ready, as a claim an earlier build took left it: no write holds work
+        # that has not started now, so the row stands as that build wrote it.
+        self.conn.execute(
+            "UPDATE work_items SET claim_ref = 'one' WHERE planning_space_id ="
+            " (SELECT planning_space_id FROM planning_spaces WHERE key = ?) AND number = ?",
+            (SPACE_KEY, int(self.children["claimed"].rsplit("-", 1)[1])),
         )
         # Enough closed children on distinct days for the series to be cut.
         for day in range(1, 33):
             done = planning_service.create_work_item(
-                self.conn, space=SPACE_KEY, title=f"done {day}", state="done", parent=self.root
+                self.conn,
+                space=SPACE_KEY,
+                title=f"done {day}",
+                state="done",
+                parent=self.root,
+                acceptance="assignment",
             )
             stamp = f"{date(2026, 7, 31) + timedelta(days=day)}T08:00:00Z"
             self.conn.execute(

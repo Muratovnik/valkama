@@ -250,7 +250,7 @@ class WritingTests(Harness):
             "apply_work_item_changes",
             id=self.ref,
             comment={"body": "Findings", "list": LIST},
-            transition={"state": "review", "force": True},
+            transition={"state": "review", "force": True, "acceptance": "assignment"},
         )
         self.assertEqual("review", moved["state"]["key"], "review keeps it open, and the list")
 
@@ -341,7 +341,7 @@ class WaitsForNobodyTests(Harness):
             "SELECT status FROM work_item_requests WHERE request_id = ?", (listed,)
         ).fetchone()[0]
         self.assertEqual("pending", stored, "nothing is written: it reads expired")
-        self.move("dev")
+        self.move("ready")
         thawed = self.request(listed)
         self.assertEqual(("pending", None), (thawed["status"], thawed["expired_reason"]))
 
