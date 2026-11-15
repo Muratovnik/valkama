@@ -746,7 +746,7 @@ def _category_lists(text: str) -> list[list[str]]:
     return found
 
 
-class PublishedCategories(unittest.TestCase):
+class PublishedCategoriesTests(unittest.TestCase):
     """What an agent reads of the categories, in prose and in the schemas, is the eight.
 
     The tool descriptions and the handshake text are prose a client sends a model
