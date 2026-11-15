@@ -35,44 +35,63 @@ def resolve(conn: sqlite3.Connection, workflow_id: str, reference: object) -> sq
 
     text = model.text_field(reference, "workflow state", limit=64)
     model.refuse_retired("state", text, lambda: _unknown(text, public_states(conn, workflow_id)))
+    row = _named(conn, workflow_id, text)
+    if row is None:
+        raise model.PlanningError(_unknown(text, public_states(conn, workflow_id)))
+    return row
+
+
+def _named(conn: sqlite3.Connection, workflow_id: str, text: str) -> sqlite3.Row | None:
+    """The state one workflow gives the name `text`, or None when it gives it none.
+
+    The state's id or its key, and failing both a category, which names a state
+    only when exactly one state of the workflow has it. Two states sharing the
+    category refuse, naming both, since the caller must then name one by its key.
+    """
+
     row = conn.execute(
         "SELECT * FROM workflow_states WHERE workflow_id = ? AND (state_id = ? OR key = ?)"
         " AND category != ?",
         (workflow_id, text, text, model.SERVICE_CATEGORY),
     ).fetchone()
-    if row is not None:
+    if row is not None or text not in model.PUBLIC_CATEGORIES:
         return row
-    states = public_states(conn, workflow_id)
-    if text in model.PUBLIC_CATEGORIES:
-        matching = [state for state in states if state["category"] == text]
-        if len(matching) == 1:
-            return matching[0]
-        if matching:
-            raise model.PlanningError(
-                f"category {text} names {len(matching)} states in this workflow:"
-                f" {', '.join(str(state['key']) for state in matching)}; name one by its key"
-            )
-    raise model.PlanningError(_unknown(text, states))
+    matching = [state for state in public_states(conn, workflow_id) if state["category"] == text]
+    if len(matching) == 1:
+        return matching[0]
+    if matching:
+        raise model.PlanningError(
+            f"category {text} names {len(matching)} states in this workflow:"
+            f" {', '.join(str(state['key']) for state in matching)}; name one by its key"
+        )
+    return None
 
 
-def filter_key(conn: sqlite3.Connection, workflow_ids: list[str], reference: object) -> str:
-    """The state key a list keeps, refused when no workflow it reads has that state.
+def filter_ids(conn: sqlite3.Connection, workflow_ids: list[str], reference: object) -> list[str]:
+    """The state ids a list keeps: the state each workflow it reads gives the name, or refused.
 
-    A list filter names a state by its key alone, across the workflows of the
-    spaces it reads. A key none of them has, a retired one among them, is refused
-    as a write naming it would be, rather than answered with an empty list that
-    reads as no work.
+    A list filter names a state the way a write does, by `_named` in each workflow
+    of the spaces it reads, so a key, a state id and a category one state has all
+    keep the same items. A name none of them gives, a retired one among them, is
+    refused as a write naming it would be, rather than answered with an empty list
+    that reads as no work.
     """
 
-    key = model.state_key(reference)
+    text = model.text_field(reference, "workflow state", limit=64)
     known: dict[str, sqlite3.Row] = {}
     for workflow_id in workflow_ids:
         for state in public_states(conn, workflow_id):
             known.setdefault(str(state["key"]), state)
-    model.refuse_retired("state", key, lambda: _unknown(key, list(known.values())))
-    if key not in known and workflow_ids:
-        raise model.PlanningError(_unknown(key, list(known.values())))
-    return key
+    listed = list(known.values())
+    model.refuse_retired("state", text, lambda: _unknown(text, listed))
+    found = [
+        str(row["state_id"])
+        for workflow_id in workflow_ids
+        if (row := _named(conn, workflow_id, text)) is not None
+    ]
+    if not found and workflow_ids:
+        raise model.PlanningError(_unknown(text, listed))
+    return found
 
 
 def _unknown(text: str, states: list[sqlite3.Row]) -> str:

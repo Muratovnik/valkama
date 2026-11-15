@@ -187,7 +187,6 @@ _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 STATE_ENTRY_ACTIONS = ("created", "transitioned", "opened")
 
 _SPACE_KEY = re.compile(r"^[A-Z][A-Z0-9]{1,7}$")
-_STATE_KEY = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 # Characters only: each caller's `limit` owns the length, so a step of up to
 # 1000 characters is not refused here as if it held a control character.
 _SAFE_TEXT = re.compile(r"^[^\x00\r\n]*$")
@@ -345,13 +344,6 @@ def derive_space_key(name: str, taken: frozenset[str]) -> str:
         if candidate not in taken:
             return candidate
     raise PlanningError("no free planning space key remains for this name")
-
-
-def state_key(value: object) -> str:
-    text = text_field(value, "workflow_state.key", limit=32)
-    if not _STATE_KEY.match(text):
-        raise PlanningError("workflow_state.key must be lowercase letters, digits or dashes")
-    return text
 
 
 def refuse_retired(field: str, value: object, unknown: Callable[[], str] | None = None) -> None:

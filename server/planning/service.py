@@ -161,7 +161,8 @@ def list_work_items(
     parent and `stage` those under one. The service state is no state and no
     category a caller names: `container` is refused for either with the word that
     replaces it, as is every retired word (`kind=epic`, `category=backlog`), and a
-    `state` key no workflow of the spaces read has is refused with their states.
+    `state` name no workflow of the spaces read gives (by key, state id or a category
+    one state has) is refused with their states.
 
     Nothing here caps the count: a caller that wants a bounded page with an
     honest account of what it left out asks `list_work_items_page`.
@@ -179,8 +180,10 @@ def list_work_items(
             if space_id is not None
             else [str(row[0]) for row in conn.execute("SELECT workflow_id FROM workflows")]
         )
-        clauses.append("s.key = ?")
-        parameters.append(states.filter_key(conn, workflows, state_key))
+        ids = states.filter_ids(conn, workflows, state_key)
+        placeholders = ",".join("?" * len(ids))
+        clauses.append(f"i.state_id IN ({placeholders})" if ids else "1 = 0")
+        parameters.extend(ids)
     if category is not None:
         clauses.append("s.category = ?")
         parameters.append(model.state_category(category))
