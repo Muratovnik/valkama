@@ -282,16 +282,16 @@ and only fades the end of a strip that scrolls on past it.
   | --- | --- | --- |
   | `info` (blue) | work moving | in progress, a held item on the graph |
   | `success` (green) | finished, healthy | done |
-  | `warning` (amber) | a decision waiting, or high priority | review, a stale claim, high |
+  | `warning` (amber) | a decision waiting, or high priority | review, awaiting confirmation, a stale claim, high |
   | `danger` (red) | stopped, or urgent | blocked, urgent |
-  | `neutral` | nothing to act on | backlog, the queue, low and medium priority, workable |
+  | `neutral` | nothing to act on | triage, deferred, ready, cancelled, not started, low and medium priority, workable |
 
   Hue says how much it asks of the reader and shape says which fact it is, so a
   state and a priority that share a hue never share a shape. A kind is not on
   this table: it says what an item is, so it has a colour of its own below and
   no tone. A colour that appears on every card is a colour nobody reads: in
   progress used to be the green of done, the queue the blue of focus, and
-  workable — the ordinary condition of open backlog — a green line on every
+  workable — the ordinary condition of work waiting to be taken — a green line on every
   second card, which made it the loudest colour on the board and the one that
   meant least. Each hue holds 4.5:1 as text on a hovered card and 3:1 as a mark
   on a pressed control (WCAG 1.4.3 and 1.4.11); `designTokens.test.ts` holds
@@ -1907,7 +1907,7 @@ question waits, «Ответить» with the question's sign: a verb that goes 
 Overview, in the state chip's word and on its baseline. It was drawn as the status «Ждёт ответа», a state that acted when pressed, and
 that the agent waits the state's dot already says. The priority is a menu as well, urgent to low, each
 choice saying what it means; on an item the client cannot change both are plain marks.
-The parent is named «Родитель», since any item may hold others one level deep, and drawn by
+The parent is named «Родитель», since a goal and a stage both hold others, and drawn by
 its own kind's sign in that kind's ink, as a tile of it draws it: the container's sign for a
 goal or a stage, a bug's for a bug, and for a plain task, which has no sign, the generic parent's. Every
 parent was once called by the one container word under its sign, a task holding others too. Its reference is

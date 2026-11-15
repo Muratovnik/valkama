@@ -2247,8 +2247,9 @@ lease, and promises nothing about a session that ends: from that moment the leas
 is `stale`, `expires_at` is `null`, and the grace above applies. `claim` is
 `null` when nobody holds the item. `claim_state` stands beside `claim_ref` in the
 full record, an item of an HTTP list, a compact row of `list_work_items` and
-`search_work_items`, an HTTP chain member, a row of `open_members` and a write
-acknowledgement; `claim_ref` means what it meant. Three projections carry
+`search_work_items`, an HTTP chain member, a row of `open_members`, a row of
+`stale_claims` in `GET /api/planning` and a write acknowledgement; `claim_ref`
+means what it meant. Three projections carry
 `claim_ref` alone: a node of `GET /api/planning/graph`, a hit of the platform
 search and an item of the Exact Project read.
 

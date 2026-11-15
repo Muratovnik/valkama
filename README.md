@@ -25,10 +25,11 @@ directory, and the MCP server only exists while a client is talking to it.
   Execution tab is off by default; turn it on under Settings → General → Interface.
 - **Task finder** with Ctrl/Cmd+K across mapped projects. Results retain their
   exact store and space; unavailable sources and truncated results stay visible.
-- **Colours for task types.** Epics are purple by default, bugs rose, improvements
-  turquoise and tasks grey-blue, on a type's icon and word only: state colours stay as
-  they are. Change them under Settings → General → Task type colors; a change applies at
-  once. The choice is kept in `localStorage`, on the device, so a browser and the desktop
+- **Colours for task types.** Goals and stages share one colour, purple by default, as
+  they share one icon; bugs are rose, improvements turquoise and tasks grey-blue, on a
+  type's icon and word only: state colours stay as they are. Change them under
+  Settings → General → Task type colors, where goals and stages are the one row
+  "Goal and stage"; a change applies at once. The choice is kept in `localStorage`, on the device, so a browser and the desktop
   app each remember their own.
 - **Names for accounts.** The usage records hold only the id of the organization work
   was billed to. Under Settings → General → Accounts, each account the past year saw is
@@ -460,14 +461,20 @@ registration is removed before its launcher-backed replacement is added.
 One column per state of the space's workflow. A new space gets one for each of
 the eight categories: Triage, Deferred, Ready, Dev, Review, Done, Blocked and
 Cancelled. Beside them the workflow keeps a service state where an accepted open
-container stands; no listing shows it and no input names it. Done is for finished work;
+goal or stage stands; no listing shows it and no input names it. Done is for finished work;
 Cancelled is for work closed as not needed, duplicated or superseded, and needs
 a closing summary that says why but no ticked checklist.
 
-A card becomes an **epic** when other cards point `parent_id` at it. The board
-keeps a persistent index of epics and renders one selected view;
-inside each lane, children are grouped under their epic instead of repeating the
-epic id on every card.
+A work item is a task, a bug or an improvement, which an agent takes, holds and
+finishes, or a **goal** or a **stage**, which holds other work and is never claimed
+itself. A goal stands under no parent; a stage stands under a goal or another stage,
+at any depth, so which of the two it is follows from whether it has a parent: a goal
+created with a parent is a stage, and a stage created without one is refused. Only an
+open goal or stage can be a parent: filing work under a task or under closed work is
+refused, and so is moving an item under itself or anything under it. An accepted open
+goal or stage stands in no state of its own: it shows what it derives from the work
+under it, Not started, In progress or Awaiting confirmation. The exact rules are in
+[the connection contract](docs/connection-contract.md#the-work-model).
 
 Three things make a card honest about its own progress:
 
@@ -573,12 +580,15 @@ order is the item's `position`, which every store already holds, so it needs
 no new schema; the exact rules are in
 [the connection contract](docs/connection-contract.md#the-order-of-work).
 
-**The board reads by epic.** Grouped by epic, each epic is a lane with its
-reference, title, open and closed counts and a fold; a lane with nothing open
-starts folded, and the board remembers the lanes you fold or unfold, per space,
-in the browser. Work under no epic comes last. A lane's Chain action narrows the
-board to that epic's chain, and the chain stays when you switch to List or
-Graph; its chip leaves it in every view.
+**The board reads by goal.** With View → Grouping → By goal, each goal is a lane
+headed by its reference, title, open and closed counts and a fold, and holds the work
+filed directly under it. A goal is its lane's heading, not a card in it. A stage is a
+card in its parent's lane and, once it holds work, heads a lane of its own. Lanes with
+open work come first, and the work under no parent comes last, in a lane of its own.
+A lane with nothing open starts folded, and the board remembers the lanes you fold or
+unfold, per space, in the browser. A lane's Chain action narrows the board to the
+chain of the goal or stage heading it,
+and the chain stays when you switch to List or Graph; its chip leaves it in every view.
 
 ### Migrating an older store
 
