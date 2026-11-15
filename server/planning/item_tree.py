@@ -32,19 +32,20 @@ import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from . import model
+from . import model, states
 
 #: What an accepted open container derives, in the order the work goes through them.
 CONTAINER_STATES = ("not_started", "in_progress", "awaiting_confirmation")
 
-#: The facts of each item the rule reads, from its row and its state's. An attached
-#: store an earlier build wrote is read as it is: it records no start, and its
-#: `{started}` reads as null there.
+#: The facts of each item the rule reads, from its row and its state's, and whether its
+#: workflow lets a claim start it where it stands. An attached store an earlier build
+#: wrote is read as it is: it records no start, and its `{started}` reads as null there.
 _FACTS = (
-    "SELECT i.work_item_id, i.parent_id, i.kind, {started}, s.category,"
+    "SELECT i.work_item_id, i.parent_id, i.kind, {started}, s.category,"  # noqa: S608 - constant text
     " CASE WHEN i.kind = 'container' THEN EXISTS (SELECT 1 FROM work_item_events e"
-    "  WHERE e.work_item_id = i.work_item_id AND e.action = 'child_left') ELSE 0 END"
-    " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
+    "  WHERE e.work_item_id = i.work_item_id AND e.action = 'child_left') ELSE 0 END, "
+    + states.STARTS_CLAUSE
+    + " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
 )
 #: Every item of the spaces named, as one JSON array.
 _SPACES = _FACTS + " WHERE i.planning_space_id IN (SELECT value FROM json_each(?))"  # noqa: S608 - constant text
@@ -91,6 +92,9 @@ class _Node:
     started_at: str | None
     #: A `child_left` event names a child that left it.
     lost_child: bool
+    #: Its workflow leads from its state into work (`states.STARTS_CLAUSE`); None
+    #: where it was not loaded, as for one task's own record.
+    startable: bool | None
 
 
 @dataclass(frozen=True)
@@ -139,6 +143,12 @@ class Tree:
             return []
         return list(self.waits.get(identity, ()))
 
+    def startable(self, identity: str) -> bool | None:
+        """Whether a claim can start the item where it stands; None when it was not loaded."""
+
+        node = self.nodes.get(identity)
+        return None if node is None else node.startable
+
     def _first_start(self, identity: str) -> str | None:
         found: str | None = None
         pending = list(self.children.get(identity, ()))
@@ -165,6 +175,7 @@ def _node(row: sqlite3.Row | tuple[object, ...]) -> _Node:
         closed=str(row[4]) in model.TERMINAL_CATEGORIES,
         started_at=None if row[3] is None else str(row[3]),
         lost_child=bool(row[5]),
+        startable=None if len(row) < 7 or row[6] is None else bool(row[6]),
     )
 
 

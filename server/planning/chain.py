@@ -161,6 +161,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                     checklist=row["checklist"],
                     category=str(row["state_category"]),
                     blocked=partial(operator.contains, blocked, identity),
+                    startable=partial(read_model.startable, conn, row, tree.startable(identity)),
                 ),
                 "rank": rank[identity],
                 "_parent_id": parent,

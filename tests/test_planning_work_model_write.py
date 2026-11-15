@@ -950,6 +950,33 @@ class QueueTests(WriteCase):
         self.assertEqual(sorted(workable), sorted(handed))
         self.assertEqual(set(), {name for name in self.tree.ids if self.record(name)["workable"]})
 
+    def test_a_task_its_workflow_cannot_start_is_not_workable_and_the_queue_passes_it(
+        self,
+    ) -> None:
+        # Ready comes before triage in the order of work, so `a` is first in the queue;
+        # with no way from ready into work, only `b` can be started.
+        self.tree.add("a", state="ready")
+        self.tree.add("b")
+        self.conn.execute(
+            "DELETE FROM workflow_transitions WHERE workflow_id = ? AND from_state_id = ?"
+            " AND to_state_id IN (SELECT state_id FROM workflow_states WHERE category = 'active')",
+            (self.tree.workflow_id, self.tree.states["ready"]),
+        )
+        self.conn.commit()
+        self.assertEqual(
+            (False, True), (self.record("a")["workable"], self.record("b")["workable"])
+        )
+        # A board reads it with the tree of its space, and reads it the same.
+        listed = service.list_work_items(self.conn, space=self.tree.key, limit=None)
+        self.assertEqual(
+            {self.ref("a"): False, self.ref("b"): True},
+            {item["reference"]: item["workable"] for item in listed},
+        )
+        handed = self.handed_out(self.call("claim_ready", {"space": self.tree.key}))
+        self.assertEqual(self.ref("b"), handed)
+        self.assertEqual(("ready", ""), (self.record("a")["state"]["key"], self.holders("a")[0]))
+        self.assertIsNone(self.handed_out(self.call("claim_ready", {"space": self.tree.key})))
+
 
 class QueueOverHttpTests(QueueTests):
     via = "http"

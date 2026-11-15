@@ -276,7 +276,7 @@ HTTP answer of a write to an item -- carries these fields of the model:
 | `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule` or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
-| `workable` | whether it may be taken now: a task, held by nobody, in `triage` or `ready`, with nothing unfinished blocking it. It is the rule `claim_ready_work_item` takes work by |
+| `workable` | whether it may be taken now: a task, held by nobody, in `triage` or `ready` in a workflow that leads from there to an active state, with nothing unfinished blocking it. It is the rule `claim_ready_work_item` takes work by |
 
 Four other answers carry only some of these fields:
 
