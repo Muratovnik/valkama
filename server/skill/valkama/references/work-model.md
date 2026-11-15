@@ -11,8 +11,8 @@ one branch or one pull request — and is small enough to finish in hours to a
 couple of days. It closes on a "done when" a test can check, run by a verify
 command written in the item, so whoever closes it can show the result rather
 than assert it. Work that cannot finish within a few days is more than one
-change: split it into items that each integrate on their own, under an epic
-when they share a goal [DORA, Devin].
+change: split it into items that each integrate on their own, under a goal
+or stage when they share one [DORA, Devin].
 
 ## A finding is evidence, not an item
 
@@ -59,8 +59,8 @@ one item and not two [Claude Code teams].
 
 ## Flow
 
-Take work from the ranked ready queue (`claim_ready_work_item`, or the first
-ready item in the order `rank` sets) rather than by preference. Keep the work in
+Take work from the ranked queue (`claim_ready_work_item`, or the first
+workable task in the order `rank` sets) rather than by preference. Keep the work in
 progress within what can be verified and merged: a change counts once it is
 integrated, and every further open item adds coordination and delays the
 feedback on the others [DORA, Claude Code teams].

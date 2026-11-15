@@ -9,11 +9,16 @@ here from the work model, not read from the list in `model`.
 Every input is driven with every word it took, through MCP and over HTTP. The MCP
 inputs are also read off the published schemas, so a tool that starts taking a
 kind, a scope, a category or a state fails this file until it is driven here.
+
+What an agent reads does not teach the words either: no tool's schema, no line of
+the handshake and no page of the skill Valkama ships names one.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import sqlite3
 import tempfile
 import unittest
@@ -22,6 +27,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface, store
+from server.ops import skills
 from server.planning import api, model, service, tools
 
 KEY = "RW"
@@ -254,6 +260,36 @@ class RetiredWordTests(unittest.TestCase):
             self.conn, "list_work_items", {"space": KEY, "state": "ready"}
         )
         self.assertIn("work_items", listed)
+
+
+#: Where the skill Valkama ships lives in this checkout.
+SKILL = Path(__file__).resolve().parent.parent.joinpath(*skills.SOURCE_PARTS)
+#: A retired word as a word of its own: `container_state` is not `container`.
+RETIRED_WORD = re.compile(
+    r"\b(" + "|".join(sorted({word for words in RETIRED.values() for word in words})) + r")\b",
+    re.IGNORECASE,
+)
+
+
+class WhatAnAgentReadsTests(unittest.TestCase):
+    def assert_names_no_retired_word(self, where: str, text: str) -> None:
+        found = sorted({match.group(0) for match in RETIRED_WORD.finditer(text)})
+        self.assertEqual([], found, f"{where} names a retired word")
+
+    def test_no_tool_schema_names_a_retired_word(self) -> None:
+        for tool in mcp_surface.catalogue():
+            with self.subTest(tool=tool["name"]):
+                self.assert_names_no_retired_word(tool["name"], json.dumps(tool))
+
+    def test_the_handshake_names_no_retired_word(self) -> None:
+        self.assert_names_no_retired_word("the handshake", mcp_surface.PLANNING_INSTRUCTIONS)
+
+    def test_the_skill_names_no_retired_word(self) -> None:
+        pages = sorted(SKILL.rglob("*.md"))
+        self.assertIn(SKILL / "SKILL.md", pages)
+        for page in pages:
+            with self.subTest(page=page.relative_to(SKILL).as_posix()):
+                self.assert_names_no_retired_word(page.name, page.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
