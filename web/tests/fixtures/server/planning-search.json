@@ -1,0 +1,250 @@
+{
+  "interface_version": "valkama-planning-search",
+  "query": "Tree",
+  "limit": 50,
+  "has_more": false,
+  "items": [
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-6",
+        "writable": true
+      },
+      "item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000041",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-6",
+        "title": "Tree goal",
+        "kind": "goal",
+        "priority": "medium",
+        "state": null,
+        "open": true,
+        "container_state": "in_progress",
+        "claim_ref": ""
+      }
+    },
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-7",
+        "writable": true
+      },
+      "item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000038",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-7",
+        "title": "Tree stage",
+        "kind": "stage",
+        "priority": "medium",
+        "state": null,
+        "open": true,
+        "container_state": "not_started",
+        "claim_ref": ""
+      }
+    },
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-8",
+        "writable": true
+      },
+      "item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000036",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-8",
+        "title": "Tree nested stage",
+        "kind": "stage",
+        "priority": "medium",
+        "state": null,
+        "open": true,
+        "container_state": "not_started",
+        "claim_ref": ""
+      }
+    },
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-9",
+        "writable": true
+      },
+      "item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000035",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-9",
+        "title": "Tree work in the nested stage",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "name": "Ready",
+          "category": "ready",
+          "is_terminal": false
+        },
+        "open": true,
+        "container_state": null,
+        "claim_ref": ""
+      }
+    },
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-10",
+        "writable": true
+      },
+      "item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000037",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-10",
+        "title": "Tree work under the stage",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "name": "Ready",
+          "category": "ready",
+          "is_terminal": false
+        },
+        "open": true,
+        "container_state": null,
+        "claim_ref": ""
+      }
+    },
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-11",
+        "writable": true
+      },
+      "item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000040",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-11",
+        "title": "Tree work finished under the goal",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "name": "Done",
+          "category": "completed",
+          "is_terminal": true
+        },
+        "open": false,
+        "container_state": null,
+        "claim_ref": ""
+      }
+    },
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-12",
+        "writable": true
+      },
+      "item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000032",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-12",
+        "title": "Tree goal not accepted yet",
+        "kind": "goal",
+        "priority": "medium",
+        "state": {
+          "name": "Triage",
+          "category": "triage",
+          "is_terminal": false
+        },
+        "open": true,
+        "container_state": null,
+        "claim_ref": ""
+      }
+    },
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-13",
+        "writable": true
+      },
+      "item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000033",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-13",
+        "title": "Tree stage not accepted yet",
+        "kind": "stage",
+        "priority": "medium",
+        "state": {
+          "name": "Triage",
+          "category": "triage",
+          "is_terminal": false
+        },
+        "open": true,
+        "container_state": null,
+        "claim_ref": ""
+      }
+    },
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-14",
+        "writable": true
+      },
+      "item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000034",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-14",
+        "title": "Tree work under the stage not accepted",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "name": "Triage",
+          "category": "triage",
+          "is_terminal": false
+        },
+        "open": true,
+        "container_state": null,
+        "claim_ref": ""
+      }
+    }
+  ],
+  "coverage": [
+    {
+      "project_id": "example-project",
+      "space_ref": {
+        "data_scope_id": "00000000-0000-4000-8000-000000000004",
+        "space_key": "MAIN"
+      },
+      "status": "searched",
+      "reason": null
+    }
+  ]
+}

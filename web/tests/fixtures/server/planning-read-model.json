@@ -1,0 +1,841 @@
+{
+  "revision": "0000000000000000000000000000000000000000000000000000000000000000",
+  "interface_version": "valkama-planning-read-model",
+  "planning_spaces": [
+    {
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "project_id": "example-project",
+      "name": "Contract",
+      "key": "MAIN",
+      "provider_kind": "local",
+      "work_items": 14,
+      "open": 13,
+      "active": 2,
+      "completed": 1,
+      "updated_at": "2026-01-02T03:04:05Z"
+    }
+  ],
+  "planning_space": {
+    "planning_space_id": "00000000-0000-4000-8000-000000000002",
+    "project_id": "example-project",
+    "name": "Contract",
+    "key": "MAIN",
+    "provider_kind": "local"
+  },
+  "workflow": {
+    "workflow_id": "00000000-0000-4000-8000-000000000024",
+    "name": "Delivery",
+    "initial_state_id": "00000000-0000-4000-8000-000000000003",
+    "states": [
+      {
+        "state_id": "00000000-0000-4000-8000-000000000003",
+        "key": "triage",
+        "name": "Triage",
+        "category": "triage",
+        "position": 0,
+        "is_terminal": false
+      },
+      {
+        "state_id": "00000000-0000-4000-8000-000000000025",
+        "key": "deferred",
+        "name": "Deferred",
+        "category": "deferred",
+        "position": 1,
+        "is_terminal": false
+      },
+      {
+        "state_id": "00000000-0000-4000-8000-000000000026",
+        "key": "ready",
+        "name": "Ready",
+        "category": "ready",
+        "position": 2,
+        "is_terminal": false
+      },
+      {
+        "state_id": "00000000-0000-4000-8000-000000000011",
+        "key": "dev",
+        "name": "Dev",
+        "category": "active",
+        "position": 3,
+        "is_terminal": false
+      },
+      {
+        "state_id": "00000000-0000-4000-8000-000000000027",
+        "key": "review",
+        "name": "Review",
+        "category": "review",
+        "position": 4,
+        "is_terminal": false
+      },
+      {
+        "state_id": "00000000-0000-4000-8000-000000000028",
+        "key": "done",
+        "name": "Done",
+        "category": "completed",
+        "position": 5,
+        "is_terminal": true
+      },
+      {
+        "state_id": "00000000-0000-4000-8000-000000000029",
+        "key": "blocked",
+        "name": "Blocked",
+        "category": "blocked",
+        "position": 6,
+        "is_terminal": false
+      },
+      {
+        "state_id": "00000000-0000-4000-8000-000000000030",
+        "key": "cancelled",
+        "name": "Cancelled",
+        "category": "cancelled",
+        "position": 7,
+        "is_terminal": true
+      }
+    ],
+    "transitions": [
+      {
+        "from": "00000000-0000-4000-8000-000000000003",
+        "to": "00000000-0000-4000-8000-000000000025"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000003",
+        "to": "00000000-0000-4000-8000-000000000026"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000003",
+        "to": "00000000-0000-4000-8000-000000000011"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000003",
+        "to": "00000000-0000-4000-8000-000000000027"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000003",
+        "to": "00000000-0000-4000-8000-000000000028"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000003",
+        "to": "00000000-0000-4000-8000-000000000029"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000003",
+        "to": "00000000-0000-4000-8000-000000000030"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000025",
+        "to": "00000000-0000-4000-8000-000000000003"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000025",
+        "to": "00000000-0000-4000-8000-000000000026"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000025",
+        "to": "00000000-0000-4000-8000-000000000011"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000025",
+        "to": "00000000-0000-4000-8000-000000000027"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000025",
+        "to": "00000000-0000-4000-8000-000000000028"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000025",
+        "to": "00000000-0000-4000-8000-000000000029"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000025",
+        "to": "00000000-0000-4000-8000-000000000030"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000026",
+        "to": "00000000-0000-4000-8000-000000000003"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000026",
+        "to": "00000000-0000-4000-8000-000000000025"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000026",
+        "to": "00000000-0000-4000-8000-000000000011"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000026",
+        "to": "00000000-0000-4000-8000-000000000027"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000026",
+        "to": "00000000-0000-4000-8000-000000000028"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000026",
+        "to": "00000000-0000-4000-8000-000000000029"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000026",
+        "to": "00000000-0000-4000-8000-000000000030"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000011",
+        "to": "00000000-0000-4000-8000-000000000003"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000011",
+        "to": "00000000-0000-4000-8000-000000000025"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000011",
+        "to": "00000000-0000-4000-8000-000000000026"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000011",
+        "to": "00000000-0000-4000-8000-000000000027"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000011",
+        "to": "00000000-0000-4000-8000-000000000028"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000011",
+        "to": "00000000-0000-4000-8000-000000000029"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000011",
+        "to": "00000000-0000-4000-8000-000000000030"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000027",
+        "to": "00000000-0000-4000-8000-000000000003"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000027",
+        "to": "00000000-0000-4000-8000-000000000025"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000027",
+        "to": "00000000-0000-4000-8000-000000000026"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000027",
+        "to": "00000000-0000-4000-8000-000000000011"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000027",
+        "to": "00000000-0000-4000-8000-000000000028"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000027",
+        "to": "00000000-0000-4000-8000-000000000029"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000027",
+        "to": "00000000-0000-4000-8000-000000000030"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000028",
+        "to": "00000000-0000-4000-8000-000000000003"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000028",
+        "to": "00000000-0000-4000-8000-000000000025"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000028",
+        "to": "00000000-0000-4000-8000-000000000026"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000028",
+        "to": "00000000-0000-4000-8000-000000000011"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000028",
+        "to": "00000000-0000-4000-8000-000000000027"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000028",
+        "to": "00000000-0000-4000-8000-000000000029"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000028",
+        "to": "00000000-0000-4000-8000-000000000030"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000029",
+        "to": "00000000-0000-4000-8000-000000000003"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000029",
+        "to": "00000000-0000-4000-8000-000000000025"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000029",
+        "to": "00000000-0000-4000-8000-000000000026"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000029",
+        "to": "00000000-0000-4000-8000-000000000011"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000029",
+        "to": "00000000-0000-4000-8000-000000000027"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000029",
+        "to": "00000000-0000-4000-8000-000000000028"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000029",
+        "to": "00000000-0000-4000-8000-000000000030"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000030",
+        "to": "00000000-0000-4000-8000-000000000003"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000030",
+        "to": "00000000-0000-4000-8000-000000000025"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000030",
+        "to": "00000000-0000-4000-8000-000000000026"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000030",
+        "to": "00000000-0000-4000-8000-000000000011"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000030",
+        "to": "00000000-0000-4000-8000-000000000027"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000030",
+        "to": "00000000-0000-4000-8000-000000000028"
+      },
+      {
+        "from": "00000000-0000-4000-8000-000000000030",
+        "to": "00000000-0000-4000-8000-000000000029"
+      }
+    ]
+  },
+  "work_items": [
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000005",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-1",
+      "number": 1,
+      "title": "Contract card",
+      "kind": "task",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000003",
+        "key": "triage",
+        "name": "Triage",
+        "category": "triage",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": null,
+      "started_at": null,
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": null,
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": true,
+      "comment_count": 7
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000001",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-2",
+      "number": 2,
+      "title": "Told card",
+      "kind": "task",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000003",
+        "key": "triage",
+        "name": "Triage",
+        "category": "triage",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": null,
+      "started_at": null,
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": null,
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 1,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": true,
+      "comment_count": 0
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000031",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-4",
+      "number": 4,
+      "title": "Live goal",
+      "kind": "goal",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000003",
+        "key": "triage",
+        "name": "Triage",
+        "category": "triage",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": null,
+      "started_at": "2026-01-02T03:04:05Z",
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": null,
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": false,
+      "comment_count": 0
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000032",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-12",
+      "number": 12,
+      "title": "Tree goal not accepted yet",
+      "kind": "goal",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000003",
+        "key": "triage",
+        "name": "Triage",
+        "category": "triage",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": null,
+      "started_at": null,
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": null,
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": false,
+      "comment_count": 0
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000033",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-13",
+      "number": 13,
+      "title": "Tree stage not accepted yet",
+      "kind": "stage",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000003",
+        "key": "triage",
+        "name": "Triage",
+        "category": "triage",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": null,
+      "started_at": null,
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": "00000000-0000-4000-8000-000000000032",
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": false,
+      "comment_count": 0
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000034",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-14",
+      "number": 14,
+      "title": "Tree work under the stage not accepted",
+      "kind": "task",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000003",
+        "key": "triage",
+        "name": "Triage",
+        "category": "triage",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": null,
+      "started_at": null,
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": "00000000-0000-4000-8000-000000000033",
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": true,
+      "comment_count": 0
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000035",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-9",
+      "number": 9,
+      "title": "Tree work in the nested stage",
+      "kind": "task",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000026",
+        "key": "ready",
+        "name": "Ready",
+        "category": "ready",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": {
+        "basis": "inherited",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": null,
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": "00000000-0000-4000-8000-000000000036",
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": true,
+      "comment_count": 0
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000037",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-10",
+      "number": 10,
+      "title": "Tree work under the stage",
+      "kind": "task",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000026",
+        "key": "ready",
+        "name": "Ready",
+        "category": "ready",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": {
+        "basis": "inherited",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": null,
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": "00000000-0000-4000-8000-000000000038",
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": true,
+      "comment_count": 0
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000010",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-3",
+      "number": 3,
+      "title": "Card with executors",
+      "kind": "task",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000011",
+        "key": "dev",
+        "name": "Dev",
+        "category": "active",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": {
+        "basis": "assignment",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": "2026-01-02T03:04:05Z",
+      "waits_for": [],
+      "claim_ref": "claude (session 00000000-0000-4000-8000-000000000012)",
+      "claim_state": "live",
+      "parent_id": null,
+      "labels": [],
+      "source": "",
+      "checklist": [
+        {
+          "id": "00000000-0000-4000-8000-000000000013",
+          "text": "An agent's",
+          "done": false,
+          "claimed_by": "claude agent a4d2c8f1e0b3a297 (session 00000000-0000-4000-8000-000000000012)",
+          "done_by": ""
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000014",
+          "text": "A person's",
+          "done": false,
+          "claimed_by": "the owner",
+          "done_by": ""
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000015",
+          "text": "A digest's",
+          "done": false,
+          "claimed_by": "claude (session 388ed4aac64b107a)",
+          "done_by": ""
+        }
+      ],
+      "revision": 5,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": false,
+      "comment_count": 2
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000039",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-5",
+      "number": 5,
+      "title": "Quiet task",
+      "kind": "task",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000011",
+        "key": "dev",
+        "name": "Dev",
+        "category": "active",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": {
+        "basis": "assignment",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": "2026-01-02T03:04:05Z",
+      "waits_for": [],
+      "claim_ref": "claude (session 00000000-0000-4000-8000-000000000018)",
+      "claim_state": "live",
+      "parent_id": "00000000-0000-4000-8000-000000000031",
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 1,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": false,
+      "comment_count": 0
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000040",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-11",
+      "number": 11,
+      "title": "Tree work finished under the goal",
+      "kind": "task",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000028",
+        "key": "done",
+        "name": "Done",
+        "category": "completed",
+        "is_terminal": true
+      },
+      "open": false,
+      "container_state": null,
+      "acceptance": {
+        "basis": "inherited",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": "2026-01-02T03:04:05Z",
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": "00000000-0000-4000-8000-000000000041",
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 2,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": "2026-01-02T03:04:05Z",
+      "last_claim_ref": null,
+      "workable": false,
+      "comment_count": 1
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000041",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-6",
+      "number": 6,
+      "title": "Tree goal",
+      "kind": "goal",
+      "priority": "medium",
+      "state": null,
+      "open": true,
+      "container_state": "in_progress",
+      "acceptance": {
+        "basis": "assignment",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": "2026-01-02T03:04:05Z",
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": null,
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": false,
+      "comment_count": 0
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000038",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-7",
+      "number": 7,
+      "title": "Tree stage",
+      "kind": "stage",
+      "priority": "medium",
+      "state": null,
+      "open": true,
+      "container_state": "not_started",
+      "acceptance": {
+        "basis": "inherited",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": null,
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": "00000000-0000-4000-8000-000000000041",
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": false,
+      "comment_count": 0
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000036",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-8",
+      "number": 8,
+      "title": "Tree nested stage",
+      "kind": "stage",
+      "priority": "medium",
+      "state": null,
+      "open": true,
+      "container_state": "not_started",
+      "acceptance": {
+        "basis": "inherited",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": null,
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": "00000000-0000-4000-8000-000000000038",
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "workable": false,
+      "comment_count": 0
+    }
+  ],
+  "links": [],
+  "stale_claims": [],
+  "live_work": {
+    "00000000-0000-4000-8000-000000000010": {
+      "state": "waiting",
+      "long": false,
+      "asks": false
+    },
+    "00000000-0000-4000-8000-000000000039": {
+      "state": "quiet",
+      "quiet_since": "2026-01-02T03:04:05Z"
+    }
+  }
+}

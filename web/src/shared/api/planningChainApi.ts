@@ -151,7 +151,7 @@ export type WorkItemChain = z.infer<typeof chainSchema>
 export type ChainMember = WorkItemChain['members'][number]
 export type ChainDay = WorkItemChain['series'][number]
 
-function validateWorkItemChain(value: unknown, path = 'planning.chain'): WorkItemChain {
+export function validateWorkItemChain(value: unknown, path = 'planning.chain'): WorkItemChain {
   return parseContract(responseSchema, value, path, invalid).chain
 }
 

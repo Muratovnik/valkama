@@ -36,7 +36,9 @@ import {
   validateOpenPlaces,
   validateOpenPlan,
 } from '@/shared/api/openPlanModel.ts'
-import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
+import { validateWorkItemChain } from '@/shared/api/planningChainApi.ts'
+import { validateGlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
+import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import {
   validateItemUsageAnswer,
   validateSessionUsageAnswer,
@@ -88,6 +90,9 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'open-plan-silent-desktop.json': validateOpenPlan,
   'open-plan-silent.json': validateOpenPlan,
   'open-plan-session.json': validateOpenPlan,
+  'planning-chain-tree.json': (value) => validateWorkItemChain(value),
+  'planning-read-model.json': (value) => validateReadModel(value),
+  'planning-search.json': validateGlobalPlanningSearch,
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,
   'requests.json': validateInputRequestList,
@@ -103,6 +108,10 @@ const agentOnly = new Set([
   'mcp-get-work-item-thread.json',
   'mcp-get-work-item-unresolved.json',
 ])
+
+/** Where a record stands, in words a test can compare: in a state, or deriving one. */
+const standing = (item: { container_state: string | null; state: { category?: string } | null }) =>
+  item.state === null ? `derives ${item.container_state}` : `stands in ${item.state.category}`
 
 describe('the server fixtures', () => {
   it('are each read by the web or named as an agent read', () => {
@@ -204,6 +213,44 @@ describe('the server fixtures', () => {
     ])
     expect(pageDimensionOf(usage)).toBeNull()
     expect(pageDimensionOf(validateUsageAnswer(read('analytics-usage.json')))).toBe('work_item')
+  })
+
+  it('carry goals and stages as the board, the chain and the finder read them', () => {
+    const model = validateReadModel(read('planning-read-model.json'))
+    const chain = validateWorkItemChain(read('planning-chain-tree.json'))
+    const found = validateGlobalPlanningSearch(read('planning-search.json'))
+    const tree = model.work_items.filter((item) => item.title.startsWith('Tree'))
+    // An accepted open goal and its stages stand in no state and derive one; the rest stand in one.
+    expect(
+      Object.fromEntries(tree.map((item) => [item.title, `${item.kind} ${standing(item)}`])),
+    ).toEqual({
+      'Tree goal': 'goal derives in_progress',
+      'Tree stage': 'stage derives not_started',
+      'Tree nested stage': 'stage derives not_started',
+      'Tree work in the nested stage': 'task stands in ready',
+      'Tree work under the stage': 'task stands in ready',
+      'Tree work finished under the goal': 'task stands in completed',
+      'Tree goal not accepted yet': 'goal stands in triage',
+      'Tree stage not accepted yet': 'stage stands in triage',
+      'Tree work under the stage not accepted': 'task stands in triage',
+    })
+    expect(chain.scope).toBe('tree')
+    expect(chain.root.title).toBe('Tree goal')
+    expect(chain.members.map((member) => member.title).toSorted()).toEqual([
+      'Tree nested stage',
+      'Tree stage',
+      'Tree work finished under the goal',
+      'Tree work in the nested stage',
+      'Tree work under the stage',
+    ])
+    const derived = chain.members.filter((member) => member.state === null)
+    expect(derived.map((member) => member.container_state)).toEqual(['not_started', 'not_started'])
+    const hits = found.items.map((hit) => hit.item)
+    expect(hits.find((hit) => hit.title === 'Tree goal')).toMatchObject({
+      state: null,
+      open: true,
+      container_state: 'in_progress',
+    })
   })
 
   it('carry every 2.5 form the card and the question view draw', () => {

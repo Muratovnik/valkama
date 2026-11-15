@@ -70,7 +70,8 @@ class _Normalizer:
 
     def __call__(self, value: object) -> object:
         if isinstance(value, dict):
-            return {key: self(found) for key, found in value.items()}
+            # A key can be an id too: the read model's live work is keyed by its items' ids.
+            return {self.text(key): self(found) for key, found in value.items()}
         if isinstance(value, list):
             return [self(found) for found in value]
         if isinstance(value, str):
@@ -577,6 +578,56 @@ class _Scenario:
             conn.close()
         return self.http("/api/planning/work-item/pin", {"id": self.reference, "pinned": True})
 
+    def tree(self) -> dict[str, object]:
+        """Goals and stages with work under them, read as the board, the chain and the finder read.
+
+        An accepted open goal and the stages filed under it stand in no state and derive one
+        from the work under them; a goal and a stage not yet accepted stand in triage. The
+        board reads the whole space, the chain the goal's tree, and the finder the search.
+        """
+
+        conn = store.connect()
+        try:
+
+            def item(title: str, **fields: object) -> str:
+                return str(
+                    service.create_work_item(conn, space=SPACE, title=title, **fields)["reference"]
+                )
+
+            goal = item("Tree goal", kind="goal", acceptance="assignment")
+            stage = item("Tree stage", kind="stage", parent=goal)
+            nested = item("Tree nested stage", kind="stage", parent=stage)
+            item("Tree work in the nested stage", parent=nested)
+            item("Tree work under the stage", parent=stage)
+            finished = item("Tree work finished under the goal", parent=goal)
+            service.set_summary(conn, finished, {"done": "Finished.", "next": "Nothing."})
+            service.transition_work_item(conn, finished, "done", acceptance="assignment")
+            waiting = item("Tree goal not accepted yet", kind="goal")
+            loose = item("Tree stage not accepted yet", kind="stage", parent=waiting)
+            item("Tree work under the stage not accepted", parent=loose)
+            conn.commit()
+        finally:
+            conn.close()
+        space = urlencode({"project": PROJECT, **self.space_ref})
+        model = self.http(f"/api/planning?{space}")
+        # A digest of the whole answer, ids and instants included, which change run to run.
+        model["revision"] = "0" * 64
+        # The workflow's moves stand in the order of their states' ids; put them in the states'.
+        position = {state["state_id"]: state["position"] for state in model["workflow"]["states"]}
+        model["workflow"]["transitions"].sort(
+            key=lambda move: (position[move["from"]], position[move["to"]])
+        )
+        found = self.http(f"/api/modules/planning/search?{urlencode({'q': 'Tree', 'limit': '50'})}")
+        # Equal matches stand in the order of their ids, which change run to run.
+        found["items"].sort(key=lambda hit: int(hit["item"]["reference"].split("-")[1]))
+        return {
+            "planning-read-model": model,
+            "planning-chain-tree": self.http(
+                f"/api/planning/work-item/chain?{urlencode({'id': goal, 'scope': 'tree'})}"
+            ),
+            "planning-search": found,
+        }
+
     def open_plans(self) -> dict[str, object]:
         """What a click is told to do: each form of a plan, for the files `documents` wrote."""
 
@@ -773,6 +824,8 @@ class _Scenario:
             **self.usage(),
             "doctor-vocabulary": {"quota": _doctor_quota_codes()},
             "analytics-quota": self.quota(),
+            # Last, so the references the answers above name stay theirs.
+            **self.tree(),
         }
 
 

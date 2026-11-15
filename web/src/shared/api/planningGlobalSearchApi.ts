@@ -47,6 +47,10 @@ const searchSchema = strictObject({
 
 export type GlobalPlanningSearch = z.infer<typeof searchSchema>
 
+/** What the platform search answers, read strictly. */
+export const validateGlobalPlanningSearch = (value: unknown): GlobalPlanningSearch =>
+  searchSchema.parse(value)
+
 /**
  * The refusals that stop the whole search rather than one source, by the code
  * the server names them with. Anything else is an ordinary failed request.
@@ -76,7 +80,7 @@ export async function searchGlobalPlanningWorkItems(
   )
   signal.throwIfAborted()
   if (!response.ok) throw refusal(response, payload)
-  const result = searchSchema.parse(payload)
+  const result = validateGlobalPlanningSearch(payload)
   if (result.query !== query || result.limit !== 50) throw new Error('Search response mismatch')
   return result
 }

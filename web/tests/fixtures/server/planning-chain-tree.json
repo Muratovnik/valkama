@@ -1,0 +1,161 @@
+{
+  "interface_version": "valkama-planning-api",
+  "chain": {
+    "root": {
+      "work_item_id": "00000000-0000-4000-8000-000000000041",
+      "reference": "MAIN-6",
+      "title": "Tree goal",
+      "kind": "goal",
+      "has_children": true,
+      "totals": {
+        "chain": 5,
+        "tree": 5
+      }
+    },
+    "scope": "tree",
+    "total": 5,
+    "closed": 1,
+    "open": 4,
+    "workable": 2,
+    "by_category": {
+      "completed": 1,
+      "ready": 2
+    },
+    "by_container_state": {
+      "not_started": 2
+    },
+    "origins": [
+      {
+        "parent_reference": "MAIN-6",
+        "parent_title": "Tree goal",
+        "count": 2,
+        "open": 1
+      },
+      {
+        "parent_reference": "MAIN-7",
+        "parent_title": "Tree stage",
+        "count": 2,
+        "open": 2
+      },
+      {
+        "parent_reference": "MAIN-8",
+        "parent_title": "Tree nested stage",
+        "count": 1,
+        "open": 1
+      }
+    ],
+    "series": [
+      {
+        "day": "2026-11-15",
+        "created": 5,
+        "closed": 1,
+        "total": 5,
+        "closed_total": 1
+      }
+    ],
+    "recent": {
+      "days": 7,
+      "created": 5,
+      "closed": 1,
+      "trend": "growing"
+    },
+    "members": [
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000038",
+        "reference": "MAIN-7",
+        "title": "Tree stage",
+        "kind": "stage",
+        "state": null,
+        "open": true,
+        "container_state": "not_started",
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_reference": "MAIN-6",
+        "created_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "workable": false,
+        "rank": 13
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000036",
+        "reference": "MAIN-8",
+        "title": "Tree nested stage",
+        "kind": "stage",
+        "state": null,
+        "open": true,
+        "container_state": "not_started",
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_reference": "MAIN-7",
+        "created_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "workable": false,
+        "rank": 14
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000035",
+        "reference": "MAIN-9",
+        "title": "Tree work in the nested stage",
+        "kind": "task",
+        "state": {
+          "key": "ready",
+          "name": "Ready",
+          "category": "ready",
+          "is_terminal": false
+        },
+        "open": true,
+        "container_state": null,
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_reference": "MAIN-8",
+        "created_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "workable": true,
+        "rank": 3
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000037",
+        "reference": "MAIN-10",
+        "title": "Tree work under the stage",
+        "kind": "task",
+        "state": {
+          "key": "ready",
+          "name": "Ready",
+          "category": "ready",
+          "is_terminal": false
+        },
+        "open": true,
+        "container_state": null,
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_reference": "MAIN-7",
+        "created_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "workable": true,
+        "rank": 4
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000040",
+        "reference": "MAIN-11",
+        "title": "Tree work finished under the goal",
+        "kind": "task",
+        "state": {
+          "key": "done",
+          "name": "Done",
+          "category": "completed",
+          "is_terminal": true
+        },
+        "open": false,
+        "container_state": null,
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_reference": "MAIN-6",
+        "created_at": "2026-01-02T03:04:05Z",
+        "closed_at": "2026-01-02T03:04:05Z",
+        "workable": false,
+        "rank": 11
+      }
+    ],
+    "edges": []
+  }
+}
