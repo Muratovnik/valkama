@@ -1463,11 +1463,13 @@ them. The reference is set in the line's own figures, not tabular ones: no
 column of digits lines up on a tile. So urgent, an improvement, a four-digit
 reference and «⛔» with another hold whole in a desktop column when the space's
 key is three letters; a longer key folds as any exception short of room does.
-The board grouped by goal gives a lane to each item that holds others, a goal or a
-stage, and one to the work under none, «No parent» («Без
-родителя»): the lanes name the parent, as the card does, and only a goal's or a
-stage's own title and sign say which it is; the branch map's lane under none and the
-graph's frame under none are named the same way.
+The board grouped by goal gives a lane to each goal, the root of a line of work, and
+one to the work under none, «No parent» («Без
+родителя»). A goal's lane holds all the work under it, through its stages at any
+depth; a stage heads no lane and is work of its goal's lane, a tile there while it
+stands in a column, so no item is drawn twice. The lanes name the goal, as the card
+does; the branch map's lane under none and the graph's frame under none are named
+the same way.
 On the board grouped by goal a cell with no tile drawn takes no ground until a
 tile of its lane is dragged and could land there, and a finished cell's offer of
 its tiles is a line of text. A goal's row is one line: its reference, its title

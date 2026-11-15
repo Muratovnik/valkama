@@ -101,6 +101,84 @@ describe('the board grouped by goal', () => {
   })
 })
 
+/**
+ * Goals and the stages under them, as a 3.0 read answers: an accepted open goal or stage
+ * stands in no state and derives one, and a stage not yet accepted stands in triage.
+ */
+const accepted = (n: number, kind: 'goal' | 'stage', parent: number | null) =>
+  boardItem(n, 'backlog', {
+    kind,
+    state: null,
+    container_state: 'in_progress',
+    acceptance: { basis: 'assignment', at: '2026-10-30T10:00:00Z' },
+    parent_id: parent === null ? null : boardId(parent),
+    workable: false,
+  })
+const goal = accepted(50, 'goal', null)
+const stage = accepted(51, 'stage', 50)
+const nested = accepted(52, 'stage', 51)
+const triageStage = boardItem(53, 'backlog', {
+  kind: 'stage',
+  parent_id: goal.work_item_id,
+  workable: false,
+})
+const tree = [
+  goal,
+  stage,
+  boardItem(60, 'dev', { parent_id: stage.work_item_id }),
+  nested,
+  boardItem(61, 'todo', { parent_id: nested.work_item_id }),
+  boardItem(62, 'done', { parent_id: nested.work_item_id }),
+  triageStage,
+  boardItem(63, 'backlog', { parent_id: triageStage.work_item_id }),
+  boardItem(64, 'dev', { parent_id: goal.work_item_id }),
+  boardItem(65, 'todo'),
+]
+
+describe('the board grouped by goal, with stages under the goals', () => {
+  it('stands the work under a stage, at any depth, in its goal’s lane', () => {
+    const found = lanes(tree)
+    expect(found.map((lane) => lane.goal?.reference ?? NO_PARENT)).toEqual(['MAIN-50', NO_PARENT])
+    const own = found.find((lane) => lane.id === goal.work_item_id)
+    // In the order the space lists them: the stages and the work under each.
+    expect(references(own?.items ?? [])).toEqual([
+      'MAIN-51',
+      'MAIN-60',
+      'MAIN-52',
+      'MAIN-61',
+      'MAIN-62',
+      'MAIN-53',
+      'MAIN-63',
+      'MAIN-64',
+    ])
+    expect([own?.open, own?.closed]).toEqual([7, 1])
+  })
+
+  it('heads no lane with a stage, accepted or in triage, and draws no item twice', () => {
+    const found = lanes(tree)
+    expect(found.some((lane) => lane.goal?.kind === 'stage')).toBe(false)
+    const drawn = found.flatMap((lane) => references(lane.items))
+    expect(drawn).toHaveLength(new Set(drawn).size)
+    // The stage in triage is a tile once, in its goal's lane, beside its own work.
+    expect(drawn.filter((reference) => reference === 'MAIN-53')).toEqual(['MAIN-53'])
+    expect(drawn).not.toContain('MAIN-50')
+  })
+
+  it('heads the goal’s lane with the record the server sent, its derived standing as it came', () => {
+    const own = lanes(tree).find((lane) => lane.id === goal.work_item_id)
+    expect(own?.goal).toBe(goal)
+    expect(own?.goal?.state).toBeNull()
+    expect(own?.goal?.container_state).toBe('in_progress')
+  })
+
+  it('stands work under a stage the space holds without its goal with the work under none', () => {
+    const lost = [stage, boardItem(60, 'dev', { parent_id: stage.work_item_id })]
+    const found = lanes(lost)
+    expect(found.map((lane) => lane.id)).toEqual([NO_PARENT])
+    expect(references(found[0].items)).toEqual(['MAIN-51', 'MAIN-60'])
+  })
+})
+
 const laneStates = ['backlog', 'todo', 'dev', 'review', 'done'].map((key) => ({
   key,
   is_terminal: key === 'done',

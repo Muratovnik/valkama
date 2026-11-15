@@ -581,10 +581,11 @@ no new schema; the exact rules are in
 [the connection contract](docs/connection-contract.md#the-order-of-work).
 
 **The board reads by goal.** With View → Grouping → By goal, each goal is a lane
-headed by its reference, title, open and closed counts and a fold, and holds the work
-filed directly under it. A goal is its lane's heading, not a card in it. A stage is a
-card in its parent's lane and, once it holds work, heads a lane of its own. Lanes with
-open work come first, and the work under no parent comes last, in a lane of its own.
+headed by its reference, title, open and closed counts and a fold, and holds all the
+work under it, through its stages at any depth. A goal is its lane's heading, not a card
+in it. A stage heads no lane: it is work of its goal's lane, a card there while it stands
+in a column. Lanes with open work come first, and the work under no parent comes last,
+in a lane of its own.
 A lane with nothing open starts folded, and the board remembers the lanes you fold or
 unfold, per space, in the browser. A lane's Chain action narrows the board to the
 chain of the goal or stage heading it, and the chain stays when you switch to List or

@@ -1,6 +1,12 @@
 /**
- * The board read by goal: one lane per goal, holding its children, and one lane
- * for the work filed under none.
+ * The board read by goal: one lane per goal, holding all the work under it at any
+ * depth, and one lane for the work filed under none.
+ *
+ * A lane is a root's: a goal, which stands under nothing. Work filed under a stage
+ * stands in the lane of the goal the stage is under, however deep, and a stage is
+ * work of that lane like any other — a tile there while it stands in a column, and
+ * the head of no lane. A lane per nearest container would be another grouping; this
+ * one reads the space by goal.
  *
  * Three sets go in because a lane answers three questions. Which lanes there are
  * and what each counts comes from the board's scope — the space, or the chain it
@@ -11,7 +17,8 @@
  *
  * A goal is the lane, not a tile in it: its title heads the lane and its state
  * is marked there, and its card is one click away. Drawing it again among its
- * own children would put the same item twice on one screen.
+ * own work would put the same item twice on one screen, and so would a stage that
+ * headed a lane of its own while it stood as a tile in its goal's.
  */
 import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
@@ -44,7 +51,7 @@ export interface BoardLane {
   open: number
 }
 
-/** An item that heads a lane: something's parent, or a goal, and nobody's child. */
+/** An item that heads a lane: a container that is nobody's child, which is a goal. */
 function headsLane(item: WorkItemBrief): boolean {
   return item.parent_id === null && WORK_ITEM_TREE.isContainer(item)
 }
@@ -66,9 +73,21 @@ export function boardLanes(input: {
   const order = new Map(input.space.map((item, index) => [item.work_item_id, index]))
   const byId = new Map(input.space.map((item) => [item.work_item_id, item]))
   const lanes = new Map<string, BoardLane>()
+  /**
+   * The lane an item stands in: its root's, found by its parents in the space. An item
+   * whose line of parents leaves the space before it reaches a goal has no goal to stand
+   * under here, and stands with the work under none.
+   */
   const laneOf = (item: WorkItemBrief): string | null => {
     if (headsLane(item)) return null
-    return item.parent_id !== null && byId.has(item.parent_id) ? item.parent_id : NO_PARENT
+    const seen = new Set([item.work_item_id])
+    let parent = item.parent_id === null ? undefined : byId.get(item.parent_id)
+    while (parent !== undefined && !seen.has(parent.work_item_id)) {
+      if (headsLane(parent)) return parent.work_item_id
+      seen.add(parent.work_item_id)
+      parent = parent.parent_id === null ? undefined : byId.get(parent.parent_id)
+    }
+    return NO_PARENT
   }
   const lane = (id: string): BoardLane => {
     let found = lanes.get(id)
