@@ -104,8 +104,15 @@ function selectSpecs(request: Request, io: RunnerIo): string[] {
   const names = [...new Set(listedNames(text))]
   if (names.length === 0) throw new Refusal(`the list file ${request.listFile} names no spec`)
   const unknown = names.filter((name) => !suite.includes(name))
-  if (unknown.length > 0)
-    throw new Refusal(`no such spec under tests/browser: ${unknown.join(', ')}`)
+  if (unknown.length > 0) {
+    // The usual slip is a path or a name without `.spec.ts`; a name of the suite shows the form.
+    const example = suite.find((name) => allowed(name)) ?? suite[0]
+    const such = example === undefined ? '' : `, such as ${example}`
+    throw new Refusal(
+      `no such spec under tests/browser: ${unknown.join(', ')}; a list file names spec ` +
+        `files bare, by their names relative to tests/browser, one a line${such}`,
+    )
+  }
   const clipboard = names.filter((name) => !allowed(name))
   if (clipboard.length > 0)
     throw new Refusal(

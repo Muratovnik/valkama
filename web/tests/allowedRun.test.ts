@@ -86,6 +86,18 @@ describe('the allowed browser run', () => {
     expect(playwright).not.toHaveBeenCalled()
   })
 
+  it('says the form a list file takes when it names no spec, by a name of the suite', async () => {
+    const lists = { 'batch.txt': 'tests/browser/ui-buttons.spec.ts\nui-buttons\n' }
+    const { io, playwright, said } = runner(lists)
+    expect(await runAllowed(['--specs=batch.txt'], io)).toBe(2)
+    expect(playwright).not.toHaveBeenCalled()
+    expect(said).toEqual([
+      'Refused, no test ran: no such spec under tests/browser: ' +
+        'tests/browser/ui-buttons.spec.ts, ui-buttons; a list file names spec files bare, ' +
+        `by their names relative to tests/browser, one a line, such as ${allowed[0]}`,
+    ])
+  })
+
   it('runs a clipboard spec only when --with-clipboard names it', async () => {
     const lists = { 'batch.txt': `${notes}\n` }
     const refused = runner(lists)
