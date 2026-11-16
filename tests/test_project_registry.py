@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import os
 import tempfile
 import unittest
@@ -59,14 +60,94 @@ class ProjectRegistryTests(unittest.TestCase):
             self.assertEqual(["sample"], [item["project_id"] for item in listing["projects"]])
             self.assertEqual(directory, listing["projects"][0]["canonical_root"])
             self.assertEqual("Sample", listing["projects"][0]["display_name"])
-            self.assertEqual(binding["resource_ref"], listing["projects"][0]["planning_binding"])
+            self.assertEqual(
+                {**binding["resource_ref"], "default": True},
+                listing["projects"][0]["planning_binding"],
+            )
 
-    def test_host_runtime_v3_compatibility_fixture_is_accepted(self) -> None:
-        fixture = Path(__file__).with_name("fixtures") / "valkama-projects-v3.fixture.json"
+    def test_v4_fixture_is_read_with_two_projects_of_one_space(self) -> None:
+        fixture = Path(__file__).with_name("fixtures") / "valkama-projects-v4.fixture.json"
         listing = project_registry.parse_registry(fixture.read_bytes())
         self.assertEqual("available", listing["status"])
-        self.assertEqual(["alpha", "beta"], [item["project_id"] for item in listing["projects"]])
-        self.assertIsNone(listing["projects"][1]["planning_binding"])
+        self.assertEqual(
+            ["alpha", "alpha-tool", "beta"], [item["project_id"] for item in listing["projects"]]
+        )
+        alpha, tool, beta = listing["projects"]
+        self.assertTrue(alpha["planning_binding"]["default"])
+        self.assertFalse(tool["planning_binding"]["default"])
+        self.assertEqual(
+            alpha["planning_binding"]["resource_id"], tool["planning_binding"]["resource_id"]
+        )
+        self.assertIsNone(beta["planning_binding"])
+
+    def test_a_projection_of_schema_3_is_malformed(self) -> None:
+        fixture = Path(__file__).with_name("fixtures") / "valkama-projects-v4.fixture.json"
+        former = fixture.read_bytes().replace(b'"schema_version": 4', b'"schema_version": 3')
+        listing = project_registry.parse_registry(former)
+        self.assertEqual("malformed", listing["status"])
+        self.assertEqual([], listing["projects"])
+        self.assertIn("registry.schema_version must be 4", listing["reason"])
+
+    def test_each_bound_space_needs_exactly_one_default_project(self) -> None:
+        resource_ref = planning_space_entity(
+            {"data_scope_id": "22222222-2222-4222-8222-222222222222", "space_key": "SAMPLE"}
+        )
+        base = Path(tempfile.gettempdir()) / "made-up"
+        for defaults, status in (
+            ((True, False), "available"),
+            ((True, True), "malformed"),
+            ((False, False), "malformed"),
+        ):
+            projects = []
+            for index, default in enumerate(defaults):
+                entry = project_entry(f"p{index}", base / f"p{index}")
+                entry["planning_binding"] = {**resource_ref, "default": default}
+                projects.append(entry)
+            with self.subTest(defaults=defaults):
+                result = project_registry.parse_registry(registry_bytes(projects))
+                self.assertEqual(status, result["status"])
+                if status == "malformed":
+                    self.assertIn("exactly one default project", result["reason"])
+
+    def test_a_binding_without_a_boolean_default_is_malformed(self) -> None:
+        resource_ref = planning_space_entity(
+            {"data_scope_id": "22222222-2222-4222-8222-222222222222", "space_key": "SAMPLE"}
+        )
+        entry = project_entry("sample", Path(tempfile.gettempdir()) / "sample")
+        for binding, reason in (
+            ({**resource_ref, "default": 1}, "default must be true or false"),
+            ({**resource_ref, "default": True, "extra": 1}, "unknown extra"),
+        ):
+            entry["planning_binding"] = binding
+            with self.subTest(binding=binding):
+                result = project_registry.parse_registry(registry_bytes([entry]))
+                self.assertEqual("malformed", result["status"])
+                self.assertIn(reason, result["reason"])
+        # The fixture writer marks a bare binding default, so this one is written by hand.
+        entry["planning_binding"] = resource_ref
+        raw = json.dumps({"schema_version": 4, "projects": [entry]}).encode("utf-8")
+        result = project_registry.parse_registry(raw)
+        self.assertEqual("malformed", result["status"])
+        self.assertIn("missing default", result["reason"])
+
+    def test_the_space_root_is_the_root_of_its_default_project(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            outer = Path(directory) / "outer"
+            inner = outer / "inner"
+            inner.mkdir(parents=True)
+            resource_ref = planning_space_entity(
+                {"data_scope_id": "22222222-2222-4222-8222-222222222222", "space_key": "SAMPLE"}
+            )
+            projects = [project_entry("outer", outer), project_entry("inner", inner)]
+            for default, project in zip((False, True), projects, strict=True):
+                project["planning_binding"] = {**resource_ref, "default": default}
+            answer = project_registry.resolve_space_root(
+                resource_ref, reader=lambda: registry_bytes(projects)
+            )
+            self.assertEqual("mapped", answer["status"])
+            self.assertEqual(str(inner), answer["canonical_root"])
+            self.assertEqual(resource_ref, answer["resource_ref"])
+            self.assertNotIn("source", answer)
 
     def test_absent_and_malformed_are_distinct_typed_empty_results(self) -> None:
         absent = project_registry.parse_registry(None)
@@ -109,12 +190,13 @@ class ProjectRegistryTests(unittest.TestCase):
                     "space_key": "SAMPLE",
                 }
             )
+            # One space may hold several projects, but only one of them is its default.
             first["planning_binding"] = resource_ref
             second = project_entry("second", Path(directory) / "second", board="Second")
             second["planning_binding"] = resource_ref
             result = project_registry.parse_registry(registry_bytes([first, second]))
             self.assertEqual("malformed", result["status"])
-            self.assertIn("planning_binding resource_id", result["reason"])
+            self.assertIn("exactly one default project", result["reason"])
 
     def test_opaque_registry_identity_is_not_interpreted_or_migrated_on_read(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -143,7 +225,10 @@ class ProjectRegistryTests(unittest.TestCase):
                 )
             )
             self.assertEqual("available", result["status"])
-            self.assertEqual(legacy["resource_ref"], result["projects"][0]["planning_binding"])
+            self.assertEqual(
+                {**legacy["resource_ref"], "default": True},
+                result["projects"][0]["planning_binding"],
+            )
             resolved = project_registry.resolve_space_root(
                 legacy["resource_ref"], reader=lambda: registry_bytes([])
             )
@@ -233,7 +318,7 @@ class ProjectRegistryTests(unittest.TestCase):
         self.assertEqual("", context["effective_cwd"])
         self.assertEqual("C:\\observed\\checkout", context["session_cwd"])
         self.assertFalse(context["fallback"])
-        self.assertEqual("host_runtime", context["source"])
+        self.assertNotIn("source", context)
 
     def test_owned_sources_have_no_compatibility_reader_or_path_seam(self) -> None:
         root = Path(__file__).resolve().parents[1]

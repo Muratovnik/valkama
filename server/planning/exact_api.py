@@ -56,7 +56,7 @@ def planning_payload(routing: PlanningRouting, parameters: Mapping[str, list[str
         projects = [_planning_project(routing, item) for item in routing.projects]
         spaces = []
         for project in () if directory_only else routing.projects:
-            binding = project["planning_binding"]
+            binding = project_registry.binding_entity(project["planning_binding"])
             if binding is not None:
                 space_ref = planning_space_ref(binding)
                 binding_state, _reason = routing.resolve(project["project_id"], binding)

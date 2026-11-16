@@ -1,4 +1,4 @@
-"""Strict Host Runtime project-registry fixtures shared by consumer tests."""
+"""Strict project-registry fixtures shared by consumer tests."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def project_entry(
     bindings: list[dict] | None = None,
     source_hash: str = SOURCE_HASH,
 ) -> dict:
-    """Return one complete Host Runtime schema-v3 entry."""
+    """Return one complete registry entry; `registry_bytes` writes its binding as schema v4."""
 
     _ = source_hash  # accepted while legacy migration fixtures still pass it
     canonical_root = str(root)
@@ -56,7 +56,20 @@ def project_entry(
 
 
 def registry_bytes(projects: list[dict]) -> bytes:
-    return json.dumps({"schema_version": 3, "projects": projects}, sort_keys=True).encode("utf-8")
+    """A schema-v4 projection of these entries.
+
+    A binding given as a bare planning-space entity, as most tests write it, is
+    its space's only project and so its default; one that names `default` is
+    written as given.
+    """
+
+    written = []
+    for project in projects:
+        binding = project.get("planning_binding")
+        if isinstance(binding, dict) and "default" not in binding:
+            project = dict(project, planning_binding={**binding, "default": True})
+        written.append(project)
+    return json.dumps({"schema_version": 4, "projects": written}, sort_keys=True).encode("utf-8")
 
 
 def registry_reader(path: str | Path) -> Callable[[], bytes]:

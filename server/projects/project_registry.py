@@ -2,10 +2,14 @@ r"""Strict, read-only consumption of Valkama's project registry projection.
 
 Valkama owns the inventory, writer and recovery path. Consumers read the fixed
 ``%LOCALAPPDATA%\Valkama\projects.json`` projection and accept the whole
-schema-v3 snapshot or none of it. The registry carries project identity and one
+schema-v4 snapshot or none of it. The registry carries project identity and one
 optional opaque Planning binding; hook configuration, index commands, memory
 namespaces and source-manifest provenance are deliberately not part of it.
-The ``host_runtime`` source value remains as a legacy wire discriminator.
+
+A planning space may hold several projects. Each binding says whether its
+project is the space's default one, and every bound space has exactly one: the
+space's root is the root of that project. A projection of another format is
+malformed here, as a schema-v4 one is to a reader of schema 3.
 """
 
 from __future__ import annotations
@@ -25,7 +29,6 @@ RegistryStatus = Literal["available", "absent", "malformed", "unavailable"]
 
 class RegistryResult(TypedDict):
     status: RegistryStatus
-    source: Literal["host_runtime"]
     projects: list[dict[str, Any]]
     reason: str
 
@@ -36,7 +39,8 @@ class RegistryError(ValueError):
 
 _DOCUMENT_KEYS = {"schema_version", "projects"}
 _ENTRY_KEYS = {"project_id", "display_name", "canonical_root", "planning_binding"}
-_BINDING_KEYS = {"kind", "resource_id"}
+_BINDING_KEYS = {"kind", "resource_id", "default"}
+SCHEMA_VERSION = 4
 _PROJECT_ID = re.compile(r"^[a-z][a-z0-9-]{0,159}$")
 _MAX_NAME = 200
 _MAX_RESOURCE_ID = 512
@@ -61,7 +65,6 @@ def _result(
 ) -> RegistryResult:
     return {
         "status": status,
-        "source": "host_runtime",
         "projects": [] if projects is None else projects,
         "reason": reason,
     }
@@ -80,7 +83,7 @@ def read_registry(*, reader: RegistryReader | None = None) -> RegistryResult:
 
 
 def parse_registry(raw: bytes | None) -> RegistryResult:
-    """Validate exact schema-v3 bytes and return the complete set or no projects."""
+    """Validate exact schema-v4 bytes and return the complete set or no projects."""
 
     if raw is None:
         return _result("absent", reason="Valkama project registry is absent")
@@ -89,8 +92,9 @@ def parse_registry(raw: bytes | None) -> RegistryResult:
     try:
         document = json.loads(raw.decode("utf-8"))
         document = _exact_mapping(document, _DOCUMENT_KEYS, "registry")
-        if document["schema_version"] != 3:
-            raise RegistryError("registry.schema_version must be 3")
+        version = document["schema_version"]
+        if type(version) is not int or version != SCHEMA_VERSION:
+            raise RegistryError(f"registry.schema_version must be {SCHEMA_VERSION}")
         projects = document["projects"]
         if not isinstance(projects, list):
             raise RegistryError("registry.projects must be an array")
@@ -122,13 +126,16 @@ def _bounded_text(value: object, label: str, *, maximum: int) -> str:
     return value
 
 
-def _validate_binding(value: object, label: str) -> dict[str, str] | None:
+def _validate_binding(value: object, label: str) -> dict[str, Any] | None:
     if value is None:
         return None
     binding = _exact_mapping(value, _BINDING_KEYS, label)
     if binding["kind"] != "planning-space":
         raise RegistryError(f"{label}.kind must be planning-space")
+    if type(binding["default"]) is not bool:
+        raise RegistryError(f"{label}.default must be true or false")
     return {
+        "default": binding["default"],
         "kind": "planning-space",
         "resource_id": _bounded_text(
             binding["resource_id"], f"{label}.resource_id", maximum=_MAX_RESOURCE_ID
@@ -171,15 +178,22 @@ def _validate_projects(values: list[object]) -> list[dict[str, Any]]:
     _require_unique(
         (os.path.normcase(project["canonical_root"]) for project in projects), "canonical_root"
     )
-    _require_unique(
-        (
-            binding["resource_id"]
-            for project in projects
-            if (binding := project["planning_binding"]) is not None
-        ),
-        "planning_binding resource_id",
-    )
+    defaults: dict[str, int] = {}
+    for project in projects:
+        if (binding := project["planning_binding"]) is not None:
+            resource_id = binding["resource_id"]
+            defaults[resource_id] = defaults.get(resource_id, 0) + binding["default"]
+    if any(count != 1 for count in defaults.values()):
+        raise RegistryError("every bound planning space must have exactly one default project")
     return sorted(projects, key=lambda project: (project["project_id"], project["canonical_root"]))
+
+
+def binding_entity(binding: Mapping[str, Any] | None) -> dict[str, str] | None:
+    """The planning-space entity a binding names, without its default flag."""
+
+    if binding is None:
+        return None
+    return {"kind": str(binding["kind"]), "resource_id": str(binding["resource_id"])}
 
 
 def project_holding(folder: str, projects: Iterable[Mapping[str, Any]]) -> str | None:
@@ -213,14 +227,13 @@ def _space_result(
         "status": status,
         "canonical_root": root,
         "reason": reason,
-        "source": "host_runtime",
     }
 
 
 def resolve_space_root(
     resource_ref: object | None, *, reader: RegistryReader | None = None
 ) -> dict:
-    """Resolve one canonical Planning identity from the registry binding."""
+    """Resolve a planning space to its root: the root of the space's default project."""
 
     if resource_ref is None:
         return _space_result(None, "missing", reason="planning space binding is absent")
@@ -237,12 +250,13 @@ def resolve_space_root(
         status = "malformed" if listing["status"] == "malformed" else "unavailable"
         return _space_result(canonical, status, reason=listing["reason"])
     matches = [
-        project for project in listing["projects"] if project["planning_binding"] == canonical
+        project
+        for project in listing["projects"]
+        if binding_entity(project["planning_binding"]) == canonical
+        and project["planning_binding"]["default"]
     ]
     if not matches:
         return _space_result(canonical, "missing", reason="no exact Planning binding exists")
-    if len(matches) > 1:
-        return _space_result(canonical, "ambiguous", reason=f"{len(matches)} exact bindings exist")
     root = str(matches[0]["canonical_root"])
     if not os.path.isdir(root):
         return _space_result(

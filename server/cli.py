@@ -51,7 +51,6 @@ from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
 from .ops import adapter_check, configuration, doctor, export, setup, skills
 from .planning import model as planning_model
-from .planning import service as planning_service
 from .planning import views as planning_views
 from .planning.display_links import HOOK_PATH
 from .platform import installed
@@ -468,10 +467,14 @@ def _projects_main(options: argparse.Namespace) -> None:
             payload = registry_owner.check(inventory, target)
         elif command == "rollback":
             payload = {"changed": registry_owner.rollback(inventory, target)}
+        elif command == "upgrade":
+            payload = {"changed": registry_owner.upgrade(inventory, target)}
+        elif command == "downgrade":
+            payload = {"changed": registry_owner.downgrade(inventory, target)}
         elif command == "import":
             payload = {
-                "changed": registry_owner.update(
-                    inventory, target, source=Path(options.source).expanduser()
+                "changed": registry_owner.import_inventory(
+                    inventory, target, Path(options.source).expanduser()
                 )
             }
         elif command == "add":
@@ -510,26 +513,34 @@ def _projects_main(options: argparse.Namespace) -> None:
                 raise registry_owner.RegistryOwnerError(
                     f"data scope is unavailable: {options.scope}"
                 )
+            # Only the space's identity and the store's are read, never the rest of
+            # the space's row: a binding is made before the store is migrated too.
             database = Path(selected["path"])
             with contextlib.closing(
                 sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)
             ) as conn:
-                conn.row_factory = sqlite3.Row
-                space = planning_service.get_planning_space(conn, options.space)
-                if space["project_id"] != options.project_id:
+                space = conn.execute(
+                    "SELECT planning_space_id, key, name FROM planning_spaces"
+                    " WHERE planning_space_id = ? OR key = ? OR name = ?",
+                    (options.space, options.space, options.space),
+                ).fetchone()
+                if space is None:
                     raise registry_owner.RegistryOwnerError(
-                        "planning space belongs to a different project id"
+                        f"no planning space named {options.space} in data scope {options.scope}"
                     )
                 metadata = store_metadata.read_store_metadata(conn)
             binding = planning_space_entity(
-                {"data_scope_id": metadata["data_scope_id"], "space_key": space["key"]}
+                {"data_scope_id": metadata["data_scope_id"], "space_key": space[1]}
             )
-            payload = {
-                "changed": registry_owner.update(
-                    inventory, target, bind=(options.project_id, binding)
-                ),
-                "planning_binding": binding,
-            }
+            changed = registry_owner.update(
+                inventory, target, bind=(options.project_id, binding, options.default)
+            )
+            written = next(
+                entry
+                for entry in registry_owner.parse_inventory(inventory.read_bytes())
+                if entry["project_id"] == options.project_id
+            )
+            payload = {"changed": changed, "planning_binding": written["planning_binding"]}
         else:
             payload = {"changed": registry_owner.update(inventory, target)}
         print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
@@ -650,11 +661,24 @@ def main(argv: list[str] | None = None) -> None:
     bind_cmd.add_argument("project_id")
     bind_cmd.add_argument("--space", required=True)
     bind_cmd.add_argument("--scope", default=scopes.PRIMARY_SCOPE)
+    bind_cmd.add_argument(
+        "--default", action="store_true", help="make it the space's default project"
+    )
     projects_sub.add_parser("check", help="compare inventory and projection")
     projects_sub.add_parser("apply", help="project the current inventory")
     projects_sub.add_parser("doctor", help="report inventory and projection health")
-    projects_sub.add_parser("rollback", help="restore exact prior inventory and projection bytes")
-    import_cmd = projects_sub.add_parser("import", help="import an existing inventory once")
+    projects_sub.add_parser(
+        "rollback", help="undo the last change, restoring the bytes it replaced"
+    )
+    projects_sub.add_parser(
+        "upgrade", help="carry the registry to inventory format 2 and projection format 4"
+    )
+    projects_sub.add_parser(
+        "downgrade", help="restore the exact registry bytes the upgrade replaced"
+    )
+    import_cmd = projects_sub.add_parser(
+        "import", help="import a former inventory of format 1 once"
+    )
     import_cmd.add_argument("--source", required=True)
     summary = commands.add_parser("summary")
     summary.add_argument("--space", default=None)

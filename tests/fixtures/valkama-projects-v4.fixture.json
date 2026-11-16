@@ -4,10 +4,21 @@
       "canonical_root": "C:\\workspace\\alpha",
       "display_name": "Alpha",
       "planning_binding": {
+        "default": true,
         "kind": "planning-space",
         "resource_id": "opaque-alpha-planning-identity"
       },
       "project_id": "alpha"
+    },
+    {
+      "canonical_root": "C:\\workspace\\alpha\\tools\\alpha-tool",
+      "display_name": "Alpha Tool",
+      "planning_binding": {
+        "default": false,
+        "kind": "planning-space",
+        "resource_id": "opaque-alpha-planning-identity"
+      },
+      "project_id": "alpha-tool"
     },
     {
       "canonical_root": "C:\\workspace\\beta",
@@ -16,5 +27,5 @@
       "project_id": "beta"
     }
   ],
-  "schema_version": 3
+  "schema_version": 4
 }

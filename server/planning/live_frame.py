@@ -188,7 +188,7 @@ def _roots(conn: sqlite3.Connection) -> _Roots:
     bound: dict[str, str] = {}
     for project in project_registry.read_registry()["projects"]:
         key: str | None = None
-        binding = project["planning_binding"]
+        binding = project_registry.binding_entity(project["planning_binding"])
         if binding is not None:
             try:
                 space = planning_space_ref(binding)

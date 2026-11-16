@@ -64,7 +64,8 @@ def _resources(routing: PlanningRouting) -> list[tuple[str, dict]]:
         if binding is None:
             continue
         try:
-            result.append((project["project_id"], planning_space_ref(binding)))
+            entity = project_registry.binding_entity(binding)
+            result.append((project["project_id"], planning_space_ref(entity)))
         except (ContractError, KeyError, TypeError) as error:
             raise api.PlanningHttpError(409, "unavailable", "planning_binding_invalid") from error
     return sorted(
@@ -268,7 +269,7 @@ def existing_references(
         return set()
     scopes_of_key: dict[str, set[str]] = {}
     for project in registry["projects"]:
-        binding = project.get("planning_binding")
+        binding = project_registry.binding_entity(project.get("planning_binding"))
         if binding is not None:
             space_ref = planning_space_ref(binding)
             scopes_of_key.setdefault(space_ref["space_key"], set()).add(space_ref["data_scope_id"])

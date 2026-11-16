@@ -5,7 +5,7 @@ A request names a project and a planning space by its exact identity --
 registry binds that project to that space and the store holding the space is
 present: the primary store, or an attached store opened read-only. Nothing
 here falls back to the primary store or to a key-only lookup: two stores can
-each keep an `AW`, and a key alone says nothing between them.
+each keep a `MAIN`, and a key alone says nothing between them.
 
 A `PlanningRouting` is built per request from the project registry and the
 stores as they are at that moment, and it only reads. Answering a GET through
@@ -122,7 +122,7 @@ class PlanningRouting:
         # to pass the same boundary check every other entity ref does.
         for project in self.projects:
             if project["planning_binding"] is not None:
-                validate_entity_ref(project["planning_binding"])
+                validate_entity_ref(project_registry.binding_entity(project["planning_binding"]))
         self._stores = self._present_stores()
 
     def _present_stores(self) -> dict[str, list[dict]]:
@@ -167,7 +167,9 @@ class PlanningRouting:
         """
 
         owners = [
-            item["project_id"] for item in self.projects if item["planning_binding"] == resource_ref
+            item["project_id"]
+            for item in self.projects
+            if project_registry.binding_entity(item["planning_binding"]) == resource_ref
         ]
         if not owners:
             return "unbound", "No owner Project binding"
@@ -212,7 +214,7 @@ class PlanningRouting:
         """One project as the shell lists it: its binding and how that binding stands."""
 
         resources = []
-        resource_ref = project["planning_binding"]
+        resource_ref = project_registry.binding_entity(project["planning_binding"])
         if resource_ref is not None:
             state, reason = self.resolve(project["project_id"], resource_ref)
             entry = {"resource_ref": resource_ref, "state": state}
