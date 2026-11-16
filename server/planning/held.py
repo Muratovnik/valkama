@@ -9,8 +9,9 @@ A claim counts while its lease has not lapsed, read as the work-item read reads
 its `claim_state` (`leases`): a `stale` lease is nobody's work any more, though
 nothing has released it yet. A step records no call of its own, so it lapses
 with the session that holds it, by the same rule, read from that session's
-newest confirmed call. An item in a terminal state holds nothing: closing
-releases every claim on it.
+newest confirmed call (`leases.of_step`). An open question to the owner on the
+item stops the count of silence for both. An item in a terminal state holds
+nothing: closing releases every claim on it.
 
 Read-only: nothing here writes, releases or expires anything.
 """
@@ -19,7 +20,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import acknowledgements, calls, leases, model, questions, read_model, states, subscriptions
+from . import acknowledgements, leases, model, questions, read_model, states, subscriptions
 
 CLAIM = "claim"
 STEP = "step"
@@ -31,9 +32,6 @@ _OPEN_ITEMS = (
     " JOIN workflow_states s ON s.state_id = w.state_id"
     " WHERE s.is_terminal = 0 AND (instr(w.claim_ref, ?) > 0 OR instr(w.checklist, ?) > 0)"
     " ORDER BY w.updated_at DESC, w.work_item_id"
-)
-_NEWEST_CALL = leases.CALL + (
-    " WHERE c.session_id = ? AND c.identity_state = ? ORDER BY c.id DESC LIMIT 1"
 )
 
 
@@ -52,17 +50,12 @@ def held_by_session(conn: sqlite3.Connection, session: object) -> dict:
     # The SQL finds every candidate; the label rule decides, because a suffix
     # inside a step's text or a done step's holder is not a hold.
     rows = conn.execute(_OPEN_ITEMS, (suffix, suffix)).fetchall()
-    standing: bool | None = None
     items = []
     for row in rows:
         lease = leases.lease(conn, row) if subscriptions.holds_claim(row, suffix) else None
         if lease is not None and lease.state != leases.STALE:
             held_as = CLAIM
-        elif subscriptions.holds_step(row, suffix):
-            if standing is None:
-                standing = _stands(conn, session)
-            if not standing:
-                continue
+        elif _holds_standing_step(conn, row, suffix):
             held_as = STEP
         else:
             continue
@@ -70,11 +63,14 @@ def held_by_session(conn: sqlite3.Connection, session: object) -> dict:
     return {"session": session, "items": items}
 
 
-def _stands(conn: sqlite3.Connection, session: str) -> bool:
-    """Whether a claim this session took now would not read `stale`."""
+def _holds_standing_step(conn: sqlite3.Connection, row: sqlite3.Row, suffix: str) -> bool:
+    """Whether an open step of the item is held under `suffix` by a lease not gone stale."""
 
-    call = conn.execute(_NEWEST_CALL, (session, calls.CONFIRMED)).fetchone()
-    return leases.of_call("", call).state != leases.STALE
+    for step in model.checklist(row["checklist"]):
+        holder = str(step["claimed_by"] or "")
+        if not step["done"] and holder.endswith(suffix):
+            return leases.of_step(conn, row, holder).state != leases.STALE
+    return False
 
 
 def _item(conn: sqlite3.Connection, row: sqlite3.Row, held_as: str) -> dict:

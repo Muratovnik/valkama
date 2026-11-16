@@ -458,7 +458,9 @@ TOOLS = [
         " began, waits_for the open items blocking it, workable whether its space's queue"
         " may give it now and withheld why not: container, not_ready, held, waits,"
         " question, no_start, ancestor_triage, ancestor_deferred, ancestor_waits or"
-        " ancestor_closed.",
+        " ancestor_closed. claim.expires_at is when the claim lapses if its session stays"
+        " silent, or, for a claim no session proved, the owner's own included, if the item"
+        " stays quiet; null while an open question to the owner stops that count.",
         READ_ONLY,
         {
             "id": WORK_ITEM_REFERENCE,

@@ -511,12 +511,14 @@ its duplicate with its own history intact
 A claim also says whether anyone is still behind it. When the client proves its
 session, the claim is a lease on that session: `live` while the session is
 active and has shown a sign of life — a hook event or a Valkama write — in the
-last 14 days, `stale` once it ended or went quiet, and `unconfirmed` when no
+last 3 days, `stale` once it ended or went quiet, and `unconfirmed` when no
 session was proved, which is also how every older claim and every claim made in
-the browser reads. Another session needs `force` to take a live claim, even when
+the browser reads. An `unconfirmed` claim lapses after 3 days without an event
+on the item, the owner's own included. An open question to the owner on the item
+stops both counts. Another session needs `force` to take a live claim, even when
 it signs with the same author. A stale claim is released by whoever meets it
 next, and taking it over needs no `force`; the history shows the expiry as a
-`released` event by `valkama`. The board marks stale claims, and the inspector
+`released` event by `valkama`, and the claimed steps of that session go with it. The board marks stale claims, and the inspector
 shows the lease and when it expires. The exact rules are in
 [the connection contract](docs/connection-contract.md#claims-are-leases).
 

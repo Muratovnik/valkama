@@ -193,7 +193,7 @@ def drain_spool(conn: sqlite3.Connection, *, seconds: float | None = None) -> in
 
 
 def expire_leases(conn: sqlite3.Connection) -> int:
-    """Release every stale lease past its grace, in one transaction; how many were released."""
+    """Release every lapsed claim and step hold, in one transaction; on how many items."""
 
     conn.execute("BEGIN IMMEDIATE")
     try:

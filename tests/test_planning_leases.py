@@ -13,6 +13,11 @@ quiet for longer than the lease period, reads `stale`; anything else is `live`.
 A stale lease is not always released yet. An ended session has twelve hours to
 come back, and until then only a caller who asks for that item takes it: the
 start-up sweep and the take-next queue leave it alone.
+
+The terms the tests hold the code to are the contract's, spelled out here: three
+days of silence, twelve hours after an end, three days without an event on the
+item for a hold no session proved, and no count of silence while an open
+question to the owner stands on the item.
 """
 
 from __future__ import annotations
@@ -34,12 +39,13 @@ from unittest import mock
 from server import housekeeping, http_surface, mcp_surface, store
 from server.hooks import ingest, normalize
 from server.ops import tray
-from server.planning import leases, service, views
+from server.planning import leases, requests, service, views
 
 PROTOCOL = {"io.modelcontextprotocol/protocolVersion": mcp_surface.MODERN_PROTOCOL}
 ONE = "019a3c2e-0001-7c11-9e0f-2f4b6d8a1c3e"
 TWO = "019a3c2e-0002-7c11-9e0f-2f4b6d8a1c3e"
 THREAD = "019a3c2e-0003-7c11-9e0f-2f4b6d8a1c3e"
+THREE = "019a3c2e-0004-7c11-9e0f-2f4b6d8a1c3e"
 SECOND = "%Y-%m-%dT%H:%M:%SZ"
 
 
@@ -262,7 +268,7 @@ class LeaseStateTests(LeaseTestCase):
         self.assertEqual("codex-meta", lease["source"])
         seen = datetime.strptime(lease["last_seen"], SECOND).replace(tzinfo=UTC)
         self.assertEqual(
-            seen + timedelta(days=14),
+            seen + timedelta(days=3),
             datetime.strptime(lease["expires_at"], SECOND).replace(tzinfo=UTC),
         )
         self.assertTrue(lease["acquired_at"])
@@ -292,9 +298,9 @@ class LeaseStateTests(LeaseTestCase):
         self.assertEqual("stale", self.item()["claim_state"])
         self.assertIsNone(self.item()["claim"]["last_seen"])
 
-    def test_the_lease_lapses_after_exactly_fourteen_days_without_a_sign_of_life(self) -> None:
+    def test_the_lease_lapses_after_exactly_three_days_without_a_sign_of_life(self) -> None:
         now = datetime(2026, 10, 31, 12, 0, 0, tzinfo=UTC)
-        boundary = now - timedelta(days=14)
+        boundary = now - timedelta(days=3)
         with mock.patch.object(leases, "utc_now", return_value=now):
             self.set_session(ONE, last_seen=boundary.strftime(SECOND))
             self.assertEqual("live", self.item()["claim_state"])
@@ -737,7 +743,7 @@ class ExpiryReasonTests(HookedLeaseTestCase):
         super().setUp()
         self.claim(codex(ONE), author="codex")
 
-    def test_fourteen_quiet_days_keep_the_reason_they_always_had(self) -> None:
+    def test_quiet_days_keep_the_reason_they_always_had(self) -> None:
         self.age(ONE, 20)
         self.mcp("list_work_items", {"space": "LSE"})
         self.assertEqual("", self.item()["claim_ref"])
@@ -923,15 +929,16 @@ class AbandonedClaimTests(LeaseTestCase):
         self.conn.commit()
         self.assertEqual([(self.reference, "unconfirmed")], self.abandoned())
 
-    def test_the_owners_own_claim_is_never_called_abandoned(self) -> None:
+    def test_the_owners_own_claim_is_called_abandoned_when_quiet_too(self) -> None:
         status, _ = self.http(
             self.listener(), "POST", "/api/planning/work-item/claim", {"id": self.reference}
         )
         self.assertEqual(200, status)
+        self.assertEqual([], self.abandoned())
         self.conn.execute("UPDATE work_item_events SET created_at = '2020-01-01T00:00:00Z'")
         self.conn.execute("UPDATE work_items SET updated_at = '2020-01-01T00:00:00Z'")
         self.conn.commit()
-        self.assertEqual([], self.abandoned())
+        self.assertEqual([(self.reference, "unconfirmed")], self.abandoned())
 
 
 class ExecutorGuardTests(LeaseTestCase):
@@ -968,6 +975,289 @@ class ExecutorGuardTests(LeaseTestCase):
             [f"{self.reference} starts under a stale claim by {held(ONE)}: its session is gone"],
             self.start(),
         )
+
+
+#: The contract's terms, spelled out: what the sweep tests hold the code to.
+QUIET = timedelta(days=3)
+MINUTE = timedelta(minutes=1)
+FIELD = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
+
+
+class SweepTestCase(LeaseTestCase):
+    """Holds on items, a clock, and the sweep as `service.expire_leases` runs it.
+
+    Every call goes through a loop that is already running (`started`), so the
+    sweep under test is the only one.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        service.set_checklist(self.conn, self.reference, ["one", "two", "three"])
+        self.conn.commit()
+        self.now = datetime.now(UTC).replace(microsecond=0) + timedelta(seconds=1)
+
+    def at_now(self) -> mock._patch:
+        return mock.patch.object(leases, "utc_now", return_value=self.now)
+
+    def sweep(self) -> int:
+        with self.at_now():
+            released = service.expire_leases(self.conn)
+        self.conn.commit()
+        return released
+
+    def read(self, reference: str | None = None) -> dict:
+        with self.at_now():
+            return service.get_work_item(self.conn, reference or self.reference)
+
+    def new_item(self, title: str) -> str:
+        reference = str(service.create_work_item(self.conn, space="LSE", title=title)["reference"])
+        self.conn.commit()
+        return reference
+
+    def take(self, meta: dict | None, reference: str | None = None) -> None:
+        answer = self.mcp(
+            "claim_work_item",
+            {"id": reference or self.reference, "author": "old"},
+            meta,
+            started=True,
+        )
+        self.assertNotIn("error", answer)
+
+    def take_step(self, meta: dict | None, index: int, reference: str | None = None) -> None:
+        reference = reference or self.reference
+        step = service.get_work_item(self.conn, reference)["checklist"][index]
+        answer = self.mcp(
+            "claim_work_item_checklist_item",
+            {"id": reference, "item_id": step["id"], "author": "old"},
+            meta,
+            started=True,
+        )
+        self.assertNotIn("error", answer)
+
+    def silent(self, session: str, quiet: timedelta) -> None:
+        self.set_session(session, last_seen=(self.now - quiet).strftime(SECOND))
+
+    def ended(self, session: str, ago: timedelta) -> None:
+        self.set_session(session, status="ended", ended_at=(self.now - ago).strftime(SECOND))
+
+    def quiet_item(self, reference: str, quiet: timedelta) -> None:
+        """Date every event of the item, and its last write, `quiet` before the clock."""
+
+        identity = service.get_work_item(self.conn, reference)["work_item_id"]
+        moment = (self.now - quiet).strftime(SECOND)
+        self.conn.execute(
+            "UPDATE work_item_events SET created_at = ? WHERE work_item_id = ?", (moment, identity)
+        )
+        self.conn.execute(
+            "UPDATE work_items SET updated_at = ? WHERE work_item_id = ?", (moment, identity)
+        )
+        self.conn.commit()
+
+    def ask(self, reference: str | None = None) -> None:
+        requests.create(
+            self.conn, reference or self.reference, kind="question", prompt="Which?", fields=[FIELD]
+        )
+        self.conn.commit()
+
+    def holders(self, reference: str | None = None) -> tuple[str, list[str], str]:
+        """Who holds the item, who holds each of its steps, and its state."""
+
+        item = self.read(reference)
+        return (
+            item["claim_ref"],
+            [step["claimed_by"] for step in item["checklist"]],
+            item["state"]["key"],
+        )
+
+    def by_valkama(self, reference: str | None = None) -> list[tuple[str, str]]:
+        """What Valkama itself wrote: its releases and the moves they made."""
+
+        return [
+            (event["action"], event["detail"])
+            for event in self.read(reference)["events"]
+            if event["author"] == "valkama"
+        ]
+
+
+class SilenceTests(SweepTestCase):
+    """The terms of a lease, read by the sweep."""
+
+    def test_an_end_within_its_grace_waits_and_a_claim_by_number_takes_it_now(self) -> None:
+        self.take(codex(ONE))
+        self.ended(ONE, timedelta(hours=11, minutes=59))
+        self.assertEqual(0, self.sweep())
+        self.assertEqual((held(ONE), ["", "", ""], "dev"), self.holders())
+        with self.at_now():
+            taken = self.claim(codex(TWO), author="codex", started=True)
+        self.assertEqual(held(TWO), taken["claim_ref"])
+        self.assertEqual(("released", f"session-ended: {held(ONE)}"), self.by_valkama()[0])
+
+    def test_three_days_and_a_minute_of_silence_lapse_and_a_minute_less_does_not(self) -> None:
+        other = self.new_item("Still here")
+        self.take(codex(ONE))
+        self.take(codex(TWO), other)
+        self.silent(ONE, QUIET + MINUTE)
+        self.silent(TWO, QUIET - MINUTE)
+        self.assertEqual(1, self.sweep())
+        self.assertEqual(("", ["", "", ""], "ready"), self.holders())
+        self.assertEqual(
+            [("released", f"lease-expired: {held(ONE)}"), ("transitioned", "ready: lease-expired")],
+            self.by_valkama(),
+        )
+        self.assertEqual((held(TWO), [], "dev"), self.holders(other))
+        self.assertEqual("live", self.read(other)["claim_state"])
+        self.assertEqual([], self.by_valkama(other))
+
+    def test_an_open_question_stops_the_silence_and_an_end_still_counts(self) -> None:
+        elsewhere = self.new_item("No question here")
+        self.take(codex(ONE))
+        self.take(codex(ONE), elsewhere)
+        self.ask()
+        self.silent(ONE, timedelta(days=4))
+        # The pause is the item's: the same session loses the item nobody asked about.
+        self.assertEqual(1, self.sweep())
+        self.assertEqual("", self.read(elsewhere)["claim_ref"])
+        lease = self.read()["claim"]
+        self.assertEqual((held(ONE), "live"), (lease["holder"], lease["state"]))
+        self.assertIsNone(lease["expires_at"])
+        self.assertEqual([], self.by_valkama())
+
+        self.ended(ONE, timedelta(hours=12, minutes=1))
+        self.assertEqual(1, self.sweep())
+        self.assertEqual(("", ["", "", ""], "ready"), self.holders())
+        self.assertEqual(("released", f"session-ended: {held(ONE)}"), self.by_valkama()[0])
+
+
+class StepHoldTests(SweepTestCase):
+    """A lease is the session's, and its steps lapse with it."""
+
+    def test_an_item_held_only_by_steps_goes_back_to_the_queue_started(self) -> None:
+        self.take_step(codex(ONE), 0)
+        self.take_step(codex(ONE), 1)
+        self.assertEqual(("", [held(ONE), held(ONE), ""], "dev"), self.holders())
+        self.silent(ONE, QUIET + MINUTE)
+        self.assertEqual(1, self.sweep())
+        self.assertEqual(("", ["", "", ""], "ready"), self.holders())
+        self.assertIsNotNone(self.read()["started_at"])
+        self.assertEqual(
+            [
+                ("checklist_released", "one"),
+                ("checklist_released", "two"),
+                ("transitioned", "ready: lease-expired"),
+            ],
+            self.by_valkama(),
+        )
+
+    def test_a_live_step_of_another_session_keeps_the_item_at_work(self) -> None:
+        self.take(codex(ONE))
+        self.take_step(codex(TWO), 1)
+        self.silent(ONE, timedelta(days=4))
+        self.assertEqual(1, self.sweep())
+        self.assertEqual(("", ["", held(TWO), ""], "dev"), self.holders())
+        self.assertEqual([("released", f"lease-expired: {held(ONE)}")], self.by_valkama())
+
+    def test_a_question_keeps_every_hold_until_a_holder_ends(self) -> None:
+        self.take(codex(ONE))
+        self.take_step(codex(TWO), 1)
+        self.ask()
+        self.silent(ONE, timedelta(days=4))
+        self.silent(TWO, timedelta(days=4))
+        self.assertEqual(0, self.sweep())
+        self.assertEqual((held(ONE), ["", held(TWO), ""], "dev"), self.holders())
+
+        self.ended(TWO, timedelta(hours=12, minutes=1))
+        self.assertEqual(1, self.sweep())
+        self.assertEqual((held(ONE), ["", "", ""], "dev"), self.holders())
+        self.assertEqual([("checklist_released", "two")], self.by_valkama())
+
+    def test_a_claim_by_number_releases_the_steps_of_the_lease_it_releases(self) -> None:
+        self.take(codex(ONE))
+        self.take_step(codex(ONE), 0)
+        self.take_step(codex(TWO), 1)
+        self.ended(ONE, timedelta(hours=1))
+        with self.at_now():
+            taken = self.claim(codex(THREE), author="codex", started=True)
+        self.assertEqual(held(THREE), taken["claim_ref"])
+        self.assertEqual((held(THREE), ["", held(TWO), ""], "dev"), self.holders())
+        self.assertEqual(
+            [("released", f"session-ended: {held(ONE)}"), ("checklist_released", "one")],
+            self.by_valkama(),
+        )
+
+
+class UnprovedHoldTests(SweepTestCase):
+    """A hold no session proved ages with its item, the owner's own as well."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.server = self.listener()
+
+    def browser_claim(self, reference: str, **payload: str) -> None:
+        status, answer = self.http(
+            self.server, "POST", "/api/planning/work-item/claim", {"id": reference, **payload}
+        )
+        self.assertEqual(200, status, answer)
+
+    def test_every_hold_no_session_proved_lapses_after_three_quiet_days(self) -> None:
+        agent = self.reference
+        owner, runner, recent, steps = (
+            self.new_item(title) for title in ("Owner", "Runner", "Recent", "Steps")
+        )
+        service.set_checklist(self.conn, steps, ["only"])
+        self.conn.commit()
+        self.take(None, agent)
+        self.browser_claim(owner)
+        self.browser_claim(runner, author="codex:executor")
+        self.browser_claim(recent)
+        self.take_step(None, 0, steps)
+        self.assertEqual(
+            ["old", "user", "codex:executor", "user", ""],
+            [self.read(ref)["claim_ref"] for ref in (agent, owner, runner, recent, steps)],
+        )
+        for reference in (agent, owner, runner, steps):
+            self.quiet_item(reference, QUIET + MINUTE)
+        self.quiet_item(recent, QUIET - MINUTE)
+
+        self.assertEqual(4, self.sweep())
+
+        for reference in (agent, owner, runner, steps):
+            item = self.read(reference)
+            self.assertEqual(
+                ("", "ready", [""] * len(item["checklist"])),
+                (
+                    item["claim_ref"],
+                    item["state"]["key"],
+                    [step["claimed_by"] for step in item["checklist"]],
+                ),
+                reference,
+            )
+            self.assertIsNotNone(item["started_at"], reference)
+        released = [e for e in self.read(owner)["events"] if e["action"] == "released"]
+        self.assertEqual(
+            [("lease-expired: user", "valkama", "valkama")],
+            [(e["detail"], e["author"], e["identity"]["source"]) for e in released],
+        )
+        self.assertEqual(("checklist_released", "only"), self.by_valkama(steps)[0])
+        kept = self.read(recent)["claim"]
+        self.assertEqual(("user", "unconfirmed"), (kept["holder"], kept["state"]))
+        self.assertEqual((self.now + MINUTE).strftime(SECOND), kept["expires_at"])
+
+    def test_an_open_question_stops_the_quiet_of_a_hold_no_session_proved(self) -> None:
+        self.browser_claim(self.reference)
+        self.ask()
+        self.quiet_item(self.reference, timedelta(days=4))
+        self.assertEqual(0, self.sweep())
+        lease = self.read()["claim"]
+        self.assertEqual(("user", "unconfirmed"), (lease["holder"], lease["state"]))
+        self.assertIsNone(lease["expires_at"])
+
+    def test_a_claim_by_number_takes_a_lapsed_unproved_claim_without_force(self) -> None:
+        self.take(None)
+        self.quiet_item(self.reference, QUIET + MINUTE)
+        with self.at_now():
+            taken = self.claim(codex(TWO), author="codex", started=True)
+        self.assertEqual(held(TWO), taken["claim_ref"])
+        self.assertEqual(("released", "lease-expired: old"), self.by_valkama()[0])
 
 
 if __name__ == "__main__":

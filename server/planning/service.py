@@ -1134,8 +1134,9 @@ def claim_work_item(
 ) -> dict:
     """Take, release or take over an item, deciding who holds it from its lease.
 
-    A stale lease is released before anything else, so taking it over needs no
-    `force` and the history shows the expiry and the claim as two events. The
+    An abandoned lease (`leases.abandoned`) is released before anything else,
+    with the steps its holder held and every lapsed one, so taking it over needs
+    no `force` and the history shows the expiry and the claim as two events. The
     one exception is the holding session itself: it is still the holder, and
     its own call has just counted as its heartbeat.
 
@@ -1158,12 +1159,8 @@ def claim_work_item(
     caller = calls.current()
     lease = leases.lease(conn, row)
     expired = False
-    if (
-        lease is not None
-        and lease.state == leases.STALE
-        and not leases.held_by(lease, caller, actor)
-    ):
-        row = _expire(conn, row, lease)
+    if lease is not None and leases.abandoned(lease) and not leases.held_by(lease, caller, actor):
+        row = _expire(conn, row, lease, _lapsed_steps(conn, row, lease))
         lease, expired = None, True
     held = lease.holder if lease is not None else ""
     holder = lease is not None and leases.held_by(lease, caller, actor)
@@ -1428,40 +1425,88 @@ def _claim_lost(conn: sqlite3.Connection, row: sqlite3.Row, actor: str) -> dict:
 
 
 def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> int:
-    """Release every stale lease past its grace, in one space or all; how many were released.
+    """Release every lapsed hold, in one space or all; on how many items it released one.
 
-    Only a lease a confirmed session holds can lapse: an unconfirmed claim has
-    no session to go quiet. A lease in its grace waits for its session to come
-    back, since nobody asked for that item in particular. A lease another writer
-    changed in the meantime is left to it.
+    A hold is an item's claim or a claimed step of it, and each lapses by its
+    lease (`leases.lapsed`): a session's after its silence or past the grace of
+    its end, one no session proved after its item's quiet. An open question to
+    the owner on the item stops the count of silence for every hold there. A
+    lease in its grace waits for its session to come back, since nobody asked
+    for that item in particular. An item another writer changed in the meantime
+    is left to it.
     """
 
     clauses = [
-        "i.claim_ref != ''",
-        "c.identity_state = 'confirmed'",
-        "COALESCE(c.session_id, '') != ''",
+        "s.is_terminal = 0",
+        "(i.claim_ref != '' OR EXISTS (SELECT 1 FROM json_each(i.checklist) j"
+        " WHERE json_extract(j.value, '$.claimed_by') != ''))",
     ]
     parameters: list[object] = []
     if space_id is not None:
         clauses.append("i.planning_space_id = ?")
         parameters.append(space_id)
     query = with_clauses(
-        "SELECT i.* FROM work_items i JOIN execution_events c ON c.id = i.claim_call_id", clauses
+        "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
     expired = 0
     for row in conn.execute(query + " ORDER BY i.number", parameters).fetchall():
-        lease = leases.lease(conn, row)
-        if lease is None or lease.state != leases.STALE or lease.in_grace:
+        asked = leases.question_stands(conn, row)
+        lease = leases.lease(conn, row, asked=asked)
+        claim = lease if lease is not None and leases.lapsed(lease) else None
+        steps = _lapsed_steps(conn, row, claim, asked=asked)
+        if claim is None and not steps:
             continue
-        if _strands(conn, row, "", row["checklist"]):
-            # Its release would leave it at work unheld: the lease stays until it moves.
+        left = model.checklist(row["checklist"])
+        for step in left:
+            if step["id"] in steps:
+                step["claimed_by"] = ""
+        if _strands(conn, row, "" if claim is not None else str(row["claim_ref"]), left):
+            # Its release would leave it at work unheld: the hold stays until it moves.
             continue
         try:
-            _expire(conn, row, lease)
+            _expire(conn, row, claim, steps)
         except model.RevisionConflictError:
             continue
         expired += 1
     return expired
+
+
+def _lapsed_steps(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    claim: leases.Lease | None,
+    *,
+    asked: bool | None = None,
+) -> dict[str, leases.Lease]:
+    """The claimed steps of the item to release, by step id, each with its lease.
+
+    A lapsed one, and, beside a claim being released, every step of the same
+    holder: the lease is the session's, so what lapses for its claim lapses for
+    its steps.
+    """
+
+    if asked is None:
+        asked = leases.question_stands(conn, row)
+    found: dict[str, leases.Lease] = {}
+    read: dict[str, leases.Lease] = {}
+    for step in model.checklist(row["checklist"]):
+        holder = str(step["claimed_by"] or "")
+        if step["done"] or not holder:
+            continue
+        if holder not in read:
+            read[holder] = leases.of_step(conn, row, holder, asked=asked)
+        held = read[holder]
+        if leases.lapsed(held) or (claim is not None and _same_holder(held, claim)):
+            found[str(step["id"])] = held
+    return found
+
+
+def _same_holder(step: leases.Lease, claim: leases.Lease) -> bool:
+    """Whether a step stands on the lease of the claim: its session, or its unproved name."""
+
+    if claim.session_id is not None:
+        return step.session_id == claim.session_id
+    return step.state == leases.UNCONFIRMED and step.holder == claim.holder
 
 
 def _strands(conn: sqlite3.Connection, row: sqlite3.Row, claim_ref: str, checklist: object) -> bool:
@@ -1488,19 +1533,40 @@ def _keep_held(
         raise _stranded(conn, row)
 
 
-def _expire(conn: sqlite3.Connection, row: sqlite3.Row, lease: leases.Lease) -> sqlite3.Row:
-    """Release a stale lease as a write of Valkama's own, and return the row after it.
+def _expire(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    claim: leases.Lease | None,
+    steps: Mapping[str, leases.Lease],
+) -> sqlite3.Row:
+    """Release lapsed holds as one write of Valkama's own, and return the row after it.
 
-    The release is its own call, so the history says who released it and why
-    rather than charging the expiry to whichever caller happened to meet it. The
-    why is the lease's own reason, in the release and in the move back to the queue.
+    `claim` is the item's lease to release, or None to keep it; `steps` the
+    claimed steps to release, by id. The only path an expiry takes, for the
+    sweep, the take-next queue and a claim by number alike. The release is its
+    own call, so the history says who released it and why rather than charging
+    the expiry to whichever caller happened to meet it: `released` with the
+    claim's reason and holder, `checklist_released` with each step's text. The
+    why of the move back to the queue is the claim's reason, else a step's.
     """
 
     identity = str(row["work_item_id"])
+    checklist = model.checklist(row["checklist"])
+    released = [step for step in checklist if step["id"] in steps]
+    for step in released:
+        step["claimed_by"] = ""
+    updates: list[str] = ["checklist = ?"] if released else []
+    parameters: list[object] = [model.dumps(checklist)] if released else []
+    reason = claim.reason if claim is not None else next(iter(steps.values())).reason
     with calls.bind(calls.valkama(), leases.EXPIRY_TOOL):
-        _hold(conn, row, "")
-        _log(conn, identity, "released", leases.expiry_detail(lease), leases.EXPIRY_AUTHOR)
-        _hand_back(conn, identity, leases.EXPIRY_AUTHOR, lease.reason)
+        if claim is not None:
+            _hold(conn, row, "", updates, parameters)
+            _log(conn, identity, "released", leases.expiry_detail(claim), leases.EXPIRY_AUTHOR)
+        else:
+            _write(conn, row, updates, parameters)
+        for step in released:
+            _log(conn, identity, "checklist_released", step["text"][:120], leases.EXPIRY_AUTHOR)
+        _hand_back(conn, identity, leases.EXPIRY_AUTHOR, reason)
     return read_model.item_by_id(conn, identity)
 
 
@@ -2015,8 +2081,8 @@ def _merge_claims(
     """The claims of other sessions a merge would override, by item id.
 
     Moving steps into an item someone else holds changes their work, and closing
-    an item someone else holds ends it, so either needs `force`. A stale lease
-    is nobody's work any more and does not stand in the way.
+    an item someone else holds ends it, so either needs `force`. An abandoned
+    lease (`leases.abandoned`) is nobody's work any more and does not stand in the way.
     """
 
     actor = model.actor(author)
@@ -2024,7 +2090,7 @@ def _merge_claims(
     overridden: dict[str, str] = {}
     for row in rows:
         lease = leases.lease(conn, row)
-        if lease is None or lease.state == leases.STALE or leases.held_by(lease, caller, actor):
+        if lease is None or leases.abandoned(lease) or leases.held_by(lease, caller, actor):
             continue
         if not force:
             raise model.PlanningError(

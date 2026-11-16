@@ -66,12 +66,12 @@ The holder is the session your client proved, written as
 for your call, and the holder only when no session is confirmed. Sign every
 call with the same `author`.
 
-A claim is a lease. It reads `live` while its session is active, `stale` once
-the session ended or was quiet for 14 days, and `unconfirmed` when no session
-was proved. A stale claim is taken over without `force`; a live one is
-someone's work, so take it over only on an instruction that says so. A session
-that ended keeps its claims for 12 hours: resuming it makes them `live` again,
-and `claim_ready_work_item` does not hand them out until then.
+A claim is a lease: `live` while its session is active, `stale` once it ended
+or was quiet 3 days, `unconfirmed` when no session was proved, lapsing after 3
+days without an event on the item. An open question to the owner there stops
+the count; your steps lapse with your claim. Take a stale claim over without
+`force`, a live one only on an instruction that says so. An ended session keeps
+its claims 12 hours: resuming makes them `live`, and the queue leaves them.
 `release: true` gives an item back and returns it from the active state to a
 ready one, unless a checklist step of it is still claimed; a blocked one stays.
 With no ready state to return to, the release is refused: move the item first.

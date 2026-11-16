@@ -354,17 +354,17 @@ _SCOPE = (
     " AND {stands}) GROUP BY work_item_id ORDER BY MAX(id) DESC LIMIT {most}"
 )
 #: Whether the recipient's session still stands behind what it subscribed, by the rule a
-#: claim lapses by (`planning.leases`): a row, not failed, seen within the lease period,
-#: or ended within its grace. Every row of the recipient is its own session's, so one
+#: claim lapses by (`planning.leases`) with a subscription's own silence: a row, not
+#: failed, seen within `planning.subscriptions.QUIET_PERIOD`, or ended within its grace. Every row of the recipient is its own session's, so one
 #: test of that session answers for all of them, inside the queries the hook makes anyway.
 _STANDS = (
     "EXISTS (SELECT 1 FROM sessions v WHERE v.id = ? AND ((v.status NOT IN ('ended', 'failed')"
     " AND substr(v.last_seen, 1, 19) >= ?) OR (v.status = 'ended'"
     " AND substr(v.ended_at, 1, 19) > ?)))"
 )
-#: `leases.LEASE_PERIOD` and `leases.ENDED_GRACE` in seconds, held equal by a test: the
-#: hook does not import the planning package to read two numbers.
-LEASE_SECONDS = 14 * 24 * 3600
+#: `subscriptions.QUIET_PERIOD` and `leases.ENDED_GRACE` in seconds, held equal by a test:
+#: the hook does not import the planning package to read two numbers.
+SUBSCRIPTION_QUIET_SECONDS = 14 * 24 * 3600
 ENDED_GRACE_SECONDS = 12 * 3600
 _ITEMS = (
     "SELECT w.work_item_id, s.key, w.number, w.title, w.claim_ref, w.checklist, w.revision,"
@@ -428,7 +428,7 @@ def _in_scope(
     now = time.time()
     stands = (
         session_id,
-        time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now - LEASE_SECONDS)),
+        time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now - SUBSCRIPTION_QUIET_SECONDS)),
         time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now - ENDED_GRACE_SECONDS)),
     )
     parameters = (

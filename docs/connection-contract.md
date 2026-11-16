@@ -1825,7 +1825,9 @@ A subscription is not a change to the item: no history event, no revision, and
 nobody is told of it. Its call is recorded, naming the item, as every write's is.
 It lapses with its session by the rule a [claim](#claims-are-leases) lapses by:
 its session has no row, failed, ended more than 12 hours ago or has not been seen
-for 14 days. A lapsed subscription or mute reads as gone at once, to the card and
+for 14 days. That silence is a subscription's own and longer than a lease's three
+days: a subscription left over costs a row and a name among the subscribers, while
+one lost leaves a session deaf to the owner's answer it still waits for. A lapsed subscription or mute reads as gone at once, to the card and
 to the hook alike, and the sweep that releases lapsed claims when a server starts
 removes it; a session that comes back within its grace finds it standing. A merge
 gives the survivor the subscriptions of the items merged into it, keeping the
@@ -2222,11 +2224,22 @@ and never written by one:
 | --- | --- |
 | nobody holds the item | `null` |
 | the claim names no call, the call is not `confirmed`, or it has no session | `unconfirmed` |
-| the session has no row, is `ended` or `failed`, or was last seen more than 14 days ago | `stale` |
+| the session has no row, is `ended` or `failed`, or was last seen more than 3 days ago | `stale` |
 | otherwise | `live` |
 
 A claim made before calls were recorded, by a build that does not record them,
 or in the browser reads `unconfirmed`: none of them names a session.
+
+An open question to the owner on the item stops the count of silence: the holder
+waits for the owner rather than having left the work. The pause is the item's,
+so it covers its claim and every claimed step on it, whoever holds them, and no
+other item the same session holds. An end or a missing session row still
+counts, and a question addressed to a session does not stop anything.
+
+A lease is the session's, not the record's. A claimed step records no call of its
+own: it stands on the session its holder names, read from that session's newest
+confirmed call, and lapses with it. When a session's lease lapses, its claim and
+its claimed steps on the item are released together.
 
 `stale` says nobody is working the item now, not that the claim is gone. A
 session that ended may come back: a client restart ends the session and resumes
@@ -2247,10 +2260,13 @@ has a `failed` one, which only a session start reopens.
 
 `holder` is `claim_ref`. `acquired_at` is when the claiming call arrived and is
 `null` for a claim that names no call; `last_seen` is the session's, and
-`expires_at` is `last_seen` plus 14 days while the lease is `live`, `null`
-otherwise. It answers how long a session that shows no sign of life keeps a live
-lease, and promises nothing about a session that ends: from that moment the lease
-is `stale`, `expires_at` is `null`, and the grace above applies. `claim` is
+`expires_at` is `last_seen` plus 3 days while the lease is `live`, and for an
+`unconfirmed` claim the item's last history event (its `updated_at` when it has
+none) plus 3 days; `null` while an open question to the owner stops the count,
+and for a `stale` lease. It answers how long a session that shows no sign of
+life keeps a live lease, and promises nothing about a session that ends: from
+that moment the lease is `stale`, `expires_at` is `null`, and the grace above
+applies. `claim` is
 `null` when nobody holds the item. `claim_state` stands beside `claim_ref` in the
 full record, an item of an HTTP list, a compact row of `list_work_items` and
 `search_work_items`, an HTTP chain member, a row of `open_members`, a row of
@@ -2313,13 +2329,14 @@ Who may release or take over a claim follows the lease:
 - Any other call needs `force` against a `live` lease, including a call from
   another session that signs with the same `author`, and a call with no
   confirmed session at all.
-- `claim_work_item` on an item under a `stale` lease releases it before it does
-  anything else, in the grace or not: whoever asks for that item takes it now,
-  without `force`, and the session that comes back later finds it taken. Its
-  history reads `released` and then `claimed`.
+- `claim_work_item` on an item under a `stale` lease, or an `unconfirmed` claim
+  past its 3 days, releases it before it does anything else, in the grace or
+  not, with the steps the same session holds there: whoever asks for that item
+  takes it now, without `force`, and the session that comes back later finds it
+  taken. Its history reads `released` and then `claimed`.
   `claim_work_item` with `release` on a stale lease stops after that release.
-- `claim_ready_work_item` first releases every stale lease in its space that is
-  past its grace. It neither gives nor releases an item whose lease is in the
+- `claim_ready_work_item` first releases every lapsed hold in its space, as the
+  sweep below does. It neither gives nor releases an item whose lease is in the
   grace, because nobody asked for that item in particular.
 - A task in an active state whose workflow lets it reach no `ready` state keeps
   its stale lease: releasing it would leave work with no holder, so every sweep
@@ -2328,28 +2345,33 @@ Who may release or take over a claim follows the lease:
 - The release is a `released` event with the detail `<reason>: <holder>`, written
   by Valkama under its own call; an item it leaves unheld in an active state is
   put back in the queue under the same call, as any release does (see
-  [A claim starts the work](#a-claim-starts-the-work)). The reason names what
-  happened to the session:
+  [A claim starts the work](#a-claim-starts-the-work)). A released step is a
+  `checklist_released` event with the step's text under the same call. The
+  reason names what happened to the session:
 
   | Reason | The session |
   | --- | --- |
   | `session-ended` | ended or failed |
   | `session-missing` | has no row |
-  | `lease-expired` | was last seen more than 14 days ago |
+  | `lease-expired` | was last seen more than 3 days ago, or, for a claim or step no session proved, the item had no event for 3 days |
 
   Releases written before the reasons were told apart say `lease-expired`,
   whatever the cause, and stay as they were written.
 - An `unconfirmed` claim is compared by `author`, as every claim was before
-  leases, and never expires by itself.
+  leases. It has no session to go quiet, so it lapses when its item has had no
+  history event for 3 days, and so does a step whose holder no session proved.
+  The owner's own claim made in the browser lapses the same way, as does a claim
+  a launch took for its runner. It reads `unconfirmed` until the release.
 
-An MCP server and `serve` also release every stale lease past its grace once
-when they start. A grace is over at exactly 12 hours after `ended_at`, so a start
-at that second releases the lease.
+An MCP server and `serve` also release every lapsed hold once when they start:
+each claim and claimed step whose stale lease is past its grace, or whose
+`unconfirmed` hold is past its 3 days. A grace is over at exactly 12 hours after
+`ended_at`, so a start at that second releases the lease.
 
 The space's list of abandoned claims (`stale_claims` in the read model) holds
-every `stale` lease, in its grace or not, and every `unconfirmed` claim with no
-event for three days, except the owner's own claim made in the browser. A claim a
-launch took for its runner is listed like any other.
+every claim of an item at work or blocked whose lease is `stale`, in its grace or
+not, and every `unconfirmed` claim whose 3 days without an event are over, until
+a release takes it away.
 
 A claim still counts as the executor that starting an item requires. Starting
 an item under an `unconfirmed` or a `stale` claim answers with a warning, not a

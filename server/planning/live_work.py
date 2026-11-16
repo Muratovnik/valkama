@@ -13,7 +13,7 @@ An item takes its state from the sessions behind it:
 
 | A session behind the item, checked in order | The item's state |
 |---|---|
-| not `active`, no row, or `last_seen` older than `leases.LEASE_PERIOD` | none |
+| not `active`, no row, or `last_seen` older than `leases.QUIET_PERIOD` | none |
 | `last_seen` older than `LIVE_QUIET` | `quiet`, with `quiet_since` |
 | at work in a turn of its own, and this is the item it stands on | `working` |
 | at work, and a live subagent of it wrote to this item since that subagent last started | `working` |
@@ -524,7 +524,7 @@ def _states(
             continue
         transcripts[str(row["id"])] = str(row["transcript_path"] or "")
         seen = leases.moment(row["last_seen"])
-        if row["status"] != "active" or seen is None or seen < now - leases.LEASE_PERIOD:
+        if row["status"] != "active" or seen is None or seen < now - leases.QUIET_PERIOD:
             continue
         if seen < now - LIVE_QUIET:
             live[str(row["id"])] = {"state": QUIET, "quiet_since": seen.strftime(_STAMP)}

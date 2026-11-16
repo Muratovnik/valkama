@@ -15,18 +15,27 @@ subagent and its orchestrator, and the interface, which proves no session, canno
 write one. It is not a change to the item: no event, no revision, nothing anybody
 is told; the call has its row, naming the item, as every write's does.
 
-It lapses with its session, by the rule a claim lapses by (`leases`): a session
-gone without a row, failed, ended longer ago than `leases.ENDED_GRACE`, or silent
-for `leases.LEASE_PERIOD`. A lapsed one is read as gone at once and removed by the
-start-up sweep that releases lapsed claims; a session coming back within its
-grace finds it standing, as it finds its claims.
+It lapses with its session, by the rule a claim lapses by (`leases`) but with a
+silence of its own: a session gone without a row, failed, ended longer ago than
+`leases.ENDED_GRACE`, or silent for `QUIET_PERIOD`. That is longer than a lease's,
+because the costs differ: a subscription left over costs a row and a name among
+the subscribers, while one lost leaves a session deaf to the owner's answer it
+still waits for; a lease holds work away from other sessions. A lapsed one is
+read as gone at once and removed by the start-up sweep that releases lapsed
+claims; a session coming back within its grace finds it standing, as it finds
+its claims.
 """
 
 from __future__ import annotations
 
 import sqlite3
+from datetime import timedelta
 
 from . import calls, leases, model
+
+#: How long a session may stay silent before what it follows lapses. The hook's
+#: `notify.SUBSCRIPTION_QUIET_SECONDS` is the same number, held equal by a test.
+QUIET_PERIOD = timedelta(days=14)
 
 #: What `subscribe` says the session now does about the item.
 FOLLOWING = "following"
@@ -205,5 +214,5 @@ def carry(conn: sqlite3.Connection, merged_id: str, survivor_id: str) -> None:
 def _lapsed(row: sqlite3.Row) -> bool:
     """Whether a claim the same call took would be released now: stale past its grace."""
 
-    found = leases.of_call("", row)
+    found = leases.of_call("", row, quiet=QUIET_PERIOD)
     return found.state != leases.LIVE and not found.in_grace

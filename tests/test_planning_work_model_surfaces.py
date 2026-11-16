@@ -39,6 +39,7 @@ import tempfile
 import unittest
 import uuid
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -51,6 +52,7 @@ from server.planning import (
     exact_api,
     held,
     item_tree,
+    leases,
     live_frame,
     person_events,
     service,
@@ -446,6 +448,14 @@ PLACES: tuple[tuple[str, str, str, str], ...] = (
 _WITHHELD_CODE = re.compile(r"\.withheld\[\d+\]$")
 
 
+def _every_stale_claim(conn: sqlite3.Connection) -> list[dict]:
+    """The abandoned claims of the space a decade on, when every claim in it has lapsed."""
+
+    later = datetime.now(UTC) + timedelta(days=3650)
+    with mock.patch.object(leases, "utc_now", return_value=later):
+        return views.stale_claims(conn, space=KEY)
+
+
 def _walk(value: object, path: str = "") -> Iterator[tuple[str, object]]:
     yield path, value
     if isinstance(value, dict):
@@ -778,7 +788,7 @@ class Surfaces(unittest.TestCase):
             outside: dict[str, object] = {
                 "graph": graph,
                 "mermaid": views.graph_mermaid(graph),
-                "stale claims": views.stale_claims(conn, space=KEY, days=0),
+                "stale claims": _every_stale_claim(conn),
                 "export": export.export_installation(conn),
                 "federated search": federation.federated_search("item"),
             }
@@ -910,7 +920,7 @@ class Surfaces(unittest.TestCase):
             released.released_items(
                 conn, space=KEY, repository=self.repository, revisions="start..main"
             )
-            views.stale_claims(conn, space=KEY, days=0)
+            _every_stale_claim(conn)
             service.merge_work_items(conn, self.refs["y"], [self.refs["u"]])
         builders = {
             f"{module}.{name}"

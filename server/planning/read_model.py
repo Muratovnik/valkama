@@ -755,10 +755,6 @@ def present(
     # answer the same question the same way. The Board era left it to each view,
     # and they disagreed about a held item and about a container.
     identity = str(row["work_item_id"])
-    # Read, never written: a stale lease stays on the record until a write
-    # meets it, and the state says so rather than hiding it.
-    lease = leases.lease(conn, row)
-    record["claim_state"] = lease.state if lease is not None else None
     # A read of many items hands over every closing it loaded at once.
     record["closed_at"], record["last_claim_ref"] = (
         closing(conn, row, bool(state["is_terminal"]))
@@ -766,6 +762,18 @@ def present(
         else closed.get(identity, (None, None))
     )
     facts = tree if tree is not None else item_tree.of_item(conn, row, str(state["category"]))
+    # Read, never written: a stale lease stays on the record until a write
+    # meets it, and the state says so rather than hiding it. An open question
+    # to the owner stops its count; the tree has read the questions already.
+    asked = (
+        facts.question(identity) if facts.asked is not None and identity in facts.nodes else None
+    )
+    lease = leases.lease(conn, row, asked=asked) if full else None
+    record["claim_state"] = (
+        (lease.state if lease is not None else None)
+        if full
+        else leases.state(conn, row, asked=asked)
+    )
     record["container_state"] = facts.container_state(identity)
     record["started_at"] = facts.started_at(identity)
     record["waits_for"] = facts.waits_for(identity)

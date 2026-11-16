@@ -538,10 +538,14 @@ class LapseTests(Harness):
         self.assertIn("marker LP-1", orchestrator)
         self.assertEqual([CHILD], [entry["agent"] for entry in self.listed])
 
-    def test_the_hook_reads_the_lease_periods_the_planning_rule_has(self) -> None:
-        from server.planning import leases
+    def test_the_hook_reads_the_periods_the_planning_rule_has(self) -> None:
+        from server.planning import leases, subscriptions
 
-        self.assertEqual(leases.LEASE_PERIOD.total_seconds(), notify.LEASE_SECONDS)
+        # A subscription keeps its own silence, not a lease's: the hook reads that one.
+        self.assertEqual(
+            subscriptions.QUIET_PERIOD.total_seconds(), notify.SUBSCRIPTION_QUIET_SECONDS
+        )
+        self.assertNotEqual(leases.QUIET_PERIOD, subscriptions.QUIET_PERIOD)
         self.assertEqual(leases.ENDED_GRACE.total_seconds(), notify.ENDED_GRACE_SECONDS)
 
 

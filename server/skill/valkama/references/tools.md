@@ -246,15 +246,19 @@ the refusal names what they did. A `comment` sent in the same
 ## Claims
 
 A claim is a lease on the session that took it: `live` while that session is
-active and showed a sign of life in the last 14 days, `stale` once it ended or
-went quiet, `unconfirmed` when no session was proved. `claim_work_item` releases
-a stale claim at once, and taking it over needs no `force`; a live or unconfirmed
-claim held by another needs `force`. Everything else leaves the claim of an ended
+active and showed a sign of life in the last 3 days, `stale` once it ended or
+went quiet, `unconfirmed` when no session was proved. An unconfirmed claim, the
+owner's own from the browser included, lapses after 3 days without an event on
+the item. An open question to the owner on the item stops the count of silence
+for every hold on it; an end still counts. A session's claimed steps lapse with
+its lease. `claim_work_item` releases a stale or lapsed claim at once, and taking
+it over needs no `force`; a live or unconfirmed claim held by another needs
+`force`. Everything else leaves the claim of an ended
 session alone for 12 hours after its end, so a resumed session reads `live` again
 with its claims in place: until then `claim_ready_work_item` does not hand the
 item out and a server start does not release it. The history names why a claim
 was released: `session-ended`, `session-missing` or `lease-expired`, the last for
-14 quiet days. `release: true` requeues an item that was
+3 quiet days. `release: true` requeues an item that was
 in its active state unless one of its steps is still claimed. A task at work stands
 held: with no ready state to requeue it in, a release, the tick or release of its
 last held step and a takeover of its stale claim are refused, and its lapsed lease
