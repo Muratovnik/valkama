@@ -18,7 +18,7 @@ export interface Arrival {
   on: string
 }
 
-interface Watched {
+export interface Watched {
   arrivals: Arrival[]
   changes: Frame[]
   hintLog: Frame[]

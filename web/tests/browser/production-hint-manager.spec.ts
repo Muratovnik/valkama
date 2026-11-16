@@ -25,6 +25,7 @@ import {
   settledHint,
 } from './dayHintPage.ts'
 import { boxOf, hint, pass, quietPoint, watched, watchHints } from './hintFramesPage.ts'
+import type { Watched } from './hintFramesPage.ts'
 import { test } from './test.ts'
 
 /** The copy-number button of an open item drawer, with the pointer resting away from it. */
