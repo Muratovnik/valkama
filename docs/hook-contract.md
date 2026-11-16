@@ -1022,6 +1022,12 @@ holds nothing. The hook prints nothing then and exits 0.
 
 The note is a stage of its own: the lifecycle event of the start is recorded in
 every case, and a note that fails is reported on stderr and costs nothing else.
+The start is recorded first and the note read after it. A normal exit ends the
+session, and the claims and steps of an ended session read `stale`; the resume
+makes the session active again, so the note it gets names what the session
+holds. When the store cannot take the start and it waits in the spool, the note
+reads the session as it was before the start: a session that ended gets no note
+then.
 
 ### What it reads
 

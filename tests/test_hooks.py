@@ -1123,6 +1123,61 @@ class SessionStartNoteProcessTests(SessionStartNoteCase):
                 self.assertIn(f"- {self.reference} «Held over a compaction», Dev.", text)
                 self.assertEqual(number, self.starts_recorded())
 
+    def end(self, client: str, session: str = NOTE_SESSION) -> None:
+        """The session end every normal exit fires before a later `--resume`."""
+
+        payload = {"session_id": session, "hook_event_name": "SessionEnd", "reason": "other"}
+        done = subprocess.run(
+            [sys.executable, os.path.join(ROOT, "valkama.py"), "hook", client, "session-end"],
+            input=json.dumps(payload).encode(),
+            capture_output=True,
+            env={**os.environ},
+            timeout=60,
+            check=False,
+        )
+        self.assertEqual((0, b"", b""), (done.returncode, done.stdout, done.stderr))
+
+    def test_a_session_that_ended_is_told_at_its_first_resume(self) -> None:
+        # Besides the claim, the session holds a step of another item, by its own call.
+        meta = {"sessionId": NOTE_SESSION, "threadId": NOTE_SESSION}
+        stepped = str(
+            service.create_work_item(self.conn, space="NT", title="Held by a step")["reference"]
+        )
+        applied = mcp_surface.call_tool(
+            self.conn,
+            "apply_work_item_changes",
+            {"id": stepped, "checklist": {"items": ["First step", "Second step"]}},
+            meta=meta,
+        )
+        step = applied["applied"]["checklist"][0]["item_id"]
+        mcp_surface.call_tool(
+            self.conn, "claim_work_item_checklist_item", {"id": stepped, "item_id": step}, meta=meta
+        )
+        self.conn.commit()
+        for client in ("claude", "codex"):
+            with self.subTest(client=client):
+                self.end(client)
+                # The end leaves the session `ended`, so its lease reads stale until it is back.
+                self.assertEqual("ended", self.session(NOTE_SESSION)["status"])
+                done = self.hook(client, self.start("resume"))
+                self.assertEqual((0, b""), (done.returncode, done.stderr))
+                self.assertNotEqual(b"", done.stdout, "the first resume after an end is told")
+                text = json.loads(done.stdout)["hookSpecificOutput"]["additionalContext"]
+                self.assertIn("this session holds 2 open items:", text)
+                self.assertIn(f"- {self.reference} «Held over a compaction», Dev.", text)
+                self.assertIn(f"- {stepped} «Held by a step»", text)
+                self.assertIn("held by a condition. Next condition 0/2: «First step».", text)
+                self.assertEqual("active", self.session(NOTE_SESSION)["status"])
+
+    def test_a_session_that_ended_holding_nothing_is_not_told_at_its_resume(self) -> None:
+        for client in ("claude", "codex"):
+            with self.subTest(client=client):
+                self.end(client, session="holds-nothing")
+                self.assertEqual("ended", self.session("holds-nothing")["status"])
+                done = self.hook(client, self.start("resume", session="holds-nothing"))
+                self.assertEqual((0, b"", b""), (done.returncode, done.stdout, done.stderr))
+                self.assertEqual("active", self.session("holds-nothing")["status"])
+
     def test_only_a_start_that_gets_a_note_loads_what_the_note_reads(self) -> None:
         script = (
             "import io, json, sys\n"

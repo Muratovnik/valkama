@@ -114,22 +114,43 @@ def _run(arguments: list[str], stdin: BinaryIO, stdout: BinaryIO) -> int:
     # event, and a session end must stop its watcher whatever the store says.
     if event == "session-end" and payload is not None and client == "claude":
         _stage(notify.session_ended, payload)
-    answer = None
+    if event == SESSION_START:
+        _session_start(client, payload, stdout)
+        return 0
     if event in notify.DELIVERY_EVENTS.get(client, {}) and payload is not None:
-        answer = _stage(notify.deliver, client, event, payload)
-    elif event == SESSION_START and client in notify.DELIVERY_EVENTS and payload is not None:
-        from . import held_note
-
-        answer = _stage(held_note.answer, payload)
-    if answer is not None:
-        stdout.write(answer)
-        stdout.flush()
+        _write(stdout, _stage(notify.deliver, client, event, payload))
     if event == "post-tool-use" and (
         client != "claude" or payload is None or payload.get("tool_name") not in _AGENT_TOOLS
     ):
         return 0  # only the Agent tool's answer is a lifecycle event
     _lifecycle(client, event, payload)
     return 0
+
+
+def _session_start(client: str, payload: dict | None, stdout: BinaryIO) -> None:
+    """Record the start, then answer it with the note of the work the session holds.
+
+    The start goes first because a resume is how an ended session comes back.
+    Every normal exit ends the session, and the leases of an ended session read
+    `stale`, so a note read before the start is recorded would tell the resumed
+    session it holds nothing. Recorded, the start makes the session active, and
+    the note reads its holds as any read after the start does. A start the store
+    cannot take now waits in the spool and does not count yet.
+    """
+
+    from . import notify
+
+    _stage(_lifecycle, client, SESSION_START, payload)
+    if client in notify.DELIVERY_EVENTS and payload is not None:
+        from . import held_note
+
+        _write(stdout, _stage(held_note.answer, payload))
+
+
+def _write(stdout: BinaryIO, answer: bytes | None) -> None:
+    if answer is not None:
+        stdout.write(answer)
+        stdout.flush()
 
 
 def _stage(action: Callable[..., T], *arguments: object) -> T | None:
