@@ -15,7 +15,7 @@ from unittest import mock
 
 from server import cli, store
 from server.planning import service as planning_service
-from server.projects import project_registry, registry_owner
+from server.projects import project_registry, registry_owner, scopes
 from server.store_identity import metadata as store_metadata
 from server.store_identity.refs import planning_space_entity
 
@@ -69,6 +69,7 @@ class RegistryOwnerTests(unittest.TestCase):
         self.project.mkdir()
         self.inventory = self.directory / "project-registry.toml"
         self.target = self.directory / "projects.json"
+        self.primary_db = self.directory / "valkama.sqlite3"
         self.entry = {
             "project_id": "example",
             "display_name": "Example",
@@ -94,6 +95,9 @@ class RegistryOwnerTests(unittest.TestCase):
         return registry_owner.update(
             self.inventory, self.target, bind=(project_id, _space(key), default)
         )
+
+    def _check(self) -> dict:
+        return registry_owner.check(self.inventory, self.target, self.primary_db)
 
     def _bindings(self) -> dict[str, tuple[str, bool] | None]:
         listing = project_registry.parse_registry(self.target.read_bytes())
@@ -135,7 +139,7 @@ class RegistryOwnerTests(unittest.TestCase):
         self.assertEqual(4, written["schema_version"])
         self.assertEqual([self.entry], written["projects"])
         self.assertTrue(self.inventory.read_bytes().startswith(b"schema_version = 2\n"))
-        self.assertTrue(registry_owner.check(self.inventory, self.target)["ok"])
+        self.assertTrue(self._check()["ok"])
         self.assertTrue(registry_owner.rollback(self.inventory, self.target))
         self.assertFalse(self.inventory.exists())
         self.assertFalse(self.target.exists())
@@ -181,7 +185,7 @@ class RegistryOwnerTests(unittest.TestCase):
     def test_an_inventory_of_format_1_is_refused_naming_upgrade(self) -> None:
         self._former([self.entry])
         for call in (
-            lambda: registry_owner.check(self.inventory, self.target),
+            lambda: self._check(),
             lambda: registry_owner.update(self.inventory, self.target, remove="example"),
         ):
             with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "projects upgrade"):
@@ -316,6 +320,47 @@ class RegistryOwnerTests(unittest.TestCase):
         self.assertEqual({"example": ("ALPHA", True)}, self._bindings())
         self.assertEqual(before, database.read_bytes())
 
+    def test_check_names_a_binding_to_a_store_that_is_neither_main_nor_attached(self) -> None:
+        work = self.directory / "work.sqlite3"
+        scope_of: dict[str, str] = {}
+        for database in (self.primary_db, work):
+            with mock.patch.dict(os.environ, {"VALKAMA_DB": str(database)}):
+                connection = store.connect()
+                try:
+                    scope_of[database.name] = store_metadata.read_store_metadata(connection)[
+                        "data_scope_id"
+                    ]
+                finally:
+                    connection.close()
+        scopes.attach(str(self.primary_db), "work", str(work))
+        scopes.attach(str(self.primary_db), "lost", str(self.directory / "lost.sqlite3"))
+        stray = "9b1c3f0e-6d2a-4e8b-8f57-2c4a1d0e7b93"
+        bound = {
+            "example": (scope_of[self.primary_db.name], "EX"),
+            "worker": (scope_of[work.name], "WK"),
+            "stray": (stray, "ZZ"),
+        }
+        for project_id, (scope, key) in bound.items():
+            self._add(project_id)
+            registry_owner.update(
+                self.inventory,
+                self.target,
+                bind=(
+                    project_id,
+                    planning_space_entity({"data_scope_id": scope, "space_key": key}),
+                    True,
+                ),
+            )
+
+        check = self._check()
+
+        self.assertTrue(check["ok"])
+        self.assertEqual(
+            [{"project_id": "stray", "space_key": "ZZ", "data_scope_id": stray}],
+            check["foreign_bindings"],
+        )
+        self.assertEqual(1, check["unreadable_stores"])
+
     # Upgrade, downgrade and rollback across the change of format.
 
     def test_upgrade_carries_format_3_to_4_once_and_downgrade_returns_its_bytes(self) -> None:
@@ -329,8 +374,22 @@ class RegistryOwnerTests(unittest.TestCase):
         self.assertTrue(registry_owner.upgrade(self.inventory, self.target))
         self.assertEqual({"example": None, "second": ("EX", True)}, self._bindings())
         self.assertEqual(
-            {"bytes_match": True, "ok": True, "planning_bindings": 1, "projects": 2},
-            registry_owner.check(self.inventory, self.target),
+            {
+                "bytes_match": True,
+                # No store holds the scope this binding names: none was written here.
+                "foreign_bindings": [
+                    {
+                        "project_id": "second",
+                        "space_key": "EX",
+                        "data_scope_id": SCOPE,
+                    }
+                ],
+                "ok": True,
+                "planning_bindings": 1,
+                "projects": 2,
+                "unreadable_stores": 1,
+            },
+            self._check(),
         )
         snapshot = registry_owner.upgrade_path(self.target)
         kept = json.loads(snapshot.read_bytes())
@@ -408,7 +467,7 @@ class RegistryOwnerTests(unittest.TestCase):
         self.assertTrue(self.inventory.read_bytes().startswith(b"schema_version = 2\n"))
         self.assertEqual(4, json.loads(self.target.read_bytes())["schema_version"])
         self.assertEqual({"example": ("EX", True)}, self._bindings())
-        self.assertTrue(registry_owner.check(self.inventory, self.target)["bytes_match"])
+        self.assertTrue(self._check()["bytes_match"])
 
         imported = self._state()
         self.assertFalse(registry_owner.import_inventory(self.inventory, self.target, source))
@@ -494,7 +553,7 @@ class RegistryOwnerTests(unittest.TestCase):
         self.assertTrue(registry_owner.update(self.inventory, self.target, remove="example"))
         self.assertEqual([], json.loads(self.target.read_bytes())["projects"])
         self.assertEqual([], registry_owner.parse_inventory(self.inventory.read_bytes()))
-        self.assertTrue(registry_owner.check(self.inventory, self.target)["ok"])
+        self.assertTrue(self._check()["ok"])
 
     def test_new_root_must_exist_without_creating_inventory(self) -> None:
         invalid = dict(self.entry, canonical_root=str(self.directory / "missing"))

@@ -31,7 +31,7 @@ from typing import Any
 
 from ..store_identity.primitives import ContractError
 from ..store_identity.refs import planning_space_ref
-from . import project_registry
+from . import project_registry, scopes
 
 SCHEMA_VERSION = 2
 FORMER_SCHEMA_VERSION = 1
@@ -730,7 +730,7 @@ def update(
         )
 
 
-def check(inventory: Path, target: Path) -> dict[str, Any]:
+def check(inventory: Path, target: Path, primary_db: str) -> dict[str, Any]:
     for path in (inventory, target):
         _safe_path(path)
     raw = _read(inventory)
@@ -742,11 +742,16 @@ def check(inventory: Path, target: Path) -> dict[str, Any]:
     if _read(inventory) != raw or _read(target) != current:
         raise RegistryOwnerError("inventory or projection changed during check")
     semantic_match = existing == projects
+    known, unreadable = scopes.data_scope_ids(primary_db)
     return {
         "ok": semantic_match,
         "projects": len(projects),
         "planning_bindings": sum(entry["planning_binding"] is not None for entry in projects),
         "bytes_match": current == render_projection(projects),
+        # Reported, not refused: the registry is consistent, but a binding names a store
+        # this machine does not hold, so no planning read can answer for that project.
+        "foreign_bindings": project_registry.foreign_bindings(projects, known),
+        "unreadable_stores": unreadable,
     }
 
 

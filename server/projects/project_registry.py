@@ -196,6 +196,37 @@ def binding_entity(binding: Mapping[str, Any] | None) -> dict[str, str] | None:
     return {"kind": str(binding["kind"]), "resource_id": str(binding["resource_id"])}
 
 
+def foreign_bindings(
+    projects: Iterable[Mapping[str, Any]], known: frozenset[str]
+) -> list[dict[str, Any]]:
+    """Each binding whose planning space lives in none of the `known` stores, by project and space.
+
+    A binding whose identity does not decode names no store at all, so it is reported with
+    a null store identity rather than dropped.
+    """
+
+    foreign: list[dict[str, Any]] = []
+    for project in projects:
+        binding = project.get("planning_binding")
+        if binding is None:
+            continue
+        try:
+            space: dict[str, Any] | None = planning_space_ref(binding_entity(binding))
+        except ContractError:
+            space = None
+        data_scope_id = space["data_scope_id"] if space is not None else None
+        if data_scope_id in known:
+            continue
+        foreign.append(
+            {
+                "project_id": project["project_id"],
+                "space_key": space["space_key"] if space is not None else None,
+                "data_scope_id": data_scope_id,
+            }
+        )
+    return foreign
+
+
 def project_holding(folder: str, projects: Iterable[Mapping[str, Any]]) -> str | None:
     """The id of the project whose root holds this folder, the deepest root first.
 

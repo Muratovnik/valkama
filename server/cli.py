@@ -464,7 +464,7 @@ def _projects_main(options: argparse.Namespace) -> None:
             raw = inventory.read_bytes()
             payload = {"projects": registry_owner.parse_inventory(raw)}
         elif command in {"check", "doctor"}:
-            payload = registry_owner.check(inventory, target)
+            payload = registry_owner.check(inventory, target, db_path())
         elif command == "rollback":
             payload = {"changed": registry_owner.rollback(inventory, target)}
         elif command == "upgrade":

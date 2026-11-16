@@ -14,6 +14,45 @@ from tests.registry_fixtures import project_entry, registry_bytes, registry_read
 
 
 class ProjectRegistryTests(unittest.TestCase):
+    def test_foreign_bindings_name_the_space_a_store_is_missing_for(self) -> None:
+        known_scope = "22222222-2222-4222-8222-222222222222"
+        known_space = planning_space_entity({"data_scope_id": known_scope, "space_key": "EX"})
+        projects = [
+            {"project_id": "free", "planning_binding": None},
+            {"project_id": "known", "planning_binding": {**known_space, "default": True}},
+            {
+                "project_id": "garbled",
+                "planning_binding": {
+                    "kind": "planning-space",
+                    "resource_id": "not-a-space",
+                    "default": True,
+                },
+            },
+            {
+                "project_id": "stray",
+                "planning_binding": {
+                    **planning_space_entity(
+                        {
+                            "data_scope_id": "9b1c3f0e-6d2a-4e8b-8f57-2c4a1d0e7b93",
+                            "space_key": "ZZ",
+                        }
+                    ),
+                    "default": True,
+                },
+            },
+        ]
+        self.assertEqual(
+            [
+                {"project_id": "garbled", "space_key": None, "data_scope_id": None},
+                {
+                    "project_id": "stray",
+                    "space_key": "ZZ",
+                    "data_scope_id": "9b1c3f0e-6d2a-4e8b-8f57-2c4a1d0e7b93",
+                },
+            ],
+            project_registry.foreign_bindings(projects, frozenset({known_scope})),
+        )
+
     def test_default_path_is_the_single_valkama_registry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.dict(
