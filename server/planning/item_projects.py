@@ -177,14 +177,15 @@ def of_items(conn: sqlite3.Connection, rows: Iterable[sqlite3.Row]) -> dict[str,
 
     identities = [str(row["work_item_id"]) for row in rows]
     found: dict[str, dict[str, str]] = {identity: {} for identity in identities}
-    if (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'work_item_projects'"
-        ).fetchone()
-        is None
-    ):
+    # Asked for directly rather than probed first: a probe is one more statement on
+    # every read, and the read's statement count is bounded.
+    try:
+        held_rows = conn.execute(_UNDER, (json.dumps(identities),)).fetchall()
+    except sqlite3.OperationalError as error:
+        if not str(error).startswith("no such table: work_item_projects"):
+            raise
         return {identity: [] for identity in identities}
-    for root, project, source in conn.execute(_UNDER, (json.dumps(identities),)):
+    for root, project, source in held_rows:
         held = found[str(root)]
         held[str(project)] = strongest(str(source), held.get(str(project), str(source)))
     names: dict[str, str] = {}

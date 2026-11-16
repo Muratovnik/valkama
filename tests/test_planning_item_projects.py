@@ -140,6 +140,14 @@ class WriteAndReadTests(ItemProjectsCase):
     def test_a_task_that_names_none_reads_an_empty_set(self) -> None:
         self.assertEqual([], self.card(self.task("No project"))["projects"])
 
+    def test_a_store_an_earlier_build_wrote_reads_no_projects(self) -> None:
+        # Such a store, attached as it is, has no table of projects at all.
+        reference = self.task("Older", projects=["valkama"])
+        self.conn.execute("DROP TABLE work_item_projects")
+        self.assertEqual([], self.card(reference)["projects"])
+        listed = service.list_work_items(self.conn, space=SPACE)
+        self.assertEqual([[]], [item["projects"] for item in listed])
+
     def test_an_edit_replaces_the_set_and_names_each_project_it_keeps(self) -> None:
         reference = self.task("Edited", projects=["valkama"])
         self.give(reference, "valkama", "commits")
