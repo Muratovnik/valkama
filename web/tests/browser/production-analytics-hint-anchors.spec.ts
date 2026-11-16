@@ -73,7 +73,9 @@ test('at 390px, a button the short bar leaves its icon names itself under it', a
     await rest(page, button)
     await expect(page.locator('.whole-text'), `${control}: no words laid over it`).toHaveCount(0)
     const hint = page.locator('.tooltip-hint')
-    await expect(hint.locator('[role="tooltip"]'), control).toHaveText(said?.trim() ?? '')
+    // The hint is its own tooltip and says the button's words once.
+    await expect(hint, control).toHaveAttribute('role', 'tooltip')
+    await expect(hint, control).toHaveText(said?.trim() ?? '')
     const [own, shown] = await Promise.all([boxOf(button), boxOf(hint)])
     expect(overlaps(own, shown), `${control}: over its own button`).toBe(false)
     expect(shown.top, `${control}: under it`).toBeGreaterThanOrEqual(own.bottom)
