@@ -63,6 +63,7 @@ test.beforeEach(async ({ page }) => {
               },
               parent_id: null,
               labels: [],
+              projects: [],
               source: '',
               open: true,
               container_state: null,
