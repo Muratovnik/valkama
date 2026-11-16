@@ -12,8 +12,9 @@ A machine may carry a local overlay as `AGENTS.local.md`. It is not tracked
 here, it never contradicts this file, and its absence changes nothing: this file
 is complete on its own.
 
-- Read `README.md` before changing a tool. `CONTRIBUTING.md` states the same
-  gates for a human contributor.
+- Read `README.md`, and the guide in `docs/guides/` for the tool, before
+  changing a tool. `CONTRIBUTING.md` states the same gates for a human
+  contributor.
 - `DESIGN.md` is about 100 KB: find the passage by its component, token or
   `**Label:**` and read that passage; read a whole section of it only when your
   change is to that section's rules.
@@ -133,10 +134,11 @@ and a source guard holds every decoding call to naming both.
 The top level is five owned directories, one entry point, and the configuration
 a repository root has to carry — `server/`, `web/`, `desktop/`, `windows/`,
 `tests/`, plus `docs/` and the `.agents/rules/` this file routes to.
-`README.md` states what each owns. A new file at the top level needs an argument
-for why it belongs to none of them; the usual answer is that it belongs to
-`windows/`, which holds what exists only because the host is Windows — the tray
-script, the icon, the generator that renders it, and the installer.
+`docs/guides/repository-layout.md` states what each owns. A new file at the
+top level needs an argument for why it belongs to none of them; the usual
+answer is that it belongs to `windows/`, which holds what exists only because
+the host is Windows — the tray script, the icon, the generator that renders it,
+and the installer.
 
 The server lives in `server/`, split into domain and surfaces. Domain modules
 answer questions about the store and know nothing about who asked: `store`,

@@ -1152,7 +1152,7 @@ anywhere. The kinds are a closed list:
 | `task_open` | a task opened from any of those |
 
 `POST /api/analytics/uses` counts one use, under the rules of every write from the page
-([local HTTP security](../README.md#local-http-security)): an allowed `Origin`
+([local HTTP security](guides/http-security.md#browser-writes-and-the-installation-token)): an allowed `Origin`
 (`origin_refused`, 403), `Sec-Fetch-Site: same-origin` (`fetch_metadata_refused`, 403)
 and the page's session credential in `X-Valkama-Session` (401 without it), with a JSON
 object for a body:
@@ -2043,7 +2043,7 @@ An event written before calls were recorded, or by the execution runner outside
 any call, has
 `{"state": "unconfirmed", "source": null, "session_id": null, "agent_id": null}`.
 A write from the browser UI is `confirmed` with source `browser` and no session;
-see [Local HTTP security](../README.md#local-http-security).
+see [Local HTTP security](guides/http-security.md#whose-write-it-is).
 
 `browser` means this and no more: the request carried the fetch metadata a
 browser sets on its own -- `Sec-Fetch-Site: same-origin` -- together with the
@@ -3377,5 +3377,5 @@ one open under `preschema14`). A store already at 15 opens without either. A
 build of the previous release, at schema 14, refuses a store at 15 with
 `StoreTooNew` and leaves it untouched rather than show cards it would refuse;
 going back to it means restoring the `preschema15` snapshot with its pictures
-(see [Migrating an older store](../README.md#migrating-an-older-store)), which
+(see [Restoring a snapshot](guides/store-upgrades.md#restoring-a-snapshot)), which
 loses everything written since.

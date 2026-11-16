@@ -31,6 +31,9 @@ cd web     && npm ci
 cd desktop && npm ci
 ```
 
+[Building and development](docs/guides/development.md) shows how to run the web UI
+and the desktop app from source and rebuild them.
+
 ## The gates
 
 Every change runs all of these, from the repository root. GitHub CI runs the
@@ -42,6 +45,7 @@ exercised.
 python -m ruff check .
 python -m ruff format --check .
 python tests/commit_subjects.py
+python .github/relkit.pyz audit --history
 typos
 vulture server tests valkama.py vulture_whitelist.py --min-confidence 60
 mypy
@@ -59,6 +63,9 @@ npm test
 
 The toolchain is pinned in `requirements-dev.txt` and configured in
 `pyproject.toml`. Do not loosen a pin to make a gate pass.
+
+An owner checkout additionally runs `python .github/relkit.pyz protect install`
+once and `python .github/relkit.pyz audit --history --owner` before publication.
 
 `tests/isolated.py` runs that list in one call, in a throwaway profile, so a run
 cannot write test projects or a store into your own. Run it with the virtual
