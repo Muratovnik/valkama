@@ -1,0 +1,1 @@
+import{Ir as e,Nr as t,mr as n,yr as r}from"./vendor-DE-gul6U.js";import{Ft as i}from"./SegmentedControl-cNcL7vkG.js";var a={class:`line-end`},o=i(r({__name:`LineEnd`,setup(r){return(r,i)=>(t(),n(`span`,a,[e(r.$slots,`default`,{},void 0,!0)]))}}),[[`__scopeId`,`data-v-226e8cfb`]]);export{o as t};
