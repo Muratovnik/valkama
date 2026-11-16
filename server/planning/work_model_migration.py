@@ -1832,8 +1832,8 @@ def _holds_indexes(conn: sqlite3.Connection, context: Context) -> Mapping[str, A
         found.append(f"{stale} index rows are stale")
     searched = _search(conn, oracle.search)
     for stem, before in oracle.search.items():
-        expected = before if before is None else sorted({*before, *oracle.search_added[stem]})
-        if searched.get(stem) != expected:
+        wanted = before if before is None else sorted({*before, *oracle.search_added[stem]})
+        if searched.get(stem) != wanted:
             found.append(f"a search for {stem!r} finds other items")
     _unmet(found, "indexes, triggers and search")
     return {"index_rows": rows, "searches_compared": len(oracle.search)}
