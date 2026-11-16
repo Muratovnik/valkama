@@ -5,7 +5,7 @@
  * (240 characters a state string) is refused with words under the filters and to a screen
  * reader, and the address, the reads and the values already chosen stay as they were.
  */
-import { flushPromises } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -53,6 +53,10 @@ afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
+// Registered after the restore, so it runs before it: a page left open reads again once its view
+// changes, and a read asked after the stand-in is gone goes to the DOM's own fetch, which the
+// environment aborts at teardown with a trace.
+enableAutoUnmount(afterEach)
 
 describe('the address of a view', () => {
   it('is one address for the values of a filter chosen in either order', async () => {
