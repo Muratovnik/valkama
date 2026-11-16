@@ -228,6 +228,8 @@ Steps of the same change stay on the checklist; a link is for separate work.
 then work already started, then tasks of a goal or stage already under way,
 then priority, then age. A list row the queue gives says its `queue_order`, 1
 being what `claim_ready_work_item` gives next; any other row says `withheld`.
+The queue is one space's: `space`, or that of `within`, a goal or stage whose
+work it keeps at any depth; `label` keeps the tasks carrying that label.
 
 **Priority.** `urgent`: blocks work or loses data. `high`: serious; could block
 work. `medium`: noticeably affects work, with a workaround. `low`: minor. A label
@@ -235,11 +237,8 @@ is not a scale. How much an item matters goes in priority; what comes next
 follows from it. Asked to rate work along something an item has no field for, ask
 the owner how it maps before writing it to many items.
 
-**Labels.** `labels` in an edit replaces the whole set. To add one, send
-`labels_add`; to take one off, `labels_remove`. Neither needs the labels the item
-already has. An edit that changes the set leaves a `labels_changed` event in the
-history with the set before and after, so who changed the labels and from what
-can be read back.
+**Labels.** `labels` replaces the whole set; `labels_add` and `labels_remove`
+change it: see [the tool reference](references/tools.md#creating-an-item).
 
 **Reading.** `get_work_item` returns the item with the 5 threads that saw the
 newest activity, its newest events and the sessions that wrote to it. Each root

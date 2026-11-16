@@ -633,12 +633,27 @@ TOOLS = [
         " state, unheld, with nothing unfinished blocking it and no open question to the"
         " owner, under no goal or stage that is in triage, deferred, closed or blocked."
         " Order: urgent first, then work already started, then tasks of a goal or stage"
-        " already under way, then by priority, oldest first. The claim starts the task as"
-        " claim_work_item does, so it answers in its active state with started."
-        " Answers with nothing when no task is workable; a record's withheld says why an"
-        " item is not given.",
+        " already under way, then by priority, oldest first. The queue is one space's:"
+        " space, else the space of within. within (a goal or stage, at any depth) and"
+        " label narrow it. A task of any space is claimed by number with claim_work_item."
+        " The claim starts the task as claim_work_item does. Answers with nothing when no"
+        " task is workable; a record's withheld says why an item is not given.",
         WRITES,
-        {"space": _SPACE, "author": _AUTHOR},
+        {
+            "space": _SPACE,
+            "within": {
+                "type": "string",
+                "description": "A goal or stage, by its reference (MAIN-142) or its"
+                " work_item_id: only the tasks under it, at any depth. Beside space it must"
+                " be of that space.",
+            },
+            "label": {
+                "type": "string",
+                "description": "Only the tasks that carry this label themselves, not through a"
+                " goal or stage over them.",
+            },
+            "author": _AUTHOR,
+        },
     ),
     _tool(
         "claim_work_item_checklist_item",

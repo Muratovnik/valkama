@@ -63,7 +63,11 @@ holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
 `claim_ready_work_item` takes the first workable task in the order of work —
 urgent, started, a goal or stage under way, priority, age — which a list row
 says as `queue_order`, and answers with the item it took, or nothing when no
-task is workable. A goal, a stage and work in triage or deferred are never
+task is workable. It reads one space's queue: `space`, or the space of
+`within`, a goal or stage whose tasks at any depth it keeps; `label` keeps the
+tasks that carry that label themselves. A call naming neither `space` nor
+`within` is refused with the spaces, as is `within` naming a task or a goal of
+another space than `space`; a task of any space is claimed by number. A goal, a stage and work in triage or deferred are never
 taken. Nothing sets the order by hand. A comment in `applied` has `comment_id`, and `reply_to` and
 `reply_to_request`: the root a reply joined, both null for a new root, and
 `list_request_id` when it carried a `list`, as the summary does. A comment or a

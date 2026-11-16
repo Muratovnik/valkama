@@ -398,6 +398,25 @@ parent, is `in_progress`; then by priority, `high`, `medium`, `low`; then the
 older by `created_at`. `claim_ready_work_item` gives the `workable` tasks in
 that order, the smaller number first on a tie.
 
+`claim_ready_work_item` and `POST /api/planning/work-item/claim-ready` read the
+queue of one space: `space`, else the space of `within`. `within` names a goal
+or stage, by reference or id, and keeps the tasks under it at any depth; without
+`space` it may name one of any space, and its space is the call's. `label` keeps
+the tasks that carry that label themselves, not through a goal or stage over
+them, and a label nothing carries keeps nothing. Both narrow the one queue
+without reordering it, and together a task must meet both. Each refusal is
+`invalid_request` and comes before anything is written, the release of lapsed
+leases included:
+
+| Input | Refusal |
+| --- | --- |
+| `within` names a task | `within names a goal or stage; MAIN-12 is a task` |
+| `within` of another space than `space` | `within MAIN-3 is in space MAIN, not OPS` |
+| neither `space` nor `within` | `name a space: no space's project root holds this session's folder; the spaces are MAIN, OPS` |
+
+A task of any space is claimed by number with `claim_work_item`, whatever the
+queue a session reads.
+
 Every read of many items stands on one total order: the state's place in its
 workflow, the key of work, the space's key, the number. `list_work_items` and its
 pages, `GET /api/planning/work-items`, the board's `GET /api/planning`, the

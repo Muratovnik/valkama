@@ -18,15 +18,20 @@ of their own.
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import mcp_surface, store
-from server.planning import chain, requests, service, views
+from server import mcp_surface, sessions, store
+from server.planning import api, chain, model, requests, service, views
+from server.projects import project_registry
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
 from tests.planning_tree import Tree
+from tests.registry_fixtures import project_entry, registry_bytes
 
 #: The one field of a question to the owner.
 FIELD = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
@@ -603,6 +608,192 @@ class OneReadTests(OrderCase):
             self.assertEqual(1, listed[tree.refs[name]], name)
             given.append(name)
         self.assertEqual(["c", "b", "e", "d"], given)
+
+
+class ScopeCase(OrderCase):
+    """What narrows one space's queue, read on trees built to tell a scope apart.
+
+    Each case puts the space's own first task outside the scope, so a queue that
+    ignored the scope would give that task instead, and orders the tasks inside
+    it against their numbers, so a scope read by number would give them wrongly.
+    """
+
+    def taken(self, tree: Tree, **scope: object) -> str | None:
+        answer = service.claim_ready_work_item(self.conn, author="agent", **scope)
+        if answer is None:
+            return None
+        return {reference: name for name, reference in tree.refs.items()}[answer["reference"]]
+
+    def holder(self, tree: Tree, name: str) -> str:
+        return str(service.get_work_item(self.conn, tree.refs[name])["claim_ref"])
+
+    def nested(self) -> Tree:
+        """G -> S -> t1; t2 straight under G; t3 outside G, urgent: the space's first."""
+
+        tree = self.space()
+        tree.add("G", kind="goal", state="container")
+        tree.add("S", kind="stage", state="container", parent="G")
+        tree.add("t1", state="ready", parent="S")
+        tree.add("t2", state="ready", parent="G")
+        tree.add("t3", state="ready")
+        self.shape(tree, "t1", created="2026-11-01T00:00:00Z")
+        self.shape(tree, "t2", created="2026-11-01T00:00:00Z", priority="high")
+        self.shape(tree, "t3", created="2026-11-01T00:00:00Z", priority="urgent")
+        return tree
+
+
+class ScopeTests(ScopeCase):
+    """The scopes `within` and `label`."""
+
+    def test_within_gives_the_work_under_a_goal_at_any_depth_in_queue_order(self) -> None:
+        tree = self.nested()
+        within = tree.refs["G"]
+        self.assertEqual(["t2", "t1", None], [self.taken(tree, within=within) for _ in range(3)])
+        self.assertEqual("", self.holder(tree, "t3"))
+        # The space read is the goal's own, named by its reference alone.
+        self.assertEqual("t3", self.taken(tree, space=tree.key, within=None))
+
+    def test_within_a_stage_gives_only_the_work_under_that_stage(self) -> None:
+        tree = self.nested()
+        self.assertEqual(["t1", None], [self.taken(tree, within=tree.refs["S"]) for _ in range(2)])
+        self.assertEqual(("", ""), (self.holder(tree, "t2"), self.holder(tree, "t3")))
+
+    def test_label_gives_the_tasks_that_carry_it_themselves(self) -> None:
+        tree = self.space()
+        tree.add("G", kind="goal", state="container")
+        tree.add("t4", state="ready")
+        tree.add("t5", state="ready")
+        tree.add("t6", state="ready")
+        tree.add("under", state="ready", parent="G")
+        tree.add("first", state="ready")
+        for name, labels in (("t4", ["x"]), ("t5", ["y"]), ("t6", ["x"]), ("G", ["x"])):
+            self.conn.execute(
+                "UPDATE work_items SET labels = ? WHERE work_item_id = ?",
+                (json.dumps(labels), tree.ids[name]),
+            )
+        self.shape(tree, "t4", created="2026-11-01T00:00:00Z")
+        self.shape(tree, "t6", created="2026-11-01T00:00:00Z", priority="high")
+        self.shape(tree, "first", created="2026-11-01T00:00:00Z", priority="urgent")
+        # A label on the goal over a task is not the task's: `under` is not given.
+        self.assertEqual(
+            ["t6", "t4", None],
+            [self.taken(tree, space=tree.key, label="x") for _ in range(3)],
+        )
+        self.assertEqual(
+            ("", "", ""), tuple(self.holder(tree, n) for n in ("t5", "under", "first"))
+        )
+        # A label nothing carries narrows to nothing; it is no refusal.
+        self.assertIsNone(self.taken(tree, space=tree.key, label="nowhere"))
+
+    def test_within_and_label_together_keep_what_both_keep(self) -> None:
+        tree = self.nested()
+        for name in ("t1", "t3"):
+            self.conn.execute(
+                "UPDATE work_items SET labels = '[\"x\"]' WHERE work_item_id = ?", (tree.ids[name],)
+            )
+        within = tree.refs["G"]
+        self.assertEqual(
+            ["t1", None], [self.taken(tree, within=within, label="x") for _ in range(2)]
+        )
+
+
+class ScopeRefusalTests(ScopeCase):
+    """The refusals of the design's table, each before anything is written."""
+
+    def assert_refused(self, text: str, **scope: object) -> None:
+        before = self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        with self.assertRaises(model.PlanningError) as caught:
+            service.claim_ready_work_item(self.conn, author="agent", **scope)
+        self.assertEqual(text, str(caught.exception))
+        self.assertEqual(
+            before, self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        )
+
+    def test_within_naming_a_task_is_refused(self) -> None:
+        tree = self.nested()
+        self.assert_refused(
+            f"within names a goal or stage; {tree.refs['t1']} is a task", within=tree.refs["t1"]
+        )
+
+    def test_within_of_another_space_than_space_is_refused(self) -> None:
+        tree = self.nested()
+        other = self.space()
+        other.add("o", state="ready")
+        self.assert_refused(
+            f"within {tree.refs['G']} is in space {tree.key}, not {other.key}",
+            space=other.key,
+            within=tree.refs["G"],
+        )
+
+    def test_a_call_that_names_no_space_is_refused_with_the_spaces(self) -> None:
+        tree = self.nested()
+        other = self.space()
+        other.add("o", state="ready")
+        text = (
+            "name a space: no space's project root holds this session's folder;"
+            f" the spaces are {tree.key}, {other.key}"
+        )
+        self.assert_refused(text)
+        # Every surface refuses it the same way: the tool and the HTTP write.
+        with self.assertRaises(model.PlanningError) as caught:
+            mcp_surface.call_tool(self.conn, "claim_ready_work_item", {"author": "agent"})
+        self.assertEqual(text, str(caught.exception))
+        status, body = api.error_response(caught.exception)
+        self.assertEqual((400, "invalid_request", text), (status, *body["error"].values()))
+        # The goal named alone sets the space, over HTTP too.
+        answer = api.handle_post(
+            self.conn, "/api/planning/work-item/claim-ready", {"within": tree.refs["G"]}
+        )
+        assert answer is not None
+        self.assertEqual((200, tree.refs["t2"]), (answer[0], answer[1]["work_item"]["reference"]))
+
+    def test_the_tool_takes_within_and_label(self) -> None:
+        tree = self.nested()
+        self.conn.execute(
+            "UPDATE work_items SET labels = '[\"x\"]' WHERE work_item_id = ?", (tree.ids["t1"],)
+        )
+        answer = mcp_surface.call_tool(
+            self.conn,
+            "claim_ready_work_item",
+            {"within": tree.refs["G"], "label": "x", "author": "agent"},
+        )
+        self.assertEqual(tree.refs["t1"], answer["work_item"]["reference"])
+
+
+class ClaimByNumberTests(QueueCase):
+    """A claim by number takes work of any space, whatever the session's."""
+
+    def test_a_session_in_one_space_s_project_claims_another_space_s_task(self) -> None:
+        aw = Tree(self.conn, "ALPHA")
+        rv = Tree(self.conn, "ROVER")
+        rv.add("n", state="ready")
+        root = Path(os.environ["VALKAMA_DB"]).parent / "aw"
+        root.mkdir()
+        entry = project_entry("aw", root)
+        entry["planning_binding"] = planning_space_entity(
+            {"data_scope_id": read_store_metadata(self.conn)["data_scope_id"], "space_key": aw.key}
+        )
+        reader = mock.patch.object(
+            project_registry, "_read_registry_bytes", return_value=registry_bytes([entry])
+        )
+        reader.start()
+        self.addCleanup(reader.stop)
+        session = "019a3c2e-0015-7c11-9e0f-2f4b6d8a1c3e"
+        sessions.touch(
+            self.conn, session, client="codex", at="2026-11-16T12:00:00Z", cwd=str(root / "src")
+        )
+        # The premise: the session's folder lies in the root of the project bound to ALPHA.
+        projects = project_registry.read_registry()["projects"]
+        self.assertEqual("aw", project_registry.project_holding(str(root / "src"), projects))
+        meta = {"sessionId": session, "threadId": session, "callId": "call_0015"}
+        answer = mcp_surface.call_tool(
+            self.conn, "claim_work_item", {"id": rover.refs["n"], "author": "codex"}, meta=meta
+        )
+        taken = service.get_work_item(self.conn, rover.refs["n"])
+        self.assertEqual(f"codex (session {session})", answer["claim_ref"])
+        self.assertEqual(
+            ("active", answer["claim_ref"]), (taken["state"]["category"], taken["claim_ref"])
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest discovery owns this

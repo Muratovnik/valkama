@@ -517,6 +517,8 @@ def _claim_ready(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dic
     picked = service.claim_ready_work_item(
         conn,
         space=_optional_text(payload, "space"),
+        within=_optional_text(payload, "within"),
+        label=_optional_text(payload, "label"),
         author=_author(payload),
     )
     return {"interface_version": PLANNING_API_INTERFACE, "work_item": picked}

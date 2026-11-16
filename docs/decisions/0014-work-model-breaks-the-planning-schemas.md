@@ -48,6 +48,10 @@ and no compatibility layer.
      in the space's queue; an item record carries `withheld`, why the queue does
      not give it, and `lapsed_claim`, the holder whose claim the sweep released;
      a checklist step carries `by_previous_holder`;
+   - `claim_ready_work_item` reads one space's queue: `space`, or the space of
+     a goal or stage named in `within`, which keeps the tasks under it, and
+     `label` keeps the tasks that carry that label; a call naming neither
+     `space` nor `within` is refused;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was.
@@ -83,6 +87,7 @@ and no compatibility layer.
 | creating work an agent was asked for | `acceptance: "assignment"` |
 | `rank` to place an item | nothing: the order of work is computed |
 | a chain member's `rank` | the members' order, and `queue_order` |
+| `claim_ready_work_item` with no `space`, taking from every space | `space`, or `within` naming a goal or stage |
 
 ## Consequences
 
