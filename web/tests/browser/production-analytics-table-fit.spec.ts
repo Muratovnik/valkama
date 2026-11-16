@@ -7,7 +7,7 @@
  * the table past its frame: at 1920 every one is one line.
  *
  * The name gives the figures its room down to its floor, eight of the table's ems, and is cut
- * there, said whole in its hint under the pointer and the keyboard's focus. It is cut only for
+ * there, its whole words laid over it under the pointer and the keyboard's focus. It is cut only for
  * the figures: every column of figures is as wide as its cells ask and no wider. Where even the
  * floor leaves the figures too little, at a window of 900 pixels, the table scrolls sideways in
  * its frame with the names held at its start. Each run prints what it measured.
@@ -31,6 +31,7 @@ import {
   serve,
   shortfalls,
 } from './analyticsPage.ts'
+import { wholeText } from './hintFramesPage.ts'
 import { test } from './test.ts'
 
 const ACCOUNT = value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f')
@@ -361,22 +362,23 @@ for (const locale of ['ru', 'en'] as const)
       const name = analytics.locator('.spending-table tbody .table-name').first()
       const text = await name.textContent()
       const whole = text?.trim() ?? ''
-      const hint = page.getByRole('tooltip')
+      // Its hint is its words, laid whole over the cut ones.
+      const hint = wholeText(page)
 
       await page.mouse.move(0, 0)
-      await expect(hint).toBeHidden()
+      await expect(hint).toHaveCount(0)
       await name.hover()
       await expect(hint).toBeVisible()
-      await expect(hint).toContainText(whole)
+      await expect(hint).toHaveText(whole)
 
       await page.mouse.move(0, 0)
-      await expect(hint).toBeHidden()
+      await expect(hint).toHaveCount(0)
       // From the last heading of the table, the next stop of the keyboard is the first row's name.
       await analytics.locator('.spending-table thead th button').last().focus()
       await page.keyboard.press('Tab')
       await expect(name.locator('a')).toBeFocused()
       await expect(hint).toBeVisible()
-      await expect(hint).toContainText(whole)
+      await expect(hint).toHaveText(whole)
     })
   })
 

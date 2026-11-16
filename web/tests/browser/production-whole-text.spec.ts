@@ -23,7 +23,7 @@ import { busyFrame, liveRow as frameRow } from '../support/liveFrame.ts'
 import { openReport, pageAt, record, serve as serveAnalytics, serveTask } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, openList } from './boardPage.ts'
-import { pass, watched, watchHints } from './hintFramesPage.ts'
+import { pass, watched, watchHints, wholeText as whole } from './hintFramesPage.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
 import { worked } from './overviewPage.ts'
 import { globalScope, identity } from './planningFixtures.ts'
@@ -151,8 +151,6 @@ const onFirstLetter = (anchor: Locator) =>
     }
     throw new Error('no letter shows')
   })
-
-const whole = (page: Page) => page.locator('.whole-text')
 
 /**
  * Points at the cut `anchor` with one move from a corner of the window that shows nothing, after
