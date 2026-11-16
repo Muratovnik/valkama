@@ -80,8 +80,9 @@ session was proved, which is also how every older claim and every claim made in
 the browser reads. Another session needs `force` to take a live claim, even when
 it signs with the same author. A stale claim is released by whoever meets it
 next, and taking it over needs no `force`; the history shows the expiry as a
-`released` event by `valkama`. The board marks stale claims, and the inspector
-shows the lease and when it expires. The exact rules are in
+`released` event by `valkama`. A checklist step's claim lapses with its session
+the same way. The board marks stale claims, and the inspector shows the lease
+and when it expires. The exact rules are in
 [the connection contract](../connection-contract.md#claims-are-leases).
 
 ## Discussion and outcomes

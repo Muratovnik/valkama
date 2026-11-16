@@ -219,8 +219,12 @@ session alone for 12 hours after its end, so a resumed session reads `live` agai
 with its claims in place: until then `claim_ready_work_item` does not hand the
 item out and a server start does not release it. The history names why a claim
 was released: `session-ended`, `session-missing` or `lease-expired`, the last for
-14 quiet days. `release: true` requeues an item that was
-in its active state unless one of its steps is still claimed.
+14 quiet days. A step's claim lapses with its session by the same rules:
+releasing a stale claim releases that session's steps, and a server start or
+`claim_ready_work_item` releases a step whose session is stale past the grace,
+written as `checklist_released` with `<reason>: <step text>`. `release: true`
+requeues an item that was in its active state unless one of its steps is still
+claimed.
 `list_work_items` with `owner` set to a holder exactly as `claim_ref` spells it
 lists that holder's items.
 

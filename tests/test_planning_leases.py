@@ -967,5 +967,173 @@ class ExecutorGuardTests(LeaseTestCase):
         )
 
 
+class StepExpiryTests(LeaseTestCase):
+    """A step's claim lapses with its session, by the rule the item's claim lapses by.
+
+    The holds are taken through `call_tool` with a Codex `_meta`, so every label is
+    one a confirmed session records, and nothing sweeps before the write under test.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        service.set_checklist(self.conn, self.reference, ["first", "second", "third"])
+        self.conn.commit()
+        self.steps = [str(step["id"]) for step in self.item()["checklist"]]
+
+    def agent(
+        self, tool: str, session: str, thread: str | None = None, **arguments: object
+    ) -> dict:
+        answer = mcp_surface.call_tool(
+            self.conn, tool, {"id": self.reference, **arguments}, meta=codex(session, thread)
+        )
+        self.conn.commit()
+        assert isinstance(answer, dict), answer
+        return answer
+
+    def take(self, session: str) -> None:
+        self.agent("claim_work_item", session, author="codex")
+
+    def take_step(self, session: str, index: int, thread: str | None = None) -> None:
+        self.agent("claim_work_item_checklist_item", session, thread, item_id=self.steps[index])
+
+    def holders(self) -> list[str]:
+        return [str(step["claimed_by"]) for step in self.item()["checklist"]]
+
+    def expiry_events(self) -> list[tuple[str, str]]:
+        return [
+            (event["action"], event["detail"])
+            for event in self.item()["events"]
+            if event["author"] == leases.EXPIRY_AUTHOR
+        ]
+
+    def sweep(self) -> int:
+        """The start-up sweep: how many items it released claims on."""
+
+        return housekeeping.expire_leases(self.conn)
+
+    # -- with the item's claim -----------------------------------------------
+
+    def test_the_sweep_releases_the_lapsed_holders_steps_with_its_claim(self) -> None:
+        self.take(ONE)
+        self.take_step(ONE, 0)
+        self.take_step(ONE, 1, thread=THREAD)
+        self.take_step(TWO, 2)
+        self.set_session(ONE, status="ended")
+        self.assertEqual(1, self.sweep())
+        # TWO's step stands, so the item stays where its work is.
+        self.assertEqual(["", "", held(TWO)], self.holders())
+        self.assertEqual(("", "dev"), (self.item()["claim_ref"], self.item()["state"]["key"]))
+        self.assertEqual(
+            [
+                ("released", f"session-ended: {held(ONE)}"),
+                ("checklist_released", "session-ended: first"),
+                ("checklist_released", "session-ended: second"),
+            ],
+            self.expiry_events(),
+        )
+
+    def test_taking_a_stale_item_releases_its_holders_steps_in_the_grace_too(self) -> None:
+        self.take(ONE)
+        self.take_step(ONE, 0)
+        self.set_session(ONE, status="ended", ended_at=datetime.now(UTC).strftime(SECOND))
+        taken = self.agent("claim_work_item", TWO, author="codex")
+        self.assertEqual(held(TWO), taken["claim_ref"])
+        self.assertEqual(["", "", ""], self.holders())
+        # Nothing held it once the expiry ran, so it went back to the queue, and the
+        # claim after it started it again.
+        self.assertEqual(
+            [
+                ("released", f"session-ended: {held(ONE)}"),
+                ("checklist_released", "session-ended: first"),
+                ("transitioned", "todo: session-ended"),
+            ],
+            self.expiry_events(),
+        )
+
+    # -- with only steps held ------------------------------------------------
+
+    def test_an_item_held_only_by_a_lapsed_step_goes_back_to_the_queue(self) -> None:
+        self.take(ONE)
+        self.take_step(ONE, 0)
+        self.agent("claim_work_item", ONE, release=True)
+        # The step kept it active after the release: that is the hold that lapses.
+        self.assertEqual("dev", self.item()["state"]["key"])
+        self.age(ONE, 15)
+        picked = service.claim_ready_work_item(self.conn, space="LSE", author="next")
+        # Back in the queue, so the take-next queue hands it out again.
+        assert picked is not None
+        self.assertEqual((self.reference, "next"), (picked["reference"], picked["claim_ref"]))
+        self.assertEqual(["", "", ""], self.holders())
+        self.assertEqual(
+            [
+                ("checklist_released", "lease-expired: first"),
+                ("transitioned", "todo: lease-expired"),
+            ],
+            self.expiry_events(),
+        )
+
+    def test_the_sweep_releases_a_lapsed_step_beside_a_live_claim(self) -> None:
+        self.take(TWO)
+        self.take_step(ONE, 0)
+        self.set_session(ONE, status="failed")
+        self.assertEqual(1, self.sweep())
+        self.assertEqual(
+            (held(TWO), "dev"), (self.item()["claim_ref"], self.item()["state"]["key"])
+        )
+        self.assertEqual(["", "", ""], self.holders())
+        self.assertEqual([("checklist_released", "session-ended: first")], self.expiry_events())
+
+    # -- what stays ----------------------------------------------------------
+
+    def test_a_step_in_its_grace_stays_held(self) -> None:
+        self.take(ONE)
+        self.take_step(ONE, 0)
+        self.agent("claim_work_item", ONE, release=True)
+        self.set_session(ONE, status="ended", ended_at=datetime.now(UTC).strftime(SECOND))
+        self.assertEqual(0, self.sweep())
+        self.assertEqual([held(ONE), "", ""], self.holders())
+        self.assertEqual("dev", self.item()["state"]["key"])
+        self.assertEqual([], self.expiry_events())
+
+    def test_the_callers_own_step_stays_while_it_takes_a_stale_item(self) -> None:
+        self.take(ONE)
+        self.take_step(TWO, 1)
+        self.set_session(ONE, status="ended")
+        # TWO reads stale until its own call is written, which is its heartbeat.
+        self.age(TWO, 15)
+        taken = self.agent("claim_work_item", TWO, author="codex")
+        self.assertEqual(held(TWO), taken["claim_ref"])
+        self.assertEqual(["", held(TWO), ""], self.holders())
+        self.assertEqual([("released", f"session-ended: {held(ONE)}")], self.expiry_events())
+
+    def test_a_step_no_session_confirmed_stays_held(self) -> None:
+        service.claim_checklist_item(self.conn, self.reference, self.steps[0], author="old")
+        self.conn.commit()
+        # A session's step beside it puts the item in front of the sweep.
+        self.take_step(TWO, 1)
+        self.assertEqual(0, self.sweep())
+        self.assertEqual(["old", held(TWO), ""], self.holders())
+        self.assertEqual([], self.expiry_events())
+
+    def test_a_done_step_keeps_who_did_it(self) -> None:
+        self.take_step(ONE, 0)
+        self.agent("apply_work_item_changes", ONE, checklist_ticks=[{"item_id": self.steps[0]}])
+        self.take_step(ONE, 1)
+        # A done step still carrying its holder, which no current write leaves behind:
+        # a done step is nobody's hold, so the sweep has nothing of it to release.
+        steps = json.loads(self.conn.execute("SELECT checklist FROM work_items").fetchone()[0])
+        steps[0]["claimed_by"] = held(ONE)
+        self.conn.execute("UPDATE work_items SET checklist = ?", (json.dumps(steps),))
+        self.conn.commit()
+        self.set_session(ONE, status="ended")
+        self.assertEqual(1, self.sweep())
+        [first, second, _] = self.item()["checklist"]
+        self.assertEqual(
+            (True, held(ONE), held(ONE)), (first["done"], first["done_by"], first["claimed_by"])
+        )
+        self.assertEqual((False, ""), (second["done"], second["claimed_by"]))
+        self.assertEqual([("checklist_released", "session-ended: second")], self.expiry_events())
+
+
 if __name__ == "__main__":
     unittest.main()

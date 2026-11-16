@@ -9,8 +9,8 @@ A claim counts while its lease has not lapsed, read as the work-item read reads
 its `claim_state` (`leases`): a `stale` lease is nobody's work any more, though
 nothing has released it yet. A step records no call of its own, so it lapses
 with the session that holds it, by the same rule, read from that session's
-newest confirmed call. An item in a terminal state holds nothing: closing
-releases every claim on it.
+newest confirmed call (`leases.of_session`). An item in a terminal state holds
+nothing: closing releases every claim on it.
 
 Read-only: nothing here writes, releases or expires anything.
 """
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import acknowledgements, calls, leases, model, read_model, requests, subscriptions
+from . import acknowledgements, leases, model, read_model, requests, subscriptions
 
 CLAIM = "claim"
 STEP = "step"
@@ -31,9 +31,6 @@ _OPEN_ITEMS = (
     " JOIN workflow_states s ON s.state_id = w.state_id"
     " WHERE s.is_terminal = 0 AND (instr(w.claim_ref, ?) > 0 OR instr(w.checklist, ?) > 0)"
     " ORDER BY w.updated_at DESC, w.work_item_id"
-)
-_NEWEST_CALL = leases.CALL + (
-    " WHERE c.session_id = ? AND c.identity_state = ? ORDER BY c.id DESC LIMIT 1"
 )
 
 
@@ -73,8 +70,7 @@ def held_by_session(conn: sqlite3.Connection, session: object) -> dict:
 def _stands(conn: sqlite3.Connection, session: str) -> bool:
     """Whether a claim this session took now would not read `stale`."""
 
-    call = conn.execute(_NEWEST_CALL, (session, calls.CONFIRMED)).fetchone()
-    return leases.of_call("", call).state != leases.STALE
+    return leases.of_session(conn, "", session).state != leases.STALE
 
 
 def _item(conn: sqlite3.Connection, row: sqlite3.Row, held_as: str) -> dict:

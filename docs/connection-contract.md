@@ -2198,12 +2198,23 @@ Who may release or take over a claim follows the lease:
 
   Releases written before the reasons were told apart say `lease-expired`,
   whatever the cause, and stay as they were written.
+- A checklist step's claim records no call of its own, so it lapses with the
+  session its holder names, by the same rules, read from that session's newest
+  confirmed call. Releasing a stale lease releases the steps its session holds
+  in the same write, whether the grace is over or a caller asked for the item.
+  A step of any other session is released once that session is stale past its
+  grace, by the same sweeps that release a lease past it, whether or not
+  somebody holds the item. Each release is a `checklist_released` event with
+  the detail `<reason>: <step text>`, written by Valkama under the same call,
+  and an item that is left active with nothing holding it goes back to the
+  queue. A done step, and a step held under a label no session confirmed, never
+  lapse; a step of the session making the call stays, as its claim does.
 - An `unconfirmed` claim is compared by `author`, as every claim was before
   leases, and never expires by itself.
 
-An MCP server and `serve` also release every stale lease past its grace once
-when they start. A grace is over at exactly 12 hours after `ended_at`, so a start
-at that second releases the lease.
+An MCP server and `serve` also release every stale lease and step claim past
+its grace once when they start. A grace is over at exactly 12 hours after
+`ended_at`, so a start at that second releases the lease.
 
 The space's list of abandoned claims (`stale_claims` in the read model) holds
 every `stale` lease, in its grace or not, and every `unconfirmed` claim with no

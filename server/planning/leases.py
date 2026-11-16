@@ -30,9 +30,15 @@ its own, and the session coming back makes it `live` again without a write. A
 session with no `ended_at` has no grace, and neither has a `failed` one, which
 only an explicit start reopens.
 
+A checklist step's claim records no call of its own, so it lapses with the
+session its holder label names, by the same rules, read from that session's
+newest confirmed call (`of_session`). A step held under a label no session
+proved is compared by name, like an unconfirmed claim, and never lapses.
+
 Expiry is not done here, and it lives with every other write in `service`. A
 caller who asks for the item releases a stale lease at once, in its grace or
-not. The start-up sweep and the take-next queue release only a lease past it.
+not, and the steps its session holds with it. The start-up sweep and the
+take-next queue release only a lease past it, and a step only past its session's.
 """
 
 from __future__ import annotations
@@ -192,6 +198,21 @@ def of_call(holder: str, call: sqlite3.Row | None) -> Lease:
     return Lease(
         state=LIVE, last_seen=last_seen, expires_at=_stamp(seen + LEASE_PERIOD), **described
     )
+
+
+_NEWEST_CALL = CALL + " WHERE c.session_id = ? AND c.identity_state = ? ORDER BY c.id DESC LIMIT 1"
+
+
+def of_session(conn: sqlite3.Connection, holder: str, session_id: str) -> Lease:
+    """The lease `holder` would have through a claim `session_id` took now.
+
+    What a step's claim, which records no call, is read by: the session's newest
+    confirmed call stands for the call the step never recorded. A session with
+    no confirmed call answers `unconfirmed`.
+    """
+
+    call = conn.execute(_NEWEST_CALL, (session_id, calls.CONFIRMED)).fetchone()
+    return of_call(holder, call)
 
 
 def state(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:

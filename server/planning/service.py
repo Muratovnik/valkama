@@ -830,7 +830,7 @@ def claim_work_item(
         and lease.state == leases.STALE
         and not leases.held_by(lease, caller, actor)
     ):
-        row = _expire(conn, row, lease)
+        row = _expire(conn, row, lease, _lapsed_steps(conn, row, lease, {}))
         lease, expired = None, True
     held = lease.holder if lease is not None else ""
     holder = lease is not None and leases.held_by(lease, caller, actor)
@@ -976,52 +976,122 @@ def _claim_lost(conn: sqlite3.Connection, row: sqlite3.Row, actor: str) -> dict:
 
 
 def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> int:
-    """Release every stale lease past its grace, in one space or all; how many were released.
+    """Release every claim stale past its grace, in one space or all; on how many items.
 
-    Only a lease a confirmed session holds can lapse: an unconfirmed claim has
-    no session to go quiet. A lease in its grace waits for its session to come
-    back, since nobody asked for that item in particular. A lease another writer
+    A claim on the item and a claim on one of its steps lapse alike, each with
+    the session that holds it. Only a confirmed session's claim can lapse: an
+    unconfirmed claim, or a step held under a label no session proved, has no
+    session to go quiet. A claim in its grace waits for its session to come
+    back, since nobody asked for that item in particular. An item another writer
     changed in the meantime is left to it.
     """
 
     clauses = [
-        "i.claim_ref != ''",
-        "c.identity_state = 'confirmed'",
-        "COALESCE(c.session_id, '') != ''",
+        "((i.claim_ref != '' AND c.identity_state = 'confirmed'"
+        " AND COALESCE(c.session_id, '') != '') OR instr(i.checklist, '(session ') > 0)",
     ]
     parameters: list[object] = []
     if space_id is not None:
         clauses.append("i.planning_space_id = ?")
         parameters.append(space_id)
     query = with_clauses(
-        "SELECT i.* FROM work_items i JOIN execution_events c ON c.id = i.claim_call_id", clauses
+        "SELECT i.* FROM work_items i LEFT JOIN execution_events c ON c.id = i.claim_call_id",
+        clauses,
     )
+    sessions: dict[str, leases.Lease] = {}
     expired = 0
     for row in conn.execute(query + " ORDER BY i.number", parameters).fetchall():
         lease = leases.lease(conn, row)
-        if lease is None or lease.state != leases.STALE or lease.in_grace:
+        if lease is not None and (lease.state != leases.STALE or lease.in_grace):
+            lease = None
+        steps = _lapsed_steps(conn, row, lease, sessions)
+        if lease is None and not steps:
             continue
         try:
-            _expire(conn, row, lease)
+            _expire(conn, row, lease, steps)
         except model.RevisionConflictError:
             continue
         expired += 1
     return expired
 
 
-def _expire(conn: sqlite3.Connection, row: sqlite3.Row, lease: leases.Lease) -> sqlite3.Row:
-    """Release a stale lease as a write of Valkama's own, and return the row after it.
+def _lapsed_steps(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    lease: leases.Lease | None,
+    sessions: dict[str, leases.Lease],
+) -> dict[str, str]:
+    """The open steps of `row` whose claims lapse now, by id, each with its reason.
 
-    The release is its own call, so the history says who released it and why
-    rather than charging the expiry to whichever caller happened to meet it. The
-    why is the lease's own reason, in the release and in the move back to the queue.
+    A step held by the session of `lease`, the item's claim being released, goes
+    with it, for the lease's reason: that session is gone from the item, grace or
+    not. A step held by any other session goes once that session's own lease,
+    `leases.of_session`, is stale past its grace. A done step is nobody's hold,
+    and a step under a label no session proved stays. So does a step of the
+    caller's own session, as its claim would: its call is its heartbeat, though
+    nothing has written it yet. `sessions` keeps each session's lease for the
+    rest of one sweep.
+    """
+
+    gone = calls.label_id(lease.session_id) if lease is not None and lease.session_id else None
+    caller = calls.current()
+    mine = (
+        calls.label_id(caller.session_id)
+        if caller is not None and caller.state == calls.CONFIRMED and caller.session_id
+        else None
+    )
+    lapsed: dict[str, str] = {}
+    for step in model.checklist(row["checklist"]):
+        ids = calls.holder_ids(str(step["claimed_by"] or ""))
+        if step["done"] or ids is None or ids[0] == mine:
+            continue
+        session = ids[0]
+        if lease is not None and session == gone:
+            lapsed[step["id"]] = lease.reason
+            continue
+        if session not in sessions:
+            sessions[session] = leases.of_session(conn, "", session)
+        found = sessions[session]
+        if found.state == leases.STALE and not found.in_grace:
+            lapsed[step["id"]] = found.reason
+    return lapsed
+
+
+def _expire(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    lease: leases.Lease | None,
+    lapsed: dict[str, str],
+) -> sqlite3.Row:
+    """Release a stale lease and the lapsed step claims, as a write of Valkama's own.
+
+    `lease` is the item's claim to release, or None to keep it; `lapsed` the
+    steps to release, from `_lapsed_steps`. Both go in one guarded write. The
+    release is its own call, so the history says who released it and why rather
+    than charging the expiry to whichever caller happened to meet it. The why is
+    each lease's own reason: in the `released` event, before the step's text in
+    each `checklist_released`, and in the move back to the queue that an item
+    nobody holds any more takes. Answers the row after it.
     """
 
     identity = str(row["work_item_id"])
+    steps = model.checklist(row["checklist"])
+    released = [step for step in steps if step["id"] in lapsed]
+    for step in released:
+        step["claimed_by"] = ""
+    checklist = model.dumps(steps) if released else None
     with calls.bind(calls.valkama(), leases.EXPIRY_TOOL):
-        _hold(conn, row, "")
-        _log(conn, identity, "released", leases.expiry_detail(lease), leases.EXPIRY_AUTHOR)
-        _hand_back(conn, identity, leases.EXPIRY_AUTHOR, lease.reason)
+        if lease is not None:
+            _hold(conn, row, "", checklist=checklist)
+            _log(conn, identity, "released", leases.expiry_detail(lease), leases.EXPIRY_AUTHOR)
+        elif checklist is not None:
+            _write(conn, row, ["checklist = ?"], [checklist])
+        for step in released:
+            detail = f"{lapsed[step['id']]}: {step['text'][:120]}"
+            _log(conn, identity, "checklist_released", detail, leases.EXPIRY_AUTHOR)
+        if lease is not None or not row["claim_ref"]:
+            reason = lease.reason if lease is not None else lapsed[released[0]["id"]]
+            _hand_back(conn, identity, leases.EXPIRY_AUTHOR, reason)
     return read_model.item_by_id(conn, identity)
 
 
@@ -2219,7 +2289,9 @@ def _write(
     raise model.RevisionConflictError(expected, int(current[0]))
 
 
-def _hold(conn: sqlite3.Connection, row: sqlite3.Row, holder: str) -> None:
+def _hold(
+    conn: sqlite3.Connection, row: sqlite3.Row, holder: str, *, checklist: str | None = None
+) -> None:
     """Set who holds an item, and the call that took it, in one guarded write.
 
     The only writer of `claim_ref` but one: a transition into a terminal state
@@ -2227,11 +2299,18 @@ def _hold(conn: sqlite3.Connection, row: sqlite3.Row, holder: str) -> None:
     a lease always names the call that took it; a release clears both. A build
     that writes `claim_ref` alone leaves the call unchanged, and the store's
     `work_items_claim_follows_call` trigger clears it, which makes that claim
-    read as unconfirmed rather than as somebody else's lease.
+    read as unconfirmed rather than as somebody else's lease. `checklist`, when
+    given, goes in the same write: an expiry releasing the steps that lapsed with
+    the claim.
     """
 
     taken = calls.call_id(conn, str(row["work_item_id"])) if holder else None
-    _write(conn, row, ["claim_ref = ?", "claim_call_id = ?"], [holder, taken])
+    updates = ["claim_ref = ?", "claim_call_id = ?"]
+    parameters: list[object] = [holder, taken]
+    if checklist is not None:
+        updates.append("checklist = ?")
+        parameters.append(checklist)
+    _write(conn, row, updates, parameters)
 
 
 def _log(
