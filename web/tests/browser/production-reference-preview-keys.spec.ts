@@ -20,6 +20,7 @@ import {
   pause,
   reference,
   rest,
+  watchOpening,
 } from './previewPage.ts'
 import { test } from './test.ts'
 
@@ -78,7 +79,7 @@ test('a Tab shows the card at once and describes the reference; leaving takes it
   const shown = card(page)
   // No wait: the description has to be there as focus lands.
   await expect(shown).toBeVisible({ timeout: 300 })
-  await expect(shown).toHaveAttribute('data-state', 'instant-open')
+  await expect(shown).toHaveAttribute('data-opened', 'at-once')
 
   const opened = await described(page, link)
   expect(opened.name).toBe('MAIN-12')
@@ -220,7 +221,7 @@ test('focus an overlay gives back after Escape does not bring the card up', asyn
   await expect(shown).toBeVisible()
 })
 
-test('focus given back to a reference the pointer rests on does not bring the card up', async ({
+test('focus given back to a reference the pointer rests on brings no card; the pointer does, after its rest', async ({
   page,
 }) => {
   const { entry } = await openReported(page)
@@ -239,11 +240,17 @@ test('focus given back to a reference the pointer rests on does not bring the ca
   const finder = page.getByRole('dialog', { name: 'Go to a task' })
   await expect(finder).toBeVisible()
   await expect(shown).toHaveCount(0)
+  // Past the moment the next card would open at once, so what comes is what the rest brings.
+  await coolDown()
+  const opening = watchOpening(page)
   await page.keyboard.press('Escape')
   await expect(finder).toHaveCount(0)
   await expect(link).toBeFocused()
   expect(await link.evaluate((element) => element.matches(':hover'))).toBe(true)
-  expect(await cardsAfterTheDelay(page)).toBe(0)
+  // The focus handed back brings nothing; the closing finder leaves the reference under the
+  // still pointer, which asks again after its rest, as after a scroll's end.
+  expect(await opening, 'from the Escape to the card, in ms').toBeGreaterThanOrEqual(450)
+  await expect(shown).toHaveAttribute('data-opened', 'after-rest')
 })
 
 test('a surface opening over a card the pointer holds up closes it', async ({ page }) => {

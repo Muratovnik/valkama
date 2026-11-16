@@ -947,7 +947,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   and with no detail to add it is the `clipped` hint of its words. For
   assistive technology a hint is what `title` was: the name of an element nothing else
   names, else its description when it says more than the name. A reference's preview
-  card wins over it. A hint is words; anything with a control in it is `InfoTip`.
+  card follows the same manager and these rules, as one more surface of it: on a reference it
+  wins over a hint, and the card and a hint take over from each other at once, never both up
+  and with no frame without one, but for the moment a card that reads waits for its answer.
+  What the card adds, controls to press and text to select, is
+  its own (A reference's card). A hint is words; anything with a control in it is `InfoTip`.
   A chart's mark says in its hint what it does not print (Charts). A caveat that
   qualifies a whole section is no element's hint: it is said once, by an «ⓘ» at the
   section's heading that opens on a press as well, as `InfoTip` does, since a hint
@@ -1306,8 +1310,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   to another Markdown file opens in the same place, and a file read again when the window
   returns keeps the reader's place by the heading above it.
 - **A reference's card:** `ReferencePreview` owns the one card per window shown
-  for a work item's number in free text, half a second after the pointer rests on
-  it or at once on Tab: number and state on a line, the title, the holder and the
+  for a work item's number in free text. When it shows and goes is the hint manager's (Hints):
+  half a second after the pointer rests on it, at once while a hint or a card is up or has just
+  gone, at once on Tab. It shows number and state on a line, the title, the holder and the
   steps. Its number copies itself and the icon beside it copies the item's address, as in a
   card's head and with the head's note; Tab goes from the reference through those two and on
   from the reference. Its text can be selected: focus goes back to where it stood when the
@@ -1315,10 +1320,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   card up until a press elsewhere, Escape or a scroll. The pointer on the card keeps it
   whatever reference lies under it. A press on the reference still
   opens the item, and Escape closes the card and nothing under it. A card from the
-  pointer closes when what holds the reference scrolls. A card from Tab stays,
+  pointer closes when what holds the reference scrolls, and the scroll's end asks again for
+  the reference the resting pointer is on, as for a hint. A card from Tab stays,
   because the browser's own scroll to the focused number would close it, and is
   hidden only while the number is out of the window. Focus handed back by a closing
-  surface does not bring it up. A number the open space holds is drawn from memory
+  surface does not bring it up; a pointer resting on the number that surface uncovers asks
+  again after its rest, as after a scroll's end. A number the open space holds is drawn from memory
   with no request; any other reads that item's brief record once.
 - **Writing free text:** `MarkdownEditor` owns the field, and draws it as one
   object: a slim toolbar, the text and a foot inside one hairline and one radius,

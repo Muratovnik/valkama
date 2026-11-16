@@ -60,7 +60,7 @@ describe('RichText', () => {
     expect(hintOf(held)).toBeUndefined()
     expect(held?.attributes('aria-description')).toBe('Open MAIN-12')
     expect(held?.attributes()).toHaveProperty('data-reference-preview')
-    expect(held?.attributes()).toHaveProperty('data-grace-area-trigger')
+    expect(held?.attributes()).not.toHaveProperty('data-grace-area-trigger')
 
     expect(hintOf(plain)).toBe('Open MAIN-13')
     expect(plain?.attributes('aria-description')).toBeUndefined()

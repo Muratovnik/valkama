@@ -22,8 +22,8 @@
  * - A hint of the `clipped` kind shows only while its text is cut, measured as it would show;
  *   a name and a detail always show. A detail on an element whose own words are cut says
  *   them whole first, on a line of their own, measured the same way; uncut, it is the detail.
- * - A reference's preview wins: no hint shows on a reference, or while its card is up, and the
- *   card closes the hint as it opens.
+ * - A reference's preview wins on a reference: no hint is found there. The card is a surface of
+ *   the same manager, so it and a hint replace each other as any two hints do.
  * - A hint the pointer raised can be entered by the pointer. One the keyboard holds up lets a
  *   press through to what it covers, since it stands over every control the keyboard reaches,
  *   and a chart period's lets the pointer through, since it follows the pointer along the plot.
@@ -51,16 +51,12 @@ import {
 import TooltipBody from '@/shared/ui/TooltipBody.vue'
 import { bodyWidth, hintWidth } from '@/shared/ui/tooltipWidth.ts'
 
-/** A reference's card is up: the reader's, until it hears the manager as well. */
-const previewUp = () => document.querySelector('.reference-preview') !== null
-
 useHintKind('tooltip', {
   pointedAnchor: (target) => (previewAnchorOf(target) ? null : pointerAnchorOf(target)),
   focusedAnchor: (target) => (previewAnchorOf(target) ? null : focusAnchorOf(target)),
   shows(anchor) {
     const tooltip = tooltipOf(anchor)
-    const free = Boolean(tooltip) && !previewAnchorOf(anchor) && !previewUp()
-    return free && (!tooltip?.clipped || textIsClipped(anchor))
+    return Boolean(tooltip) && (!tooltip?.clipped || textIsClipped(anchor))
   },
   isArea: inTooltipArea,
 })

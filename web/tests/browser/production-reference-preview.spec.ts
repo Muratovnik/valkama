@@ -2,11 +2,12 @@
  * A reference in text shows its card under the pointer: when it opens and does not,
  * how the pointer reaches it, what it does to the reference it hangs from.
  *
- * The one popup of the window is the library's Tooltip pointed from outside at
- * whichever reference is under the pointer, a use it does not document. These specs
- * are what would notice an upgrade of it changing any of that.
+ * The card is a surface of the window's hint manager, drawn on the library's hover
+ * card held open and placed against whichever reference the manager shows it for.
+ * These specs are what would notice a change of either changing any of that.
  */
 import { expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import {
   card,
@@ -118,7 +119,7 @@ test('a neighbour takes the card over at once; after a pause it waits again', as
   expect(Date.now() - before).toBeLessThan(450)
   await expect(page.locator(CARD)).toHaveCount(1)
   // No fading in again: it is the same card, moved.
-  await expect(shown).toHaveAttribute('data-state', 'instant-open')
+  await expect(shown).toHaveAttribute('data-opened', 'at-once')
   await expect(reference(entry, 'MAIN-12')).not.toHaveAttribute('aria-describedby')
 
   await page.mouse.move(5, 5, { steps: 4 })
@@ -230,7 +231,56 @@ test('a press in the card takes no focus, so the draft holds it and Tab stays in
   )
 })
 
-test('a wheel under a still pointer opens nothing, and a scroll closes the card', async ({
+/** Resolves once no card is on the page: start it before what should close the card. */
+const closing = (page: Page) =>
+  page.evaluate(
+    (selector) =>
+      new Promise<boolean>((resolve) => {
+        const seen = new MutationObserver(() => {
+          if (document.querySelector(selector)) return
+          seen.disconnect()
+          resolve(true)
+        })
+        seen.observe(document.body, { childList: true, subtree: true })
+      }),
+    CARD,
+  )
+
+/**
+ * Once a scroll under a pointer at `at` that has not moved has ended and the delay a card would
+ * take has passed: the reference under the pointer now, if any, and whether the card on the page
+ * hangs from it, as the reference's description says.
+ */
+async function afterTheScroll(page: Page, at: { x: number; y: number }) {
+  await cardsAfterTheDelay(page)
+  return page.evaluate(
+    ({ x, y, selector }) => {
+      const under = document.elementFromPoint(x, y)?.closest('[data-reference-preview]')
+      const cards = document.querySelectorAll(selector)
+      const id = under?.getAttribute('aria-describedby')
+      return {
+        cards: cards.length,
+        describedByTheCard: Boolean(id && cards[0]?.querySelector(`[id="${id}"]`)),
+        under: under
+          ? [...document.querySelectorAll('[data-reference-preview]')].indexOf(under)
+          : -1,
+      }
+    },
+    { ...at, selector: CARD },
+  )
+}
+
+/** What a scroll's end shows: the card of the reference under the pointer, or none over text. */
+function expectTheCardOfWhatIsUnder(after: Awaited<ReturnType<typeof afterTheScroll>>) {
+  if (after.under < 0) expect(after.cards, 'no reference under the pointer: no card').toBe(0)
+  else
+    expect(after, 'the card of the reference under the pointer').toMatchObject({
+      cards: 1,
+      describedByTheCard: true,
+    })
+}
+
+test('a scroll closes the card, and its end asks again for what the still pointer is on', async ({
   page,
 }) => {
   const lines = Array.from({ length: 60 }, (_, index) =>
@@ -240,23 +290,34 @@ test('a wheel under a still pointer opens nothing, and a scroll closes the card'
   await entry.getByRole('button', { name: 'Show all', exact: true }).click()
   const links = reference(entry, 'MAIN-12')
   await rest(page, links.nth(3))
+  const at = await middle(links.nth(3))
   await expect(card(page)).toBeVisible()
+  const closed = closing(page)
   await page.mouse.wheel(0, 120)
-  await expect(card(page)).toHaveCount(0)
+  expect(await closed, 'closed by the scroll').toBe(true)
+  // A resting pointer points at whatever the scroll brought under it, as for a hint.
+  expectTheCardOfWhatIsUnder(await afterTheScroll(page, at))
 
-  // Wheeling on until a reference stands under the pointer, which has not moved.
+  // Wheeling on: the reference the card came from has moved from under the pointer.
   const standing = await links.nth(3).boundingBox()
   await page.mouse.wheel(0, 60)
-  expect(await cardsAfterTheDelay(page)).toBe(0)
+  expectTheCardOfWhatIsUnder(await afterTheScroll(page, at))
   expect(await links.nth(3).boundingBox()).not.toEqual(standing)
   await expect(drawer).toBeVisible()
 
-  // A wheel while the card still waits calls it off too.
+  // A wheel while the card still waits calls that card off: whatever shows is what is under.
   await page.mouse.move(5, 5)
+  await expect(card(page)).toHaveCount(0)
   await coolDown()
   await rest(page, links.nth(8))
+  const resting = await middle(links.nth(8))
+  const waited = await links
+    .nth(8)
+    .evaluate((link) => [...document.querySelectorAll('[data-reference-preview]')].indexOf(link))
   await page.mouse.wheel(0, 240)
-  expect(await cardsAfterTheDelay(page)).toBe(0)
+  const after = await afterTheScroll(page, resting)
+  expectTheCardOfWhatIsUnder(after)
+  expect(after.under, 'the waited reference has left the pointer').not.toBe(waited)
 })
 
 test('the card follows the stream while open, and goes with its reference', async ({ page }) => {

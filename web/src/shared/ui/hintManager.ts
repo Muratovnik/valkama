@@ -19,10 +19,15 @@
  *   at once. Such a hint is read, never pressed: its surface lets a press through. A key that acts
  *   or dismisses (`ACTING_KEYS`) brings none: the focus the page moves in answer, into a layer it
  *   opened or back to the element a closed one came from, is the page's, and its hint would make
- *   the next Escape close the hint instead of the layer under it.
+ *   the next Escape close the hint instead of the layer under it. Focus moving from the anchor
+ *   into the shown surface, or within it, keeps it and asks for nothing else.
  * - Escape closes the hint and goes no further; with no hint up it is not touched.
  * - A press closes the hint. Resting on what was pressed brings none back; another anchor, or
  *   another part of an area (`HintKind.isArea`), asks again.
+ * - A surface a reader works on (`HintKind.interactive`), as a card with controls and text to
+ *   select is, stays for a press on it. While it holds itself up (`HintKind.holds`), as a
+ *   selection being made or made on it does, neither the pointer leaving, a drag nor focus going
+ *   elsewhere closes it; a press elsewhere, Escape and a scroll still do.
  * - A scroll of anything holding the anchor closes a hint the pointer raised, and when that scroll
  *   ends the anchor under the resting pointer asks again: a resting pointer points at whatever the
  *   scroll brought under it. A hint focus holds stays, since a Tab scrolls what it lands on into
@@ -45,8 +50,12 @@ const ACTING_KEYS = new Set(['Enter', ' ', 'Escape'])
 
 /** How one kind of hint finds its anchors. When any of them shows is the manager's. */
 export interface HintKind {
+  /** Whether its surface is worked on, not only read: a press on it keeps it. */
+  interactive?: boolean
   /** The anchor focus on `target` asks for, or null. */
   focusedAnchor: (target: Element) => HTMLElement | null
+  /** Whether its surface holds itself up now, against the pointer, a drag and focus leaving. */
+  holds?: (anchor: HTMLElement) => boolean
   /** Whether the anchor speaks for an area, each part of which asks again after a press. */
   isArea: (anchor: HTMLElement) => boolean
   /** The anchor the pointer on `target` asks for, or null. */
@@ -62,6 +71,8 @@ interface ShownHint {
   readonly anchor: HTMLElement
   readonly by: Raiser
   readonly kind: string
+  /** It showed after the pointer's rest rather than at once, so its surface may settle in. */
+  readonly rested: boolean
 }
 
 interface Asked {
@@ -103,7 +114,15 @@ let keyed = false
 let scrolledBy: Node | null = null
 
 const surfaceOf = (target: Element) => target.closest('[data-hint-surface]')
+/** Whether `target` is on the shown hint's surface: one surface shows at a time. */
+const onShownSurface = (target: EventTarget | null) =>
+  shown.value !== null && target instanceof Element && surfaceOf(target) !== null
 const warm = () => shown.value !== null || coolTimer !== undefined
+/** The shown hint's surface holds itself up now (`HintKind.holds`). */
+function held() {
+  const now = shown.value
+  return now !== null && kinds.get(now.kind)?.holds?.(now.anchor) === true
+}
 
 function stopRest() {
   clearTimeout(restTimer)
@@ -126,11 +145,12 @@ function resolve(target: EventTarget | null, by: Raiser): Asked | null {
 }
 
 /**
- * Shows `asked`'s hint now, raised `by` the pointer or focus, if its kind lets it show. One that
- * does not show leaves the shown hint to its own grace: the pointer moving from a cut name onto a
- * whole one once kept the cut one's hint up for as long as it rested there.
+ * Shows `asked`'s hint now, raised `by` the pointer or focus, if its kind lets it show; `rested`
+ * says the pointer's rest brought it. One that does not show leaves the shown hint to its own
+ * grace: the pointer moving from a cut name onto a whole one once kept the cut one's hint up for
+ * as long as it rested there.
  */
-function open(asked: Asked, by: Raiser) {
+function open(asked: Asked, by: Raiser, rested = false) {
   const rules = kinds.get(asked.kind)
   if (!rules || !asked.anchor.isConnected || !rules.shows(asked.anchor)) return
   stopRest()
@@ -139,7 +159,7 @@ function open(asked: Asked, by: Raiser) {
   coolTimer = undefined
   const now = shown.value
   if (now?.anchor === asked.anchor && now.kind === asked.kind && now.by === by) return
-  shown.value = { ...asked, by }
+  shown.value = { ...asked, by, rested }
 }
 
 function close() {
@@ -160,7 +180,7 @@ function startGrace() {
   graceTimer = setTimeout(() => {
     graceTimer = undefined
     const now = shown.value
-    if (now?.by === 'pointer' && !onSurface && hovered?.anchor !== now.anchor) close()
+    if (now?.by === 'pointer' && !onSurface && hovered?.anchor !== now.anchor && !held()) close()
   }, GRACE_MS)
 }
 
@@ -181,7 +201,7 @@ function enter(asked: Asked) {
     restTimer = undefined
     const waited = pending
     pending = null
-    if (waited && hovered?.anchor === waited.anchor) open(waited, 'pointer')
+    if (waited && hovered?.anchor === waited.anchor) open(waited, 'pointer', true)
   }, REST_MS)
 }
 
@@ -211,10 +231,10 @@ function point(event: PointerEvent) {
   arrive(target)
 }
 
-/** A button is down: the pointer is dragging, and shows no hint. */
+/** A button is down: the pointer is dragging, and shows no hint but one that holds itself up. */
 function drag() {
   stopRest()
-  if (shown.value?.by === 'pointer') close()
+  if (shown.value?.by === 'pointer' && !held()) close()
 }
 
 /** The pointer moved after a scroll, so it no longer rests under what the scroll brought there. */
@@ -266,6 +286,8 @@ function pointerOut(event: PointerEvent) {
 
 function press(event: PointerEvent) {
   keyed = false
+  const now = shown.value
+  if (now && kinds.get(now.kind)?.interactive && onShownSurface(event.target)) return
   if (hovered && event.target instanceof Element)
     dismissed = { anchor: hovered.anchor, part: event.target }
   stopRest()
@@ -276,6 +298,8 @@ function escape(event: KeyboardEvent) {
   if (event.key !== 'Escape' || event.isComposing || !shown.value) return
   event.preventDefault()
   event.stopImmediatePropagation()
+  // The key goes no further, so the listener that hears every key never hears this one act.
+  keyed = false
   if (hovered) dismissed = { anchor: hovered.anchor, part: pointed.value }
   close()
 }
@@ -286,7 +310,7 @@ function focusIn(event: FocusEvent) {
   if (!keyed || !target) return
   // Focus a key moved is where the reader stands now, not where the pointer rests.
   pointed.value = null
-  if (!target.matches(':focus-visible')) return
+  if (onShownSurface(target) || !target.matches(':focus-visible')) return
   const asked = resolve(target, 'focus')
   if (asked) open(asked, 'focus')
 }
@@ -294,9 +318,15 @@ function focusIn(event: FocusEvent) {
 function focusOut(event: FocusEvent) {
   focused.value = null
   const now = shown.value
-  if (now?.by !== 'focus' || resolve(event.target, 'focus')?.anchor !== now.anchor) return
-  // Focus moving among the parts of the anchor's area keeps its hint where it stands.
-  if (resolve(event.relatedTarget, 'focus')?.anchor !== now.anchor) close()
+  if (now?.by !== 'focus') return
+  const keeps = (target: EventTarget | null) =>
+    onShownSurface(target) || resolve(target, 'focus')?.anchor === now.anchor
+  if (!keeps(event.target)) return
+  // Focus moving among the parts of the anchor's area, or into its surface, keeps its hint; so
+  // does focus leaving the surface for nothing, as it does from a control that is drawn again.
+  const into = event.relatedTarget
+  if (keeps(into) || (into === null && onShownSurface(event.target)) || held()) return
+  close()
 }
 
 function scrolled(event: Event) {
