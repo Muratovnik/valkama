@@ -9,9 +9,9 @@ open a session with a new id, which holds nothing, and get no note.
 
 Who is told. The orchestrator, a hook input without `agent_id`, is told what its
 session holds, its agents' holds with it; a subagent only what its own label
-holds. A line of holds lost since the recipient's last call and, for the
-orchestrator alone, a line of requests waiting for its answer follow the items
-when a caller gives them.
+holds. The note tells the held items alone: `compose` can also set a line of
+holds lost and a line of requests waiting for an answer after them, but nothing
+in this build reads either, so `note` passes neither.
 
 How long. At most `MOST_CHARACTERS` of text, by construction: the note tries up
 to `MOST_TASKS` items and fewer, each at `LEVELS` of shorter fields, and takes
