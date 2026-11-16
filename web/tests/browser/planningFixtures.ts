@@ -65,10 +65,14 @@ export { DEV_STATE as devState, doneState }
 
 export const planningSpace = {
   planning_space_id: identity(800),
-  project_id: projectId,
   name: 'Main',
   key: spaceRef.space_key,
   provider_kind: 'local',
+  launch_place: 'space',
+  projects: [
+    { project_id: projectId, display_name: 'Example Project', root: 'C:/example', default: true },
+  ],
+  default_project: projectId,
 }
 
 /** The item `MAIN-264` is blocked by. Opening it is what makes Back reachable. */

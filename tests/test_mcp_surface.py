@@ -86,9 +86,7 @@ class McpSurfaceTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        planning_service.create_planning_space(
-            self.conn, project_id="mcp", name=SPACE_NAME, key=SPACE_KEY
-        )
+        planning_service.create_planning_space(self.conn, name=SPACE_NAME, key=SPACE_KEY)
         self.conn.commit()
 
     def converse(self, *messages: dict | bytes) -> list[dict]:

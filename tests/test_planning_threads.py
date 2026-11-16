@@ -41,7 +41,7 @@ class ThreadTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="threads", name="Threads", key=SPACE)
+        service.create_planning_space(self.conn, name="Threads", key=SPACE)
         self.ref = self.item("A discussed change")
         self.conn.commit()
 

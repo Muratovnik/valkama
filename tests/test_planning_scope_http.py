@@ -47,9 +47,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"VALKAMA_DB": str(path)}):
                 conn = store.connect()
                 try:
-                    service.create_planning_space(
-                        conn, project_id="example-project", name="Shared name", key="SAME"
-                    )
+                    service.create_planning_space(conn, name="Shared name", key="SAME")
                     service.create_work_item(conn, space="SAME", title=f"{name}-only")
                     conn.commit()
                     self.refs[name] = {
@@ -574,7 +572,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         """
 
         conn = store.connect()
-        service.create_planning_space(conn, project_id="a-project", name="Alpha", key="AAA")
+        service.create_planning_space(conn, name="Alpha", key="AAA")
         service.create_work_item(
             conn, space="AAA", title="Mentions the other", description="See SAME-1 first."
         )
@@ -625,7 +623,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         """
 
         conn = store.connect()
-        service.create_planning_space(conn, project_id="a-project", name="Alpha", key="AAA")
+        service.create_planning_space(conn, name="Alpha", key="AAA")
         for number in range(1, 12):
             service.create_work_item(conn, space="AAA", title=f"Alpha {number}")
         for number, updated in ((1, "2020"), (10, "2021"), (11, "2022")):
@@ -787,7 +785,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
                 {"id": "reply", "label": "Reply", "type": "text", "required": True, "options": []}
             ],
         )
-        service.create_planning_space(conn, project_id="other", name="Other space", key="ELSE")
+        service.create_planning_space(conn, name="Other space", key="ELSE")
         service.create_work_item(conn, space="ELSE", title="Other item")
         other = requests.create(
             conn,

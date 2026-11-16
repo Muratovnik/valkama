@@ -49,7 +49,7 @@ class EmitHarness(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="p", name="Quality", key="MAIN")
+        service.create_planning_space(self.conn, name="Quality", key="MAIN")
         self.conn.commit()
         self.ref = self.item("Rollout order")
         self.log = os.path.join(directory.name, "valkama-alerts.log")
@@ -679,7 +679,7 @@ class SessionEndTests(unittest.TestCase):
 
     def frames(self) -> list[dict]:
         return [
-            self.call(1, "create_planning_space", project_id="p", name="Quality", key="MAIN"),
+            self.call(1, "create_planning_space", name="Quality", key="MAIN"),
             self.call(2, "create_work_item", space="MAIN", title="Rollout order"),
             self.call(
                 3,

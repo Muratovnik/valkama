@@ -488,10 +488,12 @@ def file_digest(path: str) -> str:
 
 
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [*(f"M{number}" for number in range(10)), "last-route"]
+STEP_NAMES = [f"M{number}" for number in range(12)]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(1, 16)),
+    "store-identity",
+    "space-projects",
     "task-projects",
     "labels-kept",
     "routes",
@@ -811,6 +813,40 @@ class MigratedStoreTests(StoreCase):
                 (self.ids["WM-9"], "other", "label"),
             )
         conn.rollback()
+
+    def test_spaces_takes_the_project_off_each_space_and_keeps_the_rest_as_it_was(self) -> None:
+        columns = "planning_space_id, key, name, provider_kind, next_number, created_at, updated_at"
+        point = self.report["recovery_point"]
+        with contextlib.closing(sqlite3.connect(point)) as before:
+            kept = sorted(
+                tuple(row) for row in before.execute(f"SELECT {columns} FROM planning_spaces")
+            )
+            identity = before.execute(
+                "SELECT data_scope_id FROM platform_store_metadata"
+            ).fetchone()
+        self.assertTrue(kept)
+        after = self.read(f"SELECT {columns}, launch_place FROM planning_spaces")
+        self.assertEqual(kept, sorted(tuple(row)[:-1] for row in after))
+        self.assertEqual({"space"}, {row["launch_place"] for row in after})
+        self.assertNotIn(
+            "project_id", {row[1] for row in self.read("PRAGMA table_info(planning_spaces)")}
+        )
+        self.assertEqual(
+            tuple(identity),
+            tuple(self.read("SELECT data_scope_id FROM platform_store_metadata")[0]),
+        )
+        step_spaces = next(step for step in self.report["steps"] if step["name"] == "spaces")
+        self.assertEqual(len(kept), step_spaces["result"]["spaces"])
+        post_store_identity = next(
+            entry for entry in self.report["postconditions"] if entry["name"] == "store-identity"
+        )
+        self.assertEqual(len(kept), post_store_identity["detail"]["spaces"])
+        # A name is a space's alone now, as a fresh store holds it.
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "UNIQUE"):
+            self.read(
+                "INSERT INTO planning_spaces(planning_space_id, name, key) VALUES('x', ?, 'ZZ')",
+                (kept[0][2],),
+            )
 
     def test_the_derived_states_are_reported(self) -> None:
         derived = self.report["postconditions"][11]["detail"]["derived"]
@@ -1196,6 +1232,16 @@ FAULTS = (
         "UPDATE work_items SET state_id = (SELECT state_id FROM workflow_states"
         " WHERE workflow_id = work_items.workflow_id AND key = 'done') WHERE work_item_id = ?",
         lambda ids: (ids["WM-21"],),
+    ),
+    fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
+    fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
+    fault(
+        "store-identity",
+        "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'",
+    ),
+    fault(
+        "space-projects",
+        "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'",
     ),
     fault(
         "task-projects",

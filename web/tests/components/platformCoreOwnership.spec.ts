@@ -63,10 +63,12 @@ function readModel(space: PlanningSpaceRef) {
     planning_spaces: [],
     planning_space: {
       planning_space_id: identity(800),
-      project_id: scope.project_ref.project_id,
       name: 'Main',
       key: space.space_key,
       provider_kind: 'local',
+      launch_place: 'space',
+      projects: [],
+      default_project: null,
     },
     workflow: {
       workflow_id: identity(700),

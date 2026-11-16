@@ -169,10 +169,12 @@ describe('a card', () => {
       planning_spaces: [],
       planning_space: {
         planning_space_id: boardId(1),
-        project_id: 'bounds',
         name: 'Bounds',
         key: 'QA',
         provider_kind: 'local',
+        launch_place: 'space',
+        projects: null,
+        default_project: null,
       },
       workflow: {
         workflow_id: boardId(2),

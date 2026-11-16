@@ -32,7 +32,7 @@ class ClaimMoveTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        self.space = service.create_planning_space(self.conn, project_id="moves", name="Moves")
+        self.space = service.create_planning_space(self.conn, name="Moves")
         self.key = self.space["key"]
         self.workflow_id = str(self.space["workflow"]["workflow_id"])
 

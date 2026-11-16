@@ -262,9 +262,7 @@ class RegistryOwnerTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"VALKAMA_DB": str(database)}):
             connection = store.connect()
             try:
-                planning_service.create_planning_space(
-                    connection, project_id="example", name="Example", key="EX"
-                )
+                planning_service.create_planning_space(connection, name="Example", key="EX")
                 connection.commit()
                 scope_id = store_metadata.read_store_metadata(connection)["data_scope_id"]
             finally:

@@ -17,9 +17,7 @@ from server.planning import tools as planning_tools
 def seed_quality_assurance(conn) -> None:
     """The space these tests call QA, holding one item, QA-1, committed."""
 
-    service.create_planning_space(
-        conn, project_id="example-workspace", name="Quality Assurance", key="QA"
-    )
+    service.create_planning_space(conn, name="Quality Assurance", key="QA")
     service.create_work_item(conn, space="QA", title="Carried over")
     conn.commit()
 
@@ -633,7 +631,7 @@ class PlanningCompactReadTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="tools", name="Quality", key="QA")
+        service.create_planning_space(self.conn, name="Quality", key="QA")
         self.epic = self.call("create_work_item", space="QA", title="Umbrella", kind="goal")
         self.child = self.call(
             "create_work_item",

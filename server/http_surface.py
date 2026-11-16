@@ -54,6 +54,7 @@ from .planning import display_links, live_frame
 from .planning import exact_api as planning_exact_api
 from .planning import images as planning_images
 from .planning import interactions as planning_interactions
+from .planning import item_projects as planning_item_projects
 from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
@@ -1597,7 +1598,11 @@ class Handler(BaseHTTPRequestHandler):
                     if view == "activity":
                         current = planning_views.activity_feed(conn)
                     else:
-                        current = {"planning_spaces": planning_service.list_planning_spaces(conn)}
+                        current = {
+                            "planning_spaces": planning_item_projects.spaces_shown(
+                                conn, planning_service.list_planning_spaces(conn)
+                            )
+                        }
                     frame = frames.frame(json.dumps(current, ensure_ascii=False))
                 if frame is not None:
                     self.wfile.write(frame)

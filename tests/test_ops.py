@@ -330,7 +330,7 @@ class DoctorStoreTests(unittest.TestCase):
         os.environ["VALKAMA_DB"] = os.path.join(self._dir.name, "test.sqlite3")
         self.addCleanup(lambda: os.environ.__setitem__("VALKAMA_DB", SUITE_STORE))
         self.conn = store.connect()
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         self.conn.commit()
 
     def tearDown(self) -> None:
@@ -376,7 +376,7 @@ class DoctorProjectTests(unittest.TestCase):
         self.addCleanup(lambda: os.environ.__setitem__("VALKAMA_DB", SUITE_STORE))
         conn = store.connect()
         try:
-            planning.create_planning_space(conn, project_id="test", name="Test", key="TST")
+            planning.create_planning_space(conn, name="Test", key="TST")
             conn.commit()
             self.main = store_metadata.read_store_metadata(conn)["data_scope_id"]
         finally:

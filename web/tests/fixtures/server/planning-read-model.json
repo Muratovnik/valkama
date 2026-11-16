@@ -4,23 +4,41 @@
   "planning_spaces": [
     {
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
-      "project_id": "example-project",
       "name": "Contract",
       "key": "MAIN",
       "provider_kind": "local",
+      "launch_place": "space",
       "work_items": 14,
       "open": 13,
       "active": 2,
       "completed": 1,
-      "updated_at": "2026-01-02T03:04:05Z"
+      "updated_at": "2026-01-02T03:04:05Z",
+      "projects": [
+        {
+          "project_id": "example-project",
+          "display_name": "example-project",
+          "root": "/workspace",
+          "default": true
+        }
+      ],
+      "default_project": "example-project"
     }
   ],
   "planning_space": {
     "planning_space_id": "00000000-0000-4000-8000-000000000002",
-    "project_id": "example-project",
     "name": "Contract",
     "key": "MAIN",
-    "provider_kind": "local"
+    "provider_kind": "local",
+    "launch_place": "space",
+    "projects": [
+      {
+        "project_id": "example-project",
+        "display_name": "example-project",
+        "root": "/workspace",
+        "default": true
+      }
+    ],
+    "default_project": "example-project"
   },
   "workflow": {
     "workflow_id": "00000000-0000-4000-8000-000000000024",

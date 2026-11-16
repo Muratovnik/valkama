@@ -31,9 +31,7 @@ class AppShellTests(unittest.TestCase):
         conn = store.connect()
         try:
             for name, key in (("Example Space", "EXA"), ("Other Space", "OTH"), ("Bare", "BARE")):
-                planning_service.create_planning_space(
-                    conn, project_id="example-project", name=name, key=key
-                )
+                planning_service.create_planning_space(conn, name=name, key=key)
             conn.commit()
             scope = read_store_metadata(conn)["data_scope_id"]
             self.space_ref = {"data_scope_id": scope, "space_key": "EXA"}

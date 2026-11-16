@@ -56,7 +56,7 @@ class ItemProjectsCase(unittest.TestCase):
         self.write_registry(REGISTERED)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="valkama", name="Projects", key=SPACE)
+        service.create_planning_space(self.conn, name="Projects", key=SPACE)
         self.conn.commit()
 
     def write_registry(self, projects: dict[str, str]) -> None:
@@ -448,7 +448,7 @@ class ProjectFilterTests(ItemProjectsCase):
         return sorted(str(item["reference"]) for item in answer["work_items"])
 
     def test_the_project_filter_reads_every_space_and_narrows_to_a_space_given(self) -> None:
-        service.create_planning_space(self.conn, project_id="rover", name="Other", key="OTH")
+        service.create_planning_space(self.conn, name="Other", key="OTH")
         here = self.task("Here", projects=["rover"])
         goal = self.task("Umbrella", kind="goal")
         under = self.task("Under the goal", parent=goal, projects=["rover"])

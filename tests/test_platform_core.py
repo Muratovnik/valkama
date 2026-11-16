@@ -248,9 +248,7 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
             self.assertEqual(b"\n", response.readline())
             writer = store.connect()
             try:
-                planning_service.create_planning_space(
-                    writer, project_id="streamed", name="Streamed", key="STR"
-                )
+                planning_service.create_planning_space(writer, name="Streamed", key="STR")
                 writer.commit()
             finally:
                 writer.close()

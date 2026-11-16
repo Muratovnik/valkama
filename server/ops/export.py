@@ -111,10 +111,7 @@ def _planning(conn: sqlite3.Connection, chosen: tuple[str, ...] | None) -> dict:
     try:
         spaces = planning_service.list_planning_spaces(conn)
         if chosen is not None:
-            wanted = {
-                str(planning_service.get_planning_space(conn, reference)["planning_space_id"])
-                for reference in chosen
-            }
+            wanted = {planning_service.space_identity(conn, reference) for reference in chosen}
             spaces = [space for space in spaces if str(space["planning_space_id"]) in wanted]
         items: list[dict] = []
         questions: list[dict] = []

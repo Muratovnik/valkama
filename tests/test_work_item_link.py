@@ -109,7 +109,7 @@ class LinkedStoreCase(unittest.TestCase):
         with mock.patch.dict(os.environ, {"VALKAMA_DB": str(path)}):
             conn = store.connect()
             try:
-                service.create_planning_space(conn, project_id="seeded", name=key, key=key)
+                service.create_planning_space(conn, name=key, key=key)
                 for index in range(items):
                     service.create_work_item(conn, space=key, title=f"{key} item {index}")
                 conn.commit()
@@ -743,7 +743,7 @@ class WorkItemUrlTests(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="seeded", name="Main", key="MAIN")
+        service.create_planning_space(self.conn, name="Main", key="MAIN")
         service.create_work_item(self.conn, space="MAIN", title="One")
         self.conn.commit()
 

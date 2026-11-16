@@ -340,7 +340,8 @@ TOOLS = [
     _tool(
         "list_planning_spaces",
         "List planning spaces",
-        "Every planning space with its key, its project, and how much work it holds.",
+        "Every planning space with its key, its projects and default project, its launch"
+        " place and how much work it holds.",
         READ_ONLY,
         {},
     ),
@@ -348,7 +349,8 @@ TOOLS = [
         "get_planning_space",
         "Read a planning space",
         "One space and its workflow: the states, their categories, and the"
-        " transitions between them. Read this before asking for a state by name.",
+        " transitions between them, its projects with their roots, and its launch place."
+        " Read this before asking for a state by name.",
         READ_ONLY,
         {"space": _SPACE},
         ["space"],
@@ -356,11 +358,12 @@ TOOLS = [
     _tool(
         "create_planning_space",
         "Create a planning space",
-        "A new space in one project, with the default workflow. Its key is derived"
-        " from the name unless you name one.",
+        "A new space with the default workflow and no projects. Its key is derived from"
+        " the name unless you name one. A project joins a space through the registry"
+        " command: valkama projects bind <project> --space <KEY>.",
         WRITES,
-        {"project_id": _STR, "name": _STR, "key": _STR},
-        ["project_id", "name"],
+        {"name": _STR, "key": _STR},
+        ["name"],
     ),
     _tool(
         "create_work_item",
@@ -1557,7 +1560,10 @@ def _answer(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object
 
 
 def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    return service.get_planning_space(conn, str(arguments["space"]))
+    (shown,) = item_projects.spaces_shown(
+        conn, [service.get_planning_space(conn, str(arguments["space"]))]
+    )
+    return shown
 
 
 OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {

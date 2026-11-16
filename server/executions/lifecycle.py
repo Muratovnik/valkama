@@ -26,6 +26,7 @@ import sqlite3
 import sys
 
 from .. import runner
+from ..planning import item_projects
 from ..planning import model as planning_model
 from ..planning import service as planning_service
 from ..sessions import op_ingest_session_event
@@ -199,13 +200,10 @@ def _launch_reserved(
 
 
 def _project_id(conn: sqlite3.Connection, planning_space_id: str) -> str:
-    """Which project this space belongs to, or an empty string when none does."""
+    """The default project the registry binds to this space, or an empty string when
+    it binds none or cannot be read."""
 
-    row = conn.execute(
-        "SELECT project_id FROM planning_spaces WHERE planning_space_id = ?",
-        (planning_space_id,),
-    ).fetchone()
-    return str(row[0] or "") if row is not None else ""
+    return item_projects.space_default_project(conn, planning_space_id) or ""
 
 
 def _correlation(conn: sqlite3.Connection, execution_id: str, record: dict) -> dict[str, str]:

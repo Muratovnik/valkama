@@ -56,17 +56,34 @@ MAX_SEARCH_PAGE = 200
 # -- reading -----------------------------------------------------------------
 
 
+#: The columns a space is read by, named: a store another build wrote answers a
+#: missing one with `StoreSchemaError` rather than with a record lacking a field.
+_SPACE_COLUMNS = "planning_space_id, name, key, provider_kind, launch_place, updated_at"
+
+
+def _space_record(row: sqlite3.Row) -> dict:
+    """A space as the store knows it. Its projects are the registry's, which
+    `item_projects.with_projects` adds where a space is shown."""
+
+    return {
+        "planning_space_id": row["planning_space_id"],
+        "name": row["name"],
+        "key": row["key"],
+        "provider_kind": row["provider_kind"],
+        "launch_place": row["launch_place"],
+    }
+
+
+@read_model.whole_store_read()
 def list_planning_spaces(conn: sqlite3.Connection) -> list[dict]:
     spaces = []
-    for row in conn.execute("SELECT * FROM planning_spaces ORDER BY name"):
+    for row in conn.execute(
+        f"SELECT {_SPACE_COLUMNS} FROM planning_spaces ORDER BY name"  # noqa: S608
+    ):
         counts = _space_counts(conn, str(row["planning_space_id"]))
         spaces.append(
             {
-                "planning_space_id": row["planning_space_id"],
-                "project_id": row["project_id"],
-                "name": row["name"],
-                "key": row["key"],
-                "provider_kind": row["provider_kind"],
+                **_space_record(row),
                 "work_items": counts["total"],
                 "open": counts["open"],
                 "active": counts["active"],
@@ -77,19 +94,17 @@ def list_planning_spaces(conn: sqlite3.Connection) -> list[dict]:
     return spaces
 
 
+@read_model.whole_store_read()
 def get_planning_space(conn: sqlite3.Connection, reference: str) -> dict:
     """One space, by id, key or name — whichever the caller has."""
 
-    row = _space_row(conn, reference)
-    workflow = store.workflow_for_space(conn, str(row["planning_space_id"]))
-    return {
-        "planning_space_id": row["planning_space_id"],
-        "project_id": row["project_id"],
-        "name": row["name"],
-        "key": row["key"],
-        "provider_kind": row["provider_kind"],
-        "workflow": _workflow_payload(conn, workflow),
-    }
+    identity = space_identity(conn, reference)
+    row = conn.execute(
+        f"SELECT {_SPACE_COLUMNS} FROM planning_spaces WHERE planning_space_id = ?",  # noqa: S608
+        (identity,),
+    ).fetchone()
+    workflow = store.workflow_for_space(conn, identity)
+    return {**_space_record(row), "workflow": _workflow_payload(conn, workflow)}
 
 
 @read_model.whole_store_read()
@@ -493,10 +508,8 @@ def _page(found: list[dict], size: int, offset: int) -> dict:
 # -- writing -----------------------------------------------------------------
 
 
-def create_planning_space(
-    conn: sqlite3.Connection, *, project_id: str, name: str, key: str | None = None
-) -> dict:
-    space = store.create_space(conn, project_id=project_id, name=name, key=key)
+def create_planning_space(conn: sqlite3.Connection, *, name: str, key: str | None = None) -> dict:
+    space = store.create_space(conn, name=name, key=key)
     return get_planning_space(conn, space["planning_space_id"])
 
 
@@ -2682,6 +2695,16 @@ def _space_counts(conn: sqlite3.Connection, planning_space_id: str) -> dict:
         "active": int(row["active"] or 0),
         "completed": int(row["completed"] or 0),
     }
+
+
+def space_identity(conn: sqlite3.Connection, reference: object) -> str:
+    """The id of the space a caller named by its id, key or name.
+
+    It reads nothing but the space's identity, so a store another build wrote,
+    whose spaces lack a column the record reads, still answers it.
+    """
+
+    return str(_space_row(conn, reference)["planning_space_id"])
 
 
 def _space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:

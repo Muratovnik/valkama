@@ -33,9 +33,14 @@ otherwise cascade into them:
   gets them, every other task its space's former project, `migrated`; a container
   none. The file is the one `store` checked before the first write and left in
   `Context.memo`, beside the registry it read.
-- **labels** takes off each item the labels its entry in that file drops, the others in
-  their order, and brings the word index current inside the transaction: `item-projects` and the
-  labels marked items stale, and `indexes` reads the index.
+- **labels** takes off each item the labels its entry in that file drops, the
+  others in their order, and brings the word index current inside the transaction:
+  `item-projects` and the labels marked items stale, and `indexes` reads the index.
+- **spaces** rebuilds `planning_spaces` without the project each space held and
+  with the place an agent launched from one of its cards works, `space` for each.
+  `item-projects` has read that project, which the registry now binds to the
+  space. A name becomes the space's alone: no two spaces share one, as `store`
+  checked before the first write.
 - **last-route** drops the last route the shell remembered when its scope is a project:
   a space is the scope now, and the address it names no longer opens.
 
@@ -45,7 +50,7 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
-The postconditions `fresh-shape` to `second-run` and `task-projects` to `routes` are checked after the steps, inside the
+The postconditions `fresh-shape` to `second-run` and `store-identity` to `routes` are checked after the steps, inside the
 same transaction; `store` adds `recovery-point`, the recovery point.
 """
 
@@ -269,6 +274,9 @@ class Oracle:
     #: Every remembered preference, record by key, and the keys `last-route` drops.
     ui_prefs: dict[str, str] = field(default_factory=dict)
     dropped_prefs: list[str] = field(default_factory=list)
+    #: The store's identity and each space as `spaces` keeps it: id, key, name, next number.
+    data_scope_id: str = ""
+    spaces: set[tuple[str, str, str, int]] = field(default_factory=set)
 
 
 def _oracle(context: Context) -> Oracle:
@@ -652,6 +660,8 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         for key, record in oracle.ui_prefs.items()
         if key == _LAST_ROUTE and _project_scoped(record)
     )
+    oracle.data_scope_id = _data_scope_id(conn)
+    oracle.spaces = _spaces(conn)
     context.memo["oracle"] = oracle
     context.memo["renames"] = renames
     return {
@@ -734,6 +744,20 @@ def _project_scoped(record: str) -> bool:
         return False
     scope = value.get("scope") if isinstance(value, dict) else None
     return isinstance(scope, dict) and scope.get("kind") == "project"
+
+
+def _data_scope_id(conn: sqlite3.Connection) -> str:
+    row = conn.execute("SELECT data_scope_id FROM platform_store_metadata").fetchone()
+    return "" if row is None else str(row[0])
+
+
+def _spaces(conn: sqlite3.Connection) -> set[tuple[str, str, str, int]]:
+    return {
+        (str(row[0]), str(row[1]), str(row[2]), int(row[3]))
+        for row in conn.execute(
+            "SELECT planning_space_id, key, name, next_number FROM planning_spaces"
+        )
+    }
 
 
 def _oracle_needed(conn: sqlite3.Connection, context: Context) -> bool:
@@ -1384,7 +1408,42 @@ def _check_labels(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError("an item still holds a label its entry drops")
 
 
-# -- `last-route`: the last route -------------------------------------------------------
+# -- the space without its project ---------------------------------------------
+
+
+def _space_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(planning_spaces)")}
+    return "project_id" in columns or "launch_place" not in columns
+
+
+def _rebuild_spaces(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`spaces`: `planning_spaces` as a fresh store holds it, each space launching in itself.
+
+    Every column but the project is kept as it was; the launch place is the one
+    every space starts with.
+    """
+
+    del context
+    recreated = planning_store.rebuild_table(
+        conn,
+        "planning_spaces",
+        planning_store.table_definition(
+            "planning_spaces", f"planning_spaces{planning_store.REPLACEMENT}"
+        ),
+        "SELECT planning_space_id, name, key, provider_kind, next_number,"  # noqa: S608
+        f" '{model.LAUNCH_PLACES[0]}', created_at, updated_at FROM planning_spaces",
+    )
+    spaces = int(conn.execute("SELECT COUNT(*) FROM planning_spaces").fetchone()[0])
+    return {"spaces": spaces, "recreated": recreated}
+
+
+def _check_space(conn: sqlite3.Connection, context: Context) -> None:
+    if _space_needed(conn, context):
+        raise UnmetError("planning_spaces still holds a project or has no launch place")
+
+
+# -- the last route ------------------------------------------------------------
 
 _LAST_ROUTE = "last-route"
 #: The remembered route whose scope is a project, read in SQL for `last-route`.
@@ -1429,6 +1488,7 @@ STEPS = (
     Step("checks", "checks", _create_trigger, _trigger_needed, _check_trigger),
     Step("item-projects", "item projects", _create_item_projects, _item_projects_needed, _check_item_projects),
     Step("labels", "labels", _drop_labels, _labels_needed, _check_labels),
+    Step("spaces", "the space", _rebuild_spaces, _space_needed, _check_space),
     Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
 )
 
@@ -1586,7 +1646,7 @@ def _p5(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
 _DEFAULT_KEYS = frozenset(key for key, _, _ in model.DEFAULT_STATES)
 
 
-def _holds_categories(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _p6(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     oracle = _oracle(context)
     found = [
         f"a state is still in {row[0]}"
@@ -1612,7 +1672,7 @@ def _holds_categories(conn: sqlite3.Connection, context: Context) -> Mapping[str
     return {"standard_workflows": sum(1 for wf in oracle.workflows.values() if wf["standard"])}
 
 
-def _holds_history_keys(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _p7(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     oracle = _oracle(context)
     keys: dict[str, set[str]] = {}
     for workflow, key in conn.execute("SELECT workflow_id, key FROM workflow_states"):
@@ -1902,6 +1962,44 @@ def _holds_known_exceptions(conn: sqlite3.Connection, context: Context) -> Mappi
     return {"taken_out_of_closed_containers": moved, "tasks_left_in_review": review}
 
 
+def _holds_store_identity(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The store keeps its identity, and each space its id, key, name and next number."""
+
+    oracle = _oracle(context)
+    found = []
+    data_scope_id = _data_scope_id(conn)
+    if data_scope_id != oracle.data_scope_id:
+        found.append(f"the store is {data_scope_id}, not {oracle.data_scope_id}")
+    spaces = _spaces(conn)
+    found += [f"space {space} is missing" for space in sorted(oracle.spaces - spaces)]
+    found += [f"space {space} is extra" for space in sorted(spaces - oracle.spaces)]
+    _unmet(found, "the store and its spaces")
+    return {"data_scope_id": data_scope_id, "spaces": len(spaces)}
+
+
+def _holds_space_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """No space holds a project, and each launches in itself."""
+
+    del context
+    found = []
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(planning_spaces)")}
+    if "project_id" in columns:
+        found.append("planning_spaces still has the column project_id")
+    elif "launch_place" not in columns:
+        found.append("planning_spaces has no column launch_place")
+    else:
+        found += [
+            f"{row[0]} launches in {row[1]}"
+            for row in conn.execute(
+                "SELECT key, launch_place FROM planning_spaces WHERE launch_place != ?"
+                " ORDER BY key",
+                (model.LAUNCH_PLACES[0],),
+            )
+        ]
+    _unmet(found, "the spaces")
+    return {"launch_place": model.LAUNCH_PLACES[0]}
+
+
 def _holds_task_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     """Each task names the projects `oracle` read for it, each by its source; a container none."""
 
@@ -1982,6 +2080,8 @@ POSTCONDITIONS = (
     Postcondition("indexes", "indexes, triggers and the word index", _p13),
     Postcondition("identities", "identities and content", _p14),
     Postcondition("known-exceptions", "known exceptions", _p15),
+    Postcondition("store-identity", "the store and each space keep their identity", _p18),
+    Postcondition("space-projects", "no space holds a project; each launches in itself", _p19),
     Postcondition("task-projects", "each task names the projects the file and its space give", _p20),
     Postcondition("labels-kept", "each item keeps its labels but the ones its entry drops", _p21),
     Postcondition("routes", "no remembered route has a project as its scope", _p22),

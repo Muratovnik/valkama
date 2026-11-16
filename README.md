@@ -190,9 +190,10 @@ python valkama.py projects check
 ```
 
 The check reports `"ok": true` when Valkama's inventory and the projection
-used by its modules agree. To connect the project to Planning, use the MCP
-`create_planning_space` tool with `project_id` set to `my-project`, then bind
-the returned space key:
+used by its modules agree. To connect the project to Planning, create a space
+with the MCP `create_planning_space` tool, giving it a name no other space has (a
+key is derived from the name unless you give one); a space holds no project until
+one is bound to it. Then bind the project to the returned space key:
 
 ```powershell
 python valkama.py projects bind my-project --space MY

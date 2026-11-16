@@ -28,7 +28,7 @@ class ChecklistGroupTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="steps", name="Steps", key="STP")
+        service.create_planning_space(self.conn, name="Steps", key="STP")
         self.reference = service.create_work_item(self.conn, space="STP", title="Work")["reference"]
 
     def post(self, path: str, **payload: object) -> dict:

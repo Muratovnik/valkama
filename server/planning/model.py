@@ -78,6 +78,10 @@ ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "migrated"
 #: How a project came to an item (`item_projects`), strongest first: named by whoever
 #: filed or edited it, derived from its commits, or its space's former project.
 PROJECT_SOURCES = ("named", "commits", "migrated")
+#: Where an agent launched from a card works, a setting of its space: the root of the
+#: space's default project, or the root of a project the card names. The first is
+#: what every space starts with; only the owner's settings change it.
+LAUNCH_PLACES = ("space", "item_project")
 #: The one basis a caller names itself: an agent taking on work it was asked to do.
 #: A person's write is the owner's without naming it, and the rest the server gives.
 NAMED_BASIS = "assignment"

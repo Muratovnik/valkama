@@ -32,6 +32,7 @@ from typing import Any
 
 from .. import processes
 from ..projects import project_registry
+from ..store_identity.metadata import read_store_metadata
 from . import model
 
 #: The sources a project comes to an item by, strongest first.
@@ -113,6 +114,66 @@ def require_nameable(projects: Sequence[str], *, container: bool) -> None:
     raise model.PlanningError(
         f"[project] {subject} not registered: registered projects are {shown}"
     )
+
+
+def with_projects(
+    spaces: Iterable[Mapping[str, Any]],
+    listing: project_registry.RegistryResult,
+    data_scope_id: str,
+) -> list[dict]:
+    """Each space record with the projects the registry binds to it in `data_scope_id`.
+
+    `projects` lists them the default first, then by id, each with its root, and
+    `default_project` names the default one, or None when no project is bound. A
+    registry that was not read knows no projects, which is not the same as none:
+    both fields are then None.
+    """
+
+    known = listing["status"] == "available"
+    shown: list[dict] = []
+    for space in spaces:
+        if not known:
+            shown.append({**space, "projects": None, "default_project": None})
+            continue
+        bound = project_registry.space_projects(
+            listing["projects"], {"data_scope_id": data_scope_id, "space_key": str(space["key"])}
+        )
+        shown.append(
+            {
+                **space,
+                "projects": [
+                    {
+                        "project_id": str(project["project_id"]),
+                        "display_name": str(project["display_name"]),
+                        "root": str(project["canonical_root"]),
+                        "default": bool(project["planning_binding"]["default"]),
+                    }
+                    for project in bound
+                ],
+                "default_project": str(bound[0]["project_id"]) if bound else None,
+            }
+        )
+    return shown
+
+
+def spaces_shown(conn: sqlite3.Connection, spaces: Iterable[Mapping[str, Any]]) -> list[dict]:
+    """`with_projects` for spaces of the store `conn` reads, by the registry as it reads now."""
+
+    data_scope_id = str(read_store_metadata(conn)["data_scope_id"])
+    return with_projects(spaces, project_registry.read_registry(), data_scope_id)
+
+
+def space_default_project(conn: sqlite3.Connection, planning_space_id: str) -> str | None:
+    """The default project the registry binds to one space of this store, or None when
+    it binds none there or cannot be read."""
+
+    row = conn.execute(
+        "SELECT key FROM planning_spaces WHERE planning_space_id = ?", (planning_space_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    default: str | None = spaces_shown(conn, [{"key": str(row[0])}])[0]["default_project"]
+    return default
 
 
 def _stored(conn: sqlite3.Connection, work_item_id: str) -> dict[str, str]:

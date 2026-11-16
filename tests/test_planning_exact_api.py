@@ -37,9 +37,7 @@ class PlanningExactApiTests(unittest.TestCase):
         self.addCleanup(environment.stop)
         conn = store.connect()
         try:
-            planning_service.create_planning_space(
-                conn, project_id="example-project", name="Example Space", key="EXA"
-            )
+            planning_service.create_planning_space(conn, name="Example Space", key="EXA")
             created = planning_service.create_work_item(conn, space="EXA", title="Phase 1 item")
             planning_service.attach_ref(
                 conn, created["reference"], "memory", "lsn_example", label="Decision pointer"
@@ -242,9 +240,7 @@ class PlanningExactApiTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
                 conn = store.connect()
                 try:
-                    planning_service.create_planning_space(
-                        conn, project_id="example-project", name="Attached", key="EXA"
-                    )
+                    planning_service.create_planning_space(conn, name="Attached", key="EXA")
                     planning_service.create_work_item(conn, space="EXA", title="Attached item")
                     conn.commit()
                 finally:
@@ -298,9 +294,7 @@ class PlanningExactApiTests(unittest.TestCase):
     def test_global_portfolio_lists_every_space_with_its_projects(self) -> None:
         """Every space of the store, bound or not; a project no space holds is in none."""
 
-        planning_service.create_planning_space(
-            self.conn, project_id="example-project", name="Second Space", key="SEC"
-        )
+        planning_service.create_planning_space(self.conn, name="Second Space", key="SEC")
         self.conn.commit()
         unbound_root = self.root / "unbound"
         unbound_root.mkdir()
@@ -408,9 +402,7 @@ class PlanningExactApiTests(unittest.TestCase):
     def test_a_space_is_read_with_or_without_projects_and_says_why_it_cannot_be(self) -> None:
         """The stable reasons a read across spaces names, and the refusals of an exact one."""
 
-        planning_service.create_planning_space(
-            self.conn, project_id="example-project", name="Second Space", key="SEC"
-        )
+        planning_service.create_planning_space(self.conn, name="Second Space", key="SEC")
         self.conn.commit()
         routing = self.routing()
         self.assertIsNone(routing.unavailable_reason(self.space_ref))
@@ -442,9 +434,7 @@ class PlanningExactApiTests(unittest.TestCase):
     def test_a_project_narrows_its_space_or_one_whose_items_name_it(self) -> None:
         other_root = self.root / "other"
         other_root.mkdir()
-        planning_service.create_planning_space(
-            self.conn, project_id="example-project", name="Other Space", key="OTH"
-        )
+        planning_service.create_planning_space(self.conn, name="Other Space", key="OTH")
         self.conn.commit()
         self.write_registry(
             [

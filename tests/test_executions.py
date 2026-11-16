@@ -53,7 +53,7 @@ class LaunchHarness(unittest.TestCase):
         os.environ["VALKAMA_DB"] = os.path.join(self._dir.name, "test.sqlite3")
         os.environ["VALKAMA_CLAUDE_BIN"] = sys.executable
         self.conn = store.connect()
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         self.conn.commit()
         self.repo = os.path.join(self._dir.name, "repo")
         os.makedirs(self.repo)

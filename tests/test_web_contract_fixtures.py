@@ -107,7 +107,7 @@ class _Scenario:
         self.root = root
         conn = store.connect()
         try:
-            service.create_planning_space(conn, project_id=PROJECT, name="Contract", key=SPACE)
+            service.create_planning_space(conn, name="Contract", key=SPACE)
             self.reference = str(
                 service.create_work_item(conn, space=SPACE, title="Contract card")["reference"]
             )

@@ -284,9 +284,9 @@ class RowTests(FrameCase):
         self.assertEqual((None, "working"), (rows[epic]["state"], rows[task]["state"]))
 
     def test_spaces_come_by_key_and_a_space_with_no_rows_is_left_out(self) -> None:
-        service.create_planning_space(self.conn, project_id="a", name="Alpha", key="AA")
-        service.create_planning_space(self.conn, project_id="z", name="Zulu", key="ZZ")
-        service.create_planning_space(self.conn, project_id="m", name="Empty", key="MM")
+        service.create_planning_space(self.conn, name="Alpha", key="AA")
+        service.create_planning_space(self.conn, name="Zulu", key="ZZ")
+        service.create_planning_space(self.conn, name="Empty", key="MM")
         for key in ("ZZ", "AA"):
             self.pin(str(service.create_work_item(self.conn, space=key, title="x")["reference"]))
         self.pin(self.item())

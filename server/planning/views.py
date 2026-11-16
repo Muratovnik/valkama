@@ -11,7 +11,19 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import calls, item_tree, leases, live_work, model, read_model, service, states, store
+from ..projects import project_registry
+from ..store_identity.metadata import read_store_metadata
+from . import (
+    calls,
+    item_projects,
+    item_tree,
+    leases,
+    live_work,
+    model,
+    read_model,
+    service,
+    states,
+)
 
 READ_MODEL_INTERFACE = f"{model.PLANNING_INTERFACE}-read-model"
 
@@ -35,17 +47,17 @@ def planning_payload(conn: sqlite3.Connection, *, space: str | None = None) -> d
     chosen = service.get_planning_space(conn, space or spaces[0]["planning_space_id"])
     space_id = str(chosen["planning_space_id"])
     items = service.list_work_items(conn, space=space_id, limit=None)
+    workflow = chosen.pop("workflow")
+    # The store this read is of names the spaces its projects are bound to.
+    listing = project_registry.read_registry()
+    data_scope_id = str(read_store_metadata(conn)["data_scope_id"])
+    spaces = item_projects.with_projects(spaces, listing, data_scope_id)
+    (shown,) = item_projects.with_projects([chosen], listing, data_scope_id)
     return {
         "interface_version": READ_MODEL_INTERFACE,
         "planning_spaces": spaces,
-        "planning_space": {
-            "planning_space_id": chosen["planning_space_id"],
-            "project_id": chosen["project_id"],
-            "name": chosen["name"],
-            "key": chosen["key"],
-            "provider_kind": chosen["provider_kind"],
-        },
-        "workflow": chosen["workflow"],
+        "planning_space": shown,
+        "workflow": workflow,
         "work_items": items,
         "links": _links(conn, space_id),
         "stale_claims": stale_claims(conn, space=space_id),
@@ -88,7 +100,7 @@ def stale_claims(
     parameters: list[object] = []
     if space is not None:
         clauses.append("w.planning_space_id = ?")
-        parameters.append(str(service.get_planning_space(conn, space)["planning_space_id"]))
+        parameters.append(service.space_identity(conn, space))
     query = service.with_clauses(
         "SELECT w.*, p.key || '-' || w.number AS reference, s.key, s.name, s.category,"
         " s.is_terminal,"
@@ -329,30 +341,3 @@ def _links(conn: sqlite3.Connection, planning_space_id: str) -> list[dict]:
         }
         for row in rows
     ]
-
-
-def space_for_project(conn: sqlite3.Connection, project_id: str) -> dict | None:
-    """The space a project is bound to, or nothing when it has none yet."""
-
-    row = conn.execute(
-        "SELECT * FROM planning_spaces WHERE project_id = ? ORDER BY name LIMIT 1",
-        (model.text_field(project_id, "project_id", limit=160),),
-    ).fetchone()
-    if row is None:
-        return None
-    return service.get_planning_space(conn, str(row["planning_space_id"]))
-
-
-def ensure_space_for_project(
-    conn: sqlite3.Connection, project_id: str, *, name: str | None = None
-) -> dict:
-    """The project's space, created on first use rather than by a setup step."""
-
-    existing = space_for_project(conn, project_id)
-    if existing is not None:
-        return existing
-    store.create_space(conn, project_id=project_id, name=name or project_id)
-    answer = space_for_project(conn, project_id)
-    if answer is None:  # pragma: no cover - the insert above either raises or lands
-        raise model.PlanningError("planning space creation did not persist")
-    return answer

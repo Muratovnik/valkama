@@ -25,7 +25,10 @@ import {
   EVENT_DETAIL_MAX,
   LABELS_DETAIL_MAX,
 } from '@/shared/api/planningEventActions.ts'
-import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
+import { spaceBriefSchema, spaceIdentitySchema, TITLE } from '@/shared/api/planningSpaceModel.ts'
+import { enumField, ID, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
+
+export { SPACE_KEY, TITLE } from '@/shared/api/planningSpaceModel.ts'
 
 export const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
 const PLANNING_API = 'valkama-planning-api' as const
@@ -55,9 +58,7 @@ const REF_KINDS = ['commit', 'memory', 'session', 'url'] as const
 
 /** `MAIN-142`: what a person types and what a URL carries. */
 export const WORK_ITEM_REFERENCE = /^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u
-export const SPACE_KEY = /^[A-Z][A-Z0-9]{1,7}$/u
 export const STATE_KEY = /^[a-z][a-z0-9-]{0,31}$/u
-export const TITLE = /^[^\u{0}]{1,200}$/u
 
 /**
  * Text the server composes itself (a warning, a refusal joining its guards),
@@ -422,23 +423,6 @@ const workItemSchema = strictObject({
   // The holder whose claim a close ended.
   released: holderField().optional(),
 }).refine(...stateOrDerived)
-
-const spaceIdentityShape = {
-  planning_space_id: boundedText(UUID, 36),
-  project_id: boundedText(PROJECT_ID, 160),
-  name: boundedText(TITLE, 200),
-  key: boundedText(SPACE_KEY, 8),
-  provider_kind: enumField(['local'] as const),
-}
-const spaceIdentitySchema = strictObject(spaceIdentityShape)
-const spaceBriefSchema = strictObject({
-  ...spaceIdentityShape,
-  work_items: positiveInt(true),
-  open: positiveInt(true),
-  active: positiveInt(true),
-  completed: positiveInt(true),
-  updated_at: boundedText(ISO, 96),
-})
 
 const workflowSchema = strictObject({
   workflow_id: boundedText(UUID, 36),

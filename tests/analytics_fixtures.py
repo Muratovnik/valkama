@@ -67,7 +67,7 @@ class UsageStore(unittest.TestCase):
             self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        planning.create_planning_space(self.conn, project_id="alpha", name="Alpha", key="MAIN")
+        planning.create_planning_space(self.conn, name="Alpha", key="MAIN")
         self.conn.commit()
         self.runs: dict[tuple[str, str], int] = {}
 

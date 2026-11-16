@@ -42,7 +42,7 @@ class HeldTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="held", name="Held", key="HLD")
+        service.create_planning_space(self.conn, name="Held", key="HLD")
         self.conn.commit()
 
     # -- helpers -------------------------------------------------------------

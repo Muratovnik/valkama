@@ -23,13 +23,13 @@ from pathlib import Path
 from unittest import mock
 from urllib.parse import urlencode
 
-from server import http_surface, mcp_surface, store
+from server import federation, http_surface, mcp_surface, store
 from server.ops import tray
 from server.planning import read_model, service
 from server.projects import project_registry, scopes
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
-from tests import schema9
+from tests import schema9, schema17
 from tests.registry_fixtures import project_entry, registry_bytes
 
 CODE = "store_schema_mismatch"
@@ -59,7 +59,7 @@ class AttachedSchemaCase(unittest.TestCase):
         environment.start()
         self.addCleanup(environment.stop)
         with contextlib.closing(store.connect()) as conn:
-            service.create_planning_space(conn, project_id="own", name="Own", key="OWN")
+            service.create_planning_space(conn, name="Own", key="OWN")
             conn.commit()
         registry_patch = mock.patch.object(
             project_registry, "_read_registry_bytes", self.registry.read_bytes
@@ -188,13 +188,16 @@ class HttpTests(AttachedSchemaCase):
                 self.assertEqual(404, missing.status)
 
     def test_a_board_the_store_cannot_answer_is_refused_the_same_way(self) -> None:
-        """The first build has no `execution_events`, so its board read cannot run either."""
+        """Neither build's store has the launch place its spaces are read with, and the
+        first has no `execution_events` either, so neither board read can run."""
 
-        _path, space_ref = self.attached_older(schema9.FIXTURE)
-        status, body = self.board(space_ref)
-        self.assertEqual(409, status, body)
-        self.assertEqual(CODE, json.loads(body)["error"]["code"])
-        self.assert_nothing_internal(body)
+        for name, fixture in FIXTURES.items():
+            with self.subTest(store=name):
+                _path, space_ref = self.attached_older(fixture)
+                status, body = self.board(space_ref)
+                self.assertEqual(409, status, body)
+                self.assertEqual(CODE, json.loads(body)["error"]["code"])
+                self.assert_nothing_internal(body)
 
     def test_what_the_store_can_answer_it_still_answers(self) -> None:
         """Refusing the card must not cost the listings that work on such a store."""
@@ -228,12 +231,6 @@ class HttpTests(AttachedSchemaCase):
                     [source["status"] for source in json.loads(body)["coverage"]],
                 )
 
-    def test_the_last_public_release_s_store_keeps_its_board(self) -> None:
-        _path, space_ref = self.attached_older(schema9.LAST)
-        status, body = self.board(space_ref)
-        self.assertEqual(200, status, body)
-        self.assertEqual(2, len(json.loads(body)["work_items"]))
-
     def test_a_current_store_reads_its_card_as_it_always_did(self) -> None:
         """The control: the refusal is for a store that cannot answer, not for attached ones."""
 
@@ -242,7 +239,7 @@ class HttpTests(AttachedSchemaCase):
             mock.patch.dict(os.environ, {"VALKAMA_DB": str(path)}),
             contextlib.closing(store.connect()) as conn,
         ):
-            service.create_planning_space(conn, project_id="kept", name="Kept", key="KEEP")
+            service.create_planning_space(conn, name="Kept", key="KEEP")
             service.create_work_item(conn, space="KEEP", title="Current item")
             conn.commit()
         space_ref = self.attach(path)
@@ -261,7 +258,7 @@ class HttpTests(AttachedSchemaCase):
             mock.patch.dict(os.environ, {"VALKAMA_DB": str(path)}),
             contextlib.closing(store.connect()) as conn,
         ):
-            service.create_planning_space(conn, project_id="kept", name="Kept", key="KEEP")
+            service.create_planning_space(conn, name="Kept", key="KEEP")
             service.create_work_item(conn, space="KEEP", title="Item")
             conn.execute("DROP TABLE work_item_refs")
             conn.commit()
@@ -316,6 +313,59 @@ class McpTests(AttachedSchemaCase):
                 self.assertTrue(result["isError"], result)
                 self.assertEqual("not_found", result["structuredContent"]["error"]["code"])
                 self.assertEqual(before, digest(path))
+
+
+class FederationTests(AttachedSchemaCase):
+    """Every attached store's spaces: one a 2.9 build wrote cannot answer, the rest do."""
+
+    def test_a_2_9_store_is_unavailable_with_its_reason_and_the_others_are_listed(self) -> None:
+        older = self.root / "older-29.sqlite3"
+        schema17.build_2_9(str(older))
+        with contextlib.closing(sqlite3.connect(older)) as conn:
+            schema9.old_space(conn, project_id="kept", name="Kept", key="KEEP")
+            conn.commit()
+        current = self.root / "current.sqlite3"
+        with contextlib.closing(store.connect(str(current))) as conn:
+            service.create_planning_space(conn, name="Far", key="FAR")
+            conn.commit()
+            far = {"data_scope_id": read_store_metadata(conn)["data_scope_id"], "space_key": "FAR"}
+        scopes.save(str(self.primary), [])
+        scopes.attach(str(self.primary), "older", str(older))
+        scopes.attach(str(self.primary), "current", str(current))
+        entry = project_entry("kept", self.root)
+        entry["planning_binding"] = planning_space_entity(far)
+        self.registry.write_bytes(registry_bytes([entry]))
+        before = digest(older)
+
+        listing = federation.federated_spaces()
+
+        by_scope = {scope["name"]: scope for scope in listing["scopes"]}
+        self.assertEqual(
+            (
+                False,
+                "this store was written by another build of Valkama and cannot answer this read",
+            ),
+            (by_scope["older"]["available"], by_scope["older"]["detail"]),
+        )
+        self.assertTrue(by_scope["current"]["available"])
+        spaces = {(space["scope"], space["key"]): space for space in listing["planning_spaces"]}
+        self.assertEqual({("current", "FAR"), ("personal", "OWN")}, set(spaces))
+        # Each space names the projects its own store's binding gives it.
+        self.assertEqual(
+            ("kept", ["kept"]),
+            (
+                spaces[("current", "FAR")]["default_project"],
+                [project["project_id"] for project in spaces[("current", "FAR")]["projects"]],
+            ),
+        )
+        self.assertEqual(
+            ([], None),
+            (
+                spaces[("personal", "OWN")]["projects"],
+                spaces[("personal", "OWN")]["default_project"],
+            ),
+        )
+        self.assertEqual(before, digest(older))
 
 
 class WholeStoreReadTests(unittest.TestCase):

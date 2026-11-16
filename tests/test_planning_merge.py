@@ -51,7 +51,7 @@ class MergeTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="merge", name="Merge", key="MRG")
+        service.create_planning_space(self.conn, name="Merge", key="MRG")
         self.survivor = self.item("The change")
         self.first = self.item("Found it once")
         self.second = self.item("Found it again")
@@ -298,7 +298,7 @@ class MergeRelationTests(MergeTestCase):
 
 class MergeRefusalTests(MergeTestCase):
     def test_what_cannot_be_one_change_is_refused_before_anything_is_written(self) -> None:
-        service.create_planning_space(self.conn, project_id="far", name="Far", key="FAR")
+        service.create_planning_space(self.conn, name="Far", key="FAR")
         elsewhere = str(service.create_work_item(self.conn, space="FAR", title="Far")["reference"])
         closed = self.item("Closed")
         service.set_summary(self.conn, closed, {"done": "d", "next": "n"})

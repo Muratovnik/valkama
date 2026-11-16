@@ -24,9 +24,7 @@ class PlanningApiTests(unittest.TestCase):
         self.addCleanup(self.conn.close)
         # A fresh store holds no Board domain at all: nothing to drop, and the
         # boundary is simply live.
-        self.space = service.create_planning_space(
-            self.conn, project_id="example-workspace", name="Quality Assurance"
-        )
+        self.space = service.create_planning_space(self.conn, name="Quality Assurance")
 
     def get(self, path: str, **parameters: str) -> dict:
         status, body = planning_api.handle_get(
@@ -173,27 +171,21 @@ class PlanningApiTests(unittest.TestCase):
         self.assertEqual([created["reference"]], [node["reference"] for node in graph["nodes"]])
         self.assertTrue(graph["nodes"][0]["workable"])
 
-    def test_a_read_resolves_the_space_from_the_project_that_binds_it(self) -> None:
-        """A browser knows its project long before it knows a space id."""
+    def test_a_project_does_not_choose_the_space_a_read_shows(self) -> None:
+        """A space holds no project, so the read and the graph are of the space named."""
 
-        created = self.post("/api/planning/work-items", space="QA", title="Bound")
-        payload = self.get("/api/planning", project="example-workspace")
-        self.assertEqual(
-            self.space["planning_space_id"], payload["planning_space"]["planning_space_id"]
-        )
-        self.assertEqual(
-            [created["reference"]], [item["reference"] for item in payload["work_items"]]
-        )
-        graph = self.get("/api/planning/graph", project="example-workspace")
-        self.assertEqual([created["reference"]], [node["reference"] for node in graph["nodes"]])
-
-    def test_a_read_refuses_two_answers_to_one_question_and_an_unbound_project(self) -> None:
-        with self.assertRaisesRegex(planning_api.PlanningHttpError, "two answers to one question"):
-            planning_api.handle_get(
-                self.conn, "/api/planning", {"space": ["QA"], "project": ["example-workspace"]}
-            )
-        with self.assertRaisesRegex(planning_api.PlanningHttpError, "no planning space yet"):
-            planning_api.handle_get(self.conn, "/api/planning", {"project": ["sample-project"]})
+        for path in ("/api/planning", "/api/planning/graph"):
+            for parameters in (
+                {"project": ["example-workspace"]},
+                {"space": ["QA"], "project": ["x"]},
+            ):
+                with (
+                    self.subTest(path=path, parameters=parameters),
+                    self.assertRaisesRegex(
+                        planning_api.PlanningHttpError, "a project does not choose a planning space"
+                    ),
+                ):
+                    planning_api.handle_get(self.conn, path, parameters)
 
     def test_a_read_refuses_a_repeated_parameter_and_a_missing_one(self) -> None:
         with self.assertRaisesRegex(planning_api.PlanningHttpError, "at most once"):
@@ -310,7 +302,7 @@ class PlanningApiTests(unittest.TestCase):
         self.assertEqual(created["reference"], picked["work_item"]["reference"])
 
     def test_a_space_is_created_through_the_boundary(self) -> None:
-        made = self.post("/api/planning/spaces", project_id="sims", name="Sample Mods Manager")
+        made = self.post("/api/planning/spaces", name="Sample Mods Manager")
         self.assertEqual("SMM", made["key"])
         self.assertEqual(2, len(self.get("/api/planning/spaces")["planning_spaces"]))
 

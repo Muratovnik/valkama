@@ -87,7 +87,7 @@ class LiveStreamTests(unittest.TestCase):
         self.addCleanup(registry.stop)
         conn = store.connect()
         try:
-            service.create_planning_space(conn, project_id="live", name="Live", key="LIVE")
+            service.create_planning_space(conn, name="Live", key="LIVE")
             self.reference = str(
                 service.create_work_item(conn, space="LIVE", title="Pinned")["reference"]
             )
@@ -144,6 +144,18 @@ class LiveStreamTests(unittest.TestCase):
         self.assertEqual("live", name)
         assert isinstance(frame, dict)
         self.assertEqual([self.reference], [row["reference"] for row in frame["spaces"][0]["rows"]])
+
+    def test_the_spaces_stream_names_each_space_s_projects(self) -> None:
+        response = self.open("/api/events?view=spaces")
+        self.assertEqual(200, response.status)
+        ((_name, frame),) = self.events(response, 1.0)
+        assert isinstance(frame, dict)
+        (space,) = frame["planning_spaces"]
+        # The registry binds no project to LIVE: none, rather than unknown.
+        self.assertEqual(
+            ("LIVE", [], None, "space"),
+            (space["key"], space["projects"], space["default_project"], space["launch_place"]),
+        )
 
     def test_a_live_stream_takes_no_scope(self) -> None:
         for query in ("project=live&data_scope_id=x&space_key=LIVE", "space_key=LIVE"):

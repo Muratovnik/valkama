@@ -35,9 +35,7 @@ class ExportSectionTests(unittest.TestCase):
         self.addCleanup(self.conn.close)
 
     def test_the_planning_trail_is_the_whole_export(self) -> None:
-        planning_service.create_planning_space(
-            self.conn, project_id="export", name="Export", key="EXP"
-        )
+        planning_service.create_planning_space(self.conn, name="Export", key="EXP")
         planning_service.create_work_item(self.conn, space="EXP", title="Kept in the export")
         self.conn.commit()
         payload = json.loads(export.render(export.export_installation(self.conn)))
@@ -78,9 +76,7 @@ class ExportSectionTests(unittest.TestCase):
                 now=normalize.timestamp(time.time_ns()),
             )
         (archive,) = transcripts.current(self.conn).values()
-        planning_service.create_planning_space(
-            self.conn, project_id="export", name="Export", key="EXP"
-        )
+        planning_service.create_planning_space(self.conn, name="Export", key="EXP")
         item = planning_service.create_work_item(self.conn, space="EXP", title="Refers to it")
         planning_service.attach_ref(self.conn, str(item["reference"]), "session", session_id)
         self.conn.commit()
@@ -157,9 +153,7 @@ class CompleteExportTests(unittest.TestCase):
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
         for key, name in ((self.BIG, "Big"), (self.SMALL, "Small")):
-            planning_service.create_planning_space(
-                self.conn, project_id="export", name=name, key=key
-            )
+            planning_service.create_planning_space(self.conn, name=name, key=key)
         bulk_items(self.conn, self.BIG, planning_service.MAX_LIST_PAGE + 1)
         bulk_items(self.conn, self.SMALL, 3)
 

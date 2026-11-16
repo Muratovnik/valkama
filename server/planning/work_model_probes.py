@@ -73,8 +73,7 @@ _ROWS: dict[str, dict[str, object]] = {
     "owner_alert_settings": {"key": "settings", "record_json": "{}", "updated_at": "probe"},
     "planning_spaces": {
         "planning_space_id": _NEW,
-        "project_id": _NEW,
-        "name": "probe",
+        "name": _NEW,
         "key": _NEW,
     },
     "platform_store_metadata": {

@@ -263,9 +263,7 @@ class MemoryLinkTests(unittest.TestCase):
         self.addCleanup(registry.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        planning_service.create_planning_space(
-            self.conn, project_id="sample", name="Sample", key="SMP"
-        )
+        planning_service.create_planning_space(self.conn, name="Sample", key="SMP")
         self.item = planning_service.create_work_item(
             self.conn, space="Sample", title="One work item", projects=["sample"]
         )
@@ -285,9 +283,7 @@ class MemoryLinkTests(unittest.TestCase):
     def test_the_work_is_every_item_that_names_the_project_in_any_space(self) -> None:
         """An item in a space whose project is another names its own projects."""
 
-        planning_service.create_planning_space(
-            self.conn, project_id="example-project", name="Example project", key="MAIN"
-        )
+        planning_service.create_planning_space(self.conn, name="Example project", key="MAIN")
         named = planning_service.create_work_item(
             self.conn, space="MAIN", title="Change the service", projects=["valkama"]
         )
