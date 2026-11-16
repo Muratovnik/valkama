@@ -929,7 +929,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   closed, is the page's, and its hint would hold up the next Escape. It goes with a press,
   a scroll, whose end asks again for what the pointer rests on, and the pointer leaving: a
   hint the pointer raised can be entered and stays while the pointer is on it, going a
-  moment after the pointer leaves both. Escape closes the hint and nothing else, never the
+  moment after the pointer leaves both. On its way from the element to such a hint the
+  pointer keeps it over whatever it crosses, as a rail row's cut name and pin: what it
+  crosses takes over once the pointer rests on it a moment or turns off the way, never as
+  it passes. Escape closes the hint and nothing else, never the
   drawer or menu under it; with no hint up it reaches them as before. A hint focus holds,
   and a chart period's, lets the pointer and a press through to what it covers. Where a hint
   stands follows what it is to its element, never a side its place writes: a detail stands

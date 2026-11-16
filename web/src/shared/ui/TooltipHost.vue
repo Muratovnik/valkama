@@ -69,6 +69,11 @@ useHintKind('tooltip', {
       ? namesHidden(anchor) && textIsClipped(anchor)
       : tooltipOf(anchor) !== undefined,
   isArea: inTooltipArea,
+  // A hint the pointer passes through is never entered, so nothing holds it on the way there.
+  reachable: () =>
+    passedThrough.value
+      ? null
+      : (document.querySelector('.tooltip-hint')?.getBoundingClientRect() ?? null),
 })
 
 /** This kind's hint, while the manager shows one. */

@@ -13,8 +13,11 @@
  *   kind.
  * - When the pointer leaves the anchor the hint stays `GRACE_MS`, and for as long as the pointer is
  *   on the hint itself (`[data-hint-surface]`): a hint the pointer raised can be entered (WCAG 2.2,
- *   1.4.13). Another anchor takes over at once. A surface that lets the pointer through, as one
- *   following the pointer along a chart does, is never entered, and goes after the same grace.
+ *   1.4.13). Another anchor takes over at once, but on the way to a hint that can be entered
+ *   (`HintKind.reachable`, `hintWay.ts`): there what the pointer crosses takes over only once it
+ *   stands still on it for `GRACE_MS`, or leaves the way. A surface that lets the pointer
+ *   through, as one following the pointer along a chart does, is never entered, and goes after
+ *   the same grace.
  *   One laid over its anchor (`HintKind.covers`), as a cut text's whole words are, lets the
  *   pointer and a press through to what it covers and is entered all the same: the pointer
  *   anywhere within it is on it, and what it presses there is what it covers.
@@ -40,6 +43,8 @@
  */
 import { computed, effectScope, onScopeDispose, shallowRef, watch } from 'vue'
 
+import { onWayTo } from '@/shared/ui/hintWay.ts'
+import type { Point } from '@/shared/ui/hintWay.ts'
 import { overlayTop } from '@/shared/ui/overlayStack.ts'
 
 /** How long the pointer rests on an anchor before its hint shows, in ms. */
@@ -68,6 +73,11 @@ export interface HintKind {
   isArea: (anchor: HTMLElement) => boolean
   /** The anchor the pointer on `target` asks for, or null. */
   pointedAnchor: (target: Element) => HTMLElement | null
+  /**
+   * The box of its shown surface where the pointer can enter it from its anchor, or null where
+   * it lets the pointer through: the pointer heading there keeps it over what lies between.
+   */
+  reachable?: () => DOMRect | null
   /** Whether the anchor's hint may show now: asked as it would open. */
   shows: (anchor: HTMLElement) => boolean
 }
@@ -120,6 +130,11 @@ let coolTimer: ReturnType<typeof setTimeout> | undefined
 let dismissed: { anchor: HTMLElement; part: Element | null } | null = null
 /** A key that moves focus, not a press, was the last input: focus that moves is the reader's. */
 let keyed = false
+/** Where the pointer stood last, and where it last stood on the shown hint's anchor. */
+let lastAt: Point | null = null
+let leftFrom: Point | null = null
+/** Runs while the pointer is on its way to the shown hint: at its end, what it is on asks. */
+let wayTimer: ReturnType<typeof setTimeout> | undefined
 /** What scrolled and closed a hint the pointer raised, until its scroll ends. */
 let scrolledBy: Node | null = null
 
@@ -153,6 +168,31 @@ function stopGrace() {
   graceTimer = undefined
 }
 
+function stopWay() {
+  clearTimeout(wayTimer)
+  wayTimer = undefined
+}
+
+/**
+ * Whether the pointer at `at` is on its way from the shown hint's anchor to the hint, which it
+ * raised and can enter: it left the anchor from `leftFrom`, and nothing took over since.
+ */
+function headingForHint(at: Point) {
+  const now = shown.value
+  if (now?.by !== 'pointer' || !leftFrom || hovered?.anchor !== now.anchor) return false
+  const box = kinds.get(now.kind)?.reachable?.()
+  return box !== null && box !== undefined && onWayTo(leftFrom, box, at)
+}
+
+/** The pointer goes on along the way: what it is on asks once it stands still there. */
+function onWay() {
+  stopWay()
+  wayTimer = setTimeout(() => {
+    wayTimer = undefined
+    arrive(lastTarget)
+  }, GRACE_MS)
+}
+
 function resolve(target: EventTarget | null, by: Raiser): Asked | null {
   if (!(target instanceof Element)) return null
   for (const [kind, rules] of kinds) {
@@ -178,6 +218,7 @@ function open(asked: Asked, by: Raiser, rested = false) {
   const now = shown.value
   if (now?.anchor === asked.anchor && now.kind === asked.kind && now.by === by) return
   shown.value = { ...asked, by, rested }
+  leftFrom = by === 'pointer' ? lastAt : null
 }
 
 /** The anchor the pointer is on: the one it rests on, or the one under the hint laid over it. */
@@ -188,6 +229,8 @@ function underPointer(): Asked | null {
 function close() {
   stopRest()
   stopGrace()
+  stopWay()
+  leftFrom = null
   if (!shown.value) return
   // Off a hint laid over its anchor the pointer is on what it covered, without moving: a scroll's
   // end asks for that again, and a press or Escape keeps it closed there.
@@ -252,13 +295,27 @@ function point(event: PointerEvent) {
     return
   }
   if (moved && scrolledBy && (event.movementX || event.movementY)) resume()
+  const at = { x: event.clientX, y: event.clientY }
+  lastAt = at
   // A move within the element already heard changes nothing else, unless it crosses the edge of
-  // a hint laid over that element; anchors are found on arrival.
+  // a hint laid over that element or goes on along the way to a hint; anchors are found on
+  // arrival.
   const over = coveredAt(event)
-  if (moved && target === lastTarget && over === covering) return
+  if (moved && target === lastTarget && over === covering && wayTimer === undefined) {
+    keepLeftFrom(at)
+    return
+  }
   lastTarget = target
   covering = over
-  arrive(target)
+  arrive(target, at)
+  keepLeftFrom(at)
+}
+
+/** The pointer stands on the shown hint's anchor, not on its way off it: the way starts here. */
+function keepLeftFrom(at: Point) {
+  const now = shown.value
+  if (wayTimer === undefined && now?.by === 'pointer' && hovered?.anchor === now.anchor)
+    leftFrom = at
 }
 
 /** A button is down: the pointer is dragging, and shows no hint but one that holds itself up. */
@@ -273,9 +330,13 @@ function resume() {
   if (hovered) enter(hovered)
 }
 
-/** The pointer is on `target` now: on the hint itself, on an anchor, or on neither. */
-function arrive(target: Element | null) {
+/**
+ * The pointer is on `target` now: on the hint itself, on an anchor, or on neither; `at`, where it
+ * moved to, unless it stood still there.
+ */
+function arrive(target: Element | null, at: Point | null = null) {
   if (target && (covering || surfaceOf(target))) {
+    stopWay()
     leave()
     onSurface = true
     stopGrace()
@@ -285,9 +346,16 @@ function arrive(target: Element | null) {
   onSurface = false
   const asked = target ? resolve(target, 'pointer') : null
   if (asked && asked.anchor === hovered?.anchor) {
+    stopWay()
     askAgain(asked, target)
     return
   }
+  // On its way from the anchor to the hint, the pointer passes over what lies between.
+  if (at && !offSurface && headingForHint(at)) {
+    onWay()
+    return
+  }
+  stopWay()
   leave()
   // Off the hint and onto an anchor whose hint does not show, the hint goes after its grace as
   // it does off its own anchor: it stayed up for as long as the pointer rested there.
@@ -315,6 +383,7 @@ function pointerOut(event: PointerEvent) {
   lastTarget = null
   onSurface = false
   covering = false
+  stopWay()
   leave()
   startGrace()
 }
@@ -445,6 +514,9 @@ function listen(): () => void {
 function reset() {
   stopRest()
   stopGrace()
+  stopWay()
+  lastAt = null
+  leftFrom = null
   clearTimeout(coolTimer)
   coolTimer = undefined
   shown.value = null
