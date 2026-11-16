@@ -1,6 +1,6 @@
 /**
  * What the hint-manager specs note of the window's hover surfaces, a hint's and a reference's
- * card's: every frame, every change of the count of hints, every arrival of the pointer and key,
+ * card's, a cut text's whole words laid over it counting as a hint: every frame, every change of the count of hints, every arrival of the pointer and key,
  * all on the page's own clock, and the points and boxes they aim the pointer at.
  */
 import type { Locator, Page } from '@playwright/test'
@@ -44,15 +44,19 @@ export const watchHints = (page: Page) =>
     )
     document.addEventListener('keydown', (event) => note(`key ${event.key}`), true)
     const now = (at: number): Frame => {
-      const hints = [...document.querySelectorAll('.tooltip-hint')]
+      const hints = [...document.querySelectorAll('.tooltip-hint, .whole-text')]
       const shown = hints[0]?.cloneNode(true) as Element | undefined
       for (const copy of shown?.querySelectorAll('[role="tooltip"]') ?? []) copy.remove()
-      const surfaces = [...document.querySelectorAll('.tooltip-hint, .reference-preview')]
+      const surfaces = [
+        ...document.querySelectorAll('.tooltip-hint, .whole-text, .reference-preview'),
+      ]
         .filter((surface) => {
           const { left, top, right, bottom } = surface.getBoundingClientRect()
           return right > left && bottom > top && bottom > 0 && top < innerHeight && right > 0
         })
-        .map((surface): 'card' | 'hint' => (surface.matches('.tooltip-hint') ? 'hint' : 'card'))
+        .map((surface): 'card' | 'hint' =>
+          surface.matches('.reference-preview') ? 'card' : 'hint',
+        )
       return { at, count: hints.length, surfaces, text: shown?.textContent ?? '' }
     }
     let last = now(performance.now()).count
@@ -98,7 +102,8 @@ export const boxOf = (locator: Locator) =>
     return { left, top, right, bottom }
   })
 
-export const hint = (page: Page) => page.locator('.tooltip-hint')
+/** The hint up, in either of its surfaces: a box of words, or a cut text's words laid whole. */
+export const hint = (page: Page) => page.locator('.tooltip-hint, .whole-text')
 
 /** Real time passing in the page, `ms` long, while its frames are noted. */
 export const pass = (page: Page, ms: number) =>

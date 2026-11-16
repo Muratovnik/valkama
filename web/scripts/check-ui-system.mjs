@@ -28,7 +28,7 @@ import {
 } from './ui-system/native-titles.mjs'
 import { ONE_LINE_COPIES, scanOneLineCopies } from './ui-system/one-line.mjs'
 import { scanRevealCopies } from './ui-system/reveal.mjs'
-import { scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
+import { COPIED_PAINT, scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
 import { collectVueSources, defaultSourceRoot } from './ui-system/sources.mjs'
 import { scanStateNames, STATE_NAME_READS } from './ui-system/state-names.mjs'
 import {
@@ -60,7 +60,7 @@ export function scanUiTree(root = defaultSourceRoot) {
   return [
     ...scanUiSources(sources),
     ...scanRevealCopies(sources),
-    ...scanSemanticStateOwnership(sources),
+    ...scanSemanticStateOwnership(sources, product ? COPIED_PAINT : new Map()),
     ...scanTokenHygiene(sources),
     ...scanTypeStyles(sources),
     ...scanBorderBudget(sources, budget),

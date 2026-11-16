@@ -15,6 +15,9 @@
  *   on the hint itself (`[data-hint-surface]`): a hint the pointer raised can be entered (WCAG 2.2,
  *   1.4.13). Another anchor takes over at once. A surface that lets the pointer through, as one
  *   following the pointer along a chart does, is never entered, and goes after the same grace.
+ *   One laid over its anchor (`HintKind.covers`), as a cut text's whole words are, lets the
+ *   pointer and a press through to what it covers and is entered all the same: the pointer
+ *   anywhere within it is on it, and what it presses there is what it covers.
  * - Focus a key brought (`:focus-visible` after a key, never after a press) shows its anchor's hint
  *   at once. Such a hint is read, never pressed: its surface lets a press through. A key that acts
  *   or dismisses (`ACTING_KEYS`) brings none: the focus the page moves in answer, into a layer it
@@ -52,6 +55,11 @@ const ACTING_KEYS = new Set(['Enter', ' ', 'Escape'])
 export interface HintKind {
   /** Whether its surface is worked on, not only read: a press on it keeps it. */
   interactive?: boolean
+  /**
+   * Whether the point stands within its shown surface, which lies over its anchor and lets the
+   * pointer through to what it covers: no event says the pointer is on such a surface.
+   */
+  covers?: (x: number, y: number) => boolean
   /** The anchor focus on `target` asks for, or null. */
   focusedAnchor: (target: Element) => HTMLElement | null
   /** Whether its surface holds itself up now, against the pointer, a drag and focus leaving. */
@@ -100,6 +108,8 @@ let hovered: Asked | null = null
 let lastTarget: Element | null = null
 /** The pointer is on the shown hint itself. */
 let onSurface = false
+/** It is there within a surface laid over its anchor (`HintKind.covers`), on what that covers. */
+let covering = false
 /** The anchor waiting out `REST_MS` under the pointer. */
 let pending: Asked | null = null
 let restTimer: ReturnType<typeof setTimeout> | undefined
@@ -122,6 +132,14 @@ const warm = () => shown.value !== null || coolTimer !== undefined
 function held() {
   const now = shown.value
   return now !== null && kinds.get(now.kind)?.holds?.(now.anchor) === true
+}
+
+/** Whether the pointer stands within the shown hint, a surface it raised over its anchor. */
+function coveredAt(event: PointerEvent) {
+  const now = shown.value
+  return (
+    now?.by === 'pointer' && kinds.get(now.kind)?.covers?.(event.clientX, event.clientY) === true
+  )
 }
 
 function stopRest() {
@@ -162,10 +180,19 @@ function open(asked: Asked, by: Raiser, rested = false) {
   shown.value = { ...asked, by, rested }
 }
 
+/** The anchor the pointer is on: the one it rests on, or the one under the hint laid over it. */
+function underPointer(): Asked | null {
+  return hovered ?? (covering && pointed.value ? resolve(pointed.value, 'pointer') : null)
+}
+
 function close() {
   stopRest()
   stopGrace()
   if (!shown.value) return
+  // Off a hint laid over its anchor the pointer is on what it covered, without moving: a scroll's
+  // end asks for that again, and a press or Escape keeps it closed there.
+  if (covering) hovered = underPointer()
+  covering = false
   shown.value = null
   onSurface = false
   clearTimeout(coolTimer)
@@ -225,9 +252,12 @@ function point(event: PointerEvent) {
     return
   }
   if (moved && scrolledBy && (event.movementX || event.movementY)) resume()
-  // A move within the element already heard changes nothing else; anchors are found on arrival.
-  if (moved && target === lastTarget) return
+  // A move within the element already heard changes nothing else, unless it crosses the edge of
+  // a hint laid over that element; anchors are found on arrival.
+  const over = coveredAt(event)
+  if (moved && target === lastTarget && over === covering) return
   lastTarget = target
+  covering = over
   arrive(target)
 }
 
@@ -245,12 +275,13 @@ function resume() {
 
 /** The pointer is on `target` now: on the hint itself, on an anchor, or on neither. */
 function arrive(target: Element | null) {
-  if (target && surfaceOf(target)) {
+  if (target && (covering || surfaceOf(target))) {
     leave()
     onSurface = true
     stopGrace()
     return
   }
+  const offSurface = onSurface
   onSurface = false
   const asked = target ? resolve(target, 'pointer') : null
   if (asked && asked.anchor === hovered?.anchor) {
@@ -258,6 +289,9 @@ function arrive(target: Element | null) {
     return
   }
   leave()
+  // Off the hint and onto an anchor whose hint does not show, the hint goes after its grace as
+  // it does off its own anchor: it stayed up for as long as the pointer rested there.
+  if (offSurface) startGrace()
   if (!asked) {
     startGrace()
     return
@@ -280,6 +314,7 @@ function pointerOut(event: PointerEvent) {
   pointed.value = null
   lastTarget = null
   onSurface = false
+  covering = false
   leave()
   startGrace()
 }
@@ -288,8 +323,9 @@ function press(event: PointerEvent) {
   keyed = false
   const now = shown.value
   if (now && kinds.get(now.kind)?.interactive && onShownSurface(event.target)) return
-  if (hovered && event.target instanceof Element)
-    dismissed = { anchor: hovered.anchor, part: event.target }
+  const under = underPointer()
+  if (under && event.target instanceof Element)
+    dismissed = { anchor: under.anchor, part: event.target }
   stopRest()
   close()
 }
@@ -300,7 +336,8 @@ function escape(event: KeyboardEvent) {
   event.stopImmediatePropagation()
   // The key goes no further, so the listener that hears every key never hears this one act.
   keyed = false
-  if (hovered) dismissed = { anchor: hovered.anchor, part: pointed.value }
+  const under = underPointer()
+  if (under) dismissed = { anchor: under.anchor, part: pointed.value }
   close()
 }
 
@@ -353,6 +390,20 @@ export function closeHint() {
   close()
 }
 
+/**
+ * An anchor's box changed size, as a text does when the window or a panel narrows or widens it:
+ * whether its hint may show is asked again, with no pointer moving. One that no longer shows
+ * closes; under a resting pointer, one that shows now asks for its hint as on arrival.
+ */
+export function hintAnchorResized(anchor: HTMLElement) {
+  const now = shown.value
+  if (now?.anchor === anchor) {
+    if (!kinds.get(now.kind)?.shows(anchor)) close()
+    return
+  }
+  if (hovered?.anchor === anchor && pending?.anchor !== anchor) enter(hovered)
+}
+
 /** An anchor left the page or stopped asking for a hint. */
 export function hintAnchorGone(anchor: HTMLElement) {
   if (hovered?.anchor === anchor) hovered = null
@@ -402,6 +453,7 @@ function reset() {
   hovered = null
   lastTarget = null
   onSurface = false
+  covering = false
   dismissed = null
   keyed = false
   scrolledBy = null

@@ -18,9 +18,10 @@
  * - Where a hint stands is its kind's and its list's (`hintPlacement.ts`), asked as it opens; the
  *   library keeps it inside the window from there, a hint aside of a list read against a box
  *   that follows its row as the page moves.
- * - A hint of the `clipped` kind shows only while its text is cut, measured as it would show;
- *   a name and a detail always show. A detail on an element whose own words are cut says
- *   them whole first, on a line of their own, measured the same way; uncut, it is the detail.
+ * - A hint of the `clipped` kind is not drawn here: its words are laid whole over the cut ones
+ *   (`WholeText`), the second surface of this host. A name and a detail always show. A detail
+ *   on an element whose own words are cut says them whole first, on a line of their own,
+ *   measured as it would show; uncut, it is the detail.
  * - A reference's preview wins on a reference: no hint is found there. The card is a surface of
  *   the same manager, so it and a hint replace each other as any two hints do.
  * - A hint the pointer raised can be entered by the pointer. One the keyboard holds up lets a
@@ -41,6 +42,7 @@ import {
   focusAnchorOf,
   inTooltipArea,
   pointerAnchorOf,
+  showsWhole,
   textIsClipped,
   tooltipDescriptions,
   tooltipOf,
@@ -49,14 +51,15 @@ import {
 } from '@/shared/ui/tooltipAnchors.ts'
 import TooltipBody from '@/shared/ui/TooltipBody.vue'
 import { bodyWidth, hintWidth } from '@/shared/ui/tooltipWidth.ts'
+import WholeText from '@/shared/ui/WholeText.vue'
+
+/** The element whose hint an event's target asks for, unless its hint is its words whole. */
+const besideOf = (anchor: HTMLElement | null) => (anchor && !showsWhole(anchor) ? anchor : null)
 
 useHintKind('tooltip', {
-  pointedAnchor: (target) => (previewAnchorOf(target) ? null : pointerAnchorOf(target)),
-  focusedAnchor: (target) => (previewAnchorOf(target) ? null : focusAnchorOf(target)),
-  shows(anchor) {
-    const tooltip = tooltipOf(anchor)
-    return Boolean(tooltip) && (!tooltip?.clipped || textIsClipped(anchor))
-  },
+  pointedAnchor: (target) => (previewAnchorOf(target) ? null : besideOf(pointerAnchorOf(target))),
+  focusedAnchor: (target) => (previewAnchorOf(target) ? null : besideOf(focusAnchorOf(target))),
+  shows: (anchor) => tooltipOf(anchor) !== undefined,
   isArea: inTooltipArea,
 })
 
@@ -168,6 +171,7 @@ watch(shown, (element) => {
       </HoverCardContent>
     </HoverCardPortal>
   </HoverCardRoot>
+  <WholeText />
   <!-- The words each element is described by, whether or not its hint shows. -->
   <div hidden>
     <span

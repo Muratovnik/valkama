@@ -802,8 +802,8 @@ The rail's width is the reader's. Its right edge is a window splitter, the same 
 drawer is resized by: dragged, or stepped 16px by the arrow keys, Home and End taking it to
 its narrowest and widest. It starts at 260px, goes no narrower than 200px and no wider than
 480px or than leaves the workspace 500px, and keeps the width chosen across a reload. A
-name the rail still cuts short says itself in a hint beside the rail; a name it does not
-cut shows none. At 760px and narrower the rail is its icons alone and has no edge to drag.
+name the rail still cuts short says itself whole over its own place, reading on past the
+rail's edge from where it stands (Hints); a name it does not cut shows none. At 760px and narrower the rail is its icons alone and has no edge to drag.
 
 The connection's state shows in the foot only while the connection is lost. Connected, the
 streams bring every change as it happens, so a green dot and a refresh nobody needed stood at
@@ -932,9 +932,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   and a chart period's, lets the pointer and a press through to what it covers. Where a hint
   stands follows what it is to its element, never a side its place writes: a detail stands
   below its element from the element's start, 6px off and at most 20rem wide, and above it only
-  where the window has no room below; a name stands below its icon, centred; a clipped text
-  above its words, centred. A list declares itself once on its container (`data-hint-list`),
-  and its rows say nothing: in it every hint stands aside of the list, level with its row's
+  where the window has no room below; a name stands below its icon, centred. A cut text's
+  hint stands nowhere beside it: its whole words are laid over the cut ones, the first letter
+  on the cut text's first letter in the same type and ink and on the ground under it, running
+  on to the right up to 8px short of the window's edge and wrapping by words only where the
+  whole text does not fit there, so on one line it covers no other row. It lets the pointer
+  and a press through to the element under it, which keeps its hover and does what it does,
+  and the pointer anywhere on it holds it up. A width that leaves the text whole takes it down
+  without a hover, and one that cuts it again lays it again. A list declares itself once on
+  its container (`data-hint-list`), and its rows say nothing: in it every other hint stands
+  aside of the list, level with its row's
   top, over no other row — the rail's past the rail's edge, a chart period's beside its column
   at the plot's top — on the left where the right has no room, on the roomier side drawn
   narrower down to 12rem where neither holds it, and above its element where neither has even

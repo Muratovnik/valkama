@@ -93,7 +93,7 @@ describe('a hint aside of a list', () => {
   it('stands level with the top of a row of two lines for each of its lines', () => {
     rail()
     for (const selector of ['.second .title', '.second .line', '.second .pin']) {
-      const reference = hintPlaceOf(one(selector), { kind: 'clipped' }, 120).reference as {
+      const reference = hintPlaceOf(one(selector), { kind: 'detail' }, 120).reference as {
         getBoundingClientRect: () => DOMRect
       }
       expect(reference.getBoundingClientRect().top).toBe(128)

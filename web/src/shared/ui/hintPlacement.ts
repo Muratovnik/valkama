@@ -7,8 +7,11 @@
  * - A `detail` stands below its element, its start at the element's start, and above it only
  *   where the window has no room below.
  * - A `name` stands below its icon, centred on it.
- * - A `clipped` text keeps the place it had: above its element, centred on it.
- * - In a list, every hint stands aside of it, its top level with its row's: a list of rows down
+ * - A `clipped` text is no hint beside its element: its whole words are laid over the cut ones,
+ *   its first letter on theirs, and run on to `EDGE` short of the window's right edge, wrapping
+ *   by words only where they do not fit there (`placeWhole`, drawn by `WholeText`). On one line
+ *   it covers its own line and nothing over or under it, in a list as anywhere.
+ * - In a list, every other hint stands aside of it, its top level with its row's: a list of rows down
  *   (`data-hint-list="rows"`, the rail) puts it past the list's own edge, clear of every row; a
  *   list of rows across (`data-hint-list="columns"`, a chart's periods) puts it beside its row.
  *   A list declares itself once on its container, and its rows say nothing.
@@ -78,8 +81,40 @@ export function placeHint(setting: HintSetting): HintPlace {
   if (asked?.side === 'top' || asked?.side === 'bottom') return { ...asked, aside: false }
   if (asked) return { ...beside(setting, asked.side, asked.align), aside: false }
   if (list) return beside(setting, 'right', 'start')
-  if (kind === 'clipped') return ABOVE
-  return { align: kind === 'detail' ? 'start' : 'center', aside: false, side: 'bottom' }
+  return { align: kind === 'name' ? 'center' : 'start', aside: false, side: 'bottom' }
+}
+
+/** What decides where the whole of a cut text is laid, measured as it opens. */
+export interface WholeSetting {
+  /** Where the whole text's first letter stands inside its own box as drawn, in px. */
+  inset: { left: number; top: number }
+  /** Where the cut text's first letter stands, in the window's coordinates. */
+  letter: { left: number; top: number }
+  /** How much larger than its type the cut text is drawn, as on a zoomed canvas; 1 elsewhere. */
+  scale: number
+  /** The window's width, without its scrollbar. */
+  window: number
+}
+
+export interface WholePlace {
+  /** Where its box stands, in the window's coordinates. */
+  left: number
+  top: number
+  /** How wide it is drawn at most before it wraps, in px of its own type. */
+  widest: number
+}
+
+/**
+ * Where the whole of a cut text is laid: its box placed so that its first letter stands on the
+ * cut text's, and as wide as the room from there to `EDGE` short of the window's right edge.
+ */
+export function placeWhole({ inset, letter, scale, window }: WholeSetting): WholePlace {
+  const left = letter.left - inset.left
+  return {
+    left,
+    top: letter.top - inset.top,
+    widest: Math.max(0, (window - EDGE - left) / scale),
+  }
 }
 
 /** A hint beside `aside`, on the side asked where its lines fit, else where there is room. */

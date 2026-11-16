@@ -23,7 +23,9 @@
  * in decide it (`hintPlacement.ts`). An argument, a side (`right`, `left-start`), is read only for
  * an exception `check:ui-system` registers with its reason. `clipped` shows the hint only while
  * the element or something in it has more text than its box shows: an ellipsis, a clamp, or a
- * label hidden for want of room. An empty or absent text shows nothing.
+ * label hidden for want of room. An empty or absent text shows nothing. Such a hint is not drawn
+ * beside its element: its words are laid whole over the cut ones, from their first letter and in
+ * their type (`WholeText`), so the text reads on where it was cut.
  *
  * The value is the text, or `{ text, note }`: the note is a second line in the quiet ink,
  * a state under an action. The text may run over several lines: a line break in it is kept,
@@ -56,7 +58,7 @@ import { shallowReactive } from 'vue'
 import type { Directive, DirectiveBinding } from 'vue'
 
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
-import { hintAnchorGone } from '@/shared/ui/hintManager.ts'
+import { hintAnchorGone, hintAnchorResized } from '@/shared/ui/hintManager.ts'
 import type { HintAlign, HintSide } from '@/shared/ui/hintPlacement.ts'
 
 /** A registered exception's argument: a side, and `-start` to stand level with the element's start. */
@@ -173,10 +175,26 @@ function setDescribedBy(element: HTMLElement, ids: string[]) {
   else element.removeAttribute('aria-describedby')
 }
 
+/**
+ * The cut texts' boxes, watched while they hold a hint that shows only while they are cut: a
+ * window or a panel that narrows or widens one changes whether it is cut, with no pointer moving.
+ */
+let resizes: ResizeObserver | null = null
+
+function watchSize(element: HTMLElement, cut: boolean) {
+  if (typeof ResizeObserver === 'undefined') return
+  resizes ??= new ResizeObserver((entries) => {
+    for (const { target } of entries) if (target instanceof HTMLElement) hintAnchorResized(target)
+  })
+  if (cut) resizes.observe(element)
+  else resizes.unobserve(element)
+}
+
 function forget(element: HTMLElement) {
   const tooltip = tooltips.get(element)
   if (!tooltip) return
   tooltips.delete(element)
+  watchSize(element, false)
   if (tooltip.names) element.removeAttribute('aria-label')
   if (tooltip.describes) {
     tooltipDescriptions.delete(tooltip.describes)
@@ -254,6 +272,7 @@ function file(
     text: main,
     words,
   })
+  if (clipped !== before?.clipped) watchSize(element, clipped)
 }
 
 export const vTooltip: Directive<HTMLElement, TooltipValue, TooltipKind, TooltipPlace> = {
@@ -320,6 +339,12 @@ export function tooltipRowOf(anchor: HTMLElement, part: Element | null): string 
 /** What the element's hint says and how it shows, read reactively. */
 export const tooltipOf = (element: Element) => tooltips.get(element)
 
+/**
+ * Whether the element's hint is its own words, shown only while they are cut, which are laid
+ * whole over them (`WholeText`) rather than drawn as a hint beside it (`TooltipHost`).
+ */
+export const showsWhole = (element: Element) => tooltipOf(element)?.clipped === true
+
 /** Overflow under which a box shows less than it holds. `visible` lets it run on. */
 const CUTS = new Set(['hidden', 'clip', 'auto', 'scroll'])
 /** How many elements inside a hint's element are looked at: a hint sits on a control. */
@@ -334,6 +359,24 @@ function shownText(box: HTMLElement): Text[] {
     if (node.textContent?.trim() && !(hidden && box.contains(hidden))) found.push(node as Text)
   }
   return found
+}
+
+/**
+ * The first letter the element shows, where it stands, and the element whose type draws it:
+ * where the whole of a cut text starts (`WholeText`). Null for an element that shows none.
+ */
+export function firstLetterOf(element: HTMLElement): { box: DOMRect; inked: Element } | null {
+  const range = document.createRange()
+  for (const node of shownText(element)) {
+    const at = node.data.search(/\S/u)
+    if (!node.parentElement || at < 0) continue
+    range.setStart(node, at)
+    range.setEnd(node, at + 1)
+    const box = range.getBoundingClientRect()
+    // A text laid out nowhere, as one a closed part holds, is not where the words start.
+    if (box.width > 0 && box.height > 0) return { box, inked: node.parentElement }
+  }
+  return null
 }
 
 /**

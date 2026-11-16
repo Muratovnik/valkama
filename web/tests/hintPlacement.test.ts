@@ -2,12 +2,14 @@
  * Where a hint stands, from its kind, its list and the room beside it, with no page. The window
  * is 1440px wide and a rem 16px, so a hint is drawn at most 320px wide and beside a list no
  * narrower than 192px; a hint stands 6px from what it is placed against and 8px from the edge.
+ * A cut text's whole words are laid over it rather than placed beside it: first letter on first
+ * letter, as wide as the room to 8px short of the window's right edge.
  */
 import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import { placeHint } from '@/shared/ui/hintPlacement.ts'
+import { placeHint, placeWhole } from '@/shared/ui/hintPlacement.ts'
 import type { Box, HintSetting } from '@/shared/ui/hintPlacement.ts'
 
 const box = (left: number, right: number, top = 100, bottom = 120): Box => ({
@@ -40,23 +42,55 @@ test('a detail stands below its element, from its start; a name below its icon, 
   })
 })
 
-test('a clipped text keeps its place above its element, centred', () => {
-  assert.deepEqual(placeHint(setting({ kind: 'clipped' })), {
-    align: 'center',
-    aside: false,
-    side: 'top',
+test('a cut text’s whole words start on its first letter and run to 8px short of the edge', () => {
+  // Their own first letter stands 5px in from their box's left and 2px down from its top.
+  const inset = { left: 5, top: 2 }
+  assert.deepEqual(placeWhole({ inset, letter: { left: 100, top: 50 }, scale: 1, window: 1440 }), {
+    left: 95,
+    top: 48,
+    widest: 1337,
   })
+  // In the rail, 12px from the window's left, with a 1024px window.
+  assert.deepEqual(placeWhole({ inset, letter: { left: 12, top: 300 }, scale: 1, window: 1024 }), {
+    left: 7,
+    top: 298,
+    widest: 1009,
+  })
+})
+
+test('on a canvas drawn at half size the whole words take as wide a room in their own type', () => {
+  // The inset is measured as drawn, so at half size it is half as far; the room of 1334.5px on
+  // the window is 2669px of type drawn at half size.
+  assert.deepEqual(
+    placeWhole({
+      inset: { left: 2.5, top: 1 },
+      letter: { left: 100, top: 50 },
+      scale: 0.5,
+      window: 1440,
+    }),
+    { left: 97.5, top: 49, widest: 2669 },
+  )
+})
+
+test('a first letter past the room leaves the whole words no width rather than a negative one', () => {
+  const laid = placeWhole({
+    inset: { left: 0, top: 0 },
+    letter: { left: 1436, top: 0 },
+    scale: 1,
+    window: 1440,
+  })
+  assert.equal(laid.widest, 0)
 })
 
 test('out of a list the room beside an element does not move a hint', () => {
   // An element at the window's right edge: the library keeps the hint inside, not this rule.
-  for (const kind of ['name', 'clipped', 'detail'] as const)
+  for (const kind of ['name', 'detail'] as const)
     assert.equal(placeHint(setting({ aside: box(1400, 1436), kind })).aside, false, kind)
 })
 
 test('in a list every kind stands aside of it, on the right, level with its row', () => {
   for (const list of ['rows', 'columns'] as const)
-    for (const kind of ['name', 'clipped', 'detail'] as const)
+    for (const kind of ['name', 'detail'] as const)
       assert.deepEqual(
         placeHint(setting({ aside: box(0, 260), kind, list })),
         { align: 'start', aside: true, side: 'right' },
