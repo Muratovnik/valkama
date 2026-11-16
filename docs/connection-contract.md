@@ -277,7 +277,7 @@ HTTP answer of a write to an item -- carries these fields of the model:
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
 | `workable` | whether its space's take-next queue may give it now: `withheld` is empty. It is the rule `claim_ready_work_item` takes work by |
-| `withheld` | why the queue does not give it, as codes in this order: `container` (a goal or stage, which has no other code), `not_ready` (not in a `ready` state), `held` (a claim, or a claimed step), `waits` (an unfinished blocker), `question` (an open question to the owner), `no_start` (in a `ready` state its workflow leads nowhere into work from), `ancestor_triage` and `ancestor_deferred` (a goal or stage over it stands there), `ancestor_waits` (a goal or stage over it has an unfinished blocker), `ancestor_closed` (a goal or stage over it is closed while it is open). Empty exactly when `workable` |
+| `withheld` | why the queue does not give it, as codes in this order: `goal_or_stage` (a goal or stage, which has no other code), `not_ready` (not in a `ready` state), `held` (a claim, or a claimed step), `waits` (an unfinished blocker), `question` (an open question to the owner), `no_start` (in a `ready` state its workflow leads nowhere into work from), `ancestor_triage` and `ancestor_deferred` (a goal or stage over it stands there), `ancestor_waits` (a goal or stage over it has an unfinished blocker), `ancestor_closed` (a goal or stage over it is closed while it is open). Empty exactly when `workable` |
 
 Four other answers carry only some of these fields:
 

@@ -70,11 +70,6 @@ ALLOWED_PASSAGES = (
     ),
     Allowed(
         "docs/connection-contract.md",
-        "`container` (a goal or stage, which has no other code)",
-        "the code withheld gives a goal or stage, not the retired category",
-    ),
-    Allowed(
-        "docs/connection-contract.md",
         "`epic` names `tree` in its refusal",
         "names the retired scope by what its refusal says",
     ),

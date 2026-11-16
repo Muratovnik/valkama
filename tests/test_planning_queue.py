@@ -98,7 +98,7 @@ class ConditionTests(QueueCase):
         tree.add("T", kind="goal")
         for name in ("G", "S", "T"):
             with self.subTest(item=name):
-                self.assertEqual(["container"], self.withheld(tree, name))
+                self.assertEqual(["goal_or_stage"], self.withheld(tree, name))
         self.assertIsNone(self.given(tree))
 
     def test_work_in_triage_or_deferred_is_not_ready(self) -> None:
@@ -339,7 +339,7 @@ class OneSpaceTests(QueueCase):
             },
         )
         for name in ("G", "S", "F", "D", "T"):
-            self.assertEqual(["container"], listed[tree.refs[name]], name)
+            self.assertEqual(["goal_or_stage"], listed[tree.refs[name]], name)
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest discovery owns this

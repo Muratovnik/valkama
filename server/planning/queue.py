@@ -20,7 +20,7 @@ from . import item_tree, model, states
 #: Why the queue does not give an item, in the order `withheld` names them.
 CODES = (
     #: It is a goal or a stage: nobody works one, and it has no other code.
-    "container",
+    "goal_or_stage",
     #: It does not stand in a ready state.
     "not_ready",
     #: Somebody holds it, or a step of it.
@@ -46,7 +46,7 @@ def withheld(conn: sqlite3.Connection, row: sqlite3.Row, tree: item_tree.Tree) -
     """Why the queue of its space does not give this item; empty when it does.
 
     `row` is the item's own, and `tree` holds its facts and those of every item
-    over it. A container is never given and says only that. Every other reason
+    over it. A goal or stage is never given and says only that. Every other reason
     that holds is named. A task in a ready state is asked last whether its
     workflow can start it, and only that one: in any other state `not_ready`
     already says it is not given, and coming back to work from review or
@@ -59,7 +59,7 @@ def withheld(conn: sqlite3.Connection, row: sqlite3.Row, tree: item_tree.Tree) -
     if node is None:
         raise model.PlanningError("work item disappeared mid-write")
     if node.container:
-        return ["container"]
+        return ["goal_or_stage"]
     found: list[str] = []
     ready = node.category in model.WORKABLE_CATEGORIES
     if not ready:

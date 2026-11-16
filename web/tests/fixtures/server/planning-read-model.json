@@ -427,7 +427,7 @@
       "closed_at": null,
       "last_claim_ref": null,
       "withheld": [
-        "container"
+        "goal_or_stage"
       ],
       "workable": false,
       "comment_count": 0
@@ -464,7 +464,7 @@
       "closed_at": null,
       "last_claim_ref": null,
       "withheld": [
-        "container"
+        "goal_or_stage"
       ],
       "workable": false,
       "comment_count": 0
@@ -501,7 +501,7 @@
       "closed_at": null,
       "last_claim_ref": null,
       "withheld": [
-        "container"
+        "goal_or_stage"
       ],
       "workable": false,
       "comment_count": 0
@@ -794,7 +794,7 @@
       "closed_at": null,
       "last_claim_ref": null,
       "withheld": [
-        "container"
+        "goal_or_stage"
       ],
       "workable": false,
       "comment_count": 0
@@ -828,7 +828,7 @@
       "closed_at": null,
       "last_claim_ref": null,
       "withheld": [
-        "container"
+        "goal_or_stage"
       ],
       "workable": false,
       "comment_count": 0
@@ -862,7 +862,7 @@
       "closed_at": null,
       "last_claim_ref": null,
       "withheld": [
-        "container"
+        "goal_or_stage"
       ],
       "workable": false,
       "comment_count": 0

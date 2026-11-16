@@ -37,7 +37,7 @@ const acceptedGoal = (extra: Record<string, unknown> = {}) => ({
   container_state: 'in_progress',
   acceptance: { basis: 'owner', at: '2026-01-02T03:04:05Z' },
   workable: false,
-  withheld: ['container'],
+  withheld: ['goal_or_stage'],
   ...extra,
 })
 

@@ -245,7 +245,7 @@ class ThroughMcpTests(WriteCase):
         # A goal or stage is withheld for its kind alone, wherever it stands.
         for name in ("G", "S", "T"):
             with self.subTest(item=name):
-                self.assertEqual(["container"], self.record(name)["withheld"])
+                self.assertEqual(["goal_or_stage"], self.record(name)["withheld"])
         untouched = {name: self.stored(name, "revision") for name in ("G", "S", "T")}
         self.call("claim_ready", {"space": self.tree.key})
         self.assertEqual("active", self.category("a"))

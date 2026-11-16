@@ -87,7 +87,7 @@ export function boardGoal(
   return boardItem(n, state, {
     kind: 'goal',
     workable: false,
-    withheld: ['container'],
+    withheld: ['goal_or_stage'],
     ...overrides,
   })
 }

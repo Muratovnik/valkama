@@ -456,7 +456,7 @@ TOOLS = [
         " not_started, in_progress or awaiting_confirmation. acceptance is the basis it was"
         " accepted on and when, null in triage or deferred; started_at is when work on it"
         " began, waits_for the open items blocking it, workable whether its space's queue"
-        " may give it now and withheld why not: container, not_ready, held, waits,"
+        " may give it now and withheld why not: goal_or_stage, not_ready, held, waits,"
         " question, no_start, ancestor_triage, ancestor_deferred, ancestor_waits or"
         " ancestor_closed. claim.expires_at is when the claim lapses if its session stays"
         " silent, or, for a claim no session proved, the owner's own included, if the item"

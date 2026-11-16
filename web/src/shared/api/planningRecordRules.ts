@@ -14,7 +14,7 @@ import { enumField } from '@/shared/api/platformApiGuards.ts'
  * triage, deferred, waiting or closed.
  */
 const WITHHELD_CODES = [
-  'container',
+  'goal_or_stage',
   'not_ready',
   'held',
   'waits',

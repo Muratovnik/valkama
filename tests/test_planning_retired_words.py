@@ -352,11 +352,6 @@ RETIRED_WORD = re.compile(
 )
 
 
-#: Where a tool names `container` as the code the queue withholds a goal or stage
-#: by, a value of `withheld` and not the retired category; nothing else may.
-WITHHELD_CODES = {"get_work_item": "withheld why not: container, not_ready,"}
-
-
 class WhatAnAgentReadsTests(unittest.TestCase):
     def assert_names_no_retired_word(self, where: str, text: str) -> None:
         found = sorted({match.group(0) for match in RETIRED_WORD.finditer(text)})
@@ -365,12 +360,7 @@ class WhatAnAgentReadsTests(unittest.TestCase):
     def test_no_tool_schema_names_a_retired_word(self) -> None:
         for tool in mcp_surface.catalogue():
             with self.subTest(tool=tool["name"]):
-                text = json.dumps(tool)
-                codes = WITHHELD_CODES.get(tool["name"])
-                if codes is not None:
-                    self.assertEqual(1, text.count(codes), "the withheld codes moved")
-                    text = text.replace(codes, "")
-                self.assert_names_no_retired_word(tool["name"], text)
+                self.assert_names_no_retired_word(tool["name"], json.dumps(tool))
 
     def test_the_handshake_names_no_retired_word(self) -> None:
         self.assert_names_no_retired_word("the handshake", mcp_surface.PLANNING_INSTRUCTIONS)
