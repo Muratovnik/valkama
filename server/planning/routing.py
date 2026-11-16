@@ -198,7 +198,7 @@ class PlanningRouting:
             raise PlatformHttpError(404, "unavailable", "Project is not registered")
         return matches[0]
 
-    def space_projects(self, space_ref: dict) -> list[dict]:
+    def space_projects(self, space_ref: dict) -> list[Mapping[str, object]]:
         """The projects the registry binds to this space: the default one first, then by id."""
 
         return project_registry.space_projects(self.projects, space_ref)

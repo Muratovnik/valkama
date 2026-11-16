@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Literal, TypedDict
 
 from ..store_identity.primitives import ContractError
@@ -208,7 +208,7 @@ def space_projects(
     )
 
 
-def projects_shown(bound: list[Mapping[str, Any]]) -> dict[str, Any]:
+def projects_shown(bound: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """How a space names its projects: the default one's id, and each one's id and name.
 
     `bound` is `space_projects`' answer, so the default project, which every bound
