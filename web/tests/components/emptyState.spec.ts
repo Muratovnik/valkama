@@ -45,7 +45,7 @@ describe('the empty state says one thing, in one place', () => {
   it('translates a stable empty-state reason instead of printing its key', () => {
     const panel = mountEmpty('platform.planning.noSpaces')
 
-    expect(panel.get('.empty-title').text()).toBe('Привязанных пространств пока нет.')
+    expect(panel.get('.empty-title').text()).toBe('Пространств пока нет.')
     expect(panel.text()).not.toContain('platform.planning.noSpaces')
   })
 

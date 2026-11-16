@@ -13,10 +13,10 @@ import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platfor
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-const board = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+const board = serializePlatformRoute({ module_id: 'planning', scope: spaceScope })
 
 /** The module state the address holds now. */
 async function addressState(page: Page) {
@@ -192,7 +192,7 @@ for (const width of [1440, 1024, 390]) {
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
+        scope: spaceScope,
         state: {
           cat: 'triage,deferred,ready,active,review,blocked,completed,cancelled',
           kind: 'bug,task,goal,improvement,stage',
@@ -315,7 +315,7 @@ for (const width of [1280, 390])
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
+        scope: spaceScope,
         state: { kind: 'bug', pri: 'low' },
       }),
     )

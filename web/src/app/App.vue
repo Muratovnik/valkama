@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppContextBar from '@/app/components/AppContextBar.vue'
@@ -20,7 +20,6 @@ import { usePlatformEntryRestore } from '@/app/composables/usePlatformEntryResto
 import { usePlatformLiveFeed } from '@/app/composables/usePlatformLiveFeed.ts'
 import { DEFAULT_ROUTE, usePlatformNavigation } from '@/app/composables/usePlatformNavigation.ts'
 import { usePlatformReadModels } from '@/app/composables/usePlatformReadModels.ts'
-import { useProjectResources } from '@/app/composables/useProjectResources.ts'
 import { useSessionOpening } from '@/app/composables/useSessionOpening.ts'
 import { useShellNotice } from '@/app/composables/useShellNotice.ts'
 import { prefetchModule } from '@/app/moduleViews.ts'
@@ -37,7 +36,7 @@ import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
-import { provideProjectTitles } from '@/shared/lib/projectTitles.ts'
+import { provideSpaceNames } from '@/shared/lib/spaceNames.ts'
 import ReferencePreview from '@/shared/ui/ReferencePreview.vue'
 import TooltipHost from '@/shared/ui/TooltipHost.vue'
 
@@ -57,7 +56,7 @@ const {
   entryRestorePending,
   goHome,
   moveRoute,
-  openProject,
+  openSpace,
   operatingScope,
   pendingSession,
   questionsAsked,
@@ -97,8 +96,8 @@ const contextReady = computed(() =>
     ? contextState.value.payload
     : null,
 )
-// Every surface that names a project reads the same list the finder does.
-provideProjectTitles(computed(() => contextReady.value?.projects ?? []))
+// Every surface that names a space reads the same list the finder does.
+provideSpaceNames(computed(() => contextReady.value?.spaces ?? []))
 const moduleStage = ref<InstanceType<typeof AppModuleStage> | null>(null)
 // The card by the id a sender of alerts knows it by: the route has only its reference.
 useAlertPresence(
@@ -148,22 +147,12 @@ const {
   te,
   translate: t,
 })
-const { availableProjectResources, selectedResourceRef, selectResource } = useProjectResources({
-  activeManifest,
-  contextReady,
-  modulesAuthoritative,
-  refused: () => {
-    say(t('platform.route.invalid'), 'refused')
-  },
-  route,
-  writeRoute,
-})
 const routeRecoveryFailure = computed(
   () => routeFailure.value || (modulesAuthoritative.value ? '' : modulesFailure.value),
 )
 // A space's stream carries the live-work frame, so the shell opens its own only without one,
-// and at the start until the space's stream has delivered: see the composable. The space a
-// project shows is known once the context has been read.
+// and at the start until the space's stream has delivered: see the composable. Which spaces
+// there are is known once the context has been read.
 const { connection: liveConnection } = useLiveWorkFeed({
   shell: () => documentPage.value === null,
   known: () =>
@@ -179,7 +168,7 @@ const { connection: liveConnection } = useLiveWorkFeed({
 const { current: liveShown, target: liveTarget } = useLiveWorkNav(route, contextReady)
 
 const displayedConnection = computed(() => {
-  if (activeModule.value === 'planning' && operatingScope.value.kind === 'project')
+  if (activeModule.value === 'planning' && operatingScope.value.kind === 'space')
     return planningConnection.value ?? liveConnection.value ?? connectionState.value
   return liveConnection.value === 'reconnecting' ? 'reconnecting' : connectionState.value
 })
@@ -208,14 +197,17 @@ const contextTitle = computed(() => {
 })
 const barScope = computed(() => (entryRestorePending.value ? null : operatingScope.value))
 /**
- * The projects the bar names a scope by, or null until the context and the module list have
- * been read once: the scope's name and the resource selector beside it come from both.
+ * The spaces the bar names a scope by, or null until the context and the module list have
+ * been read once: the scope's name and the project choice beside it come from both.
  */
-const barProjects = computed(() =>
+const barSpaces = computed(() =>
   contextState.value.status === 'loading' || !modulesSettled.value
     ? null
-    : (contextReady.value?.projects ?? []),
+    : (contextReady.value?.spaces ?? []),
 )
+const contextBar = useTemplateRef<{ chooseSpace: () => void }>('contextBar')
+/** An address that can only be left by choosing a space opens that choice in the bar. */
+const chooseSpace = () => contextBar.value?.chooseSpace()
 // A state the module's manifest does not admit is dropped, not shown as a
 // blocked module: the address keeps the module and scope, and says so once.
 watch(liveRouteFailure, (failure) => {
@@ -258,7 +250,7 @@ useDocumentOpening(say, openDocument)
 provideOpenNotice(say)
 // References written in free text, anywhere in the shell: see the composable.
 useAppReferenceLinks({
-  projects: () => contextReady.value?.projects ?? [],
+  spaces: () => contextReady.value?.spaces ?? [],
   primaryScope: () => contextReady.value?.primary.data_scope_id,
   openTarget,
   openSession: (id) => void openSession(id),
@@ -315,13 +307,11 @@ usePlatformEntryRestore({
 
     <div class="app-main">
       <AppContextBar
+        ref="contextBar"
         :title="contextTitle"
         :scope="barScope"
-        :resource-ref="selectedResourceRef"
-        :resources="availableProjectResources"
-        :projects="barProjects"
+        :spaces="barSpaces"
         @scope="switchScope"
-        @resource="selectResource"
       />
 
       <div
@@ -347,6 +337,7 @@ usePlatformEntryRestore({
           :unavailable="routeUnavailable"
           @home="goHome"
           @choose="switchModule"
+          @choose-space="chooseSpace"
         />
 
         <AppModuleStage
@@ -366,9 +357,8 @@ usePlatformEntryRestore({
           @find="findText"
           @go="(next) => writeRoute(next)"
           @notice="(message) => say(message, 'refused')"
-          @open-project="openProject"
+          @open-space="openSpace"
           @question-taken="cardQuestionTaken"
-          @switch-scope="switchScope"
           @state="updateModuleState"
           @locale="selectLocale"
         />
@@ -385,7 +375,7 @@ usePlatformEntryRestore({
     v-if="documentPage === null"
     :open="finderOpen"
     :text="finderText"
-    :projects="contextReady?.projects ?? []"
+    :spaces="contextReady?.spaces ?? []"
     @close="finderOpen = false"
     @select="openTarget"
   />

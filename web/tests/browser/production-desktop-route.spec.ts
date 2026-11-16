@@ -5,14 +5,14 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { blockedWorkItem, projectScope, spaceRef, workItemRef } from './planningFixtures.ts'
+import { blockedWorkItem, spaceRef, spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** The route a card has, written from the fixture; the desktop app receives this from the server. */
 function cardRoute(reference: string) {
   return serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
+    scope: spaceScope,
     entity: planningWorkItemEntity({ space_ref: spaceRef, reference }),
   })
 }
@@ -157,7 +157,7 @@ test('a route the page cannot read leaves it where it is', async ({ page }) => {
   const here = page.url()
   for (const route of [
     '/modules/nothing/here',
-    '/modules/planning/project/example?entity=not-an-entity',
+    `/modules/planning/space/${workItemRef.space_ref.data_scope_id}/MAIN?entity=not-an-entity`,
   ]) {
     await app.handOver(route)
     await expect(page).toHaveURL(here)

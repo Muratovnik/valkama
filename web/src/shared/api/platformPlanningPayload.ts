@@ -18,14 +18,7 @@ import {
   validateWorkItemRecord,
 } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import {
-  BINDING_STATES,
-  enumField,
-  invalid,
-  ISO,
-  PROJECT_ID,
-} from '@/shared/api/platformApiGuards.ts'
-import type { BindingState } from '@/shared/api/platformApiTypes.ts'
+import { enumField, invalid, ISO, PROJECT_ID } from '@/shared/api/platformApiGuards.ts'
 import { validateTypedState } from '@/shared/api/platformContextPayload.ts'
 import { validatePlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import {
@@ -77,10 +70,17 @@ const workItemSummarySchema = strictObject({
   updated_at: boundedText(ISO, 96),
 })
 
+/** A space as the directory lists it: its name, its projects and how many items it holds. */
 const spaceSummarySchema = strictObject({
   space_ref: fromValidator(validatePlanningSpaceRef),
   title: displayName(),
   work_item_count: positiveInt(true),
+  /** Null when the registry binds no project to the space. */
+  default_project: boundedText(PROJECT_ID, 160).nullable(),
+  /** The default one first, then by id. */
+  projects: z.array(
+    strictObject({ project_id: boundedText(PROJECT_ID, 160), display_name: displayName() }),
+  ),
 })
 
 const spaceViewSchema = strictObject({
@@ -89,18 +89,9 @@ const spaceViewSchema = strictObject({
   work_items: z.array(workItemSummarySchema),
 })
 
-const planningProjectSchema = strictObject({
-  project_id: boundedText(PROJECT_ID, 160),
-  title: displayName(),
-  binding_state: z.enum([...BINDING_STATES] as [BindingState, ...BindingState[]], {
-    message: 'unknown binding state',
-  }),
-  planning_spaces: boundedList(spaceSummarySchema, 128),
-})
-
 const planningReadySchema = strictObject({
-  // The registry counts no projects, and a space holds as many items as it has.
-  projects: z.array(planningProjectSchema),
+  // A store holds as many spaces as it has, and a space as many items.
+  spaces: z.array(spaceSummarySchema),
   planning_spaces: z.array(spaceViewSchema),
 })
 

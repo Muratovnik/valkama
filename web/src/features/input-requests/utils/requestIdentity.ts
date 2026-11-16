@@ -3,7 +3,6 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 
 export function targetIdentity(target: PlanningTarget): string {
   return JSON.stringify([
-    target.project_id,
     target.space_ref.data_scope_id,
     target.space_ref.space_key,
     target.reference,

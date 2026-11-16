@@ -23,7 +23,11 @@ const REVIEW: WorkFilter = { text: '', category: ['review'] }
 
 afterEach(() => vi.unstubAllGlobals())
 test('retired deep routes recover into Work in the same operating scope', () => {
-  const scope = { kind: 'project' as const, project_ref: { project_id: 'sample' } }
+  const scope = {
+    kind: 'space' as const,
+    space_ref: spaceRef,
+    project_ref: { project_id: 'sample' },
+  }
   for (const module_id of ['sessions', 'improvements', 'skills', 'memory']) {
     const old = parsePlatformRoute(
       serializePlatformRoute({ module_id, scope, state: { query: 'old' } }),
@@ -140,7 +144,7 @@ test('exact-session context and retained refs do not request a session fleet or 
     '/api/ref?kind=session&value=exact%20id',
   ])
 })
-test('the global Work portfolio requests the bounded project directory without full space items', async () => {
+test('all spaces request the bounded space directory without full space items', async () => {
   const payload = {
     interface_version: 'valkama-planning',
     scope: { kind: 'global' },
@@ -148,12 +152,13 @@ test('the global Work portfolio requests the bounded project directory without f
       interface_version: 'valkama-ui-state',
       status: 'ready',
       payload: {
-        projects: [
+        spaces: [
           {
-            project_id: 'sample',
-            title: 'Sample',
-            binding_state: 'mapped',
-            planning_spaces: [{ space_ref: spaceRef, title: 'Main', work_item_count: 1966 }],
+            space_ref: spaceRef,
+            title: 'Main',
+            work_item_count: 1966,
+            default_project: 'sample',
+            projects: [{ project_id: 'sample', display_name: 'Sample' }],
           },
         ],
         planning_spaces: [],
@@ -162,7 +167,7 @@ test('the global Work portfolio requests the bounded project directory without f
   }
   const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(JSON.stringify(payload)))
   vi.stubGlobal('fetch', fetch)
-  expect(await fetchPlatformPlanning({ kind: 'global' })).toEqual(payload)
+  expect(await fetchPlatformPlanning()).toEqual(payload)
   expect(fetch).toHaveBeenCalledWith(
     '/api/platform/planning?scope_kind=global&directory_only=true',
     { signal: expect.any(AbortSignal) },

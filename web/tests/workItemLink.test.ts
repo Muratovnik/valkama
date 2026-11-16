@@ -16,7 +16,6 @@ afterEach(() => {
 })
 
 const SPACE = finderTarget().space_ref
-const PROJECT = finderTarget().project_id
 
 function serve(value: unknown, status = 200) {
   const fetchMock = vi
@@ -34,7 +33,7 @@ function nothingFound(query: string, coverage: { reason: string | null; status: 
     limit: 50,
     has_more: false,
     items: [],
-    coverage: coverage.map((source) => ({ project_id: PROJECT, space_ref: SPACE, ...source })),
+    coverage: coverage.map((source) => ({ space_ref: SPACE, ...source })),
   }
 }
 
@@ -56,7 +55,7 @@ describe('what a work item address leads to', () => {
       kind: 'found',
       route: {
         module_id: 'planning',
-        scope: { kind: 'project', project_ref: { project_id: PROJECT } },
+        scope: { kind: 'space', space_ref: SPACE },
         entity: expect.objectContaining({ kind: 'work-item' }),
       },
     })
@@ -69,7 +68,7 @@ describe('what a work item address leads to', () => {
       kind: 'no-item',
       reference: 'TASK-999',
       space: 'TASK',
-      spaceRoute: { scope: { project_ref: { project_id: PROJECT } } },
+      spaceRoute: { module_id: 'planning', scope: { kind: 'space', space_ref: SPACE } },
     })
     serve(nothingFound('NOPE-1', [{ status: 'searched', reason: null }]))
     expect(await read('NOPE-1')).toEqual({ kind: 'no-space', reference: 'NOPE-1', space: 'NOPE' })
@@ -124,12 +123,15 @@ describe('the address grammar', () => {
     // The same literal stands in `tests/test_work_item_link.py`, worked out by hand:
     // the two languages share this route and no code, so this is what ties them.
     const route = parsePlatformRoute(
-      '/modules/planning/project/example-project?entity=' +
+      '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?entity=' +
         'eyJraW5kIjoid29yay1pdGVtIiwicmVzb3VyY2VfaWQiOiJleUp5WldabGNtVnVZMlVpT2lKTlFVbE9MVEV5SWl3aWMz' +
         'QmhZMlZmY21WbUlqcDdJbVJoZEdGZmMyTnZjR1ZmYVdRaU9pSXdNVEl6TkRVMk55MDRPV0ZpTFRSa1pXWXRPREV5TXkw' +
         'ME5UWTNPRGxoWW1Oa1pXWWlMQ0p6Y0dGalpWOXJaWGtpT2lKTlFVbE9JbjE5In0',
     )
-    expect(route.scope).toEqual({ kind: 'project', project_ref: { project_id: 'example-project' } })
+    expect(route.scope).toEqual({
+      kind: 'space',
+      space_ref: { data_scope_id: '01234567-89ab-4def-8123-456789abcdef', space_key: 'MAIN' },
+    })
     expect(planningWorkItemRef(route.entity)).toEqual({
       reference: 'MAIN-12',
       space_ref: { data_scope_id: '01234567-89ab-4def-8123-456789abcdef', space_key: 'MAIN' },

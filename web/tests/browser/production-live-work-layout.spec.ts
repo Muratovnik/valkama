@@ -15,7 +15,7 @@ import { busyFrame, liveRow as frameRow } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { settled } from './documentBeside.ts'
 import { installLiveStreams, liveRow, openFolds } from './liveWorkPage.ts'
-import { globalScope, projectScope, workItemRef } from './planningFixtures.ts'
+import { globalScope, spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: globalScope })
@@ -284,7 +284,7 @@ test('a phone opens the list in a panel over the page, with a finger’s rows an
   await button.click()
   await liveRow(page, 'MAIN-12', '.side-panel-body').locator('.nav-row-link').click()
   await expect(panel).toBeHidden()
-  await expect(page).toHaveURL(/\/modules\/planning\/project\/example-project\?entity=/u)
+  await expect(page).toHaveURL(/\/modules\/planning\/space\/[^/]+\/MAIN\?entity=/u)
 })
 
 test('a forced palette keeps the signs, and the open row is the system’s own pair throughout', async ({
@@ -296,7 +296,7 @@ test('a forced palette keeps the signs, and the open row is the system’s own p
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )

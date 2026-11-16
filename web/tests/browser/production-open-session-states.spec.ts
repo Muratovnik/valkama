@@ -19,12 +19,12 @@ import {
   openPlanFor,
   shortHolderCard,
 } from './openSessionFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

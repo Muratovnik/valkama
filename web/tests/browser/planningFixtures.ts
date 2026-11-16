@@ -25,7 +25,7 @@ export const attachedSpaceRef = {
   data_scope_id: attachedDataScopeId,
   space_key: spaceRef.space_key,
 }
-export const projectScope = { kind: 'project' as const, project_ref: { project_id: projectId } }
+export const spaceScope = { kind: 'space' as const, space_ref: spaceRef }
 export const globalScope = { kind: 'global' as const }
 export const workItemRef = { space_ref: spaceRef, reference: 'MAIN-264' }
 export const attachedWorkItemRef = { space_ref: attachedSpaceRef, reference: workItemRef.reference }
@@ -228,24 +228,45 @@ export const planningReadModel = {
   ],
 }
 
-/** The Kernel's directory of projects and the spaces they bind. */
-export const planningReadyFor = (exactSpaceRef = spaceRef, includeUnboundProject = false) => ({
-  projects: [
+/** The projects a fixture space lists: the example project, its default. */
+const spaceProjects = [{ project_id: projectId, display_name: 'Example Project' }]
+
+/** A space with nothing in it and no project bound, as a store may hold one. */
+export const emptySpaceRef = { data_scope_id: dataScopeId, space_key: 'NEW' }
+
+/**
+ * A space as the shell's context lists it: the scope choice names it by key and name and
+ * narrows it to its projects. The empty one binds none.
+ */
+export const shellSpaceFor = (space: { data_scope_id: string; space_key: string }) =>
+  space.space_key === emptySpaceRef.space_key
+    ? { ...space, name: 'New space', default_project: null, projects: [], other_space_projects: [] }
+    : {
+        ...space,
+        name: planningSpace.name,
+        default_project: projectId,
+        projects: spaceProjects,
+        other_space_projects: [],
+      }
+
+/** The directory «All spaces» reads: every space, its projects and how full it is. */
+export const planningReadyFor = (exactSpaceRef = spaceRef, includeEmptySpace = false) => ({
+  spaces: [
     {
-      project_id: projectId,
-      title: 'Example Project',
-      binding_state: 'mapped',
-      planning_spaces: [
-        { space_ref: exactSpaceRef, title: planningSpace.name, work_item_count: 2 },
-      ],
+      space_ref: exactSpaceRef,
+      title: planningSpace.name,
+      work_item_count: 2,
+      default_project: projectId,
+      projects: spaceProjects,
     },
-    ...(includeUnboundProject
+    ...(includeEmptySpace
       ? [
           {
-            project_id: 'unbound-project',
-            title: 'Unbound Project',
-            binding_state: 'unbound',
-            planning_spaces: [],
+            space_ref: emptySpaceRef,
+            title: 'New space',
+            work_item_count: 0,
+            default_project: null,
+            projects: [],
           },
         ]
       : []),

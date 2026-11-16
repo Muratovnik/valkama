@@ -9,9 +9,9 @@ import { fetchPlanning, subscribePlanning, transitionWorkItem } from '@/shared/a
 import { validateReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import { fetchPlatformPlanning } from '@/shared/api/platformPlanningApi.ts'
-import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
-import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import {
@@ -19,8 +19,8 @@ import {
   dataScopeId,
   planningReadModel,
   projectId,
-  projectScope,
   spaceRef,
+  spaceScope,
   workItemRef,
 } from '../browser/planningFixtures.ts'
 
@@ -60,28 +60,27 @@ function context(): PlatformContextReady {
   return {
     primary: { data_scope_id: dataScopeId, is_writable: true },
     ui_prefs: null,
-    projects: [
-      {
-        project_id: projectId,
-        title: 'Example',
-        binding_state: 'mapped',
-        resources: [spaceRef, attachedSpaceRef].map((space) => ({
-          resource_ref: planningSpaceEntity(space),
-          state: 'mapped',
-        })),
-      },
-    ],
+    spaces: [spaceRef, attachedSpaceRef].map((space) => ({
+      ...space,
+      name: 'Example',
+      default_project: projectId,
+      projects: [{ project_id: projectId, display_name: 'Example' }],
+      other_space_projects: [],
+    })),
   }
 }
 
-function route(space: PlanningSpaceRef, open = false): PlatformRoute {
-  return {
+/** The address of a space, with its item open or not, and the scope it stands in. */
+function place(space: PlanningSpaceRef, open = false) {
+  const scope: OperatingScope = { kind: 'space', space_ref: space }
+  const route: PlatformRoute = {
     module_id: 'planning',
-    scope: projectScope,
-    entity: open
-      ? planningWorkItemEntity({ space_ref: space, reference: workItemRef.reference })
-      : planningSpaceEntity(space),
+    scope,
+    ...(open
+      ? { entity: planningWorkItemEntity({ space_ref: space, reference: workItemRef.reference }) }
+      : {}),
   }
+  return { route, scope }
 }
 
 const workspace = {
@@ -94,14 +93,14 @@ const inspector = {
   template: '<div class="inspector-probe">{{ resourceRef.resource_id }}</div>',
 }
 
-function surface(open = false) {
+function surface(open = false, scope: OperatingScope = spaceScope) {
   return mount(PlanningModuleSurface, {
     props: {
       context: context(),
       primaryWriteScopeId: dataScopeId,
       stateBytes: 2048,
-      route: route(spaceRef, open),
-      scope: projectScope,
+      ...place(spaceRef, open),
+      scope,
     },
     global: {
       plugins: [createI18n({ legacy: false, locale: 'en', messages })],
@@ -144,8 +143,22 @@ describe('Planning exact resource lifecycle', () => {
     expect(wrapper.text()).toContain('Read item')
     expect(subscribePlanning).toHaveBeenCalledOnce()
     const [target, , since] = vi.mocked(subscribePlanning).mock.calls[0] ?? []
-    expect(target).toEqual({ project: projectId, ...spaceRef })
+    // The whole space: no project narrows what the views read.
+    expect(target).toEqual(spaceRef)
+    expect(fetchPlanning).toHaveBeenCalledWith(spaceRef)
     expect(since).toBe(revision)
+    wrapper.unmount()
+  })
+
+  it('reads and streams only the project the scope narrows the space to', async () => {
+    vi.mocked(fetchPlanning).mockResolvedValueOnce(model('Project item'))
+    const wrapper = surface(false, { ...spaceScope, project_ref: { project_id: projectId } })
+    await flushPromises()
+    expect(fetchPlanning).toHaveBeenCalledWith({ project: projectId, ...spaceRef })
+    expect(vi.mocked(subscribePlanning).mock.calls[0]?.[0]).toEqual({
+      project: projectId,
+      ...spaceRef,
+    })
     wrapper.unmount()
   })
 
@@ -168,12 +181,12 @@ describe('Planning exact resource lifecycle', () => {
       const result = vi.mocked(subscribePlanning).mock.results[0]
       if (!subscription || !result) throw new Error('Expected initial stream subscription')
       const [target, callbacks] = subscription
-      expect(target).toEqual({ project: projectId, ...spaceRef })
+      expect(target).toEqual(spaceRef)
       // A read of the space the page holds keeps its stream open, and a frame may beat it.
       const refresh = deferred<ReturnType<typeof model>>()
       vi.mocked(fetchPlanning).mockReturnValueOnce(refresh.promise)
       const renamed = context()
-      renamed.projects = renamed.projects.map((project) => ({ ...project, title: 'Renamed' }))
+      renamed.spaces = renamed.spaces.map((space) => ({ ...space, name: 'Renamed' }))
       await wrapper.setProps({ context: renamed })
       expect(fetchPlanning).toHaveBeenCalledTimes(2)
       expect(subscribePlanning).toHaveBeenCalledOnce()
@@ -190,7 +203,7 @@ describe('Planning exact resource lifecycle', () => {
       expect(wrapper.text()).toContain('Fresh stream item')
       expect(wrapper.text()).not.toContain('Earlier HTTP item')
       const close = result.value
-      await wrapper.setProps({ route: route(attachedSpaceRef) })
+      await wrapper.setProps(place(attachedSpaceRef))
       expect(close).toHaveBeenCalledOnce()
       callbacks.snapshot(model('Old stream item'))
       await flushPromises()
@@ -221,8 +234,8 @@ describe('Planning exact resource lifecycle', () => {
     expect(wrapper.text()).toContain('Primary item')
     const next = deferred<ReturnType<typeof model>>()
     vi.mocked(fetchPlanning).mockReturnValueOnce(next.promise)
-    await wrapper.setProps({ route: route(attachedSpaceRef, true) })
-    expect(fetchPlanning).toHaveBeenLastCalledWith({ project: projectId, ...attachedSpaceRef })
+    await wrapper.setProps(place(attachedSpaceRef, true))
+    expect(fetchPlanning).toHaveBeenLastCalledWith(attachedSpaceRef)
     // The views stand while the next store is read, and hold nothing of the one they left.
     expect(wrapper.get('.workspace-probe').attributes('data-reading')).toBe('true')
     expect(wrapper.get('.workspace-probe').text()).toBe('')
@@ -241,7 +254,7 @@ describe('Planning exact resource lifecycle', () => {
       .mockReturnValueOnce(oldModel.promise)
       .mockResolvedValueOnce(model('Attached item'))
     const wrapper = surface(true)
-    await wrapper.setProps({ route: route(attachedSpaceRef, true) })
+    await wrapper.setProps(place(attachedSpaceRef, true))
     await flushPromises()
     expect(wrapper.text()).toContain('Attached item')
     expect(wrapper.find('.write-probe').exists()).toBe(false)
@@ -258,7 +271,7 @@ describe('Planning exact resource lifecycle', () => {
       vi.mocked(fetchPlanning).mockReturnValueOnce(old.promise)
       const wrapper = surface(true)
       if (destination === 'unavailable')
-        await wrapper.setProps({ context: { ...context(), projects: [] } })
+        await wrapper.setProps({ context: { ...context(), spaces: [] } })
       else
         await wrapper.setProps({
           scope: { kind: 'global' },
@@ -281,10 +294,7 @@ describe('Planning exact resource lifecycle', () => {
     const refresh = deferred<ReturnType<typeof model>>()
     vi.mocked(fetchPlanning).mockReturnValueOnce(refresh.promise)
     const updated = context()
-    updated.projects = updated.projects.map((project) => ({
-      ...project,
-      title: 'Updated project label',
-    }))
+    updated.spaces = updated.spaces.map((space) => ({ ...space, name: 'Updated space name' }))
     await wrapper.setProps({ context: updated })
     expect(wrapper.text()).toContain('Retained item')
     expect(wrapper.get('.workspace-probe').attributes('data-stale')).toBe('true')
@@ -299,18 +309,14 @@ describe('Planning exact resource lifecycle', () => {
   })
 })
 
-describe('an address that names a project this workstation does not have', () => {
-  it('says which project is missing, offers the projects that exist, and asks for no retry', async () => {
+describe('an address that names a space this workstation does not have', () => {
+  it('says which space is missing, offers the spaces that exist, and asks for no retry', async () => {
     const wrapper = mount(PlanningModuleSurface, {
       props: {
         context: context(),
         primaryWriteScopeId: dataScopeId,
         stateBytes: 2048,
-        route: {
-          module_id: 'planning',
-          scope: { kind: 'project', project_ref: { project_id: 'nonexistent' } },
-        },
-        scope: { kind: 'project', project_ref: { project_id: 'nonexistent' } },
+        ...place({ data_scope_id: dataScopeId, space_key: 'NONE' }),
       },
       global: {
         plugins: [createI18n({ legacy: false, locale: 'en', messages })],
@@ -318,12 +324,11 @@ describe('an address that names a project this workstation does not have', () =>
       },
     })
     await flushPromises()
-    expect(wrapper.text()).toContain(
-      'Project “nonexistent” was not found. Choose a project and space below.',
-    )
+    expect(wrapper.text()).toContain('Space NONE was not found. Choose a space below.')
     expect(wrapper.text()).not.toContain('Retry')
-    // The picker is the portfolio of every project, read at global scope.
-    expect(vi.mocked(fetchPlatformPlanning)).toHaveBeenCalledWith({ kind: 'global' })
+    // The picker is «All spaces», the directory of every space.
+    expect(vi.mocked(fetchPlatformPlanning)).toHaveBeenCalledOnce()
+    expect(fetchPlanning).not.toHaveBeenCalled()
     expect(wrapper.find('[data-scroll-owner="planning-portfolio"]').exists()).toBe(true)
     // No space is open, so no space stream is opened, and the shell's own
     // connection is the one the rail shows.

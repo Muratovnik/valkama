@@ -20,12 +20,12 @@ import { serve, showChain } from './chainFixtures.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { frames } from './frames.ts'
 import { openPlanFor } from './openSessionFixtures.ts'
-import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

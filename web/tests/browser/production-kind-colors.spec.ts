@@ -30,7 +30,7 @@ import {
   wordIn,
 } from './kindColorsPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectId, spaceRef, workItem } from './planningFixtures.ts'
+import { spaceRef, workItem } from './planningFixtures.ts'
 import { card, held, openHub, reference, rest } from './previewPage.ts'
 import { test } from './test.ts'
 
@@ -170,7 +170,6 @@ test('a search result leads with its kind in its colour, at rest and highlighted
         has_more: false,
         items: (['goal', 'bug'] as const).map((kind, index) => ({
           target: {
-            project_id: projectId,
             space_ref: spaceRef,
             reference: `MAIN-${901 + index}`,
             writable: true,
@@ -188,9 +187,7 @@ test('a search result leads with its kind in its colour, at rest and highlighted
             claim_ref: '',
           },
         })),
-        coverage: [
-          { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
-        ],
+        coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
       },
     }),
   )

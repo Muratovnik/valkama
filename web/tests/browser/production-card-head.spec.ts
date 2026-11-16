@@ -7,7 +7,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
@@ -36,7 +36,7 @@ async function openCard(page: Page, width: number) {
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
@@ -172,7 +172,7 @@ test('a reference in a checklist step opens its card, and pressing the step text
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
@@ -214,7 +214,7 @@ async function openLongCard(page: Page, width: number, answer?: (page: Page) => 
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
@@ -331,7 +331,7 @@ test('a read-down goal has no action in its bar and its reason goes with the fac
       route.fulfill({
         json: {
           interface_version: 'valkama-planning-work-item',
-          scope: projectScope,
+          scope: spaceScope,
           work_item_ref: workItemRef,
           state: {
             interface_version: 'valkama-ui-state',

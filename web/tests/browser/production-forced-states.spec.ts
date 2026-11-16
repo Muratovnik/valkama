@@ -6,11 +6,11 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installAlerts, TRIAL_SHOWN } from './alertsFixtures.ts'
 import { installBackend } from './backend.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
-import { blockedWorkItem, planningSpace, projectScope, workItem } from './planningFixtures.ts'
+import { blockedWorkItem, planningSpace, spaceScope, workItem } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: projectScope })
-const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: spaceScope })
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: spaceScope })
 
 /** How far around a control is read, so an edge drawn on its border is inside the picture. */
 const MARGIN = 3

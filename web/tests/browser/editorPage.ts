@@ -5,7 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { installDocuments, LONG_PATH } from './documentBackend.ts'
-import { planningSpace, projectScope } from './planningFixtures.ts'
+import { planningSpace, spaceScope } from './planningFixtures.ts'
 
 /**
  * A card open with its comment field in reach, and how to read what a field is doing.
@@ -14,7 +14,7 @@ import { planningSpace, projectScope } from './planningFixtures.ts'
 export async function openCard(page: Page, prepare?: () => Promise<unknown>) {
   const backend = await installDiscussionBackend(page)
   await prepare?.()
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer).toHaveCSS('transform', 'none')

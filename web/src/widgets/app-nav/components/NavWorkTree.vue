@@ -57,11 +57,7 @@ export interface NavShown {
 }
 
 /** Where a space or one of its rows leads, as the shell routes it. */
-export type NavTarget = (place: {
-  key: string
-  project_id: string | null
-  reference: string | null
-}) => PlatformRoute | null
+export type NavTarget = (place: { key: string; reference: string | null }) => PlatformRoute | null
 
 const props = defineProps<{
   /** The sessions whose folder lies under no space. */
@@ -125,7 +121,7 @@ function foldsOf(list: LiveList, key: string, at: string): Fold[] {
 
 function spaceTree(space: ShownSpace): SpaceTree {
   const node: NavNode = `space:${space.key}`
-  const route = props.target({ key: space.key, project_id: space.default_project, reference: null })
+  const route = props.target({ key: space.key, reference: null })
   const list = liveList(space.rows, space.sessions)
   return {
     branch: `${props.prefix}-space-${space.key}`,
@@ -139,8 +135,7 @@ function spaceTree(space: ShownSpace): SpaceTree {
     node,
     pinnedHeading: `${props.prefix}-pinned-${space.key}`,
     route,
-    rowRoute: (reference: string) =>
-      props.target({ key: space.key, project_id: space.default_project, reference }),
+    rowRoute: (reference: string) => props.target({ key: space.key, reference }),
     space,
   }
 }

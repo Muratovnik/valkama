@@ -14,7 +14,6 @@ afterEach(() => {
 })
 
 const SPACE = finderTarget().space_ref
-const PROJECT = finderTarget().project_id
 
 function serve(...answers: { body: unknown; status?: number }[]) {
   const fetchMock = vi.fn<typeof fetch>()
@@ -31,7 +30,7 @@ function nothingFound(query: string, status = 'searched', reason: string | null 
     limit: 50,
     has_more: false,
     items: [],
-    coverage: [{ project_id: PROJECT, space_ref: SPACE, status, reason }],
+    coverage: [{ space_ref: SPACE, status, reason }],
   }
 }
 
@@ -60,10 +59,10 @@ describe('the page behind a work item address that led nowhere', () => {
     expect(wrapper.find('[data-tone="danger"]').exists()).toBe(false)
 
     await button(wrapper, 'Open space TASK').trigger('click')
-    expect(wrapper.emitted('go')?.[0]?.[0]).toMatchObject({
+    // The space opens whole, at its board: an address names a space, not an entity in it.
+    expect(wrapper.emitted('go')?.[0]?.[0]).toEqual({
       module_id: 'planning',
-      scope: { project_ref: { project_id: PROJECT } },
-      entity: { kind: 'planning-space' },
+      scope: { kind: 'space', space_ref: SPACE },
     })
     await button(wrapper, 'Go to a task').trigger('click')
     expect(wrapper.emitted('find')).toHaveLength(1)

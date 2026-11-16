@@ -6,7 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installAlerts } from './alertsFixtures.ts'
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General') {
@@ -16,7 +16,7 @@ async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General') 
 test('Settings sections share one measure and one compact control lane', async ({ page }) => {
   await installBackend(page)
   await page.setViewportSize({ width: 1920, height: 1009 })
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
 
   const settings = page.locator('.settings-page')
   const pageBox = await settings.boundingBox()
@@ -59,7 +59,7 @@ test('Settings has nothing to switch modules with and nothing the registry used 
   page,
 }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   await expect(page.getByRole('heading', { name: 'Interface', exact: true })).toBeVisible()
   await expect(
     page.getByRole('heading', { name: 'Opening sessions and files', exact: true }),
@@ -88,7 +88,7 @@ test('the sections are tabs that open on Enter, since Diagnostics runs the check
   page,
 }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   const strip = page.getByRole('tablist', { name: 'Settings section' })
   const [general, diagnostics] = [
     strip.getByRole('tab', { name: 'General' }),
@@ -116,7 +116,7 @@ test('a link to the retired Workspace section opens General', async ({ page }) =
   await page.goto(
     serializePlatformRoute({
       module_id: 'settings',
-      scope: projectScope,
+      scope: spaceScope,
       state: { section: 'workspace' },
     }),
   )
@@ -127,7 +127,7 @@ test('a link to the retired Workspace section opens General', async ({ page }) =
 
 test('Settings reads the installation in levels, each problem with its fix', async ({ page }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   await openSettingsSection(page, 'Diagnostics')
   const health = page.locator('.installation-health')
   await expect(health).toBeVisible()
@@ -175,7 +175,7 @@ test('Settings reads the installation in levels, each problem with its fix', asy
 
 test('Settings diagnostic actions stay readable at working widths', async ({ page }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 960 })
     await openSettingsSection(page, 'General')
@@ -203,7 +203,7 @@ test('a setting is named at the top of a stack and beside a single control', asy
   await installBackend(page)
   await installAlerts(page)
   await page.setViewportSize({ width: 1500, height: 1800 })
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   await expect(page.locator('.settings-row').first()).toBeVisible()
   const rows = await page.locator('.settings-row').evaluateAll((all) =>
     all.map((row) => {

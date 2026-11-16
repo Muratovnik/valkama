@@ -2,12 +2,11 @@ import { ref, watch } from 'vue'
 import type { Ref } from 'vue'
 
 import { subscribePlanning } from '@/shared/api/planningApi.ts'
-import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
+import type { PlanningConnectionState, PlanningSpaceTarget } from '@/shared/api/planningApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
-import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
 
-type Target = ({ project: string } & PlanningSpaceRef) | null
+type Target = PlanningSpaceTarget | null
 
 export function usePlanningSubscription(
   target: Ref<Target>,

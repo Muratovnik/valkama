@@ -23,6 +23,7 @@ import { pastedImageMessages } from '@/shared/i18n/pastedImageMessages.ts'
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
+import { shellScopeMessages } from '@/shared/i18n/shellScopeMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { treeRowMessages } from '@/shared/i18n/treeRowMessages.ts'
 import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
@@ -91,7 +92,7 @@ export const en = {
         system: 'System',
       },
     },
-    scope: { label: 'Operating scope', global: 'Global' },
+    scope: shellScopeMessages.en.scope,
     bindings: {
       mapped: 'Mapped',
       missing: 'Not found',
@@ -149,20 +150,7 @@ export const en = {
       queryDropped:
         'Part of the address could not be read and was dropped; the section opened without it.',
     },
-    planning: {
-      portfolio: 'Portfolio',
-      projectCount: '{count} projects',
-      empty: 'No registered projects are available.',
-      bindingRequired: "Choose this project's planning space at the top right.",
-      projectMissing: 'Project “{project}” was not found. Choose a project and space below.',
-      openProject: 'Open project',
-      reviewBinding: 'Review project setup',
-      workItemCount: '{count} work items',
-      noSpaces: 'No bound planning spaces yet.',
-      registryUnavailable:
-        'The project list could not be read. Open Settings to check the installation.',
-      noSpacesDetail: 'Run the Host Runtime project setup, bind a planning space, then refresh.',
-    },
+    planning: shellScopeMessages.en.planning,
     sessionsScope: {
       projectNote:
         'Sessions are shown for the whole agent fleet. A per-project session view is not available yet.',
@@ -579,9 +567,10 @@ export const en = {
     none: 'Nothing has been attached to this item.',
     search: 'Search knowledge',
     searchHint: "the project's own documents",
+    searchDefault: "the documents of the space's default project",
     searchIn: 'Searches {root}',
     searchAction: 'Search',
-    noProject: 'Open this item inside its project to search its knowledge.',
+    noProject: 'This space has no project whose knowledge could be searched.',
     technicalDetails: 'Technical details',
     provider: 'Answered by {provider} · {capabilities}',
     unavailable: 'This provider is not answering.',

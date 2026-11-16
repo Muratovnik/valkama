@@ -19,6 +19,7 @@ import { useI18n } from 'vue-i18n'
 
 import {
   memorySourceGap,
+  useDefaultProject,
   useMemorySource,
 } from '@/widgets/work-item-inspector/utils/memorySource.ts'
 
@@ -36,7 +37,7 @@ import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
   item: WorkItem
-  /** Absent in a global scope, where no project answers for this item. */
+  /** Empty where no project answers for this item: its space has none. */
   projectId: string
   writable: boolean
 }>()
@@ -80,7 +81,7 @@ const sourceGap = computed(() => {
 const diagnostics = computed(() =>
   serializePlatformRoute({
     module_id: 'settings',
-    scope: { kind: 'project', project_ref: { project_id: props.projectId } },
+    scope: { kind: 'global' },
     state: { section: 'diagnostics' },
   }),
 )
@@ -104,9 +105,12 @@ const attached = computed(() => props.item.refs.filter((entry) => entry.kind ===
 const searchable = computed(() => Boolean(props.projectId) && query.value.trim().length > 0)
 
 /** What the field says: the folder it searches, once that is known. */
-const searchHint = computed(() =>
-  sourceRoot.value ? t('memory.searchIn', { root: sourceRoot.value }) : t('memory.searchHint'),
-)
+const defaultProject = useDefaultProject()
+/** Where a search looks; a scope that narrows to no project searches the space's default one. */
+const searchHint = computed(() => {
+  if (sourceRoot.value) return t('memory.searchIn', { root: sourceRoot.value })
+  return t(defaultProject() ? 'memory.searchDefault' : 'memory.searchHint')
+})
 const searchHintId = useId()
 
 /** The provider's own capability list, as one readable line. */

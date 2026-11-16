@@ -9,7 +9,7 @@ import { requestListView } from '@/features/input-requests/utils/requestListView
 
 import { fetchInputRequests } from '@/shared/api/inputRequestApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
-import { provideProjectTitles } from '@/shared/lib/projectTitles.ts'
+import { provideSpaceNames } from '@/shared/lib/spaceNames.ts'
 
 import { requestEntry, requestList, unavailableSource } from '../support/inputRequests.ts'
 import { residentView } from '../support/residentView.ts'
@@ -19,20 +19,22 @@ vi.mock('@/shared/api/inputRequestApi.ts', async (original) => ({
   fetchInputRequests: vi.fn(),
 }))
 
-/** The list the app loads: the question's project and one unread source are both in it. */
-const PROJECTS = [
-  { project_id: 'requests-project', title: 'Requests title' },
-  { project_id: 'detached-project', title: 'Detached title' },
+const STORE = requestEntry().target.space_ref.data_scope_id
+
+/** The list the app loads: the question's space and one unread space are both in it. */
+const SPACES = [
+  { data_scope_id: STORE, space_key: 'TASK', name: 'Requests space' },
+  { data_scope_id: STORE, space_key: 'AWAY', name: 'Detached space' },
 ]
 
 const wrappers: ReturnType<typeof mount>[] = []
 
-/** Mounts the hub under a root that provides the project list, as the app does. */
+/** Mounts the hub under a root that provides the space list, as the app does. */
 function hub(locale: 'en' | 'ru') {
   const Root = defineComponent({
     components: { InputRequestsHub },
     setup() {
-      provideProjectTitles(ref(PROJECTS))
+      provideSpaceNames(ref(SPACES))
     },
     template: '<InputRequestsHub :open="true" />',
   })
@@ -54,8 +56,8 @@ beforeEach(() => {
   vi.mocked(fetchInputRequests).mockResolvedValue({
     ...requestList([requestEntry()]),
     coverage: [
-      unavailableSource('detached-project', 'store_not_attached'),
-      unavailableSource('unlisted-project', 'store_not_attached'),
+      unavailableSource('AWAY', 'store_not_attached'),
+      unavailableSource('GONE', 'store_not_attached'),
     ],
   })
 })
@@ -65,23 +67,22 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-// The questions dialog printed the id of each project ("requests-project · TASK-7"),
-// which the finder had already replaced with its title. A project the list does
-// not hold still shows its id.
-describe('project names in the questions dialog', () => {
-  it('names the project of a question and of an unread source by its title, in both languages', async () => {
+// A question and an unread source are named by the space the app lists them under,
+// as the finder names them. A space the list does not hold is named by its key.
+describe('space names in the questions dialog', () => {
+  it('names the space of a question and of an unread source by its name, in both languages', async () => {
     const en = hub('en')
     await flushPromises()
-    expect(en.get('.request-context').text()).toBe('Requests title · TASK-7')
+    expect(en.get('.request-context').text()).toBe('Requests space · TASK-7')
     const enNotes = en.findAll('.request-note').map((note) => note.text())
-    expect(enNotes).toContain('Detached title · TASK: Store not attached')
-    expect(enNotes).toContain('unlisted-project · TASK: Store not attached')
+    expect(enNotes).toContain('Detached space: Store not attached')
+    expect(enNotes).toContain('GONE: Store not attached')
 
     const ru = hub('ru')
     await flushPromises()
-    expect(ru.get('.request-context').text()).toBe('Requests title · TASK-7')
+    expect(ru.get('.request-context').text()).toBe('Requests space · TASK-7')
     const ruNotes = ru.findAll('.request-note').map((note) => note.text())
-    expect(ruNotes).toContain('Detached title · TASK: Хранилище не подключено')
-    expect(ruNotes).toContain('unlisted-project · TASK: Хранилище не подключено')
+    expect(ruNotes).toContain('Detached space: Хранилище не подключено')
+    expect(ruNotes).toContain('GONE: Хранилище не подключено')
   })
 })

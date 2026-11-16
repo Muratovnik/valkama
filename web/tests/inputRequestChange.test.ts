@@ -138,7 +138,6 @@ describe('answer writes', () => {
       field_notes: { proceed: '' },
     })
     expect(sent()[0]?.body).toEqual({
-      project_id: entry.target.project_id,
       data_scope_id: entry.target.space_ref.data_scope_id,
       space_key: 'TASK',
       id: entry.request.request_id,
@@ -171,7 +170,6 @@ describe('answer writes', () => {
       {
         url: '/api/modules/planning/request/change',
         body: {
-          project_id: before.target.project_id,
           data_scope_id: before.target.space_ref.data_scope_id,
           space_key: 'TASK',
           id: before.request.request_id,

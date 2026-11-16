@@ -17,13 +17,13 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { largeChainHere, serve } from './chainFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: spaceScope })
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

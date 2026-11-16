@@ -22,12 +22,12 @@ import { drawnColours } from './contrast.ts'
 import { openMentionList } from './editorPage.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
 import { heldCard, openPlanFor } from './openSessionFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

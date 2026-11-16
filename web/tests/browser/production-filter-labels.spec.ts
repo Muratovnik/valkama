@@ -24,7 +24,7 @@ import {
   shownTiles,
   words,
 } from './filterPage.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const pick = (page: Page, label: string) =>
@@ -168,7 +168,7 @@ test('a label pressed on a tile joins in the reading in force', async ({ page })
 test('a label pressed in a card joins in the reading in force', async ({ page }) => {
   await page.setViewportSize({ width: 1500, height: 900 })
   await installDiscussionBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await openFacet(page, 'Label')
   await anyOf(page).click()
   await page.keyboard.press('Escape')

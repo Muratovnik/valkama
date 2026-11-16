@@ -13,12 +13,16 @@ import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 
 import { requestBody, requestUrl, withSecurityBootstrap } from './support/request.ts'
 
-const scope = { kind: 'project' as const, project_ref: { project_id: 'example-project' } }
 const spaceRef = {
   data_scope_id: '123e4567-e89b-42d3-a456-426614174000',
   space_key: 'MAIN',
 }
-test('context validates exact primary and project bindings without path-shaped legacy data', () => {
+const scope = {
+  kind: 'space' as const,
+  space_ref: spaceRef,
+  project_ref: { project_id: 'example-project' },
+}
+test('context validates the exact primary and each space with its projects, without path-shaped legacy data', () => {
   const payload = {
     interface_version: 'valkama-context',
     scope: { kind: 'global' },
@@ -27,12 +31,16 @@ test('context validates exact primary and project bindings without path-shaped l
       status: 'ready',
       payload: {
         primary: { data_scope_id: spaceRef.data_scope_id, is_writable: true },
-        projects: [
+        spaces: [
           {
-            project_id: 'example-project',
-            title: 'Example Project',
-            binding_state: 'mapped',
-            resources: [{ resource_ref: planningSpaceEntity(spaceRef), state: 'mapped' }],
+            ...spaceRef,
+            name: 'Main',
+            default_project: 'example-project',
+            projects: [{ project_id: 'example-project', display_name: 'Example Project' }],
+            other_space_projects: [
+              { project_id: 'other-project', display_name: 'Other', space_key: 'ROVER' },
+              { project_id: 'unplaced-project', display_name: 'Unplaced', space_key: null },
+            ],
           },
         ],
         ui_prefs: null,
@@ -40,6 +48,11 @@ test('context validates exact primary and project bindings without path-shaped l
     },
   }
   assert.equal(validatePlatformContextPayload(payload).state.status, 'ready')
+  const legacy = structuredClone(payload)
+  Object.assign(legacy.state.payload.spaces[0] as Record<string, unknown>, {
+    resources: [{ resource_ref: planningSpaceEntity(spaceRef), state: 'mapped' }],
+  })
+  assert.throws(() => validatePlatformContextPayload(legacy), /resources.*unknown field/)
   assert.throws(
     () => validatePlatformContextPayload({ ...payload, path: 'C:\\workspace' }),
     /unknown field/,
@@ -55,7 +68,7 @@ test('context ui_prefs and saved-preference results validate exact bounded recor
       status: 'ready',
       payload: {
         primary: { data_scope_id: spaceRef.data_scope_id, is_writable: true },
-        projects: [],
+        spaces: [],
         ui_prefs: { module_id: 'planning', scope, resource_ref: planningSpaceEntity(spaceRef) },
       },
     },
@@ -136,17 +149,18 @@ test('planning accepts only sparse exact work-item summaries', () => {
   }
   const payload = {
     interface_version: 'valkama-planning',
-    scope,
+    scope: { kind: 'global' },
     state: {
       interface_version: 'valkama-ui-state',
       status: 'ready',
       payload: {
-        projects: [
+        spaces: [
           {
-            project_id: 'example-project',
-            title: 'Example Project',
-            binding_state: 'mapped',
-            planning_spaces: [{ space_ref: spaceRef, title: 'Main', work_item_count: 1 }],
+            space_ref: spaceRef,
+            title: 'Main',
+            work_item_count: 1,
+            default_project: 'example-project',
+            projects: [{ project_id: 'example-project', display_name: 'Example Project' }],
           },
         ],
         planning_spaces: [{ space_ref: spaceRef, title: 'Main', work_items: [workItem] }],
@@ -181,22 +195,24 @@ const INTERFACE_VERSION_BY_PATH = [
   { fragment: '/work-item', version: 'valkama-planning-work-item' },
 ]
 
-test('GET helpers serialize only canonical scope and exact binding parameters', async () => {
+test('GET helpers serialize only canonical scope and exact space parameters', async () => {
   const originalFetch = globalThis.fetch
   const requested: string[] = []
   const attachedSpaceRef = { ...spaceRef, data_scope_id: '123e4567-e89b-42d3-a456-426614174001' }
+  let answerScope: unknown = { kind: 'global' }
   globalThis.fetch = (async (input: string | URL | Request) => {
     const pathname = requestUrl(input)
     requested.push(pathname)
     const version =
       INTERFACE_VERSION_BY_PATH.find((entry) => pathname.includes(entry.fragment))?.version ??
       'valkama-planning'
+    const reference = new URL(pathname, 'https://test.invalid').searchParams.get('reference')
     return new Response(
       JSON.stringify({
         interface_version: version,
-        scope,
+        scope: answerScope,
         ...(pathname.includes('/work-item')
-          ? { work_item_ref: { space_ref: spaceRef, reference: 'MAIN-264' } }
+          ? { work_item_ref: { space_ref: attachedSpaceRef, reference } }
           : {}),
         state: { interface_version: 'valkama-ui-state', status: 'empty' },
       }),
@@ -207,33 +223,31 @@ test('GET helpers serialize only canonical scope and exact binding parameters', 
     )
   }) as typeof fetch
   try {
-    await platformApi.fetchPlatformContext(scope)
-    await planningApi.fetchPlatformPlanning(scope, spaceRef)
-    await planningApi.fetchPlatformPlanning(scope, attachedSpaceRef)
-    await planningApi.fetchPlanningWorkItem(scope, { space_ref: spaceRef, reference: 'MAIN-264' })
+    await platformApi.fetchPlatformContext({ kind: 'global' })
+    await planningApi.fetchPlatformPlanning()
+    answerScope = { kind: 'space', space_ref: attachedSpaceRef }
+    await planningApi.fetchPlanningWorkItem({ space_ref: attachedSpaceRef, reference: 'MAIN-264' })
     // Two stores may hold a space keyed the same way, so the data scope travels
     // with the key on every read; the reference is sent whole rather than split
     // into a key and a number the server would have to put back together.
     assert.deepEqual(requested, [
-      '/api/platform/context?scope_kind=project&project_id=example-project',
-      `/api/platform/planning?scope_kind=project&project_id=example-project&data_scope_id=${spaceRef.data_scope_id}&space_key=MAIN`,
-      `/api/platform/planning?scope_kind=project&project_id=example-project&data_scope_id=${attachedSpaceRef.data_scope_id}&space_key=MAIN`,
-      `/api/modules/planning/work-item?scope_kind=project&project_id=example-project&data_scope_id=${spaceRef.data_scope_id}&space_key=MAIN&reference=MAIN-264`,
+      '/api/platform/context?scope_kind=global',
+      '/api/platform/planning?scope_kind=global&directory_only=true',
+      `/api/modules/planning/work-item?scope_kind=space&data_scope_id=${attachedSpaceRef.data_scope_id}&space_key=MAIN&reference=MAIN-264`,
     ])
+    // A card read answered in another space than its own is refused.
+    answerScope = { kind: 'space', space_ref: spaceRef }
     await assert.rejects(
       () =>
-        planningApi.fetchPlanningWorkItem(
-          { kind: 'global' },
-          { space_ref: spaceRef, reference: 'MAIN-264' },
-        ),
-      /Project scope/,
+        planningApi.fetchPlanningWorkItem({ space_ref: attachedSpaceRef, reference: 'MAIN-264' }),
+      /scope does not match/,
     )
   } finally {
     globalThis.fetch = originalFetch
   }
 })
 
-test('Project planning rejects implicit binding and response envelopes must echo exact scope', async () => {
+test('response envelopes must echo the exact scope they were asked in', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = (async () =>
     new Response(
@@ -245,7 +259,6 @@ test('Project planning rejects implicit binding and response envelopes must echo
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     )) as typeof fetch
   try {
-    await assert.rejects(() => planningApi.fetchPlatformPlanning(scope), /exact space binding/)
     await assert.rejects(() => platformApi.fetchPlatformContext(scope), /scope does not match/)
   } finally {
     globalThis.fetch = originalFetch

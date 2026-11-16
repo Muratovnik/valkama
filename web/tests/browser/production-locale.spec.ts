@@ -1,14 +1,13 @@
 import { expect } from '@playwright/test'
 import type { Page, Route } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { answerFilePlans, copiedIn, keepCopies, noticeOf } from './documentEditorPlan.ts'
 import { openPage, shot } from './documentPageSurface.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { globalScope, projectScope, spaceRef } from './planningFixtures.ts'
+import { globalScope, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 test('Russian production shell localizes Settings without runtime failures', async ({ page }) => {
@@ -22,7 +21,7 @@ test('Russian production shell localizes Settings without runtime failures', asy
   })
 
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
 
   await expect(page.getByRole('heading', { level: 1, name: 'Настройки' })).toBeVisible()
   const sections = page.getByRole('tablist', { name: 'Раздел настроек' })
@@ -49,25 +48,22 @@ test('Russian Settings names the task type colours and each colour field by its 
   page,
 }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   await expect(page.getByRole('heading', { name: 'Цвета типов задач', exact: true })).toBeVisible()
   for (const word of ['Дефект', 'Цель и этап', 'Улучшение', 'Задача'])
     await expect(page.getByLabel(`Цвет типа «${word}»`, { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Сбросить все цвета', exact: true })).toBeDisabled()
 })
 
-test('Russian Planning portfolio presents an unbound project through typed localized state', async ({
-  page,
-}) => {
-  await installBackend(page, { includeUnboundPlanningProject: true })
+test('Russian «All spaces» names an empty space with no projects in Russian', async ({ page }) => {
+  await installBackend(page, { includeEmptySpace: true })
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: globalScope }))
 
-  const project = page.locator('.portfolio-project').filter({ hasText: 'unbound-project' })
-  await expect(project.getByText('Не связан', { exact: true })).toBeVisible()
-  await expect(project).toContainText('Привязанных пространств пока нет.')
-  await expect(project).toContainText('Проверить настройку проекта')
-  await expect(project).not.toContainText('No owner Planning-space binding')
-  await expect(project.locator('.binding-reason')).toHaveCount(0)
+  const space = page.locator('.portfolio-space').filter({ hasText: 'New space' })
+  await expect(space.locator('.space-count')).toHaveText('Задач: 0')
+  await expect(space.locator('.projects-names')).toHaveText('Проектов нет')
+  await expect(space.getByRole('button', { name: 'Открыть пространство' })).toBeVisible()
+  await expect(page.locator('.operating-scope [role="combobox"]')).toContainText('Все пространства')
 })
 
 /** The vertical extent of each control in the bar's first row that is drawn. */
@@ -119,7 +115,7 @@ for (const width of [1440, 1260, 1024, 996, 990, 900, 888, 880, 820, 760, 700, 6
   }) => {
     await page.setViewportSize({ width, height: 800 })
     await installBackend(page)
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await expect(page.locator('.work-item-tile').first()).toBeVisible()
     const bar = await barAt(page)
     expect(bar.name, 'the menu is named').toBe('Вид')
@@ -139,8 +135,7 @@ test('every order of the Russian phone list has its whole name', async ({ page }
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(spaceRef),
+      scope: spaceScope,
       state: { view: 'list' },
     }),
   )
@@ -167,7 +162,7 @@ test('Russian Work bar keeps its controls on one row, and the former presets are
   page,
 }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
   const conditions = page.getByRole('group', { name: 'Условия' })
   const field = page.getByRole('combobox', { name: 'Фильтр работы' })
@@ -224,7 +219,7 @@ test('the context bar names each module and adds no introductory copy', async ({
     ['planning', 'Работа'],
     ['settings', 'Настройки'],
   ] as const) {
-    await page.goto(serializePlatformRoute({ module_id: module, scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: module, scope: spaceScope }))
     const title = page.locator('.context-title')
     await expect(title.getByRole('heading', { level: 1, name })).toBeVisible()
     await expect(title).toHaveText(name)
@@ -261,7 +256,7 @@ for (const [shape, fail, reason] of [
       await page.goto(
         serializePlatformRoute({
           module_id: 'planning',
-          scope: projectScope,
+          scope: spaceScope,
           state: { view: 'list' },
         }),
       )

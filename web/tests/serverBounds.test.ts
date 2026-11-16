@@ -99,12 +99,27 @@ const day = (index: number) => ({
   total: 0,
   closed_total: 0,
 })
-const named = (index: number, title = 'Project') => ({
+const project = (index: number, display_name = 'Project') => ({
   project_id: `project-${index}`,
-  title,
-  binding_state: 'unbound',
+  display_name,
 })
-const project = (index: number, title?: string) => ({ ...named(index, title), planning_spaces: [] })
+/** A space as the directory lists it, with the projects the registry binds to it. */
+const listed = (title = 'Space', projects = [project(0)]) => ({
+  space_ref: spaceRef,
+  title,
+  work_item_count: 0,
+  default_project: projects[0]?.project_id ?? null,
+  projects,
+})
+/** A space as the shell's context lists it. */
+const shellSpace = (index: number, name = 'Space') => ({
+  data_scope_id: spaceRef.data_scope_id,
+  space_key: `S${index}`,
+  name,
+  default_project: `project-${index}`,
+  projects: [project(index, name)],
+  other_space_projects: [],
+})
 const summary = (index: number) => ({
   work_item_ref: { space_ref: spaceRef, reference: `QA-${index + 1}` },
   title: 'Item',
@@ -249,32 +264,36 @@ it('reads a chain past every old list bound', async () => {
   )
 })
 
-describe('the project directory', () => {
+describe('the space directory', () => {
   it.each([
-    ['257 projects', { projects: many(257, (index) => project(index)), planning_spaces: [] }],
-    ['1025 spaces', { projects: [project(0)], planning_spaces: many(1025, () => space('S')) }],
+    ['a space of 501 projects', { spaces: [listed('S', many(501, project))], planning_spaces: [] }],
+    [
+      '1025 spaces',
+      { spaces: many(1025, () => listed()), planning_spaces: many(1025, () => space('S')) },
+    ],
     [
       'a space of 20001 items',
-      { projects: [project(0)], planning_spaces: [space('Big', many(20_001, summary))] },
+      { spaces: [listed()], planning_spaces: [space('Big', many(20_001, summary))] },
     ],
     [
       'a project and a space named as the server allows',
-      { projects: [project(0, longName)], planning_spaces: [space(longName)] },
+      { spaces: [listed(longName, [project(0, longName)])], planning_spaces: [space(longName)] },
     ],
   ])('reads Planning with %s', (_, payload) => {
     expect(() => validatePlatformPlanningPayload(planning(payload))).not.toThrow()
   })
 
   it.each([
-    ['257 projects', many(257, (index) => ({ ...named(index), resources: [] }))],
-    ['a project named as the server allows', [{ ...named(0, longName), resources: [] }]],
-  ])('reads the context with %s', (_, projects) => {
+    ['257 spaces', many(257, (index) => shellSpace(index))],
+    ['a space of 501 projects', [{ ...shellSpace(0), projects: many(501, project) }]],
+    ['a space and a project named as the server allows', [shellSpace(0, longName)]],
+  ])('reads the context with %s', (_, spaces) => {
     const context = {
       interface_version: 'valkama-context',
       scope: { kind: 'global' },
       state: ready({
         primary: { data_scope_id: spaceRef.data_scope_id, is_writable: true },
-        projects,
+        spaces,
         ui_prefs: null,
       }),
     }

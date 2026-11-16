@@ -9,18 +9,16 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
-import { projectScope, spaceRef } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const LIST = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
-  entity: planningSpaceEntity(spaceRef),
+  scope: spaceScope,
   state: { view: 'list' },
 })
 

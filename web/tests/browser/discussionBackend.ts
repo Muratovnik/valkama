@@ -4,7 +4,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 
 import { asRoot } from '../support/threads.ts'
 import { installBackend } from './backend.ts'
-import { doneState, now, projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { doneState, now, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 
 function checklistQuote(item: WorkItem, id: unknown) {
   const step = typeof id === 'string' ? item.checklist.find((entry) => entry.id === id) : undefined
@@ -123,7 +123,7 @@ export async function installDiscussionBackend(page: Page) {
     return route.fulfill({
       json: {
         interface_version: 'valkama-planning-work-item',
-        scope: projectScope,
+        scope: spaceScope,
         work_item_ref: workItemRef,
         state: {
           interface_version: 'valkama-ui-state',

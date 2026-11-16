@@ -11,16 +11,20 @@ import type { Page } from '@playwright/test'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { dataScopeId, spaceRef, spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 import {
   chooseScope,
-  firstProject,
+  firstSpace,
   inSecond,
-  SECOND,
+  SECOND_KEY,
   SECOND_TITLE,
-  serveTwoProjects,
-} from './twoProjects.ts'
+  serveTwoSpaces,
+} from './twoSpaces.ts'
+
+/** The address of a module in the second space, with nothing after it. */
+const secondAddress = (module: string) =>
+  new RegExp(`/modules/${module}/space/${dataScopeId}/${SECOND_KEY}$`, 'u')
 
 /** The module state the address holds, decoded. */
 function addressState(page: Page): unknown {
@@ -34,9 +38,9 @@ const SURFACES = {
 } as const
 
 for (const view of ['graph', 'list'] as const) {
-  test(`the ${view} stays open from one project to another`, async ({ page }) => {
-    await serveTwoProjects(page)
-    await page.goto(firstProject({ view }))
+  test(`the ${view} stays open from one space to another`, async ({ page }) => {
+    await serveTwoSpaces(page)
+    await page.goto(firstSpace({ view }))
     await expect(page.locator(SURFACES[view])).toBeVisible()
     await chooseScope(page, SECOND_TITLE)
     await inSecond(page)
@@ -44,30 +48,30 @@ for (const view of ['graph', 'list'] as const) {
     expect(addressState(page)).toEqual({ view })
   })
 
-  test(`the ${view} stays open through all projects, whichever way back is taken`, async ({
+  test(`the ${view} stays open through all spaces, whichever way back is taken`, async ({
     page,
   }) => {
-    await serveTwoProjects(page)
-    await page.goto(firstProject({ view }))
+    await serveTwoSpaces(page)
+    await page.goto(firstSpace({ view }))
     await expect(page.locator(SURFACES[view])).toBeVisible()
 
-    await chooseScope(page, 'Global')
-    const second = page.locator('.portfolio-project').filter({ hasText: SECOND })
-    await second.getByRole('button', { name: /Open project/iu }).click()
+    await chooseScope(page, 'All spaces')
+    const second = page.locator('.portfolio-space').filter({ hasText: SECOND_TITLE })
+    await second.getByRole('button', { name: /Open space/iu }).click()
     await inSecond(page)
     await expect(page.locator(SURFACES[view])).toBeVisible()
 
-    await chooseScope(page, 'Global')
-    await expect(page.locator('.portfolio-project')).toHaveCount(2)
-    await chooseScope(page, 'Example Project')
+    await chooseScope(page, 'All spaces')
+    await expect(page.locator('.portfolio-space')).toHaveCount(2)
+    await chooseScope(page, spaceRef.space_key)
     await expect(page.locator(SURFACES[view])).toBeVisible()
     expect(addressState(page)).toEqual({ view })
   })
 }
 
-test('the board’s grouping stays from one project to another', async ({ page }) => {
-  await serveTwoProjects(page)
-  await page.goto(firstProject({ group: 'goal' }))
+test('the board’s grouping stays from one space to another', async ({ page }) => {
+  await serveTwoSpaces(page)
+  await page.goto(firstSpace({ group: 'goal' }))
   /** The grouping the view's menu checks. */
   const grouped = async () => {
     await page.getByRole('button', { name: 'View', exact: true }).click()
@@ -106,8 +110,8 @@ for (const [view, width] of [
     const held = new Promise<void>((done) => {
       answer = done
     })
-    await serveTwoProjects(page, () => held)
-    await page.goto(firstProject({ view, group: 'goal' }))
+    await serveTwoSpaces(page, () => held)
+    await page.goto(firstSpace({ view, group: 'goal' }))
     const bar = page.locator('.workspace-head')
     await expect(
       page.locator('.workspace-stage > :not(.platform-state-panel, [role="status"])').first(),
@@ -139,18 +143,18 @@ for (const [view, width] of [
 }
 
 test('the board stays the board, with nothing in the address', async ({ page }) => {
-  await serveTwoProjects(page)
-  await page.goto(firstProject())
+  await serveTwoSpaces(page)
+  await page.goto(firstSpace())
   await expect(page.locator('.work-item-board')).toBeVisible()
   await chooseScope(page, SECOND_TITLE)
-  await expect(page).toHaveURL(new RegExp(`/modules/planning/project/${SECOND}$`, 'u'))
+  await expect(page).toHaveURL(secondAddress('planning'))
   await expect(page.locator('.work-item-board')).toBeVisible()
 })
 
 test('a filter and a chain stay with their space, and Back finds them there', async ({ page }) => {
-  await serveTwoProjects(page)
+  await serveTwoSpaces(page)
   const state = { view: 'list', query: 'gateway', ready: true }
-  const left = firstProject(state)
+  const left = firstSpace(state)
   await page.goto(left)
   await expect(page.getByRole('combobox', { name: 'Filter work' })).toHaveValue('gateway')
   await chooseScope(page, SECOND_TITLE)
@@ -160,16 +164,16 @@ test('a filter and a chain stay with their space, and Back finds them there', as
 
   await page.goBack()
   await expect(page).toHaveURL(left)
-  await expect(page.locator('.operating-scope [role="combobox"]')).toContainText('Example Project')
+  await expect(page.locator('.operating-scope [role="combobox"]')).toContainText(spaceRef.space_key)
   await expect(page.getByRole('combobox', { name: 'Filter work' })).toHaveValue('gateway')
   expect(addressState(page)).toEqual(state)
 })
 
 test('a card closed before the move stays closed', async ({ page }) => {
-  await serveTwoProjects(page)
+  await serveTwoSpaces(page)
   const card = serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
+    scope: spaceScope,
     entity: planningWorkItemEntity(workItemRef),
     state: { view: 'list' },
   })
@@ -185,15 +189,15 @@ test('a card closed before the move stays closed', async ({ page }) => {
 })
 
 test('another module’s state is its own: a change of scope hands it nothing', async ({ page }) => {
-  await serveTwoProjects(page)
+  await serveTwoSpaces(page)
   await page.goto(
     serializePlatformRoute({
       module_id: 'settings',
-      scope: projectScope,
+      scope: spaceScope,
       state: { query: 'theme', view: 'graph' },
     }),
   )
   await expect(page.locator('.app-shell')).toBeVisible()
   await chooseScope(page, SECOND_TITLE)
-  await expect(page).toHaveURL(new RegExp(`/modules/settings/project/${SECOND}$`, 'u'))
+  await expect(page).toHaveURL(secondAddress('settings'))
 })

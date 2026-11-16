@@ -35,7 +35,7 @@ export type WorkItemRef = {
 export type PlanningRouteSelection =
   | { status: 'ready'; space_ref?: PlanningSpaceRef; work_item_ref?: WorkItemRef }
   | {
-      reason: 'invalid-planning-entity' | 'resource-not-mapped' | 'resource-required'
+      reason: 'invalid-planning-entity' | 'other-space'
       status: 'unavailable'
     }
 
@@ -162,51 +162,33 @@ function resourceId(entity: EntityRef): string {
   return 'resource_id' in entity ? entity.resource_id : ''
 }
 
-function sameEntity(left: EntityRef, right: EntityRef): boolean {
-  return left.kind === right.kind && resourceId(left) === resourceId(right)
-}
-
-function defaultPlanningSelection(
-  mappedResources: readonly EntityRef[],
-  projectScoped: boolean,
-): PlanningRouteSelection {
-  if (!projectScoped) return { status: 'ready' }
-  if (mappedResources.length !== 1) return { status: 'unavailable', reason: 'resource-required' }
-  try {
-    const space = planningSpaceRef(mappedResources[0])
-    return space
-      ? { status: 'ready', space_ref: space }
-      : { status: 'unavailable', reason: 'invalid-planning-entity' }
-  } catch {
-    return { status: 'unavailable', reason: 'invalid-planning-entity' }
-  }
+/** Two references to one space. */
+export function sameSpace(left: PlanningSpaceRef, right: PlanningSpaceRef): boolean {
+  return left.data_scope_id === right.data_scope_id && left.space_key === right.space_key
 }
 
 /**
- * Resolve a Planning entity only at the Planning boundary. A present invalid or
- * stale identity is an explicit refusal; it can never trigger the sole-resource
- * convenience default.
+ * Resolve a Planning entity only at the Planning boundary. In a space the route
+ * names no entity to open the space itself, and an entity it does name must be of
+ * that space: a present invalid identity, or one of another space, is an explicit
+ * refusal rather than a quiet move to somewhere else.
  */
 export function resolvePlanningRouteSelection(
   entity: EntityRef | undefined,
-  mappedResources: readonly EntityRef[],
-  projectScoped: boolean,
+  space?: PlanningSpaceRef,
 ): PlanningRouteSelection {
-  if (entity === undefined) return defaultPlanningSelection(mappedResources, projectScoped)
+  if (entity === undefined)
+    return space ? { status: 'ready', space_ref: space } : { status: 'ready' }
   if (entity.kind !== 'planning-space' && entity.kind !== 'work-item')
     return { status: 'unavailable', reason: 'invalid-planning-entity' }
   try {
     const item = planningWorkItemRef(entity)
-    const space = planningSpaceRef(entity) ?? item?.space_ref
-    if (!space) return { status: 'unavailable', reason: 'invalid-planning-entity' }
-    if (
-      projectScoped &&
-      !mappedResources.some((resource) => sameEntity(resource, planningSpaceEntity(space)))
-    )
-      return { status: 'unavailable', reason: 'resource-not-mapped' }
+    const named = planningSpaceRef(entity) ?? item?.space_ref
+    if (!named) return { status: 'unavailable', reason: 'invalid-planning-entity' }
+    if (space && !sameSpace(space, named)) return { status: 'unavailable', reason: 'other-space' }
     return {
       status: 'ready',
-      space_ref: space,
+      space_ref: named,
       ...(item ? { work_item_ref: item } : {}),
     }
   } catch {
