@@ -959,12 +959,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   its container (`data-hint-list`), and its rows say nothing: in it every other hint stands
   aside of the list, level with its row's
   top, over no other row — the rail's past the rail's edge, a ranked bar's past the
-  ranking's edge, a step's past its card's checklist, a setting's past the settings sheet, a
-  tile's past the Analytics rail, a row's past the list view's table, a chart period's beside
-  its column
+  ranking's edge, a tile's past the Analytics rail, a row's past the list view's table, a
+  chart period's beside its column
   at the plot's top — on the left where the right has no room, on the roomier side drawn
   narrower down to 12rem where neither holds it, and above its element where neither has even
-  that. Every period of a chart asks the chart's frame (`data-hint-frame`) for the room of
+  that. A list of rows wide enough to hold a hint (`data-hint-list="wide-rows"`), as the
+  settings sheet and a card's checklist are, keeps it inside its element's own row instead:
+  beside the element on the side of the row with more room, level with the row's top, over
+  the row's own label and no other row, and drawn as wide as that room, up to 40rem, so a long
+  one takes as few lines as the row's height allows. Every period of a chart asks the chart's
+  frame (`data-hint-frame`) for the room of
   the widest hint, not of its own: the right inside the frame for every period that has it,
   the left past them, so along the chart the side changes once and never jumps between
   neighbours; a frame with that room on neither side gives the roomier side of the window.

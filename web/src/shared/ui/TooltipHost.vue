@@ -147,7 +147,7 @@ const current = computed(() => {
 /** What the hint is placed against: its element, or the box aside of the list it stands in. */
 const reference = computed(() => (shown.value ? place.value?.reference : undefined))
 
-/** The hint's widest where its place draws it narrower than `WIDEST`. */
+/** The hint's widest where its place draws it other than `WIDEST` wide. */
 const widestStyle = computed(() =>
   place.value?.widest ? { '--tooltip-widest': `${place.value.widest}px` } : undefined,
 )
@@ -231,7 +231,7 @@ watch(shown, (element) => {
 
 .tooltip-hint {
   /* The widest a hint is drawn (`WIDEST` in `hintPlacement.ts`); beside a list with less room,
-     the host's less. */
+     the host's less, and in a wide row the room beside its element. */
   --tooltip-widest: 20rem;
 
   /* Over the menus and sheets (120) whose rows it speaks for, as a cut text's whole words are. */

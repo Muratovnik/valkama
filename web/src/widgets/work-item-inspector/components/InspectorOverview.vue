@@ -227,11 +227,12 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
         :title="t('workItem.checklist')"
         :count="stepCount"
       />
-      <!-- A list of rows: a step's hint stands past the checklist's edge, level with its step,
-           rather than under its control and over the step after it. -->
+      <!-- A list of wide rows: a step's hint stands beside its control inside the step's own
+           row, rather than under its control and over the step after it, or past the
+           checklist's edge, far from it. -->
       <ul
         class="checklist"
-        data-hint-list="rows"
+        data-hint-list="wide-rows"
       >
         <!-- The step, its one action at the row's end, and who holds or closed
              it directly under the step's own text. The action used to be a full

@@ -135,6 +135,53 @@ test('in a list every kind stands aside of it, on the right, level with its row'
       )
 })
 
+test('in a list of wide rows a hint stands beside its element inside its row, as wide as the room', () => {
+  // A settings row from 292 to 1408 with its control from 862 to 906, the hint 8px in from the
+  // row's edges: 862 - 6 - 300 = 556 on the left, 1400 - 906 - 6 = 488 on the right.
+  const row = { left: 292, right: 1408 }
+  const control = box(862, 906, 499, 560)
+  const wide = (over: Partial<HintSetting>) =>
+    placeHint(setting({ aside: control, frame: row, list: 'wide-rows', width: 400, ...over }))
+  assert.deepEqual(wide({}), { align: 'start', aside: true, side: 'left', widest: 556 })
+  // A control at the row's start has its room on the right, 1400 - 344 - 6 = 1050: drawn no
+  // wider than twice the widest hint, 640px, however wide the row.
+  assert.deepEqual(wide({ aside: box(300, 344, 499, 560) }), {
+    align: 'start',
+    aside: true,
+    side: 'right',
+    widest: 640,
+  })
+  // The row, not the window, bounds the room: in a row from 900 to 1300, 1292 - 1040 - 6 = 246
+  // on the right where the window would leave 386, and 1000 - 6 - 908 = 86 on the left.
+  assert.deepEqual(wide({ aside: box(1000, 1040), frame: { left: 900, right: 1300 } }), {
+    align: 'start',
+    aside: true,
+    side: 'right',
+    widest: 246,
+  })
+})
+
+test('in a list of wide rows a hint with no room beside its element stands above it', () => {
+  // 450 - 6 - 300 = 144 on the left and 1400 - 1240 - 6 = 154 on the right: under 12rem, 192px.
+  const narrow = {
+    aside: box(450, 1240),
+    frame: { left: 292, right: 1408 },
+    list: 'wide-rows',
+  } as const
+  assert.deepEqual(placeHint(setting({ ...narrow, width: 400 })), {
+    align: 'center',
+    aside: false,
+    side: 'top',
+  })
+  // A hint as short as the room still stands beside its element.
+  assert.deepEqual(placeHint(setting({ ...narrow, width: 120 })), {
+    align: 'start',
+    aside: true,
+    side: 'right',
+    widest: 154,
+  })
+})
+
 test('a list with no room on the right puts the hint on the left', () => {
   // 1440 - 1100 - 14 = 326 >= 200 on the right; with the row ending at 1300 it is 126.
   assert.equal(placeHint(setting({ aside: box(1000, 1100), list: 'columns' })).side, 'right')

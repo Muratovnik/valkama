@@ -11,11 +11,12 @@
  * so a hint there stands over no part of the list, and so do a ranking's bars, whose hint stood
  * under its row and over the rows after it; the chart's periods are a list of rows across,
  * whose hint stands beside its own column, over the periods after it by the place they chose.
+ * The settings and a card's checklist are lists of wide rows, whose hint stands inside its own
+ * row and over no other (`production-hint-row.spec.ts` measures how near).
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { busyFrame } from '../support/liveFrame.ts'
@@ -25,13 +26,17 @@ import { openBoard, serve } from './boardPage.ts'
 import { openCard } from './cardHeadPage.ts'
 import { openDays } from './dayHintPage.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { projectScope } from './planningFixtures.ts'
+import { openSteps } from './stepsPage.ts'
 import { test } from './test.ts'
 
 interface Placed {
   /** The element pointed at, by its first class and its kind. */
   element: string
-  /** The hint stands over the list the element stands in, of rows down; or over its row, across. */
+  /**
+   * The hint stands over the list the element stands in, of rows down; over its row, across; or
+   * over another row, in a list of wide rows.
+   */
   listCovered: boolean
   /** The hint stands over its own element. */
   ownCovered: boolean
@@ -39,46 +44,25 @@ interface Placed {
 
 /**
  * The list a screen's elements stand in, named by the screen rather than read from the page, so
- * this judges any build: a list of rows down, which no hint may stand over, or of rows across,
- * where a hint may not stand over its own row.
+ * this judges any build: a list of rows down, which no hint may stand over, of rows across,
+ * where a hint may not stand over its own row, or of wide rows, where it may not stand over
+ * another row.
  */
 interface List {
   across: boolean
   /** The list of rows down, or the row of a list across, that holds an element. */
   holder: string
+  /** In a list of wide rows, each of its rows. */
+  row?: string
 }
 
 const RAIL: List = { across: false, holder: '.app-nav-shell' }
 const PERIODS: List = { across: true, holder: '.period-slot' }
 const RANKING: List = { across: false, holder: '.ranked-grid' }
-const STEPS: List = { across: false, holder: '.checklist' }
-const SETTINGS: List = { across: false, holder: '.settings-general-sheet' }
+const STEPS: List = { across: false, holder: '.checklist', row: '.step-row' }
+const SETTINGS: List = { across: false, holder: '.settings-general-sheet', row: '.settings-row' }
 const RAIL_TILES: List = { across: false, holder: '.analytics-rail-list' }
 const LIST_ROWS: List = { across: false, holder: '.list-table' }
-
-/** Steps enough that each but the last has a step under it, one held and one done. */
-const STEP_LIST = [1, 2, 3, 4].map((number) => ({
-  id: `123e4567-e89b-42d3-a456-42661417410${number}`,
-  text: `Step ${number} of the work, said in a few words`,
-  done: number === 2,
-  claimed_by: number === 3 ? 'own-b' : '',
-  done_by: number === 2 ? 'own-a' : '',
-}))
-
-/** An item's card with its checklist, open at the window the page has. */
-async function openSteps(page: Page) {
-  await installBackend(page, { card: (read) => ({ ...read, checklist: STEP_LIST }) })
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'planning',
-      scope: projectScope,
-      entity: planningWorkItemEntity(workItemRef),
-    }),
-  )
-  const drawer = page.locator('.drawer')
-  await expect(drawer.locator('.step-row')).toHaveCount(STEP_LIST.length)
-  await expect(drawer).toHaveCSS('transform', 'none')
-}
 
 /**
  * Where the hint that shows under the pointer at `x, y` stands against the element there. A
@@ -99,11 +83,21 @@ function placedAt([[x, y], list]: [[number, number], List | null]): Placed | nul
     Math.min(shown.right, box.right) - Math.max(shown.left, box.left) > 1 &&
     Math.min(shown.bottom, box.bottom) - Math.max(shown.top, box.top) > 1
   const holder = list ? anchor.closest(list.holder) : null
+  const own = list?.row ? anchor.closest(list.row) : null
+  const others = list?.row && holder ? [...holder.querySelectorAll(list.row)] : []
   return {
     element: `${anchor.classList[0] ?? anchor.tagName.toLowerCase()}.${anchor.dataset.tooltipKind ?? ''}`,
-    listCovered: holder !== null && covers(holder.getBoundingClientRect()),
+    listCovered: list?.row
+      ? others.some((row) => row !== own && covers(row.getBoundingClientRect()))
+      : holder !== null && covers(holder.getBoundingClientRect()),
     ownCovered: covers(anchor.getBoundingClientRect()),
   }
+}
+
+/** What a hint in `list` stood over that it must not. */
+function overWhat(list: List | null) {
+  if (list?.row) return 'another row of its list'
+  return list?.across ? 'its own column' : 'the rows of its list'
 }
 
 /** Points at every element with a hint inside `where` and lists each hint that covers what it must not. */
@@ -127,10 +121,7 @@ async function sweep(page: Page, where: Locator, list: List | null = null) {
     if (!shown) continue
     placed.push(shown)
     if (shown.ownCovered) covered.push(`${shown.element}: over its own element`)
-    if (shown.listCovered)
-      covered.push(
-        `${shown.element}: over ${list?.across ? 'its own column' : 'the rows of its list'}`,
-      )
+    if (shown.listCovered) covered.push(`${shown.element}: over ${overWhat(list)}`)
   }
   return { covered, placed }
 }
@@ -178,7 +169,7 @@ for (const width of [1440, 1024]) {
       expect(list.covered).toEqual([])
     })
 
-    test('no hint of a card’s steps covers its element, nor a step of the checklist', async ({
+    test('no hint of a card’s steps covers its element, nor another step of the checklist', async ({
       page,
     }) => {
       await openSteps(page)
@@ -190,7 +181,7 @@ for (const width of [1440, 1024]) {
       expect(placed.covered).toEqual([])
     })
 
-    test('no hint of the settings covers its element, nor a row of the settings', async ({
+    test('no hint of the settings covers its element, nor another row of the settings', async ({
       page,
     }) => {
       await installBackend(page)

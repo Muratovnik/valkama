@@ -12,19 +12,24 @@
  *   by words only where they do not fit there (`placeWhole`, drawn by `WholeText`). On one line
  *   it covers its own line and nothing over or under it, in a list as anywhere.
  * - In a list, every other hint stands aside of it, its top level with its row's: a list of rows down
- *   (`data-hint-list="rows"`: the rail, a ranking's bars, a card's checklist, the settings sheet,
- *   the Analytics rail and the list view's table) puts it past the list's own edge, clear
- *   of every row; a list of rows across (`data-hint-list="columns"`, a chart's periods) puts it
- *   beside its row.
+ *   (`data-hint-list="rows"`: the rail, a ranking's bars, the Analytics rail and the list view's
+ *   table) puts it past the list's own edge, clear of every row; a list of rows across
+ *   (`data-hint-list="columns"`, a chart's periods) puts it beside its row.
+ * - A list of rows wide enough to hold a hint (`data-hint-list="wide-rows"`: the settings sheet, a
+ *   card's checklist) puts it inside the element's own row, beside the element on the side of
+ *   the row with more room, as a control at a row's end has on its left: over the row's own label
+ *   and over no other row, drawn as wide as that room so a long one keeps to the row's height.
+ *   Past the sheet's edge it stood 375 to 576px from its control.
  *   A list declares itself once on its container, and its rows say nothing.
  * - A list of columns in a frame that keeps its hints inside (`data-hint-frame="inside"`, each
  *   chart of a small multiple) puts a column's hint inside that frame, as wide as it at most, from
  *   its start: against its top edge where the column stands in its lower half, else against its
- *   bottom edge, over part of its own chart and never over a neighbouring one; one taller than the
- *   chart, as a long name's in a narrow window, runs on into the air between the charts. It lets the pointer
- *   through to what it covers, as a chart period's does: resting on a period, it stands over the
- *   next. Below its period, as a detail stands, it stood over the charts of the next row; beside
- *   it, a chart a few columns wide had no room, and the window's side put it over the next chart.
+ *   bottom edge, over part of its own chart and never over a neighbouring one; one taller than
+ *   the chart, as a long name's in a narrow window, runs on into the air between the charts. It
+ *   lets the pointer through to what it covers, as a chart period's does: resting on a period, it
+ *   stands over the next. Below its period, as a detail stands, it stood over the charts of the
+ *   next row; beside it, a chart a few columns wide had no room, and the window's side put it
+ *   over the next chart.
  *
  * A hint stands on the right of a list where its lines fit there, else on the left, else on the
  * roomier side drawn narrower, down to `NARROWEST_BESIDE`, and above its element where neither
@@ -48,12 +53,19 @@ export type HintSide = 'top' | 'right' | 'bottom' | 'left'
 /** Where along its side a hint stands: centred on what it is placed against, or level with its start. */
 export type HintAlign = 'center' | 'start'
 
-/** How a list's rows run, as its container declares in `data-hint-list`. */
-export type HintList = 'rows' | 'columns'
+/**
+ * How a list's rows run, as its container declares in `data-hint-list`: down, across, or down
+ * and wide enough to hold a hint beside each element.
+ */
+export type HintList = 'rows' | 'columns' | 'wide-rows'
 
-/** The widest a hint is drawn, and the narrowest it is drawn beside a list, in rem. */
+/**
+ * The widest a hint is drawn, and the narrowest it is drawn beside a list, in rem; in a row wide
+ * enough to hold it, as wide as the row's room up to twice `WIDEST`.
+ */
 const WIDEST = 20
 const NARROWEST_BESIDE = 12
+const WIDEST_IN_ROW = 2 * WIDEST
 /** The room between a hint and what it stands against, and between a hint and the window's edge, in px. */
 export const OFFSET = 6
 export const EDGE = 8
@@ -83,7 +95,7 @@ export interface HintSetting {
   asked?: { align: HintAlign; side: HintSide } | null
   /**
    * The frame a list of columns keeps its hints inside (`data-hint-frame`): across, and with its
-   * top and bottom where it keeps them wholly inside (`inside`).
+   * top and bottom where it keeps them wholly inside (`inside`); in a list of wide rows, the row.
    */
   frame?: (Pick<Box, 'left' | 'right'> & { inside?: Pick<Box, 'bottom' | 'top'> }) | null
 }
@@ -95,7 +107,7 @@ export interface HintPlace {
   side: HintSide
   /** The edge of the frame that keeps it inside (`data-hint-frame="inside"`) it stands against. */
   inside?: 'top' | 'bottom'
-  /** How wide the hint is drawn at most where it stands, in px, where narrower than `WIDEST`. */
+  /** How wide the hint is drawn at most where it stands, in px, where not `WIDEST`. */
   widest?: number
 }
 
@@ -109,6 +121,7 @@ export function placeHint(setting: HintSetting): HintPlace {
   const { frame } = setting
   if (list === 'columns' && frame?.inside)
     return within(setting.aside, { ...frame, ...frame.inside })
+  if (list === 'wide-rows') return inRow(setting)
   if (list) return beside(setting, 'right', 'start')
   return { align: kind === 'name' ? 'center' : 'start', aside: false, side: 'bottom' }
 }
@@ -123,6 +136,25 @@ function within(column: Box, frame: Box): HintPlace {
     side: lower ? 'bottom' : 'top',
     widest: frame.right - frame.left,
   }
+}
+
+/**
+ * A hint inside its element's own row, beside the element on the side where the row has more
+ * room, level with the row's top and as far in from its edges as from the window's. It is drawn
+ * as wide as that room, up to `WIDEST_IN_ROW`, so a long hint takes as few lines as the row
+ * allows: drawn 278px wide, a setting's hint of 130 letters took four lines, 85px, in a row 69px
+ * high. Where the room holds neither its lines nor `NARROWEST_BESIDE`, the hint stands above its
+ * element.
+ */
+function inRow({ aside, frame, rem, width, window }: HintSetting): HintPlace {
+  // As far in from the row's edges as from the window's.
+  const left = Math.max(0, frame?.left ?? 0) + EDGE
+  const right = Math.min(window, frame?.right ?? window) - EDGE
+  const room = { left: aside.left - OFFSET - left, right: right - aside.right - OFFSET }
+  const side = room.left >= room.right ? 'left' : 'right'
+  return room[side] >= Math.min(NARROWEST_BESIDE * rem, width)
+    ? { align: 'start', aside: true, side, widest: Math.min(room[side], WIDEST_IN_ROW * rem) }
+    : ABOVE
 }
 
 /** What decides where the whole of a cut text is laid, measured as it opens. */
@@ -205,7 +237,7 @@ function beside(
     : ABOVE
 }
 
-const LISTS: readonly HintList[] = ['rows', 'columns']
+const LISTS: readonly HintList[] = ['rows', 'columns', 'wide-rows']
 
 /**
  * The frame a list of columns keeps its hints inside, as the nearest `data-hint-frame` says, and
@@ -240,9 +272,9 @@ const shows = (box: DOMRect) => box.width > 1 && box.height > 1
 
 /** Whether `other` stands wholly before or after `one` along the way a list's rows run. */
 function apart(one: DOMRect, other: DOMRect, list: HintList): boolean {
-  return list === 'rows'
-    ? other.bottom <= one.top + 1 || other.top >= one.bottom - 1
-    : other.right <= one.left + 1 || other.left >= one.right - 1
+  return list === 'columns'
+    ? other.right <= one.left + 1 || other.left >= one.right - 1
+    : other.bottom <= one.top + 1 || other.top >= one.bottom - 1
 }
 
 /**
@@ -277,11 +309,25 @@ export interface HintReference {
   getBoundingClientRect: () => DOMRect
 }
 
-/** The box a hint aside of `element`'s list stands against: past the list's edge or beside the row. */
+/**
+ * The box a hint aside of `element`'s list stands against: past the list's edge, beside the row,
+ * or, in a list of wide rows, beside the element inside its row.
+ */
 function asideBox(element: HTMLElement, container: HTMLElement, list: HintList): DOMRect {
   const row = hintRowOf(element, container, list).getBoundingClientRect()
-  const across = list === 'rows' ? container.getBoundingClientRect() : row
+  const across = {
+    'columns': row,
+    'rows': container.getBoundingClientRect(),
+    'wide-rows': element.getBoundingClientRect(),
+  }[list]
   return new DOMRect(across.left, row.top, across.width, row.height)
+}
+
+/** The frame of the hint of `element` in its list: its chart's, or its own row in a wide one. */
+function frameIn(element: HTMLElement, container: HTMLElement, list: HintList) {
+  if (list !== 'wide-rows') return frameOf(container, list)
+  const { left, right } = hintRowOf(element, container, list).getBoundingClientRect()
+  return { left, right }
 }
 
 /**
@@ -301,7 +347,7 @@ export function hintPlaceOf(
   const place = placeHint({
     aside,
     asked,
-    frame: declared ? frameOf(declared.container, declared.list) : null,
+    frame: declared ? frameIn(element, declared.container, declared.list) : null,
     kind,
     list: declared?.list ?? null,
     rem,
