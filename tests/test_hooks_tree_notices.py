@@ -343,7 +343,7 @@ class PersonOnTheTreeTests(Harness):
         with (
             mock.patch.object(notify, "_working", lambda scoped: scoped),
             mock.patch.object(
-                notify, "_feed", lambda _conn, _tree, places, *_: ({}, {}, {}, places[:3])
+                notify, "_feed", lambda _conn, _tree, places, *_: ({}, {}, {}, places, {})
             ),
         ):
             self.setUp()

@@ -59,6 +59,12 @@ tree; a write the server makes inside an agent's call is that agent's. It wakes 
 when its kind asks for a session (`person_events.SERVER_ASKS`), and then as a
 person's act does, outside the hourly limit.
 
+A question asked of a session rather than the owner is that session's: its asking
+reaches it through the tree's news from wherever it was asked, and wakes it; what
+becomes of it reaches that session and the one that asked, nobody else. A list on a
+comment asks nobody, so its asking is no line. Words a person left on a goal or stage
+nobody worked on, which a subagent's claim took, are told once to its orchestrator.
+
 Where the place is kept. Not in the store: a hook that wrote there would be a
 writer on every tool call. Each recipient has a small file beside the spool,
 `notify/<session>[--<agent>].marks`, holding for every item it wrote to the last
@@ -66,8 +72,9 @@ call it has read, the item's change signature and whether it held the item then,
 and apart from those the last call whose agents' news it read and whether some
 still waits: a `Stop` reads past such news without telling it; the wakes other
 sessions' news made; per item, the notices that quoted it; and an orchestrator's
-places in its tree's news, an event, a comment and a call. Whether it follows
-the item is read from the store each time, never kept here. A file that cannot be read is an empty one, so the worst a damaged
+places in its tree's news, an event, a comment, a call and the last claim whose words
+left waiting it read. Whether it follows the item is read from the store each time,
+never kept here. A file that cannot be read is an empty one, so the worst a damaged
 file does is tell the current news once more, and wake once more.
 
 What it costs. `PostToolUse` runs on every tool call, so this module imports
@@ -139,6 +146,8 @@ GRACE_SECONDS = 30.0
 MOST_EVENTS = 8
 MOST_CHARACTERS = 4000
 CLIENT_CHARACTERS = {"codex": 2400}
+#: How the words left waiting on a goal or stage that a subagent's claim took are headed.
+LEFT_WAITING = "words left for whoever takes work here:"
 #: The notice's last line when it shows less than was written: an entry cut, some left
 #: out, or a folded line.
 READ_THE_REST = (
@@ -698,24 +707,54 @@ def _tree_moved(ends: tuple[int, int, int], places: tuple[int, int, int, int] | 
     return places is None or any(end > place for end, place in zip(ends, places[:3], strict=True))
 
 
-def _waiting_end(conn: sqlite3.Connection) -> int:
-    """Where the words left waiting end: a store without them yet has none."""
+#: The words left waiting that claims handed to a session after a claim's call, by the
+#: delivered rows' index on the session: its subagents' claims and its own.
+_HANDED = (
+    "SELECT work_item_id, from_call, delivered_call, delivered_agent"
+    " FROM work_item_waiting_notices WHERE delivered_session = ?"
+    " AND delivered_call IS NOT NULL AND delivered_call > ? ORDER BY delivered_call, notice_id"
+)
+
+
+def _handed(
+    conn: sqlite3.Connection, session_id: str, after: int
+) -> tuple[list[tuple[str, bool, list[tuple[int, dict]]]], int]:
+    """The words left waiting that claims of this session took after the claim call `after`:
+    per row, the goal or stage, whether a subagent took them, and the words up to the claim,
+    with their calls; and the last claim call read.
+
+    The place is a claim's call, not a row's number: a row is numbered when it is left and
+    handed over later, so a row left before another can be handed after it. A store
+    without the rows yet hands nothing.
+    """
 
     import _sqlite3
 
+    from ..planning import person_events
+
     try:
-        return int(
-            conn.execute("SELECT MAX(notice_id) FROM work_item_waiting_notices").fetchone()[0] or 0
-        )
+        rows = conn.execute(_HANDED, (session_id, after)).fetchall()
     except _sqlite3.OperationalError:
-        return 0
+        return [], after
+    found = []
+    for item, start, call, agent in rows:
+        words = person_events.unheard(conn, str(item), int(start) - 1)
+        found.append((str(item), bool(agent), [pair for pair in words if pair[0] < int(call)]))
+    return found, max([after, *(int(row[2]) for row in rows)])
 
 
 #: The tree's news of one pass: per item, a person's acts on a goal or stage, which are
 #: the person's news and wake; the rest, which waits at `Stop` and in the watcher; and
-#: the item's reference, title and the goal or stage it came under, if not itself; and
-#: where the read stopped.
-_Feed = tuple[dict[str, list[dict]], dict[str, list[dict]], dict[str, tuple], tuple[int, int, int]]
+#: the item's reference, title and the goal or stage it came under, if not itself; where
+#: the read stopped, the words left waiting included; and per goal or stage, what of a
+#: person's that this session's claims took with words left waiting, never told again.
+_Feed = tuple[
+    dict[str, list[dict]],
+    dict[str, list[dict]],
+    dict[str, tuple],
+    tuple[int, int, int, int],
+    dict[str, set[tuple]],
+]
 
 
 def _feed(
@@ -730,9 +769,20 @@ def _feed(
     A goal or stage it wrote to or follows is read by that item's own path, worked on
     as held (`_working`); the tree's news has the rest. On a task under it, what says
     where the work stands (`person_events.WORK_KINDS`), but on a task it holds or
-    follows, which its own path tells whole, and a list on a comment, which nobody
-    waits for. On a goal or stage, everything a holder hears. Never what its own
-    session wrote: its subagents' work is told by the items they wrote to.
+    follows, which its own path tells whole. On a goal or stage, everything a holder
+    hears. Never what its own session wrote: its subagents' work is told by the items
+    they wrote to. Never a list on a comment asked or withdrawn, which nobody waits for.
+
+    A request asked of a session is that session's alone, wherever it was asked: its
+    asking wakes it (`asks`) and names what to answer, and whatever becomes of it is
+    told to it as well, to nobody else here. The session that asked hears the answer
+    on the item's own path, as it hears any question it asked (`_owed`).
+
+    Words left waiting on a goal or stage that a subagent's claim took are told here,
+    once, after the claim, without a wake: the subagent read them in its answer, and
+    its orchestrator learns what it was handed. A claim of the orchestrator's own took
+    them in its answer, so they are not told. Either way, what of them the tree's news
+    or an item's own path read again in this pass is left out there.
     """
 
     from ..planning import person_events
@@ -760,28 +810,131 @@ def _feed(
             names[item] = (*chain[0][1][2:], chain[via][1][2:] if via else None)
         return whole
 
-    rows, moved = person_events.tree_since(conn, places[:3], choose)
+    session = tree.session_id
+    rows, moved = person_events.tree_since(conn, places[:3], choose, asked_of=session)
     said: dict[str, list[dict]] = {}
     rest: dict[str, list[dict]] = {}
-    asked = set()
-    for item, call, entry in rows:
-        if entry.get("session") == tree.session_id:
+    unnamed: set[str] = set()
+    for item, call, entry in _no_lists(conn, [(item, call, entry) for item, call, entry in rows]):
+        if entry.get("session") == session:
             continue
-        if not whole[item] and "request_id" in entry:
-            asked.add(str(entry["request_id"]))
+        addressee = entry.get("addressee")
+        if addressee is not None and addressee != session:
+            continue
+        if addressee is not None and entry["kind"] == "question_asked":
+            entry["asks"] = entry["asked_of_you"] = True
         entry["call"] = call
-        if names[item][2] is not None:
+        if item not in names:
+            unnamed.add(item)  # a request asked of this session on an item outside its tree
+        elif names[item][2] is not None:
             entry["under"] = names[item][2]
-        person = whole[item] and entry.get("via") not in OTHERS
+        person = whole.get(item, False) and entry.get("via") not in OTHERS
         (said if person else rest).setdefault(item, []).append(entry)
-    listed = person_events.lists(conn, asked)
-    if listed:
-        rest = {
-            item: kept
-            for item, entries in rest.items()
-            if (kept := [entry for entry in entries if entry.get("request_id") not in listed])
-        }
-    return said, rest, names, moved
+    handed, waited = _handed(conn, session, places[3])
+    taken: dict[str, set[tuple]] = {}
+    for item, by_agent, words in handed:
+        keys = {_key(entry) for _call, entry in words}
+        taken.setdefault(item, set()).update(keys)
+        for found in (said, rest):
+            if item in found:
+                found[item] = [entry for entry in found[item] if _key(entry) not in keys]
+        if by_agent and words:
+            for call, entry in words:
+                entry.pop("asks", None)  # its subagent has them: they wake nobody now
+                entry.update(call=call, left=True)
+            rest.setdefault(item, []).extend(entry for _call, entry in words)
+            if item not in names:
+                unnamed.add(item)
+    if unnamed:
+        listed = sorted(unnamed)
+        for row in conn.execute(_NODES.format(items=",".join("?" * len(listed))), listed):
+            names[str(row[0])] = (str(row[3]), str(row[4]), None)
+    said = {item: entries for item, entries in said.items() if entries}
+    rest = {item: entries for item, entries in rest.items() if entries}
+    return said, rest, names, (*moved, waited), taken
+
+
+def _key(entry: dict) -> tuple:
+    """What tells one entry from another, whichever path read it: its speaker's kind, and
+    what it is and when. Words left waiting are a person's and Valkama's, so another
+    agent's entry never matches one."""
+
+    return (
+        entry.get("via"),
+        entry["kind"],
+        entry["at"],
+        entry.get("comment_id"),
+        entry.get("request_id"),
+        tuple(entry.get("fields") or ()),
+    )
+
+
+#: What a question's asking and its withdrawal are told as. A list on a comment is
+#: neither: nobody waits for one, so it never comes to wait for the owner.
+_ASKING = frozenset({"question_asked", "question_withdrawn"})
+
+
+def _no_lists(conn: sqlite3.Connection, rows: list[tuple]) -> list[tuple]:
+    """`rows`, each ending in an entry, without the asking or withdrawal of a list on a
+    comment: one read, and only when some row asks or withdraws a question."""
+
+    from ..planning import person_events
+
+    listed = person_events.lists(
+        conn,
+        {
+            str(row[-1]["request_id"])
+            for row in rows
+            if row[-1]["kind"] in _ASKING and "request_id" in row[-1]
+        },
+    )
+    if not listed:
+        return rows
+    return [
+        row for row in rows if not (row[-1]["kind"] in _ASKING and row[-1]["request_id"] in listed)
+    ]
+
+
+def _owed(conn: sqlite3.Connection, item: str, entries: list[dict], session_id: str) -> list[dict]:
+    """Other speakers' entries on one item's own path, without what is not this recipient's
+    to hear there of requests.
+
+    A list on a comment asked or withdrawn is no question (`_no_lists`). A request asked
+    of a session is told on an item's own path only to the session that asked it, and
+    only what another session or a person made of it; the session asked hears it through
+    the tree's news (`_feed`), and nobody else hears it, its holders and those who follow
+    the item included. Its asking by this session's own subagent is no question to the
+    owner, so the orchestrator gets no line of it either.
+    """
+
+    from ..planning import person_events
+
+    kept = []
+    for entry in _no_lists(conn, [(entry,) for entry in entries]):
+        found = entry[0]
+        addressee = found.get("addressee")
+        if addressee is not None:
+            if found.get("session") == session_id or addressee == session_id:
+                continue
+            asker = person_events.author_of(conn, item, found)
+            if asker is None or asker[0] != session_id:
+                continue
+        kept.append(found)
+    return kept
+
+
+def _untaken(read: _Read | None, taken: set[tuple] | None) -> _Read | None:
+    """An item's read without what this session's claims took as words left waiting."""
+
+    if read is None or not taken:
+        return read
+    told, spoken, after, heard = read
+    return (
+        [entry for entry in told if _key(entry) not in taken],
+        [entry for entry in spoken if _key(entry) not in taken],
+        after,
+        heard,
+    )
 
 
 def _was_held(mark: Mark | None) -> bool:
@@ -801,7 +954,8 @@ Mark = tuple[int, tuple[int, int, int, int], bool, int, bool]
 #: newest call those were read to, past which nothing held back wakes again; and per
 #: item, the times of the notices that quoted other sessions' news on it within
 #: `FOLD_WINDOW_SECONDS`; and an orchestrator's places in the tree's news, the last event,
-#: comment and call it read there and the last words left waiting, or None before any.
+#: comment and call it read there and the call of the last claim whose words left waiting
+#: it read, or None before any.
 Budget = tuple[
     tuple[int, ...], int, int, dict[str, tuple[int, ...]], tuple[int, int, int, int] | None
 ]
@@ -1044,10 +1198,15 @@ def collect(
                 reads.append((scoped, mark, read))
             if tree is not None:
                 if places is None:
-                    # A first read, or a file from before the tree: from the end, no past.
-                    places = (*_ends(conn), _waiting_end(conn))
-                else:
-                    feed = _feed(conn, tree, places, {s[0]: s for s in items}, marks)
+                    # A first read, or a file from before the tree: from the end, no past. No
+                    # words left waiting were told yet: a session is handed each row once.
+                    places = (*_ends(conn), 0)
+                feed = _feed(conn, tree, places, {s[0]: s for s in items}, marks)
+                if feed[4]:
+                    reads = [
+                        (scoped, mark, _untaken(read, feed[4].get(scoped[0])))
+                        for scoped, mark, read in reads
+                    ]
             tell, woke = agents, False
             waking = [
                 entry
@@ -1101,8 +1260,7 @@ def collect(
         rest: dict[str, list[dict]] = {}
         names: dict[str, tuple] = {}
         if feed is not None and (tell or feed[0]):
-            said, rest, names, moved = feed
-            places = (*moved, places[3]) if places is not None else None
+            said, rest, names, places, _taken = feed
         updated: dict[str, Mark] = {}
         for scoped, mark, read in reads:
             item, reference, title, signature, _own, holds = scoped[:6]
@@ -1213,7 +1371,7 @@ def _read(
     spoken = _agents_for_recipient(
         conn,
         item,
-        spoken,
+        _owed(conn, item, spoken, session_id),
         session_id,
         agent_id,
         whole=listens == ALL or (listens != MUTED and mark is not None and mark[2]),
@@ -1226,11 +1384,12 @@ def _read(
     if listens != ADDRESSED_ONLY or (mark is not None and mark[2]):
         # Valkama's own records reach whoever hears the item whole, and one that held it
         # at its last read once more; a mute keeps other sessions out, not Valkama.
-        spoken += [
+        recorded = [
             _at_call(entry, call)
             for call, entry in person_events.valkama_since(conn, item, heard)
             if call <= newest
         ]
+        spoken += _owed(conn, item, recorded, session_id)
     if holds and signature[3]:
         # A blocker's state, a person's or another session's, is read from the one place
         # other sessions' news is: a close reads as a change once a later transition
@@ -1380,14 +1539,12 @@ def _agents_for_recipient(
         for entry in [*told, *mentions]:
             if entry.get("recent"):
                 entry["asks"] = True
-    ours = [] if muted else _own_agents(conn, entries, session_id, agent_id)
+    ours = [] if muted else _own_agents(entries, session_id, agent_id)
     order = {id(entry): place for place, entry in enumerate(entries)}
     return sorted([*told, *mentions, *ours], key=lambda entry: order[id(entry)])
 
 
-def _own_agents(
-    conn: sqlite3.Connection, entries: list[dict], session_id: str, agent_id: str | None
-) -> list[dict]:
+def _own_agents(entries: list[dict], session_id: str, agent_id: str | None) -> list[dict]:
     """What an orchestrator hears of its own subagents' writes on an item: where the work
     stands, one short line each (`yours`), never quoted and never asking for it.
 
@@ -1396,8 +1553,9 @@ def _own_agents(
     one agent at one time read the same, as a claim that started the item and the close
     in one call do: the line is told once. It never wakes: nothing here says `asks` or
     `answers`, so at `Stop` and in the watcher it waits for the next tool call as any
-    news that does not ask. A list on a comment, asked or withdrawn, is no line: the
-    work never waits on one. A subagent hears none of this.
+    news that does not ask. A list on a comment, asked or withdrawn, and a request asked
+    of another session are no line: `_owed` took them out before, since the work never
+    comes to wait for the owner on one. A subagent hears none of this.
     """
 
     from ..planning import person_events
@@ -1411,14 +1569,11 @@ def _own_agents(
         and entry.get("agent") is not None
         and entry["kind"] in person_events.WORK_KINDS
     ]
-    listed = person_events.lists(
-        conn, {str(entry["request_id"]) for entry in candidates if "request_id" in entry}
-    )
     ours = []
     lines = set()
     for entry in candidates:
         line = (entry["kind"], entry["at"], entry["agent"])
-        if line in lines or entry.get("request_id") in listed:
+        if line in lines:
             continue
         lines.add(line)
         entry.pop("text", None)
@@ -1658,8 +1813,8 @@ def _agents_block(
     if woke and (asking != {VALKAMA}):
         last.append(
             "This is not an error: it came now because another agent's news asks for this"
-            " session (a reply it awaited, a comment that awaits its reply, or a blocker of"
-            " its work closed)."
+            " session (a reply it awaited, a comment that awaits its reply, a question asked"
+            " of it, or a blocker of its work closed)."
         )
     if woke and VALKAMA in asking:
         last.append(
@@ -1730,15 +1885,41 @@ def _compose(
             current = None  # the line names the item itself
             lines.append(f"{reference} {_quote(name)}{_under(entry)}: {_folded(entry)}")
             continue
-        if reference != current:
-            current = reference
-            lines.append(f"{reference} {_quote(name)}{_under(entry)}:")
-        said = " ".join(str(entry.get("text", "")).split())
-        line = f"- {entry['kind']} at {entry['at']}{_where(entry)}{_flags(entry)}"
-        lines.append(line + (f": {_quote(said)}" if said else ""))
+        heading = (reference, bool(entry.get("left")))
+        if heading != current:
+            current = heading
+            lines.append(
+                f"{reference} {_quote(name)}: {LEFT_WAITING}"
+                if entry.get("left")
+                else f"{reference} {_quote(name)}{_under(entry)}:"
+            )
+        lines.append(_line(entry))
     if left:
         lines.append(f"- and {left} {'earlier' if older else 'more'}, in the history of the item.")
     return "\n".join([*lines, *last])
+
+
+def _line(entry: dict) -> str:
+    """One entry's line: what it is, when, whose, what it asks and what was said.
+
+    A request asked of this session says so instead of its kind, and how to answer it:
+    its id and its fields, each with its type and the ids of its options.
+    """
+
+    said = " ".join(str(entry.get("text", "")).split())
+    kind = "question asked of this session" if entry.get("asked_of_you") else entry["kind"]
+    line = f"- {kind} at {entry['at']}{_where(entry)}{_flags(entry)}"
+    quoted = f": {_quote(said)}" if said else ""
+    if not entry.get("asked_of_you"):
+        return line + quoted
+    fields = "; ".join(
+        f"{identity} {shape}" + (f": {', '.join(options)}" if options else "")
+        for identity, shape, options in entry.get("asked", ())
+    )
+    return (
+        f"{line}{quoted} — answer with answer_work_item_request id={entry['request_id']};"
+        f" fields: {fields}"
+    )
 
 
 def _under(entry: dict) -> str:
@@ -1770,11 +1951,16 @@ def _folded(entry: dict) -> str:
 
 
 def _flags(entry: dict) -> str:
-    """What a line asks of the reader, or answers: a wait for a reply, or its answer."""
+    """What a line asks of the reader, or answers: a wait for a reply, its answer, or the
+    answer of this session to a request asked of it."""
 
     flags = [
         said
-        for key, said in (("awaits_reply", "awaits a reply"), ("answers", "the reply awaited"))
+        for key, said in (
+            ("awaits_reply", "awaits a reply"),
+            ("answers", "the reply awaited"),
+            ("asked_of_you", "asks for your answer"),
+        )
         if entry.get(key)
     ]
     return f" ({', '.join(flags)})" if flags else ""

@@ -18,7 +18,7 @@ row's call on.
   (`after_person`). A stage that writes for the server leaves one with `leave`.
 - **What waits.** A person's acts, and the records Valkama makes in a call of its
   own whose kind asks for a session (`person_events.SERVER_ASKS`): both wake whoever
-  works there, so both are lost on nobody (`unheard`).
+  works there, so both are lost on nobody (`person_events.unheard`).
 - **Recovered.** A participant can stop without saying so: its lease runs out, and
   whatever a person said after its last call reached nobody, since the server
   cannot see what a client hook told it. `recover` looks for such acts on the
@@ -193,14 +193,17 @@ def delivered(conn: sqlite3.Connection, call: int) -> list[dict]:
     """The words the rows delivered by `call` hold, for the claiming agent's answer.
 
     One entry per row: the container's `reference` and `title`, and `said`, what
-    waits on it from the row's call on (`unheard`), in the entries of `from_person`,
+    waits on it from the row's call on (`person_events.unheard`), in the entries of `from_person`,
     the newest `person_events.MOST_SHOWN`, with `omitted` counting the earlier ones.
     """
 
     found = []
     for work_item_id, from_call in conn.execute(_DELIVERED, (call,)).fetchall():
         container = read_model.item_by_id(conn, str(work_item_id))
-        said = [entry for _call, entry in unheard(conn, str(work_item_id), int(from_call) - 1)]
+        said = [
+            entry
+            for _call, entry in person_events.unheard(conn, str(work_item_id), int(from_call) - 1)
+        ]
         shown = said[-person_events.MOST_SHOWN :]
         entry: dict = {
             "reference": read_model.reference(conn, container),
@@ -219,7 +222,7 @@ def recover(conn: sqlite3.Connection, lapsed: Iterable[tuple[str, str]]) -> int:
     `lapsed` pairs a session that stopped working with an item it stopped working
     on: a task whose claim lapsed, a container it followed. For each container over
     that item (the item too, when it is one) that no live session hears any more, what
-    waits there (`unheard`) after the last call of the sessions gone from it reached
+    waits there (`person_events.unheard`) after the last call of the sessions gone from it reached
     nobody: after its last call a session heard nothing, since it called nothing. A
     row is left from the first of it, in the call in progress, unless a row delivered
     after that already gave it to a session.
@@ -237,7 +240,7 @@ def recover(conn: sqlite3.Connection, lapsed: Iterable[tuple[str, str]]) -> int:
     for container, last in sorted(gone.items()):
         if participants.heard(conn, container):
             continue
-        found = unheard(conn, container, last)
+        found = person_events.unheard(conn, container, last)
         if not found:
             continue
         first = found[0][0]
@@ -245,25 +248,6 @@ def recover(conn: sqlite3.Connection, lapsed: Iterable[tuple[str, str]]) -> int:
             continue
         left += leave(conn, container, TREE, from_call=first)
     return left
-
-
-def unheard(conn: sqlite3.Connection, work_item_id: str, after: int) -> list[tuple[int, dict]]:
-    """What waits on a container for whoever works there, after `after`, with its call.
-
-    A person's acts as `from_person` gives them, and Valkama's own records of a kind
-    that asks for a session (`person_events.SERVER_ASKS`), in the order of their calls.
-    Valkama's other records wake nobody, so a session that missed them lost nothing.
-    """
-
-    found = person_events.since_call(conn, work_item_id, after)
-    asking = [
-        (call, entry)
-        for call, entry in person_events.valkama_since(conn, work_item_id, after)
-        if entry.get("asks")
-    ]
-    if not asking:
-        return found
-    return sorted([*found, *asking], key=lambda pair: pair[0])
 
 
 def _over(conn: sqlite3.Connection, work_item_id: str) -> list[str]:

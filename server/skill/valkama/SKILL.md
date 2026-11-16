@@ -180,6 +180,12 @@ item you hold mutes other agents there while you hold it; a person, and the repl
 to your own `awaits_reply` comment, still reach you. A goal you create is followed
 for your session from the start, even when a subagent of yours created it.
 
+A request asked of your session (`question asked of this session`) wakes you and
+waits for your answer: answer it with `answer_work_item_request` and its fields, from
+your conversation or a subagent. `list_work_item_requests` with `addressed: true`
+lists the open ones. Words left waiting that your subagent's claim took reach you
+once, headed `words left for whoever takes work here`.
+
 **Comments.** The batch's `comment` is for what the fields have no place for: a
 decision and its reason, evidence, a handoff. `checklist_item_id` ties a
 comment to a step.

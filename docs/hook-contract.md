@@ -604,6 +604,24 @@ A session's first read, and a place file from before the tree, start at the end
 of the tables: what was written under a goal before is not retold, and the item
 itself holds it. See [where each agent's place is kept](#where-each-agents-place-is-kept).
 
+The same feed carries two things more: a [request asked of the session](#asked-of-a-session),
+and the [words left waiting](connection-contract.md#words-that-wait-for-a-session)
+that a claim of the session took on a goal or stage nobody worked on. A subagent's
+claim hands them to the subagent in its answer; its orchestrator hears them once,
+at its next tool call or prompt after the claim, without a wake, headed by the goal
+or stage:
+
+```text
+MAIN-10 «Ship the parser»: words left for whoever takes work here:
+- comment at 2026-11-06T08:00:00Z: «Use the other library for the whole goal.»
+```
+
+They come in the person's block, since they are a person's words. An orchestrator
+whose own claim took them read them in its answer and hears them no more. Either way,
+what the tree's feed or the item's own path read of the same acts in that call is
+left out there, so they are told once; a person's acts after the claim are the
+tree's news.
+
 ### Valkama's own records
 
 **Since 3.0**, what Valkama records on its own account is told too: an event
@@ -631,6 +649,30 @@ another session's words, and it comes in the second block as one line,
   is that agent's, told by the session and agent of the call. A claim that meets a
   lapsed lease releases it in a call of Valkama's own first, so the release is
   Valkama's and the claim the caller's.
+
+### Asked of a session
+
+**Since 3.0**, a question can be asked of a top-level agent session instead of the
+owner (see [a question asked of an agent session](connection-contract.md#a-question-asked-of-an-agent-session)). It is that session's alone:
+
+- **The session asked** hears the asking through [the tree's feed](#under-a-goal),
+  wherever on the board it was asked, whether the item is in its tree or not, and it
+  [wakes](#when-another-sessions-news-wakes) it: the watcher leaves with it, or a
+  `Stop` continues the turn with it. A request Valkama asks is outside the six wakes
+  an hour; one another session asks counts among them. The line names the request,
+  its fields and how to answer:
+  `- question asked of this session at <time> by Valkama (asks for your answer): «<prompt>» — answer with answer_work_item_request id=<request_id>; fields: choice choice: agree, object; why text`,
+  each field as its id, its type and the ids of its options. Whatever else becomes
+  of the request, a withdrawal or a change, reaches it at its next tool call, and
+  wakes nothing.
+- **The session that asked** hears what another session made of it, the answer
+  included, on the item's own path, as it hears the answer to any question it asked.
+  Its own subagent's asking is no question to the owner, so it gets no
+  [`by your agent`](#another-agent-sessions-news) line of it.
+- **Nobody else** hears any of it: not the holders of the item or its followers, not
+  the sessions working under its goal, and not the person.
+
+The orchestrator hears it, not a subagent: a subagent's hooks carry no tree.
 
 ### When it is told
 
@@ -705,6 +747,7 @@ its orchestrator once when it idles, or continue its turn once at `Stop`:
 | a comment with `awaits_reply`, on an item or naming it in `mentions` | the holders of that item, the claim's and the steps' | for 24 hours after it was written; older, it is told at the next tool call |
 | a [blocker closed](#another-agent-sessions-news) by another session or a person | the holders of the item it blocked | once per close |
 | since 3.0, a [record of Valkama's](#valkamas-own-records) of a kind that asks for a session; no kind does yet | whoever hears the item, through the tree too | once; not counted among the six an hour |
+| since 3.0, a [question asked of the session](#asked-of-a-session) | that session | once; one Valkama asked is not counted among the six an hour |
 
 - **Once.** What woke a session, or continued its turn, is told then and moves the
   place past it, so it never wakes again; all the other sessions' news waiting for
@@ -835,9 +878,12 @@ back to.
 - status at 2026-11-06T09:25:00Z by Valkama: «ready: lease-expired»
 ```
 
-A [list on a comment](connection-contract.md#a-list-on-a-comment) by its subagent
-gives the orchestrator no `question_asked` line, nor `question_withdrawn` when it is
-taken back: nobody waits on a list, so the work does not come to wait for the owner.
+A [list on a comment](connection-contract.md#a-list-on-a-comment) gives no
+`question_asked` line, nor `question_withdrawn` when it is taken back, to the
+orchestrator of the subagent that wrote it, to the holders of the item or to anyone
+working under its goal: nobody waits on a list, so the work does not come to wait for
+the owner. The comment is told as any comment is, and the owner's ticks as
+`question_answered`.
 
 A comment that waits for a reply, and the reply that answered a wait, say so on
 their line, and a blocker's change names the item and the state it reached:
@@ -851,8 +897,8 @@ their line, and a blocker's change names the item and the state it reached:
 
 A block told because it asks for the session, at `Stop` or by the watcher, says
 so: `This is not an error: it came now because another agent's news asks for this
-session (a reply it awaited, a comment that awaits its reply, or a blocker of its
-work closed).`, and one woken by a record of Valkama's that asks says `This is not an
+session (a reply it awaited, a comment that awaits its reply, a question asked of it,
+or a blocker of its work closed).`, and one woken by a record of Valkama's that asks says `This is not an
 error: it came now because a record of Valkama's here asks for this session.` The
 watcher's heading adds "while this session was idle", or, when
 it woke a session at work that made no tool call within the 30 seconds, "while this
@@ -972,8 +1018,12 @@ told, and may wake, once more, with a fresh budget, and the next write is whole.
 
 **Since 3.0** the file is headed `v5`. An orchestrator's file adds one line,
 `@tree <event> <comment> <call> <waiting>`: the last event, comment and call row
-its [tree's feed](#under-a-goal) read, and the last words left waiting it was
-handed, one place for the whole tree, so a goal of any size costs one line. The
+its [tree's feed](#under-a-goal) read, and the call of the last claim whose words
+left waiting it read, one place for the whole tree, so a goal of any size costs one
+line. The waiting place is a claim's call and not a row's number: a row is numbered
+when it is left and handed over later, so a row left first can be handed last. It
+starts at nothing, not at the end, for a new recipient as for a `v4` file: each row
+is handed to a session once, so none of them was told before. The
 tree's news has no separate place for a person, so it is told whole or waits
 whole: at a `Stop` or in the watcher, a person's act on a goal or stage is told with
 everything the feed read beside it, and without one the feed's places stay. A `v4`

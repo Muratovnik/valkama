@@ -307,6 +307,27 @@ def valkama_since(
     return found
 
 
+def unheard(conn: sqlite3.Connection, work_item_id: str, after: int) -> list[tuple[int, dict]]:
+    """What waits on a container for whoever works there, after `after`, with its call.
+
+    A person's acts as `from_person` gives them, and Valkama's own records of a kind
+    that asks for a session (`SERVER_ASKS`), in the order of their calls. Valkama's
+    other records wake nobody, so a session that missed them lost nothing. Words left
+    waiting (`waiting`) are these, and so is what a client hook tells the orchestrator
+    whose subagent was handed them.
+    """
+
+    found = since_call(conn, work_item_id, after)
+    asking = [
+        (call, entry)
+        for call, entry in valkama_since(conn, work_item_id, after)
+        if entry.get("asks")
+    ]
+    if not asking:
+        return found
+    return sorted([*found, *asking], key=lambda pair: pair[0])
+
+
 def _by_valkama(entry: dict) -> dict:
     entry["via"] = VALKAMA
     if entry["kind"] in SERVER_ASKS:
@@ -350,8 +371,11 @@ def tree_since(
     conn: sqlite3.Connection,
     after: tuple[int, int, int],
     choose: Callable[[set[str]], Mapping[str, bool]],
+    *,
+    asked_of: str | None = None,
 ) -> tuple[list[tuple[str, int, dict]], tuple[int, int, int]]:
-    """What was written on any item after three places, for the items `choose` keeps.
+    """What was written on any item after three places, for the items `choose` keeps,
+    and every event of a request asked of the session `asked_of`, wherever it was asked.
 
     The places are an event, a comment and a call row: the three sources a person's
     or an agent's write lands in, an edit being found on its call row alone. Each
@@ -368,6 +392,11 @@ def tree_since(
     nobody is nobody's words and is left out, and so is a comment of Valkama's. They come
     as `(work_item_id, call, entry)` in the order the calls were made, with the
     places the next read starts from: the last row read of each source.
+
+    The events of a request asked of `asked_of` come whatever `choose` says of their
+    item, every kind of them: a session is asked from anywhere on the board. Each
+    request's entry names its `addressee` (`_request_entry`), so the reader can leave
+    out what was asked of somebody else; who is told is the reader's to decide.
     """
 
     most = MOST_FEED_ROWS
@@ -387,6 +416,7 @@ def tree_since(
     named = {str(row[5]) for row in events} | {str(row[7]) for row in comments}
     named |= {str(row[5]) for row in edits}
     kept = choose(named) if named else {}
+    theirs = _asked_of(conn, asked_of, events) if asked_of else set()
     found: list[tuple[tuple[int, int, int], str, dict]] = []
     reports: set[int] = set()
     for row in comments:
@@ -408,10 +438,10 @@ def tree_since(
         found.append(((int(row[4]), 1, int(row[0])), item, entry))
     for row in events:
         item, action = str(row[5]), str(row[1])
-        if (
-            item not in kept
-            or action not in KINDS
-            or not (kept[item] or KINDS[action] in WORK_KINDS)
+        if action not in KINDS:
+            continue
+        if not (action.startswith("request_") and str(row[2]) in theirs) and (
+            item not in kept or not (kept[item] or KINDS[action] in WORK_KINDS)
         ):
             continue
         speaker = _feed_speaker(row[6], row[7], row[8], row[9])
@@ -433,6 +463,25 @@ def tree_since(
         found.extend((order, item, entry) for order, entry in _edit_entries(conn, item, rows))
     found.sort(key=lambda each: each[0])
     return [(item, order[0], entry) for order, item, entry in found], places
+
+
+def _asked_of(conn: sqlite3.Connection, session: str, events: list[tuple]) -> set[str]:
+    """Which of the requests these event rows name were asked of `session`: one read, and
+    none when no row is a request's."""
+
+    named = {str(row[2]) for row in events if str(row[1]).startswith("request_")}
+    if not named:
+        return set()
+    import json
+
+    return {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT request_id FROM work_item_requests WHERE addressee = ?"
+            " AND request_id IN (SELECT value FROM json_each(?))",
+            (session, json.dumps(sorted(named))),
+        )
+    }
 
 
 def _feed_speaker(source: object, state: object, tool: object, session: object) -> str | None:
@@ -746,7 +795,7 @@ def _event_entry(conn: sqlite3.Connection, row: tuple, work_item_id: str) -> dic
     action, detail, at = str(row[1]), str(row[2]), str(row[3])
     kind = KINDS[action]
     if action.startswith("request_"):
-        return _entry(kind, at, request_id=detail, text=_question_text(conn, action, detail))
+        return _request_entry(conn, kind, at, action, detail)
     if action == "checklist_replaced":
         return _entry(kind, at, text=f"{detail} steps")
     if action in ("comment_resolved", "comment_reopened"):
@@ -823,21 +872,52 @@ def _described(conn: sqlite3.Connection, at: str, source: str, named: str) -> di
     return _entry("mentioned", at, text=said, **place, **{"from": f"{row[1]}-{row[2]}"})
 
 
-def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> str:
+def _request_entry(
+    conn: sqlite3.Connection, kind: str, at: str, action: str, request_id: str
+) -> dict:
+    """A question's event: what was asked, or what came back, and of whom it was asked.
+
+    A request asked of a session says so, `addressee` naming it, since who hears what
+    becomes of it is decided by that; its asking also names its fields, `asked`, each
+    as `(id, type, option ids)`, so the session asked can answer without a read. A
+    question to the owner carries neither.
+    """
+
+    row = conn.execute(
+        "SELECT prompt, fields_json, answers_json, comment_id, addressee FROM work_item_requests"
+        " WHERE request_id = ?",
+        (request_id,),
+    ).fetchone()
+    if row is None:
+        return _entry(kind, at, request_id=request_id, text="")
+    entry = _entry(
+        kind, at, request_id=request_id, text=_question_text(conn, action, request_id, row)
+    )
+    if row[4] is not None:
+        entry["addressee"] = str(row[4])
+        fields = _json(str(row[1])) if action == "request_created" else None
+        if isinstance(fields, list):
+            entry["asked"] = [
+                (
+                    str(field.get("id")),
+                    str(field.get("type")),
+                    [str(option.get("id")) for option in field.get("options") or []],
+                )
+                for field in fields
+                if isinstance(field, dict)
+            ]
+    return entry
+
+
+def _question_text(conn: sqlite3.Connection, action: str, request_id: str, row: tuple) -> str:
     """What came back when a person answered, and otherwise what was asked.
 
     An answer reads as it stands now, as an edit does: a change says what differs
     between the current answer and the version it replaced, row by row, whichever
     change of a window it is. Two whole answers of a review do not fit in one event.
+    `row` is the request's prompt, fields, answers and comment.
     """
 
-    row = conn.execute(
-        "SELECT prompt, fields_json, answers_json, comment_id FROM work_item_requests"
-        " WHERE request_id = ?",
-        (request_id,),
-    ).fetchone()
-    if row is None:
-        return ""
     if action not in ("request_answered", "request_changed"):
         return str(row[0])
     fields = _json(str(row[1]))

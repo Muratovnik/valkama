@@ -3350,6 +3350,11 @@ does not say it waits on the survivor. `GET /api/modules/planning/requests`,
 leave it out; `get_work_item_request`, a read by its id, and an export read it as
 any request.
 
+**Who is told.** Where Valkama's client hooks are installed, the asking wakes the
+session asked, and what becomes of the request reaches that session and the one that
+asked, nobody else: see
+[asked of a session](hook-contract.md#asked-of-a-session).
+
 ### Steps from a comment
 
 A comment or a report that holds a Markdown list can become steps of its item in
