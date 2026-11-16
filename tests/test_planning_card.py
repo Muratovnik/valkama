@@ -54,7 +54,7 @@ class CardCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="p", name="Cards", key="CRD")
+        service.create_planning_space(self.conn, name="Cards", key="CRD")
         self.conn.commit()
 
     def agent(self, tool: str, session: str = HOLDER, **arguments: object) -> dict:

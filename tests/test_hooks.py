@@ -1008,7 +1008,7 @@ class SessionStartNoteCase(StoreCase):
         patch = mock.patch.dict(os.environ, {"VALKAMA_PROTECTED_STORE": LIVE_STORE})
         patch.start()
         self.addCleanup(patch.stop)
-        service.create_planning_space(self.conn, project_id="note", name="Note", key="NT")
+        service.create_planning_space(self.conn, name="Note", key="NT")
         self.reference = str(
             service.create_work_item(self.conn, space="NT", title="Held over a compaction")[
                 "reference"

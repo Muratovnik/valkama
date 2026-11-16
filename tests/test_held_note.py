@@ -358,7 +358,7 @@ class RecipientTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="note", name="Note", key="NT")
+        service.create_planning_space(self.conn, name="Note", key="NT")
         self.conn.commit()
 
     def item(self, title: str, steps: tuple[str, ...] = ()) -> str:

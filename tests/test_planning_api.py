@@ -166,7 +166,7 @@ class PlanningApiTests(unittest.TestCase):
                 "acceptance", "checklist", "claim", "claim_ref", "claim_state", "closed_at",
                 "comments", "container_state", "created_at", "description", "events", "kind",
                 "labels", "last_claim_ref", "links", "mentions", "mentions_total", "number",
-                "open", "parent_id", "planning_space_id", "priority", "reference", "refs",
+                "open", "parent_id", "planning_space_id", "priority", "projects", "reference", "refs",
                 "revision", "source", "started_at", "state", "subscribers", "summary",
                 "summary_comment_id", "title", "updated_at", "waits_for", "work_item_id",
                 "workable",
