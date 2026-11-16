@@ -19,6 +19,27 @@ says what they mean together.
   under a parent, at any depth. A goal or stage is never claimed. A task's kind
   changes only among the first three.
 
+## Naming a file in a text
+
+A description, a comment, a report, a summary, a question or an option's
+description names a file or folder of the project as a Markdown link to its path
+from the root of the space's project, with a label that says what it is:
+`docs/plan.md#kb:a7f3`, `src/parse.ts:42`, `docs/plans/`.
+
+- **Where it opens.** Valkama opens a Markdown file in its own viewer at the
+  `#kb:…` anchor, heading or `:42` line the link names, another file in the
+  owner's editor at that line, and a folder in the editor. A whole path in
+  backticks works too; a label reads better.
+- **From the root.** Write a path from that root, not from your working folder or
+  another repository: a relative path is looked for there first, and in the
+  projects registered inside it only when the root has nothing there. Use an
+  absolute path only where there is no relative one, such as a file of another
+  project.
+- **Spaces.** A path with spaces goes in `<…>` inside a link; in backticks only an
+  absolute path may hold one.
+- **Outside every project.** A path outside every project registered with Valkama
+  does not open, and a press copies it: link it, but do not promise it opens.
+
 ## What an item says about itself
 
 - `open` says whether its work is still open. An accepted open goal or stage has

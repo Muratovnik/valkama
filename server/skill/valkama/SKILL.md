@@ -289,17 +289,9 @@ an address there is one more thing to go stale.
 **Naming a file.** In a description, a comment, a report, a summary, a question or
 an option's description, name a file or folder of the project as a Markdown link
 to its path from the root of the space's project, with a label that says what it
-is: `docs/plan.md#kb:a7f3`, `src/parse.ts:42`, `docs/plans/`. Valkama opens a
-Markdown file in its own viewer at the `#kb:…` anchor, heading or `:42` line the
-link names, another file in the owner's editor at that line, and a folder in the
-editor. A whole path in backticks works too; a label reads better.
-Write a path from that root, not from your working folder or another repository:
-a relative path is looked for there first, and in the projects registered inside
-it only when the root has nothing there. Use an absolute path only where there
-is no relative one, such as a file of another project. A path with spaces goes
-in `<…>` inside a link; in backticks only an absolute path may hold one. A path
-outside every project registered with Valkama does not open, and a press copies
-it: link it, but do not promise it opens.
+is: `docs/plan.md#kb:a7f3`, `src/parse.ts:42`, `docs/plans/`. Where Valkama opens
+it, and how to write an absolute path or one with spaces, is in
+[the tool reference](references/tools.md#naming-a-file-in-a-text).
 
 ## Blocked work
 
