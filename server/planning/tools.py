@@ -738,9 +738,10 @@ TOOLS = [
                 "type": "boolean",
                 "description": "true: this session hears other sessions' news on the item"
                 " as its holder would, a person's acts at its next call; false stops that,"
-                " and on an item the session holds mutes other sessions' news there while"
-                " it holds it (a person's acts and the replies to its own awaits_reply"
-                " still come). Written for the proved session and agent, lapsing with the"
+                " and on an item the session holds, or a goal or stage it holds work under,"
+                " mutes other sessions' news there while it holds it (a person's acts and"
+                " the replies to its own awaits_reply still come); on a goal or stage it"
+                " only follows, false stops following. Written for the proved session and agent, lapsing with the"
                 " session; applied.subscribe says following, muted or not_following.",
             },
             "update": {

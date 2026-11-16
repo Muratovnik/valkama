@@ -355,6 +355,49 @@ class PersonOnTheTreeTests(Harness):
                 self.assertIsNone(self.hook(session))
 
 
+class MutedGoalTests(Harness):
+    """A holds T1 under S1 and muted the goal G; B writes beside it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.agent("claim_work_item", AS_A, id=self.t1)
+        answer = self.agent("apply_work_item_changes", AS_A, id=self.goal, subscribe=False)
+        self.assertEqual("muted", answer["applied"]["subscribe"], "working under G holds it")
+        self.settle(A)
+
+    def test_a_mute_on_the_goal_keeps_other_sessions_out_and_lets_a_person_wake(self) -> None:
+        self.comment(AS_B, self.goal, "B on the muted goal, marker M-1")
+        self.assertIsNone(self.hook(A), "other sessions' news on the goal is muted")
+        self.comment(AS_B, self.s1, "B on the stage, marker M-2")
+        told = self.hook(A)
+        assert told is not None, "the mute is the goal's, not the stage's under it"
+        self.assertIn("marker M-2", told)
+        self.assertNotIn("marker M-1", told)
+        self.person(COMMENT, id=self.goal, body="The owner on the goal, marker P-1")
+        status, text = self.watch(A)
+        self.assertEqual(notify.WAKE_STATUS, status, "a person's act wakes through the mute")
+        self.assertEqual(1, text.count("marker P-1"), text)
+        self.assertNotIn("marker M-1", text)
+        self.assertIsNone(self.hook(A), "once")
+
+    def test_a_mute_left_once_the_work_is_let_go_follows_nothing(self) -> None:
+        self.agent("claim_work_item", AS_A, id=self.t1, release=True)
+        self.settle(A)
+        rows = self.conn.execute(
+            "SELECT follows FROM work_item_subscriptions WHERE session_id = ?", (A,)
+        ).fetchall()
+        self.assertEqual([(0,)], [tuple(row) for row in rows], "the row stays, as on a task")
+        self.assertEqual(frozenset(), notify.watched(self.conn, A), "and adds no root")
+        goal = read_model.item_row(self.conn, self.goal)
+        self.assertEqual([], participants.of_container(self.conn, goal))
+        # Held at its last read, the goal's next news is told once more, as a task's is to the
+        # holder that let it go; the mute counts for nothing then, as on a task.
+        self.comment(AS_B, self.goal, "B on the goal, marker M-3")
+        self.assertIn("marker M-3", self.hook(A) or "")
+        self.comment(AS_B, self.goal, "B on the goal again, marker M-4")
+        self.assertIsNone(self.hook(A), "A works on nothing and follows nothing")
+
+
 class PlacesTests(Harness):
     def marks_path(self, session: str) -> str:
         return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, session + ".marks")

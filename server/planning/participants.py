@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 
 from . import calls, item_tree, leases, model
@@ -41,7 +41,7 @@ MOST_HOLDS = 20
 _TASKS = (
     "SELECT p.key, i.number, i.checklist,"
     " CASE WHEN i.claim_ref != '' AND c.identity_state = ? THEN c.session_id END AS session_id,"
-    " c.identity_source"
+    " c.identity_source, c.agent_id"
     " FROM work_items i JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
     " LEFT JOIN execution_events c ON c.id = i.claim_call_id"
     " WHERE i.kind != ? AND i.work_item_id IN (SELECT value FROM json_each(?))"
@@ -111,6 +111,24 @@ def heard(conn: sqlite3.Connection, work_item_id: str) -> bool:
     return bool(chain) and bool(_live(conn, chain[-1], chain))
 
 
+def holds_under(
+    conn: sqlite3.Connection, work_item_id: str, session_id: str, agent_id: str | None
+) -> bool:
+    """Whether this session, or this agent of it, holds a task or an open step under the item.
+
+    The holds that make a session a participant of a container, read for one
+    session: what lets its mute stand on the container (`subscriptions.subscribe`).
+    The session's own conversation finds what its agents hold as well, an agent
+    only its own, as a holder label is matched (`subscriptions.holds`).
+    """
+
+    agent = calls.label_id(agent_id) if agent_id else None
+    return any(
+        session == session_id and (agent is None or held_by == agent)
+        for session, held_by, _label, _reference in _holdings(conn, work_item_id)
+    )
+
+
 def _containers(conn: sqlite3.Connection, work_item_id: str) -> list[str]:
     """The item and the items over it that are containers, nearest first."""
 
@@ -125,19 +143,8 @@ def _live(conn: sqlite3.Connection, root: str, followed: Iterable[str]) -> list[
     """The live sessions holding work under `root` or following one of `followed`."""
 
     found: dict[str, _Found] = {}
-    under = json.dumps(sorted(item_tree.below(conn, [root]).nodes))
-    for task in conn.execute(_TASKS, (calls.CONFIRMED, model.CONTAINER_KIND, under)):
-        reference = model.human_id(str(task["key"]), int(task["number"]))
-        if task["session_id"]:
-            label = calls.channel_holder(str(task["identity_source"]), str(task["session_id"]))
-            if label is not None:
-                _hold(found, str(task["session_id"]), label, reference)
-        for step in model.checklist(task["checklist"]):
-            holder = str(step["claimed_by"] or "")
-            ids = None if step["done"] else calls.holder_ids(holder)
-            label = calls.session_holder(holder)
-            if ids is not None and label is not None:
-                _hold(found, ids[0], label, reference)
+    for holder, _agent, named, reference in _holdings(conn, root):
+        _hold(found, holder, named, reference)
     for row in conn.execute(_FOLLOWERS, (json.dumps(list(followed)),)):
         session = str(row["session_id"])
         label = calls.channel_holder(str(row["identity_source"]), session)
@@ -160,6 +167,28 @@ def _live(conn: sqlite3.Connection, root: str, followed: Iterable[str]) -> list[
     ]
     listed.sort(key=lambda entry: (entry["label"], entry["session"]))
     return listed[:MOST_PARTICIPANTS]
+
+
+def _holdings(conn: sqlite3.Connection, root: str) -> Iterator[tuple[str, str | None, str, str]]:
+    """Every hold of a task under `root`, a claim or an open step: the session, the agent as
+    a holder label carries it or None for the session's own conversation, the label of
+    that conversation, and the task's reference."""
+
+    under = json.dumps(sorted(item_tree.below(conn, [root]).nodes))
+    for task in conn.execute(_TASKS, (calls.CONFIRMED, model.CONTAINER_KIND, under)):
+        reference = model.human_id(str(task["key"]), int(task["number"]))
+        if task["session_id"]:
+            session = str(task["session_id"])
+            label = calls.channel_holder(str(task["identity_source"]), session)
+            if label is not None:
+                agent = calls.label_id(task["agent_id"]) if task["agent_id"] else None
+                yield session, agent, label, reference
+        for step in model.checklist(task["checklist"]):
+            holder = str(step["claimed_by"] or "")
+            ids = None if step["done"] else calls.holder_ids(holder)
+            label = calls.session_holder(holder)
+            if ids is not None and label is not None:
+                yield ids[0], ids[1], label, reference
 
 
 def _hold(found: dict[str, _Found], session: str, label: str, reference: str) -> None:

@@ -3,11 +3,15 @@
 A session hears another session's news on the items it holds (`hooks.notify`).
 One that depends on an item it does not hold, an item another agent is changing
 under it, subscribes to it, and from then on hears other sessions' news there as
-a holder would, and a person's acts at its next tool call; it unsubscribes when it no longer needs the item. `false` on an
-item the session holds mutes other sessions' news there instead: a person's act
-still reaches it, since a holder is who a person's words are for, and so do the
-replies to what the session asked there with `awaits_reply`. The mute counts only
-while the session holds the item; the row stays, and lapses with the session.
+a holder would, and a person's acts at its next tool call; it unsubscribes when it
+no longer needs the item. `false` on an item the session holds, or on a goal or
+stage it holds a task or an open step under (`participants.holds_under`), mutes
+other sessions' news there instead: a person's act still reaches it, since a
+holder is who a person's words are for, and so do the replies to what the session
+asked there with `awaits_reply`. Working under a goal or stage is holding it in
+this, and following one is not: `false` on a goal or stage the session only
+follows forgets the subscription. The mute counts only while the session holds
+the item or works under it; the row stays, and lapses with the session.
 
 A subscription belongs to the confirmed session and agent of the call that wrote
 it, never to the `author` it signed, so a subagent's subscription tells that
@@ -29,7 +33,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import calls, leases, model
+from . import calls, leases, model, participants
 
 #: What `subscribe` says the session now does about the item.
 FOLLOWING = "following"
@@ -43,7 +47,8 @@ _ROW = (
 
 
 def subscribe(conn: sqlite3.Connection, row: sqlite3.Row, follows: object) -> str:
-    """Follow the item of `row`, or stop: mute it while the session holds it, else forget it.
+    """Follow the item of `row`, or stop: mute it while the session holds it or work under
+    it, else forget it.
 
     The caller holds the write and read the row inside it. Asking for what already stands writes nothing more. A change of mind keeps one
     row per session and agent, dated by its newest call.
@@ -63,7 +68,7 @@ def subscribe(conn: sqlite3.Connection, row: sqlite3.Row, follows: object) -> st
     if follows:
         wanted: int | None = 1
     else:
-        wanted = 0 if holds(row, session, identity.agent_id) else None
+        wanted = 0 if _held(conn, row, session, identity.agent_id) else None
     if wanted is None:
         conn.execute(
             "DELETE FROM work_item_subscriptions"
@@ -143,6 +148,18 @@ def holds(row: sqlite3.Row, session_id: str, agent_id: str | None) -> bool:
 
     suffix = holder_suffix(session_id, agent_id)
     return holds_claim(row, suffix) or holds_step(row, suffix)
+
+
+def _held(
+    conn: sqlite3.Connection, row: sqlite3.Row, session_id: str, agent_id: str | None
+) -> bool:
+    """Whether a mute may stand on the item: held, or a goal or stage held work stands under."""
+
+    if holds(row, session_id, agent_id):
+        return True
+    return str(row["kind"]) == model.CONTAINER_KIND and participants.holds_under(
+        conn, str(row["work_item_id"]), session_id, agent_id
+    )
 
 
 def holder_suffix(session_id: str, agent_id: str | None = None) -> str:

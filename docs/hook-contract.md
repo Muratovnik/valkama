@@ -511,7 +511,8 @@ the same rules as a person's act and beside the mentions above:
   session's news there, mentions included, while it holds the item. A person's act
   still reaches it, and so do the replies after it asked there with
   `awaits_reply`. Once the session no longer holds the item the mute counts for
-  nothing, and the item is heard as any other it does not hold.
+  nothing, and the item is heard as any other it does not hold. A goal or stage the
+  session holds work under takes a mute too, [as a held item does](#under-a-goal).
 - **The speaker is a session and an agent.** Nobody is told its own writes, and
   a subagent is told nothing its session wrote, its orchestrator's or another
   subagent's. An orchestrator is told what its subagents did to where the work
@@ -579,7 +580,11 @@ hears no tree: the orchestrator keeps the whole and passes it on.
 - **One path a recipient and an item.** A goal or stage the session wrote to or
   follows is read by its own path, and working on it counts as holding it: all of
   a person's acts there are told whole and wake, and other sessions' news there
-  is told as to a holder. A task it holds or follows is told by its own path as
+  is told as to a holder. So is a mute: `subscribe: false` on a goal or stage the
+  session or one of its subagents holds a task or an open step under keeps other
+  sessions' news there out while the session works on it, and a person's acts
+  there still come and wake. On a goal or stage the session only follows, `false`
+  ends the following instead. A task it holds or follows is told by its own path as
   before. A task it only wrote to, or never touched, has its addressed news, a
   reply in its thread, on its own path and where its work stands from the tree, and
   the two never overlap. Nothing the session wrote is told by the tree: its own
