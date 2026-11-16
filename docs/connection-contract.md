@@ -607,7 +607,7 @@ and a `sessions` other than `true` or `false` are refused with
 
 **Since 2.5.** The HTTP read stays flat: comments are rows in id order, each
 with its `reply_to` and `reply_to_request`, and a reader groups them into
-threads itself. Neither it nor the card's read through the exact project scope
+threads itself. Neither it nor the card's read through the exact space scope
 (`GET /api/modules/planning/work-item`) caps how many comments or events it
 returns: a card is drawn from the whole record, however long its discussion and
 history are, and a client must not refuse a record for its length. The same read
@@ -615,14 +615,14 @@ takes the agent's reads as opt-in parameters: `unresolved=true` with
 `comments_after`, `thread=<id>`, and `threads=<count>` for that many threads with
 the latest activity. `unresolved` other than `true` or `false` is `invalid_request`.
 
-**Since 2.5.** The card's read through the exact project scope also takes
+**Since 2.5.** The card's read through the exact space scope also takes
 `brief=true`, which answers in the same envelope with the brief record a space's
 list carries instead of the full one: state, title, holder, steps and dates,
 with `comment_count` in place of the comments and no history, links, refs or
 agents. Its size does not grow with the item's history, and it is what a
 preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
-refused with 400; an unknown item is 404 and a binding that no longer resolves
-is 409, as for the full read.
+refused with 400; an unknown item is 404 and a space that is not there is 409,
+as for the full read.
 
 ### Threads and the resolved mark
 
@@ -754,7 +754,7 @@ with the answer, each once, is in the
 `GET /open/<reference>` opens one work item in the web UI, so that an agent can
 hand a person a link built from nothing but a number. A client does not turn a
 bare number into a link, and the address of a card itself cannot be written from a
-number: it names the project and the store.
+number: it names the store and the space.
 
 The reference is read as a search reads one, so `main-12` is `MAIN-12`, and its
 prefix names the space. The route is a loopback address under the same `Host` rule
@@ -762,8 +762,8 @@ as every other, and it answers:
 
 | The address | Answer |
 | --- | --- |
-| names an item in a space a project binds, followed by a person, with the desktop app installed | `200` and a small page, after starting the app on the card; see below |
-| names an item in a space a project binds, in any other case | `302` to `/modules/planning/project/<project>?entity=<entity>`, the route the card has when it is opened any other way, with `Cache-Control: no-store` |
+| names an item, followed by a person, with the desktop app installed | `200` and a small page, after starting the app on the card; see below |
+| names an item, in any other case | `302` to `/modules/planning/space/<data_scope_id>/<KEY>?entity=<entity>`, the route the card has when it is opened any other way, with `Cache-Control: no-store` |
 | is exactly `/open/questions` | as for an item, but the panel of open questions in place of a card; see [The panel of open questions](#the-panel-of-open-questions) |
 | names anything else | the app page with `404`, which says what is wrong and offers the next step |
 | reaches a store or a project registry that cannot be read | the app page with `503`, which offers another try |
@@ -774,11 +774,14 @@ redirect but a reference the grammar accepted and a store confirmed, and the
 surface checks the result against the one shape a card route has: `/open//evil`,
 `/open/https:%2F%2Fevil` and the like get the app page, never a `Location`. Primary
 and attached stores can each keep a space with one key; the primary answers first.
-A space no project binds has no card route, so the page says there is no such space.
+Every space has a card route, whether or not a project is bound to it. The shell
+also opens on the project route a card had before 3.0,
+`/modules/planning/project/<project>`, so a kept bookmark lands in the app rather
+than on an error; what it shows there is the shell's to say.
 
 The page reads why from `GET /api/modules/planning/search`, whose coverage names
-each source it read and each it could not: a number nobody filed, a key no project
-binds, and a store that did not answer read differently, and an item is never
+each source it read and each it could not: a number nobody filed, a key no store
+here holds, and a store that did not answer read differently, and an item is never
 called missing while a store that may hold it stayed silent.
 
 An agent client's chat keeps a link only for ordinary schemes and opens it in the
@@ -960,7 +963,7 @@ otherwise `state_unavailable` is `null`. An end whose state is unknown is not
 open, and as a blocker it blocks nothing. A reader of an older server finds no
 such fields and looks the end up among the items it holds.
 
-The cross-project search, `GET /api/modules/planning/search`, marks each result
+The search across spaces, `GET /api/modules/planning/search`, marks each result
 the same way: `item` carries `kind` and `priority`, and `item.state` carries
 `category` and `is_terminal` beside its name.
 
@@ -1653,7 +1656,9 @@ it changes only when a state does: with a write to the store, with a client writ
 transcript or falling silent, and with a session's title. Attached stores are not read.
 
 ```json
-{"spaces": [{"key": "MAIN", "name": "Main", "project_id": "example-project",
+{"spaces": [{"key": "MAIN", "name": "Main",
+   "projects": [{"project_id": "example-project", "display_name": "Example project"}],
+   "default_project": "example-project",
    "rows": [
      {"reference": "MAIN-4", "title": "Structured answers", "kind": "goal", "parent": null,
       "state": null, "agents": 0, "long": false, "asks": false, "since": null,
@@ -1704,7 +1709,9 @@ transcript or falling silent, and with a session's title. Attached stores are no
 
 | Field | What it holds |
 | --- | --- |
-| `key`, `name`, `project_id` | the space, and the project that binds it; `project_id` is `null` when none does |
+| `key`, `name` | the space |
+| `projects` | the projects the registry binds to the space, each with its `project_id` and `display_name`, the default one first and the others by id; empty when none is bound, and `null` when the registry could not be read |
+| `default_project` | the `project_id` of the space's default project, `null` when no project is bound or the registry could not be read |
 | `rows` | the space's rows, in the order they are drawn |
 | `sessions` | the sessions under this space that work or wait on no row, freshest first |
 | `elsewhere` | the same list for sessions whose folder lies under no space |
@@ -2914,7 +2921,7 @@ the neutral boundary). The body is the answer's, with the request's
 `expected_revision` required:
 
 ```json
-{"project_id": "example-project", "data_scope_id": "…", "space_key": "MAIN",
+{"data_scope_id": "…", "space_key": "MAIN",
  "id": "7d1c2a9e-3f4b-4c5d-8e6f-0a1b2c3d4e5f", "expected_revision": 2,
  "author": "user", "answers": {"route": "threads"},
  "field_notes": {"route": "Threads serve the digest too"}}
@@ -3153,18 +3160,23 @@ An export carries every question in `planning.requests`, whole. Since 2.5 a sear
 also reads own variants and field comments, and the decision of a resolved mark
 with the comments.
 
-The browser's mapped search and request endpoints return exact project and
-Planning-space identities. Their list envelopes include source coverage and a
-truncation flag. A source that was not read says why in `reason`, as one stable
-code: `store_not_attached` (the project's space lives in a store this server
-neither owns nor has attached), `store_unreadable` (an attached store could not
-be opened), `attached_list_unreadable` (the list of attached stores could not be
-read), `space_missing` (the bound store holds no such space), `binding_conflict`
-(the space is bound to another project), `search_failed` (the store opened but
-the search failed there) or `requests_unavailable` (an attached store predates
-human requests). The mapped search answers the item a reference query names
-first, the primary store's ahead of an attached store's, before it cuts the
-page; a query that is a number alone answers each source's item of that number
+The browser's mapped search and request endpoints read every space of the
+primary store and of each attached store, and every space the registry binds a
+project to that cannot be read; a space with no project is read like any other.
+Each result names its exact Planning space in `target.space_ref`, and each source
+of the coverage is one space, by `space_ref`. Their list envelopes include source
+coverage and a truncation flag. A source that was not read says why in `reason`,
+as one stable code: `store_not_attached` (a project's space lives in a store this
+server neither owns nor has attached), `store_unreadable` (an attached store could
+not be opened), `attached_list_unreadable` (the list of attached stores could not
+be read), `space_missing` (the store holds no such space), `search_failed` (the
+store opened but the search failed there) or `requests_unavailable` (an attached
+store predates human requests). The exact reads and writes name one space by
+`scope_kind=space` with `data_scope_id` and `space_key`; a read may narrow it with
+`project_id`, a project of the space or one its items name: a project the
+registry does not hold is 404, and a registered one that is neither is 409. The
+mapped search answers the item a reference query names first, the primary
+store's ahead of an attached store's, before it cuts the page; a query that is a number alone answers each source's item of that number
 first the same way. A request detail or mutation returns the confirmed request with
 its target; attached stores remain read-only. Existing Planning searches and
 the complete space read model keep their existing scope and limits.

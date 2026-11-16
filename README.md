@@ -773,9 +773,11 @@ identity; resume never chooses a session by title, directory, time, or recency.
 `GET /api/session?id=<id>` resolves compact session context by exact identity
 or a unique stored prefix. A successful
 response has `resolved: true` and includes `session`, `client_family`,
-`work_item`, `space_root`, `status`, `detail`, and `at`. Missing or ambiguous
-identity returns `resolved: false` with the corresponding status. This endpoint
-does not return an event feed.
+`work_item`, `space_root`, `status`, `detail`, and `at`. `space_root` is the
+root of the default project of the space the session's work item lives in: a
+space may have several projects, and the registry names one of them its default.
+Missing or ambiguous identity returns `resolved: false` with the corresponding
+status. This endpoint does not return an event feed.
 
 Planning owns `POST /api/ingest`, which accepts only `session_start`,
 `session_end`, `attention`, and `turn_end` lifecycle events. The standalone
