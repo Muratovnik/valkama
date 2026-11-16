@@ -16,22 +16,16 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page, TestInfo } from '@playwright/test'
 
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-
 import { task } from '../fixtures/analytics.ts'
-import { busyFrame, liveRow as frameRow } from '../support/liveFrame.ts'
 import { openReport, pageAt, record, serve as serveAnalytics, serveTask } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, openList } from './boardPage.ts'
+import { openRail } from './cutRailPage.ts'
 import { pass, watched, watchHints, wholeText as whole } from './hintFramesPage.ts'
-import { installLiveStreams } from './liveWorkPage.ts'
 import { worked } from './overviewPage.ts'
-import { globalScope, identity } from './planningFixtures.ts'
+import { identity } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: globalScope })
-/** Cut by the rail at its narrowest, and whole at its widest. */
-const LONG_TITLE = 'An item whose title runs past the rail at its narrowest'
 const LONG_HOLDER = 'a-reviewer-whose-name-runs-past-the-column-of-holders'
 const LONG_TASK =
   'ToolSpec: one Unity-free description of every tool the agents call, its arguments and errors'
@@ -212,34 +206,6 @@ async function check(page: Page, info: TestInfo, { anchor, answered, name, rows 
   await page.mouse.up()
   await answered()
   return laid
-}
-
-/** The rail at its narrowest, holding a row whose title it cuts, from the Settings page. */
-async function openRail(page: Page, width: number) {
-  await page.setViewportSize({ width, height: 800 })
-  await installBackend(page)
-  const streams = await installLiveStreams(page)
-  await page.goto(SETTINGS)
-  await expect.poll(() => streams.open()).toHaveLength(1)
-  const frame = busyFrame()
-  frame.spaces.push({
-    key: 'LONG',
-    name: 'Long',
-    project_id: 'example-project',
-    rows: [frameRow('LONG-1', { title: LONG_TITLE, state: 'working' })],
-    sessions: [],
-  })
-  await streams.live(frame)
-  const edge = page.getByRole('separator', { name: 'Navigation width' })
-  await edge.focus()
-  await page.keyboard.press('Home')
-  await edge.blur()
-  const row = page.locator('.nav-row', { has: page.locator('[aria-label^="LONG-1 "]') })
-  // The rail's list scrolls under its modules, which stand over the rows at its foot.
-  await row.scrollIntoViewIfNeeded()
-  await pass(page, 300)
-  await expect(row).toBeVisible()
-  return { edge, row, title: row.locator('.nav-row-title') }
 }
 
 for (const width of [1440, 1024]) {

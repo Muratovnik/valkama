@@ -922,8 +922,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   `title` attribute, which the browser draws late, in its own font and colours, and
   never for text cut short. When it shows and goes is kept by one hint manager for every
   element: after half a second's rest of the pointer, at once while another hint is up or
-  has just gone, at once on focus a key brought, never for a finger. Enter, Space and Escape
-  bring none: the focus the page moves in answer, into what they opened or back from what they
+  has just gone, at once on focus a key brought, never for a finger. After the rest it fades
+  in, a cut text's whole words as well; at once it is already there, with no animation, as
+  the reference's card is, and under a preference for reduced motion nothing fades. Enter,
+  Space and Escape bring none: the focus the page moves in answer, into what they opened or back from what they
   closed, is the page's, and its hint would hold up the next Escape. It goes with a press,
   a scroll, whose end asks again for what the pointer rests on, and the pointer leaving: a
   hint the pointer raised can be entered and stays while the pointer is on it, going a

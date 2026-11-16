@@ -20,6 +20,8 @@
  * - It lets the pointer and a press through to what it covers, so the row under it keeps its
  *   hover, a link under it opens and a button presses; the pointer within it still holds it up
  *   (`HintKind.covers`).
+ * - It fades in where it lies after the pointer's rest, and is there at once passing on from a
+ *   neighbour, as every hint is.
  * - It is drawn, not read: assistive technology reads the element's own words, which are whole
  *   in the page however the screen cuts them.
  */
@@ -79,6 +81,10 @@ useHintKind('whole', {
 /** The element whose words show whole, while the manager shows them. */
 const anchor = computed(() => (shownHint.value?.kind === 'whole' ? shownHint.value.anchor : null))
 const text = computed(() => (anchor.value ? (tooltipOf(anchor.value)?.text ?? '') : ''))
+/** How the whole text opened: after the pointer's rest, when it fades in, or at once. */
+const opened = computed(() =>
+  shownHint.value?.kind === 'whole' && shownHint.value.rested ? 'after-rest' : 'at-once',
+)
 
 /** The type, the ground and the scale the whole text is drawn in, read as it is laid. */
 const look = shallowRef<{
@@ -240,6 +246,7 @@ useEventListener(window, 'resize', relay, { passive: true })
       class="whole-text"
       aria-hidden="true"
       :style="boxStyle"
+      :data-opened="opened"
       data-hint-surface
     >
       {{ text }}
@@ -266,5 +273,23 @@ useEventListener(window, 'resize', relay, { passive: true })
     0 4px 12px var(--color-shadow);
   transform-origin: 0 0;
   pointer-events: none;
+
+  /* It fades in where it lies after the rest, never moving: its letters stand on the cut ones.
+     Passing on from a neighbour, or brought by a key, it is already there. */
+  &[data-opened='after-rest'] {
+    animation: whole-text-appear var(--duration-quick) var(--ease-out);
+  }
+}
+
+@keyframes whole-text-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whole-text[data-opened='after-rest'] {
+    animation: none;
+  }
 }
 </style>

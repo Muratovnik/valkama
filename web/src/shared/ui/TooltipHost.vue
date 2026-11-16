@@ -28,6 +28,8 @@
  * - A hint the pointer raised can be entered by the pointer. One the keyboard holds up lets a
  *   press through to what it covers, since it stands over every control the keyboard reaches,
  *   and a chart period's lets the pointer through, since it follows the pointer along the plot.
+ * - A hint fades in after the pointer's rest; passing on from a neighbour, or brought by a key,
+ *   it is already there, as the reference's card is.
  * - A hint with a structure (`body`) is drawn as a grid (`TooltipBody`), its width estimated from
  *   its widest cells before it opens, and the main row of the part of its area that the pointer or
  *   the keyboard stands on (`data-tooltip-row`) is marked, without opening the hint again.
@@ -75,6 +77,11 @@ const mine = computed(() => (shownHint.value?.kind === 'tooltip' ? shownHint.val
 const shown = computed(() => mine.value?.anchor ?? null)
 const hint = computed(() => (shown.value ? tooltipOf(shown.value) : undefined))
 const open = computed(() => hint.value !== undefined)
+/**
+ * How the hint opened: after the pointer's rest, when it fades in, or at once, passing on from a
+ * neighbour or brought by a key, when it is already there.
+ */
+const opened = computed(() => (mine.value?.rested ? 'after-rest' : 'at-once'))
 /**
  * The pointer and a press go through the hint rather than onto it: a hint focus a key brought
  * stands over every control the keyboard reaches, and a chart period's follows the pointer along
@@ -157,6 +164,7 @@ watch(shown, (element) => {
         :side-offset="OFFSET"
         :collision-padding="EDGE"
         :style="widestStyle"
+        :data-opened="opened"
         data-hint-surface
         hide-when-detached
       >
@@ -219,6 +227,24 @@ watch(shown, (element) => {
 
   /* A hint the pointer raised can be entered, and stays while the pointer is on it. */
   pointer-events: auto;
+
+  /* It fades in after the rest; passing on from a neighbour, or brought by a key, it is already
+     there and does not appear again, as the reference's card does. */
+  &[data-opened='after-rest'] {
+    animation: tooltip-hint-appear var(--duration-quick) var(--ease-out);
+  }
+}
+
+@keyframes tooltip-hint-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tooltip-hint[data-opened='after-rest'] {
+    animation: none;
+  }
 }
 
 /* A hint the keyboard holds up, and a chart period's, are read, never pressed or entered: a press
