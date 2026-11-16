@@ -978,7 +978,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   detail, since a cut word is not on screen; while they are whole it is the detail alone,
   and with no detail to add it is the `clipped` hint of its words. For
   assistive technology a hint is what `title` was: the name of an element nothing else
-  names, else its description when it says more than the name. A reference's preview
+  names, else its description when it says more than the name; the hint shown is a tooltip
+  that holds its words once, and one drawn as a grid reads as its text. A reference's preview
   card follows the same manager and these rules, as one more surface of it: on a reference it
   wins over a hint, and the card and a hint take over from each other at once, never both up
   and with no frame without one, but for the moment a card that reads waits for its answer.

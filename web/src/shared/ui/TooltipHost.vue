@@ -28,6 +28,9 @@
  * - A hint the pointer raised can be entered by the pointer. One the keyboard holds up lets a
  *   press through to what it covers, since it stands over every control the keyboard reaches,
  *   and a chart period's lets the pointer through, since it follows the pointer along the plot.
+ * - A hint of words is a tooltip itself and holds its words once; a hint drawn as a grid keeps
+ *   its text, for assistive technology alone, beside a grid drawn for the eye alone. The element
+ *   is described by its hint through the hidden copies under this host, whether or not it shows.
  * - A hint fades in after the pointer's rest; passing on from a neighbour, or brought by a key,
  *   it is already there, as the reference's card is.
  * - A hint with a structure (`body`) is drawn as a grid (`TooltipBody`), its width estimated from
@@ -101,21 +104,23 @@ const passedThrough = computed(() => {
 const whole = ref(false)
 /**
  * What stands between the words and the detail, as an expression: the template compiler drops a
- * space that ends an element, and the hint's text, which is its accessible copy too, read a cut
- * name glued to its share, «part 1» and «32%» as «part 132%». The detail's line starts with it,
- * so it shows nothing.
+ * space that ends an element, and the hint's text, which assistive technology reads too, read a
+ * cut name glued to its share, «part 1» and «32%» as «part 132%». The detail's line starts with
+ * it, so it shows nothing.
  */
 const apart = ' '
 /**
- * What assistive technology reads of the hint, as the library's tooltip gave it: the words it
- * shows, and for a hint drawn as a grid its text rather than the grid's cells run together.
+ * What assistive technology reads of a hint drawn as a grid: its text, rather than the grid's
+ * cells run together, which are drawn for the eye alone. A hint of words is its own tooltip and
+ * reads as it shows: a copy of them beside the words once said every hint twice.
  */
-const copy = computed(() => {
-  const tooltip = hint.value
-  if (!tooltip) return ''
-  if (tooltip.body) return [tooltip.text, tooltip.note].filter(Boolean).join('\n')
-  return [whole.value ? tooltip.words : '', tooltip.text, tooltip.note].filter(Boolean).join(' ')
-})
+const copy = computed(() =>
+  hint.value?.body ? [hint.value.text, hint.value.note].filter(Boolean).join('\n') : '',
+)
+/** A hint of words is the tooltip itself; a grid's tooltip is its copy. */
+const role = computed(() => (hint.value?.body ? undefined : 'tooltip'))
+/** A grid's note is in its copy, so as drawn it is for the eye alone. */
+const noteHidden = computed(() => (hint.value?.body ? 'true' : undefined))
 
 /**
  * The key of the main row the part under the pointer stands for, while the pointer is in the
@@ -170,11 +175,13 @@ watch(shown, (element) => {
         :collision-padding="EDGE"
         :style="widestStyle"
         :data-opened="opened"
+        :role="role"
         data-hint-surface
         hide-when-detached
       >
         <TooltipBody
           v-if="hint.body"
+          aria-hidden="true"
           :body="hint.body"
           :current="current"
         />
@@ -186,9 +193,14 @@ watch(shown, (element) => {
         ><span
           v-if="hint.note"
           class="tooltip-note"
+          :aria-hidden="noteHidden"
         >
           {{ hint.note }}</span
-        ><VisuallyHidden role="tooltip">{{ copy }}</VisuallyHidden>
+        ><VisuallyHidden
+          v-if="hint.body"
+          role="tooltip"
+          >{{ copy }}</VisuallyHidden
+        >
       </HoverCardContent>
     </HoverCardPortal>
   </HoverCardRoot>

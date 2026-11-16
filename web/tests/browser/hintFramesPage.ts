@@ -46,6 +46,7 @@ export const watchHints = (page: Page) =>
     const now = (at: number): Frame => {
       const hints = [...document.querySelectorAll('.tooltip-hint, .whole-text')]
       const shown = hints[0]?.cloneNode(true) as Element | undefined
+      // A hint drawn as a grid keeps a copy of its text for a screen reader; it shows the rest.
       for (const copy of shown?.querySelectorAll('[role="tooltip"]') ?? []) copy.remove()
       const surfaces = [
         ...document.querySelectorAll('.tooltip-hint, .whole-text, .reference-preview'),

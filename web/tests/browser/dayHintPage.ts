@@ -52,8 +52,8 @@ export type Parts = Awaited<ReturnType<typeof dayParts>>
 /**
  * Teaches the page to note every hint it shows — which element it is, the words it shows and
  * its box — and, from then on, to note them every frame, so a hint that swapped for a frame and
- * back is noted too. The words leave out the copy the popup library keeps for a screen reader,
- * which can trail the words on screen by a render.
+ * back is noted too. The words leave out the copy a day's hint, drawn as a grid, keeps for a
+ * screen reader, which can trail the words on screen by a render.
  */
 const noteHints = (page: Page) =>
   page.evaluate(() => {

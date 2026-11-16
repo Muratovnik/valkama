@@ -102,7 +102,9 @@ async function hiddenHint(page: Page, { control, label }: { control: string; lab
   await rest(page, element)
   await expect(page.locator('.whole-text'), `${control}: no words laid over it`).toHaveCount(0)
   const hint = page.locator('.tooltip-hint')
-  await expect(hint.locator('[role="tooltip"]'), control).toHaveText(words?.trim() ?? '')
+  // The hint is its own tooltip and says the hidden words once.
+  await expect(hint, control).toHaveAttribute('role', 'tooltip')
+  await expect(hint, control).toHaveText(words?.trim() ?? '')
   const [own, shown] = await Promise.all([boxOf(element), boxOf(hint)])
   expect(overlaps(own, shown), `${control}: over its own element`).toBe(false)
   return { own, shown }
