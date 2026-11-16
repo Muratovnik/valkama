@@ -936,8 +936,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   hint stands nowhere beside it: its whole words are laid over the cut ones, the first letter
   on the cut text's first letter in the same type and ink and on the ground under it, running
   on to the right up to 8px short of the window's edge and wrapping by words only where the
-  whole text does not fit there, so on one line it covers no other row. It lets the pointer
-  and a press through to the element under it, which keeps its hover and does what it does,
+  whole text does not fit there, so on one line it covers no other row. A label a narrow place
+  hides whole, as the icon rail's and the board's sign-only action's, is hidden rather than cut:
+  no letter of it is on screen to lay its words from, and a glyph beside it hidden from assistive
+  technology, as a «+», is none of its words, so its hint names the control where a name stands.
+  The whole words let the pointer and a press through to the element under it, which keeps its
+  hover and does what it does,
   and the pointer anywhere on it holds it up. A width that leaves the text whole takes it down
   without a hover, and one that cuts it again lays it again. A list declares itself once on
   its container (`data-hint-list`), and its rows say nothing: in it every other hint stands

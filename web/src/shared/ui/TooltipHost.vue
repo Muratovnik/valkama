@@ -19,9 +19,10 @@
  *   library keeps it inside the window from there, a hint aside of a list read against a box
  *   that follows its row as the page moves.
  * - A hint of the `clipped` kind is not drawn here: its words are laid whole over the cut ones
- *   (`WholeText`), the second surface of this host. A name and a detail always show. A detail
- *   on an element whose own words are cut says them whole first, on a line of their own,
- *   measured as it would show; uncut, it is the detail.
+ *   (`WholeText`), the second surface of this host. Words hidden whole, as an icon rail's labels,
+ *   show no letter to lay them from, and are drawn here, placed as a name. A name and a detail
+ *   always show. A detail on an element whose own words are cut says them whole first, on a line
+ *   of their own, measured as it would show; uncut, it is the detail.
  * - A reference's preview wins on a reference: no hint is found there. The card is a surface of
  *   the same manager, so it and a hint replace each other as any two hints do.
  * - A hint the pointer raised can be entered by the pointer. One the keyboard holds up lets a
@@ -41,6 +42,7 @@ import { previewAnchorOf } from '@/shared/ui/referencePreviewAnchors.ts'
 import {
   focusAnchorOf,
   inTooltipArea,
+  namesHidden,
   pointerAnchorOf,
   showsWhole,
   textIsClipped,
@@ -59,7 +61,11 @@ const besideOf = (anchor: HTMLElement | null) => (anchor && !showsWhole(anchor) 
 useHintKind('tooltip', {
   pointedAnchor: (target) => (previewAnchorOf(target) ? null : besideOf(pointerAnchorOf(target))),
   focusedAnchor: (target) => (previewAnchorOf(target) ? null : besideOf(focusAnchorOf(target))),
-  shows: (anchor) => tooltipOf(anchor) !== undefined,
+  // Words hidden whole show only while they are hidden: a width that shows them takes it down.
+  shows: (anchor) =>
+    tooltipOf(anchor)?.clipped === true
+      ? namesHidden(anchor) && textIsClipped(anchor)
+      : tooltipOf(anchor) !== undefined,
   isArea: inTooltipArea,
 })
 
@@ -132,7 +138,9 @@ watch(shown, (element) => {
   const words = whole.value ? [tooltip.words] : []
   const lines = [...words, ...tooltip.text.split('\n'), tooltip.note]
   const width = tooltip.body ? bodyWidth(tooltip.body) : hintWidth(lines)
-  place.value = hintPlaceOf(element, tooltip, width)
+  // Words hidden whole name an icon that stands alone, as a name does.
+  const kind = tooltip.clipped ? 'name' : tooltip.kind
+  place.value = hintPlaceOf(element, { asked: tooltip.asked, kind }, width)
 })
 </script>
 

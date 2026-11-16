@@ -25,7 +25,8 @@
  * the element or something in it has more text than its box shows: an ellipsis, a clamp, or a
  * label hidden for want of room. An empty or absent text shows nothing. Such a hint is not drawn
  * beside its element: its words are laid whole over the cut ones, from their first letter and in
- * their type (`WholeText`), so the text reads on where it was cut.
+ * their type (`WholeText`), so the text reads on where it was cut. A label hidden whole shows no
+ * letter to lay them from, and its hint names its element beside it, placed as a `name` is.
  *
  * The value is the text, or `{ text, note }`: the note is a second line in the quiet ink,
  * a state under an action. The text may run over several lines: a line break in it is kept,
@@ -341,9 +342,18 @@ export const tooltipOf = (element: Element) => tooltips.get(element)
 
 /**
  * Whether the element's hint is its own words, shown only while they are cut, which are laid
- * whole over them (`WholeText`) rather than drawn as a hint beside it (`TooltipHost`).
+ * whole over them (`WholeText`) rather than drawn as a hint beside it (`TooltipHost`): while a
+ * letter of them is on screen to lay them from (`firstLetterOf`). Words a narrow place hides
+ * whole, as an icon rail's labels, are hidden rather than cut, and have nothing to lay them
+ * over: the hint names its element beside it, as an icon's name does (`namesHidden`). Laid from
+ * the hidden label, they stood over the icon as a block a few letters wide that broke the word.
  */
-export const showsWhole = (element: Element) => tooltipOf(element)?.clipped === true
+export const showsWhole = (element: HTMLElement) =>
+  tooltipOf(element)?.clipped === true && firstLetterOf(element) !== null
+
+/** Whether the element's hint is its own words that no letter of shows: hidden, not cut. */
+export const namesHidden = (element: HTMLElement) =>
+  tooltipOf(element)?.clipped === true && firstLetterOf(element) === null
 
 /** Overflow under which a box shows less than it holds. `visible` lets it run on. */
 const CUTS = new Set(['hidden', 'clip', 'auto', 'scroll'])
@@ -362,19 +372,52 @@ function shownText(box: HTMLElement): Text[] {
 }
 
 /**
- * The first letter the element shows, where it stands, and the element whose type draws it:
- * where the whole of a cut text starts (`WholeText`). Null for an element that shows none.
+ * Whether at least half of a letter, across and down, is on screen: not cut away by a box between
+ * it and `element` that shows less than it holds, nor hidden. A label kept for a reader alone is
+ * laid out in a box a pixel wide that shows a pixel of its first letter; a word folded onto a
+ * line its mark cuts is laid out under it and shows none.
+ */
+function inSight(letter: DOMRect, inked: Element, element: HTMLElement): boolean {
+  if (getComputedStyle(inked).visibility !== 'visible') return false
+  let [left, top, right, bottom] = [letter.left, letter.top, letter.right, letter.bottom]
+  for (let box: Element | null = inked; box; box = box === element ? null : box.parentElement) {
+    const style = getComputedStyle(box)
+    const clips = style.clipPath !== 'none'
+    if (!clips && !CUTS.has(style.overflowX) && !CUTS.has(style.overflowY)) continue
+    const edges = box.getBoundingClientRect()
+    if (clips || CUTS.has(style.overflowX)) {
+      left = Math.max(left, edges.left + (Number.parseFloat(style.borderLeftWidth) || 0))
+      right = Math.min(right, edges.right - (Number.parseFloat(style.borderRightWidth) || 0))
+    }
+    if (clips || CUTS.has(style.overflowY)) {
+      top = Math.max(top, edges.top + (Number.parseFloat(style.borderTopWidth) || 0))
+      bottom = Math.min(bottom, edges.bottom - (Number.parseFloat(style.borderBottomWidth) || 0))
+    }
+  }
+  return right - left >= letter.width / 2 && bottom - top >= letter.height / 2
+}
+
+/**
+ * The first letter of the words the element shows, where it stands, and the element whose type
+ * draws it: where the whole of a cut text starts (`WholeText`). Null for an element none of whose
+ * words is on screen (`inSight`). Text hidden from assistive technology inside it is a glyph or a
+ * shortened form, as a «+» before a label or a shortcut after it, never the words the hint makes
+ * whole: laid from the «+» of a hidden «New work», the words stood over the sign.
  */
 export function firstLetterOf(element: HTMLElement): { box: DOMRect; inked: Element } | null {
   const range = document.createRange()
   for (const node of shownText(element)) {
     const at = node.data.search(/\S/u)
-    if (!node.parentElement || at < 0) continue
+    const inked = node.parentElement
+    if (!inked || at < 0) continue
+    const glyph = inked.closest('[aria-hidden="true"]')
+    if (glyph && glyph !== element && element.contains(glyph)) continue
     range.setStart(node, at)
     range.setEnd(node, at + 1)
     const box = range.getBoundingClientRect()
-    // A text laid out nowhere, as one a closed part holds, is not where the words start.
-    if (box.width > 0 && box.height > 0) return { box, inked: node.parentElement }
+    // A text laid out nowhere, as one a closed part holds, is not where the words start. Words
+    // laid out and out of sight are where they start, hidden: a count after them is not.
+    if (box.width > 0 && box.height > 0) return inSight(box, inked, element) ? { box, inked } : null
   }
   return null
 }
@@ -416,7 +459,7 @@ function hidesText(box: HTMLElement, across: boolean): boolean {
  * The shared copy for assistive technology (`.visually-hidden`) is never shown, so it is
  * never cut: counted, it held up the hint of every element that keeps one, as a mark whose
  * short words stand on screen keeps its whole words. A label a narrow place hides for want
- * of room is hidden by a rule of its own, and counts.
+ * of room is hidden by a rule of its own, and counts: its hint names the element (`namesHidden`).
  */
 export function textIsClipped(element: HTMLElement): boolean {
   const boxes = [element, ...[...element.querySelectorAll<HTMLElement>('*')].slice(0, LOOK_AT)]
