@@ -1735,6 +1735,7 @@ def claim_ready_work_item(
     space: str | None = None,
     within: str | None = None,
     label: str | None = None,
+    project: str | None = None,
     author: str | None = None,
 ) -> dict | None:
     """Pick the next task the queue of one space gives and take it.
@@ -1744,10 +1745,13 @@ def claim_ready_work_item(
     (`queue.work_key`) — urgent, started, under way above, priority, age — the
     smaller number first on a tie: the item whose `queue_order` reads 1.
 
-    The space is `space`, else the space of `within`; a call naming neither is
+    The space is `space`, else the space of `within`, else the space of the
+    calling session (`item_projects.session_space`); a call with none of them is
     refused with the spaces there are (`_queue_scope`). `within`, a goal or
-    stage, keeps the tasks under it at any depth, and `label` the tasks that
-    carry that label themselves; both narrow that one queue, never reorder it.
+    stage, keeps the tasks under it at any depth, `label` the tasks that carry
+    that label themselves, and `project` the tasks that name that project, as the
+    list's `project` keeps them, so a task naming none is kept by no project; each
+    narrows that one queue, never reorders it.
 
     Choosing and writing are two statements, so the item chosen can be taken by
     somebody else before this claim lands. The guarded write is what catches
@@ -1758,7 +1762,7 @@ def claim_ready_work_item(
     the last refusal is reported rather than looped on forever.
     """
 
-    scope = _queue_scope(conn, space, within, label)
+    scope = _queue_scope(conn, space, within, label, project)
     holder = calls.holder(author)
     # An expired lease is not a holder, so the queue sees through it: released
     # first, the item then reads unheld to the rule below. A lease in its grace
@@ -1793,17 +1797,27 @@ class _QueueScope:
     space_id: str
     within_id: str | None
     label: str | None
+    project: str | None
 
 
 def _queue_scope(
-    conn: sqlite3.Connection, space: str | None, within: str | None, label: str | None
+    conn: sqlite3.Connection,
+    space: str | None,
+    within: str | None,
+    label: str | None,
+    project: str | None,
 ) -> _QueueScope:
     """The space a queue call reads and what narrows it, or the refusal that says why not.
 
     `within` names a goal or stage, of any space when `space` is not given, and
-    then its space is the call's; beside `space` it must be of that space. A label
-    is matched as an item's labels are written, so one nothing carries narrows the
-    queue to nothing rather than being refused.
+    then its space is the call's; beside `space` it must be of that space. With
+    neither, the space is the one whose project root holds the folder of the
+    session the call proved: none for a call that proved no session, a session
+    whose folder lies under no root bound to a space, or a registry that cannot
+    be read, and the call is refused. A label is matched as an item's labels are
+    written, and a project as the items name it, so one nothing carries or names
+    narrows the queue to nothing rather than being refused; a project of another
+    space keeps the tasks of this space that name it.
     """
 
     named = _space_row(conn, space) if space is not None else None
@@ -1823,6 +1837,9 @@ def _queue_scope(
         named = under
         within_id = str(row["work_item_id"])
     if named is None:
+        found = item_projects.session_space(conn, calls.confirmed_session())
+        named = _space_row(conn, found) if found is not None else None
+    if named is None:
         keys = [str(key) for (key,) in conn.execute("SELECT key FROM planning_spaces ORDER BY key")]
         raise model.PlanningError(
             "name a space: no space's project root holds this session's folder; "
@@ -1834,6 +1851,7 @@ def _queue_scope(
         label=None
         if label is None
         else model.text_field(label, "label", limit=model.MAX_LABEL_LENGTH),
+        project=None if project is None else item_projects.project_id(project, "project"),
     )
 
 
@@ -1841,15 +1859,19 @@ def _next_given(conn: sqlite3.Connection, scope: _QueueScope) -> str | None:
     """The first item the queue of the scope's space gives, if any: one read of its tree.
 
     The scope only keeps some of what the queue gives, so the item given is
-    the one of those that stands first in the space's own queue.
+    the one of those that stands first in the space's own queue. A project keeps
+    what `item_projects.naming` names, the rule the list's `project` reads.
     """
 
     tree = item_tree.of_spaces(conn, [scope.space_id])
+    naming = None if scope.project is None else set(item_projects.naming(conn, [scope.project]))
     for row in queue.of_spaces(conn, [scope.space_id], tree):
         identity = str(row["work_item_id"])
         if scope.within_id is not None and scope.within_id not in tree.ancestors(identity):
             continue
         if scope.label is not None and scope.label not in model.labels(json.loads(row["labels"])):
+            continue
+        if naming is not None and identity not in naming:
             continue
         return identity
     return None

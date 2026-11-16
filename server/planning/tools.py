@@ -693,6 +693,11 @@ TOOLS = [
                 "description": "Only the tasks that carry this label themselves, not through a"
                 " goal or stage over them.",
             },
+            "project": {
+                "type": "string",
+                "description": "Only the tasks that name this project, by its id in the project"
+                " registry; a task that names none is kept by no project.",
+            },
             "author": _AUTHOR,
         },
     ),

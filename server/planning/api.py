@@ -657,6 +657,7 @@ def _claim_ready(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dic
         space=_optional_text(payload, "space"),
         within=_optional_text(payload, "within"),
         label=_optional_text(payload, "label"),
+        project=_optional_text(payload, "project"),
         author=_author(payload),
     )
     return {"interface_version": PLANNING_API_INTERFACE, "work_item": picked}

@@ -85,6 +85,57 @@ class QueueCase(unittest.TestCase):
             self.conn, tree.refs[name], kind="question", prompt="Which way?", fields=[FIELD]
         )
 
+    def register(self, *projects: tuple[str, Tree | None, bool]) -> dict[str, Path]:
+        """Register projects, each with a root of its own: its id, the space it is bound to
+        or None, and whether it is that space's default project. The roots by id."""
+
+        scope = str(read_store_metadata(self.conn)["data_scope_id"])
+        base = Path(os.environ["VALKAMA_DB"]).parent
+        roots: dict[str, Path] = {}
+        entries = []
+        for project, space, default in projects:
+            roots[project] = base / project
+            roots[project].mkdir()
+            bindings = (
+                []
+                if space is None
+                else [
+                    project_binding(
+                        project,
+                        planning_space_entity({"data_scope_id": scope, "space_key": space.key}),
+                    )
+                ]
+            )
+            entry = project_entry(project, roots[project], bindings=bindings)
+            if entry["planning_binding"] is not None:
+                entry["planning_binding"]["default"] = default
+            entries.append(entry)
+        reader = mock.patch.object(
+            project_registry, "_read_registry_bytes", return_value=registry_bytes(entries)
+        )
+        reader.start()
+        self.addCleanup(reader.stop)
+        return roots
+
+    def name_projects(self, tree: Tree, name: str, *projects: str) -> None:
+        """The projects an item names, placed in SQL as the tree places the rest."""
+
+        for project in projects:
+            self.conn.execute(
+                "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+                " VALUES (?, ?, 'named')",
+                (tree.ids[name], project),
+            )
+
+    def session_in(self, folder: Path, index: int) -> dict:
+        """A session started in `folder`; the call metadata that proves it."""
+
+        session = f"019a3c2e-0015-7c11-9e0f-2f4b6d8a1c{index:02x}"
+        sessions.touch(
+            self.conn, session, client="codex", at="2026-11-16T12:00:00Z", cwd=str(folder)
+        )
+        return {"sessionId": session, "threadId": session, "callId": f"call_{index:04d}"}
+
 
 class ConditionTests(QueueCase):
     """One condition each."""
@@ -760,42 +811,147 @@ class ScopeRefusalTests(ScopeCase):
         self.assertEqual(tree.refs["t1"], answer["work_item"]["reference"])
 
 
+class ProjectScopeTests(ScopeCase):
+    """The scope `project`, alone, with `label` and across spaces."""
+
+    def test_project_keeps_the_tasks_naming_it_and_never_one_naming_none(self) -> None:
+        tree = self.space()
+        roots = self.register(("a", tree, True), ("b", tree, False))
+        for name in ("none", "tb", "ta"):
+            tree.add(name, state="ready")
+        self.name_projects(tree, "ta", "a")
+        self.name_projects(tree, "tb", "b")
+        # The space's queue gives `none`, then `tb`, then `ta`: a scope it ignored shows.
+        self.conn.execute("UPDATE work_items SET created_at = '2026-11-01T00:00:00Z'")
+        listed = service.list_work_items(self.conn, project="a", limit=None)
+        self.assertEqual(["ta"], self.names(tree, listed))
+        # The call names only the project: the space is the session's, the project's root.
+        meta = self.session_in(roots["a"], 1)
+        taken = [
+            mcp_surface.call_tool(self.conn, "claim_ready_work_item", {"project": "a"}, meta=meta)[
+                "work_item"
+            ]
+            for _ in range(2)
+        ]
+        self.assertEqual(tree.refs["ta"], taken[0]["reference"])
+        # A is the space's default project, and still the task naming none is not given.
+        self.assertIsNone(taken[1])
+        self.assertEqual(("", ""), (self.holder(tree, "none"), self.holder(tree, "tb")))
+
+    def test_project_and_label_together_keep_what_both_keep(self) -> None:
+        tree = self.space()
+        other = self.space()
+        self.register(("a", tree, True))
+        for name, labels in (("t4", ["x"]), ("t5", ["y"]), ("t6", ["x"])):
+            tree.add(name, state="ready")
+            self.conn.execute(
+                "UPDATE work_items SET labels = ? WHERE work_item_id = ?",
+                (json.dumps(labels), tree.ids[name]),
+            )
+        self.name_projects(tree, "t6", "a")
+        other.add("o", state="ready")
+        self.name_projects(other, "o", "a")
+        self.conn.execute("UPDATE work_items SET created_at = '2026-11-01T00:00:00Z'")
+        self.assertEqual(
+            ["t6", None],
+            [self.taken(tree, space=tree.key, label="x", project="a") for _ in range(2)],
+        )
+        self.assertEqual("", self.holder(tree, "t4"))
+        # A project of another space gives the tasks of the call's space that name it.
+        self.assertEqual("o", self.taken(other, space=other.key, project="a"))
+        # A project nothing names narrows to nothing; it is no refusal.
+        self.assertIsNone(self.taken(tree, space=tree.key, project="nowhere"))
+
+    def test_a_project_list_across_spaces_keeps_the_total_order_and_own_places(self) -> None:
+        first, second = Tree(self.conn, "MAIN"), Tree(self.conn, "OPS")
+        self.register(("p", first, True))
+        # m0 names no project: it is MAIN's first in the queue and missing from the list.
+        first.add("m0", state="ready")
+        first.add("m1", state="ready")
+        first.add("GM", kind="goal", state="container")
+        first.add("mu", state="ready", parent="GM")
+        second.add("o1", state="ready")
+        second.add("GO", kind="goal", state="container")
+        second.add("ou", state="ready", parent="GO")
+        for tree, name in ((first, "m1"), (first, "mu"), (second, "o1"), (second, "ou")):
+            self.name_projects(tree, name, "p")
+        self.conn.execute("UPDATE work_items SET created_at = '2026-11-01T00:00:00Z'")
+        listed = service.list_work_items(self.conn, project="p", limit=None)
+        by_reference = {
+            reference: name for tree in (first, second) for name, reference in tree.refs.items()
+        }
+        # The goals name what the tasks under them name, and stand in their own state.
+        self.assertEqual(
+            ["m1", "mu", "o1", "ou", "GM", "GO"],
+            [by_reference[str(item["reference"])] for item in listed],
+        )
+        # Each place is in the row's own space's whole queue, not in the project's list.
+        self.assertEqual([2, 3, 1, 2, None, None], [item["queue_order"] for item in listed])
+
+
+class SessionSpaceTests(ScopeCase):
+    """A call naming no space takes the space of its session's project."""
+
+    def test_a_session_in_a_bound_project_root_takes_that_space_s_work(self) -> None:
+        alpha, rover = Tree(self.conn, "ALPHA"), Tree(self.conn, "ROVER")
+        alpha.add("a", state="ready")
+        rover.add("r", state="ready")
+        roots = self.register(("rover", rover, True), ("loose", None, False))
+        outside = Path(os.environ["VALKAMA_DB"]).parent / "elsewhere"
+        outside.mkdir()
+        refused = (
+            "name a space: no space's project root holds this session's folder;"
+            " the spaces are ALPHA, ROVER"
+        )
+        # Outside every root, and in the root of a project bound to no space: refused.
+        for index, folder in ((2, outside), (3, roots["loose"])):
+            meta = self.session_in(folder, index)
+            with self.assertRaises(model.PlanningError) as caught:
+                mcp_surface.call_tool(self.conn, "claim_ready_work_item", {}, meta=meta)
+            self.assertEqual(refused, str(caught.exception))
+        meta = self.session_in(roots["rover"] / "src", 1)
+        answer = mcp_surface.call_tool(self.conn, "claim_ready_work_item", {}, meta=meta)
+        self.assertEqual(rover.refs["r"], answer["work_item"]["reference"])
+        self.assertEqual("", str(service.get_work_item(self.conn, alpha.refs["a"])["claim_ref"]))
+
+    def test_a_registry_that_cannot_be_read_places_no_session(self) -> None:
+        rover = Tree(self.conn, "ROVER")
+        rover.add("r", state="ready")
+        roots = self.register(("rover", rover, True))
+        meta = self.session_in(roots["rover"], 1)
+        unreadable = mock.patch.object(
+            project_registry, "_read_registry_bytes", return_value=b"{not json"
+        )
+        unreadable.start()
+        self.addCleanup(unreadable.stop)
+        with self.assertRaises(model.PlanningError) as caught:
+            mcp_surface.call_tool(self.conn, "claim_ready_work_item", {}, meta=meta)
+        self.assertEqual(
+            "name a space: no space's project root holds this session's folder; the spaces are ROVER",
+            str(caught.exception),
+        )
+        self.assertEqual("", str(service.get_work_item(self.conn, rover.refs["r"])["claim_ref"]))
+
+
 class ClaimByNumberTests(QueueCase):
     """A claim by number takes work of any space, whatever the session's."""
 
     def test_a_session_in_one_space_s_project_claims_another_space_s_task(self) -> None:
-        aw = Tree(self.conn, "ALPHA")
-        rv = Tree(self.conn, "ROVER")
-        rv.add("n", state="ready")
-        root = Path(os.environ["VALKAMA_DB"]).parent / "aw"
-        root.mkdir()
-        scope = str(read_store_metadata(self.conn)["data_scope_id"])
-        entry = project_entry(
-            "aw",
-            root,
-            bindings=[
-                project_binding(
-                    "aw", planning_space_entity({"data_scope_id": scope, "space_key": aw.key})
-                )
-            ],
-        )
-        reader = mock.patch.object(
-            project_registry, "_read_registry_bytes", return_value=registry_bytes([entry])
-        )
-        reader.start()
-        self.addCleanup(reader.stop)
-        session = "019a3c2e-0015-7c11-9e0f-2f4b6d8a1c3e"
-        sessions.touch(
-            self.conn, session, client="codex", at="2026-11-16T12:00:00Z", cwd=str(root / "src")
-        )
+        alpha = Tree(self.conn, "ALPHA")
+        rover = Tree(self.conn, "ROVER")
+        rover.add("n", state="ready")
+        root = self.register(("alpha", alpha, True))["alpha"]
+        meta = self.session_in(root / "src", 0x3E)
+        session = meta["sessionId"]
         # The premise: the session's folder lies in the root of the project bound to ALPHA.
         place = project_registry.place_of_folder(
-            str(root / "src"), project_registry.read_registry(), scope
+            str(root / "src"),
+            project_registry.read_registry(),
+            str(read_store_metadata(self.conn)["data_scope_id"]),
         )
         self.assertIsNotNone(place)
         assert place is not None
-        self.assertEqual(("aw", aw.key), (place["project_id"], place["space_key"]))
-        meta = {"sessionId": session, "threadId": session, "callId": "call_0015"}
+        self.assertEqual(("alpha", alpha.key), (place["project_id"], place["space_key"]))
         answer = mcp_surface.call_tool(
             self.conn, "claim_work_item", {"id": rover.refs["n"], "author": "codex"}, meta=meta
         )
