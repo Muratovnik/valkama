@@ -934,15 +934,15 @@ def _hand_back(
     active state goes back to the first queued state its workflow lets it reach,
     or the backlog when there is none; the answer is that move, for the
     caller's `requeued`, or None. Its checklist, comments and history stay. An
-    item whose checklist still has a claimed step stays active, because that
-    step's holder is still its executor; review, blocked and finished items stay
-    where they are.
+    item whose checklist still has a claimed step that is not done stays active,
+    because that step's holder is still its executor; a done step is nobody's
+    hold. Review, blocked and finished items stay where they are.
     """
 
     row = read_model.item_by_id(conn, identity)
     current = read_model.state_by_id(conn, str(row["state_id"]))
     if current["category"] != "active" or any(
-        step["claimed_by"] for step in model.checklist(row["checklist"])
+        step["claimed_by"] and not step["done"] for step in model.checklist(row["checklist"])
     ):
         return None
     target = states.queue_state(conn, row)
@@ -982,29 +982,40 @@ def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> i
     the session that holds it. Only a confirmed session's claim can lapse: an
     unconfirmed claim, or a step held under a label no session proved, has no
     session to go quiet. A claim in its grace waits for its session to come
-    back, since nobody asked for that item in particular. An item another writer
-    changed in the meantime is left to it.
+    back, since nobody asked for that item in particular. A claim of the session
+    making the call stays, as `claim_work_item` keeps it: the call is that
+    session's heartbeat, though nothing has written it yet. A finished item's
+    steps are left as they were closed. An item another writer changed in the
+    meantime is left to it.
     """
 
     clauses = [
         "((i.claim_ref != '' AND c.identity_state = 'confirmed'"
-        " AND COALESCE(c.session_id, '') != '') OR instr(i.checklist, '(session ') > 0)",
+        " AND COALESCE(c.session_id, '') != '')"
+        " OR (s.is_terminal = 0 AND instr(i.checklist, '(session ') > 0))",
     ]
     parameters: list[object] = []
     if space_id is not None:
         clauses.append("i.planning_space_id = ?")
         parameters.append(space_id)
     query = with_clauses(
-        "SELECT i.* FROM work_items i LEFT JOIN execution_events c ON c.id = i.claim_call_id",
+        "SELECT i.*, s.is_terminal AS finished FROM work_items i"
+        " JOIN workflow_states s ON s.state_id = i.state_id"
+        " LEFT JOIN execution_events c ON c.id = i.claim_call_id",
         clauses,
     )
+    mine = _calling_session()
     sessions: dict[str, leases.Lease] = {}
     expired = 0
     for row in conn.execute(query + " ORDER BY i.number", parameters).fetchall():
         lease = leases.lease(conn, row)
-        if lease is not None and (lease.state != leases.STALE or lease.in_grace):
+        if lease is not None and (
+            lease.state != leases.STALE
+            or lease.in_grace
+            or (mine is not None and lease.session_id == mine)
+        ):
             lease = None
-        steps = _lapsed_steps(conn, row, lease, sessions)
+        steps = {} if row["finished"] else _lapsed_steps(conn, row, lease, sessions)
         if lease is None and not steps:
             continue
         try:
@@ -1034,12 +1045,8 @@ def _lapsed_steps(
     """
 
     gone = calls.label_id(lease.session_id) if lease is not None and lease.session_id else None
-    caller = calls.current()
-    mine = (
-        calls.label_id(caller.session_id)
-        if caller is not None and caller.state == calls.CONFIRMED and caller.session_id
-        else None
-    )
+    calling = _calling_session()
+    mine = calls.label_id(calling) if calling is not None else None
     lapsed: dict[str, str] = {}
     for step in model.checklist(row["checklist"]):
         ids = calls.holder_ids(str(step["claimed_by"] or ""))
@@ -1055,6 +1062,15 @@ def _lapsed_steps(
         if found.state == leases.STALE and not found.in_grace:
             lapsed[step["id"]] = found.reason
     return lapsed
+
+
+def _calling_session() -> str | None:
+    """The session the call in progress proved, or None: whose claims its own call keeps."""
+
+    caller = calls.current()
+    if caller is None or caller.state != calls.CONFIRMED or not caller.session_id:
+        return None
+    return caller.session_id
 
 
 def _expire(

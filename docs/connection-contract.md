@@ -2182,8 +2182,9 @@ Who may release or take over a claim follows the lease:
   history reads `released` and then `claimed`.
   `claim_work_item` with `release` on a stale lease stops after that release.
 - `claim_ready_work_item` first releases every stale lease in its space that is
-  past its grace. It neither gives nor releases an item whose lease is in the
-  grace, because nobody asked for that item in particular.
+  past its grace, except one the calling session holds: its call is its sign of
+  life. It neither gives nor releases an item whose lease is in the grace,
+  because nobody asked for that item in particular.
 - The release is a `released` event with the detail `<reason>: <holder>`, written
   by Valkama under its own call; an item it leaves unheld in an active state is
   put back in the queue under the same call, as any release does (see
@@ -2207,8 +2208,9 @@ Who may release or take over a claim follows the lease:
   somebody holds the item. Each release is a `checklist_released` event with
   the detail `<reason>: <step text>`, written by Valkama under the same call,
   and an item that is left active with nothing holding it goes back to the
-  queue. A done step, and a step held under a label no session confirmed, never
-  lapse; a step of the session making the call stays, as its claim does.
+  queue. A done step, a step of a closed item and a step held under a label no
+  session confirmed never lapse; a step of the session making the call stays,
+  as its claim does.
 - An `unconfirmed` claim is compared by `author`, as every claim was before
   leases, and never expires by itself.
 

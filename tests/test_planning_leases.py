@@ -420,7 +420,7 @@ class ExpiryTests(LeaseTestCase):
         self.mcp("claim_work_item", {"id": live, "author": "codex"}, codex(TWO))
         # The call above started the loop, and the loop swept on its way in.
         self.assertEqual("", self.item()["claim_ref"])
-        self.assertEqual("valkama: released 1 expired Planning lease(s)\n", self.stderr.getvalue())
+        self.assertEqual(RELEASED, self.stderr.getvalue())
         self.assert_expired_by_valkama()
         self.assertEqual(0, housekeeping.run(self.conn).expired_leases)
         self.assertEqual("live", service.get_work_item(self.conn, live)["claim_state"])
@@ -554,7 +554,7 @@ class HookedLeaseTestCase(LeaseTestCase):
 END = datetime(2026, 10, 1, 20, 2, 23, tzinfo=UTC)
 #: The contract's number, spelled out: this is what the tests hold the code to.
 GRACE = timedelta(hours=12)
-RELEASED = "valkama: released 1 expired Planning lease(s)\n"
+RELEASED = "valkama: released expired Planning claims on 1 work item(s)\n"
 
 
 class EndedSessionGraceTests(HookedLeaseTestCase):
@@ -1006,6 +1006,14 @@ class StepExpiryTests(LeaseTestCase):
             if event["author"] == leases.EXPIRY_AUTHOR
         ]
 
+    def write_holder(self, index: int, holder: str) -> None:
+        """Write a step's holder into the store directly, for a state no current write leaves."""
+
+        steps = json.loads(self.conn.execute("SELECT checklist FROM work_items").fetchone()[0])
+        steps[index]["claimed_by"] = holder
+        self.conn.execute("UPDATE work_items SET checklist = ?", (json.dumps(steps),))
+        self.conn.commit()
+
     def sweep(self) -> int:
         """The start-up sweep: how many items it released claims on."""
 
@@ -1106,6 +1114,56 @@ class StepExpiryTests(LeaseTestCase):
         self.assertEqual(["", held(TWO), ""], self.holders())
         self.assertEqual([("released", f"session-ended: {held(ONE)}")], self.expiry_events())
 
+    def test_the_take_next_queue_keeps_the_callers_own_stale_claim(self) -> None:
+        self.take(ONE)
+        self.take_step(ONE, 0)
+        # ONE reads stale until its own call is written, which is its heartbeat.
+        self.age(ONE, 15)
+        picked = mcp_surface.call_tool(
+            self.conn, "claim_ready_work_item", {"space": "LSE", "author": "codex"}, meta=codex(ONE)
+        )
+        self.conn.commit()
+        assert isinstance(picked, dict)
+        self.assertIsNone(picked["work_item"])
+        self.assertEqual(
+            (held(ONE), "live"), (self.item()["claim_ref"], self.item()["claim_state"])
+        )
+        self.assertEqual([held(ONE), "", ""], self.holders())
+        self.assertEqual([], self.expiry_events())
+
+    def test_an_item_whose_only_holder_left_is_on_a_done_step_goes_back_to_the_queue(
+        self,
+    ) -> None:
+        self.take(ONE)
+        self.agent("apply_work_item_changes", ONE, checklist_ticks=[{"item_id": self.steps[0]}])
+        # A done step still carrying its holder, which no current write leaves behind.
+        self.write_holder(0, held(ONE))
+        self.set_session(ONE, status="ended")
+        self.assertEqual(1, self.sweep())
+        self.assertEqual(("", "todo"), (self.item()["claim_ref"], self.item()["state"]["key"]))
+        self.assertEqual(
+            [
+                ("released", f"session-ended: {held(ONE)}"),
+                ("transitioned", "todo: session-ended"),
+            ],
+            self.expiry_events(),
+        )
+
+    def test_a_closed_item_keeps_its_lapsed_step_as_it_was_closed(self) -> None:
+        self.take_step(ONE, 0)
+        service.transition_work_item(self.conn, self.reference, "cancelled", force=True)
+        self.conn.commit()
+        # An open step still held after the close, which an earlier build could leave.
+        self.write_holder(0, held(ONE))
+        self.set_session(ONE, status="ended")
+        before = self.item()
+        self.assertEqual(0, self.sweep())
+        after = self.item()
+        self.assertEqual(
+            (before["revision"], before["checklist"], before["events"]),
+            (after["revision"], after["checklist"], after["events"]),
+        )
+
     def test_a_step_no_session_confirmed_stays_held(self) -> None:
         service.claim_checklist_item(self.conn, self.reference, self.steps[0], author="old")
         self.conn.commit()
@@ -1121,10 +1179,7 @@ class StepExpiryTests(LeaseTestCase):
         self.take_step(ONE, 1)
         # A done step still carrying its holder, which no current write leaves behind:
         # a done step is nobody's hold, so the sweep has nothing of it to release.
-        steps = json.loads(self.conn.execute("SELECT checklist FROM work_items").fetchone()[0])
-        steps[0]["claimed_by"] = held(ONE)
-        self.conn.execute("UPDATE work_items SET checklist = ?", (json.dumps(steps),))
-        self.conn.commit()
+        self.write_holder(0, held(ONE))
         self.set_session(ONE, status="ended")
         self.assertEqual(1, self.sweep())
         [first, second, _] = self.item()["checklist"]
