@@ -108,12 +108,6 @@ _FORCE = {
     "type": "boolean",
     "description": "Carry a refusal through. The override is recorded as an event.",
 }
-_RANK = {
-    "type": "string",
-    "description": "Where the item goes among the items of its state: first, last,"
-    " before:MAIN-12 or after:MAIN-12, naming an item in that same state. The order"
-    " is the one the board shows and claim_ready_work_item takes work in.",
-}
 #: The four levels of `priority`, each defined; a level added to model.PRIORITIES
 #: must be defined here, which the schema test checks.
 _PRIORITY_MEANING = (
@@ -216,7 +210,7 @@ _COMMENT_FORM = (
 )
 #: What a batch's transition takes, and the guards it meets.
 _TRANSITION_FORM = (
-    'An object, never a bare state name: {"state": "done"}, with reason, force or rank'
+    'An object, never a bare state name: {"state": "done"}, with reason or force'
     " when they apply. The one path a state changes by. The workflow's guards apply:"
     " an active state needs a holder after the write (executor), a terminal state needs"
     " every checklist step ticked and a closing summary, entering review or a completed"
@@ -238,7 +232,7 @@ _TRANSITION_FORM = (
     " state but an active or blocked one"
     " also ends the item's claim and any step claim, whoever holds them; the answer"
     " names the holder as released, and last_claim_ref keeps reading it. Reopening"
-    " restores no claim. The item goes last in its new state unless rank places it. An"
+    " restores no claim. An"
     " agent's close is refused with person_spoke while a person acted on the item in"
     " the interface since an agent last wrote to it; the refusal quotes it."
 )
@@ -770,7 +764,6 @@ TOOLS = [
                         " is never edited into a task, and its place says which it is.",
                     },
                     "parent": _PARENT,
-                    "rank": _RANK,
                     "mentions": _TEXT_MENTIONS,
                 },
             },
@@ -936,7 +929,6 @@ TOOLS = [
                     "state": _STATE,
                     "reason": _STR,
                     "force": _FORCE,
-                    "rank": _RANK,
                     "acceptance": _ACCEPTANCE,
                 },
                 "required": ["state"],

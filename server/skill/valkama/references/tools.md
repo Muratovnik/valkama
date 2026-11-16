@@ -60,8 +60,11 @@ holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
 | `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
-`claim_ready_work_item` answers with the item it took, or nothing when no task
-is workable. A comment in `applied` has `comment_id`, and `reply_to` and
+`claim_ready_work_item` takes the first workable task in the order of work —
+urgent, started, a goal or stage under way, priority, age — which a list row
+says as `queue_order`, and answers with the item it took, or nothing when no
+task is workable. A goal, a stage and work in triage or deferred are never
+taken. Nothing sets the order by hand. A comment in `applied` has `comment_id`, and `reply_to` and
 `reply_to_request`: the root a reply joined, both null for a new root, and
 `list_request_id` when it carried a `list`, as the summary does. A comment or a
 summary that named other items in `mentions` adds `mentions`: per item its
@@ -140,7 +143,7 @@ resolves its discussion, records its summary and moves its state:
 | `resolutions` | `[{"comment_id": 12, "resolution": "…", "reopen": false}]` | marks thread roots resolved |
 | `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | asks as `create_work_item_request` does |
 | `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
-| `transition` | `{"state": "completed", "reason": "…", "force": false, "rank": "first"}` | moves the state |
+| `transition` | `{"state": "completed", "reason": "…", "force": false}` | moves the state |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
 the item already had and a `checklist` in the same call kept; send a new step
@@ -210,16 +213,6 @@ and `last_reply`, its newest reply as `id`, `author`, `by_person`, `at` and
 `full` add `comments_total` (every row), `threads_total` (the roots),
 `unresolved_total` (the roots without the mark), `events_total` and `history_truncated`, true when fewer threads, comments or
 events are shown than there are.
-
-## Placement
-
-`rank` in the batch's `update` (in the item's own state) and `transition` (in
-the state it moves to): `first`, `last`,
-`before:MAIN-12`, `after:MAIN-12`, the anchor in that same state. Without
-`rank`, a moved item goes last. No read orders by it: `claim_ready_work_item`
-takes the first workable task in the order of work — urgent, started, a goal or
-stage under way, priority, age — and a list row says that place as
-`queue_order`. A goal, a stage and work in triage or deferred are never taken.
 
 ## Guards
 

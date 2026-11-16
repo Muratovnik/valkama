@@ -29,7 +29,6 @@ from . import (
     leases,
     model,
     queue,
-    ranking,
     read_model,
     request_model,
     states,
@@ -589,12 +588,11 @@ def create_work_item(
     transitions.refuse(refusals, False)
     item_id = model.new_id()
     number = store.next_number(conn, space_id)
-    position = _tail_position(conn, space_id, str(target["state_id"]))
     starts = stored_kind != model.CONTAINER_KIND and target["category"] in model.STARTING_CATEGORIES
     conn.execute(
         "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,"
-        "parent_id,priority,title,description,labels,source,position,acceptance,accepted_at,"
-        "started_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+        "parent_id,priority,title,description,labels,source,acceptance,accepted_at,"
+        "started_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,"
         f" CASE WHEN ? IS NULL THEN NULL ELSE {_NOW} END, CASE WHEN ? THEN {_NOW} END)",
         (
             item_id,
@@ -609,7 +607,6 @@ def create_work_item(
             model.multiline_field(description, "work_item.description"),
             model.dumps(model.labels(labels)),
             model.text_field(source, "work_item.source", limit=512, required=False),
-            position,
             basis,
             basis,
             starts,
@@ -639,14 +636,11 @@ def update_work_item(
     labels_remove: object = None,
     kind: str | None = None,
     parent: str | None = None,
-    rank: str | None = None,
     expected_revision: int | None = None,
     author: str | None = None,
 ) -> dict:
-    """Edit the fields a transition does not own, and where the item stands in its state.
+    """Edit the fields a transition does not own: one guarded write, one revision.
 
-    `rank` is a placement in the item's own state (`ranking.placement`). It is an
-    edit like the others: one guarded write, one revision, no history event.
     `labels` replaces the set; `labels_add` and `labels_remove` change the set the
     item has, read under the write lock (`model.edited_labels`). An edit that
     changes the set is the one edit the history records: a `labels_changed` event
@@ -661,7 +655,6 @@ def update_work_item(
         # The event is written after the edit, under this author: an author the history
         # cannot hold is refused here, while the store is still untouched.
         model.actor(author)
-    placement = ranking.placement(rank) if rank is not None else None
     updates: list[str] = []
     parameters: list[object] = []
     if title is not None:
@@ -694,17 +687,7 @@ def update_work_item(
             left = str(row["parent_id"])
     edited = _edited(row, updates, parameters)
     if edited is not None:
-        # Before the placement, which may write first: the row is inserted once.
         calls.call_id(conn, str(row["work_item_id"]), edited=edited)
-    if placement is not None:
-        # Last, because it is the one step that may write before `_write` does:
-        # every refusal above has had its chance to leave the store untouched.
-        placed = ranking.position(
-            conn, row, read_model.state_by_id(conn, str(row["state_id"])), placement
-        )
-        if placed is not None:
-            updates.append("position = ?")
-            parameters.append(placed)
     if not updates:
         return read_model.present(conn, row, full=True)
     _write(conn, row, updates, parameters)
@@ -850,15 +833,11 @@ def transition_work_item(
     *,
     reason: str = "",
     force: bool = False,
-    rank: str | None = None,
     expected_revision: int | None = None,
     author: str | None = None,
     acceptance: object = None,
 ) -> dict:
-    """Move an item to a state, last in that state unless `rank` places it.
-
-    Last is where a build without placements puts a moved item too, so an item
-    that enters a state queues behind the work already ordered there.
+    """Move an item to a state; the order of work places it there (`queue.list_key`).
 
     Any state but an active or a blocked one ends every claim on the item in the
     same write: a claim says somebody is working it, and nobody works an item in
@@ -884,7 +863,6 @@ def transition_work_item(
         state,
         reason=reason,
         force=force,
-        rank=rank,
         expected_revision=expected_revision,
         author=author,
         acceptance=acceptance,
@@ -933,7 +911,6 @@ def _transition(
     *,
     reason: str = "",
     force: bool = False,
-    rank: str | None = None,
     expected_revision: int | None = None,
     author: str | None = None,
     acceptance: object = None,
@@ -952,22 +929,14 @@ def _transition(
         answer["warnings"] = [f"{read_model.reference(conn, row)} is accepted and open already"]
         return answer
     note = _transition_reason(reason, str(target["key"]))
-    placement = ranking.placement(rank) if rank is not None else None
     gives = _basis(conn, row, target, named)
     refusals, warnings = transitions.findings(
         conn, row, target, reason=reason, basis=row["acceptance"] or gives
     )
     refusals = [finding for finding in refusals if finding[0] not in spared]
     transitions.refuse(refusals, force)
-    position = (
-        _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"]))
-        if placement is None
-        else ranking.position(conn, row, target, placement)
-    )
-    if position is None:
-        position = float(row["position"])
-    updates = ["state_id = ?", "position = ?"]
-    parameters: list[object] = [str(target["state_id"]), position]
+    updates = ["state_id = ?"]
+    parameters: list[object] = [str(target["state_id"])]
     updates += _accepting(row, target, gives, parameters)
     # Only a task at work, or blocked at it, has a holder: anywhere else the move ends
     # every claim on the item in the same write.
@@ -1117,15 +1086,8 @@ def _cascade(
                 " state of accepted work it can move to"
             )
             continue
-        parameters: list[object] = [
-            str(target["state_id"]),
-            _tail_position(conn, str(child["planning_space_id"]), str(target["state_id"])),
-        ]
-        updates = [
-            "state_id = ?",
-            "position = ?",
-            *_accepting(child, target, basis, parameters),
-        ]
+        parameters: list[object] = [str(target["state_id"])]
+        updates = ["state_id = ?", *_accepting(child, target, basis, parameters)]
         _write(conn, child, updates, parameters)
         found = str(child["work_item_id"])
         _log(conn, found, "accepted", basis, author)
@@ -1299,11 +1261,8 @@ def _starting(conn: sqlite3.Connection, row: sqlite3.Row, move_state: bool = Tru
         conn, row, target, basis=row["acceptance"] or gives, held=True
     )
     transitions.refuse(refusals, False)
-    parameters += [
-        str(target["state_id"]),
-        _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"])),
-    ]
-    updates = ["state_id = ?", "position = ?", *_accepting(row, target, gives, parameters)]
+    parameters.append(str(target["state_id"]))
+    updates = ["state_id = ?", *_accepting(row, target, gives, parameters)]
     return _Start(updates, parameters, current, target, gives)
 
 
@@ -1396,8 +1355,7 @@ def _hand_back(
     target = states.queue_state(conn, row)
     if target is None:
         raise _stranded(conn, row)
-    position = _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"]))
-    _write(conn, row, ["state_id = ?", "position = ?"], [str(target["state_id"]), position])
+    _write(conn, row, ["state_id = ?"], [str(target["state_id"])])
     _log(conn, identity, "transitioned", f"{target['key']}: {reason}", author)
     return {"from": str(current["key"]), "to": str(target["key"])}
 
@@ -2940,11 +2898,3 @@ def _step(steps: list[dict], item_id: object, conn: sqlite3.Connection, row: sql
         if step["id"] == wanted:
             return step
     raise model.PlanningError(f"{read_model.reference(conn, row)} has no checklist step {wanted}")
-
-
-def _tail_position(conn: sqlite3.Connection, planning_space_id: str, state_id: str) -> float:
-    row = conn.execute(
-        "SELECT MAX(position) FROM work_items WHERE planning_space_id = ? AND state_id = ?",
-        (planning_space_id, state_id),
-    ).fetchone()
-    return float(row[0] or 0.0) + 1.0

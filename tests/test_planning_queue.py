@@ -450,9 +450,6 @@ class WorkOrderTests(OrderCase):
         self,
     ) -> None:
         tree = self.six()
-        stored = self.conn.execute(
-            "SELECT position FROM work_items WHERE work_item_id = ?", (tree.ids["P"],)
-        ).fetchone()[0]
         service.update_work_item(self.conn, tree.refs["P"], priority="low")
         orders = self.queue_orders(tree)
         self.assertEqual(
@@ -461,13 +458,9 @@ class WorkOrderTests(OrderCase):
         )
         ready = [name for name in self.names(tree, self.listed(tree)) if orders[name]]
         self.assertEqual(["U", "S", "T", "O1", "O2", "P"], ready)
-        # The order is computed: the write stored no place for it.
-        self.assertEqual(
-            stored,
-            self.conn.execute(
-                "SELECT position FROM work_items WHERE work_item_id = ?", (tree.ids["P"],)
-            ).fetchone()[0],
-        )
+        # The order is computed: an item has no stored place to write.
+        columns = {str(row[1]) for row in self.conn.execute("PRAGMA table_info(work_items)")}
+        self.assertNotIn("position", columns)
 
 
 class ListOrderTests(OrderCase):

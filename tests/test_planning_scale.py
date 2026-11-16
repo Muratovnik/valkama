@@ -28,8 +28,8 @@ class PlanningScaleTests(unittest.TestCase):
             state = space["workflow"]["states"][0]["state_id"]
             identities = [str(uuid.uuid4()) for _ in range(1200)]
             conn.executemany(
-                "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,title,parent_id,position)"
-                " VALUES(?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,title,parent_id)"
+                " VALUES(?,?,?,?,?,?,?,?)",
                 [
                     (
                         identity,
@@ -40,7 +40,6 @@ class PlanningScaleTests(unittest.TestCase):
                         "container" if index == 0 else "task",
                         f"Task {index + 1}",
                         identities[0] if index == 1 else None,
-                        index,
                     )
                     for index, identity in enumerate(identities)
                 ],

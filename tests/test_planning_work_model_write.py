@@ -238,9 +238,6 @@ class ThroughMcpTests(WriteCase):
         self.tree.add("T", kind="goal")
         self.accepted_goal()
         self.tree.add("a", state="ready")
-        self.conn.execute(
-            "UPDATE work_items SET position = -1 WHERE kind = ?", (model.CONTAINER_KIND,)
-        )
         self.conn.commit()
         # A goal or stage is withheld for its kind alone, wherever it stands.
         for name in ("G", "S", "T"):

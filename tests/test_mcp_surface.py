@@ -2252,87 +2252,27 @@ class ServerInstructionTests(unittest.TestCase):
         self.assertIn("never in a Valkama comment or description", text)
 
 
-class RankToolTests(WireCallTestCase):
-    """`rank` on the writes an agent already has: where an item goes in its state."""
+class RetiredRankTests(WireCallTestCase):
+    """`rank` is gone from the writes that took it: the order of work is computed."""
 
-    def setUp(self) -> None:
-        super().setUp()
-        self.items = [
-            planning_service.create_work_item(self.conn, space=SPACE_KEY, title=title)["reference"]
-            for title in ("First", "Second", "Third")
-        ]
-        self.queued = planning_service.create_work_item(
-            self.conn, space=SPACE_KEY, title="Queued", state="ready", acceptance="assignment"
-        )["reference"]
-        self.conn.commit()
-
-    def order(self, state: str = "triage") -> list[str]:
-        """The order the placements stored in the state; no read sorts by it any more."""
-
-        return [
-            f"{SPACE_KEY}-{row[0]}"
-            for row in self.conn.execute(
-                "SELECT i.number FROM work_items i JOIN workflow_states s"
-                " ON s.state_id = i.state_id JOIN planning_spaces p"
-                " ON p.planning_space_id = i.planning_space_id WHERE p.key = ? AND s.key = ?"
-                " ORDER BY i.position, i.number",
-                (SPACE_KEY, state),
-            )
-        ]
-
-    def test_the_writes_that_place_an_item_publish_rank_and_no_new_tool_does(self) -> None:
+    def test_no_write_publishes_rank_and_a_call_naming_it_is_refused_unwritten(self) -> None:
         schemas = {tool["name"]: tool["inputSchema"] for tool in planning_tools.TOOLS}
         batch = schemas["apply_work_item_changes"]["properties"]
-        self.assertEqual("string", batch["update"]["properties"]["rank"]["type"])
-        transition = batch["transition"]
-        self.assertIn("rank", transition["properties"])
-        self.assertFalse({"rank_work_item", "place_work_item", "reorder_work_item"} & set(schemas))
-
-    def test_an_update_places_the_item_and_says_so(self) -> None:
-        answer = self.answer(
-            "apply_work_item_changes",
-            {"id": self.items[2], "update": {"rank": f"before:{self.items[0]}"}},
+        self.assertNotIn("rank", batch["update"]["properties"])
+        self.assertNotIn("rank", batch["transition"]["properties"])
+        item = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="First")
+        self.conn.commit()
+        error = self.refusal(
+            "apply_work_item_changes", {"id": item["reference"], "update": {"rank": "first"}}
         )
-        self.assertEqual(["rank"], answer["applied"]["update"])
-        self.assertEqual([self.items[2], *self.items[:2]], self.order())
-        [call] = self.calls()
-        self.assertEqual("apply_work_item_changes", call["tool"])
-
-    def test_a_transition_and_a_batch_place_the_item_in_its_new_state(self) -> None:
-        self.answer(
-            "apply_work_item_changes",
-            {
-                "id": self.items[0],
-                "transition": {"state": "ready", "rank": "first", "acceptance": "assignment"},
-            },
+        self.assertEqual("invalid_request", error["code"])
+        self.assertEqual(
+            "update: rank is retired: the order of work is computed — urgent, started, a goal"
+            " or stage under way, priority, age",
+            error["message"],
         )
-        self.assertEqual([self.items[0], self.queued], self.order("ready"))
-        answer = self.answer(
-            "apply_work_item_changes",
-            {
-                "id": self.items[1],
-                "transition": {
-                    "state": "ready",
-                    "rank": f"after:{self.items[0]}",
-                    "acceptance": "assignment",
-                },
-            },
-        )
-        self.assertEqual({"transition": {"state": "ready"}}, answer["applied"])
-        self.assertEqual([self.items[0], self.items[1], self.queued], self.order("ready"))
-
-    def test_a_placement_the_store_cannot_follow_is_refused_and_writes_nothing(self) -> None:
-        for rank, message in (
-            ("top", "rank must be first, last, before:<work item> or after:<work item>"),
-            (f"after:{self.queued}", f"{self.queued} is in Ready, not Triage"),
-        ):
-            with self.subTest(rank=rank):
-                error = self.refusal(
-                    "apply_work_item_changes", {"id": self.items[0], "update": {"rank": rank}}
-                )
-                self.assertEqual("invalid_request", error["code"])
-                self.assertIn(message, error["message"])
-        self.assertEqual(self.items, self.order())
+        after = planning_service.get_work_item(self.conn, item["reference"])
+        self.assertEqual(item["revision"], after["revision"])
         self.assertEqual([], self.calls())
 
 

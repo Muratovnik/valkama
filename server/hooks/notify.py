@@ -857,7 +857,7 @@ def _followed(
     wakes, so a subscriber's share of a person's news is read from the other place,
     as another session's is, and wakes nobody. What is addressed to the recipient, a
     reply in its thread or the answer it awaited, is the person's part, and wakes as
-    it did. The kinds are other sessions' kinds: no field edit and no rank.
+    it did. The kinds are other sessions' kinds: no field edit.
     """
 
     from ..planning import person_events

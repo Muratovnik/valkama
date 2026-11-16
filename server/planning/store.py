@@ -144,7 +144,6 @@ _WORK_ITEMS = f"""(
     labels TEXT NOT NULL DEFAULT '[]',
     source TEXT NOT NULL DEFAULT '',
     checklist TEXT NOT NULL DEFAULT '[]',
-    position REAL NOT NULL,
     revision INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT {_NOW},
     updated_at TEXT NOT NULL DEFAULT {_NOW},
@@ -162,6 +161,12 @@ _WORK_ITEMS = f"""(
     UNIQUE(planning_space_id, number)
 )"""
 _REBUILT = {"workflow_states": _WORKFLOW_STATES, "work_items": _WORK_ITEMS}
+#: The items of one state of one space, which every read of a state's items takes.
+#: Declared apart because the 3.0 migration creates it anew rather than from the
+#: text an older store holds, which names a column the rebuilt table no longer has.
+WORK_ITEMS_STATE_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_items_state ON work_items(planning_space_id, state_id)"
+)
 
 
 def table_definition(table: str, name: str) -> str:
@@ -200,8 +205,7 @@ CREATE TABLE IF NOT EXISTS workflow_transitions(
     PRIMARY KEY(workflow_id, from_state_id, to_state_id)
 );
 CREATE TABLE IF NOT EXISTS work_items{_WORK_ITEMS};
-CREATE INDEX IF NOT EXISTS work_items_state
-  ON work_items(planning_space_id, state_id, position);
+{WORK_ITEMS_STATE_INDEX};
 {_STATE_FITS_KIND}CREATE INDEX IF NOT EXISTS work_items_parent ON work_items(parent_id);
 -- One work item per improvement case, enforced by the store rather than by the
 -- caller that happens to check first. The Board era carried the same partial

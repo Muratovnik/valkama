@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import NamedTuple
 from uuid import UUID, uuid4
 
@@ -124,6 +124,14 @@ RETIRED_WORDS: dict[str, dict[str, RetiredWord]] = {
     # unknown key gets, which lists the workflow's states.
     "state": {**_RETIRED_STATE_WORDS, "todo": RetiredWord("", lists=True)},
 }
+#: The fields an input no longer takes, each with what its refusal says. Like a
+#: retired word, a refusal and not a synonym: the field is read for nothing, and the
+#: write that names it is refused before anything is written. The tools' refusal of
+#: an unknown argument and the HTTP refusal of an unknown field both read this list.
+RETIRED_FIELDS: dict[str, str] = {
+    "rank": "rank is retired: the order of work is computed — urgent, started, a goal or"
+    " stage under way, priority, age",
+}
 PRIORITIES = ("low", "medium", "high", "urgent")
 _PRIORITY_SET = frozenset(PRIORITIES)
 
@@ -139,8 +147,13 @@ UPDATABLE_FIELDS = (
     "labels_remove",
     "kind",
     "parent",
-    "rank",
 )
+
+
+def retired_field(names: Iterable[str]) -> str | None:
+    """What the refusal of the first retired field among `names` says, or None."""
+
+    return next((RETIRED_FIELDS[name] for name in names if name in RETIRED_FIELDS), None)
 
 
 def updated_fields(arguments: Mapping[str, object]) -> list[str]:

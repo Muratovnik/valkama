@@ -368,6 +368,35 @@ class PlanningApiTests(unittest.TestCase):
             self._refusal("/api/planning/work-item/link", id="QA-1", other="QA-1", kind="blocks"),
         )
 
+    def test_rank_is_retired_on_the_edit_the_move_and_the_batch_and_writes_nothing(self) -> None:
+        created = self.post("/api/planning/work-items", space="QA", title="First")
+        self.conn.commit()
+        retired = model.RETIRED_FIELDS["rank"]
+        for path, payload, says in (
+            ("/api/planning/work-item/update", {"rank": "first"}, retired),
+            ("/api/planning/work-item/update", {"title": "Renamed", "rank": "last"}, retired),
+            ("/api/planning/work-item/transition", {"state": "ready", "rank": "first"}, retired),
+            ("/api/planning/work-item/apply", {"update": {"rank": "first"}}, f"update: {retired}"),
+            (
+                "/api/planning/work-item/apply",
+                {"transition": {"state": "ready", "rank": "first"}},
+                f"transition: {retired}",
+            ),
+        ):
+            with self.subTest(path=path, payload=payload):
+                with self.assertRaises(planning_api.PlanningHttpError) as caught:
+                    planning_api.handle_post(self.conn, path, {"id": "QA-1", **payload})
+                self.conn.commit()
+                status, body = planning_api.error_response(caught.exception)
+                self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
+                self.assertEqual(says, body["error"]["message"])
+                after = service.get_work_item(self.conn, "QA-1")
+                self.assertEqual(
+                    (created["revision"], "First", created["state"]["key"]),
+                    (after["revision"], after["title"], after["state"]["key"]),
+                )
+        self.assertTrue(retired.startswith("rank is retired: the order of work is computed"))
+
     def test_a_conflict_names_the_revision_it_found(self) -> None:
         self.post("/api/planning/work-items", space="QA", title="First")
         status, body = planning_api.error_response(model.RevisionConflictError(0, 3))

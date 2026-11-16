@@ -44,14 +44,13 @@ def bulk_items(
             str(workflow["workflow_id"]),
             str(state["state_id"]),
             f"{title} {first + index}",
-            index,
             model.NAMED_BASIS if state["category"] in model.ACCEPTED_CATEGORIES else None,
         )
         for index, state in enumerate(placed)
     ]
     conn.executemany(
         "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
-        "title,position,acceptance) VALUES(?,?,?,?,?,?,?,?)",
+        "title,acceptance) VALUES(?,?,?,?,?,?,?)",
         rows,
     )
     conn.execute(

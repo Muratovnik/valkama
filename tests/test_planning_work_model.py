@@ -177,8 +177,8 @@ class StateFitsKindTests(FreshStoreCase):
         ).fetchone()[0]
         self.conn.execute(
             "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
-            "kind,priority,title,description,labels,position,acceptance)"
-            " SELECT ?, planning_space_id, ?, ?, ?, ?, 'medium', 'Placed', '', '[]', ?, ?"
+            "kind,priority,title,description,labels,acceptance)"
+            " SELECT ?, planning_space_id, ?, ?, ?, ?, 'medium', 'Placed', '', '[]', ?"
             " FROM workflows WHERE workflow_id = ?",
             (
                 identity,
@@ -186,7 +186,6 @@ class StateFitsKindTests(FreshStoreCase):
                 self.workflow_id,
                 self.state_id(key),
                 kind,
-                number,
                 basis,
                 self.workflow_id,
             ),

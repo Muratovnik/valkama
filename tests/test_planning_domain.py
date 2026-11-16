@@ -975,7 +975,7 @@ class PlanningDomainTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             self.conn.execute(
                 "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
-                "title,position) VALUES(?,?,?,?,?,?,?)",
+                "title) VALUES(?,?,?,?,?,?)",
                 (
                     model.new_id(),
                     created["planning_space_id"],
@@ -983,7 +983,6 @@ class PlanningDomainTests(unittest.TestCase):
                     self.space["workflow"]["workflow_id"],
                     self.space["workflow"]["initial_state_id"],
                     "A clash",
-                    1.0,
                 ),
             )
 

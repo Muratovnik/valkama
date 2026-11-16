@@ -286,6 +286,9 @@ def _canonical_arguments(name: str, arguments: object) -> dict:
         else:
             resolved.setdefault(target, value)
             given.setdefault(target, argument)
+    says = planning_model.retired_field(unknown)
+    if says is not None:
+        raise planning_api.PlanningHttpError(400, "invalid_request", f"{name}: {says}")
     if unknown:
         raise planning_api.PlanningHttpError(
             400,

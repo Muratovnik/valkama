@@ -156,7 +156,6 @@ _ROWS: dict[str, dict[str, object]] = {
         "workflow_id": _NEW,
         "state_id": _NEW,
         "title": "probe",
-        "position": 0.0,
     },
     "workflow_states": {
         "state_id": _NEW,
@@ -448,7 +447,7 @@ def _trigger_probes() -> list[Probe]:
         identity = model.new_id()
         return identity, (
             "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
-            "kind,title,position,acceptance) VALUES(?,?,1,?,?,?,'probe',0,?)",
+            "kind,title,acceptance) VALUES(?,?,1,?,?,?,'probe',?)",
             (identity, model.new_id(), workflow, states[category], kind, basis),
         )
 

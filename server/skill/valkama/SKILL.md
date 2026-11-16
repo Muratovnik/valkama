@@ -228,7 +228,6 @@ Steps of the same change stay on the checklist; a link is for separate work.
 then work already started, then tasks of a goal or stage already under way,
 then priority, then age. A list row the queue gives says its `queue_order`, 1
 being what `claim_ready_work_item` gives next; any other row says `withheld`.
-`rank` stores a place that no read orders by.
 
 **Priority.** `urgent`: blocks work or loses data. `high`: serious; could block
 work. `medium`: noticeably affects work, with a workaround. `low`: minor. A label
