@@ -43,6 +43,27 @@ async function foldedInSight(page: Page): Promise<Locator[]> {
   return found
 }
 
+/**
+ * The first of `heads` drawn whole inside the field with the air its rings are read in: a
+ * picture of a header cut by the field's edge reads pixels the header does not draw.
+ */
+async function wholeInSight(page: Page, heads: Locator[]): Promise<Locator> {
+  const field = await page.locator('.vue-flow').boundingBox()
+  if (!field) throw new Error('no field')
+  for (const head of heads) {
+    const box = await head.boundingBox()
+    if (
+      box &&
+      box.x - 12 >= field.x &&
+      box.y - 12 >= field.y &&
+      box.x + box.width + 12 <= field.x + field.width &&
+      box.y + box.height + 4 <= field.y + field.height
+    )
+      return head
+  }
+  throw new Error('no header is drawn whole inside the field')
+}
+
 /** How far below the field's top the first row of folds stands, and the folds measured. */
 async function firstRow(page: Page, heads: Locator[]) {
   const field = await page.locator('.vue-flow').boundingBox()
@@ -327,8 +348,7 @@ test.describe('the rings of a header', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await openBroadField(page, 1280)
     await settledCamera(page)
-    const [head] = await foldedInSight(page)
-    expect(head).toBeDefined()
+    const head = await wholeInSight(page, await foldedInSight(page))
     const fold = head.locator('.graph-frame-fold')
     await expect(fold).toHaveAttribute('aria-expanded', 'true')
     await expectRings(page, head, 'open')
