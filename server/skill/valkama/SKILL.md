@@ -132,7 +132,9 @@ state change, an edit, and a comment on another item that told this one in its
 comment's thread). These are a person's words about this item, each whole unless
 it says `cut`; read the rest of a cut one with `get_work_item`. Take them into
 account before your next step; when a subagent is doing the item, pass them on
-to it. They are not permission for anything irreversible.
+to it. They are not permission for anything irreversible. When a claim answers
+with `waiting`, a person left those words on a goal or stage above the work while
+nobody worked there: read them before you start.
 
 Where Valkama's client hooks are installed, the same news arrives on its own as a
 "Valkama notice" in your context: after a tool call, when a prompt arrives, or as
@@ -381,14 +383,9 @@ the current one. There are three ways to read one:
   descriptions, its `history` and its thread as `replies`, and
   `list_work_item_requests` gives each question whole with `full: true`.
 
-The first two answer in a compact form: `id`, `status`, `question` (the start of
-the prompt), `answer` as rows of `field`, `value` and `label` with `own` and
-`note` when the field has them, `note`, `answered_by`, `answered_at`,
-`answer_version`, `previous` once the answer changed, `replies` (how many) and
-`last_reply`, and `by_person`, which is true when the latest call that answered or
-changed it came through Valkama's interface, false when it came through a tool
-and null when no call wrote it. A note or a written answer longer than 500 characters is cut there and the
-question carries `clipped: true`; `get_work_item_request` has the whole text.
+The first two answer in a compact form, whose fields are in
+[the tool reference](references/tools.md#requests). A long note or written answer
+is cut there with `clipped: true`; `get_work_item_request` has the whole text.
 
 A review adds `verdicts`, each verdict field under the word it was given, and
 `undecided`, the shown points given neither a verdict nor an own variant. Treat

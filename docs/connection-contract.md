@@ -132,7 +132,10 @@ Every tool that writes to a work item and leaves it standing -- all of the above
 a person acted on that item
 through the interface since an agent last wrote to it, and only then; see
 [What a person did reaches the agent](#what-a-person-did-reaches-the-agent).
-A `verbose` answer carries it too. `delete_work_item` and `create_planning_space`
+A claim's answer carries `waiting` beside it when a person's words on a goal or
+stage over the work found nobody working there; see
+[Words that wait for a session](#words-that-wait-for-a-session).
+A `verbose` answer carries both too. `delete_work_item` and `create_planning_space`
 never do.
 
 Each of these tools takes an optional boolean `verbose`, false by default. With
@@ -2599,6 +2602,42 @@ write, as `from_person`, and no key at all when it is empty. It holds the newest
 read inside the write's own transaction, so a person's write that lands while the
 call runs is either in this answer or in the next window, never in neither. An
 HTTP write answers without it, and no schema of the interface changed.
+
+### Words that wait for a session
+
+A goal or a stage is never held, so what a person does on one reaches the agent
+sessions that work under it, through their hooks, and nobody when no live session
+works there. **Since 3.0** such words wait on the goal or stage for the next
+session that takes work under it. A person's act on a goal or stage -- a comment,
+an edit or any kind above -- while no live session holds work under it or under a
+goal or stage over it, or follows one of them, leaves its words waiting from that
+act on. Filing a goal or a stage leaves nothing. One record waits per goal or
+stage: a later act adds to what it holds rather than adding another. Words also
+wait when the session that worked there went quiet past its lease or ended
+without hearing them: Valkama's release of its lapsed claim leaves what a person
+did over the work after that session's last call, if nobody else works there.
+
+A claim of a task, or of one of its steps, by an agent session its client proved
+takes every word waiting on the goals and stages over the task, in the claim's
+own transaction: a refused claim takes nothing. The MCP answer of the claim --
+`claim_work_item`, `claim_ready_work_item`, `claim_work_item_checklist_item`, and
+`apply_work_item_changes` or `create_work_item` with `claim` -- then carries
+`waiting`, one entry per goal or stage:
+
+```json
+"waiting": [{"reference": "MAIN-10", "title": "Release 3.0",
+  "said": [{"kind": "comment", "via": "interface", "at": "2026-11-16T09:12:03Z",
+            "comment_id": 412, "text": "Keep the old route until the docs are out."}]}]
+```
+
+`said` holds what a person did there from the act that left the words to the
+claim, as the entries of `from_person`: the newest 20, with `omitted` counting the
+earlier ones when there are more, and each text whole up to 1500 characters, a
+longer one cut there with `cut: true`. A whole text has no `cut`. The words are
+taken once: the next claim under the same goal gets nothing until a person acts
+there again with nobody working. They never lapse, and they go with their item.
+The key is absent when nothing waited, and the HTTP answer of a claim never has
+it: the interface takes no work for an agent.
 
 ### A close over what a person did
 

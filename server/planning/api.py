@@ -34,6 +34,7 @@ from . import (
     subscriptions,
     usage,
     views,
+    waiting,
 )
 
 PLANNING_API_INTERFACE = f"{model.PLANNING_INTERFACE}-api"
@@ -396,12 +397,17 @@ def handle_post(
         return None
     if not isinstance(payload, Mapping):
         raise PlanningHttpError(400, "invalid_request", "request body must be a JSON object")
+    # A person's act on a goal or stage that nobody hears waits for the next
+    # session, in the same transaction as the act (`waiting.after_person`).
+    before = waiting.place(conn) if calls.by_person() else None
     answer = writer(conn, payload)
     # Every write call has its row, including one that logged nothing — an edit,
     # a claim that found itself already held, a take-next with nothing to take.
     # Inside a bound call this finds the row a write already inserted; outside
     # one it does nothing.
     calls.call_id(conn, calls.acted_on(answer))
+    if before is not None:
+        waiting.after_person(conn, before)
     return 200, answer
 
 

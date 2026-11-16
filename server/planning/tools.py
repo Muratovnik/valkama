@@ -29,6 +29,7 @@ from . import (
     request_model,
     requests,
     service,
+    waiting,
     words,
 )
 
@@ -611,7 +612,9 @@ TOOLS = [
         " The answer carries from_person when"
         " a person acted on the item in the interface since an agent last wrote to it:"
         " their words about this work, to read before the next step, each text whole up to"
-        " 1500 characters and marked cut past them.",
+        " 1500 characters and marked cut past them."
+        " It carries waiting when a person's words on a goal or stage above the work found"
+        " nobody working there: read them before you start.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -632,7 +635,9 @@ TOOLS = [
         " in apply_work_item_changes's update); priority only breaks a tie. A goal, a stage"
         " and deferred work are never taken. The claim starts the item"
         " as claim_work_item does, so it answers in its active state with started."
-        " Answers with nothing when no task is workable.",
+        " Answers with nothing when no task is workable."
+        " The answer carries waiting when a person's words on a goal or stage above the"
+        " work found nobody working there: read them before you start.",
         WRITES,
         {"space": _SPACE, "author": _AUTHOR},
     ),
@@ -645,7 +650,9 @@ TOOLS = [
         " Claiming a step of a task in a triage, deferred or ready state starts the task"
         " as claiming it would. When the last held step of an active task nobody holds"
         " is released, the task goes back to the first ready state, named in requeued;"
-        " with no ready state to reach the release is refused.",
+        " with no ready state to reach the release is refused."
+        " The answer carries waiting when a person's words on a goal or stage above the"
+        " work found nobody working there: read them before you start.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -724,7 +731,8 @@ TOOLS = [
             "claim": {
                 "type": "boolean",
                 "description": "true claims the item as claim_work_item does,"
-                " starting it when it is in a triage, deferred or ready state.",
+                " starting it when it is in a triage, deferred or ready state; the answer"
+                " then carries waiting as claim_work_item's does.",
             },
             "subscribe": {
                 "type": "boolean",
@@ -1280,23 +1288,31 @@ def _told(
     the tool named it, named a request, or took it from the queue. A refused
     write answers with its refusal and moves nothing. The key is absent when
     there is nothing to tell.
+
+    A claim says, beside it, the words a person left on a goal or stage over the
+    work while nobody worked there, which the claim took (`waiting`).
     """
 
     def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
         answer = write(conn, arguments)
         own = calls.written(conn) if calls.from_agent() else None
-        if own is None or own[1] is None or not isinstance(answer, dict):
+        if own is None or not isinstance(answer, dict):
             return answer
-        events = person_events.since_last_agent_write(conn, own[1], own_call=own[0])
-        if not events:
-            return answer
-        shown = events[-person_events.MOST_SHOWN :]
-        omitted = len(events) - len(shown)
-        return {
-            **answer,
-            "from_person": shown,
-            **({"from_person_omitted": omitted} if omitted else {}),
-        }
+        told: dict[str, object] = {}
+        events = (
+            person_events.since_last_agent_write(conn, own[1], own_call=own[0])
+            if own[1] is not None
+            else []
+        )
+        if events:
+            shown = events[-person_events.MOST_SHOWN :]
+            told["from_person"] = shown
+            if len(events) > len(shown):
+                told["from_person_omitted"] = len(events) - len(shown)
+        left = waiting.delivered(conn, own[0])
+        if left:
+            told["waiting"] = left
+        return {**answer, **told} if told else answer
 
     return run
 

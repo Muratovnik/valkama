@@ -36,6 +36,7 @@ from . import (
     store,
     subscriptions,
     transitions,
+    waiting,
     words,
 )
 from . import participants as working
@@ -1220,6 +1221,7 @@ def claim_work_item(
         else:
             _log(conn, identity, "claimed", "", author)
         _started(conn, identity, start, author, start_reason)
+        waiting.deliver(conn, row)
     overridden = _record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
@@ -1511,6 +1513,9 @@ def _expire(conn: sqlite3.Connection, row: sqlite3.Row, lease: leases.Lease) -> 
     The release is its own call, so the history says who released it and why
     rather than charging the expiry to whichever caller happened to meet it. The
     why is the lease's own reason, in the release and in the move back to the queue.
+    What a person said over the work after the session's last call reached nobody,
+    so the same call leaves it for the next session (`waiting.recover`), before a
+    claim that met the lapsed lease looks for words to take.
     """
 
     identity = str(row["work_item_id"])
@@ -1518,6 +1523,8 @@ def _expire(conn: sqlite3.Connection, row: sqlite3.Row, lease: leases.Lease) -> 
         _hold(conn, row, "")
         _log(conn, identity, "released", leases.expiry_detail(lease), leases.EXPIRY_AUTHOR)
         _hand_back(conn, identity, leases.EXPIRY_AUTHOR, lease.reason)
+        if lease.session_id is not None:
+            waiting.recover(conn, [(lease.session_id, identity)])
     return read_model.item_by_id(conn, identity)
 
 
@@ -1575,6 +1582,7 @@ def claim_ready_work_item(
         identity = str(row["work_item_id"])
         _log(conn, identity, "claimed", "", author)
         _started(conn, identity, start, author, "claimed")
+        waiting.deliver(conn, row)
         answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
         _say_started(conn, answer, start)
         return answer
@@ -1770,6 +1778,8 @@ def claim_checklist_item(
     identity = str(row["work_item_id"])
     _log(conn, identity, action, step["text"][:120], author)
     _started(conn, identity, start, author, "claimed")
+    if not release:
+        waiting.deliver(conn, row)
     overridden = _record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
