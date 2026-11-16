@@ -6,8 +6,8 @@
  * rest one click away. A lane of ninety backlog items used to be ninety tiles
  * tall, and every lane under it that far down the board. The first tiles are
  * the ones the order of work puts next, so they are the ones worth seeing. A
- * tile that lands past what the cell draws, dropped or moved from the keyboard,
- * opens the cell, so the tile is drawn where it went and keeps its focus.
+ * tile dropped past what the cell draws opens the cell, so the tile is drawn
+ * where it went.
  *
  * A terminal cell (Done, Cancelled) draws none of its tiles: that work is
  * finished, so the cell says how much there is and offers it as a line of text,
@@ -57,7 +57,6 @@ const emit = defineEmits<{
   /** The reader closed the cell, which takes back a landing that opened it. */
   collapse: []
   dragging: [active: boolean]
-  edge: [reference: string, edge: 'first' | 'last']
   filter: [token: WorkFilterToken]
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
@@ -137,7 +136,6 @@ function walk(event: KeyboardEvent) {
       :hint-id="props.hintId"
       :writable="props.writable"
       @dragging="emit('dragging', $event)"
-      @edge="(reference, edge) => emit('edge', reference, edge)"
       @filter="emit('filter', $event)"
       @open="emit('open', $event)"
       @place="(move, landing) => emit('place', move, landing)"

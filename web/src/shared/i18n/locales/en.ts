@@ -847,11 +847,8 @@ export const en = {
       offRight: 'To the right:',
     },
     order: {
-      hint: 'Arrow keys move focus between work items. Alt+Up and Alt+Down move the work item past its neighbour in the same state. The order is shared by the whole board: one order per state, across all lanes.',
-      shared: 'The order is shared by the whole board: one order per state, across all lanes.',
+      hint: 'Arrow keys move focus between work items.',
       moved: '{reference} moved: {position} of {total} in {state}',
-      first: '{reference} is already first',
-      last: '{reference} is already last',
     },
     listEmpty: 'This space has no work items yet.',
     noSpace: 'This project has no planning space yet.',

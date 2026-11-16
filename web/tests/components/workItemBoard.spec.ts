@@ -1,10 +1,11 @@
 /**
  * The board as the operator meets it: grouped by goal or not, lanes folded the
- * way their work implies and the way the operator left them, and a tile moved
- * from the keyboard with the move said aloud.
+ * way their work implies and the way the operator left them, and a tile moved to
+ * another column with the move said aloud. Nothing places a tile by hand.
  *
  * A drag is the browser suite's to prove, because the drop library needs real
- * pointer geometry; what a drop is handed up as is the same move tested here.
+ * pointer geometry. Here the library is a stand-in that keeps each stack's
+ * options, and a drop is its end handed the stacks a real one would name.
  */
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -22,6 +23,29 @@ import VMenu from '@/shared/ui/VMenu.vue'
 import { boardId, boardItem, boardWorkflow } from '../fixtures/board.ts'
 import { emptyChain } from '../fixtures/chain.ts'
 import { board, goal, i18n, live, space, tile } from '../support/workItemBoardHarness.ts'
+
+/** Each stack's list and the options it gave the drop library, in mount order. */
+const sortables = vi.hoisted(
+  () =>
+    [] as { list: { value: HTMLElement | null }; options: { onEnd: (event: object) => void } }[],
+)
+vi.mock('@vueuse/integrations/useSortable', () => ({
+  useSortable: (list: (typeof sortables)[number]['list'], _items: unknown, options: object) => {
+    sortables.push({ list, options: options as (typeof sortables)[number]['options'] })
+    return { option: vi.fn() }
+  },
+}))
+
+/** A drop as the library ends one: the tile already in the stack of `state`, at `at`. */
+function drop(wrapper: ReturnType<typeof board>, reference: string, state: string, at = 0) {
+  const item = wrapper.get(`li[data-reference="${reference}"]`).element as HTMLElement
+  const from = item.parentElement as HTMLElement
+  const to = wrapper.get(`.work-item-stack[data-state="${state}"]`).element as HTMLElement
+  const oldIndex = [...from.children].indexOf(item)
+  to.insertBefore(item, to.children[at] ?? null)
+  const sortable = sortables.find((entry) => entry.list.value === from)
+  sortable?.options.onEnd({ from, to, item, oldIndex })
+}
 
 beforeEach(() => {
   localStorage.clear()
@@ -109,119 +133,58 @@ describe('the board grouped by goal', () => {
   })
 })
 
-describe('the order hint of the grouped board', () => {
-  it('says the order is shared by the whole board, one order per state, across goals', () => {
-    const wrapper = board({ grouping: 'goal' })
-    expect(wrapper.get('[id$="-reorder"]').text()).toBe(messages.en.workItem.order.hint)
-    expect(messages.en.workItem.order.hint).toContain('one order per state, across all lanes')
-    expect(messages.ru.workItem.order.hint).toContain('один порядок на состояние, для всех строк')
+describe('a tile on the board is never placed by hand', () => {
+  it('is described by a hint of the arrows alone, in both languages', () => {
+    for (const grouping of ['none', 'goal'] as const) {
+      const wrapper = board({ grouping })
+      expect(wrapper.get('[id$="-keys"]').text()).toBe(messages.en.workItem.order.hint)
+      expect(wrapper.find('.board-order-note').exists()).toBe(false)
+      wrapper.unmount()
+    }
+    expect(messages.en.workItem.order.hint).toBe('Arrow keys move focus between work items.')
+    expect(messages.ru.workItem.order.hint).toBe('Стрелки переводят фокус между задачами.')
   })
 
-  it('shows a reorder made in a lane that the order is the whole board’s, for a few seconds', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    try {
-      const wrapper = board({ grouping: 'goal' })
-      const note = wrapper.get('.board-order-note')
-      expect(note.classes()).not.toContain('shown')
-      // Seen, not read twice: the tiles' description already carries it.
-      expect(note.attributes('aria-hidden')).toBe('true')
-      expect(note.text()).toBe(messages.en.workItem.order.shared)
-      await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowUp', altKey: true })
-      expect(note.classes()).toContain('shown')
-      vi.advanceTimersByTime(5000)
-      // A second move inside the window keeps it up for its own few seconds. The
-      // harness keeps no order, so the tile is still second and moves up again.
-      await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowUp', altKey: true })
-      vi.advanceTimersByTime(5000)
-      await wrapper.vm.$nextTick()
-      expect(note.classes()).toContain('shown')
-      vi.advanceTimersByTime(1000)
-      await wrapper.vm.$nextTick()
-      expect(note.classes()).not.toContain('shown')
-    } finally {
-      vi.useRealTimers()
+  it('takes Alt+ArrowUp and Alt+ArrowDown for nothing: no write, no focus moved', async () => {
+    for (const grouping of ['none', 'goal'] as const) {
+      const wrapper = board({ grouping })
+      tile(wrapper, 'MAIN-11').element.focus()
+      for (const key of ['ArrowUp', 'ArrowDown']) {
+        await tile(wrapper, 'MAIN-11').trigger('keydown', { key, altKey: true })
+      }
+      expect(wrapper.emitted('place')).toBeUndefined()
+      expect(document.activeElement).toBe(tile(wrapper, 'MAIN-11').element)
+      expect(tile(wrapper, 'MAIN-11').attributes('aria-keyshortcuts')).toBeUndefined()
+      wrapper.unmount()
     }
   })
 
-  it('says nothing of the kind on the flat board, where a column is the whole order', async () => {
+  it('sends nothing for a tile dropped elsewhere in its own column', async () => {
     const wrapper = board()
-    await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowDown', altKey: true })
-    expect(wrapper.find('.board-order-note').exists()).toBe(false)
-  })
-})
-
-describe('moving a tile from the keyboard', () => {
-  it('moves it one place with Alt+ArrowDown and says where it went', async () => {
-    const wrapper = board()
-    await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowDown', altKey: true })
-    expect(wrapper.emitted('place')).toEqual([
-      [{ reference: 'MAIN-10', state: 'backlog', rank: 'after:MAIN-11' }],
-    ])
-    await wrapper.vm.$nextTick()
-    expect(live(wrapper)).toBe('MAIN-10 moved: 2 of 3 in Backlog')
-  })
-
-  it('moves it up with Alt+ArrowUp inside its lane, before the tile above it there', async () => {
-    const wrapper = board({ grouping: 'goal' })
-    await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowUp', altKey: true })
-    expect(wrapper.emitted('place')).toEqual([
-      [{ reference: 'MAIN-11', state: 'backlog', rank: 'before:MAIN-10' }],
-    ])
-  })
-
-  it('says so at the end of its column instead of moving it', async () => {
-    const wrapper = board()
-    await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowUp', altKey: true })
+    drop(wrapper, 'MAIN-10', 'backlog', 2)
     await wrapper.vm.$nextTick()
     expect(wrapper.emitted('place')).toBeUndefined()
-    expect(live(wrapper)).toBe('MAIN-10 is already first')
+    // Put back where Vue drew it: the order is the one the server sent.
+    expect(
+      wrapper
+        .findAll('[data-state="backlog"] li[data-reference]')
+        .map((li) => li.attributes('data-reference')),
+    ).toEqual(['MAIN-10', 'MAIN-11', 'MAIN-12'])
   })
 
-  it('answers no other keys, and nothing at all where nothing may be written', async () => {
+  it('sends a tile dropped in another column as that state alone, and says it went last', async () => {
     const wrapper = board()
-    await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowDown' })
-    await tile(wrapper, 'MAIN-10').trigger('keydown', {
-      key: 'ArrowDown',
-      altKey: true,
-      shiftKey: true,
-    })
-    expect(wrapper.emitted('place')).toBeUndefined()
-    expect(tile(wrapper, 'MAIN-10').attributes('aria-keyshortcuts')).toBe(
-      'Alt+ArrowUp Alt+ArrowDown',
-    )
-    const readOnly = board({ writable: false })
-    await tile(readOnly, 'MAIN-10').trigger('keydown', { key: 'ArrowDown', altKey: true })
-    expect(readOnly.emitted('place')).toBeUndefined()
-    expect(tile(readOnly, 'MAIN-10').attributes('aria-keyshortcuts')).toBeUndefined()
+    drop(wrapper, 'MAIN-10', 'todo')
+    expect(wrapper.emitted('place')).toEqual([[{ reference: 'MAIN-10', state: 'todo' }]])
+    await flushPromises()
+    expect(live(wrapper)).toBe('MAIN-10 moved: 2 of 2 in Todo')
   })
 
-  it('hands focus back to the tile it moved once the move is drawn, and brings it into view', async () => {
-    const wrapper = board()
-    const moved = tile(wrapper, 'MAIN-10').element
-    // The element survives the move, still focused: focusing it again scrolls
-    // nothing, so being brought into view has to be asked for.
-    const scroll = vi.fn()
-    Object.defineProperty(moved, 'scrollIntoView', { value: scroll, configurable: true })
-    moved.focus()
-    await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowDown', altKey: true })
-    const [first, ...rest] = space
-    await wrapper.setProps({ items: [rest[0], first, ...rest.slice(1)] })
-    await wrapper.vm.$nextTick()
-    expect(document.activeElement).toBe(moved)
-    expect(scroll).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' })
-  })
-
-  it('draws a column a page at a time, and a tile moved past that page where it lands', async () => {
+  it('draws a column a page at a time, its count the whole state’s', () => {
     const many = Array.from({ length: 35 }, (_, at) => boardItem(100 + at))
     const wrapper = board({ items: many, spaceItems: many })
-    const drawn = () => wrapper.findAll('[data-state="backlog"] li[data-reference]').length
-    expect(drawn()).toBe(30)
+    expect(wrapper.findAll('[data-state="backlog"] li[data-reference]')).toHaveLength(30)
     expect(wrapper.get('[data-state="backlog"] .column-count').text()).toBe('35')
-    await tile(wrapper, 'MAIN-129').trigger('keydown', { key: 'ArrowDown', altKey: true })
-    expect(wrapper.emitted('place')).toEqual([
-      [{ reference: 'MAIN-129', state: 'backlog', rank: 'after:MAIN-130' }],
-    ])
-    expect(drawn()).toBe(35)
   })
 })
 

@@ -56,18 +56,18 @@ const ENDINGS: Record<string, (page: Page, where: Locator) => Promise<void>> = {
     await page.mouse.move(to.x, to.y)
     await page.mouse.up()
   },
-  'lower in its own column': async (page, where) => {
+  'lower in its own column, which places nothing': async (page, where) => {
+    const above = () =>
+      tile(where, HELD).evaluate(
+        (held) => (held.previousElementSibling as HTMLElement | null)?.dataset.reference ?? null,
+      )
+    const before = await above()
     await pickUp(page, where)
     const box = await tile(where, 'MAIN-404').boundingBox()
     if (!box) throw new Error('nothing to drop beside')
     await page.mouse.move(box.x + box.width / 2, box.y + box.height - 4, { steps: 12 })
-    await expect
-      .poll(() =>
-        tile(where, HELD).evaluate(
-          (held) => (held.previousElementSibling as HTMLElement | null)?.dataset.reference,
-        ),
-      )
-      .toBe('MAIN-404')
+    await frames(page.locator(':root'))
+    if ((await above()) !== before) throw new Error('a drag within its own column placed the tile')
     await page.mouse.up()
   },
   'back where it was picked up': async (page, where) => {
@@ -198,11 +198,11 @@ for (const shape of [
         { once: true },
       )
     }, HELD)
-    await ENDINGS['lower in its own column'](page, where)
-    await expect.poll(() => writes.length).toBe(1)
+    await ENDINGS['lower in its own column, which places nothing'](page, where)
     // A card that was going to open has started to by the time two frames are drawn.
     await frames(page.locator(':root'))
     await expect(page.locator('.drawer')).toHaveCount(0)
+    expect(writes).toHaveLength(0)
   })
 
   // The browser hears a press ahead of a task the page has queued: on a busy board the task
@@ -257,7 +257,7 @@ for (const shape of [
     await expect.poll(() => openedCard(page)).toBe(HELD)
   })
 
-  test(`${shape.name}: after a drag the keyboard still moves and opens a tile`, async ({
+  test(`${shape.name}: after a drag the keyboard still walks to and opens a tile`, async ({
     page,
   }) => {
     const writes = await board(page)
@@ -265,10 +265,12 @@ for (const shape of [
     await ENDINGS['back where it was picked up'](page, where)
     const open = tile(where, OTHER).locator('.tile-open')
     await open.focus()
-    await page.keyboard.press('Alt+ArrowDown')
-    await expect.poll(() => writes.length).toBe(1)
+    await page.keyboard.press('ArrowUp')
+    await expect(tile(where, HELD).locator('.tile-open')).toBeFocused()
+    await page.keyboard.press('ArrowDown')
     await expect(open).toBeFocused()
     await page.keyboard.press('Enter')
     await expectCard(page, OTHER)
+    expect(writes).toHaveLength(0)
   })
 }

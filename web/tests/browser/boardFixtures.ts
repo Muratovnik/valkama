@@ -24,6 +24,12 @@ export const LONG_GOAL =
 const EMPTY_GOAL =
   'An idea opened yesterday and given nothing yet, titled long enough to need an ellipsis at every width'
 
+/** What the queue says of an item: workable exactly when nothing is withheld. */
+function queueSays(kind: string, workable: boolean) {
+  if (workable) return { workable, withheld: [] }
+  return { workable, withheld: [kind === 'goal' ? 'goal_or_stage' : 'not_ready'] as const }
+}
+
 function brief(
   number: number,
   state: State,
@@ -42,9 +48,9 @@ function brief(
     claim_state: null,
     parent_id: null,
     open: !state.is_terminal,
-    workable: state === BACKLOG,
     revision: 1,
     ...extra,
+    ...queueSays(extra.kind ?? 'task', extra.workable ?? state === BACKLOG),
   }
 }
 
@@ -83,15 +89,9 @@ export function boardSpace(): Brief[] {
   ]
 }
 
-/** Where `rank` puts an item among the items of `state`, in a flat list grouped later. */
-export function insertAt(items: Brief[], state: State, rank: unknown) {
+/** Where an item moved to `state` goes in a flat list grouped later: after that state's last. */
+export function endOf(items: Brief[], state: State) {
   const peers = items.flatMap((item, at) => (item.state.key === state.key ? [at] : []))
-  const anchor = typeof rank === 'string' ? /^(before|after):(.+)$/u.exec(rank) : null
-  if (anchor) {
-    const at = items.findIndex((item) => item.reference === anchor[2])
-    return anchor[1] === 'before' ? at : at + 1
-  }
-  if (rank === 'first' && peers.length) return peers[0]
   return peers.length ? (peers.at(-1) ?? 0) + 1 : items.length
 }
 

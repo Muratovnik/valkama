@@ -332,7 +332,7 @@ describe('planning write ownership', () => {
 
     wrapper
       .findComponent({ name: 'PlanningWorkspace' })
-      .vm.$emit('place', { reference: 'MAIN-264', state: 'dev', rank: 'first' })
+      .vm.$emit('place', { reference: 'MAIN-264', state: 'dev' })
     await flushPromises()
 
     expect(fetchMock).not.toHaveBeenCalled()

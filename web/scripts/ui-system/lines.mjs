@@ -114,8 +114,6 @@ export const LINE_BUDGET = new Map([
   ['widgets/work-item-views/components/WorkItemList.vue', 2],
   // The list's find bar floats over the rows it searches (overlay).
   ['widgets/work-item-views/components/WorkItemListFindBar.vue', 1],
-  // The line that says a reorder in a lane is the whole board's order (overlay).
-  ['widgets/work-item-views/components/WorkItemBoard.vue', 1],
   ['widgets/work-item-graph/components/GraphView.vue', 1],
   // Graph cards need a neutral boundary where dependency wires meet their edges.
   ['widgets/work-item-graph/components/GraphNodeCard.vue', 1],

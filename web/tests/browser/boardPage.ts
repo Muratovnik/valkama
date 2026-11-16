@@ -9,7 +9,7 @@ import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { chainResponse } from '../fixtures/chain.ts'
-import { BACKLOG, boardSpace, chainOf, DEV, DONE, insertAt } from './boardFixtures.ts'
+import { BACKLOG, boardSpace, chainOf, DEV, DONE, endOf } from './boardFixtures.ts'
 import { projectScope, spaceRef, workItem } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
@@ -20,7 +20,7 @@ interface Write {
 
 /**
  * A server for one space that answers reads from its list and applies the
- * placements and transitions it is sent, refusing a move while `refuse` is set.
+ * transitions it is sent, refusing a move while `refuse` is set.
  */
 export async function serve(page: Page, refuse: { message: string | null } = { message: null }) {
   const space = boardSpace()
@@ -49,7 +49,7 @@ export async function serve(page: Page, refuse: { message: string | null } = { m
     const [item] = space.splice(at, 1)
     const state = [BACKLOG, DEV, DONE].find((entry) => entry.key === body.state) ?? item.state
     const moved = { ...item, state, revision: item.revision + 1 }
-    space.splice(insertAt(space, state, body.rank), 0, moved)
+    space.splice(endOf(space, state), 0, moved)
     return route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -136,20 +136,18 @@ export interface Drag {
   level?: boolean
   /** Where the screenshot of the held tile goes, when one is wanted. */
   midway?: TestInfo
-  /** The tile is carried where it cannot go, so nothing there takes it. */
+  /**
+   * The tile is carried where it takes no place: another lane, which cannot take it,
+   * or its own stack, where nothing places a tile by hand.
+   */
   refused?: boolean
 }
 
-/** Whether the held tile stands where the drag is taking it: in another stack, or beside its target in its own. */
-function heldAt(
-  target: Element,
-  { home, reference, where }: { reference: string | null; where: string; home?: string },
-) {
+/** Whether the held tile stands in the stack the drag is taking it to, which is never its own. */
+function heldAt(target: Element, { home, reference }: { reference: string | null; home?: string }) {
   const stack = target.closest('ul')
   const held = stack?.querySelector(`:scope > li[data-reference="${reference}"]`)
-  if (!stack || !held) return false
-  if (target === stack || stack.dataset.state !== home) return true
-  return (where === 'top' ? held.nextElementSibling : held.previousElementSibling) === target
+  return Boolean(stack && held && stack.dataset.state !== home)
 }
 
 /** Drag `from` by the pointer to the top or bottom edge of `to`, a tile or a stack, as a hand does. */
@@ -174,9 +172,9 @@ export async function drag(page: Page, { from, level, midway, refused, to, where
   // The board reads where the pointer is on its own beat, every 50ms, rather than at
   // each move. A release between readings still lands in the stack under the pointer
   // (production-board-release holds that), but its place among that stack's tiles is
-  // the last one read, and these drags name a place. The held tile stands in its
-  // place once the place is read, which is what a hand sees before letting go.
-  if (!refused) await expect.poll(() => to.evaluate(heldAt, { home, reference, where })).toBe(true)
+  // the last one read. The held tile stands in that stack once it is read, which is
+  // what a hand sees before letting go.
+  if (!refused) await expect.poll(() => to.evaluate(heldAt, { home, reference })).toBe(true)
   if (midway) {
     // The copy under the pointer is a list item outside its list: no marker.
     const copy = page.locator('body > .sortable-fallback')

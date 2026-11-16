@@ -4,7 +4,7 @@ import type { Ref } from 'vue'
 import { placeLocally } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
-import { rankWorkItem, transitionWorkItem } from '@/shared/api/planningApi.ts'
+import { transitionWorkItem } from '@/shared/api/planningApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 
 interface MoveOptions {
@@ -21,12 +21,13 @@ interface MoveOptions {
 /**
  * Moves on the board: sent one at a time, and drawn before they are answered.
  *
- * A move is the state an item goes to and where it lands there. Each one is
- * sent with the revision the item was read at, so a drop on an item somebody
- * else has moved since is refused with a conflict instead of undoing their
- * move. Two moves of one item in a row — Alt+↓ pressed twice — would both
- * carry that same read revision, so they go one after another, and the second
- * carries the revision the first one's answer named.
+ * A move is the state an item goes to; where it stands there the server's
+ * order of work says. Each one is sent with the revision the item was read at,
+ * so a drop on an item somebody else has moved since is refused with a conflict
+ * instead of undoing their move. Two moves of one item in a row — dropped in one
+ * column, then in another — would both carry that same read revision, so they
+ * go one after another, and the second carries the revision the first one's
+ * answer named. A move to the state the item already stands in sends nothing.
  *
  * Until the space is read again the moves are drawn on top of the last read,
  * which is what keeps a dropped tile where it was dropped. A refusal stops the
@@ -56,18 +57,13 @@ export function usePlanningMoves(options: MoveOptions) {
     if (item === undefined) return
     const known = answered.get(move.reference)
     const revision = Math.max(item.revision, known?.revision ?? item.revision)
-    const reorder = (known ? known.state : (item.state?.key ?? null)) === move.state
-    if (reorder && move.rank === undefined) return
+    if ((known ? known.state : (item.state?.key ?? null)) === move.state) return
     try {
-      const answer =
-        reorder && move.rank !== undefined
-          ? await rankWorkItem({ id: move.reference, rank: move.rank, expected_revision: revision })
-          : await transitionWorkItem({
-              id: move.reference,
-              state: move.state,
-              rank: move.rank,
-              expected_revision: revision,
-            })
+      const answer = await transitionWorkItem({
+        id: move.reference,
+        state: move.state,
+        expected_revision: revision,
+      })
       answered.set(move.reference, { revision: answer.revision, state: answer.state?.key ?? null })
     } catch (error) {
       refused = true

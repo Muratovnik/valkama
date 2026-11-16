@@ -9,7 +9,8 @@
  * 50ms: this file then no longer tests what it says, and its reading of the
  * release has to be looked at again.
  *
- * The server is the board suite's double, which keeps the order it is told.
+ * The server is the board suite's double, which puts a moved tile last in its
+ * new state.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -106,7 +107,6 @@ async function board(page: Page, state?: Record<string, string>) {
 const said = (page: Page) => page.locator('.work-item-board [role="status"]')
 
 const TRANSITION = '/api/planning/work-item/transition'
-const REORDER = '/api/planning/work-item/update'
 
 for (const shape of [
   { name: 'a column', state: {}, where: (page: Page) => page.locator('.work-item-board') },
@@ -132,7 +132,7 @@ for (const shape of [
       expect(writes[0].body).not.toHaveProperty('rank')
     })
 
-    test('a tile takes the place the pointer points at among that stack’s tiles', async ({
+    test('a tile let go among another stack’s tiles takes that state alone, and stands last', async ({
       page,
     }) => {
       const { writes } = await board(page, shape.state)
@@ -144,10 +144,11 @@ for (const shape of [
       await letGo(page, tile('MAIN-403'), 'upper')
       await expect.poll(() => writes.length).toBe(1)
       expect(writes[0].path).toBe(TRANSITION)
-      expect(writes[0].body).toEqual(
-        expect.objectContaining({ id: 'MAIN-405', state: 'backlog', rank: 'before:MAIN-403' }),
-      )
-      await expect.poll(() => tiles(cell(where, 'backlog'))).toContain('MAIN-405')
+      expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-405', state: 'backlog' }))
+      expect(writes[0].body).not.toHaveProperty('rank')
+      await expect
+        .poll(() => tiles(cell(where, 'backlog')).then((drawn) => drawn.at(-1)))
+        .toBe('MAIN-405')
     })
 
     test('a tile lands there though the board read nothing at all', async ({ page }) => {
@@ -159,9 +160,8 @@ for (const shape of [
       await letGo(page, tile('MAIN-405'), 'lower')
       await expect.poll(() => writes.length).toBe(1)
       expect(writes[0].path).toBe(TRANSITION)
-      expect(writes[0].body).toEqual(
-        expect.objectContaining({ id: 'MAIN-402', state: 'dev', rank: 'after:MAIN-405' }),
-      )
+      expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-402', state: 'dev' }))
+      expect(writes[0].body).not.toHaveProperty('rank')
       await expect.poll(() => tiles(cell(where, 'dev'))).toContain('MAIN-402')
     })
 
@@ -180,42 +180,38 @@ for (const shape of [
       expect(await tiles(cell(where, 'backlog'))).toEqual(backlog)
     })
 
-    test('a tile carried away and back to another place reorders its own stack', async ({
+    test('a tile carried away and back to another place of its own stack moves nothing', async ({
       page,
     }) => {
       const { writes } = await board(page, shape.state)
       const where = shape.where(page)
       const tile = (reference: string) => where.locator(`li[data-reference="${reference}"]`)
+      const backlog = await tiles(cell(where, 'backlog'))
 
       await pickUp(page, tile('MAIN-402'))
       await pass(page, cell(where, 'dev'))
       await letGo(page, tile('MAIN-404'), 'upper')
-      await expect.poll(() => writes.length).toBe(1)
-      expect(writes[0].path).toBe(REORDER)
-      expect(writes[0].body).toEqual(
-        expect.objectContaining({ id: 'MAIN-402', rank: 'before:MAIN-404' }),
-      )
+      await expect(page.locator('.work-item-board')).not.toHaveClass(/dragging/u)
+      await expect(said(page)).toBeEmpty()
+      expect(writes).toHaveLength(0)
+      expect(await tiles(cell(where, 'backlog'))).toEqual(backlog)
     })
 
-    test('in the stack a tile stands in, the place drawn is the place it takes', async ({
+    test('in the stack a tile stands in, passing its neighbours draws no new place', async ({
       page,
     }) => {
       const { writes } = await board(page, shape.state)
       const where = shape.where(page)
       const tile = (reference: string) => where.locator(`li[data-reference="${reference}"]`)
+      const backlog = await tiles(cell(where, 'backlog'))
 
-      // Its neighbours may still be gliding from the last reading, so the pointer's
-      // height among them at the release is not asked: the hand sees the drawn place.
       await pickUp(page, tile('MAIN-404'))
       await pass(page, tile('MAIN-403'), 'lower')
-      const drawn = await tiles(cell(where, 'backlog'))
-      expect(drawn.indexOf('MAIN-404')).toBeLessThan(drawn.indexOf('MAIN-403'))
+      expect(await tiles(cell(where, 'backlog'))).toEqual(backlog)
       await letGo(page, tile('MAIN-402'), 'upper')
-      await expect.poll(() => writes.length).toBe(1)
-      expect(writes[0].path).toBe(REORDER)
-      expect(writes[0].body).toEqual(
-        expect.objectContaining({ id: 'MAIN-404', rank: 'before:MAIN-403' }),
-      )
+      await expect(page.locator('.work-item-board')).not.toHaveClass(/dragging/u)
+      await expect(said(page)).toBeEmpty()
+      expect(writes).toHaveLength(0)
     })
 
     test('a drop the server refuses leaves the tile where it was', async ({ page }) => {
@@ -303,36 +299,30 @@ const columnHead = (where: Locator, state: string) =>
   where.locator(`.work-item-column[data-state="${state}"] .column-head`)
 
 test.describe('let go over a column’s head', () => {
-  test('a tile lands on top of that column after only passing another', async ({ page }) => {
+  test('a tile lands in that column after only passing another, as its state alone', async ({
+    page,
+  }) => {
     const { writes } = await board(page, {})
     const where = page.locator('.work-item-board')
     const tile = (reference: string) => where.locator(`li[data-reference="${reference}"]`)
-    const [first] = await tiles(cell(where, 'backlog'))
 
     await pickUp(page, tile('MAIN-405'))
     await pass(page, cell(where, 'done'))
     await letGo(page, columnHead(where, 'backlog'), 'upper')
     await expect.poll(() => writes.length).toBe(1)
     expect(writes[0].path).toBe(TRANSITION)
-    expect(writes[0].body).toEqual(
-      expect.objectContaining({ id: 'MAIN-405', state: 'backlog', rank: `before:${first}` }),
-    )
+    expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-405', state: 'backlog' }))
+    expect(writes[0].body).not.toHaveProperty('rank')
     await expect
-      .poll(async () => {
-        const [top] = await tiles(cell(where, 'backlog'))
-        return top
-      })
+      .poll(() => tiles(cell(where, 'backlog')).then((drawn) => drawn.at(-1)))
       .toBe('MAIN-405')
   })
 
-  test('a column scrolled down still takes it on top, not at what is in sight', async ({
-    page,
-  }) => {
+  test('a column scrolled down still takes it, whatever is in sight', async ({ page }) => {
     const { writes } = await board(page, {})
     await page.setViewportSize({ width: 1440, height: 420 })
     const where = page.locator('.work-item-board')
     const tile = (reference: string) => where.locator(`li[data-reference="${reference}"]`)
-    const [first] = await tiles(cell(where, 'backlog'))
     const scrolled = await where
       .locator('.work-item-column[data-state="backlog"] .column-scroll')
       .evaluate((scroller) => {
@@ -346,9 +336,8 @@ test.describe('let go over a column’s head', () => {
     await pass(page, cell(where, 'done'))
     await letGo(page, columnHead(where, 'backlog'), 'upper')
     await expect.poll(() => writes.length).toBe(1)
-    expect(writes[0].body).toEqual(
-      expect.objectContaining({ id: 'MAIN-405', state: 'backlog', rank: `before:${first}` }),
-    )
+    expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-405', state: 'backlog' }))
+    expect(writes[0].body).not.toHaveProperty('rank')
   })
 
   test('Done’s head closes the tile, with no place to name', async ({ page }) => {

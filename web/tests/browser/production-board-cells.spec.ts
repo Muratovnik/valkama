@@ -3,7 +3,8 @@
  * stays in sight, and a closed Done cell is reached by Tab, opened and closed again by
  * Enter, with focus on what it revealed and then back on its toggle.
  *
- * The server is the board's double, which keeps the order it is told.
+ * The server is the board suite's double, which puts a moved tile last in its
+ * new state.
  */
 import { expect } from '@playwright/test'
 
@@ -32,8 +33,9 @@ test('a tile dropped past what an open cell draws stays in sight', async ({ page
   await expect.poll(() => writes.length).toBe(1)
   expect(writes[0]).toEqual({
     path: '/api/planning/work-item/transition',
-    body: expect.objectContaining({ id: 'MAIN-405', state: 'backlog', rank: 'after:MAIN-404' }),
+    body: expect.objectContaining({ id: 'MAIN-405', state: 'backlog' }),
   })
+  expect(writes[0].body).not.toHaveProperty('rank')
   await expect
     .poll(() => tiles(cell(goal, 'backlog')))
     .toEqual(['MAIN-402', 'MAIN-403', 'MAIN-404', 'MAIN-405'])

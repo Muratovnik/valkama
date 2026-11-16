@@ -44,17 +44,15 @@ describe('the Done column', () => {
     expect(doneTiles(grouped)).toEqual(['MAIN-21', 'MAIN-22', 'MAIN-20'])
   })
 
-  it('offers no reorder from the keyboard there, where an open column still does', async () => {
+  it('takes no move from the keyboard there, as no open column does', async () => {
     const wrapper = board({ items: finished, spaceItems: finished })
     const done = tile(wrapper, 'MAIN-22')
     expect(done.attributes('aria-keyshortcuts')).toBeUndefined()
-    expect(done.attributes('aria-describedby')).toBeUndefined()
+    expect(done.attributes('aria-describedby')).toMatch(/-keys$/)
     for (const key of ['ArrowUp', 'ArrowDown']) await done.trigger('keydown', { key, altKey: true })
     expect(wrapper.emitted('place')).toBeUndefined()
     expect(doneTiles(wrapper)).toEqual(['MAIN-21', 'MAIN-22', 'MAIN-20', 'MAIN-2'])
-    expect(tile(wrapper, 'MAIN-1').attributes('aria-keyshortcuts')).toBe(
-      'Alt+ArrowUp Alt+ArrowDown',
-    )
+    expect(tile(wrapper, 'MAIN-1').attributes('aria-keyshortcuts')).toBeUndefined()
   })
 
   it('says its stack is ordered by closing, which a drop into it reads', () => {
