@@ -20,7 +20,17 @@ import json
 import sqlite3
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
-from . import acknowledgements, calls, item_tree, leases, mentions, model, states, subscriptions
+from . import (
+    acknowledgements,
+    calls,
+    item_tree,
+    leases,
+    mentions,
+    model,
+    sections,
+    states,
+    subscriptions,
+)
 
 
 @contextlib.contextmanager
@@ -1000,8 +1010,9 @@ def card(
 
     Built from the item's row and what is under it, with every other part counted
     by aggregates (`part_counts`) rather than read, so a card costs the same however
-    long its history is. `counted` carries what a reader above this module counts:
-    the questions, which `requests` reads.
+    long its history is. The sections are counted from the description the row
+    holds, and only for a long one (`sections.card_count`). `counted` carries what a
+    reader above this module counts: the questions, which `requests` reads.
     """
 
     record, lease = _record(conn, row)
@@ -1020,7 +1031,11 @@ def card(
     if shown["summary"] is None:
         del shown["summary"]
     shown["parts"] = table_of_contents(
-        {**part_counts(conn, str(row["work_item_id"]), lease), **(counted or {})}
+        {
+            **part_counts(conn, str(row["work_item_id"]), lease),
+            "sections": {"count": sections.card_count(str(row["description"]))},
+            **(counted or {}),
+        }
     )
     return shown
 

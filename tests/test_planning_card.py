@@ -180,7 +180,8 @@ class DefaultReadTests(FullItemCase):
             with self.subTest(part=name):
                 answer = self.read(parts=[name])
                 size = self.part_size(name, answer)
-                if size["count"] == 0:
+                # A short description is read whole, so the card does not name its sections.
+                if size["count"] == 0 or name == "sections":
                     self.assertNotIn(name, contents)
                     continue
                 self.assertEqual(size, {key: contents[name][key] for key in size})
@@ -239,6 +240,8 @@ class PartTests(FullItemCase):
             "comments": {"comments_total", "threads_total", "unresolved_total", "truncated"},
             "events": {"events_total", "events_truncated"},
             "mentions": {"mentions_total"},
+            # The description's sections, which no field of the full record holds.
+            "sections": set(),
         }
         for name in read_model.PARTS[1:]:
             with self.subTest(part=name):

@@ -30,6 +30,7 @@ from . import (
     model,
     read_model,
     requests,
+    sections,
     service,
     subscriptions,
     usage,
@@ -272,10 +273,15 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
     The full record is what a screen and every write answer with, and each cut of
     its history is opt-in. `parts` is a comma-separated list of `read_model.PARTS`;
     a comment mode beside it cuts the comments part and `events` names how many
-    newest events the events part reads.
+    newest events the events part reads. `section`, which may repeat because a
+    heading may hold a comma, names the sections the sections part reads with their
+    text, and without `parts` reads that part alone.
     """
 
     names = _part_names(parameters)
+    section = parameters.get("section")
+    if names is None and section:
+        names = ["sections"]
     if names is not None:
         return {
             "interface_version": PLANNING_API_INTERFACE,
@@ -287,6 +293,7 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
                 thread=_count(parameters, "thread"),
                 unresolved=_switch(parameters, "unresolved"),
                 events=_events_count(parameters),
+                section=section or None,
             ),
         }
     return {
@@ -327,7 +334,8 @@ def _part_names(parameters: Mapping[str, list[str]]) -> list[str] | None:
     return read_model.part_names(name.strip() for name in value.split(","))
 
 
-#: How each part but the card, the comments and the events is read, as the field of its name.
+#: How each part but the card, the comments, the events and the sections is read, as the
+#: field of its name.
 _PART_READERS: dict[str, Callable[[sqlite3.Connection, sqlite3.Row], dict]] = {
     "links": lambda conn, row: {"links": read_model.links(conn, str(row["work_item_id"]))},
     "refs": lambda conn, row: {"refs": read_model.refs(conn, str(row["work_item_id"]))},
@@ -360,6 +368,7 @@ def _parts_of(
     thread: int | None,
     unresolved: bool,
     events: int | None = None,
+    section: list[str] | None = None,
 ) -> dict:
     """The parts named of one item, beside its reference and the revision they were read at.
 
@@ -377,6 +386,7 @@ def _parts_of(
         "unresolved": ("comments", unresolved or None),
         "comments_after": ("comments", comments_after),
         "events": ("events", events),
+        "section": ("sections", section),
     }
     for mode, (cut, value) in modes.items():
         if value is not None and cut not in names:
@@ -398,6 +408,13 @@ def _parts_of(
             )
         elif name == "events":
             part = read_model.events_part(conn, row, events)
+        elif name == "sections":
+            described = str(row["description"])
+            part = {
+                "sections": sections.contents(described)
+                if section is None
+                else sections.named(described, section)
+            }
         elif name in _PART_READERS:
             part = _PART_READERS[name](conn, row)
         else:

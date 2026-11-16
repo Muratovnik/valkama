@@ -448,9 +448,12 @@ TOOLS = [
         " events, or the newest n, with events_total and events_truncated. questions: its"
         " questions in compact form: total, open, at most"
         f" {requests.ITEM_QUESTIONS} items with the open ones first. claim: the lease, with"
-        " expires_at. Each comment names its parent in reply_to or reply_to_request (null"
-        " on a root), by_person, resolution, a root's mark, and mentions, the items it"
-        " told. A comment mode or events without parts reads that part alone. An accepted"
+        " expires_at. sections: the description's sections, by heading or, without"
+        " headings, by paragraph, each with its key and size; section reads the ones named,"
+        " so a long description is refreshed without reading it all. Each comment names its"
+        " parent in reply_to or reply_to_request (null on a root), by_person, resolution, a"
+        " root's mark, and mentions, the items it told. A comment mode, events or section"
+        " without parts reads that part alone. An accepted"
         " open goal or stage shows state null and container_state: not_started,"
         " in_progress or awaiting_confirmation.",
         READ_ONLY,
@@ -486,6 +489,12 @@ TOOLS = [
                 "minimum": 1,
                 "maximum": read_model.PART_EVENTS_MOST,
                 "description": "How many of the newest history events to read.",
+            },
+            "section": {
+                "anyOf": [_STR, {"type": "array", "items": _STR, "minItems": 1}],
+                "description": "A key of the description's sections, as the sections part"
+                " names them, or a list of keys: read those sections with their text, in the"
+                " description's order.",
             },
         },
         ["id"],
@@ -1338,6 +1347,7 @@ _MODE_PARTS = {
     "thread": "comments",
     "unresolved": "comments",
     "events": "events",
+    "section": "sections",
 }
 
 
@@ -1353,6 +1363,7 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> dic
         "thread": arguments.get("thread"),
         "unresolved": _is_verbose(arguments, "unresolved") or None,
         "events": arguments.get("events"),
+        "section": _section_keys(arguments.get("section")),
     }
     named = [_MODE_PARTS[mode] for mode, value in modes.items() if value is not None]
     # Each name is held to the parts before the list is joined, so a comma inside
@@ -1366,12 +1377,26 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> dic
             parameters[mode] = ["true"]
         elif mode == "events" and value is not None:
             parameters[mode] = [str(read_model.events_count(value))]
+        elif isinstance(value, list):
+            parameters[mode] = value
         elif value is not None:
             parameters[mode] = [str(model.count_field(value, mode))]
     answer = api.handle_get(conn, "/api/planning/work-item", parameters)
     if answer is None:  # pragma: no cover - the path table above is closed
         raise ValueError("no planning work item read")
     return answer[1]["work_item"]
+
+
+def _section_keys(keys: object) -> list[str] | None:
+    """`section` as a list of keys: one key or a list of them, or None when not named."""
+
+    if keys is None:
+        return None
+    if isinstance(keys, str):
+        return [keys]
+    if isinstance(keys, list) and keys and all(isinstance(key, str) for key in keys):
+        return keys
+    raise model.PlanningError("section must be a section key or a list of them")
 
 
 def _part_names(names: object, by_modes: list[str]) -> list[str]:

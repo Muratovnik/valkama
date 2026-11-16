@@ -2564,6 +2564,15 @@ class CompactWorkItemReadTests(WireCallTestCase):
                         "maximum": 1000,
                         "description": "How many of the newest history events to read.",
                     },
+                    "section": {
+                        "anyOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                        ],
+                        "description": "A key of the description's sections, as the sections"
+                        " part names them, or a list of keys: read those sections with their"
+                        " text, in the description's order.",
+                    },
                 },
                 "required": ["id"],
             },
@@ -2594,6 +2603,10 @@ class CompactWorkItemReadTests(WireCallTestCase):
         """Each refusal in the words the contract gives it, so an agent corrects itself."""
 
         root = self.complete["comments"][0]["id"]
+        planning_service.update_work_item(
+            self.conn, self.reference, description="# Plan\nstep\n# Notes\nnone yet"
+        )
+        self.conn.commit()
         for arguments, wanted in (
             (
                 {"parts": "history"},
@@ -2617,6 +2630,16 @@ class CompactWorkItemReadTests(WireCallTestCase):
                 {"parts": ["card", "comments"], "events": 3},
                 "events reads the events part: add events to parts or leave parts out",
             ),
+            (
+                {"parts": ["card"], "section": "(start)"},
+                "section reads the sections part: add sections to parts or leave parts out",
+            ),
+            (
+                {"section": ["no such heading"]},
+                "unknown section 'no such heading'; sections are Plan, Notes",
+            ),
+            ({"section": []}, "section must be a section key or a list of them"),
+            ({"section": 3}, "section must be a section key or a list of them"),
             ({"events": 0}, "events must be between 1 and 1000"),
             ({"events": 1001}, "events must be between 1 and 1000"),
             ({"events": True}, "events must be between 1 and 1000"),
