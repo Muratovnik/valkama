@@ -39,6 +39,9 @@ T3 = "2026-08-03T10:00:00Z"
 T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
+#: The steps a run takes and the postconditions it checks, in their order.
+STEP_NAMES = [*(f"M{number}" for number in range(8)), "addressee"]
+POSTCONDITION_NAMES = [*(f"P{number}" for number in range(1, 16)), "requests-asked", "second-run", "recovery-point"]
 
 #: The work items of the space `WM`, by number: kind, state key, parent number,
 #: holder, the step its holder claimed, labels, and the history, as (action,
@@ -447,11 +450,9 @@ class MigratedStoreTests(StoreCase):
     def test_the_run_is_reported_and_every_postcondition_holds(self) -> None:
         self.assertEqual("migrated", self.report["status"])
         self.assertEqual({"from": 17, "to": store.STORE_SCHEMA_VERSION}, self.report["schema"])
+        self.assertEqual(STEP_NAMES, [step["name"] for step in self.report["steps"]])
         self.assertEqual(
-            [f"M{number}" for number in range(8)], [step["name"] for step in self.report["steps"]]
-        )
-        self.assertEqual(
-            [(f"P{number}", True) for number in range(1, 18)],
+            [(name, True) for name in POSTCONDITION_NAMES],
             [(entry["name"], entry["passed"]) for entry in self.report["postconditions"]],
         )
         phases = [phase["name"] for phase in self.report["phases"]]
@@ -672,6 +673,29 @@ class MigratedStoreTests(StoreCase):
             )
         conn.rollback()
 
+    def test_addressee_lets_a_request_name_a_session_and_leaves_each_one_asking_the_owner(
+        self,
+    ) -> None:
+        columns = [row[1] for row in self.read("PRAGMA table_info(work_item_requests)")]
+        self.assertEqual("addressee", columns[-1], "appended last, as a fresh store declares it")
+        [index] = self.read(
+            "SELECT sql FROM sqlite_master WHERE name = 'work_item_requests_addressee'"
+        )
+        self.assertIn("(addressee, status) WHERE addressee IS NOT NULL", index[0])
+        self.assertEqual(
+            [("kept-request", None)],
+            [
+                tuple(row)
+                for row in self.read("SELECT request_id, addressee FROM work_item_requests")
+            ],
+        )
+        [step] = [step for step in self.report["steps"] if step["name"] == "addressee"]
+        self.assertEqual((True, {"column_added": True}), (step["needed"], step["result"]))
+        [entry] = [
+            entry for entry in self.report["postconditions"] if entry["name"] == "requests-asked"
+        ]
+        self.assertEqual({"requests": 1}, entry["detail"])
+
     def test_the_derived_states_are_reported(self) -> None:
         derived = self.report["postconditions"][11]["detail"]["derived"]
         # WM-1 waits on a ready task nobody started; WM-6, WM-15 and WM-16 have work
@@ -794,7 +818,7 @@ class BoardEraSessionsTests(StoreCase):
         report = self.migrate()
         self.assertEqual("migrated", report["status"])
         self.assertEqual(
-            [(f"P{number}", True) for number in range(1, 18)],
+            [(name, True) for name in POSTCONDITION_NAMES],
             [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
         )
         declared = {row[1]: row[2] for row in self.read("PRAGMA table_info(sessions)")}
@@ -832,11 +856,11 @@ class KeptStepClaimTests(StoreCase):
             conn.close()
         self.checklists = {reference: self.item(reference)["checklist"] for reference in KEPT_STEPS}
 
-    def test_a_claimed_step_on_a_task_at_work_is_kept_and_p14_holds(self) -> None:
+    def test_a_claimed_step_on_a_task_at_work_is_kept_and_identities_holds(self) -> None:
         report = self.migrate()
         self.assertEqual("migrated", report["status"])
         self.assertEqual(
-            [(f"P{number}", True) for number in range(1, 18)],
+            [(name, True) for name in POSTCONDITION_NAMES],
             [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
         )
         for reference in KEPT_STEPS:
@@ -846,7 +870,7 @@ class KeptStepClaimTests(StoreCase):
                 self.assertEqual("active", row["category"])
                 self.assertEqual([], self.events(reference, "checklist_released"))
 
-    def test_identities_refuses_a_migration_that_clears_a_kept_claim(self) -> None:
+    def test_p14_refuses_a_migration_that_clears_a_kept_claim(self) -> None:
         identity_before, digest = identity(self.path), file_digest(self.path)
         clear = writing(
             "UPDATE work_items SET checklist = json_set(checklist, '$[0].claimed_by', '')"
@@ -858,10 +882,8 @@ class KeptStepClaimTests(StoreCase):
             self.migrate()
         report = raised.exception.report
         self.assertIn("identities", report["failed"])
-        post_identities = next(
-            entry for entry in report["postconditions"] if entry["name"] == "identities"
-        )
-        self.assertIn(f"{self.ids['WM-7']} changed its checklist", post_identities["error"])
+        p14 = next(entry for entry in report["postconditions"] if entry["name"] == "identities")
+        self.assertIn(f"{self.ids['WM-7']} changed its checklist", p14["error"])
         self.assertEqual((identity_before, digest), (identity(self.path), file_digest(self.path)))
 
 
@@ -1006,6 +1028,10 @@ FAULTS = (
         " WHERE workflow_id = work_items.workflow_id AND key = 'done') WHERE work_item_id = ?",
         lambda ids: (ids["WM-21"],),
     ),
+    fault(
+        "requests-asked",
+        "UPDATE work_item_requests SET addressee = 'kept-session' WHERE request_id = 'kept-request'",
+    ),
 )
 
 
@@ -1140,6 +1166,30 @@ def _quiet(sql: str, parameters: tuple) -> list[tuple[str, tuple]]:
 CLAUSE_FAULTS: tuple[
     tuple[str, str, Callable[[dict[str, str]], list[tuple[str, tuple]]], list[str]], ...
 ] = (
+    (
+        "requests-asked",
+        "the request kept-request asks the session kept-session",
+        lambda _ids: [
+            (
+                "UPDATE work_item_requests SET addressee = 'kept-session'"
+                " WHERE request_id = 'kept-request'",
+                (),
+            )
+        ],
+        ["requests-asked"],
+    ),
+    (
+        "requests-asked",
+        "requests differ: missing ['kept-request'], extra ['other-request']",
+        lambda _ids: [
+            (
+                "UPDATE work_item_requests SET request_id = 'other-request'"
+                " WHERE request_id = 'kept-request'",
+                (),
+            )
+        ],
+        ["requests-asked"],
+    ),
     (
         "history-keys",
         "no opened record for the container",

@@ -71,6 +71,17 @@ def _appended(table: str) -> str:
     return "".join(f",\n    {definition}" for _, definition in _THREAD_COLUMNS[table])
 
 
+#: The agent session a request asks instead of the owner, a top-level one; null asks
+#: the owner. The 3.0 migration appends it after the columns above, so the base
+#: schema declares it last and both stores have one order.
+ADDRESSEE_COLUMN = "addressee TEXT REFERENCES sessions(id)"
+#: The open requests asked of one session, read by that session.
+ADDRESSEE_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_item_requests_addressee"
+    " ON work_item_requests(addressee, status) WHERE addressee IS NOT NULL"
+)
+
+
 _ACCEPTED_SQL = ",".join(f"'{category}'" for category in model.ACCEPTED_CATEGORIES)
 
 #: Which states an item may stand in, refused by the store as well as by the service.
@@ -269,9 +280,11 @@ CREATE TABLE IF NOT EXISTS work_item_requests(
     created_at TEXT NOT NULL,
     resolved_at TEXT,
     revision INTEGER NOT NULL DEFAULT 0,
-    expired_reason TEXT CHECK(expired_reason IN ('deadline','withdrawn','execution_closed','task_closed')){_appended("work_item_requests")}
+    expired_reason TEXT CHECK(expired_reason IN ('deadline','withdrawn','execution_closed','task_closed')){_appended("work_item_requests")},
+    {ADDRESSEE_COLUMN}
 );
 CREATE INDEX IF NOT EXISTS work_item_requests_item ON work_item_requests(work_item_id,created_at);
+{ADDRESSEE_INDEX};
 -- The answers a question's current one replaced, one row per version. The
 -- current answer stays on the request row, so each version lives in one place
 -- and every reader of the current answer reads what it always read.

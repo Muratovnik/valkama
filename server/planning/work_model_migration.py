@@ -27,6 +27,9 @@ otherwise cascade into them:
   and gives an active task nobody holds back to ready; **children-left** takes each open child
   out of a closed container into triage.
 - **checks** creates the trigger that keeps every kind where it may stand.
+- **addressee** appends the column a request names the agent session it asks with
+  (`work_item_requests.addressee`) and its index; every request it finds asks the
+  owner, as it did.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -34,8 +37,8 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
-The postconditions `fresh-shape` to `second-run` are checked after the steps, inside the same
-transaction; `store` adds `recovery-point`, the recovery point.
+The postconditions `fresh-shape` to `second-run` and `requests-asked` are checked after the steps, inside the same
+transaction, `second-run` last; `store` adds `recovery-point`, the recovery point.
 """
 
 from __future__ import annotations
@@ -240,6 +243,7 @@ class Oracle:
     search: dict[str, list[str] | None] = field(default_factory=dict)
     content: dict[str, dict[str, Any]] = field(default_factory=dict)
     numbers: set[tuple[str, int]] = field(default_factory=set)
+    request_ids: frozenset[str] = frozenset()
     containers: int = 0
     started_from_created: int = 0
 
@@ -385,6 +389,9 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
     """
 
     oracle = Oracle(counts=_counts(conn), objects=_objects(conn))
+    oracle.request_ids = frozenset(
+        str(row[0]) for row in conn.execute("SELECT request_id FROM work_item_requests")
+    )
     oracle.last_event = int(
         conn.execute("SELECT coalesce(MAX(id), 0) FROM work_item_events").fetchone()[0]
     )
@@ -1159,6 +1166,40 @@ def _check_trigger(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError("the trigger that keeps each kind in its states is missing")
 
 
+# -- `addressee`: the session a request asks --------------------------------------------
+
+
+def _addressee_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return "addressee" not in _columns(conn, "work_item_requests") or (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index'"
+            " AND name = 'work_item_requests_addressee'"
+        ).fetchone()
+        is None
+    )
+
+
+def _add_addressee(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`addressee`: a request may ask an agent session instead of the owner.
+
+    ALTER TABLE appends and cannot be run twice, so the column is added only when it
+    is missing; the index is created if it is not there.
+    """
+
+    del context
+    added = "addressee" not in _columns(conn, "work_item_requests")
+    if added:
+        conn.execute(f"ALTER TABLE work_item_requests ADD COLUMN {planning_store.ADDRESSEE_COLUMN}")
+    conn.execute(planning_store.ADDRESSEE_INDEX)
+    return {"column_added": added}
+
+
+def _check_addressee(conn: sqlite3.Connection, context: Context) -> None:
+    if _addressee_needed(conn, context):
+        raise UnmetError("work_item_requests lacks the addressee column or its index")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1170,6 +1211,7 @@ STEPS = (
         "children-left", "closed containers with open children", _take_out_children, _left_needed, _check_left
     ),
     Step("checks", "checks", _create_trigger, _trigger_needed, _check_trigger),
+    Step("addressee", "the session a request asks", _add_addressee, _addressee_needed, _check_addressee),
 )
 
 
@@ -1274,7 +1316,7 @@ def _p3(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     return {"foreign_key_check": "empty", "integrity_check": result}
 
 
-def _p4(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_no_epic(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     oracle = _oracle(context)
     epics, containers = conn.execute(
         "SELECT SUM(kind = 'epic'), SUM(kind = ?) FROM work_items", (_CONTAINER,)
@@ -1288,7 +1330,7 @@ def _p4(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     return {"containers": int(containers or 0)}
 
 
-def _p5(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_parents(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     del context
     references = _references(conn)
     found = [
@@ -1638,7 +1680,27 @@ def _holds_known_exceptions(conn: sqlite3.Connection, context: Context) -> Mappi
     return {"taken_out_of_closed_containers": moved, "tasks_left_in_review": review}
 
 
-def _holds_second_run(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_requests_asked(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    oracle = _oracle(context)
+    found = [
+        f"the request {row[0]} asks the session {row[1]}"
+        for row in conn.execute(
+            "SELECT request_id, addressee FROM work_item_requests WHERE addressee IS NOT NULL"
+        )
+    ]
+    held = frozenset(
+        str(row[0]) for row in conn.execute("SELECT request_id FROM work_item_requests")
+    )
+    if held != oracle.request_ids:
+        found.append(
+            f"requests differ: missing {sorted(oracle.request_ids - held)[:5]},"
+            f" extra {sorted(held - oracle.request_ids)[:5]}"
+        )
+    _unmet(found, "requests")
+    return {"requests": len(held)}
+
+
+def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
     return {"steps_needed_again": again}
@@ -1660,6 +1722,7 @@ POSTCONDITIONS = (
     Postcondition("indexes", "indexes, triggers and the word index", _p13),
     Postcondition("identities", "identities and content", _p14),
     Postcondition("known-exceptions", "known exceptions", _p15),
+    Postcondition("requests-asked", "every request asks the owner, and none is lost", _p23),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 
