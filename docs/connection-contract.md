@@ -420,8 +420,8 @@ The server places the new item:
    list has no session and no such field.
 
 A later edit of `projects` does not move the item: its number stays. Refused
-with `invalid_request` and the code `[placement]`, each refusal naming the
-candidates, before anything is written:
+with `invalid_request` and the code `[placement]`, naming the candidates where
+there are any, before anything is written:
 
 - projects of two spaces without `space`: `projects A and B live in ALPHA and
   ROVER: name one of them as space`;

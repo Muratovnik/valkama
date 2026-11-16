@@ -778,9 +778,9 @@ written through `POST /api/planning/space/settings` with `{space, launch_place}`
 no planning tool writes it. The attempt records the project of that root as its
 `project_id`. Each claim answers with the root of every project the card changes
 (`project_roots`), so the agent reads each one's instructions before editing there.
-The capabilities read names it as `repository`, with `repository_project` and
-`repository_status`, which uses the words of `project_roots` with the same
-meaning: `mapped` (the root is registered and its directory is there),
+The capabilities read names the suggested directory as `repository`, with
+`repository_project` and `repository_status`, which uses the words of
+`project_roots` with the same meaning: `mapped` (the root is registered and its directory is there),
 `missing` (its directory is not there), `unregistered` (the card's project is
 no longer in the registry) and `unavailable` (the registry could not be read,
 one that does not parse included). Two cases only the launch root has:
