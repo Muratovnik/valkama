@@ -87,7 +87,14 @@ class RowTests(FrameCase):
         session = self.working(reference)
         space = self.space()
         self.assertEqual(
-            {"key": SPACE, "name": "Live", "project_id": None, "sessions": []},
+            # The registry is not read here, so the space's projects are unknown.
+            {
+                "key": SPACE,
+                "name": "Live",
+                "projects": None,
+                "default_project": None,
+                "sessions": [],
+            },
             {name: value for name, value in space.items() if name != "rows"},
         )
         self.assertEqual(
@@ -423,7 +430,14 @@ class SessionPlaceTests(FrameCase):
     def test_a_session_on_no_row_is_listed_under_the_space_its_folder_is_bound_to(self) -> None:
         session = self.at_work(str(self.bound / "src"))
         space = self.space()
-        self.assertEqual(("bound-project", []), (space["project_id"], space["rows"]))
+        self.assertEqual(
+            (
+                "bound-project",
+                [{"project_id": "bound-project", "display_name": "bound-project"}],
+                [],
+            ),
+            (space["default_project"], space["projects"], space["rows"]),
+        )
         self.assertEqual([session], self.listed(space["sessions"]))
         self.assertEqual([], self.frame()["elsewhere"])
 

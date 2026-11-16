@@ -36,6 +36,10 @@ this store. With no such root, or a project that binds no space of this store, i
 listed in `elsewhere`. That places a row and nothing more: nothing is written or
 routed from it, and no binding is ever inferred from a folder. A space with neither
 rows nor sessions is not in the frame.
+
+A space names its `projects`, the default one first, and its `default_project`;
+both are null when the registry could not be read, since its projects are then
+unknown rather than none.
 """
 
 from __future__ import annotations
@@ -47,8 +51,6 @@ from dataclasses import dataclass
 
 from ..projects import project_registry
 from ..store_identity.metadata import read_store_metadata
-from ..store_identity.primitives import ContractError
-from ..store_identity.refs import planning_space_ref
 from . import executors, item_tree, live_sessions, live_work, model, read_model, states
 
 #: Every open item and every pinned one, with all their ancestors, in one read. Only a
@@ -163,25 +165,6 @@ def _work(row: _Item) -> tuple[float, float, int]:
 
 def _number(row: _Item) -> int:
     return row.number
-
-
-def _default_projects(
-    listing: project_registry.RegistryResult, data_scope_id: str
-) -> dict[str, str]:
-    """The default project of each space of this store the registry binds, by space key."""
-
-    found: dict[str, str] = {}
-    for project in listing["projects"]:
-        binding = project["planning_binding"]
-        if binding is None or not binding["default"]:
-            continue
-        try:
-            space = planning_space_ref(project_registry.binding_entity(binding))
-        except ContractError:
-            continue
-        if space["data_scope_id"] == data_scope_id:
-            found[str(space["space_key"])] = str(project["project_id"])
-    return found
 
 
 def _sessions(
@@ -299,12 +282,21 @@ def frame(conn: sqlite3.Connection) -> dict:
     sessions, elsewhere = _sessions(
         conn, placement.sessions, shown, listing, data_scope_id, names, executor_of
     )
-    projects = _default_projects(listing, data_scope_id)
+    # An unreadable registry knows no projects, which is not the same as none.
+    known = listing["status"] == "available"
     spaces = [
         {
             "key": key,
             "name": names[key],
-            "project_id": projects.get(key),
+            **(
+                project_registry.projects_shown(
+                    project_registry.space_projects(
+                        listing["projects"], {"data_scope_id": data_scope_id, "space_key": key}
+                    )
+                )
+                if known
+                else {"projects": None, "default_project": None}
+            ),
             "rows": [
                 _row(item, placement, references, executor_of, derived)
                 for item in _ordered(by_space.get(key, []))
