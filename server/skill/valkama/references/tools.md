@@ -243,6 +243,21 @@ the refusal names what they did. A `comment` sent in the same
 `apply_work_item_changes` call does not lift it.
 `force: true` carries a refusal through and records an `overridden` event.
 
+## When a call is refused
+
+| Refusal | What to do |
+| --- | --- |
+| `revision_conflict` | Someone wrote since your read: read the item, then retry on the new `revision`. |
+| A claim held by another | Take other work, or take it over only on an instruction (`force: true`). |
+| `workflow_guard` with `[executor]` | Claim the item or a step before moving it to an active state. |
+| `workflow_guard` with `[acceptance]` | Send `acceptance: "assignment"` only on the owner's word; otherwise leave the item to the owner to accept. |
+| `workflow_guard` with `[checklist]` or `[summary]` | Tick what was done, move undone work to an item of its own, record the summary, then close. |
+| `workflow_guard` with `[blocker]` | Link the blocking item, or give the reason. |
+| `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
+| `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
+| An unknown state | The refusal lists the workflow's states and the categories that name one. |
+| A refused batch or creation step | The message starts with the group and index; correct that entry. |
+
 ## Claims
 
 A claim is a lease on the session that took it: `live` while that session is
