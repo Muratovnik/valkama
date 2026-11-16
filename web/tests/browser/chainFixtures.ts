@@ -44,6 +44,8 @@ export function smallChain() {
     parent_id: parent,
     open: !state.is_terminal,
     workable: state === BACKLOG,
+    // The record says why the queue does not give an item exactly when it is not workable.
+    withheld: state === BACKLOG ? [] : (['not_ready'] as const),
   })
   const children = [DONE, DONE, DONE, DONE, DEV, BACKLOG].map((state, index) =>
     brief(1001 + index, state, workItem.work_item_id),
@@ -151,6 +153,7 @@ export function longChainHere() {
     parent_id: parentId(node.parent_id),
     open: !node.state?.is_terminal,
     workable: !node.state?.is_terminal,
+    withheld: node.state?.is_terminal ? (['not_ready'] as const) : [],
   }))
   const edges = source.edges
     .filter((edge) => members.has(edge.from) && members.has(edge.to))
