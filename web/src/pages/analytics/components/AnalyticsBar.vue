@@ -24,10 +24,10 @@
  * A line with no room for all of that gives up what matters least first, and never runs past its
  * end (`useBarRoom`): the words of its buttons go first, the read again then said by its icon,
  * then the room between its parts narrows, then the age is said by its span, «● 15 s», in the
- * room of the widest span, and then a failure's retry goes, the read again beside it asking the
- * same. Past all of that a span's name is cut at its end, its hint saying it whole. The age's span
- * is never given up, nor a failure's words, nor a day of the period: its fields are as wide as a
- * date needs. A line that runs past its end with all of that given up gives up the one line last,
+ * room of the widest span, and then a failure's retry gives up its own word, the failure's words
+ * then being the retry (`RefreshFailed`). Past all of that a span's name is cut at its end, its
+ * hint saying it whole. The age's span is never given up, nor a failure's words, nor a day of the
+ * period: its fields are as wide as a date needs. A line that runs past its end with all of that given up gives up the one line last,
  * and is the two rows of a narrower bar, which take their words back: the reader's own days need
  * that up to a window of about 1360px. The line is fitted as if a failure were said, so one said
  * takes only the room the chips had and moves nothing: neither the bar's height nor its controls.
@@ -110,7 +110,8 @@ onMounted(showChosen)
 
 /**
  * What the line gives up while it has no room for all it holds (`useBarRoom`): its buttons' words,
- * the room between its parts, the word around the age, a failure's retry, and a span's name.
+ * the room between its parts, the word around the age, a failure's retry's own word, and a span's
+ * name.
  */
 const line = useTemplateRef<HTMLElement>('line')
 const refreshButton = useTemplateRef<{ $el: HTMLElement }>('refreshButton')
@@ -159,7 +160,7 @@ const short = computed(() => {
 })
 /**
  * Whether the room between the parts narrowed, the age said by its span alone («15 s», its hint
- * and its hidden words saying «ago»), a failure said without its retry, and a span's name cut.
+ * and its hidden words saying «ago»), a failure whose words are its retry, and a span's name cut.
  */
 const tight = computed(() => room.gave('gaps'))
 const bare = computed(() => room.gave('ago'))

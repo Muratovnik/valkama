@@ -2324,8 +2324,8 @@ did not have. Said twice, as
 «every 30 s» and «Last record 14:17 · 15 s ago», it held 21em of the bar, and the air after
 the first part still changed as the record aged. A line short of room gives up its buttons'
 words, then the air between its parts, then the word around the age, «● 15 s», in the room of
-the widest span, then a failed refresh's retry, the refresh beside it asking the same, and never
-a failure's words or a day of the reader's own period, whose fields are as wide as a date of
+the widest span, then a failed refresh's retry's own word, the failure's words then being the
+retry, and never a failure's words or a day of the reader's own period, whose fields are as wide as a date of
 the widest figures needs: beside a span of days in Russian the line ran «Refresh» 92px past the
 bar's end at 1200px. The last thing a line gives up is itself: one that still runs past its end
 becomes the two rows below, with its words back, and a bar with room for one line keeps one line.
@@ -2348,8 +2348,11 @@ height whatever period is chosen: the periods, scrolling sideways, with the fres
 end; the filter, a failure and the refresh; and the room of the reader's own days, which took a
 row of their own and moved the panel 44px when chosen. A refresh that fails keeps what is shown
 and says so in words before the age at every width, «Could not refresh» with a retry: given up
-on a short line, its words had left a red disc with no hint. Reading another period or filter dims
-what is shown until its answer comes, after a moment so that a quick answer does not flicker;
+on a short line, its words had left a red disc with no hint. The retry is reached at every width
+too: where the line has no room for «· Retry», the words themselves are the retry, named
+«Could not refresh · Retry» with «Retry» as their hint, and take no room the words did not.
+Dropped there, a phone and a span of days in Russian offered no retry of its own, only the
+refresh beside it. Reading another period or filter dims what is shown until its answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in
 seconds and the minutes after the newest record are hatched as «no data yet» rather than drawn
 as a drop.

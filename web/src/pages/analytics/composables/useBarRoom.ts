@@ -28,7 +28,7 @@ import { useResizeObserver } from '@vueuse/core'
 /**
  * A part the bar's line can give up: the words a short bar drops from its buttons, the room
  * between its parts down to a narrow gap, the word around the age («ago»), each of which a screen
- * reader still hears, a failure's own retry, which the bar's read again beside it stands for, or
+ * reader still hears, a failure's own retry's word, its words then the retry, or
  * the whole of a span's name, cut at its end with its hint saying it whole.
  */
 export type BarPart = 'ago' | 'gaps' | 'retry' | 'span' | 'words'

@@ -183,6 +183,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'the moment of the newest record and, for a live period, how often it reads itself again, where the bar shows only the age and the live mark',
   ],
   [
+    `pages/analytics/components/RefreshFailed.vue <VButton> v-tooltip.detail="t('platform.actions.retry')"`,
+    "what a press on a failure's words does, where a line short of room gave up the retry's own word",
+  ],
+  [
     'pages/analytics/components/RailTile.vue <span> v-tooltip.detail="{ text: leadDetail, words: lead }"',
     'the whole id of the first value a tile names by the start of it, an account; while the name is cut, it comes first, whole',
   ],

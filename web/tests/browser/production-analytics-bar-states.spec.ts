@@ -4,7 +4,9 @@
  * rows (1280px), and one line (1440 and 1920px), in Russian, whose words are the longest.
  *
  * A refresh that failed is said in its words at every width, beside the reader's own span of days
- * too, inside the bar's line and the window. A failed read leaves no live mark in the bar, neither
+ * too, inside the bar's line and the window, and its retry is reached there at every width: where
+ * the line has no room for the retry's own word, the words are the retry. Pressed with reads
+ * answering, the retry takes the failure away. A failed read leaves no live mark in the bar, neither
  * when the page has nothing to show nor beside the figures a failed refresh kept, and the mark is
  * back once a read answers. A failure said moves nothing: the bar keeps its height, the panel its
  * top, and every control of the bar its place. A span of days chosen keeps the bar's height and the
@@ -117,6 +119,8 @@ const barState = (page: Page) =>
         refresh: box('.analytics-refresh'),
       },
       failure: box('.refresh-failed'),
+      retry: box('.refresh-failed-retry'),
+      panel: box('.analytics-panel'),
       said,
       mark: mark !== null && getComputedStyle(mark).visibility === 'visible',
     }
@@ -124,20 +128,23 @@ const barState = (page: Page) =>
 
 type BarState = Awaited<ReturnType<typeof barState>>
 
-/** The failure is said in its words, inside the bar's line and the window. */
+/** The failure is said in its words, and its retry stands, inside the bar's line and the window. */
 function expectSaid(name: string, state: BarState) {
   expect.soft(state.said, `${name}: the failure's words`).toBeGreaterThan(40)
   const line = state.line ?? { left: Number.NaN, right: Number.NaN }
-  const failure = state.failure ?? { left: Number.NaN, right: Number.NaN }
-  expect
-    .soft(failure.left, `${name}: the failure before the line`)
-    .toBeGreaterThanOrEqual(line.left - 0.5)
-  expect
-    .soft(failure.right, `${name}: the failure past the line`)
-    .toBeLessThanOrEqual(line.right + 0.5)
-  expect
-    .soft(failure.right, `${name}: the failure past the window`)
-    .toBeLessThanOrEqual(state.window)
+  const none = { left: Number.NaN, right: Number.NaN }
+  for (const [part, box] of [
+    ['failure', state.failure ?? none],
+    ['retry', state.retry ?? none],
+  ] as const) {
+    expect
+      .soft(box.left, `${name}: the ${part} before the line`)
+      .toBeGreaterThanOrEqual(line.left - 0.5)
+    expect
+      .soft(box.right, `${name}: the ${part} past the line`)
+      .toBeLessThanOrEqual(line.right + 0.5)
+    expect.soft(box.right, `${name}: the ${part} past the window`).toBeLessThanOrEqual(state.window)
+  }
 }
 
 /**
@@ -162,7 +169,7 @@ const WIDTHS = [360, 390, 760, 1024, 1280, 1440, 1920] as const
 test.use({ locale: 'ru-RU', launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
 
 for (const width of WIDTHS)
-  test(`a failed refresh is said in words and moves nothing at ${width}px`, async ({
+  test(`a failed refresh is said in words with its retry and moves nothing at ${width}px`, async ({
     page,
   }, info) => {
     const fail = await serveFailing(page, width)
@@ -178,7 +185,17 @@ for (const width of WIDTHS)
       expectSaid(name, after)
       expect.soft(after.bar, `${name}: the bar's height`).toBe(before.bar)
       expect.soft(after.body, `${name}: the top under the bar`).toBe(before.body)
+      expect.soft(after.panel, `${name}: the panel's box`).toEqual(before.panel)
       expectInPlace(name, after.controls, before.controls)
+      // The failure's own retry, at every width, asks again: answered, the failure goes.
+      fail(false)
+      await page
+        .locator('.refresh-failed')
+        .getByRole('button', { name: /Повторить/u })
+        .click()
+      await expect
+        .soft(page.locator('.refresh-failed'), `${name}: the failure retried`)
+        .toBeHidden()
     }
     await record(info, `bar-states failed ${width}`, seen)
   })
