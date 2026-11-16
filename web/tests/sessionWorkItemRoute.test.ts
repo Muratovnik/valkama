@@ -5,7 +5,11 @@ import { test } from 'vitest'
 import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
 
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
-import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import {
+  planningSpaceEntity,
+  planningSpaceRef,
+  planningWorkItemEntity,
+} from '@/shared/api/platformPlanningRefs.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 
 import { moduleRegistrations } from './support/moduleRegistrations.ts'
@@ -19,51 +23,38 @@ const sameKeyDifferentStore = planningSpaceEntity({
   data_scope_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   space_key: 'MAIN',
 })
-const context = {
+const listed = (space: { data_scope_id: string; space_key: string }) => ({
+  ...space,
+  name: 'Unrelated presentation title',
+  default_project: null,
+  projects: [],
+  other_space_projects: [],
+})
+const context: PlatformContextReady = {
   primary: { data_scope_id: exactSpace.data_scope_id, is_writable: true },
-  projects: [
-    {
-      binding_state: 'mapped',
-      project_id: 'project-alpha',
-      resources: [{ resource_ref: exactResource, state: 'mapped' }],
-      title: 'Unrelated presentation title',
-    },
-    {
-      binding_state: 'mapped',
-      project_id: 'project-beta',
-      resources: [{ resource_ref: sameKeyDifferentStore, state: 'mapped' }],
-      title: 'MAIN',
-    },
-  ],
+  spaces: [listed(exactSpace)],
   ui_prefs: null,
-} as PlatformContextReady
+}
 
-test('session work-item navigation resolves only the exact canonical resource binding', () => {
+test('session work-item navigation opens the card in the exact space that holds it', () => {
   assert.deepEqual(
     resolveSessionWorkItemRoute(exactResource, 'MAIN-42', context, moduleRegistrations()),
     {
       module_id: 'planning',
-      scope: { kind: 'project', project_ref: { project_id: 'project-alpha' } },
+      scope: { kind: 'space', space_ref: exactSpace },
       entity: planningWorkItemEntity({ space_ref: exactSpace, reference: 'MAIN-42' }),
     },
   )
 })
 
-test('session work-item navigation refuses missing, duplicate, and malformed exact identities', () => {
-  const duplicate = {
+test('session work-item navigation refuses an unlisted space and malformed exact identities', () => {
+  // A space of the same key in another store is not the space the session names.
+  const elsewhere: PlatformContextReady = {
     ...context,
-    projects: [
-      ...context.projects,
-      {
-        binding_state: 'mapped',
-        project_id: 'project-duplicate',
-        resources: [{ resource_ref: exactResource, state: 'mapped' }],
-        title: 'Duplicate',
-      },
-    ],
-  } as PlatformContextReady
+    spaces: [listed(planningSpaceRef(sameKeyDifferentStore) ?? exactSpace)],
+  }
   assert.equal(
-    resolveSessionWorkItemRoute(exactResource, 'MAIN-42', duplicate, moduleRegistrations()),
+    resolveSessionWorkItemRoute(exactResource, 'MAIN-42', elsewhere, moduleRegistrations()),
     null,
   )
   assert.equal(

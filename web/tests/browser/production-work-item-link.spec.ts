@@ -3,7 +3,7 @@ import type { Page, Route } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { dataScopeId, projectId, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
+import { dataScopeId, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 type Coverage = { reason: string | null; status: 'searched' | 'unavailable' }
@@ -22,7 +22,6 @@ async function serveSearch(page: Page, found: boolean, coverage: Coverage[]) {
           ? [
               {
                 target: {
-                  project_id: projectId,
                   space_ref: spaceRef,
                   reference: workItemRef.reference,
                   writable: true,
@@ -41,7 +40,6 @@ async function serveSearch(page: Page, found: boolean, coverage: Coverage[]) {
             ]
           : [],
         coverage: coverage.map((source) => ({
-          project_id: projectId,
           space_ref: { data_scope_id: dataScopeId, space_key: spaceRef.space_key },
           ...source,
         })),
@@ -63,7 +61,9 @@ test('a missing number says so, marks no section and offers the space', async ({
   await expect(page).toHaveURL(new RegExp(`/open/${spaceRef.space_key}-999$`))
 
   await main.getByRole('button', { name: `Open space ${spaceRef.space_key}` }).click()
-  await expect(page).toHaveURL(new RegExp(`/modules/planning/project/${projectId}\\?entity=`))
+  await expect(page).toHaveURL(
+    new RegExp(`/modules/planning/space/${dataScopeId}/${spaceRef.space_key}$`),
+  )
   await expect(page.locator('.work-item-link')).toHaveCount(0)
   await page.goBack()
   await expect(page.locator('.work-item-link')).toContainText('There is no task')
@@ -74,7 +74,9 @@ test('an address the app has to resolve itself replaces itself with the card', a
   await serveSearch(page, true, SEARCHED)
   await page.goto('/modules/settings/global')
   await page.goto(`/open/${workItemRef.reference.toLowerCase()}`)
-  await expect(page).toHaveURL(new RegExp(`/modules/planning/project/${projectId}\\?entity=`))
+  await expect(page).toHaveURL(
+    new RegExp(`/modules/planning/space/${dataScopeId}/${spaceRef.space_key}\\?entity=`),
+  )
   await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
   // The address took no place in history: Back leaves the card for where it was.
   await page.goBack()
@@ -180,7 +182,6 @@ test.describe('another try', () => {
           items: [],
           coverage: [
             {
-              project_id: projectId,
               space_ref: { data_scope_id: dataScopeId, space_key: spaceRef.space_key },
               status: 'searched',
               reason: null,

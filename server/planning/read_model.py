@@ -18,9 +18,21 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 
-from . import calls, item_tree, leases, mentions, model, queue, states, subscriptions
+from . import (
+    acknowledgements,
+    calls,
+    item_projects,
+    item_tree,
+    leases,
+    mentions,
+    model,
+    queue,
+    sections,
+    states,
+    subscriptions,
+)
 
 
 @contextlib.contextmanager
@@ -180,6 +192,42 @@ def links(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
             }
         )
     return found
+
+
+def other_space_ends(conn: sqlite3.Connection, identities: Iterable[str]) -> list[dict]:
+    """The ends of a read's links that the read does not hold, by space key and number.
+
+    Each names what a reader draws it by: its `work_item_id`, which the link's
+    `from` or `to` names, `reference`, `title`, `kind`, `state` and the `space`
+    it lies in as `{key, name}`. `state` is null where the item stands in no state
+    of its own, an accepted open goal or stage, or the store cannot resolve it.
+    """
+
+    wanted = sorted(set(identities))
+    if not wanted:
+        return []
+    rows = conn.execute(
+        "SELECT w.work_item_id, w.number, w.title, w.kind, w.parent_id,"
+        " p.key AS space_key, p.name AS space_name,"
+        " s.key, s.name, s.category, s.is_terminal"
+        " FROM work_items w"
+        " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+        " LEFT JOIN workflow_states s ON s.state_id = w.state_id"
+        " WHERE w.work_item_id IN (SELECT value FROM json_each(?))"
+        " ORDER BY p.key, w.number",
+        (json.dumps(wanted),),
+    ).fetchall()
+    return [
+        {
+            "work_item_id": str(row["work_item_id"]),
+            "reference": model.human_id(str(row["space_key"]), int(row["number"])),
+            "title": row["title"],
+            "kind": outward_kind(row["kind"], row["parent_id"]),
+            "state": states.public_state(row) if row["category"] is not None else None,
+            "space": {"key": row["space_key"], "name": row["space_name"]},
+        }
+        for row in rows
+    ]
 
 
 def blocked(conn: sqlite3.Connection, work_item_id: str) -> bool:
@@ -778,6 +826,7 @@ def present(
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
     lapsed: Mapping[str, dict] | None = None,
     tree: item_tree.Tree | None = None,
+    projects: Mapping[str, list[dict]] | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
 
@@ -795,11 +844,78 @@ def present(
     many items, and `lapsed` what `lapsed_claims` did; absent, the item asks
     itself. `tree` is what such a read
     loaded of its spaces (`item_tree.of_spaces`); absent, the item loads what is
-    under it.
+    under it. `projects` is what `item_projects.of_items` read for such a read in
+    one walk; absent, the item reads its own.
 
     `state` is what `states.public_state` makes of the item's state: null for an
     accepted open container, which says what it derives as `container_state`
     instead. `open` says whether work on it is over, whatever its kind.
+    """
+
+    record, lease = _record(
+        conn, row, full=full, closed=closed, lapsed=lapsed, tree=tree, projects=projects
+    )
+    identity = str(row["work_item_id"])
+    if not full:
+        # A count, under its own name. Calling it `comments` in the brief and
+        # `comments` in the full record made one key mean two shapes, which a
+        # strict reader cannot describe.
+        record["comment_count"] = comment_count(conn, row)
+        return record
+    record["claim"] = lease.as_dict() if lease is not None else None
+    record["description"] = row["description"]
+    record["summary"] = model.summary(row["summary"], required=False)
+    record["summary_comment_id"] = row["summary_comment_id"]
+    record["links"] = links(conn, identity)
+    record["refs"] = refs(conn, identity)
+    record["comments"], shown_threads, more = _cut_comments(
+        conn,
+        identity,
+        str(record["reference"]),
+        comments=comments,
+        comments_after=comments_after,
+        threads=threads,
+        thread=thread,
+        unresolved=unresolved,
+    )
+    if more is not None:
+        record["truncated"] = more
+    record["events"] = _events(conn, identity, events)
+    if shown_threads is not None or comments is not None or comments_after or events is not None:
+        counts = _thread_counts(conn, identity)
+        events_total = _events_total(conn, identity)
+        record.update(counts)
+        record["events_total"] = events_total
+        # A thread read leaves out the threads it does not show; a flat read the rows.
+        record["history_truncated"] = (
+            shown_threads < counts["threads_total"]
+            if shown_threads is not None
+            else len(record["comments"]) < counts["comments_total"]
+        ) or len(record["events"]) < events_total
+    # The comments elsewhere that named it, which every full record carries:
+    # a write's answer is the same record a read gives.
+    record["mentions"], record["mentions_total"] = mentions_of(conn, identity, HTTP_MENTIONS)
+    # Who follows it without holding it, for the card to name.
+    record["subscribers"] = subscriptions.subscribers(conn, identity)
+    return record
+
+
+def _record(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    full: bool,
+    closed: Mapping[str, tuple[str | None, str | None]] | None = None,
+    lapsed: Mapping[str, dict] | None = None,
+    tree: item_tree.Tree | None = None,
+    projects: Mapping[str, list[dict]] | None = None,
+) -> tuple[dict, leases.Lease | None]:
+    """What the brief record, the full one and the card share, and the lease it read.
+
+    Everything here is read from the item's row, its state and what is under it,
+    never from its history, so it costs the same however long the history is.
+    The lease is read whole only when `full` asks for it, as the full record and
+    the card do; a brief record takes its state alone.
     """
 
     state = state_by_id(conn, str(row["state_id"]))
@@ -822,6 +938,11 @@ def present(
         "claim_state": None,
         "parent_id": row["parent_id"],
         "labels": model.labels(loads(row["labels"])),
+        "projects": (
+            item_projects.of_item(conn, row)
+            if projects is None
+            else projects.get(str(row["work_item_id"]), [])
+        ),
         "source": row["source"],
         "checklist": model.checklist(row["checklist"]),
         "revision": int(row["revision"]),
@@ -865,18 +986,344 @@ def present(
         # state is read already, and a brief read's statement count is bounded.
         unheld = not row["claim_ref"] and not state["is_terminal"]
         record["lapsed_claim"] = _lapsed_of_one(conn, identity) if unheld else None
-    if not full:
-        # A count, under its own name. Calling it `comments` in the brief and
-        # `comments` in the full record made one key mean two shapes, which a
-        # strict reader cannot describe.
-        record["comment_count"] = comment_count(conn, row)
-        return record
-    record["claim"] = lease.as_dict() if lease is not None else None
-    record["description"] = row["description"]
-    record["summary"] = model.summary(row["summary"], required=False)
-    record["summary_comment_id"] = row["summary_comment_id"]
-    record["links"] = links(conn, str(row["work_item_id"]))
-    record["refs"] = [
+    return record, lease
+
+
+#: The parts an item is read by, in the order its table of contents names them.
+#: `card` is the item itself; every other part is the field of that name in its
+#: full record, but `sections`, which divides the description, and `participants`,
+#: which only a goal or a stage has.
+PARTS = (
+    "card",
+    "comments",
+    "events",
+    "links",
+    "refs",
+    "questions",
+    "mentions",
+    "sessions",
+    "images",
+    "subscribers",
+    "claim",
+    "sections",
+    "participants",
+)
+#: The card's fields, in the order it carries them. A card carries each one its
+#: record has, so a field the record gains reaches the card once it is named here.
+CARD_FIELDS = (
+    "reference",
+    "title",
+    "kind",
+    "priority",
+    "state",
+    "open",
+    "container_state",
+    "acceptance",
+    "started_at",
+    "waits_for",
+    "workable",
+    "withheld",
+    "projects",
+    "claim_ref",
+    "claim_state",
+    "last_claim_ref",
+    "lapsed_claim",
+    "closed_at",
+    "labels",
+    "source",
+    "revision",
+    "created_at",
+    "updated_at",
+    "url",
+    "parent",
+    "description",
+    "checklist",
+    "summary",
+)
+#: What a step carries on the card beyond its id, text and whether it is done, each
+#: only when it is set: who holds it, who ticked it, and that a previous holder did.
+CARD_STEP_MARKS = ("claimed_by", "done_by", "by_previous_holder")
+#: The state's fields on the card; whether work is over in it is `open`.
+CARD_STATE = ("key", "name", "category")
+#: What the full record holds that is neither on the card nor a part: the ids the
+#: card's `reference` and `parent` stand for, the summary's comment, and the counts
+#: and marks of a cut history, which the table of contents and the parts carry.
+OFF_CARD = (
+    "work_item_id",
+    "planning_space_id",
+    "number",
+    "parent_id",
+    "summary_comment_id",
+    "comment_count",
+    "comments_total",
+    "threads_total",
+    "unresolved_total",
+    "events_total",
+    "history_truncated",
+    "truncated",
+    "mentions_total",
+)
+#: How many threads and events the comments and events parts carry when no cut is named.
+PART_THREADS = 5
+PART_EVENTS = 10
+#: The most newest events the events part reads when the caller names how many.
+PART_EVENTS_MOST = 1000
+#: How many comments one page of the comments part after a comment id carries. The
+#: next page starts after the last one read, as an unresolved page does, because the
+#: longest discussions do not fit one answer.
+COMMENTS_PAGE = 50
+
+
+def part_names(names: Iterable[str]) -> list[str]:
+    """The parts named, each once in the order named; a name no part has is refused."""
+
+    found = list(dict.fromkeys(names))
+    for name in found:
+        if name not in PARTS:
+            raise model.PlanningError(f"unknown part '{name}'; parts are {', '.join(PARTS)}")
+    return found
+
+
+def card(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    counted: Mapping[str, Mapping[str, int]] | None = None,
+) -> dict:
+    """An item as an agent reads it first: its fields, its own text and what else it has.
+
+    Built from the item's row and what is under it, with every other part counted
+    by aggregates (`part_counts`) rather than read, so a card costs the same however
+    long its history is. The sections are counted from the description the row
+    holds, and only for a long one (`sections.card_count`). `counted` carries what a
+    reader above this module counts: the questions, which `requests` reads.
+    """
+
+    record, lease = _record(conn, row, full=True)
+    state = record["state"]
+    found = {
+        **record,
+        # The card reads the state the record published and keeps what a reader names.
+        "state": None if state is None else {name: state[name] for name in CARD_STATE},
+        "url": acknowledgements.work_item_url(str(record["reference"])),
+        "parent": _parent_reference(conn, row["parent_id"]),
+        "description": row["description"],
+        "checklist": [card_step(step) for step in record["checklist"]],
+        "summary": model.summary(row["summary"], required=False),
+    }
+    shown = {name: found[name] for name in CARD_FIELDS if name in found}
+    if shown["summary"] is None:
+        del shown["summary"]
+    shown["parts"] = table_of_contents(
+        {
+            **part_counts(conn, str(row["work_item_id"]), lease),
+            "sections": {"count": sections.card_count(str(row["description"]))},
+            **(counted or {}),
+        }
+    )
+    return shown
+
+
+def card_step(step: Mapping[str, object]) -> dict:
+    """A step as the card carries it: its id, text and whether it is done, and each mark set."""
+
+    return {
+        "id": step["id"],
+        "text": step["text"],
+        "done": step["done"],
+        **{mark: step[mark] for mark in CARD_STEP_MARKS if step.get(mark)},
+    }
+
+
+def _parent_reference(conn: sqlite3.Connection, parent_id: object) -> str | None:
+    if not parent_id:
+        return None
+    found = conn.execute(
+        "SELECT p.key, i.number FROM work_items i JOIN planning_spaces p"
+        " ON p.planning_space_id = i.planning_space_id WHERE i.work_item_id = ?",
+        (str(parent_id),),
+    ).fetchone()
+    if found is None:
+        raise model.PlanningError("work item disappeared mid-write")
+    return model.human_id(str(found[0]), int(found[1]))
+
+
+def table_of_contents(counts: Mapping[str, Mapping[str, int]]) -> dict:
+    """Every part an item has but the card, in the order of `PARTS`, each with its counts.
+
+    A part with nothing in it is left out, so the card names only what there is to read.
+    """
+
+    return {
+        name: dict(counts[name])
+        for name in PARTS
+        if name != "card" and name in counts and int(counts[name].get("count", 0)) > 0
+    }
+
+
+#: Which calls name a session behind the writes to item `:id`; `sessions` lists them.
+_SESSION_CALLS = (
+    " FROM execution_events WHERE kind = :kind AND work_item_id = :id"
+    " AND identity_state = :confirmed AND COALESCE(session_id, '') != ''"
+)
+
+
+def _session_calls(identity: str) -> dict[str, str]:
+    """The values `_SESSION_CALLS` names."""
+
+    return {"id": identity, "kind": calls.KIND, "confirmed": calls.CONFIRMED}
+
+
+def part_counts(
+    conn: sqlite3.Connection, identity: str, lease: leases.Lease | None
+) -> dict[str, dict[str, int]]:
+    """How much an item has of each part but its questions, in one statement of aggregates.
+
+    Each count is the one reading the part answers with: the totals of `comments`
+    and `events`, the length of the rest. The followers are counted by reading
+    them, since whether one has lapsed is decided outside the store.
+    """
+
+    found = conn.execute(
+        "SELECT COUNT(*),"  # noqa: S608 - constant text
+        " COALESCE(SUM(reply_to IS NULL AND reply_to_request IS NULL), 0),"
+        " COALESCE(SUM(reply_to IS NULL AND reply_to_request IS NULL AND resolved_at IS NULL), 0),"
+        " COALESCE(SUM(length(body) + COALESCE(length(report), 0)), 0),"
+        " (SELECT COUNT(*) FROM work_item_events WHERE work_item_id = :id),"
+        " (SELECT COALESCE(SUM(length(detail)), 0) FROM work_item_events"
+        "  WHERE work_item_id = :id),"
+        " (SELECT COUNT(*) FROM work_item_links WHERE from_id = :id)"
+        " + (SELECT COUNT(*) FROM work_item_links WHERE to_id = :id),"
+        " (SELECT COUNT(*) FROM work_item_refs WHERE work_item_id = :id),"
+        " (SELECT COUNT(*) FROM work_item_events WHERE work_item_id = :id"
+        "  AND action = 'mentioned'),"
+        " (SELECT COUNT(DISTINCT session_id)" + _SESSION_CALLS + "),"
+        " (SELECT COUNT(*) FROM work_item_images WHERE work_item_id = :id)"
+        " FROM work_item_comments WHERE work_item_id = :id",
+        _session_calls(identity),
+    ).fetchone()
+    (
+        comments,
+        roots,
+        unresolved,
+        said,
+        events,
+        detail,
+        linked,
+        pointed,
+        named,
+        writers,
+        pictures,
+    ) = (int(value) for value in found)
+    return {
+        "comments": {
+            "count": comments,
+            "threads": roots,
+            "unresolved": unresolved,
+            "chars": said,
+        },
+        "events": {"count": events, "chars": detail},
+        "links": {"count": linked},
+        "refs": {"count": pointed},
+        "mentions": {"count": named},
+        "sessions": {"count": writers},
+        "images": {"count": pictures},
+        "subscribers": {"count": len(subscriptions.subscribers(conn, identity))},
+        "claim": {"count": 0 if lease is None else 1},
+    }
+
+
+def comments_part(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    comments_after: int | None = None,
+    thread: int | None = None,
+    unresolved: bool = False,
+) -> dict:
+    """The comments part: the newest threads, or the cut a comment mode names.
+
+    Without a mode it is the `PART_THREADS` threads with the newest activity.
+    `comments_after` alone is one flat page of `COMMENTS_PAGE` comments after that
+    id, roots and replies in the order written, 0 starting from the first; beside
+    `unresolved` it is where that page of roots starts. `truncated` says the cut
+    leaves out what it would have shown with more room: older threads, or a next
+    page.
+    """
+
+    identity = str(row["work_item_id"])
+    # Any `comments_after`, 0 too, is a page start a thread read cannot take.
+    _exclusive(thread=thread, comments_after=comments_after)
+    if comments_after is not None and not unresolved:
+        page, follows = _comments_page(conn, identity, comments_after)
+        return {"comments": page, **_thread_counts(conn, identity), "truncated": follows}
+    newest = thread is None and comments_after is None and not unresolved
+    found, shown, more = _cut_comments(
+        conn,
+        identity,
+        reference(conn, row),
+        comments_after=comments_after or 0,
+        threads=PART_THREADS if newest else None,
+        thread=thread,
+        unresolved=unresolved,
+    )
+    counts = _thread_counts(conn, identity)
+    if more is None:
+        more = newest and shown is not None and shown < counts["threads_total"]
+    return {"comments": found, **counts, "truncated": more}
+
+
+def _comments_page(conn: sqlite3.Connection, identity: str, after: int) -> tuple[list[dict], bool]:
+    """The first `COMMENTS_PAGE` comments after `after`, oldest first, and whether more follow.
+
+    Read one past its size, so whether more remain is known rather than guessed.
+    """
+
+    rows = conn.execute(
+        _COMMENT_ROWS + " WHERE m.work_item_id = ? AND m.id > ? ORDER BY m.id LIMIT ?",
+        (identity, after, COMMENTS_PAGE + 1),
+    ).fetchall()
+    page = with_mentions(conn, [comment_record(item) for item in rows[:COMMENTS_PAGE]])
+    return page, len(rows) > COMMENTS_PAGE
+
+
+def claim(conn: sqlite3.Connection, row: sqlite3.Row) -> dict | None:
+    """The lease on the item as the full record carries it, or None while nobody holds it."""
+
+    lease = leases.lease(conn, row)
+    return None if lease is None else lease.as_dict()
+
+
+def events_part(conn: sqlite3.Connection, row: sqlite3.Row, newest: int | None = None) -> dict:
+    """The events part: the `newest` events, `PART_EVENTS` unless named, oldest first.
+
+    Beside them how many there are, and `events_truncated` when some are left out:
+    a flag of its own, so that read beside the comments part it says which of the
+    two was cut.
+    """
+
+    identity = str(row["work_item_id"])
+    found = _events(conn, identity, PART_EVENTS if newest is None else events_count(newest))
+    total = _events_total(conn, identity)
+    return {"events": found, "events_total": total, "events_truncated": len(found) < total}
+
+
+def events_count(value: object) -> int:
+    """How many newest events a read of the events part names: 1 to `PART_EVENTS_MOST`.
+
+    An integer, never a boolean or text: the HTTP boundary reads its parameter as a
+    number first, so both surfaces are held to the one range with the one refusal.
+    """
+
+    if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= PART_EVENTS_MOST:
+        raise model.PlanningError(f"events must be between 1 and {PART_EVENTS_MOST}")
+    return value
+
+
+def refs(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
+    """The pointers attached to an item, in the order they were attached."""
+
+    return [
         {
             "kind": ref["kind"],
             "value": ref["value"],
@@ -885,10 +1332,28 @@ def present(
             "at": ref["created_at"],
         }
         for ref in conn.execute(
-            "SELECT * FROM work_item_refs WHERE work_item_id = ? ORDER BY id",
-            (str(row["work_item_id"]),),
+            "SELECT * FROM work_item_refs WHERE work_item_id = ? ORDER BY id", (work_item_id,)
         )
     ]
+
+
+def _cut_comments(
+    conn: sqlite3.Connection,
+    identity: str,
+    reference_text: str,
+    *,
+    comments: int | None = None,
+    comments_after: int = 0,
+    threads: int | None = None,
+    thread: int | None = None,
+    unresolved: bool = False,
+) -> tuple[list[dict], int | None, bool | None]:
+    """An item's comments as one cut of them reads, as `present` names the cuts.
+
+    Beside them, how many threads the cut shows, or None for a flat read of rows,
+    and whether an unresolved page leaves more after it, or None for any other cut.
+    """
+
     # A count may narrow `comments_after`; a thread read takes neither. An unresolved
     # read takes `comments_after` as where its next page starts, and no count.
     after = comments_after or None
@@ -905,33 +1370,34 @@ def present(
         _exclusive(threads=threads, comments=comments, comments_after=after, unresolved=marks)
     if unresolved:
         _exclusive(unresolved=marks, comments=comments)
-    shown_threads: int | None = None
     if thread is not None:
-        record["comments"] = _one_thread(conn, identity, record["reference"], thread)
-        shown_threads = 1
-    elif threads is not None:
-        record["comments"] = _newest_threads(conn, identity, threads)
-        shown_threads = len(record["comments"])
-    elif unresolved:
-        record["comments"], record["truncated"] = _unresolved_threads(
-            conn, identity, comments_after
-        )
-        shown_threads = len(record["comments"])
-    else:
-        record["comments"] = with_mentions(
-            conn,
-            [
-                comment_record(item)
-                for item in _newest(
-                    conn,
-                    _COMMENT_ROWS + " WHERE m.work_item_id = ? AND m.id > ?",
-                    "m.id",
-                    (identity, comments_after),
-                    comments,
-                )
-            ],
-        )
-    record["events"] = [
+        return _one_thread(conn, identity, reference_text, thread), 1, None
+    if threads is not None:
+        found = _newest_threads(conn, identity, threads)
+        return found, len(found), None
+    if unresolved:
+        found, more = _unresolved_threads(conn, identity, comments_after)
+        return found, len(found), more
+    flat = with_mentions(
+        conn,
+        [
+            comment_record(item)
+            for item in _newest(
+                conn,
+                _COMMENT_ROWS + " WHERE m.work_item_id = ? AND m.id > ?",
+                "m.id",
+                (identity, comments_after),
+                comments,
+            )
+        ],
+    )
+    return flat, None, None
+
+
+def _events(conn: sqlite3.Connection, identity: str, limit: int | None) -> list[dict]:
+    """An item's history, oldest first: every event, or only the newest `limit`."""
+
+    return [
         {
             "action": event["action"],
             "detail": event["detail"],
@@ -947,30 +1413,17 @@ def present(
             " WHERE e.work_item_id = ?",
             "e.id",
             (identity,),
-            events,
+            limit,
         )
     ]
-    if shown_threads is not None or comments is not None or comments_after or events is not None:
-        counts = _thread_counts(conn, identity)
-        events_total = int(
-            conn.execute(
-                "SELECT COUNT(*) FROM work_item_events WHERE work_item_id = ?", (identity,)
-            ).fetchone()[0]
-        )
-        record.update(counts)
-        record["events_total"] = events_total
-        # A thread read leaves out the threads it does not show; a flat read the rows.
-        record["history_truncated"] = (
-            shown_threads < counts["threads_total"]
-            if shown_threads is not None
-            else len(record["comments"]) < counts["comments_total"]
-        ) or len(record["events"]) < events_total
-    # The comments elsewhere that named it, which every full record carries:
-    # a write's answer is the same record a read gives.
-    record["mentions"], record["mentions_total"] = mentions_of(conn, identity, HTTP_MENTIONS)
-    # Who follows it without holding it, for the card to name.
-    record["subscribers"] = subscriptions.subscribers(conn, identity)
-    return record
+
+
+def _events_total(conn: sqlite3.Connection, identity: str) -> int:
+    return int(
+        conn.execute(
+            "SELECT COUNT(*) FROM work_item_events WHERE work_item_id = ?", (identity,)
+        ).fetchone()[0]
+    )
 
 
 def _newest(
@@ -1001,10 +1454,8 @@ def sessions(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
 
     found: dict[str, dict] = {}
     for call in conn.execute(
-        "SELECT session_id, client, identity_source, received_at FROM execution_events"
-        " WHERE kind = ? AND work_item_id = ? AND identity_state = ?"
-        " AND COALESCE(session_id, '') != '' ORDER BY id",
-        (calls.KIND, work_item_id, calls.CONFIRMED),
+        "SELECT session_id, client, identity_source, received_at" + _SESSION_CALLS + " ORDER BY id",
+        _session_calls(work_item_id),
     ):
         entry = found.setdefault(
             str(call["session_id"]),

@@ -8,6 +8,7 @@ import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
+import { doctorProjectMessages } from '@/shared/i18n/doctorProjectMessages.ts'
 import { doctorQuotaMessages } from '@/shared/i18n/doctorQuotaMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { graphFrameMessages } from '@/shared/i18n/graphFrameMessages.ts'
@@ -22,6 +23,7 @@ import { pastedImageMessages } from '@/shared/i18n/pastedImageMessages.ts'
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
+import { shellScopeMessages } from '@/shared/i18n/shellScopeMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { treeRowMessages } from '@/shared/i18n/treeRowMessages.ts'
 import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
@@ -90,7 +92,7 @@ export const ru = {
         system: 'Система',
       },
     },
-    scope: { label: 'Рабочая область', global: 'Глобально' },
+    scope: shellScopeMessages.ru.scope,
     bindings: {
       mapped: 'Связан',
       missing: 'Не найден',
@@ -146,21 +148,7 @@ export const ru = {
       stateDropped: 'Настройки вида в адресе не прочитаны и сброшены — раздел открыт как обычно.',
       queryDropped: 'Часть адреса не прочитана и отброшена — раздел открыт без неё.',
     },
-    planning: {
-      portfolio: 'Портфель',
-      projectCount: 'Проектов: {count}',
-      empty: 'Нет зарегистрированных проектов.',
-      bindingRequired: 'Выберите пространство планирования этого проекта вверху справа.',
-      projectMissing: 'Проект «{project}» не найден. Выберите проект и пространство ниже.',
-      openProject: 'Открыть проект',
-      reviewBinding: 'Проверить настройку проекта',
-      workItemCount: 'Задач: {count}',
-      noSpaces: 'Привязанных пространств пока нет.',
-      registryUnavailable:
-        'Список проектов не прочитан. Откройте «Настройки», чтобы проверить установку.',
-      noSpacesDetail:
-        'Запустите настройку проекта в Host Runtime, привяжите пространство и обновите экран.',
-    },
+    planning: shellScopeMessages.ru.planning,
     sessionsScope: {
       projectNote:
         'Сессии показываются по всему парку агентов. Отдельного просмотра сессий проекта пока нет.',
@@ -497,6 +485,7 @@ export const ru = {
       },
       ...doctorLoginMessages.ru,
       ...doctorQuotaMessages.ru,
+      ...doctorProjectMessages.ru,
       'listener-offline': {
         title: 'Локальный сервер не запущен',
         detail: 'На порту {port} нет ответа.',
@@ -541,33 +530,6 @@ export const ru = {
           'Установленное объявление не соответствует контракту адаптера, поэтому адаптер не подключён.',
         fix: 'Проверьте адаптер заново и переустановите его или удалите запись, если она больше не нужна. Остальные части Valkama продолжают работать.',
       },
-      'registry-available': {
-        title: 'Реестр проектов',
-        detail: 'Зарегистрировано проектов: {count}.',
-      },
-      'registry-unavailable': {
-        title: 'Реестр проектов недоступен',
-        detail: 'Valkama не может прочитать список проектов.',
-        fix: 'Проверьте, что файл реестра существует и содержит корректный JSON.',
-      },
-      'project-roots-available': {
-        title: 'Каталоги проектов',
-        detail: 'Все привязанные каталоги существуют.',
-      },
-      'project-roots-missing': {
-        title: 'Не найдены каталоги проектов',
-        detail: 'Отсутствуют каталоги: {projects}.',
-        fix: 'Проект был перемещён или удалён. Обновите canonical_root в реестре.',
-      },
-      'knowledge-roots-available': {
-        title: 'Каталоги знаний',
-        detail: 'Для каждого проекта доступен каталог {directory}.',
-      },
-      'knowledge-roots-missing': {
-        title: 'Нет каталогов знаний',
-        detail: 'Каталог {directory} не найден в: {projects}.',
-        fix: 'Создайте каталог для поиска по знаниям или оставьте его отсутствующим, если проект хранит знания в другом месте.',
-      },
     },
   },
   memoryPage: {
@@ -603,9 +565,10 @@ export const ru = {
     none: 'К этому элементу ничего не прикреплено.',
     search: 'Искать в знаниях',
     searchHint: 'собственные документы проекта',
+    searchDefault: 'документы проекта пространства по умолчанию',
     searchIn: 'Ищет в {root}',
     searchAction: 'Найти',
-    noProject: 'Откройте элемент внутри проекта, чтобы искать по его знаниям.',
+    noProject: 'У пространства нет проекта, по знаниям которого можно искать.',
     technicalDetails: 'Технические сведения',
     provider: 'Ответил {provider} · {capabilities}',
     unavailable: 'Провайдер не отвечает.',

@@ -6,7 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { chainOf, mapMember } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
 import { serve, showChain } from './chainFixtures.ts'
-import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
@@ -38,7 +38,7 @@ for (const width of [1280, 390]) {
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
+        scope: spaceScope,
         entity: planningWorkItemEntity(workItemRef),
       }),
     )

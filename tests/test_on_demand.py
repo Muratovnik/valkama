@@ -196,7 +196,7 @@ class RealProcessTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.home / "seed" / "hub.sqlite3")}):
             (self.home / "seed").mkdir()
             conn = store.connect()
-            service.create_planning_space(conn, project_id="old", name="Old", key="OLD")
+            service.create_planning_space(conn, name="Old", key="OLD")
             service.create_work_item(conn, space="OLD", title="A card from before the rename")
             conn.commit()
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")

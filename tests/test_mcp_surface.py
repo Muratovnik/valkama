@@ -41,6 +41,7 @@ from server.planning import api as planning_api
 from server.planning import calls as planning_calls
 from server.planning import chain as planning_chain
 from server.planning import model as planning_model
+from server.planning import read_model as planning_read_model
 from server.planning import service as planning_service
 from server.planning import tools as planning_tools
 from tests.planning_fixtures import basis_for, bulk_items
@@ -86,9 +87,7 @@ class McpSurfaceTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        planning_service.create_planning_space(
-            self.conn, project_id="mcp", name=SPACE_NAME, key=SPACE_KEY
-        )
+        planning_service.create_planning_space(self.conn, name=SPACE_NAME, key=SPACE_KEY)
         self.conn.commit()
 
     def converse(self, *messages: dict | bytes) -> list[dict]:
@@ -925,13 +924,17 @@ class ToolArgumentTests(McpSurfaceTestCase):
             "apply_work_item_changes", ref=self.first, comment={"body": "a note"}
         )
         self.assertEqual(self.first, commented["reference"])
-        self.assertEqual(1, len(self.call_tool("get_work_item", id=self.first)["comments"]))
+        self.assertEqual(
+            1, self.call_tool("get_work_item", id=self.first)["parts"]["comments"]["count"]
+        )
         self.call_tool(
             "apply_work_item_changes",
             reference=self.second,
             refs=[{"kind": "commit", "value": "d5678"}],
         )
-        self.assertEqual(1, len(self.call_tool("get_work_item", id=self.second)["refs"]))
+        self.assertEqual(
+            1, self.call_tool("get_work_item", id=self.second)["parts"]["refs"]["count"]
+        )
 
     def test_a_space_is_read_from_planning_space_id(self) -> None:
         created = self.call_tool("create_work_item", planning_space_id=SPACE_KEY, title="Third")
@@ -1045,7 +1048,7 @@ class ToolArgumentTests(McpSurfaceTestCase):
     def test_an_item_is_read_by_work_item_id_where_id_is_a_work_item(self) -> None:
         expected = self.call_tool("get_work_item", id=self.first)
         self.assertEqual(expected, self.call_tool("get_work_item", work_item_id=self.first))
-        uuid = expected["work_item_id"]
+        uuid = planning_service.get_work_item(self.conn, self.first)["work_item_id"]
         self.assertEqual(
             self.first, self.call_tool("get_work_item", work_item_id=uuid)["reference"]
         )
@@ -1063,7 +1066,7 @@ class ToolArgumentTests(McpSurfaceTestCase):
                     "apply_work_item_changes", id=item, author="one", changes=wrapped
                 )
                 self.assertEqual({"claim", "comment"}, set(applied["applied"]))
-                read = self.call_tool("get_work_item", id=item)
+                read = self.call_tool("get_work_item", id=item, parts=["card", "comments"])
                 self.assertEqual("one", read["claim_ref"])
                 self.assertEqual(["wrapped"], [comment["body"] for comment in read["comments"]])
 
@@ -1087,7 +1090,7 @@ class ToolArgumentTests(McpSurfaceTestCase):
             changes={"comment": {"body": "inside"}},
         )
         self.assertIn("argument 'comment' given both inside 'changes' and beside it", message)
-        self.assertEqual([], self.call_tool("get_work_item", id=self.first)["comments"])
+        self.assertNotIn("comments", self.call_tool("get_work_item", id=self.first)["parts"])
 
     def test_a_wrapped_group_is_held_to_the_names_the_tool_takes(self) -> None:
         message = self.refusal(
@@ -1891,13 +1894,15 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 self.assertIn(wanted, error["message"])
         self.assert_untouched()
 
-    def test_verbose_answers_with_the_full_item_and_what_was_applied(self) -> None:
+    def test_verbose_answers_with_the_card_and_what_was_applied(self) -> None:
         answer = self.answer(
             "apply_work_item_changes",
             {"id": self.reference, "comment": {"body": "only this"}, "verbose": True},
         )
-        self.assertEqual(["only this"], [entry["body"] for entry in answer["comments"]])
-        self.assertIn("events", answer)
+        # The card counts the comment the batch wrote; the comments part reads it.
+        self.assertEqual(1, answer["parts"]["comments"]["count"])
+        self.assertNotIn("comments", answer)
+        self.assertNotIn("events", answer)
         self.assertEqual(["comment"], list(answer["applied"]))
 
     def test_the_checklist_group_takes_the_steps_as_a_bare_list(self) -> None:
@@ -2128,7 +2133,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
             self.assertEqual("linked", events[-1]["action"])
             self.assertEqual("confirmed", events[-1]["identity"]["state"])
 
-    def test_verbose_answers_with_the_full_item_and_what_was_applied(self) -> None:
+    def test_verbose_answers_with_the_card_and_what_was_applied(self) -> None:
         answer = self.answer(
             "create_work_item",
             {
@@ -2138,7 +2143,9 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
                 "verbose": True,
             },
         )
-        self.assertIn("events", answer)
+        self.assertNotIn("events", answer)
+        self.assertEqual({"count": 1}, answer["parts"]["links"])
+        self.assertIsInstance(answer["similar"], list)
         self.assertEqual({"links": 1}, answer["applied"])
         self.assertEqual("", answer["claim_ref"])
 
@@ -2221,7 +2228,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
         tools = {tool["name"]: tool for tool in answer["result"]["tools"]}
         self.assertEqual(len(mcp_surface.catalogue()), len(tools))
         schema = tools["create_work_item"]["inputSchema"]
-        self.assertEqual(["space", "title"], schema["required"])
+        self.assertEqual(["title"], schema["required"])
         self.assertEqual("boolean", schema["properties"]["claim"]["type"])
         links = schema["properties"]["links"]
         self.assertEqual(planning_api.MAX_APPLY_ENTRIES, links["maxItems"])
@@ -2243,6 +2250,13 @@ class ServerInstructionTests(unittest.TestCase):
                 "only for an item that should never have existed."
             )
         )
+
+    def test_the_text_reads_an_item_by_parts_and_names_no_whole_record(self) -> None:
+        # `full` left get_work_item, and a verbose write answers with the card.
+        text = mcp_surface.PLANNING_INSTRUCTIONS
+        self.assertNotRegex(text, r"\bfull\b")
+        self.assertIn("get_work_item's events part returns it", text)
+        self.assertIn("verbose=true returns its card", text)
 
     def test_the_address_rule_names_a_link_for_the_owner_and_none_for_valkama(self) -> None:
         text = mcp_surface.PLANNING_INSTRUCTIONS
@@ -2294,8 +2308,10 @@ class CompactWorkItemReadTests(WireCallTestCase):
         self.conn.commit()
         self.complete = planning_service.get_work_item(self.conn, self.reference)
 
-    def test_the_default_answer_carries_the_newest_history_and_its_totals(self) -> None:
-        answer = self.answer("get_work_item", {"id": self.reference})
+    def test_the_history_parts_carry_the_newest_history_and_its_totals(self) -> None:
+        answer = self.answer(
+            "get_work_item", {"id": self.reference, "parts": ["comments", "events"]}
+        )
         # Seven threads with no replies: the newest five roots, each saying so.
         self.assertEqual(
             [
@@ -2305,33 +2321,49 @@ class CompactWorkItemReadTests(WireCallTestCase):
             answer["comments"],
         )
         self.assertEqual(self.complete["events"][-10:], answer["events"])
+        # Each part says for itself whether it left something out.
         self.assertEqual(
-            (7, 7, 26, True),
+            (7, 7, True, 26, True),
             (
                 answer["comments_total"],
                 answer["threads_total"],
+                answer["truncated"],
                 answer["events_total"],
-                answer["history_truncated"],
+                answer["events_truncated"],
             ),
         )
-        for key, value in self.complete.items():
-            if key not in ("comments", "events"):
-                self.assertEqual(value, answer[key], key)
-
-    def test_full_answers_with_the_complete_record(self) -> None:
-        answer = self.answer("get_work_item", {"id": self.reference, "full": True})
-        # A whole read carries every comment that told the item, so it counts none.
         self.assertEqual(
-            {k: v for k, v in self.complete.items() if k != "mentions_total"},
-            {
-                k: v
-                for k, v in answer.items()
-                if k not in ("sessions", "url", "questions", "images")
-            },
+            (self.complete["reference"], self.complete["revision"]),
+            (answer["reference"], answer["revision"]),
         )
-        self.assertNotIn("history_truncated", answer)
-        self.assertNotIn("mentions_total", answer)
-        self.assertEqual([], answer["sessions"])
+
+    def test_each_part_says_what_it_left_out_whatever_it_is_read_with(self) -> None:
+        """A cut of one part does not mark the other as cut."""
+
+        reference = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Quiet")[
+            "reference"
+        ]
+        for number in range(7):
+            planning_service.comment_work_item(self.conn, reference, f"note {number}")
+        self.conn.commit()
+        answer = self.answer("get_work_item", {"id": reference, "parts": ["comments", "events"]})
+        self.assertEqual((True, False), (answer["truncated"], answer["events_truncated"]))
+        answer = self.answer(
+            "get_work_item",
+            {"id": self.reference, "parts": ["comments", "events"], "comments_after": 0},
+        )
+        self.assertEqual((False, True), (answer["truncated"], answer["events_truncated"]))
+
+    def test_events_reads_the_newest_n_events_alone(self) -> None:
+        for newest, shown, cut in ((3, 3, True), (1000, 26, False)):
+            with self.subTest(events=newest):
+                answer = self.answer("get_work_item", {"id": self.reference, "events": newest})
+                self.assertEqual(
+                    {"reference", "revision", "events", "events_total", "events_truncated"},
+                    set(answer),
+                )
+                self.assertEqual(self.complete["events"][-shown:], answer["events"])
+                self.assertEqual((26, cut), (answer["events_total"], answer["events_truncated"]))
 
     def test_comments_after_answers_with_all_that_came_since_and_nothing_before(self) -> None:
         """More than the newest five, because a reader catching up must not lose the rest."""
@@ -2342,11 +2374,8 @@ class CompactWorkItemReadTests(WireCallTestCase):
         )
         self.assertEqual(comments[1:], answer["comments"])
         self.assertLess(5, len(answer["comments"]))
-        self.assertEqual(self.complete["events"][-10:], answer["events"])
-        self.assertEqual(
-            (len(comments), 26, True),
-            (answer["comments_total"], answer["events_total"], answer["history_truncated"]),
-        )
+        self.assertNotIn("events", answer)
+        self.assertEqual((len(comments), False), (answer["comments_total"], answer["truncated"]))
 
     def test_comments_after_the_last_one_read_is_empty_and_keeps_the_totals(self) -> None:
         comments = self.complete["comments"]
@@ -2354,14 +2383,13 @@ class CompactWorkItemReadTests(WireCallTestCase):
             "get_work_item", {"id": self.reference, "comments_after": comments[-1]["id"]}
         )
         self.assertEqual(
-            ([], len(comments), True),
-            (answer["comments"], answer["comments_total"], answer["history_truncated"]),
+            ([], len(comments), False),
+            (answer["comments"], answer["comments_total"], answer["truncated"]),
         )
 
     def test_comments_after_zero_is_every_comment(self) -> None:
         answer = self.answer("get_work_item", {"id": self.reference, "comments_after": 0})
         self.assertEqual(self.complete["comments"], answer["comments"])
-        self.assertEqual(self.complete["events"][-10:], answer["events"])
 
     def test_comments_after_an_id_of_another_item_is_a_point_in_the_same_sequence(self) -> None:
         """Comment ids run across items, so the point need not belong to this one."""
@@ -2374,9 +2402,8 @@ class CompactWorkItemReadTests(WireCallTestCase):
         answer = self.answer("get_work_item", {"id": self.reference, "comments_after": noted["id"]})
         self.assertEqual(["later"], [comment["body"] for comment in answer["comments"]])
 
-    def test_comments_after_is_refused_with_full_and_when_it_is_no_id(self) -> None:
+    def test_comments_after_is_refused_when_it_is_no_id(self) -> None:
         for extra, wanted in (
-            ({"comments_after": 1, "full": True}, "full and comments_after exclude each other"),
             ({"comments_after": -1}, "comments_after must be a non-negative integer"),
             ({"comments_after": "12"}, "comments_after must be a non-negative integer"),
             ({"comments_after": True}, "comments_after must be a non-negative integer"),
@@ -2391,13 +2418,14 @@ class CompactWorkItemReadTests(WireCallTestCase):
             "reference"
         ]
         self.conn.commit()
-        answer = self.answer("get_work_item", {"id": reference})
+        answer = self.answer("get_work_item", {"id": reference, "parts": ["comments", "events"]})
         self.assertEqual(
-            (0, 1, False, 1),
+            (0, 1, False, False, 1),
             (
                 answer["comments_total"],
                 answer["events_total"],
-                answer["history_truncated"],
+                answer["truncated"],
+                answer["events_truncated"],
                 len(answer["events"]),
             ),
         )
@@ -2412,7 +2440,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
             self.conn, blocker["reference"], "done", acceptance="assignment"
         )
         self.conn.commit()
-        (link,) = self.answer("get_work_item", {"id": self.reference})["links"]
+        (link,) = self.answer("get_work_item", {"id": self.reference, "parts": "links"})["links"]
         self.assertEqual(
             {
                 "kind": "blocks",
@@ -2442,29 +2470,54 @@ class CompactWorkItemReadTests(WireCallTestCase):
                         "description": "A work item, by its reference (MAIN-142) or its"
                         " work_item_id.",
                     },
-                    "full": {
-                        "type": "boolean",
-                        "description": "Answer with every comment and history event instead"
-                        " of the newest ones.",
+                    "parts": {
+                        "anyOf": [
+                            {"type": "string", "enum": list(planning_read_model.PARTS)},
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": list(planning_read_model.PARTS),
+                                },
+                            },
+                        ],
+                        "description": "What to read: card, the default, or any other part by"
+                        " name; one name reads as a list of it.",
                     },
-                    "comments_after": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "description": "A comment id: answer with every comment after it,"
-                        " oldest first, instead of the newest ones. Not together with full.",
+                    "unresolved": {
+                        "type": "boolean",
+                        "description": "Read one page of the roots without the resolved mark,"
+                        " each with replies and last_reply; comments_after is where the next"
+                        " page starts. Not together with thread.",
                     },
                     "thread": {
                         "type": "integer",
                         "minimum": 1,
-                        "description": "A comment id: answer with its thread, the root and"
-                        " every reply oldest first; a reply's id reads its root's thread. Not"
-                        " together with full or comments_after.",
+                        "description": "A comment id: read its thread, the root and every"
+                        " reply oldest first; a reply's id reads its root's thread. Not"
+                        " together with comments_after.",
                     },
-                    "unresolved": {
-                        "type": "boolean",
-                        "description": "Answer with the roots without the resolved mark, each"
-                        " with replies and last_reply. Not together with full or thread;"
-                        " comments_after is where the next page starts.",
+                    "comments_after": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "A comment id: read one flat page of the comments"
+                        " after it, oldest first, 0 starting from the first; beside"
+                        " unresolved, where the next page of roots starts.",
+                    },
+                    "events": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000,
+                        "description": "How many of the newest history events to read.",
+                    },
+                    "section": {
+                        "anyOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                        ],
+                        "description": "A key of the description's sections, as the sections"
+                        " part names them, or a list of keys: read those sections with their"
+                        " text, in the description's order.",
                     },
                 },
                 "required": ["id"],
@@ -2472,11 +2525,77 @@ class CompactWorkItemReadTests(WireCallTestCase):
             tool["inputSchema"],
         )
 
-    def test_full_must_be_a_boolean(self) -> None:
-        error = self.refusal("get_work_item", {"id": self.reference, "full": "yes"})
-        self.assertEqual(
-            ("invalid_request", "full must be a boolean"), (error["code"], error["message"])
+    def test_full_is_refused_naming_the_arguments_the_read_takes(self) -> None:
+        [listed] = self.converse(
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": params()}
         )
+        tool = next(t for t in listed["result"]["tools"] if t["name"] == "get_work_item")
+        named = ", ".join(
+            f"'{argument}' (required)" if argument == "id" else f"'{argument}'"
+            for argument in tool["inputSchema"]["properties"]
+        )
+        for value in (True, "yes"):
+            with self.subTest(full=value):
+                error = self.refusal("get_work_item", {"id": self.reference, "full": value})
+                self.assertEqual(
+                    (
+                        "invalid_request",
+                        f"get_work_item: unknown argument 'full'; expected {named}",
+                    ),
+                    (error["code"], error["message"]),
+                )
+
+    def test_the_read_refuses_what_its_parts_cannot_answer(self) -> None:
+        """Each refusal in the words the contract gives it, so an agent corrects itself."""
+
+        root = self.complete["comments"][0]["id"]
+        planning_service.update_work_item(
+            self.conn, self.reference, description="# Plan\nstep\n# Notes\nnone yet"
+        )
+        self.conn.commit()
+        for arguments, wanted in (
+            (
+                {"parts": "history"},
+                "unknown part 'history'; parts are card, comments, events, links, refs,"
+                " questions, mentions, sessions, images, subscribers, claim, sections,"
+                " participants",
+            ),
+            (
+                {"parts": ["card"], "thread": root},
+                "thread reads the comments part: add comments to parts or leave parts out",
+            ),
+            (
+                {"parts": ["card"], "unresolved": True},
+                "unresolved reads the comments part: add comments to parts or leave parts out",
+            ),
+            (
+                {"parts": ["events"], "comments_after": 0},
+                "comments_after reads the comments part: add comments to parts or leave parts out",
+            ),
+            (
+                {"parts": ["card", "comments"], "events": 3},
+                "events reads the events part: add events to parts or leave parts out",
+            ),
+            (
+                {"parts": ["card"], "section": "(start)"},
+                "section reads the sections part: add sections to parts or leave parts out",
+            ),
+            (
+                {"section": ["no such heading"]},
+                "unknown section 'no such heading'; sections are Plan, Notes",
+            ),
+            ({"section": []}, "section must be a section key or a list of them"),
+            ({"section": 3}, "section must be a section key or a list of them"),
+            ({"events": 0}, "events must be between 1 and 1000"),
+            ({"events": 1001}, "events must be between 1 and 1000"),
+            ({"events": True}, "events must be between 1 and 1000"),
+            ({"events": "3"}, "events must be between 1 and 1000"),
+            ({"thread": root, "unresolved": True}, "thread and unresolved exclude each other"),
+            ({"thread": root, "comments_after": 0}, "thread and comments_after exclude each other"),
+        ):
+            with self.subTest(arguments=arguments):
+                error = self.refusal("get_work_item", {"id": self.reference, **arguments})
+                self.assertEqual(("invalid_request", wanted), (error["code"], error["message"]))
 
     def test_sessions_name_only_the_confirmed_sessions_that_wrote(self) -> None:
         tool_use = "toolu_01ABCdefGHIjklMNOpqrSTU"
@@ -2493,21 +2612,19 @@ class CompactWorkItemReadTests(WireCallTestCase):
         self.conn.commit()
         self.assertEqual(5, len(self.calls()))
 
-        for full in (False, True):
-            with self.subTest(full=full):
-                [session] = self.answer("get_work_item", {"id": self.reference, "full": full})[
-                    "sessions"
-                ]
-                self.assertEqual(
-                    (self.SESSION, "codex", "codex-meta", 2),
-                    (
-                        session["session_id"],
-                        session["client"],
-                        session["identity_source"],
-                        session["writes"],
-                    ),
-                )
-                self.assertLessEqual(session["first_at"], session["last_at"])
+        [session] = self.answer("get_work_item", {"id": self.reference, "parts": ["sessions"]})[
+            "sessions"
+        ]
+        self.assertEqual(
+            (self.SESSION, "codex", "codex-meta", 2),
+            (
+                session["session_id"],
+                session["client"],
+                session["identity_source"],
+                session["writes"],
+            ),
+        )
+        self.assertLessEqual(session["first_at"], session["last_at"])
 
     def test_the_http_reads_answer_exactly_what_they_did(self) -> None:
         # The browser inspector reads the item through the module route, whose

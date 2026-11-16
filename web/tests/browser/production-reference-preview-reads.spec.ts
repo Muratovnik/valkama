@@ -70,13 +70,13 @@ test('in the open space the card comes from what the page holds, with no request
   expect(seen).toEqual([])
 })
 
-test('outside the open space one brief request draws it, with its project', async ({ page }) => {
+test('outside the open space one brief request draws it, with its space', async ({ page }) => {
   const { dialog, reads } = await openHub(page)
   const seen = apiRequests(page)
   await rest(page, reference(dialog, 'MAIN-12'))
   const shown = card(page)
   await expect(shown).toContainText('Keep the reader in place when a card closes')
-  await expect(shown).toContainText('Example Project')
+  await expect(shown.locator('.preview-space')).toHaveText('Main')
   expect(reads.asked).toEqual([{ reference: 'MAIN-12', scope: dataScopeId }])
   expect(seen.filter((path) => path.includes('/work-item'))).toHaveLength(1)
   expect(seen.find((path) => path.includes('/work-item'))).toContain('brief=true')

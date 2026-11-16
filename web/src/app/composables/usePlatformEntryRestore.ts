@@ -6,7 +6,8 @@ import { useDebounceFn } from '@vueuse/core'
 import { savePlatformUiPrefs } from '@/shared/api/platformApi.ts'
 import type { PlatformContextReady, PlatformUiPrefs } from '@/shared/api/platformApiTypes.ts'
 import type { ModuleManifest } from '@/shared/api/platformModuleContract.ts'
-import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+import { sameSpace } from '@/shared/api/platformPlanningRefs.ts'
+import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { resolveManifestRouteAuthority } from '@/shared/api/platformRoute.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 
@@ -27,16 +28,32 @@ interface EntryInputs {
  *
  * Desktop and browser both open "/", so the last route is restored from the
  * server-side preference once the context read model arrives — but only if it
- * still resolves: a project that lost its binding, or a resource that is no longer
- * mapped, falls back rather than restoring a dead destination.
+ * still resolves: a space this workstation no longer has falls back rather than
+ * restoring a dead destination.
  */
 /**
  * The remembered route, or null when it no longer resolves.
  *
- * Null is a real answer here, not an error: a project that lost its binding and
- * a resource that is no longer mapped are both ordinary, and the caller has a
- * fallback for them. Restoring either would open a destination that is gone.
+ * Null is a real answer here, not an error: a space that went away is ordinary,
+ * and the caller has a fallback for it. A project the space no longer lists is
+ * dropped and the whole space opens. Restoring either would open a destination
+ * that is gone.
  */
+/** The remembered scope as it still stands: its space listed, its project still one of it. */
+function restoredScope(
+  context: PlatformContextReady,
+  scope: OperatingScope,
+): OperatingScope | null {
+  if (scope.kind === 'global') return scope
+  const space = context.spaces.find((item) => sameSpace(item, scope.space_ref))
+  if (space === undefined) return null
+  const project = scope.project_ref?.project_id
+  const listed = [...space.projects, ...space.other_space_projects].some(
+    (item) => item.project_id === project,
+  )
+  return project === undefined || listed ? scope : { kind: 'space', space_ref: scope.space_ref }
+}
+
 export function resolvedPreferredRoute(
   context: PlatformContextReady,
   prefs: PlatformUiPrefs,
@@ -45,22 +62,11 @@ export function resolvedPreferredRoute(
   const manifest = modules.find((module) => module.module_id === prefs.module_id)
   if (!manifest) return null
   const scope = prefs.scope
-  const base: PlatformRoute = { module_id: manifest.module_id, scope }
+  const restored = restoredScope(context, scope)
+  if (restored === null) return null
+  const base: PlatformRoute = { module_id: manifest.module_id, scope: restored }
   if (resolveManifestRouteAuthority(manifest, base).status === 'unavailable') return null
-  if (scope.kind === 'global') {
-    if (!prefs.resource_ref) return base
-    const preferred = { ...base, entity: prefs.resource_ref }
-    return resolveManifestRouteAuthority(manifest, preferred).status === 'ready' ? preferred : base
-  }
-  const project = context.projects.find((item) => item.project_id === scope.project_ref.project_id)
-  if (project?.binding_state !== 'mapped') return null
-  if (prefs.resource_ref === undefined) return base
-  const encodedResource = JSON.stringify(prefs.resource_ref)
-  const stillMapped = project.resources.some(
-    (resource) =>
-      resource.state === 'mapped' && JSON.stringify(resource.resource_ref) === encodedResource,
-  )
-  if (!stillMapped) return base
+  if (!prefs.resource_ref) return base
   const preferred = { ...base, entity: prefs.resource_ref }
   return resolveManifestRouteAuthority(manifest, preferred).status === 'ready' ? preferred : base
 }
@@ -72,13 +78,14 @@ export function usePlatformEntryRestore(inputs: EntryInputs) {
     const preferred =
       context && prefs ? resolvedPreferredRoute(context, prefs, inputs.modules.value) : null
     if (preferred) return preferred
-    // Nothing remembered, or it is gone. One mapped project is an unambiguous
-    // destination on its own; anything else lands on the shell default.
-    const mapped = (context?.projects ?? []).filter((project) => project.binding_state === 'mapped')
-    if (mapped.length === 1) {
+    // Nothing remembered, or it is gone. One space is an unambiguous destination
+    // on its own; anything else lands on the shell default.
+    const spaces = context?.spaces ?? []
+    if (spaces.length === 1) {
+      const [{ data_scope_id, space_key }] = spaces
       return {
         module_id: 'planning',
-        scope: { kind: 'project', project_ref: { project_id: mapped[0].project_id } },
+        scope: { kind: 'space', space_ref: { data_scope_id, space_key } },
       }
     }
     return inputs.defaultRoute

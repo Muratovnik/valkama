@@ -3,7 +3,13 @@
     {
       "key": "MAIN",
       "name": "Contract",
-      "project_id": "example-project",
+      "default_project": "example-project",
+      "projects": [
+        {
+          "project_id": "example-project",
+          "display_name": "example-project"
+        }
+      ],
       "rows": [
         {
           "reference": "MAIN-4",

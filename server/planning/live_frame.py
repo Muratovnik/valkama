@@ -31,27 +31,28 @@ the panel can open the session from the row; a row only an attempt moves has non
 
 Beside its rows a space lists `sessions`: those at work or waiting none of whose work
 is a row, as `live_sessions` reads them, so that a session with no item is seen at
-all. A session's space is the one bound to the project whose root is the longest that
-contains the session's `opened_folder`, or else its `cwd`; with no such root, or a
-project that binds no space of this store, it is listed in `elsewhere`. That places a
-row and nothing more: nothing is written or routed from it, and no binding is ever
-inferred from a folder, so `project_registry.session_space_context` stays the only
-answer to where a session's space lives. A space with neither rows nor sessions is
-not in the frame.
+all. A session stands where `sessions.session_place` puts it: the folder
+`sessions.session_folder` picks, under the longest root that holds it
+(`project_registry.place_of_folder`), in the space that root's project is bound to in
+this store. With no such root, or a project that binds no space of this store, it is
+listed in `elsewhere`. That places a row and nothing more: nothing is written or
+routed from it, and no binding is ever inferred from a folder. A space with neither
+rows nor sessions is not in the frame.
+
+A space names its `projects`, the default one first, and its `default_project`;
+both are null when the registry could not be read, since its projects are then
+unknown rather than none.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from ..projects import project_registry
 from ..store_identity.metadata import read_store_metadata
-from ..store_identity.primitives import ContractError
-from ..store_identity.refs import planning_space_ref
 from . import executors, item_tree, live_sessions, live_work, model, read_model, states
 
 #: Every open item and every pinned one, with all their ancestors, in one read. Only a
@@ -168,59 +169,12 @@ def _number(row: _Item) -> int:
     return row.number
 
 
-@dataclass(frozen=True)
-class _Roots:
-    """The registered project roots, each with the space of this store it binds, if any."""
-
-    #: Normalized root, project, bound space key or None; longest root first.
-    roots: list[tuple[str, str, str | None]]
-    #: The project that binds each space of this store.
-    bound: dict[str, str]
-
-
-def _normalized(path: str) -> str:
-    return os.path.normcase(os.path.normpath(path))
-
-
-def _roots(conn: sqlite3.Connection) -> _Roots:
-    """What the registry says of this store's spaces; an unreadable registry says nothing."""
-
-    data_scope_id = read_store_metadata(conn)["data_scope_id"]
-    roots: list[tuple[str, str, str | None]] = []
-    bound: dict[str, str] = {}
-    for project in project_registry.read_registry()["projects"]:
-        key: str | None = None
-        binding = project["planning_binding"]
-        if binding is not None:
-            try:
-                space = planning_space_ref(binding)
-            except ContractError:
-                space = None
-            if space is not None and space["data_scope_id"] == data_scope_id:
-                key = str(space["space_key"])
-                bound[key] = str(project["project_id"])
-        roots.append((_normalized(str(project["canonical_root"])), str(project["project_id"]), key))
-    roots.sort(key=lambda root: len(root[0]), reverse=True)
-    return _Roots(roots, bound)
-
-
-def _space_of(folder: str, roots: _Roots) -> str | None:
-    """The space a folder's longest containing root binds, as a caption; None for none."""
-
-    if not folder:
-        return None
-    place = _normalized(folder)
-    for root, _project, key in roots.roots:
-        if place == root or place.startswith(root.rstrip(os.sep) + os.sep):
-            return key
-    return None
-
-
 def _sessions(
     conn: sqlite3.Connection,
     known: Mapping[str, live_work.SessionWork],
     rows: set[str],
-    roots: _Roots,
+    listing: project_registry.RegistryResult,
+    data_scope_id: str,
     spaces: Iterable[str],
     executor_of: Mapping[str, dict],
 ) -> tuple[dict[str, list[dict]], list[dict]]:
@@ -234,7 +188,8 @@ def _sessions(
     by_space: dict[str, list[dict]] = {}
     elsewhere: list[dict] = []
     for entry in live_sessions.listed(conn, known, rows, executor_of):
-        key = _space_of(entry.folder, roots)
+        found = project_registry.place_of_folder(entry.folder, listing, data_scope_id)
+        key = None if found is None else found["space_key"]
         if key is None or key not in held:
             elsewhere.append(entry.row)
         else:
@@ -307,7 +262,9 @@ def frame(conn: sqlite3.Connection) -> dict:
                 held[step["claimed_by"]] = item.identity
     placement = live_work.placed(conn, records, held_steps=held)
     shown = _shown(items, placement.live)
-    roots = _roots(conn)
+    # An unreadable registry places no session and names no project.
+    listing = project_registry.read_registry()
+    data_scope_id = str(read_store_metadata(conn)["data_scope_id"])
     references = {item.identity: item.reference for item in items}
     by_space: dict[str, list[_Item]] = {}
     for item in items:
@@ -324,12 +281,24 @@ def frame(conn: sqlite3.Connection) -> dict:
     executor_of = executors.session_executors(
         conn, {*placement.sessions, *placement.shown_by.values()}
     )
-    sessions, elsewhere = _sessions(conn, placement.sessions, shown, roots, names, executor_of)
+    sessions, elsewhere = _sessions(
+        conn, placement.sessions, shown, listing, data_scope_id, names, executor_of
+    )
+    # An unreadable registry knows no projects, which is not the same as none.
+    known = listing["status"] == "available"
     spaces = [
         {
             "key": key,
             "name": names[key],
-            "project_id": roots.bound.get(key),
+            **(
+                project_registry.projects_shown(
+                    project_registry.space_projects(
+                        listing["projects"], {"data_scope_id": data_scope_id, "space_key": key}
+                    )
+                )
+                if known
+                else {"projects": None, "default_project": None}
+            ),
             "rows": [
                 _row(item, placement, references, executor_of, derived)
                 for item in _ordered(by_space.get(key, []))

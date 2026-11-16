@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test'
 
-import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
@@ -9,21 +9,19 @@ import { expectNoSilentClipping } from './overflow.ts'
 import {
   attachedDataScopeId,
   attachedSpaceRef,
-  projectId,
-  projectScope,
   spaceRef,
+  spaceScope,
   workItem,
   workItemRef,
 } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-type Row = { project: string; reference: string; title: string; writable: boolean }
+type Row = { reference: string; title: string; writable: boolean }
 
 /** One finder row; `n` keeps each row's identity distinct. */
-function finderRow({ project, reference, title, writable }: Row, n: number) {
+function finderRow({ reference, title, writable }: Row, n: number) {
   return {
     target: {
-      project_id: project,
       space_ref: writable ? spaceRef : attachedSpaceRef,
       reference,
       writable,
@@ -64,7 +62,6 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
         ? [
             finderRow(
               {
-                project: projectId,
                 reference: workItemRef.reference,
                 title: LONG_TITLE,
                 writable: true,
@@ -73,7 +70,6 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
             ),
             finderRow(
               {
-                project: 'second-project',
                 reference: workItemRef.reference,
                 title: `Attached copy: ${LONG_TITLE}`,
                 writable: false,
@@ -83,7 +79,6 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
             ...Array.from({ length: 6 }, (_, index) =>
               finderRow(
                 {
-                  project: projectId,
                   reference: `MAIN-${300 + index}`,
                   title: `Follows up ${workItemRef.reference}`,
                   writable: true,
@@ -101,12 +96,11 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
         has_more: mode === 'results',
         items: rows,
         coverage: [
-          { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
+          { space_ref: spaceRef, status: 'searched', reason: null },
           ...(mode === 'empty'
             ? []
             : [
                 {
-                  project_id: 'demo-project',
                   space_ref: { data_scope_id: attachedDataScopeId, space_key: 'AWAY' },
                   status: 'unavailable',
                   reason: 'store_not_attached',
@@ -123,8 +117,7 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
-        entity: planningSpaceEntity(spaceRef),
+        scope: spaceScope,
       }),
     )
     await expect(page.locator('.work-item-board')).toBeVisible()
@@ -144,7 +137,7 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
     const first = dialog.getByRole('option').first()
     await expect(first).toContainText(LONG_TITLE)
     await expect(first).toHaveAttribute('data-highlighted', '')
-    await expect(status).toContainText('Store not attached: demo-project · AWAY')
+    await expect(status).toContainText('Store not attached: AWAY')
     await expect(status).toContainText('More matches are available.')
     // The search field stays where it was while the rows come and go.
     const fieldBox = await search.boundingBox()
@@ -164,7 +157,7 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
     mode = 'partial-empty'
     await search.fill('nothing here either')
     await expect(status).toContainText('No matching tasks in the projects that were searched.')
-    await expect(status).toContainText('Store not attached: demo-project · AWAY')
+    await expect(status).toContainText('Store not attached: AWAY')
     await shot(`partial-empty-${width}`)
 
     mode = 'failed'
@@ -220,7 +213,7 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
   await expect(page).toHaveURL(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
@@ -240,7 +233,6 @@ test('a reopened finder replaces the query it kept when the reader types', async
         items: [
           finderRow(
             {
-              project: projectId,
               reference: workItemRef.reference,
               title: LONG_TITLE,
               writable: true,
@@ -248,9 +240,7 @@ test('a reopened finder replaces the query it kept when the reader types', async
             1,
           ),
         ],
-        coverage: [
-          { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
-        ],
+        coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
       },
     }),
   )
@@ -258,8 +248,7 @@ test('a reopened finder replaces the query it kept when the reader types', async
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(spaceRef),
+      scope: spaceScope,
     }),
   )
   await expect(page.locator('.work-item-board')).toBeVisible()
@@ -294,8 +283,7 @@ test('the finder top edge crosses no label behind it at 1440, 1024 and 390 wide'
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
-        entity: planningSpaceEntity(spaceRef),
+        scope: spaceScope,
       }),
     )
     await expect(page.locator('.work-item-board')).toBeVisible()
@@ -356,7 +344,6 @@ test.describe('in Russian', () => {
           items: [
             finderRow(
               {
-                project: projectId,
                 reference: workItemRef.reference,
                 title: LONG_TITLE,
                 writable: true,
@@ -365,9 +352,8 @@ test.describe('in Russian', () => {
             ),
           ],
           coverage: [
-            { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
+            { space_ref: spaceRef, status: 'searched', reason: null },
             {
-              project_id: 'demo-project',
               space_ref: { data_scope_id: attachedDataScopeId, space_key: 'AWAY' },
               status: 'unavailable',
               reason: 'store_not_attached',
@@ -380,8 +366,7 @@ test.describe('in Russian', () => {
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
-        entity: planningSpaceEntity(spaceRef),
+        scope: spaceScope,
       }),
     )
     await expect(page.locator('.work-item-board')).toBeVisible()
@@ -390,7 +375,7 @@ test.describe('in Russian', () => {
     await dialog.getByRole('combobox').fill(workItemRef.reference)
     const status = dialog.getByRole('status')
     await expect(status).toContainText('Проверены не все проекты')
-    await expect(status).toContainText('Хранилище не подключено: demo-project · AWAY')
+    await expect(status).toContainText('Хранилище не подключено: AWAY')
     await expect(dialog.getByRole('option').first()).toHaveAttribute('data-highlighted', '')
     await expectNoSilentClipping(page, 'Russian finder at 390px')
     await page.screenshot({ path: testInfo.outputPath('w-search-ru-results-390.png') })

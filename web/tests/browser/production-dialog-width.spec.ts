@@ -11,7 +11,7 @@ import type { Locator, Page } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { asked, crowdedField, openQuestion } from './questionBackend.ts'
 import { test } from './test.ts'
 
@@ -86,7 +86,7 @@ test('on a phone the finder takes the width too, and still stands just under the
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.keyboard.press('Control+k')
   const dialog = page.getByRole('dialog', { name: 'Go to a task', exact: true })
   // Where it rests, once it has stepped up from just below.
@@ -103,7 +103,7 @@ test('in a narrow window two fields side by side keep their inputs level, whatev
   // above the other, so that a goal's title has the dialog's width.
   await page.setViewportSize({ width: 560, height: 844 })
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.getByRole('button', { name: 'New work item' }).click()
   const dialog = page.getByRole('dialog', { name: 'New work' })
   await expect(dialog).toHaveCSS('transform', 'none')

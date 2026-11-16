@@ -36,9 +36,9 @@ from .analytics import store as analytics_store
 from .executions import store as execution_store
 from .ops import configuration
 from .planning import images as planning_images
+from .planning import item_projects_map, work_model_migration
 from .planning import store as planning_store
 from .planning import words as planning_words
-from .planning import work_model_migration
 from .platform import core as platform_core
 from .platform import migrations as platform_migrations
 from .quota import store as quota_store
@@ -296,6 +296,18 @@ class WorkModelMigrationRequiredError(RuntimeError):
             " with every session stopped; it takes a verified recovery point first"
         )
         self.stored = stored
+
+
+class WorkModelPreconditionError(RuntimeError):
+    """A 2.9 store the work-model migration does not start on, and why.
+
+    Raised before the recovery point and before any write, so the store is left as
+    it was. `report` is the run's report, its status `refused`.
+    """
+
+    def __init__(self, message: str, report: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.report = report
 
 
 LINK_KINDS = ("blocks", "blocked_by", "discovered_from")
@@ -971,7 +983,9 @@ RECOVERY_POINT = store_steps.Postcondition(
 )
 
 
-def migrate_work_model(path: str | None = None) -> dict[str, Any]:
+def migrate_work_model(
+    path: str | None = None, *, item_projects: str | None = None
+) -> dict[str, Any]:
     """Carry a store Valkama 2.9 left to the work model, once, and report the run.
 
     The only way a store at Valkama 2.9's schema reaches this build: `connect()`
@@ -979,8 +993,12 @@ def migrate_work_model(path: str | None = None) -> dict[str, Any]:
     this build is left alone and reported `current`; any other is refused as
     `store_generation` refuses it, untouched.
 
-    Under the store's migration lock a verified recovery point labelled
-    `WORK_MODEL_LABEL` is taken first, with the pictures beside it. Then, with
+    Under the store's migration lock the conditions to start are read first, from
+    the store, the project registry and the file `item_projects` names, which
+    `valkama projects map-items` wrote (`planning.item_projects_map`); one that does
+    not hold raises `WorkModelPreconditionError`, the report `refused`, before any
+    write. Then a verified recovery point labelled `WORK_MODEL_LABEL` is taken,
+    with the pictures beside it. Then, with
     foreign keys off -- set before the transaction, since SQLite ignores the pragma
     inside one -- the steps of `planning.work_model_migration` run in one
     transaction, the schema is stamped and every postcondition is checked; a failed
@@ -995,14 +1013,31 @@ def migrate_work_model(path: str | None = None) -> dict[str, Any]:
     report.update(store=path, schema={"from": STORE_SCHEMA_VERSION, "to": STORE_SCHEMA_VERSION})
     with store_steps.phase(report, "total"):
         try:
-            _migrate_work_model(path, report)
+            _migrate_work_model(path, report, item_projects)
         except store_steps.RunFailedError:
             report["status"] = "failed"
             raise
     return report
 
 
-def _migrate_work_model(path: str, report: dict[str, Any]) -> None:
+def _preconditions(
+    conn: sqlite3.Connection, item_projects: str | None, report: dict[str, Any]
+) -> dict[str, Any]:
+    """The conditions to start, read through `conn` before any write; the memo they leave."""
+
+    with store_steps.phase(report, "preconditions"):
+        try:
+            raw = None
+            if item_projects is not None:
+                with open(item_projects, "rb") as handle:
+                    raw = handle.read()
+            return item_projects_map.preconditions(conn, raw)
+        except (OSError, item_projects_map.RefusedError) as error:
+            report.update(status="refused", message=str(error))
+            raise WorkModelPreconditionError(str(error), report) from error
+
+
+def _migrate_work_model(path: str, report: dict[str, Any], item_projects: str | None) -> None:
     if store_generation(path) == "current":
         report.update(status="current", message=_ALREADY)
         return
@@ -1016,6 +1051,7 @@ def _migrate_work_model(path: str, report: dict[str, Any]) -> None:
         conn = sqlite3.connect(path, timeout=5)
         conn.row_factory = sqlite3.Row
         try:
+            memo = _preconditions(conn, item_projects, report)
             timings: dict[str, float] = {}
             with store_steps.phase(report, "recovery_point"):
                 recovery_point, source_identity = store_backups.verified_snapshot(
@@ -1041,6 +1077,7 @@ def _migrate_work_model(path: str, report: dict[str, Any]) -> None:
                     identity_before=before,
                     images=backup_location(path).images,
                     reference=_fresh_store,
+                    memo=memo,
                 )
                 store_steps.run(
                     conn,

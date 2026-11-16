@@ -1,5 +1,9 @@
 """Which open work items one agent session holds, for a reader showing it beside that session.
 
+Two readers ask it: `held_by_session`, behind `GET /api/planning/held`, and
+`held_for_note`, the facts a session's resume note tells it of the work it holds.
+Both take the holds by one rule.
+
 A session holds an item while the item's claim, or a step of its checklist that
 is not done, carries a holder label of that session: the rule `subscriptions`
 and `hooks.notify` hold to. A subagent's label ends in its session's suffix, so
@@ -18,9 +22,20 @@ Read-only: nothing here writes, releases or expires anything.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
-from . import acknowledgements, leases, model, questions, read_model, states, subscriptions
+from . import (
+    acknowledgements,
+    calls,
+    item_tree,
+    leases,
+    model,
+    questions,
+    read_model,
+    states,
+    subscriptions,
+)
 
 CLAIM = "claim"
 STEP = "step"
@@ -35,6 +50,32 @@ _OPEN_ITEMS = (
 )
 
 
+#: The newest confirmed write call of a session, or of one agent of it, on each item;
+#: with one MAX, SQLite reads the bare `received_at` from the row that has it.
+_LAST_WRITES = (
+    "SELECT work_item_id, MAX(id) AS id, received_at AS at FROM execution_events"
+    " WHERE session_id = ? AND kind = ? AND identity_state = ? AND work_item_id IS NOT NULL"
+    " AND (? IS NULL OR agent_id = ?) GROUP BY work_item_id"
+)
+#: An item's threads with no resolved mark, and its questions answered after a time:
+#: every answer when the time is NULL. A changed answer moves `resolved_at`, so it
+#: counts as new again.
+_NOTE_COUNTS = (
+    "SELECT (SELECT COUNT(*) FROM work_item_comments WHERE work_item_id = :item"
+    "  AND reply_to IS NULL AND reply_to_request IS NULL AND resolved_at IS NULL),"
+    " (SELECT COUNT(*) FROM work_item_requests WHERE work_item_id = :item"
+    "  AND status = 'answered'"
+    "  AND (:after IS NULL OR julianday(resolved_at) > julianday(:after)))"
+)
+_REFERENCES = (
+    "SELECT w.work_item_id, p.key, w.number FROM work_items w"
+    " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+    " WHERE w.work_item_id IN (SELECT value FROM json_each(?))"
+)
+#: The mark a step carries when a previous holder ticked it: a tick to confirm, not a done step.
+FLAG = "by_previous_holder"
+
+
 @read_model.whole_store_read()
 def held_by_session(conn: sqlite3.Connection, session: object) -> dict:
     """The open items `session` holds, most recently changed first.
@@ -44,13 +85,77 @@ def held_by_session(conn: sqlite3.Connection, session: object) -> dict:
     the address that opens it. A session nothing names answers with no items.
     """
 
+    session = _required(session)
+    held = _holds(conn, subscriptions.holder_suffix(session))
+    return {"session": session, "items": [_item(conn, row, held_as) for row, held_as in held]}
+
+
+@read_model.whole_store_read()
+def held_for_note(
+    conn: sqlite3.Connection, session: object, agent: str | None = None
+) -> list[dict]:
+    """What a session, or one agent of it, holds, with what a resume note tells of each.
+
+    The holds are those of `held_by_session` under the same rules, for the holder
+    labels of `agent` alone when one is named and of the whole session, its agents
+    with it, when none is. Each item carries the fields `held_by_session` gives it and:
+
+    - `next_condition`: the first step not done that the recipient holds, else the
+      first step that is not done or that a previous holder ticked, as
+      `{text, done, total, flagged}`, where `done` counts the ticked steps no
+      previous holder ticked; null when every step is ticked so, or there is none;
+    - `open_threads`, the roots with no resolved mark; `new_answers`, the questions
+      answered after the recipient's newest write on the item, every answered one
+      when it wrote none; `to_confirm`, the steps a previous holder ticked;
+    - `stage` and `goal`: the nearest container over the item when it is a stage,
+      and the topmost one, by reference, or null;
+    - `last_write`: the id of the recipient's newest confirmed write call on the
+      item, or null.
+
+    The items come by `last_write`, the newest first and those with none last,
+    each group in the order `held_by_session` gives. Read-only, like that read.
+    """
+
+    session = _required(session)
+    agent = agent or None
+    suffix = subscriptions.holder_suffix(session, agent)
+    held = _holds(conn, suffix)
+    if not held:
+        return []
+    writes = {
+        str(row["work_item_id"]): row
+        for row in conn.execute(
+            _LAST_WRITES, (session, calls.KIND, calls.CONFIRMED, agent, agent)
+        ).fetchall()
+    }
+    items = []
+    for row, held_as in held:
+        write = writes.get(str(row["work_item_id"]))
+        items.append(
+            {
+                **_item(conn, row, held_as),
+                **_note_facts(conn, row, suffix, None if write is None else str(write["at"])),
+                "last_write": None if write is None else int(write["id"]),
+            }
+        )
+    # A stable sort: items with no write keep the order of `held_by_session`.
+    items.sort(key=lambda item: (item["last_write"] is None, -(item["last_write"] or 0)))
+    return items
+
+
+def _required(session: object) -> str:
     if not isinstance(session, str) or not session.strip():
         raise model.PlanningError("session is required")
-    suffix = subscriptions.holder_suffix(session)
+    return session
+
+
+def _holds(conn: sqlite3.Connection, suffix: str) -> list[tuple[sqlite3.Row, str]]:
+    """Each open item a label ending in `suffix` holds, and how: the one rule of holding."""
+
     # The SQL finds every candidate; the label rule decides, because a suffix
     # inside a step's text or a done step's holder is not a hold.
     rows = conn.execute(_OPEN_ITEMS, (suffix, suffix)).fetchall()
-    items = []
+    found = []
     for row in rows:
         lease = leases.lease(conn, row) if subscriptions.holds_claim(row, suffix) else None
         if lease is not None and lease.state != leases.STALE:
@@ -59,8 +164,8 @@ def held_by_session(conn: sqlite3.Connection, session: object) -> dict:
             held_as = STEP
         else:
             continue
-        items.append(_item(conn, row, held_as))
-    return {"session": session, "items": items}
+        found.append((row, held_as))
+    return found
 
 
 def _holds_standing_step(conn: sqlite3.Connection, row: sqlite3.Row, suffix: str) -> bool:
@@ -71,6 +176,71 @@ def _holds_standing_step(conn: sqlite3.Connection, row: sqlite3.Row, suffix: str
         if not step["done"] and holder.endswith(suffix):
             return leases.of_step(conn, row, holder).state != leases.STALE
     return False
+
+
+def _note_facts(
+    conn: sqlite3.Connection, row: sqlite3.Row, suffix: str, last_write_at: str | None
+) -> dict:
+    identity = str(row["work_item_id"])
+    steps = model.checklist(row["checklist"])
+    threads, answers = conn.execute(
+        _NOTE_COUNTS, {"item": identity, "after": last_write_at}
+    ).fetchone()
+    stage, goal = _containers(conn, row["parent_id"])
+    return {
+        "next_condition": next_condition(steps, suffix),
+        "open_threads": int(threads),
+        "new_answers": int(answers),
+        "to_confirm": sum(1 for step in steps if step.get(FLAG)),
+        "stage": stage,
+        "goal": goal,
+    }
+
+
+def next_condition(steps: list[dict], suffix: str) -> dict | None:
+    """The step a holder works next, with how many steps are ticked and of how many.
+
+    The first step not done that a label ending in `suffix` holds; failing that the
+    first step that is not done or that a previous holder ticked, which is not done
+    until somebody confirms it.
+    """
+
+    def ticked(step: dict) -> bool:
+        return bool(step["done"]) and not step.get(FLAG)
+
+    own = (
+        step
+        for step in steps
+        if not step["done"] and str(step["claimed_by"] or "").endswith(suffix)
+    )
+    found = next(own, None) or next((step for step in steps if not ticked(step)), None)
+    if found is None:
+        return None
+    return {
+        "text": found["text"],
+        "done": sum(1 for step in steps if ticked(step)),
+        "total": len(steps),
+        "flagged": bool(found.get(FLAG)),
+    }
+
+
+def _containers(conn: sqlite3.Connection, parent_id: object) -> tuple[str | None, str | None]:
+    """The stage an item stands in and the goal over it, by reference.
+
+    Only a container holds items, so everything over an item is one: the nearest is
+    a stage when something is over it, and the topmost is the goal.
+    """
+
+    if not parent_id:
+        return None, None
+    chain = [identity for identity, _kind, _category in item_tree.above(conn, str(parent_id))]
+    stage = chain[0] if len(chain) > 1 else None
+    wanted = [identity for identity in (stage, chain[-1]) if identity is not None]
+    references = {
+        str(found[0]): model.human_id(str(found[1]), int(found[2]))
+        for found in conn.execute(_REFERENCES, (json.dumps(wanted),))
+    }
+    return (None if stage is None else references.get(stage), references.get(chain[-1]))
 
 
 def _item(conn: sqlite3.Connection, row: sqlite3.Row, held_as: str) -> dict:

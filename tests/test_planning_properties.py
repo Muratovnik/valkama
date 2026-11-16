@@ -71,9 +71,7 @@ class PlanningMachine(RuleBasedStateMachine):
         )
         self.environment.start()
         self.conn = store.connect()
-        space = service.create_planning_space(
-            self.conn, project_id="property", name=SPACE_NAME, key=SPACE_KEY
-        )
+        space = service.create_planning_space(self.conn, name=SPACE_NAME, key=SPACE_KEY)
         self.conn.commit()
         # The states this space declares, so a rule picks a real one rather than
         # a name this file decided.

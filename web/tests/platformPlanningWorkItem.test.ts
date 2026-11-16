@@ -13,7 +13,7 @@ function planningWorkItemPayload() {
   }
   const payload = {
     interface_version: 'valkama-planning-work-item',
-    scope: { kind: 'project', project_ref: { project_id: 'example-project' } },
+    scope: { kind: 'space', space_ref: spaceRef },
     work_item_ref: { space_ref: spaceRef, reference: 'MAIN-264' },
     state: {
       interface_version: 'valkama-ui-state',
@@ -48,6 +48,7 @@ function planningWorkItemPayload() {
           },
           parent_id: null,
           labels: ['platform'],
+          projects: [],
           source: '',
           checklist: [],
           open: true,

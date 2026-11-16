@@ -55,7 +55,7 @@ const PREVIEW_STATES: Readonly<Record<string, WorkItemPreviewSubject>> = {
       title: 'Перенести настройки',
       updated_at: at(11, 1, 9, 12),
     }),
-    project: 'example-project',
+    space: 'example-project',
   },
   stale: {
     reference: 'MAIN-55',

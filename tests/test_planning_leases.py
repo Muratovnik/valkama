@@ -85,7 +85,7 @@ class LeaseTestCase(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="lease", name="Lease", key="LSE")
+        service.create_planning_space(self.conn, name="Lease", key="LSE")
         self.reference = service.create_work_item(self.conn, space="LSE", title="Held")["reference"]
         self.conn.commit()
 
@@ -173,7 +173,9 @@ class LeaseTestCase(unittest.TestCase):
         server = self.listener()
         _, item = self.http(server, "GET", f"/api/planning/work-item?id={self.reference}", None)
         _, listing = self.http(server, "GET", "/api/planning/work-items?space=LSE", None)
-        mcp_item = mcp_surface.call_tool(self.conn, "get_work_item", {"id": self.reference})
+        mcp_item = mcp_surface.call_tool(
+            self.conn, "get_work_item", {"id": self.reference, "parts": "claim"}
+        )
         mcp_rows = mcp_surface.call_tool(self.conn, "list_work_items", {"space": "LSE"})
         assert isinstance(mcp_item, dict) and isinstance(mcp_rows, dict)
         return {
@@ -888,7 +890,7 @@ class StartUpTests(unittest.TestCase):
             conn = store.connect()
             self.addCleanup(conn.close)
             # A hold no session proved, quiet for long enough: the lease step has work.
-            service.create_planning_space(conn, project_id="lease", name="Lease", key="LSE")
+            service.create_planning_space(conn, name="Lease", key="LSE")
             reference = service.create_work_item(conn, space="LSE", title="Held")["reference"]
             service.claim_work_item(conn, reference, author="old")
             conn.execute("UPDATE work_item_events SET created_at = '2020-01-01T00:00:00Z'")
@@ -1454,6 +1456,25 @@ class PreviousHolderTests(SweepTestCase):
         self.assertIsNone(self.read()["lapsed_claim"])
         self.assertNotIn("error", self.claim(codex(THREE), release=True, started=True))
         self.assertIsNone(self.read()["lapsed_claim"])
+
+    def test_the_card_carries_the_lapsed_claim_the_marks_and_the_queue_and_project_fields(
+        self,
+    ) -> None:
+        """The default read, the card, says what the record says of the queue, lease and projects."""
+
+        self.lapse_after_ticks()
+        self.sweep()
+        with self.at_now():
+            card = mcp_surface.call_tool(self.conn, "get_work_item", {"id": self.reference})
+        item = self.read()
+        self.assertIsNotNone(item["lapsed_claim"])
+        for name in ("withheld", "projects", "lapsed_claim"):
+            with self.subTest(field=name):
+                self.assertEqual(item[name], card[name])
+        # The mark stands on the card only where a previous holder ticked the step.
+        self.assertEqual(
+            [True, None, None], [step.get("by_previous_holder") for step in card["checklist"]]
+        )
 
     def test_a_closed_item_names_no_lapsed_claim(self) -> None:
         self.lapse_after_ticks()

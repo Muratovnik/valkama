@@ -31,7 +31,7 @@ class PlanningDiscussionMigrationTests(unittest.TestCase):
         self.assertEqual(before, Path(self.path).read_bytes())
 
     def test_verified_snapshot_accepts_native_index_trigger_reordering(self) -> None:
-        service.create_planning_space(self.conn, project_id="t", name="Snapshot", key="SNAP")
+        service.create_planning_space(self.conn, name="Snapshot", key="SNAP")
         service.create_work_item(self.conn, space="SNAP", title="Retain the exact row")
         self.conn.execute("CREATE INDEX late_work_item_title ON work_items(title)")
         self.conn.commit()
@@ -59,9 +59,7 @@ class PlanningDiscussionMigrationTests(unittest.TestCase):
     def test_native_guard_compares_json_values_and_owns_empty_and_foreign_pointers(self) -> None:
         item = service.create_work_item(
             self.conn,
-            space=service.create_planning_space(self.conn, project_id="t", name="Guard", key="GU")[
-                "key"
-            ],
+            space=service.create_planning_space(self.conn, name="Guard", key="GU")["key"],
             title="Native invariant",
         )
         current = service.report_work_item(

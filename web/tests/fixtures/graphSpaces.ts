@@ -149,6 +149,7 @@ function maker(plan: ShapePlan) {
       withheld: ['not_ready'],
       lapsed_claim: null,
       labels: [],
+      projects: [],
       source: '',
       checklist: [],
       revision: 0,
@@ -330,10 +331,12 @@ function wire(
 function readModel(plan: ShapePlan, built: Built): PlanningReadModel {
   const space = {
     planning_space_id: identity(800),
-    project_id: 'example-project',
     name: plan.name,
     key: plan.key,
     provider_kind: 'local' as const,
+    launch_place: 'space' as const,
+    projects: [],
+    default_project: null,
   }
   const open = built.items.filter((item) => item.open)
   return {

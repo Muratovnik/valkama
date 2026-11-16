@@ -261,6 +261,29 @@ def item_questions(conn: sqlite3.Connection, work_item_id: str) -> dict:
     }
 
 
+def question_counts(conn: sqlite3.Connection, work_item_id: str) -> dict[str, int]:
+    """How many questions `item_questions` counts on one item, and how many are open.
+
+    Counted rather than read: only a pending row can be open, and only it is read,
+    to ask whether it has lapsed as `item_questions` would.
+    """
+
+    total = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM work_item_requests WHERE work_item_id=?", (work_item_id,)
+        ).fetchone()[0]
+    )
+    at = request_model.now()
+    waiting = conn.execute(
+        "SELECT request_id FROM work_item_requests WHERE work_item_id=? AND status='pending'",
+        (work_item_id,),
+    ).fetchall()
+    return {
+        "count": total,
+        "open": sum(not questions.expired(conn, str(row["request_id"]), at) for row in waiting),
+    }
+
+
 def list_requests(
     conn: sqlite3.Connection,
     *,
@@ -306,7 +329,7 @@ def list_page(
     parameters: list[object] = []
     if space is not None:
         clauses.append("i.planning_space_id=?")
-        parameters.append(service.get_planning_space(conn, space)["planning_space_id"])
+        parameters.append(service.space_identity(conn, space))
     if reference is not None:
         item = read_model.item_row(conn, reference)
         if space is not None and item["planning_space_id"] != parameters[0]:

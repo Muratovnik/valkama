@@ -34,7 +34,7 @@ import tempfile
 import threading
 import uuid
 from collections import deque
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import IO, Protocol
 from urllib.parse import quote
@@ -211,6 +211,7 @@ def client_argv(
     client_session_id: str = "",
     schema_path: str = "",
     result_path: str = "",
+    added_dirs: Sequence[str] = (),
 ) -> list[str]:
     """The exact command line, asked of the driver that owns this client.
 
@@ -219,6 +220,7 @@ def client_argv(
     the tool is simply removed, and a prompt-level instruction would be advice
     rather than a contract (ADR 0008, decision 4). A driver that cannot enforce
     it ignores the request, which is why `validate_packet` has already warned.
+    `added_dirs` go to the driver only on a run its capabilities say takes them.
     """
 
     driver = drivers.driver_for(packet.client)
@@ -243,6 +245,9 @@ def client_argv(
                 session_id=client_session_id,
                 resume=packet.resume,
                 no_delegation=packet.role == "executor" and capabilities.mechanical_executor,
+                added_dirs=tuple(added_dirs)
+                if capabilities.takes_added_dirs(resume=packet.resume)
+                else (),
             )
         )
     except drivers.DriverError as error:
@@ -356,20 +361,33 @@ def launch_directory(packet: LaunchPacket, reference: str) -> tuple[str, dict]:
     return packet.repo, {}
 
 
-def wsl_argv(argv: list[str], cwd: str, distro: str) -> list[str]:
-    """Wrap a command for WSL, translating the Windows path it runs in."""
+def _wsl() -> str:
     wsl = shutil.which("wsl") or shutil.which("wsl.exe")
     if not wsl:
         raise LaunchError("WSL is not available on this machine")
+    return wsl
+
+
+def wsl_path(path: str) -> str:
+    """The WSL path of a Windows one, or a refusal naming it."""
     # A declared lenient boundary, unlike the Git calls above. wsl.exe writes
     # its own diagnostics in UTF-16 while the Linux child it wraps writes UTF-8,
     # so the two streams do not share a codec. Only the child's stdout is read,
     # and only when it succeeded; replacing on the rest keeps a missing distro a
     # LaunchError rather than a decode error from a path nobody was reading.
-    translate = processes.run_text([wsl, "wslpath", "-a", cwd.replace("\\", "/")], errors="replace")
-    linux_cwd = translate.stdout.strip() if translate.returncode == 0 else ""
-    if not linux_cwd:
-        raise LaunchError(f"cannot translate {cwd} into a WSL path")
+    translate = processes.run_text(
+        [_wsl(), "wslpath", "-a", path.replace("\\", "/")], errors="replace"
+    )
+    linux = translate.stdout.strip() if translate.returncode == 0 else ""
+    if not linux:
+        raise LaunchError(f"cannot translate {path} into a WSL path")
+    return linux
+
+
+def wsl_argv(argv: list[str], cwd: str, distro: str) -> list[str]:
+    """Wrap a command for WSL, translating the Windows path it runs in."""
+    wsl = _wsl()
+    linux_cwd = wsl_path(cwd)
     prefix = [wsl]
     if distro:
         prefix += ["-d", distro]
@@ -593,6 +611,7 @@ class Runner:
         correlation: Mapping[str, str] | None = None,
         directory: tuple[str, dict] | None = None,
         reservation: object | None = None,
+        added_dirs: Sequence[str] = (),
     ) -> dict:
         """Spawn one client for this work item.
 
@@ -600,6 +619,9 @@ class Runner:
         `launch_directory`, passed in so that the baseline it recorded and the
         directory this process runs in are the same value rather than two
         computations that agree by luck. A caller that has none resolves it here.
+        `added_dirs` are the directories the client may reach beside it, on the
+        runs its driver takes them on; under WSL each is translated as the
+        directory it runs in is.
         """
 
         if reservation is None:
@@ -613,6 +635,7 @@ class Runner:
                     correlation=correlation,
                     directory=directory,
                     reservation=owned,
+                    added_dirs=added_dirs,
                 )
         with self._lock:
             if self._starting.get(reference) is not reservation:
@@ -656,6 +679,10 @@ class Runner:
                 client_session_id=client_session_id,
                 schema_path=schema_path,
                 result_path=result_path,
+                added_dirs=[wsl_path(path) for path in added_dirs]
+                if packet.environment == "wsl"
+                and capabilities.takes_added_dirs(resume=packet.resume)
+                else added_dirs,
             )
             if packet.environment == "wsl":
                 argv = wsl_argv(argv, cwd, packet.distro)

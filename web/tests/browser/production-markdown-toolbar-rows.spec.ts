@@ -12,10 +12,10 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: spaceScope })
 
 /** Where the switch is drawn against the toolbar's content box and its row of icons. */
 async function placement(bar: Locator) {

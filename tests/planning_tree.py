@@ -37,9 +37,7 @@ class Tree:
     def __init__(self, conn: sqlite3.Connection, key: str = "OR") -> None:
         self.conn = conn
         self.key = key
-        space = service.create_planning_space(
-            conn, project_id=key.lower(), name=f"Space {key}", key=key
-        )
+        space = service.create_planning_space(conn, name=f"Space {key}", key=key)
         self.space_id = str(space["planning_space_id"])
         self.workflow_id = str(space["workflow"]["workflow_id"])
         self.states = {

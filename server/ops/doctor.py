@@ -41,7 +41,7 @@ from ..hooks import ingest, pairs, spool
 from ..memory import service as memory_service
 from ..planning import calls as planning_calls
 from ..platform import installed
-from ..projects import project_registry
+from ..projects import project_registry, scopes
 from ..quota import poll as quota_poll
 from ..quota import settings as quota_settings
 from ..telemetry import journal as telemetry_journal
@@ -1751,6 +1751,51 @@ def _refused_record_check(refusal: dict) -> dict:
     )
 
 
+def _planning_store_check(projects: list[dict]) -> dict:
+    """Whether every project's planning binding names the main store or an attached one."""
+
+    known, unreadable = scopes.data_scope_ids(store.db_path())
+    foreign = project_registry.foreign_bindings(projects, known)
+    bindings = ", ".join(
+        f"{item['project_id']} ({item['space_key'] or 'no space'} in"
+        f" {item['data_scope_id'] or 'no store'})"
+        for item in foreign
+    )
+    if not foreign:
+        return _check(
+            "planning-stores",
+            "Planning store bindings",
+            "ok",
+            "every planning binding names the main store or an attached store",
+            presentation_code="planning-stores-available",
+        )
+    parameters = {"count": len(foreign), "bindings": bindings, "unreadable": unreadable}
+    title = "Planning store bindings"
+    if unreadable:
+        return _check(
+            "planning-stores",
+            title,
+            "warn",
+            f"{unreadable} store(s) cannot be read, so {len(foreign)} binding(s) may name one of"
+            f" them: {bindings}",
+            "Restore the attached store that cannot be read (valkama scopes lists them), or bind"
+            " the project to a space in an attached store with valkama projects bind.",
+            presentation_code="planning-stores-unreadable",
+            parameters=parameters,
+        )
+    return _check(
+        "planning-stores",
+        title,
+        "warn",
+        f"{len(foreign)} binding(s) name a store that is neither the main nor an attached store:"
+        f" {bindings}",
+        "Attach the database that holds the space (valkama attach), or bind the project to a"
+        " space it holds with valkama projects bind.",
+        presentation_code="planning-stores-foreign",
+        parameters=parameters,
+    )
+
+
 def _project_checks() -> list[dict]:
     listing = project_registry.read_registry()
     projects = listing.get("projects", [])
@@ -1762,8 +1807,8 @@ def _project_checks() -> list[dict]:
             f"{len(projects)} project(s) from {project_registry.registry_path()}",
             ""
             if listing.get("status") == "available"
-            else "The registry is written by the workflow tooling; check that the file exists"
-            " and is valid JSON.",
+            else "valkama projects writes the registry; check that the file exists and is valid"
+            " JSON.",
             presentation_code=(
                 "registry-available"
                 if listing.get("status") == "available"
@@ -1800,6 +1845,7 @@ def _project_checks() -> list[dict]:
             parameters={"projects": ", ".join(missing)},
         )
     )
+    checks.append(_planning_store_check(projects))
 
     without_knowledge = [
         str(project["project_id"])

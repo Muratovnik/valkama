@@ -18,13 +18,13 @@ import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { boardRoute, openList } from './boardPage.ts'
 import { graphRoute, serve as serveChain, showChain } from './chainFixtures.ts'
-import { projectId, projectScope, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceRef, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { held, openReported, reference, rest, SPACE } from './previewPage.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 
@@ -56,7 +56,6 @@ export const routeFinder = (page: Page, title: string) =>
         items: [
           {
             target: {
-              project_id: projectId,
               space_ref: spaceRef,
               reference: workItem.reference,
               writable: true,
@@ -73,9 +72,7 @@ export const routeFinder = (page: Page, title: string) =>
             },
           },
         ],
-        coverage: [
-          { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
-        ],
+        coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
       },
     }),
   )

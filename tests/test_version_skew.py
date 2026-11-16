@@ -231,7 +231,8 @@ class StoreSchemaVersionTests(unittest.TestCase):
         conn = sqlite3.connect(self.path)
         try:
             if indexed:
-                words.migrate(conn)
+                with schema17.words_as_2_9():
+                    words.migrate(conn)
             conn.commit()
         finally:
             conn.close()

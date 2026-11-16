@@ -22,6 +22,7 @@ from . import (
     api,
     calls,
     images,
+    item_projects,
     mention_records,
     model,
     person_events,
@@ -57,6 +58,12 @@ _EDITED_LABELS = {
         "description": "Labels to take off the item; one it does not have is"
         " ignored. Not with labels.",
     },
+}
+#: The projects an item changes, by their ids in the registry: the whole set.
+_PROJECTS = {
+    "type": "array",
+    "items": {"type": "string"},
+    "maxItems": item_projects.MAX_PROJECTS,
 }
 WORK_ITEM_REFERENCE = {
     "type": "string",
@@ -118,7 +125,7 @@ _PRIORITY_MEANING = (
 )
 _VERBOSE = {
     "type": "boolean",
-    "description": "Answer with the full work item instead of the short acknowledgement.",
+    "description": "Answer with the item's card instead of the short acknowledgement.",
 }
 #: One checklist step as a caller sends it: its text, or its text and whether it is done.
 _STEP = {
@@ -144,7 +151,7 @@ _STEPS = {
 COMPACT_LIMIT = 50
 _VERBOSE_ROWS = {
     "type": "boolean",
-    "description": "Answer with the full items instead of one compact row per item."
+    "description": "Answer with each item's list record instead of one compact row per item."
     " Without it the answer holds at most limit rows (default"
     f" {COMPACT_LIMIT}).",
 }
@@ -293,10 +300,8 @@ _AWAITS_REPLY = {
 CHAIN_PAGE = 200
 #: How many of a chain's newest series entries get_work_item_chain carries.
 CHAIN_SERIES_ENTRIES = 30
-#: How much history get_work_item carries unless the caller asks for all of it.
-RECENT_COMMENTS = 5
-RECENT_EVENTS = 10
-RECENT_MENTIONS = 5
+#: One part of a work item by name, the form `parts` takes for each.
+_PART = {"type": "string", "enum": list(read_model.PARTS)}
 #: What every list and search says about paging, so an agent knows to keep going.
 _PAGING = (
     " An answer holds one page: truncated is true when more items match, and"
@@ -330,7 +335,9 @@ TOOLS = [
     _tool(
         "list_planning_spaces",
         "List planning spaces",
-        "Every planning space with its key, its project, and how much work it holds.",
+        "Every planning space with its key, its projects and default project, its launch"
+        " place and how much work it holds. session_space names the space whose project"
+        " root holds your session's folder.",
         READ_ONLY,
         {},
     ),
@@ -338,7 +345,8 @@ TOOLS = [
         "get_planning_space",
         "Read a planning space",
         "One space and its workflow: the states, their categories, and the"
-        " transitions between them. Read this before asking for a state by name.",
+        " transitions between them, its projects with their roots, and its launch place."
+        " Read this before asking for a state by name.",
         READ_ONLY,
         {"space": _SPACE},
         ["space"],
@@ -346,11 +354,12 @@ TOOLS = [
     _tool(
         "create_planning_space",
         "Create a planning space",
-        "A new space in one project, with the default workflow. Its key is derived"
-        " from the name unless you name one.",
+        "A new space with the default workflow and no projects. Its key is derived from"
+        " the name unless you name one. A project joins a space through the registry"
+        " command: valkama projects bind <project> --space <KEY>.",
         WRITES,
-        {"project_id": _STR, "name": _STR, "key": _STR},
-        ["project_id", "name"],
+        {"name": _STR, "key": _STR},
+        ["name"],
     ),
     _tool(
         "create_work_item",
@@ -372,7 +381,11 @@ TOOLS = [
         " space whose title or description share the new title's words, best first,"
         " each by reference and title: read them, and merge the new item into one that"
         " is the same change. A hint, not a check: nothing is refused on it, and an"
-        " empty list does not prove there is no duplicate.",
+        " empty list does not prove there is no duplicate. projects names the projects"
+        " the item changes. space is where it lies: leave it out and the server places it"
+        " under its parent's space, else in the home space of its projects, else in your"
+        " session's space. Projects of two spaces need space, one of them. A goal or"
+        " stage names no projects.",
         WRITES,
         {
             "space": _SPACE,
@@ -386,6 +399,7 @@ TOOLS = [
             },
             "description": _STR,
             "labels": _LABELS,
+            "projects": _PROJECTS,
             "source": {
                 "type": "string",
                 "description": "Anchor into the owning document, e.g."
@@ -425,35 +439,37 @@ TOOLS = [
             "author": _AUTHOR,
             "verbose": _VERBOSE,
         },
-        ["space", "title"],
+        ["title"],
     ),
     _tool(
         "get_work_item",
         "Read a work item",
-        "One item: its fields, checklist, links, refs and summary, the"
-        f" {RECENT_COMMENTS} discussion threads with the newest activity, each root with"
-        " replies (how many) and last_reply, the newest"
-        f" {RECENT_EVENTS} history events with comments_total, threads_total,"
-        " events_total and history_truncated, and sessions: the agent sessions whose"
-        " confirmed calls wrote to it. thread returns one thread whole; full=true every"
-        " comment and event; comments_after only the comments that came after one you"
-        " have read, roots and replies alike; unresolved the roots without the resolved"
-        f" mark, oldest first, at most {read_model.UNRESOLVED_PAGE}, with truncated, the"
-        " next page being comments_after the last root read; unresolved_total counts them."
-        " Each comment names its parent in reply_to or reply_to_request (null on a root),"
-        " by_person, resolution, a root's mark, and mentions, the items it told."
-        f" mentions holds the {RECENT_MENTIONS} newest comments elsewhere that told this item,"
-        " with mentions_total."
-        " questions gives its questions in compact form: total, open, at most"
-        f" {requests.ITEM_QUESTIONS} items with the open ones first and then the newest closed,"
-        " and truncated when there are more. images lists the pictures pasted into its"
-        " text, each with sha256, media_type, size, created_at and the path its Markdown"
-        " names; read_work_item_image shows one. open says whether its work is still open."
-        " An accepted open goal or stage shows state null and container_state:"
-        " not_started, in_progress or awaiting_confirmation. acceptance is the basis it was"
-        " accepted on and when, null in triage or deferred; started_at is when work on it"
-        " began, waits_for the open items blocking it, workable whether its space's queue"
-        " may give it now and withheld why not: goal_or_stage, not_ready, held, waits,"
+        "One item. By default its card: reference, title, kind, priority, state, open,"
+        " container_state, acceptance, started_at, waits_for, workable, withheld, projects,"
+        " claim_ref, claim_state, last_claim_ref, lapsed_claim, labels, revision, parent,"
+        " url, description, checklist (each condition with its id) and summary, and parts:"
+        " every other part it has, with count and size. parts names what to read: "
+        + ", ".join(read_model.PARTS[:-1])
+        + " and, on a goal or stage, participants; each comes as the field of that name"
+        f" beside reference and revision. comments: the {read_model.PART_THREADS} threads"
+        " with the newest activity, each root with replies (how many) and last_reply;"
+        " thread one thread whole; unresolved the roots without the resolved mark, oldest"
+        f" first, at most {read_model.UNRESOLVED_PAGE}, with truncated, the next page being"
+        " comments_after the last root read; comments_after alone every comment after that"
+        f" id, roots and replies alike, at most {read_model.COMMENTS_PAGE} with truncated, 0"
+        f" starting from the first. events: the newest {read_model.PART_EVENTS} history"
+        " events, or the newest n, with events_total and events_truncated. questions: its"
+        " questions in compact form: total, open, at most"
+        f" {requests.ITEM_QUESTIONS} items with the open ones first. claim: the lease, with"
+        " expires_at. sections: the description's sections, by heading or, without"
+        " headings, by paragraph, each with its key and size; section reads the ones named,"
+        " so a long description is refreshed without reading it all. Each comment names its"
+        " parent in reply_to or reply_to_request (null on a root), by_person, resolution, a"
+        " root's mark, and mentions, the items it told. A comment mode, events or section"
+        " without parts reads that part alone. An accepted"
+        " open goal or stage shows state null and container_state: not_started,"
+        " in_progress or awaiting_confirmation. workable says whether its space's queue may"
+        " give it now and withheld why not: goal_or_stage, not_ready, held, waits,"
         " question, no_start, ancestor_triage, ancestor_deferred, ancestor_waits or"
         " ancestor_closed. claim.expires_at is when the claim lapses if its session stays"
         " silent, or, for a claim no session proved, the owner's own included, if the item"
@@ -465,29 +481,42 @@ TOOLS = [
         READ_ONLY,
         {
             "id": WORK_ITEM_REFERENCE,
-            "full": {
-                "type": "boolean",
-                "description": "Answer with every comment and history event instead of"
-                " the newest ones.",
+            "parts": {
+                "anyOf": [_PART, {"type": "array", "items": _PART}],
+                "description": "What to read: card, the default, or any other part by"
+                " name; one name reads as a list of it.",
             },
-            "comments_after": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "A comment id: answer with every comment after it, oldest"
-                " first, instead of the newest ones. Not together with full.",
+            "unresolved": {
+                "type": "boolean",
+                "description": "Read one page of the roots without the resolved mark, each"
+                " with replies and last_reply; comments_after is where the next page starts."
+                " Not together with thread.",
             },
             "thread": {
                 "type": "integer",
                 "minimum": 1,
-                "description": "A comment id: answer with its thread, the root and every"
-                " reply oldest first; a reply's id reads its root's thread. Not together"
-                " with full or comments_after.",
+                "description": "A comment id: read its thread, the root and every reply"
+                " oldest first; a reply's id reads its root's thread. Not together with"
+                " comments_after.",
             },
-            "unresolved": {
-                "type": "boolean",
-                "description": "Answer with the roots without the resolved mark, each with"
-                " replies and last_reply. Not together with full or thread; comments_after"
-                " is where the next page starts.",
+            "comments_after": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "A comment id: read one flat page of the comments after it,"
+                " oldest first, 0 starting from the first; beside unresolved, where the next"
+                " page of roots starts.",
+            },
+            "events": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": read_model.PART_EVENTS_MOST,
+                "description": "How many of the newest history events to read.",
+            },
+            "section": {
+                "anyOf": [_STR, {"type": "array", "items": _STR, "minItems": 1}],
+                "description": "A key of the description's sections, as the sections part"
+                " names them, or a list of keys: read those sections with their text, in the"
+                " description's order.",
             },
         },
         ["id"],
@@ -517,8 +546,11 @@ TOOLS = [
         " compact row per item: reference, title, kind, state, priority, parent and holder;"
         " an accepted open goal or stage has state null and adds its container_state. A row"
         " the queue gives adds queue_order, its place in its space's queue; any other row"
-        " adds withheld, why the queue does not give it. kind=goal lists the goals,"
-        " kind=stage the stages."
+        " adds withheld, why the queue does not give it. With space, the list holds that"
+        " space's items and other spaces' items that name one of its projects, marked"
+        " other_space. project keeps the items that name that project, in every space"
+        " unless space is given; a goal or stage names what a task under it names."
+        " kind=goal lists the goals, kind=stage the stages."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -536,6 +568,11 @@ TOOLS = [
                 "type": "string",
                 "description": "Only the children of this item, by its reference (MAIN-142)"
                 " or its work_item_id.",
+            },
+            "project": {
+                "type": "string",
+                "description": "Only the items that name this project, by its id in the"
+                " project registry.",
             },
             "limit": _INT,
             "offset": _OFFSET,
@@ -575,8 +612,8 @@ TOOLS = [
         "search_work_items",
         "Search work items",
         "Find the items holding every word of the query, in any order and in any of their"
-        " title, description, labels, summary, comments and questions (a question's prompt,"
-        " field and option text and its answer and note), best match first, the title"
+        " title, description, labels, projects, summary, comments and questions (a question's"
+        " prompt, field and option text and its answer and note), best match first, the title"
         " weighing most. Each word matches by its first five letters, so searching finds"
         " search; two or three telling words find more than a sentence. A query that is"
         " exactly a reference, such as MAIN-12 in any case, is read as one phrase and"
@@ -612,6 +649,8 @@ TOOLS = [
         " nothing at work stands unheld, and so is taking over a stale claim there. A"
         " released blocked task stays blocked, held by nobody. A transition to any state"
         " but an active or blocked one releases the item already: no release follows it."
+        " The answer names the root of each project the task changes in project_roots:"
+        " read each one's instructions before editing it."
         " The answer carries from_person when"
         " a person acted on the item in the interface since an agent last wrote to it:"
         " their words about this work, to read before the next step.",
@@ -636,8 +675,10 @@ TOOLS = [
         " already under way, then by priority, oldest first. The queue is one space's:"
         " space, else the space of within. within (a goal or stage, at any depth) and"
         " label narrow it. A task of any space is claimed by number with claim_work_item."
-        " The claim starts the task as claim_work_item does. Answers with nothing when no"
-        " task is workable; a record's withheld says why an item is not given.",
+        " The claim starts the task as claim_work_item does. The answer names the root of"
+        " each project the task changes in project_roots: read each one's instructions"
+        " before editing it. Answers with nothing when no task is workable; a record's"
+        " withheld says why an item is not given.",
         WRITES,
         {
             "space": _SPACE,
@@ -683,9 +724,10 @@ TOOLS = [
         "Fold items that are one change — one cause, one fix — into the item that"
         " survives (id), all or nothing. Their checklist steps, keeping ids, ticks"
         " and step claims, their discussion threads whole, questions with their"
-        " replies, refs and links move to it; each merged item is linked duplicates"
-        " to it, gets a summary naming it, is released and closes in its cancelled"
-        " state. Their history, reports with their threads, description and parent"
+        " replies, refs, links and projects move to it; each merged item is linked"
+        " duplicates to it, gets a summary naming it, is released and closes in its"
+        " cancelled state. A project more than one of them names keeps the strongest"
+        " source: named, then commits, then migrated. Their history, reports with their threads, description and parent"
         " stay on them. Refused before anything is written:"
         " an item in another space, a closed item, a merged item with children, a goal"
         " or stage with a task (goals and stages merge only with each other),"
@@ -779,6 +821,11 @@ TOOLS = [
                         " is never edited into a task, and its place says which it is.",
                     },
                     "parent": _PARENT,
+                    "projects": _PROJECTS
+                    | {
+                        "description": "projects replaces the projects the item names;"
+                        " the item stays in its space.",
+                    },
                     "mentions": _TEXT_MENTIONS,
                 },
             },
@@ -1222,26 +1269,33 @@ def _is_verbose(arguments: Mapping[str, object], name: str = "verbose") -> bool:
     return verbose
 
 
-def _with_url(answer: object) -> object:
-    """A full work item record with its address, which only an agent needs.
+#: Every field a full record carries: the card's, the parts' and those named off both,
+#: which `read_model` keeps apart. What a write answers with beyond them is its own.
+_RECORD_FIELDS = frozenset(read_model.CARD_FIELDS + read_model.PARTS + read_model.OFF_CARD)
 
-    The HTTP boundary answers without it: a browser is already on the origin and
-    routes by the item's identity.
+
+def _as_card(conn: sqlite3.Connection, answer: dict) -> dict:
+    """A write's answer with the item as its card, and what the write itself reports.
+
+    The HTTP boundary answers a write with the full record, which grows with the
+    item's history; an agent reads the card in its place, as `get_work_item` gives
+    it by default, and the parts by name. Read after the write and inside its
+    transaction, the card stands at the revision the write left. The keys a write
+    adds beside the record — what it applied, started, requeued, released or merged,
+    what the guards warned and a force overrode — stay as the write gave them.
     """
 
-    if isinstance(answer, dict) and isinstance(answer.get("reference"), str):
-        return {**answer, "url": acknowledgements.work_item_url(answer["reference"])}
-    return answer
+    card = _work_item(conn, {"id": answer["reference"]})
+    return {**card, **{name: value for name, value in answer.items() if name not in _RECORD_FIELDS}}
 
 
 def _acknowledged(
     path: str, acknowledge: acknowledgements.Acknowledge
 ) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
-    """A write that answers briefly unless the caller asks for the whole item.
+    """A write that answers briefly unless the caller asks for the item's card.
 
-    The full record is what the HTTP boundary returns and what `verbose` still
-    returns here, with its address; the short form is cut from it afterwards, so
-    the write itself is the same either way.
+    Both forms are cut from the full record the HTTP boundary returns, so the write
+    itself is the same either way.
     """
 
     write = _post(path)
@@ -1249,8 +1303,10 @@ def _acknowledged(
     def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
         verbose = _is_verbose(arguments)
         item = write(conn, {name: value for name, value in arguments.items() if name != "verbose"})
-        if verbose or not isinstance(item, dict):
-            return _with_url(item)
+        if not isinstance(item, dict):
+            return item
+        if verbose:
+            return _as_card(conn, item)
         return acknowledge(item, arguments)
 
     return run
@@ -1263,13 +1319,16 @@ def _with_similar(
 
     Read after the write, so the links the same call made are known and left out
     (`words.similar`). The HTTP boundary answers without it: the hint is for an
-    agent that has just filed an item and may have filed it twice.
+    agent that has just filed an item and may have filed it twice. The item is found
+    by its reference, which the acknowledgement and the card both carry; the card
+    names no `work_item_id`.
     """
 
     def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
         answer = write(conn, arguments)
-        if isinstance(answer, dict) and isinstance(answer.get("work_item_id"), str):
-            answer["similar"] = words.similar(conn, answer["work_item_id"])
+        if isinstance(answer, dict) and isinstance(answer.get("reference"), str):
+            created = read_model.item_row(conn, answer["reference"])
+            answer["similar"] = words.similar(conn, str(created["work_item_id"]))
         return answer
 
     return run
@@ -1308,12 +1367,47 @@ def _told(
     return run
 
 
+def _rooted(
+    write: Callable[[sqlite3.Connection, Mapping[str, object]], object],
+    claims: Callable[[Mapping[str, object]], bool],
+) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
+    """A write whose claim began or held the item answers with its `project_roots`.
+
+    The roots are what the agent reads each project's instructions from before it
+    edits there, and they are named where the claim is, short answer or verbose.
+    The HTTP boundary answers without them: a browser does not edit a checkout.
+    The item is found by its reference, which the acknowledgement and the card
+    both carry; the card names no `work_item_id`.
+    """
+
+    def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+        answer = write(conn, arguments)
+        if not claims(arguments) or not isinstance(answer, dict):
+            return answer
+        item = answer.get("work_item", answer)
+        if not isinstance(item, dict) or not isinstance(item.get("reference"), str):
+            return answer
+        claimed = read_model.item_row(conn, item["reference"])
+        return {
+            **answer,
+            "project_roots": item_projects.project_roots(conn, str(claimed["work_item_id"])),
+        }
+
+    return run
+
+
+def _claim_asked(arguments: Mapping[str, object]) -> bool:
+    """Whether a creation or a batch names `claim: true`, its one claim group."""
+
+    return arguments.get("claim") is True
+
+
 def _claim_ready(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    """The item the queue handed over, whole: the agent needs the item it just took."""
+    """The item the queue handed over as its card: the agent needs the item it just took."""
 
     answer = _post("/api/planning/work-item/claim-ready")(conn, arguments)
-    if isinstance(answer, dict) and answer.get("work_item") is not None:
-        return {**answer, "work_item": _with_url(answer["work_item"])}
+    if isinstance(answer, dict) and isinstance(answer.get("work_item"), dict):
+        return {**answer, "work_item": _as_card(conn, answer["work_item"])}
     return answer
 
 
@@ -1341,58 +1435,77 @@ def _get(
     return run
 
 
-def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    """One item with its newest history unless the caller wants all of it.
+#: The part each mode of get_work_item cuts, which a read naming no parts reads alone.
+_MODE_PARTS = {
+    "comments_after": "comments",
+    "thread": "comments",
+    "unresolved": "comments",
+    "events": "events",
+    "section": "sections",
+}
 
-    The cut is made by the boundary's opt-in parameters, so the HTTP read a
-    screen makes without them is the complete record it always was. Either way
-    the answer names the sessions that wrote to the item.
+
+def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> dict:
+    """One item by parts: its card unless the caller names others or a mode.
+
+    The boundary reads the parts, so a read over HTTP that names them answers the
+    same. A mode without `parts` reads the part it cuts and nothing else.
     """
 
-    parameters = {"id": [str(arguments["id"])], "sessions": ["true"]}
-    full = _is_verbose(arguments, "full")
-    after = arguments.get("comments_after")
-    thread = arguments.get("thread")
-    unresolved = _is_verbose(arguments, "unresolved")
-    if unresolved:
-        if full:
-            raise model.PlanningError("full and unresolved exclude each other")
-        if thread is not None:
-            raise model.PlanningError("thread and unresolved exclude each other")
-        parameters["unresolved"] = ["true"]
-    if after is not None:
-        if full:
-            raise model.PlanningError("full and comments_after exclude each other")
-        parameters["comments_after"] = [str(model.count_field(after, "comments_after"))]
-    if thread is not None:
-        if full:
-            raise model.PlanningError("full and thread exclude each other")
-        if after is not None:
-            # Here as well as at the boundary, which reads comments_after=0 as absent.
-            raise model.PlanningError("thread and comments_after exclude each other")
-        parameters["thread"] = [str(model.count_field(thread, "thread"))]
-    if after is None and thread is None and not full and not unresolved:
-        parameters["threads"] = [str(RECENT_COMMENTS)]
-    if not full:
-        parameters["events"] = [str(RECENT_EVENTS)]
+    modes = {
+        "comments_after": arguments.get("comments_after"),
+        "thread": arguments.get("thread"),
+        "unresolved": _is_verbose(arguments, "unresolved") or None,
+        "events": arguments.get("events"),
+        "section": _section_keys(arguments.get("section")),
+    }
+    named = [_MODE_PARTS[mode] for mode, value in modes.items() if value is not None]
+    # Each name is held to the parts before the list is joined, so a comma inside
+    # one cannot make two of it.
+    parameters = {
+        "id": [str(arguments["id"])],
+        "parts": [",".join(read_model.part_names(_part_names(arguments.get("parts"), named)))],
+    }
+    for mode, value in modes.items():
+        if value is True:
+            parameters[mode] = ["true"]
+        elif mode == "events" and value is not None:
+            parameters[mode] = [str(read_model.events_count(value))]
+        elif isinstance(value, list):
+            parameters[mode] = value
+        elif value is not None:
+            parameters[mode] = [str(model.count_field(value, mode))]
     answer = api.handle_get(conn, "/api/planning/work-item", parameters)
     if answer is None:  # pragma: no cover - the path table above is closed
         raise ValueError("no planning work item read")
-    item = answer[1]["work_item"]
-    # The newest few of the comments that named it, or all of them and no count.
-    named, total = read_model.mentions_of(
-        conn, item["work_item_id"], None if full else RECENT_MENTIONS
-    )
-    item = {**item, "mentions": named, "mentions_total": total}
-    if full:
-        del item["mentions_total"]
-    return _with_url(
-        {
-            **item,
-            "questions": requests.item_questions(conn, item["work_item_id"]),
-            "images": images.of_item(conn, item["work_item_id"]),
-        }
-    )
+    return answer[1]["work_item"]
+
+
+def _section_keys(keys: object) -> list[str] | None:
+    """`section` as a list of keys: one key or a list of them, or None when not named."""
+
+    if keys is None:
+        return None
+    if isinstance(keys, str):
+        return [keys]
+    if isinstance(keys, list) and keys and all(isinstance(key, str) for key in keys):
+        return keys
+    raise model.PlanningError("section must be a section key or a list of them")
+
+
+def _part_names(names: object, by_modes: list[str]) -> list[str]:
+    """`parts` as a list of names: one name, a list of them, or what the modes read.
+
+    Without `parts`, the parts the modes cut, or the card when no mode is named.
+    """
+
+    if names is None:
+        return by_modes or ["card"]
+    if isinstance(names, str):
+        return [names]
+    if isinstance(names, list) and names and all(isinstance(name, str) for name in names):
+        return names
+    raise model.PlanningError("parts must be a part name or a list of them")
 
 
 def _image(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
@@ -1439,6 +1552,9 @@ def _compact_row(conn: sqlite3.Connection, item: dict) -> dict:
         row["queue_order"] = item["queue_order"]
     if item["withheld"]:
         row["withheld"] = item["withheld"]
+    # The space an item of another space lies in, where a space's list holds it.
+    if item.get("other_space") is not None:
+        row["other_space"] = item["other_space"]
     # Why a search returned the item; a row without it cannot be told from noise.
     hits = ("comment_hit", "question_hit", "summary_hit")
     return row | {name: item[name] for name in hits if name in item}
@@ -1563,16 +1679,33 @@ def _answer(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object
     return _post("/api/planning/request/answer")(conn, rest)
 
 
+def _spaces(conn: sqlite3.Connection, _arguments: Mapping[str, object]) -> object:
+    """The spaces, and the calling session's among them: the one its folder stands in.
+
+    Only a tool call has a session; the HTTP list a screen draws from has none.
+    """
+
+    read = api.handle_get(conn, "/api/planning/spaces", {})
+    if read is None:  # pragma: no cover - the path table above is closed
+        raise ValueError("no planning spaces read")
+    session_space = item_projects.session_space(conn, calls.confirmed_session())
+    return {**read[1], "session_space": session_space}
+
+
 def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    return service.get_planning_space(conn, str(arguments["space"]))
+    (shown,) = item_projects.spaces_shown(
+        conn, [service.get_planning_space(conn, str(arguments["space"]))]
+    )
+    return shown
 
 
 OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
-    "list_planning_spaces": _get("/api/planning/spaces"),
+    "list_planning_spaces": _spaces,
     "get_planning_space": _space,
     "create_planning_space": _post("/api/planning/spaces"),
-    "create_work_item": _with_similar(
-        _acknowledged("/api/planning/work-items", acknowledgements.created)
+    "create_work_item": _rooted(
+        _with_similar(_acknowledged("/api/planning/work-items", acknowledgements.created)),
+        _claim_asked,
     ),
     "get_work_item": _work_item,
     "read_work_item_image": _image,
@@ -1585,20 +1718,24 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
             "kind",
             "owner",
             "parent",
+            "project",
             "limit",
             "offset",
         )
     ),
     "get_work_item_chain": _chain,
     "search_work_items": _listing(_search),
-    "claim_work_item": _acknowledged("/api/planning/work-item/claim", acknowledgements.claimed),
-    "claim_ready_work_item": _claim_ready,
+    "claim_work_item": _rooted(
+        _acknowledged("/api/planning/work-item/claim", acknowledgements.claimed),
+        lambda arguments: arguments.get("release") is not True,
+    ),
+    "claim_ready_work_item": _rooted(_claim_ready, lambda _arguments: True),
     "claim_work_item_checklist_item": _acknowledged(
         "/api/planning/work-item/checklist/claim", acknowledgements.step_changed
     ),
     "merge_work_items": _acknowledged("/api/planning/work-item/merge", acknowledgements.merged),
-    "apply_work_item_changes": _acknowledged(
-        "/api/planning/work-item/apply", acknowledgements.applied
+    "apply_work_item_changes": _rooted(
+        _acknowledged("/api/planning/work-item/apply", acknowledgements.applied), _claim_asked
     ),
     "delete_work_item": _post("/api/planning/work-item/delete"),
     "create_work_item_request": _post("/api/planning/work-item/request"),

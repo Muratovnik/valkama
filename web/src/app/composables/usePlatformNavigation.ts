@@ -20,6 +20,7 @@ import { lookAcrossScopes } from '@/pages/planning/composables/usePlanningChainS
 import { documentPageAddress } from '@/shared/api/documentPage.ts'
 import type { DocumentPageAddress } from '@/shared/api/documentPage.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import {
   isPlatformRouteUnavailable,
   recoverWorkRoute,
@@ -275,11 +276,7 @@ export function usePlatformNavigation(
       : { module_id: moduleId, scope }
   }
 
-  function switchScope(value: string) {
-    const scope: OperatingScope =
-      value === 'global'
-        ? { kind: 'global' }
-        : { kind: 'project', project_ref: { project_id: value.replace(/^project:/u, '') } }
+  function switchScope(scope: OperatingScope) {
     writeRoute(inScope(activeModule.value, scope))
   }
 
@@ -287,8 +284,9 @@ export function usePlatformNavigation(
     writeRoute(inScope(DEFAULT_ROUTE.module_id, DEFAULT_ROUTE.scope))
   }
 
-  function openProject(projectId: string, moduleId: ModuleId = 'planning') {
-    writeRoute(inScope(moduleId, { kind: 'project', project_ref: { project_id: projectId } }))
+  /** A space's work, every project of it, from the page of every space. */
+  function openSpace(space: PlanningSpaceRef) {
+    writeRoute(inScope('planning', { kind: 'space', space_ref: space }))
   }
 
   /**
@@ -362,7 +360,7 @@ export function usePlatformNavigation(
     documentPage,
     entryRestorePending,
     goHome,
-    openProject,
+    openSpace,
     operatingScope,
     pendingSession,
     questionsAsked,

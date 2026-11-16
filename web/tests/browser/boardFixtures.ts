@@ -85,6 +85,7 @@ export function boardSpace(): Brief[] {
     // More labels than a column's line holds, so the line has a count to make room for.
     brief(430, BACKLOG, 'Loose work under no goal', {
       labels: ['agent-packets', 'coordinator', 'decision-review', 'ui'],
+      projects: [],
     }),
   ]
 }

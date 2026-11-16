@@ -12,14 +12,34 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from . import item_tree, leases, live_work, model, read_model, service, states, store
+from ..projects import project_registry
+from ..store_identity.metadata import read_store_metadata
+from . import (
+    item_projects,
+    item_tree,
+    leases,
+    live_work,
+    model,
+    read_model,
+    service,
+    states,
+)
 
 READ_MODEL_INTERFACE = f"{model.PLANNING_INTERFACE}-read-model"
 
 
 @read_model.whole_store_read()
-def planning_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict:
-    """One space's whole graph: its workflow, its items, and the edges between."""
+def planning_payload(
+    conn: sqlite3.Connection, *, space: str | None = None, project: str | None = None
+) -> dict:
+    """One space's whole graph: its workflow, its items, and the edges between.
+
+    A space's read holds its items and the items of other spaces that name one of
+    its projects, each marked `other_space` (`service.list_work_items`), and every
+    link with an end among them. The end of such a link the read does not hold is
+    in `other_space_ends`. `project` narrows the read to the items naming it, and
+    other spaces bring theirs only when it is one of the space's projects.
+    """
 
     spaces = service.list_planning_spaces(conn)
     if not spaces:
@@ -30,25 +50,30 @@ def planning_payload(conn: sqlite3.Connection, *, space: str | None = None) -> d
             "workflow": None,
             "work_items": [],
             "links": [],
+            "other_space_ends": [],
             "stale_claims": [],
             "live_work": {},
         }
     chosen = service.get_planning_space(conn, space or spaces[0]["planning_space_id"])
     space_id = str(chosen["planning_space_id"])
-    items = service.list_work_items(conn, space=space_id, limit=None)
+    items = service.list_work_items(
+        conn, space=space_id, project=project, other_spaces=True, limit=None
+    )
+    links, ends = _links(conn, items)
+    workflow = chosen.pop("workflow")
+    # The store this read is of names the spaces its projects are bound to.
+    listing = project_registry.read_registry()
+    data_scope_id = str(read_store_metadata(conn)["data_scope_id"])
+    spaces = item_projects.with_projects(spaces, listing, data_scope_id)
+    (shown,) = item_projects.with_projects([chosen], listing, data_scope_id)
     return {
         "interface_version": READ_MODEL_INTERFACE,
         "planning_spaces": spaces,
-        "planning_space": {
-            "planning_space_id": chosen["planning_space_id"],
-            "project_id": chosen["project_id"],
-            "name": chosen["name"],
-            "key": chosen["key"],
-            "provider_kind": chosen["provider_kind"],
-        },
-        "workflow": chosen["workflow"],
+        "planning_space": shown,
+        "workflow": workflow,
         "work_items": items,
-        "links": _links(conn, space_id),
+        "links": links,
+        "other_space_ends": ends,
         "stale_claims": stale_claims(conn, space=space_id),
         # Which items an agent is at work on now: by `live_work`'s rule, and
         # only for the items that have some.
@@ -78,7 +103,7 @@ def stale_claims(conn: sqlite3.Connection, *, space: str | None = None) -> list[
     parameters: list[object] = [json.dumps(model.HELD_CATEGORIES)]
     if space is not None:
         clauses.append("w.planning_space_id = ?")
-        parameters.append(str(service.get_planning_space(conn, space)["planning_space_id"]))
+        parameters.append(service.space_identity(conn, space))
     query = service.with_clauses(
         "SELECT w.*, p.key || '-' || w.number AS reference, s.key, s.name, s.category,"
         " s.is_terminal,"
@@ -162,23 +187,28 @@ MERMAID_SHAPES = {
 }
 
 
-def graph_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict:
+def graph_payload(
+    conn: sqlite3.Connection, *, space: str | None = None, project: str | None = None
+) -> dict:
     """The space as a dependency graph: parents, blockers, provenance, frontier.
 
     Depth is the longest chain of unfinished blockers behind an item, which is
     what makes the ready frontier obvious: depth zero, startable, unheld and not
     a container is workable now. Everything here is computed from the store
     rather than from a lane name, so a space that renames its states keeps its
-    frontier.
+    frontier. Its nodes are the items of the space's read (`planning_payload`),
+    other spaces' marked `other_space`, and `other_space_ends` the ends of its
+    edges it holds no node for.
     """
 
-    payload = planning_payload(conn, space=space)
+    payload = planning_payload(conn, space=space, project=project)
     if payload["planning_space"] is None:
         return {
             "interface_version": READ_MODEL_INTERFACE,
             "planning_space": None,
             "nodes": [],
             "edges": [],
+            "other_space_ends": [],
         }
     items = {str(item["work_item_id"]): item for item in payload["work_items"]}
     edges = list(payload["links"])
@@ -233,6 +263,7 @@ def graph_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict
                 # thing this projection adds to it.
                 "depth": level,
                 "workable": item["workable"] and level == 0,
+                "other_space": item["other_space"],
             }
         )
     return {
@@ -240,6 +271,7 @@ def graph_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict
         "planning_space": payload["planning_space"],
         "nodes": nodes,
         "edges": edges,
+        "other_space_ends": payload["other_space_ends"],
     }
 
 
@@ -276,35 +308,37 @@ def _mermaid_id(reference: str) -> str:
     return str(reference).replace("-", "_")
 
 
-def _links(conn: sqlite3.Connection, planning_space_id: str) -> list[dict]:
-    """The links leaving the space and the blocks into it, each naming its source.
+def _links(conn: sqlite3.Connection, items: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Every link with an end among the items read, each naming its source, and the
+    ends of those links the read does not hold.
 
-    The source is the end a reader asks about: a block holds while its source
-    is open, and that source may live in another space, whose items this view
-    does not carry, so its reference and state come with the link. Only links
-    leaving the space used to be read, so a blocker in another space was
-    missing from every view: an item was not workable and nothing said why, and
-    a finished foreign blocker could not be told from an open one. Another
-    space's other links into this one stay that space's to show. The source's
-    state comes the way every link names an end (`read_model.end_state`): null,
-    with the reason beside it, when the store cannot resolve it — which never
-    means the source is open. A chain's edges name their source the same way.
+    Both directions and every kind: a space's read draws its links with other
+    spaces. The source is the end a reader asks about: a block holds while its
+    source is open, and that source may lie outside the read, so its reference and
+    state come with the link. Only links leaving the space used to be read, so a
+    blocker in another space was missing from every view: an item was not workable
+    and nothing said why, and a finished foreign blocker could not be told from an
+    open one. The source's state comes the way every link names an end
+    (`read_model.end_state`): null, with the reason beside it, when the store
+    cannot resolve it — which never means the source is open. A chain's edges name
+    their source the same way.
     """
 
+    held = [str(item["work_item_id"]) for item in items]
     rows = conn.execute(
-        "SELECT l.from_id, l.to_id, l.kind, f.number, p.key AS space_key,"
+        "WITH held(work_item_id) AS (SELECT value FROM json_each(?))"
+        " SELECT l.from_id, l.to_id, l.kind, f.number, p.key AS space_key,"
         " s.name AS state_name, s.category AS state_category, s.is_terminal"
         " FROM work_item_links l"
         " JOIN work_items f ON f.work_item_id = l.from_id"
-        " JOIN work_items t ON t.work_item_id = l.to_id"
         " JOIN planning_spaces p ON p.planning_space_id = f.planning_space_id"
         " LEFT JOIN workflow_states s ON s.state_id = f.state_id"
-        " WHERE f.planning_space_id = ?"
-        "  OR (t.planning_space_id = ? AND l.kind = 'blocks') ORDER BY l.id",
-        (planning_space_id, planning_space_id),
+        " WHERE l.from_id IN (SELECT work_item_id FROM held)"
+        "  OR l.to_id IN (SELECT work_item_id FROM held) ORDER BY l.id",
+        (json.dumps(held),),
     ).fetchall()
     ends = item_tree.below(conn, read_model.service_ends(rows, "from_id"))
-    return [
+    edges = [
         {
             "from": str(row["from_id"]),
             "to": str(row["to_id"]),
@@ -314,30 +348,5 @@ def _links(conn: sqlite3.Connection, planning_space_id: str) -> list[dict]:
         }
         for row in rows
     ]
-
-
-def space_for_project(conn: sqlite3.Connection, project_id: str) -> dict | None:
-    """The space a project is bound to, or nothing when it has none yet."""
-
-    row = conn.execute(
-        "SELECT * FROM planning_spaces WHERE project_id = ? ORDER BY name LIMIT 1",
-        (model.text_field(project_id, "project_id", limit=160),),
-    ).fetchone()
-    if row is None:
-        return None
-    return service.get_planning_space(conn, str(row["planning_space_id"]))
-
-
-def ensure_space_for_project(
-    conn: sqlite3.Connection, project_id: str, *, name: str | None = None
-) -> dict:
-    """The project's space, created on first use rather than by a setup step."""
-
-    existing = space_for_project(conn, project_id)
-    if existing is not None:
-        return existing
-    store.create_space(conn, project_id=project_id, name=name or project_id)
-    answer = space_for_project(conn, project_id)
-    if answer is None:  # pragma: no cover - the insert above either raises or lands
-        raise model.PlanningError("planning space creation did not persist")
-    return answer
+    outside = {str(row[end]) for row in rows for end in ("from_id", "to_id")} - set(held)
+    return edges, read_model.other_space_ends(conn, outside)

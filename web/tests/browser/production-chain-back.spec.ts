@@ -12,7 +12,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { serve, showChain, smallChain } from './chainFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** The card's tab that is shown now. */
@@ -23,7 +23,7 @@ const shownTab = (page: Page) =>
 const cardRoute = (reference: string, state?: Record<string, string>) =>
   serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
+    scope: spaceScope,
     entity: planningWorkItemEntity({ ...workItemRef, reference }),
     ...(state ? { state } : {}),
   })

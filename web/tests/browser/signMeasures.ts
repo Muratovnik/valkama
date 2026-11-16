@@ -7,11 +7,10 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { planningReadModel, projectScope, spaceRef } from './planningFixtures.ts'
+import { planningReadModel, spaceScope } from './planningFixtures.ts'
 
 /** The room a sign may stand off the middle of the capitals of its line. */
 export const MIDDLE_ROOM = 0.5
@@ -199,8 +198,7 @@ export async function openView(
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(spaceRef),
+      scope: spaceScope,
       state: { view },
     }),
   )

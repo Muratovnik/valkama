@@ -18,8 +18,9 @@
 
 const OPEN_PATH_SWITCH = '--open-path='
 
+// One card in its space, named by the store and the key, or the panel of questions:
 // `_CARD_ROUTE` in server/http_surface.py; tests/test_work_item_link.py compares them.
-const CARD_ROUTE = /^(?:\/modules\/planning\/project\/[a-z][a-z0-9-]{0,159}\?entity=[A-Za-z0-9_-]+(?:&reveal=question)?|\/modules\/planning\/global\?panel=questions)$/
+const CARD_ROUTE = /^(?:\/modules\/planning\/space\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[A-Z][A-Z0-9]{1,7}\?entity=[A-Za-z0-9_-]+(?:&reveal=question)?|\/modules\/planning\/global\?panel=questions)$/
 
 // `_QUESTIONS_ROUTE` in server/http_surface.py, compared with it by the same test.
 const QUESTIONS_ROUTE = '/modules/planning/global?panel=questions'

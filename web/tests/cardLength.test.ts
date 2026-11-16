@@ -37,15 +37,14 @@ function events(count: number) {
   }))
 }
 
+const qaSpace = { data_scope_id: '123e4567-e89b-42d3-a456-426614174000', space_key: 'QA' }
+
 /** The card's read as it arrives, envelope and all, which is the path the card takes. */
 function cardRead(work_item: unknown) {
   return {
     interface_version: 'valkama-planning-work-item',
-    scope: { kind: 'project', project_ref: { project_id: 'example-project' } },
-    work_item_ref: {
-      space_ref: { data_scope_id: '123e4567-e89b-42d3-a456-426614174000', space_key: 'QA' },
-      reference: 'QA-320',
-    },
+    scope: { kind: 'space', space_ref: qaSpace },
+    work_item_ref: { space_ref: qaSpace, reference: 'QA-320' },
     state: { interface_version: 'valkama-ui-state', status: 'ready', payload: { work_item } },
   }
 }

@@ -55,6 +55,7 @@ function item(
     withheld: [],
     lapsed_claim: null,
     labels: [],
+    projects: [],
     source: '',
     checklist: [],
     revision: 0,

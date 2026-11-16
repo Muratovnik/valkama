@@ -46,22 +46,25 @@ const sessionSpaceRef = {
   space_key: 'MAIN',
 }
 const sessionResourceRef = planningSpaceEntity(sessionSpaceRef)
-const contextResources = [
-  { resource_ref: sessionResourceRef, state: 'mapped' as const },
+/** Two spaces, the open one with two projects, so both of the bar's choices stand. */
+const contextSpaces = [
   {
-    resource_ref: planningSpaceEntity({
-      data_scope_id: '00000000-0000-4000-8000-000000000701',
-      space_key: 'OTHER',
-    }),
-    state: 'mapped' as const,
+    ...sessionSpaceRef,
+    name: 'Пространство с длинным рабочим названием',
+    default_project: 'project-alpha',
+    projects: [
+      { project_id: 'project-alpha', display_name: 'Проект с длинным рабочим названием' },
+      { project_id: 'project-beta', display_name: 'Второй проект' },
+    ],
+    other_space_projects: [],
   },
-]
-const contextProjects = [
   {
-    binding_state: 'mapped' as const,
-    project_id: 'project-alpha',
-    resources: contextResources,
-    title: 'Проект с длинным рабочим названием',
+    data_scope_id: '00000000-0000-4000-8000-000000000701',
+    space_key: 'OTHER',
+    name: 'Other',
+    default_project: null,
+    projects: [],
+    other_space_projects: [],
   },
 ]
 const REVIEW_STATE = {
@@ -88,6 +91,7 @@ const testItem: WorkItemBrief = {
   // 264px column is where this product keeps losing content off the edge and a
   // tame fixture is why no test ever saw it.
   labels: ['example-project', 'design-system', 'accessibility'],
+  projects: [],
   source: '',
   open: true,
   container_state: null,
@@ -209,11 +213,10 @@ const Harness = defineComponent({
           }),
           h('div', { class: 'app-main context-harness-main' }, [
             h(AppContextBar, {
-              projects: contextProjects,
-              resources: contextResources,
-              resourceRef: contextResources[0]?.resource_ref,
+              spaces: contextSpaces,
               scope: {
-                kind: 'project',
+                kind: 'space',
+                space_ref: sessionSpaceRef,
                 project_ref: { project_id: 'project-alpha' },
               },
               title: 'Sessions',

@@ -77,9 +77,9 @@ async function openComposer(page: Page) {
   return dialog
 }
 
-// A phone chooses the view from a menu; a desktop has only the scope in one.
+// A phone chooses the view from a menu; a desktop has only the space in one.
 for (const [width, choice, option] of [
-  [1280, 'Operating scope', /^Example Project/u],
+  [1280, 'Space', /^MAIN/u],
   [390, 'View', /^List$/u],
 ] as const) {
   test(`at ${width}px the first press of the page makes a choice and rings nothing`, async ({

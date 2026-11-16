@@ -13,7 +13,6 @@ import { useAppReferenceLinks } from '@/app/composables/useAppReferenceLinks.ts'
 import { fetchSessionContext } from '@/shared/api/api.ts'
 import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearchApi.ts'
 import type { GlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { messages } from '@/shared/i18n/index.ts'
 import type { ResolvedRef } from '@/shared/types/reference.ts'
 import RichText from '@/shared/ui/RichText.vue'
@@ -27,7 +26,7 @@ vi.mock('@/shared/api/planningGlobalSearchApi.ts', () => ({
 
 const space = { data_scope_id: '123e4567-e89b-42d3-a456-426614174000', space_key: 'MAIN' }
 const session = '0f8fad5b-d9cb-469f-a165-70867728950e'
-const target = { project_id: 'example', space_ref: space, reference: 'MAIN-12', writable: true }
+const target = { space_ref: space, reference: 'MAIN-12', writable: true }
 
 function mountShell(source: string) {
   const openTarget = vi.fn()
@@ -40,12 +39,13 @@ function mountShell(source: string) {
       setup() {
         useAppReferenceLinks({
           primaryScope: () => space.data_scope_id,
-          projects: () => [
+          spaces: () => [
             {
-              project_id: 'example',
-              title: 'Example',
-              binding_state: 'mapped',
-              resources: [{ resource_ref: planningSpaceEntity(space), state: 'mapped' }],
+              ...space,
+              name: 'Example',
+              default_project: 'example',
+              projects: [{ project_id: 'example', display_name: 'Example' }],
+              other_space_projects: [],
             },
           ],
           openTarget,

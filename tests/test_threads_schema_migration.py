@@ -99,7 +99,7 @@ class ThreadShapeTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        planning.create_planning_space(self.conn, project_id="shape", name="Shape", key="SHAPE")
+        planning.create_planning_space(self.conn, name="Shape", key="SHAPE")
         self.item = planning.create_work_item(self.conn, space="SHAPE", title="Here")[
             "work_item_id"
         ]

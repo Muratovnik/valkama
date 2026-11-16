@@ -12,9 +12,9 @@ import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platfor
 import { busyFrame, liveRow as frameRow, liveFrame } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { installLiveStreams, liveRow, servePins } from './liveWorkPage.ts'
-import { globalScope, projectScope, workItemRef } from './planningFixtures.ts'
+import { dataScopeId, globalScope, spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
-import { firstProject, serveTwoProjects } from './twoProjects.ts'
+import { firstSpace, serveTwoSpaces } from './twoSpaces.ts'
 
 const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: globalScope })
 const PORTFOLIO = serializePlatformRoute({ module_id: 'planning', scope: globalScope })
@@ -43,7 +43,7 @@ test.describe('one stream for the tab', () => {
   // The shell opens `view=live` as it starts. A space page then opens its own stream, and the
   // start's closes once that one has delivered; any other page keeps the start's as its own.
   for (const [where, address, made] of [
-    ['a space page', firstProject(), ['live', 'planning']],
+    ['a space page', firstSpace(), ['live', 'planning']],
     ['Settings', SETTINGS, ['live']],
     ['the portfolio', PORTFOLIO, ['live']],
   ] as const)
@@ -67,7 +67,7 @@ test.describe('one stream for the tab', () => {
   }) => {
     await installBackend(page)
     const streams = await installLiveStreams(page)
-    await page.goto(firstProject())
+    await page.goto(firstSpace())
     await shown(page, streams)
     await page.locator('.nav-item.module-settings').click()
     await expect(page).toHaveURL(/\/modules\/settings\//u)
@@ -80,13 +80,13 @@ test.describe('one stream for the tab', () => {
 })
 
 test('a row of another space opens its card there and keeps the view', async ({ page }) => {
-  await serveTwoProjects(page)
+  await serveTwoSpaces(page)
   const streams = await installLiveStreams(page)
-  await page.goto(firstProject({ view: 'list' }))
+  await page.goto(firstSpace({ view: 'list' }))
   await expect(page.locator('.work-item-list')).toBeVisible()
   await shown(page, streams)
   await liveRow(page, 'NEXT-5').locator('.nav-row-link').click()
-  await expect(page).toHaveURL(/\/modules\/planning\/project\/second-project\?/u)
+  await expect(page).toHaveURL(new RegExp(`/modules/planning/space/${dataScopeId}/NEXT\\?`, 'u'))
   const route = parsePlatformRoute(new URL(page.url()).pathname + new URL(page.url()).search)
   expect(route.state).toEqual({ view: 'list' })
   expect(route.entity?.kind).toBe('work-item')
@@ -104,7 +104,7 @@ test('marks the open card’s row as the page, and the entry it stands under as 
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )

@@ -7,7 +7,9 @@
  * a wait rather than a failure. A path that names no section offers the way back
  * to «Work», named after it. A module the manifest does not carry is a URL from
  * another build or another workstation, so it offers the modules that do exist —
- * naming them is what turns a dead link into a choice.
+ * naming them is what turns a dead link into a choice. An address that names a
+ * project where work is now chosen by its space opens nothing it named: it is
+ * unavailable, and its way out is the choice of a space.
  *
  * The card stands at the top of the stage, where every other state card stands,
  * and its actions sit inside it, as every state panel's way out does, at the
@@ -32,7 +34,7 @@ const props = defineProps<{
   unavailable: PlatformRouteUnavailable | null
 }>()
 
-const emit = defineEmits<{ choose: [moduleId: ModuleId]; home: [] }>()
+const emit = defineEmits<{ 'choose': [moduleId: ModuleId]; 'choose-space': []; 'home': [] }>()
 const { t } = useI18n()
 const failureReason = computed(() => {
   if (typeof props.failure === 'string') return props.failure
@@ -60,9 +62,15 @@ const lost = computed(
 const unavailableMessage = computed(() => {
   const module = props.unavailable?.input_module_id ?? ''
   const reason = props.unavailable?.reason ?? ''
+  if (reason === 'retired-scope') return t('platform.scope.retired')
   return t(CANNOT_OPEN_HERE.has(reason) ? 'platform.route.unavailable' : 'platform.route.unknown', {
     module,
   })
+})
+/** The modules an address offers instead; a retired one offers the choice of a space. */
+const moduleChoices = computed(() => {
+  const recovery = props.unavailable?.recovery
+  return recovery?.kind === 'choose-module' ? recovery.available_modules : []
 })
 const failureState = computed(() =>
   lost.value ? uiEmpty(failureReason.value) : uiUnavailable(failureReason.value),
@@ -104,7 +112,13 @@ const unavailableState = computed(() =>
       <template #action>
         <div class="route-choices">
           <VButton
-            v-for="module in unavailable.recovery.available_modules"
+            v-if="unavailable.recovery.kind === 'choose-space'"
+            class="recovery-space"
+            @click="emit('choose-space')"
+            >{{ t('platform.scope.choose') }}</VButton
+          >
+          <VButton
+            v-for="module in moduleChoices"
             :key="module"
             class="recovery-choice"
             @click="emit('choose', module)"

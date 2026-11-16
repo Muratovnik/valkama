@@ -18,7 +18,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { lane, openBoard, openList, serve } from './boardPage.ts'
 import { largeChainHere, serve as serveChain, showChain } from './chainFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** The button that grouped the board before the view's menu held the grouping. */
@@ -341,7 +341,7 @@ test('a chain’s section reaches its list with no chart in the way', async ({ p
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )

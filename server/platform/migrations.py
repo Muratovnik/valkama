@@ -38,7 +38,7 @@ import sqlite3
 from collections.abc import Callable, Mapping
 
 from ..store_identity.primitives import ContractError
-from ..store_identity.refs import planning_space_entity, validate_operating_scope
+from ..store_identity.refs import planning_space_entity
 from . import modules as platform_modules
 
 # The current shape, borrowed rather than restated. A migration's last act is to
@@ -61,11 +61,13 @@ from .core import (
 from .legacy_records import (
     CAPABILITY_IDS,
     LEGACY_ENTITY_KINDS,
+    LEGACY_OPERATING_LEVELS,
     validate_action_input_descriptor,
     validate_adapter_record,
     validate_assignment,
     validate_connection,
     validate_legacy_entity_ref,
+    validate_legacy_operating_scope,
 )
 from .module_manifest import validate_module_manifest
 
@@ -251,13 +253,17 @@ def _normalize_schema2_module_manifest(module_id: str, value: object) -> dict:
         ):
             return value
         try:
-            return validate_module_manifest(value, entity_kinds=LEGACY_ENTITY_KINDS)
+            return validate_module_manifest(
+                value, entity_kinds=LEGACY_ENTITY_KINDS, levels=LEGACY_OPERATING_LEVELS
+            )
         except ContractError as error:
             raise CatalogMigrationError("persisted module descriptor is malformed") from error
     if module_id not in current_manifests:
         raise CatalogMigrationError("persisted module has no current manifest")
     try:
-        normalized = validate_module_manifest(value, entity_kinds=LEGACY_ENTITY_KINDS)
+        normalized = validate_module_manifest(
+            value, entity_kinds=LEGACY_ENTITY_KINDS, levels=LEGACY_OPERATING_LEVELS
+        )
     except ContractError as error:
         validation_error: ContractError | None = error
     else:
@@ -1099,7 +1105,7 @@ def _neutral_ui_prefs_record(row: Mapping[str, object], *, legacy: bool) -> dict
             raise TypeError("UI preference identity is invalid")
         result = {
             "module_id": record["module_id"],
-            "scope": validate_operating_scope(record["scope"]),
+            "scope": validate_legacy_operating_scope(record["scope"]),
         }
         if legacy and "board_ref" in record:
             result["resource_ref"] = _space_entity_from_board_ref(record["board_ref"])

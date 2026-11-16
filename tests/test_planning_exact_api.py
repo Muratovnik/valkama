@@ -18,7 +18,7 @@ from server.planning import service as planning_service
 from server.planning.routing import PlanningRouting
 from server.projects import scopes
 from server.store_identity.metadata import read_store_metadata
-from server.store_identity.refs import planning_space_entity, planning_work_item_entity
+from server.store_identity.refs import planning_space_entity
 from tests import schema9
 from tests.registry_fixtures import project_binding, project_entry, registry_bytes
 
@@ -37,9 +37,7 @@ class PlanningExactApiTests(unittest.TestCase):
         self.addCleanup(environment.stop)
         conn = store.connect()
         try:
-            planning_service.create_planning_space(
-                conn, project_id="example-project", name="Example Space", key="EXA"
-            )
+            planning_service.create_planning_space(conn, name="Example Space", key="EXA")
             created = planning_service.create_work_item(conn, space="EXA", title="Phase 1 item")
             planning_service.attach_ref(
                 conn, created["reference"], "memory", "lsn_example", label="Decision pointer"
@@ -78,14 +76,13 @@ class PlanningExactApiTests(unittest.TestCase):
 
     def exact(self, **extra: str) -> dict[str, list[str]]:
         return self.query(
-            scope_kind="project",
-            project_id="example-project",
+            scope_kind="space",
             data_scope_id=self.data_scope_id,
             space_key="EXA",
             **extra,
         )
 
-    def test_portfolio_and_work_item_answer_through_the_exact_binding(self) -> None:
+    def test_portfolio_and_work_item_answer_for_the_exact_space(self) -> None:
         planning = exact_api.planning_payload(self.routing(), self.exact())
         self.assertEqual("valkama-planning", planning["interface_version"])
         summary = planning["state"]["payload"]["planning_spaces"][0]["work_items"][0]
@@ -141,7 +138,7 @@ class PlanningExactApiTests(unittest.TestCase):
         )
         self.assertEqual("valkama-planning-work-item", brief["interface_version"])
         self.assertEqual(self.item_ref, brief["work_item_ref"])
-        self.assertEqual("project", brief["scope"]["kind"])
+        self.assertEqual({"kind": "space", "space_ref": self.space_ref}, brief["scope"])
         (listed,) = planning_service.list_work_items(self.conn, space="EXA")
         # A place in the queue is the list's, not the item's: the preview has none.
         self.assertNotIn("queue_order", brief["state"]["payload"]["work_item"])
@@ -165,7 +162,7 @@ class PlanningExactApiTests(unittest.TestCase):
         self.assertNotIn("comment_count", full)
 
     def test_a_brief_read_is_refused_as_the_full_one_is(self) -> None:
-        """Only `brief=true`; an unknown item is 404 and a binding that moved is 409."""
+        """Only `brief=true`; an unknown item is 404 and a space that is not there is 409."""
 
         for parameters in (
             self.exact(reference=self.item["reference"], brief="false"),
@@ -188,32 +185,18 @@ class PlanningExactApiTests(unittest.TestCase):
                 planning_service.get_work_item,
             )
         self.assertEqual(404, refusal.exception.status)
-        planning_service.create_planning_space(
-            self.conn, project_id="example-project", name="Second Space", key="SEC"
-        )
-        self.conn.commit()
-        self.write_registry(
-            [
-                project_entry(
-                    "example-project",
-                    self.root,
-                    bindings=[
-                        project_binding(
-                            "example-project",
-                            planning_space_entity({**self.space_ref, "space_key": "SEC"}),
-                        )
-                    ],
-                )
-            ]
-        )
         with self.assertRaises(ui_state.PlatformHttpError) as refusal:
             exact_api.work_item_payload(
                 self.routing(),
-                self.exact(reference=self.item["reference"], brief="true"),
+                {
+                    **self.exact(reference="GONE-1", brief="true"),
+                    "space_key": ["GONE"],
+                },
                 planning_service.get_work_item,
             )
         self.assertEqual(
-            (409, "No owner Project binding"), (refusal.exception.status, refusal.exception.reason)
+            (409, "Planning space is unavailable"),
+            (refusal.exception.status, refusal.exception.reason),
         )
 
     def attach_store(self, name: str, build: Callable[[str], str]) -> dict:
@@ -245,8 +228,7 @@ class PlanningExactApiTests(unittest.TestCase):
         answer = exact_api.work_item_payload(
             self.routing(),
             self.query(
-                scope_kind="project",
-                project_id="example-project",
+                scope_kind="space",
                 reference=reference,
                 brief="true",
                 **space_ref,
@@ -261,9 +243,7 @@ class PlanningExactApiTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
                 conn = store.connect()
                 try:
-                    planning_service.create_planning_space(
-                        conn, project_id="example-project", name="Attached", key="EXA"
-                    )
+                    planning_service.create_planning_space(conn, name="Attached", key="EXA")
                     planning_service.create_work_item(conn, space="EXA", title="Attached item")
                     conn.commit()
                 finally:
@@ -314,7 +294,11 @@ class PlanningExactApiTests(unittest.TestCase):
                 blocked = self.brief_from(space_ref, "KEEP-2")
                 self.assertEqual(("", False), (blocked["claim_ref"], blocked["workable"]))
 
-    def test_global_portfolio_and_memory_share_every_registered_project(self) -> None:
+    def test_global_portfolio_lists_every_space_with_its_projects(self) -> None:
+        """Every space of the store, bound or not; a project no space holds is in none."""
+
+        planning_service.create_planning_space(self.conn, name="Second Space", key="SEC")
+        self.conn.commit()
         unbound_root = self.root / "unbound"
         unbound_root.mkdir()
         self.write_registry(
@@ -327,32 +311,43 @@ class PlanningExactApiTests(unittest.TestCase):
                         project_binding("example-project", planning_space_entity(self.space_ref))
                     ],
                 ),
-                project_entry(
-                    "unbound-project",
-                    unbound_root,
-                    board="Unbound Project",
-                    bindings=[
-                        project_binding("unbound-project", planning_work_item_entity(self.item_ref))
-                    ],
-                ),
+                project_entry("unbound-project", unbound_root, board="Unbound Project"),
             ]
         )
         planning = exact_api.planning_payload(self.routing(), self.query(scope_kind="global"))
         state = planning["state"]
         self.assertEqual("ready", state["status"])
-        projects = state["payload"]["projects"]
+        self.assertEqual(
+            [
+                {
+                    "space_ref": self.space_ref,
+                    "title": "Example Space",
+                    "work_item_count": 1,
+                    "default_project": "example-project",
+                    "projects": [
+                        {"project_id": "example-project", "display_name": "Example Board"}
+                    ],
+                },
+                {
+                    "space_ref": {**self.space_ref, "space_key": "SEC"},
+                    "title": "Second Space",
+                    "work_item_count": 0,
+                    "default_project": None,
+                    "projects": [],
+                },
+            ],
+            state["payload"]["spaces"],
+        )
+        self.assertEqual(
+            ["EXA", "SEC"],
+            [space["space_ref"]["space_key"] for space in state["payload"]["planning_spaces"]],
+        )
+        # Memory still answers for every registered project, bound or not.
         memory_projects = memory_service.providers(registry_reader=self.registry_path.read_bytes)
         self.assertEqual(
-            {"example-project", "unbound-project"}, {item["project_id"] for item in projects}
-        )
-        self.assertEqual(
-            {item["project_id"] for item in projects},
+            {"example-project", "unbound-project"},
             {item["project_id"] for item in memory_projects["providers"]},
         )
-        unbound = next(item for item in projects if item["project_id"] == "unbound-project")
-        self.assertEqual("unbound", unbound["binding_state"])
-        self.assertNotIn("binding_reason", unbound)
-        self.assertEqual([], unbound["planning_spaces"])
 
     def test_global_directory_stays_bounded_without_reading_work_items(self) -> None:
         for number in range(1200):
@@ -370,9 +365,9 @@ class PlanningExactApiTests(unittest.TestCase):
         self.assertEqual("ready", directory["state"]["status"])
         payload = directory["state"]["payload"]
         self.assertEqual([], payload["planning_spaces"])
-        self.assertEqual(1201, payload["projects"][0]["planning_spaces"][0]["work_item_count"])
-        self.assertEqual("Example Board", payload["projects"][0]["title"])
-        self.assertEqual("Example Space", payload["projects"][0]["planning_spaces"][0]["title"])
+        self.assertEqual(1201, payload["spaces"][0]["work_item_count"])
+        self.assertEqual("Example Space", payload["spaces"][0]["title"])
+        self.assertEqual("Example Board", payload["spaces"][0]["projects"][0]["display_name"])
         self.assertLess(len(json.dumps(payload).encode("utf-8")), 256 * 1024)
 
         def value_count(value):
@@ -384,7 +379,7 @@ class PlanningExactApiTests(unittest.TestCase):
 
         self.assertLess(value_count(payload), 16_384)
         default = exact_api.planning_payload(self.routing(), self.query(scope_kind="global"))
-        self.assertEqual(payload["projects"], default["state"]["payload"]["projects"])
+        self.assertEqual(payload["spaces"], default["state"]["payload"]["spaces"])
         items = default["state"]["payload"]["planning_spaces"][0]["work_items"]
         self.assertEqual(1201, len(items))
         self.assertIn(self.item_ref, [item["work_item_ref"] for item in items])
@@ -407,83 +402,106 @@ class PlanningExactApiTests(unittest.TestCase):
                 exact_api.planning_payload(self.routing(), parameters)
             self.assertEqual(400, refusal.exception.status)
 
-    def test_binding_states_name_why_a_space_is_not_mapped(self) -> None:
-        """The reasons the shell shows for a binding that does not resolve.
+    def test_a_space_is_read_with_or_without_projects_and_says_why_it_cannot_be(self) -> None:
+        """The stable reasons a read across spaces names, and the refusals of an exact one."""
 
-        Each sentence is the one the browser has always received for that
-        cause; only the cause decides which one a project gets.
-        """
-
-        planning_service.create_planning_space(
-            self.conn, project_id="example-project", name="Second Space", key="SEC"
-        )
+        planning_service.create_planning_space(self.conn, name="Second Space", key="SEC")
         self.conn.commit()
         routing = self.routing()
-        mapped = planning_space_entity(self.space_ref)
-        unbound_space = planning_space_entity({**self.space_ref, "space_key": "SEC"})
-        missing_space = planning_space_entity({**self.space_ref, "space_key": "GONE"})
-        cases = {
-            "mapped": ("example-project", mapped, ("mapped", None)),
-            "no binding": (
-                "example-project",
-                unbound_space,
-                ("unbound", "No owner Project binding"),
-            ),
-            "another project": (
-                "other-project",
-                mapped,
-                ("unbound", "Resource belongs to another Project"),
-            ),
-        }
-        for name, (project_id, resource, expected) in cases.items():
-            with self.subTest(case=name):
-                self.assertEqual(expected, routing.resolve(project_id, resource))
-        with self.assertRaises(ui_state.PlatformHttpError) as refusal:
-            routing.require_mapping("example-project", {**self.space_ref, "space_key": "SEC"})
+        self.assertIsNone(routing.unavailable_reason(self.space_ref))
+        # No project is bound to it, and it is read all the same.
+        second = {**self.space_ref, "space_key": "SEC"}
+        self.assertIsNone(routing.unavailable_reason(second))
+        routing.require_space(second)
         self.assertEqual(
-            (409, "No owner Project binding"), (refusal.exception.status, refusal.exception.reason)
+            "space_missing", routing.unavailable_reason({**self.space_ref, "space_key": "GONE"})
         )
-
-        for name, resource, expected in (
+        self.assertEqual(
+            "store_not_attached",
+            routing.unavailable_reason({"data_scope_id": OTHER_STORE, "space_key": "EXA"}),
+        )
+        for space_ref, reason in (
+            ({**self.space_ref, "space_key": "GONE"}, "Planning space is unavailable"),
             (
-                "store not present",
-                planning_space_entity({"data_scope_id": OTHER_STORE, "space_key": "EXA"}),
-                ("unavailable", "Bound store is unavailable"),
+                {"data_scope_id": OTHER_STORE, "space_key": "EXA"},
+                "Planning space store is unavailable",
             ),
-            ("space not in store", missing_space, ("unbound", "Bound resource is unavailable")),
         ):
-            with self.subTest(case=name):
-                self.write_registry(
-                    [
-                        project_entry(
-                            "example-project",
-                            self.root,
-                            bindings=[project_binding("example-project", resource)],
-                        )
-                    ]
-                )
-                directory = self.routing().directory_item(self.routing().project("example-project"))
-                self.assertEqual(expected[0], directory["binding_state"])
-                self.assertEqual(
-                    [{"resource_ref": resource, "state": expected[0], "reason": expected[1]}],
-                    directory["resources"],
-                )
+            with (
+                self.subTest(space=space_ref),
+                self.assertRaises(ui_state.PlatformHttpError) as refusal,
+            ):
+                routing.require_space(space_ref)
+            self.assertEqual((409, reason), (refusal.exception.status, refusal.exception.reason))
 
-    def test_an_unbound_project_is_listed_without_resources(self) -> None:
-        self.write_registry([project_entry("example-project", self.root)])
-        directory = self.routing().directory_item(self.routing().project("example-project"))
+    def test_a_project_narrows_its_space_or_one_whose_items_name_it(self) -> None:
+        other_root = self.root / "other"
+        other_root.mkdir()
+        planning_service.create_planning_space(self.conn, name="Other Space", key="OTH")
+        self.conn.commit()
+        self.write_registry(
+            [
+                project_entry(
+                    "example-project",
+                    self.root,
+                    bindings=[
+                        project_binding("example-project", planning_space_entity(self.space_ref))
+                    ],
+                ),
+                project_entry(
+                    "other-project",
+                    other_root,
+                    bindings=[
+                        project_binding(
+                            "other-project",
+                            planning_space_entity({**self.space_ref, "space_key": "OTH"}),
+                        )
+                    ],
+                ),
+            ]
+        )
+        read = self.exact(reference=self.item["reference"], project_id="other-project")
+        with self.assertRaises(ui_state.PlatformHttpError) as refusal:
+            exact_api.work_item_payload(self.routing(), read, planning_service.get_work_item)
+        self.assertEqual(409, refusal.exception.status)
+        self.conn.execute(
+            "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+            " VALUES (?, 'other-project', 'named')",
+            (self.item["work_item_id"],),
+        )
+        self.conn.commit()
+        detail = exact_api.work_item_payload(self.routing(), read, planning_service.get_work_item)
         self.assertEqual(
             {
-                "project_id": "example-project",
-                "title": "example-project",
-                "binding_state": "unbound",
-                "resources": [],
+                "kind": "space",
+                "space_ref": self.space_ref,
+                "project_ref": {"project_id": "other-project"},
             },
-            directory,
+            detail["scope"],
+        )
+        own = exact_api.planning_payload(self.routing(), self.exact(project_id="example-project"))
+        self.assertEqual("ready", own["state"]["status"])
+        with self.assertRaises(ui_state.PlatformHttpError) as refusal:
+            exact_api.planning_payload(self.routing(), self.exact(project_id="not-registered"))
+        self.assertEqual(404, refusal.exception.status)
+
+    def test_an_unreadable_registry_answers_no_space(self) -> None:
+        self.registry_path.write_bytes(b"{}")
+        routing = self.routing()
+        self.assertEqual(
+            "platform.planning.registryUnavailable",
+            exact_api.planning_payload(routing, self.exact())["state"]["reason"],
         )
         with self.assertRaises(ui_state.PlatformHttpError) as refusal:
-            self.routing().project("not-registered")
-        self.assertEqual(404, refusal.exception.status)
+            exact_api.work_item_payload(
+                routing,
+                self.exact(reference=self.item["reference"]),
+                planning_service.get_work_item,
+            )
+        self.assertEqual(
+            (409, "Project registry is unavailable"),
+            (refusal.exception.status, refusal.exception.reason),
+        )
 
     def test_routing_reads_and_never_writes(self) -> None:
         """Building a routing and answering through it commits nothing."""

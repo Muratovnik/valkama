@@ -61,6 +61,7 @@ function brief(
     withheld: closed ? ['not_ready'] : [],
     lapsed_claim: null,
     labels: [],
+    projects: [],
     source: '',
     checklist: [],
     revision: 0,

@@ -6,7 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installAlerts, READINESS_CASES } from './alertsFixtures.ts'
 import { installBackend } from './backend.ts'
 import { frames } from './frames.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
@@ -19,7 +19,7 @@ const WIDTHS = [1280, 390] as const
 
 async function openSettings(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 })
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
 }
 
 async function openDiagnostics(page: Page, width: number) {

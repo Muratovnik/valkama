@@ -29,13 +29,13 @@ import {
   UNLINKED_SESSION,
 } from './openSessionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { globalScope, projectScope, workItemRef } from './planningFixtures.ts'
+import { globalScope, spaceScope, workItemRef } from './planningFixtures.ts'
 import { separatorRoom } from './separators.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

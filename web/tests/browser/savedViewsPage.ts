@@ -5,12 +5,11 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { boardSpace } from './boardFixtures.ts'
-import { dataScopeId, projectScope, spaceRef } from './planningFixtures.ts'
+import { dataScopeId, spaceRef } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
 export const WORDS = {
@@ -80,8 +79,7 @@ export async function seed(page: Page, locale: Locale, width: number) {
 export const spaceRoute = (space = spaceRef, state: Record<string, string> = {}) =>
   serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
-    entity: planningSpaceEntity(space),
+    scope: { kind: 'space', space_ref: space },
     state: { view: 'kanban', ...state },
   })
 

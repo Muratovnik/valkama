@@ -12,12 +12,12 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { busyFrame, liveRow as frameRow } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { installLiveStreams, servePins } from './liveWorkPage.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

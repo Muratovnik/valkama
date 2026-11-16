@@ -104,7 +104,7 @@ class HolderWriteTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="holders", name="Holders", key="HLD")
+        service.create_planning_space(self.conn, name="Holders", key="HLD")
         self.reference = service.create_work_item(self.conn, space="HLD", title="Shared")[
             "reference"
         ]

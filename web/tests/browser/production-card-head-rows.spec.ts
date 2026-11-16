@@ -13,13 +13,13 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { finishedCard, heldCard, openPlanFor, shortHolderCard } from './openSessionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { blockedWorkItem, projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { blockedWorkItem, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

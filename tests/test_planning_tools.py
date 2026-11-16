@@ -9,17 +9,15 @@ from unittest import mock
 
 from server import mcp_surface, store
 from server.ops import configuration
+from server.planning import acknowledgements, model, service
 from server.planning import api as planning_api
-from server.planning import model, service
 from server.planning import tools as planning_tools
 
 
 def seed_quality_assurance(conn) -> None:
     """The space these tests call QA, holding one item, QA-1, committed."""
 
-    service.create_planning_space(
-        conn, project_id="example-workspace", name="Quality Assurance", key="QA"
-    )
+    service.create_planning_space(conn, name="Quality Assurance", key="QA")
     service.create_work_item(conn, space="QA", title="Carried over")
     conn.commit()
 
@@ -135,7 +133,7 @@ class PlanningToolCallTests(unittest.TestCase):
         created = self.call("create_work_item", space="QA", title="Through the tools", author="one")
         self.assertEqual("QA-2", created["reference"])
         self.assertEqual(
-            created["work_item_id"], self.call("get_work_item", id="QA-2")["work_item_id"]
+            "QA-2", self.call("get_work_item", id=created["work_item_id"])["reference"]
         )
         self.assertEqual(2, len(self.call("list_work_items", space="QA")["work_items"]))
         self.assertEqual(
@@ -341,20 +339,14 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         return answer
 
     def full(self, reference: str) -> dict:
-        """The complete item, as every write's full answer carries it.
+        """The complete item as every write's full answer carries it, with its address.
 
-        `full=true` is the read that keeps every comment and event; `sessions`
-        is what the read adds about the item, not part of the record a write
-        returns. The one key the two forms keep differently is `mentions`: a
-        write answers with the item's own record, the newest `HTTP_MENTIONS` and
-        their total, where the agent's full read lists all of them without one.
+        The record is the one the HTTP read gives without parts; `url` is what the
+        tools add to it for an agent.
         """
 
-        answer = self.call("get_work_item", id=reference, full=True)
         record = service.get_work_item(self.conn, reference)
-        answer["mentions"] = record["mentions"]
-        answer["mentions_total"] = record["mentions_total"]
-        return {k: v for k, v in answer.items() if k != "sessions"}
+        return {**record, "url": acknowledgements.work_item_url(str(record["reference"]))}
 
     @property
     def step(self) -> str:
@@ -383,11 +375,23 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         }[tool]
 
     def test_exactly_the_acknowledged_tools_publish_verbose_as_a_boolean(self) -> None:
+        said = {
+            **dict.fromkeys(
+                ACKNOWLEDGED, "Answer with the item's card instead of the short acknowledgement."
+            ),
+            **dict.fromkeys(
+                ROW_READS,
+                "Answer with each item's list record instead of one compact row per item."
+                " Without it the answer holds at most limit rows (default 50).",
+            ),
+        }
         for tool in planning_tools.TOOLS:
             schema = tool["inputSchema"]
             if tool["name"] in ACKNOWLEDGED or tool["name"] in ROW_READS:
                 self.assertEqual("boolean", schema["properties"]["verbose"]["type"], tool["name"])
-                self.assertIn("full", schema["properties"]["verbose"]["description"])
+                self.assertEqual(
+                    said[tool["name"]], schema["properties"]["verbose"]["description"], tool["name"]
+                )
                 self.assertNotIn("verbose", schema.get("required", []), tool["name"])
             else:
                 self.assertNotIn("verbose", schema["properties"], tool["name"])
@@ -396,7 +400,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         for tool in ACKNOWLEDGED:
             with self.subTest(tool):
                 answer = self.call(tool, **self.arguments_for(tool))
-                stored = self.call("get_work_item", id=answer["reference"])
+                stored = self.full(answer["reference"])
                 for key in ("reference", "work_item_id", "revision", "state", "claim_ref"):
                     self.assertIn(key, answer)
                 self.assertEqual(stored["revision"], answer["revision"])
@@ -414,37 +418,36 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 for key in FULL_ONLY:
                     self.assertNotIn(key, answer)
 
-    def test_a_verbose_answer_is_the_full_item(self) -> None:
+    def test_a_verbose_answer_is_the_card_and_what_the_write_reports(self) -> None:
+        # What each write says beside the item: a creation the items reading like
+        # it, a claim the state it started the item in, that no session confirmed
+        # the holder and its projects' roots, a batch what each of its groups
+        # changed, a merge what each merged item handed over.
+        reports = {
+            "create_work_item": {"similar"},
+            "claim_work_item": {"started", "warnings", "project_roots"},
+            "claim_work_item_checklist_item": set(),
+            "apply_work_item_changes": {"applied"},
+            "merge_work_items": {"merged"},
+        }
         for tool in ACKNOWLEDGED:
             with self.subTest(tool):
                 answer = self.call(tool, verbose=True, **self.arguments_for(tool))
-                # `questions` and `images` are what the read tool adds; a write's answer
-                # has neither.
-                stored = {
-                    k: v
-                    for k, v in self.full(answer["reference"]).items()
-                    if k not in ("questions", "images")
-                }
-                # A transition also reports what the guards said about it, a
-                # claim the state it started the item in, a batch what each
-                # of its groups changed, and a creation the items reading like it.
-                self.assertEqual(
-                    stored,
-                    {
-                        k: v
-                        for k, v in answer.items()
-                        if k
-                        not in (
-                            "warnings",
-                            "applied",
-                            "started",
-                            "requeued",
-                            "merged",
-                            "overridden",
-                            "similar",
-                        )
-                    },
-                )
+                card = self.call("get_work_item", id=answer["reference"])
+                self.assertEqual(self.full(answer["reference"])["revision"], answer["revision"])
+                self.assertEqual(card, {name: answer[name] for name in card if name in answer})
+                self.assertEqual(reports[tool], set(answer) - set(card))
+                for name in ("events", "comments", "links", "refs", "mentions", "work_item_id"):
+                    self.assertNotIn(name, answer)
+
+    def test_a_verbose_creation_names_the_items_reading_like_it(self) -> None:
+        brief = self.call("create_work_item", space="QA", title="Busy item twice")
+        verbose = self.call("create_work_item", space="QA", title="Busy item again", verbose=True)
+        self.assertNotIn("work_item_id", verbose)
+        similar = [entry["reference"] for entry in verbose["similar"]]
+        self.assertIn(self.ref, similar)
+        self.assertIn(brief["reference"], similar)
+        self.assertNotIn(verbose["reference"], similar)
 
     def test_verbose_false_is_the_default_and_anything_else_is_refused(self) -> None:
         arguments = self.arguments_for("claim_work_item")
@@ -508,7 +511,8 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         [first] = [
             s for s in self.call("get_work_item", id=self.ref)["checklist"] if s["id"] == step
         ]
-        self.assertEqual(("", "two"), (first["claimed_by"], first["done_by"]))
+        # The card names only the holder a step has: its claim ended with the tick.
+        self.assertEqual((None, "two"), (first.get("claimed_by"), first["done_by"]))
         reopened = self.call(
             "apply_work_item_changes",
             id=self.ref,
@@ -520,7 +524,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         summarized = self.call(
             "apply_work_item_changes", id=self.ref, summary={"done": "d", "next": "n"}
         )
-        stored_item = self.call("get_work_item", id=self.ref)
+        stored_item = service.get_work_item(self.conn, self.ref)
         self.assertEqual(
             stored_item["summary_comment_id"],
             summarized["applied"]["summary"]["summary_comment_id"],
@@ -587,10 +591,15 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         # A new root names no parent.
         self.assertEqual((None, None), (written["reply_to"], written["reply_to_request"]))
 
-    def test_the_reads_and_the_take_next_queue_still_answer_in_full(self) -> None:
-        full = self.call("get_work_item", id=self.ref)
+    def test_the_parts_answer_in_full_and_the_take_next_queue_with_the_card(self) -> None:
+        read = self.call(
+            "get_work_item", id=self.ref, parts=["card", "comments", "events", "links", "refs"]
+        )
+        # The card carries a summary only once the item has one.
+        self.assertNotIn("summary", read)
         for key in FULL_ONLY:
-            self.assertIn(key, full)
+            if key != "summary":
+                self.assertIn(key, read)
         listed = self.call("list_work_items", space="QA", verbose=True)["work_items"]
         self.assertTrue(all("comment_count" in item and "events" not in item for item in listed))
         self.call(
@@ -599,8 +608,13 @@ class PlanningAcknowledgementTests(unittest.TestCase):
             transition={"state": "ready", "acceptance": "assignment"},
         )
         taken = self.call("claim_ready_work_item", space="QA", author="one")["work_item"]
-        for key in ("events", "checklist", "description", "comments"):
-            self.assertIn(key, taken)
+        card = self.call("get_work_item", id=taken["reference"])
+        self.assertEqual(card, {name: taken[name] for name in card if name in taken})
+        # The queue started what it handed over under a holder no session confirmed,
+        # and says both beside the card.
+        self.assertEqual({"started", "warnings"}, set(taken) - set(card))
+        for key in ("events", "comments", "links", "refs", "work_item_id"):
+            self.assertNotIn(key, taken)
 
     def test_the_http_boundary_still_answers_with_the_full_item(self) -> None:
         for path, payload in (
@@ -620,11 +634,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 # the boundary has none of them.
                 for added in ("url", "questions", "images"):
                     self.assertNotIn(added, body)
-                stored = {
-                    k: v
-                    for k, v in self.full(self.ref).items()
-                    if k not in ("url", "questions", "images")
-                }
+                stored = {k: v for k, v in self.full(self.ref).items() if k != "url"}
                 self.assertEqual(
                     stored,
                     # `released` names who the write let go: no field of the item.
@@ -645,7 +655,7 @@ class PlanningCompactReadTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="tools", name="Quality", key="QA")
+        service.create_planning_space(self.conn, name="Quality", key="QA")
         self.epic = self.call("create_work_item", space="QA", title="Umbrella", kind="goal")
         self.child = self.call(
             "create_work_item",

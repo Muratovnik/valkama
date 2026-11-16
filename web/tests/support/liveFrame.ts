@@ -35,7 +35,8 @@ export function liveSpace(key: string, rows: Row[], overrides: Partial<Space> = 
   return {
     key,
     name: `${key} space`,
-    project_id: 'example-project',
+    projects: [{ project_id: 'example-project', display_name: 'Example project' }],
+    default_project: 'example-project',
     rows,
     sessions: [],
     ...overrides,
@@ -117,7 +118,8 @@ export function busyFrame(): LiveFrame {
         },
       ),
       liveSpace('NEXT', [liveRow('NEXT-5', { title: 'Second space work', state: 'working' })], {
-        project_id: 'second-project',
+        projects: [{ project_id: 'second-project', display_name: 'Second project' }],
+        default_project: 'second-project',
       }),
     ],
     [liveSession('00000000-0000-4000-8000-000000000102', { folder: '' })],

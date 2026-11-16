@@ -10,7 +10,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { busyFrame } from '../support/liveFrame.ts'
@@ -18,7 +18,7 @@ import { installBackend } from './backend.ts'
 import { largeChainHere, serve as serveChain } from './chainFixtures.ts'
 import { settled } from './documentBeside.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
-import { projectId, projectScope, spaceRef, workItemRef } from './planningFixtures.ts'
+import { spaceRef, spaceScope, workItemRef } from './planningFixtures.ts'
 import { openReported, card as previewCard, reference as previewLink, rest } from './previewPage.ts'
 import {
   expectOnTheMiddle,
@@ -33,7 +33,7 @@ import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 
@@ -53,7 +53,7 @@ const FOUND = {
   has_more: false,
   items: [
     {
-      target: { project_id: projectId, space_ref: spaceRef, reference: 'MAIN-480', writable: true },
+      target: { space_ref: spaceRef, reference: 'MAIN-480', writable: true },
       item: {
         work_item_id: MARKED.work_item_id,
         planning_space_id: MARKED.planning_space_id,
@@ -68,7 +68,7 @@ const FOUND = {
       },
     },
   ],
-  coverage: [{ project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null }],
+  coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
 }
 
 for (const locale of ['ru', 'en'] as const) {
@@ -222,8 +222,7 @@ for (const locale of ['ru', 'en'] as const) {
       await page.goto(
         serializePlatformRoute({
           module_id: 'planning',
-          scope: projectScope,
-          entity: planningSpaceEntity(spaceRef),
+          scope: spaceScope,
         }),
       )
       await expect(page.locator('.work-item-board')).toBeVisible()

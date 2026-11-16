@@ -79,7 +79,7 @@ class Harness(unittest.TestCase):
             os.environ.pop(name, None)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="p", name="Quality", key="MAIN")
+        service.create_planning_space(self.conn, name="Quality", key="MAIN")
         #: Where the comment is written, and the item it names.
         self.source = self.item("Decide the route")
         self.target = self.item("Drop the old route")
@@ -288,7 +288,7 @@ class WhoHearsTests(Harness):
             said["mentions"],
         )
         self.assertEqual("nobody yet: no holder, it stays on the item", mention_records.NO_HOLDER)
-        read = self.agent("get_work_item", id=self.target)
+        read = self.agent("get_work_item", id=self.target, parts="mentions")
         [record] = read["mentions"]
         self.assertEqual(
             {
@@ -302,7 +302,7 @@ class WhoHearsTests(Harness):
             {name: value for name, value in record.items() if name != "at"},
         )
         self.assertEqual(1, read["mentions_total"])
-        source = self.agent("get_work_item", id=self.source)
+        source = self.agent("get_work_item", id=self.source, parts="comments")
         [comment] = [entry for entry in source["comments"] if entry["id"] == said["comment_id"]]
         self.assertEqual([held, self.target], comment["mentions"])
 
@@ -356,7 +356,7 @@ class WhoHearsTests(Harness):
         named, plain = batch["applied"]["comments"]
         self.assertEqual([self.target], [entry["reference"] for entry in named["mentions"]])
         self.assertNotIn("mentions", plain)
-        read = self.agent("get_work_item", id=self.target)
+        read = self.agent("get_work_item", id=self.target, parts="mentions")
         self.assertEqual(2, read["mentions_total"])
         self.assertEqual(SAID, read["mentions"][0]["quote"], "a summary is quoted by its done")
 
@@ -372,7 +372,9 @@ class WhoHearsTests(Harness):
         [heard] = said["applied"]["comment"]["mentions"]
         self.assertEqual("nobody: this call proved no session", heard["told"])
         self.assertTrue(heard["holders"], "the holders are named all the same")
-        self.assertEqual(1, self.agent("get_work_item", id=self.target)["mentions_total"])
+        self.assertEqual(
+            1, self.agent("get_work_item", id=self.target, parts="mentions")["mentions_total"]
+        )
         self.assertIsNone(self.hook())
         self.assertIsNone(self.hook(CHILD))
         self.assertEqual([], self.window(self.target))
@@ -384,21 +386,21 @@ class WhoHearsTests(Harness):
         self.assertNotIn("mentions", said)
         self.assertIsNone(self.hook())
         self.assertEqual([], self.window(self.target))
-        read = self.agent("get_work_item", id=self.target)
+        read = self.agent("get_work_item", id=self.target, parts="mentions")
         self.assertEqual(([], 0), (read["mentions"], read["mentions_total"]))
         self.tells()
         self.assertIsNotNone(self.hook(), "positive control: the same words in mentions")
 
 
 class ReadingTests(Harness):
-    def test_an_agent_reads_the_newest_five_whole_reads_all_and_http_fifty(self) -> None:
+    def test_the_part_and_http_read_the_newest_fifty(self) -> None:
         written = [self.tells(body=f"Mention {index}")["comment_id"] for index in range(7)]
-        read = self.agent("get_work_item", id=self.target)
-        self.assertEqual(written[2:], [entry["comment_id"] for entry in read["mentions"]])
+        read = self.agent("get_work_item", id=self.target, parts="mentions")
+        self.assertEqual(written, [entry["comment_id"] for entry in read["mentions"]])
         self.assertEqual(7, read["mentions_total"])
-        whole = self.agent("get_work_item", id=self.target, full=True)
-        self.assertEqual(written, [entry["comment_id"] for entry in whole["mentions"]])
-        self.assertNotIn("mentions_total", whole)
+        self.assertEqual(
+            7, self.agent("get_work_item", id=self.target)["parts"]["mentions"]["count"]
+        )
         answer = api.handle_get(self.conn, "/api/planning/work-item", {"id": [self.target]})
         assert answer is not None
         http = answer[1]["work_item"]
@@ -412,21 +414,21 @@ class ReadingTests(Harness):
         updated = self.agent(
             "apply_work_item_changes", id=self.target, update={"priority": "high"}, verbose=True
         )
-        for answer in (claimed, updated):
-            self.assertEqual(1, answer["mentions_total"])
-            self.assertEqual(
-                [self.source],
-                [entry["from"] for entry in answer["mentions"]],
-                "named by the source",
-            )
+        self.assertEqual(1, claimed["mentions_total"])
+        self.assertEqual(
+            [self.source], [entry["from"] for entry in claimed["mentions"]], "named by the source"
+        )
+        # An agent's verbose answer is the card, which counts them for the mentions part.
+        self.assertEqual({"count": 1}, updated["parts"]["mentions"])
+        self.assertNotIn("mentions", updated)
 
     def test_a_long_comment_is_quoted_short_and_a_deleted_one_by_nothing(self) -> None:
         self.tells(body="x" * 400)
-        [record] = self.agent("get_work_item", id=self.target)["mentions"]
+        [record] = self.agent("get_work_item", id=self.target, parts="mentions")["mentions"]
         self.assertEqual("x" * 299 + "…", record["quote"])
         service.delete_work_item(self.conn, self.source)
         self.conn.commit()
-        [record] = self.agent("get_work_item", id=self.target)["mentions"]
+        [record] = self.agent("get_work_item", id=self.target, parts="mentions")["mentions"]
         self.assertEqual((None, None), (record["from"], record["quote"]))
 
     def test_a_comment_moved_by_a_merge_names_the_survivor(self) -> None:
@@ -437,7 +439,7 @@ class ReadingTests(Harness):
         self.agent(
             "merge_work_items", id=survivor, items=[self.source], reason="One change", force=True
         )
-        [record] = self.agent("get_work_item", id=self.target)["mentions"]
+        [record] = self.agent("get_work_item", id=self.target, parts="mentions")["mentions"]
         self.assertEqual(survivor, record["from"])
 
 
@@ -454,7 +456,7 @@ class TextMentionTests(Harness):
     """
 
     def records(self, reference: str) -> list[dict]:
-        return list(self.agent("get_work_item", id=reference, full=True)["mentions"])
+        return list(self.agent("get_work_item", id=reference, parts="mentions")["mentions"])
 
     def describe(self, text: str, mentions: list[str], **extra: object) -> dict:
         """The person saves the source's description, naming `mentions`."""
@@ -484,7 +486,7 @@ class TextMentionTests(Harness):
             },
             {name: record[name] for name in ("in", "comment_id", "from", "by_person", "quote")},
         )
-        summary = self.agent("get_work_item", id=self.source)
+        summary = self.agent("get_work_item", id=self.source, parts="comments")
         [comment] = [
             entry
             for entry in summary["comments"]
@@ -798,7 +800,7 @@ class AgentMentionTests(Harness):
             told,
         )
         self.assertEqual([], self.window(self.target))
-        records = self.agent("get_work_item", id=self.target)["mentions"]
+        records = self.agent("get_work_item", id=self.target, parts="mentions")["mentions"]
         [record] = [entry for entry in records if entry["comment_id"] == said["comment_id"]]
         self.assertEqual((False, "user"), (record["by_person"], record["author"]))
 
@@ -822,7 +824,7 @@ class AgentMentionTests(Harness):
             [{"reference": self.target, "holders": [], "told": mention_records.NO_HOLDER}],
             said["mentions"],
         )
-        [record] = self.agent("get_work_item", id=self.target)["mentions"]
+        [record] = self.agent("get_work_item", id=self.target, parts="mentions")["mentions"]
         self.assertEqual(
             (said["comment_id"], False, "Before anyone took it"),
             (record["comment_id"], record["by_person"], record["quote"]),

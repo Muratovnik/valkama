@@ -79,9 +79,16 @@ const measures = {
   unpriced_tokens: positiveInt(true),
 }
 
+/** A project of a combination: its id and the registry's name, null when it records none now. */
+const combinedProjectSchema = strictObject({
+  id: boundedText(VALUE, 512),
+  name: boundedText(VALUE, 512).nullable(),
+})
+
 /**
- * One value of a dimension. `id` is null for work on no item (`unknown` false) and for a value
- * the store does not hold (`unknown` true); the names beside it are the ones a card shows.
+ * One value of a dimension. `id` is null for work on no item, on an item naming no project or
+ * several (`unknown` false) and for a value the store does not hold (`unknown` true); the names
+ * beside it are the ones a card shows.
  */
 const groupValueSchema = strictObject({
   id: boundedText(VALUE, 512).nullable(),
@@ -89,6 +96,8 @@ const groupValueSchema = strictObject({
   reference: boundedText(WORK_ITEM_REFERENCE, 20).nullable().optional(),
   title: boundedText(TITLE, 200).nullable().optional(),
   name: boundedText(VALUE, 512).nullable().optional(),
+  /** A project's: on the group of items naming several, each set of projects they name. */
+  combinations: z.array(z.array(combinedProjectSchema).min(2).max(20)).nullable().optional(),
   family: onTheSide().optional(),
   opened_in: onTheSide().optional(),
   opened_host: onTheSide().optional(),

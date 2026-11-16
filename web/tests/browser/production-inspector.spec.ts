@@ -8,14 +8,7 @@ import { installBackend } from './backend.ts'
 import { largeChainHere, serve, showChain } from './chainFixtures.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import {
-  blockedWorkItem,
-  projectId,
-  projectScope,
-  spaceRef,
-  workItem,
-  workItemRef,
-} from './planningFixtures.ts'
+import { blockedWorkItem, spaceRef, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { pressWhereItStands } from './stuckPress.ts'
 import { test } from './test.ts'
 
@@ -25,7 +18,7 @@ for (const width of [1440, 390]) {
   }) => {
     await page.setViewportSize({ width, height: 900 })
     await installBackend(page)
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     const workspace = page.locator('.workspace')
     const opener = page.locator('.work-item-column[data-state="dev"] .tile-open').first()
     await expect(opener).toBeVisible()
@@ -43,7 +36,7 @@ for (const width of [1440, 390]) {
     await page.keyboard.press('Escape')
     await expect(drawer).toHaveCount(0)
     await expect(opener).toBeFocused()
-    await expect.poll(() => parsePlatformRoute(page.url()).entity?.kind).toBe('planning-space')
+    await expect.poll(() => parsePlatformRoute(page.url()).entity).toBeUndefined()
     expect(await workspace.boundingBox()).toEqual(before)
   })
 }
@@ -54,7 +47,7 @@ test('Russian relations keep one hierarchy, aligned controls, and narrow content
   await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
   await page.setViewportSize({ width: 1440, height: 1000 })
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   // The holder is named once, among the facts in the head, and the body holds
@@ -107,7 +100,6 @@ test('an unsent comment survives browser Back, global search and a reload until 
         items: [
           {
             target: {
-              project_id: projectId,
               space_ref: spaceRef,
               reference: blockedWorkItem.reference,
               writable: true,
@@ -124,13 +116,11 @@ test('an unsent comment survives browser Back, global search and a reload until 
             },
           },
         ],
-        coverage: [
-          { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
-        ],
+        coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
       },
     }),
   )
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.head-reference')).toHaveText(workItemRef.reference)
@@ -179,7 +169,7 @@ test('an unsent comment survives browser Back, global search and a reload until 
   await expect(page).toHaveURL(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity({ space_ref: spaceRef, reference: blockedWorkItem.reference }),
     }),
   )
@@ -216,7 +206,7 @@ for (const width of [1440, 390]) {
     await enableExecutionTab(page)
     await page.setViewportSize({ width, height: 700 })
     await installBackend(page, { longRead: true })
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
     const drawer = page.locator('.drawer')
     await expect(drawer.locator('.head-reference')).toHaveText(workItemRef.reference)
@@ -269,7 +259,7 @@ for (const width of [1440, 390]) {
       identity: { agent_id: null, session_id: null, source: null, state: 'unconfirmed' },
     }))
     await installBackend(page, { events, longRead: true })
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
     const drawer = page.locator('.drawer')
     const body = drawer.locator('.drawer-frame-body')
@@ -292,7 +282,7 @@ for (const width of [1440, 390]) {
   }) => {
     await page.setViewportSize({ width, height: 700 })
     await installBackend(page, { longRead: true })
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
     const drawer = page.locator('.drawer')
     const body = drawer.locator('.drawer-frame-body')
@@ -322,7 +312,7 @@ async function openChain(page: Page, width: number) {
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )

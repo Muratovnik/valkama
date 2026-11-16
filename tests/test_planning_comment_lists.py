@@ -58,7 +58,7 @@ class Harness(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="p", name="Quality", key="MAIN")
+        service.create_planning_space(self.conn, name="Quality", key="MAIN")
         self.ref = self.item("Check the checks")
         self.conn.commit()
 
@@ -284,8 +284,7 @@ class WaitsForNobodyTests(Harness):
 
     def scoped(self, **extra: str) -> dict[str, str]:
         return {
-            "scope_kind": "project",
-            "project_id": "p",
+            "scope_kind": "space",
             "data_scope_id": self.space_ref["data_scope_id"],
             "space_key": "MAIN",
             **extra,
@@ -311,7 +310,7 @@ class WaitsForNobodyTests(Harness):
         self.assertEqual(
             sorted([asked, listed]), sorted(self.hub(**self.scoped(reference=self.ref)))
         )
-        questions = self.agent("get_work_item", id=self.ref)["questions"]
+        questions = self.agent("get_work_item", id=self.ref, parts="questions")["questions"]
         self.assertEqual(2, questions["open"], "on its item a pending list counts as open")
         shown = {entry["id"]: entry for entry in questions["items"]}
         self.assertEqual(shown[listed]["comment_id"], self.request(listed)["comment_id"])
@@ -406,7 +405,9 @@ class ReadingTests(Harness):
         compact = self.compact(listed["request_id"])
         self.assertEqual(["items"], compact["undecided"])
         self.assertEqual([], compact["answer"])
-        item_read = self.agent("get_work_item", id=self.ref)["questions"]["items"]
+        item_read = self.agent("get_work_item", id=self.ref, parts="questions")["questions"][
+            "items"
+        ]
         on_item = next(entry for entry in item_read if entry["id"] == listed["request_id"])
         self.assertEqual(["items"], on_item["undecided"])
         [event] = self.told()

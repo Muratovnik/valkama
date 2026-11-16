@@ -13,6 +13,7 @@
  */
 
 import {
+  blankable,
   boundedList,
   boundedText,
   parseContract,
@@ -23,7 +24,6 @@ import {
 import { executorSchema } from '@/shared/api/executorModel.ts'
 import { TIMELESS_LIVE_STATES } from '@/shared/api/liveWorkModel.ts'
 import {
-  blankable,
   CONTAINER_STATES,
   SPACE_KEY,
   TITLE,
@@ -85,10 +85,18 @@ const liveSessionSchema = strictObject({
   executor: executorSchema,
 })
 
+const spaceProjectSchema = strictObject({
+  project_id: boundedText(PROJECT_ID, 160),
+  display_name: boundedText(TITLE, 200),
+})
+
 const liveSpaceSchema = strictObject({
   key: boundedText(SPACE_KEY, 8),
   name: boundedText(TITLE, 200),
-  project_id: boundedText(PROJECT_ID, 160).nullable(),
+  /** The projects the registry binds to the space, its default first; null when unread. */
+  projects: boundedList(spaceProjectSchema, 500).nullable(),
+  /** The space's default project; null when it has none or the registry was unread. */
+  default_project: boundedText(PROJECT_ID, 160).nullable(),
   rows: boundedList(liveRowSchema, 2000),
   /** The sessions under this space on no row, freshest first. */
   sessions: boundedList(liveSessionSchema, 500),

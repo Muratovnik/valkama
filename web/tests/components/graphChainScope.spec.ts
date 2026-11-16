@@ -77,6 +77,7 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
     withheld: ['not_ready'],
     lapsed_claim: null,
     labels: [],
+    projects: [],
     source: '',
     checklist: [],
     revision: 0,

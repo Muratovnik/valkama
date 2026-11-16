@@ -438,13 +438,10 @@ class UnresolvedReadTests(ResolveCase):
                 page["truncated"],
             ),
         )
-        # A marked thread is not shown, and the contract's flag counts what exists.
-        self.assertIs(True, page["history_truncated"])
 
     def test_with_nothing_marked_nothing_is_said_to_be_left_out(self) -> None:
         self.comment("Only")
-        page = self.page()
-        self.assertEqual((False, False), (page["truncated"], page["history_truncated"]))
+        self.assertIs(False, self.page()["truncated"])
 
     def test_a_mark_set_between_two_pages_moves_nothing_still_to_read(self) -> None:
         roots = [self.comment(f"root {number}")["comment_id"] for number in range(25)]
@@ -467,23 +464,25 @@ class UnresolvedReadTests(ResolveCase):
             (page["comments"], page["truncated"], page["threads_total"], page["unresolved_total"]),
         )
 
-    def test_every_counted_read_says_how_many_are_open_and_full_does_not(self) -> None:
+    def test_every_comments_read_says_how_many_are_open_and_the_whole_record_does_not(
+        self,
+    ) -> None:
         root = self.comment("Marked")["comment_id"]
         self.comment("Open")
         self.mark(root)
-        for arguments in ({}, {"thread": root}, {"comments_after": 0}):
+        for arguments in ({"parts": "comments"}, {"thread": root}, {"comments_after": 0}):
             with self.subTest(read=arguments):
                 answer = self.call("get_work_item", id=self.ref, **arguments)
                 self.assertEqual(1, answer["unresolved_total"])
-                self.assertNotIn("truncated", answer)
-        self.assertNotIn("unresolved_total", self.call("get_work_item", id=self.ref, full=True))
+                # Every read of the comments part says whether it left any out.
+                self.assertIs(False, answer["truncated"])
+        handled = api.handle_get(self.conn, "/api/planning/work-item", {"id": [self.ref]})
+        assert handled is not None
+        self.assertNotIn("unresolved_total", handled[1]["work_item"])
 
     def test_the_reads_it_excludes_are_refused(self) -> None:
         root = self.comment("Root")["comment_id"]
-        for extra, wanted in (
-            ({"full": True}, "full and unresolved exclude each other"),
-            ({"thread": root}, "thread and unresolved exclude each other"),
-        ):
+        for extra, wanted in (({"thread": root}, "thread and unresolved exclude each other"),):
             with self.subTest(extra=extra):
                 with self.assertRaises(model.PlanningError) as refused:
                     self.call("get_work_item", id=self.ref, unresolved=True, **extra)
@@ -497,6 +496,8 @@ class UnresolvedReadTests(ResolveCase):
         found = self.read({"unresolved": ["true"]})
         self.assertEqual(roots[1:], [comment["id"] for comment in found["comments"]])
         self.assertEqual((False, 2), (found["truncated"], found["unresolved_total"]))
+        # A marked thread is not shown, and the whole record's flag counts what exists.
+        self.assertIs(True, found["history_truncated"])
         after = self.read({"unresolved": ["true"], "comments_after": [str(roots[1])]})
         self.assertEqual([roots[2]], [comment["id"] for comment in after["comments"]])
         for parameters, wanted in (

@@ -6,18 +6,11 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { chainResponse, largeGoalChain } from '../fixtures/chain.ts'
 import { longChainSpace } from '../fixtures/chainSpace.ts'
-import {
-  planningReadModel,
-  projectScope,
-  spaceRef,
-  workItem,
-  workItemRef,
-} from './planningFixtures.ts'
+import { planningReadModel, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
 const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`
@@ -255,8 +248,7 @@ export function routeState(page: Page): Record<string, unknown> {
 export function graphRoute(state: Record<string, string>) {
   return serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
-    entity: planningSpaceEntity(spaceRef),
+    scope: spaceScope,
     state: { view: 'graph', ...state },
   })
 }

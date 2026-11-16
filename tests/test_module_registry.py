@@ -16,11 +16,11 @@ from server.ui_state import PlatformHttpError
 _EXPECTED_SECONDARY_CONTEXTS = {
     "planning": {
         "global": ["project", "planning-space"],
-        "project": ["planning-space", "work-item"],
+        "space": ["planning-space", "work-item"],
     },
-    "analytics": {"global": ["work-item"], "project": ["work-item"]},
-    "memory": {"global": ["memory-resource"], "project": ["memory-resource", "work-item"]},
-    "settings": {"global": ["work-item"], "project": ["work-item"]},
+    "analytics": {"global": ["work-item"], "space": ["work-item"]},
+    "memory": {"global": ["memory-resource"], "space": ["memory-resource", "work-item"]},
+    "settings": {"global": ["work-item"], "space": ["work-item"]},
 }
 
 
@@ -41,7 +41,7 @@ class ModuleRegistryTests(unittest.TestCase):
         for module_id, expected in _EXPECTED_SECONDARY_CONTEXTS.items():
             manifest = manifests[module_id]
             supported = set(manifest["supported_entity_kinds"])
-            for scope in ("global", "project"):
+            for scope in ("global", "space"):
                 kinds = manifest["secondary_context"][scope]["kinds"]
                 self.assertEqual(expected[scope], kinds)
                 self.assertEqual(len(kinds), len(set(kinds)))
@@ -64,12 +64,12 @@ class ModuleRegistryTests(unittest.TestCase):
             for field in (
                 "allowed_keys",
                 "readGlobal",
-                "readProject",
+                "readSpace",
                 "actionGlobal",
-                "actionProject",
+                "actionSpace",
                 "required_read_models",
                 "secondaryGlobal",
-                "secondaryProject",
+                "secondarySpace",
                 "sse_subscriptions",
                 "supported_entity_kinds",
                 "feature_capabilities",
@@ -90,21 +90,21 @@ class ModuleRegistryTests(unittest.TestCase):
             self.assertEqual(values["icon_key"], manifest["icon_key"])
             self.assertEqual(values["allowed_keys"], manifest["state_schema"]["allowed_keys"])
             self.assertEqual(values["readGlobal"], manifest["semantics"]["global"]["read_models"])
-            self.assertEqual(values["readProject"], manifest["semantics"]["project"]["read_models"])
+            self.assertEqual(values["readSpace"], manifest["semantics"]["space"]["read_models"])
             self.assertEqual(
                 values["actionGlobal"], manifest["semantics"]["global"]["action_semantics"]
             )
             self.assertEqual(
-                values["actionProject"], manifest["semantics"]["project"]["action_semantics"]
+                values["actionSpace"], manifest["semantics"]["space"]["action_semantics"]
             )
-            self.assertEqual(values["actionProject"], manifest["primary_actions"])
+            self.assertEqual(values["actionSpace"], manifest["primary_actions"])
             self.assertEqual(values["actionGlobal"], manifest["secondary_actions"])
             self.assertEqual(values["required_read_models"], manifest["required_read_models"])
             self.assertEqual(
                 values["secondaryGlobal"], manifest["secondary_context"]["global"]["kinds"]
             )
             self.assertEqual(
-                values["secondaryProject"], manifest["secondary_context"]["project"]["kinds"]
+                values["secondarySpace"], manifest["secondary_context"]["space"]["kinds"]
             )
             self.assertEqual(values["sse_subscriptions"], manifest["sse_subscriptions"])
             self.assertEqual(values["supported_entity_kinds"], manifest["supported_entity_kinds"])
@@ -171,7 +171,7 @@ class ModuleRegistryTests(unittest.TestCase):
         self.assertEqual(len(allowed), len(set(allowed)))
 
     def test_each_analytics_read_model_is_a_read_its_api_serves(self) -> None:
-        """Analytics declares the usage, the quota and the uses reads, at both scopes.
+        """Analytics declares the usage, the quota and the uses reads, at both levels.
 
         A read model is `analytics.<name>` for the route `/api/analytics/<name>`, so a
         read the page asks is declared, and a declared one is answered.
@@ -182,7 +182,7 @@ class ModuleRegistryTests(unittest.TestCase):
         )
         served = [analytics_api.USAGE_PATH, analytics_api.QUOTA_PATH, analytics_api.USES_PATH]
         declared = ["analytics.usage", "analytics.quota", "analytics.uses"]
-        for scope in ("global", "project"):
+        for scope in ("global", "space"):
             with self.subTest(scope=scope):
                 self.assertEqual(declared, analytics["semantics"][scope]["read_models"])
         self.assertEqual(

@@ -5,7 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { asRoot } from '../support/threads.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { now, planningSpace, projectScope } from './planningFixtures.ts'
+import { now, planningSpace, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 test('description, comments and selected reports survive a fresh item read', async ({ page }) => {
@@ -24,7 +24,7 @@ test('description, comments and selected reports survive a fresh item read', asy
       checklist_item_text: null,
     })
   }
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await drawer.getByRole('button', { name: 'Edit description', exact: true }).click()
@@ -79,7 +79,7 @@ for (const width of [900, 390]) {
   test(`conflict recovery preserves drafts and autosizing at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 })
     const backend = await installDiscussionBackend(page)
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
     const drawer = page.locator('.drawer')
     await drawer.getByRole('button', { name: 'Edit description', exact: true }).click()
@@ -139,7 +139,7 @@ for (const viewport of [
     await page.route('**/api/planning/search?*', (route) =>
       route.fulfill({ json: { interface_version: 'valkama-planning-api', work_items: found } }),
     )
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
     const drawer = page.locator('.drawer')
     const comment = drawer.getByRole('textbox', { name: 'Comment', exact: true })

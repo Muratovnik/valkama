@@ -43,8 +43,8 @@ class ChainFixture(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="chain", name="Quality", key="QA")
-        service.create_planning_space(self.conn, project_id="other", name="Other", key="OTH")
+        service.create_planning_space(self.conn, name="Quality", key="QA")
+        service.create_planning_space(self.conn, name="Other", key="OTH")
         self.today("2026-10-31")
         self.ids: dict[str, str] = {}
         self.refs: dict[str, str] = {}

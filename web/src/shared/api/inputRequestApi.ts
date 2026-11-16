@@ -51,7 +51,7 @@ export async function fetchInputRequests(
   const { target, signal } = options
   const status = options.status ?? 'pending'
   const parameters = new URLSearchParams({
-    scope_kind: target ? 'project' : 'global',
+    scope_kind: target ? 'space' : 'global',
     ...(status === 'all' ? {} : { status }),
     limit: '100',
     ...(target ? { ...serializePlanningTarget(target), reference: target.reference } : {}),
@@ -67,7 +67,7 @@ export async function fetchInputRequest(
   signal?: AbortSignal,
 ): Promise<InputRequestEntry> {
   const parameters = new URLSearchParams({
-    scope_kind: 'project',
+    scope_kind: 'space',
     ...serializePlanningTarget(target),
     id,
   })

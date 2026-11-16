@@ -1,7 +1,6 @@
 /** Planning-owned space/work-item wire types. */
 
 import type { ContainerState, WorkflowState, WorkItem } from '@/shared/api/planningModel.ts'
-import type { BindingState } from '@/shared/api/platformApiTypes.ts'
 import type { PlanningSpaceRef, WorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
@@ -30,6 +29,8 @@ type PlanningWorkItemSummary = {
 }
 
 type PlanningSpaceSummary = {
+  default_project: string | null
+  projects: Array<{ display_name: string; project_id: string }>
   space_ref: PlanningSpaceRef
   title: string
   work_item_count: number
@@ -43,12 +44,7 @@ type PlanningSpaceView = {
 
 export type PlatformPlanningReady = {
   planning_spaces: PlanningSpaceView[]
-  projects: Array<{
-    binding_state: BindingState
-    planning_spaces: PlanningSpaceSummary[]
-    project_id: string
-    title: string
-  }>
+  spaces: PlanningSpaceSummary[]
 }
 
 export type PlatformPlanningPayload = {

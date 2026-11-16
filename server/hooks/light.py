@@ -35,8 +35,8 @@ class UnwritableError(Exception):
         self.reason = reason
 
 
-def uri(path: str) -> str:
-    """A read-write URI for an existing file: SQLite refuses rather than creating one."""
+def uri(path: str, mode: str = "rw") -> str:
+    """A URI for an existing file, read-write or `ro`: SQLite refuses rather than creating one."""
 
     absolute = os.path.abspath(path).replace(os.sep, "/")
     if not absolute.startswith("/"):
@@ -44,7 +44,7 @@ def uri(path: str) -> str:
     quoted = "".join(
         chr(byte) if byte in _UNQUOTED else f"%{byte:02X}" for byte in absolute.encode("utf-8")
     )
-    return f"file://{quoted}?mode=rw"
+    return f"file://{quoted}?mode={mode}"
 
 
 def reason(error: Exception) -> str:

@@ -234,7 +234,7 @@ const ShellAlone = {
   setup() {
     useAppReferenceLinks({
       primaryScope: vi.fn(),
-      projects: () => [],
+      spaces: () => [],
       openTarget: vi.fn(),
       openSession: vi.fn(),
       say: vi.fn(),

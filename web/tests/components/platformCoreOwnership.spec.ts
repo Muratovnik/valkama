@@ -43,7 +43,9 @@ const attached: PlanningSpaceRef = {
   data_scope_id: '123e4567-e89b-42d3-a456-426614174001',
   space_key: 'MAIN',
 }
-const scope = { kind: 'project' as const, project_ref: { project_id: 'example-project' } }
+/** The scope that opens a space: the page reads the space its address names. */
+const inSpace = (space: PlanningSpaceRef) => ({ kind: 'space' as const, space_ref: space })
+const scope = inSpace(primary)
 const now = '2026-08-13T09:00:00Z'
 
 const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`
@@ -63,10 +65,12 @@ function readModel(space: PlanningSpaceRef) {
     planning_spaces: [],
     planning_space: {
       planning_space_id: identity(800),
-      project_id: scope.project_ref.project_id,
       name: 'Main',
       key: space.space_key,
       provider_kind: 'local',
+      launch_place: 'space',
+      projects: [],
+      default_project: null,
     },
     workflow: {
       workflow_id: identity(700),
@@ -97,6 +101,7 @@ function readModel(space: PlanningSpaceRef) {
         withheld: [],
         lapsed_claim: null,
         labels: [],
+        projects: [],
         source: '',
         checklist: [],
         revision: 1,
@@ -111,22 +116,18 @@ function readModel(space: PlanningSpaceRef) {
   }
 }
 
-/** Both spaces are mapped, so the route's entity is what picks one. */
-const context = {
+/** Both spaces are listed, so the scope's space is what picks one. */
+const context: PlatformContextReady = {
   primary: { data_scope_id: primary.data_scope_id, is_writable: true },
-  projects: [
-    {
-      binding_state: 'mapped',
-      project_id: scope.project_ref.project_id,
-      resources: [
-        { resource_ref: planningSpaceEntity(primary), state: 'mapped' },
-        { resource_ref: planningSpaceEntity(attached), state: 'mapped' },
-      ],
-      title: 'Example',
-    },
-  ],
+  spaces: [primary, attached].map((space) => ({
+    ...space,
+    name: 'Main',
+    default_project: 'example-project',
+    projects: [{ project_id: 'example-project', display_name: 'Example' }],
+    other_space_projects: [],
+  })),
   ui_prefs: null,
-} as PlatformContextReady
+}
 
 residentView(inspectorView)
 
@@ -152,20 +153,16 @@ async function render(
   primaryWriteScopeId: string | null,
   space: PlanningSpaceRef,
   state: Record<string, string> = { view: 'list' },
+  shellContext: PlatformContextReady | null = context,
 ) {
   const i18n = createI18n({ legacy: false, locale: 'en', messages })
   const wrapper = mount(PlanningModuleSurface, {
     props: {
-      context,
+      context: shellContext,
       primaryWriteScopeId,
       stateBytes: 2048,
-      route: {
-        module_id: 'planning' as const,
-        scope,
-        entity: planningSpaceEntity(space),
-        state,
-      },
-      scope,
+      route: { module_id: 'planning' as const, scope: inSpace(space), state },
+      scope: inSpace(space),
     },
     global: { plugins: [createPinia(), i18n] },
   })
@@ -273,13 +270,15 @@ describe('planning write ownership', () => {
     await flushPromises()
     const firstInspector = wrapper.findComponent({ name: 'WorkItemInspector' }).vm
 
+    // The same reference in the other space is reached by moving to that space.
     await wrapper.setProps({
       route: {
         module_id: 'planning' as const,
-        scope,
+        scope: inSpace(attached),
         entity: planningWorkItemEntity({ space_ref: attached, reference: 'MAIN-264' }),
         state: { view: 'list' },
       },
+      scope: inSpace(attached),
     })
     await flushPromises()
 
@@ -303,12 +302,8 @@ describe('planning write ownership', () => {
     }
 
     await wrapper.setProps({
-      route: {
-        module_id: 'planning' as const,
-        scope,
-        entity: planningSpaceEntity(attached),
-        state: { view: 'list' },
-      },
+      route: { module_id: 'planning' as const, scope: inSpace(attached), state: { view: 'list' } },
+      scope: inSpace(attached),
     })
     await flushPromises()
 
@@ -360,5 +355,19 @@ describe('planning write ownership', () => {
     read.mockClear()
     await render(primary.data_scope_id, primary, { view: 'list', chain: 'MAIN-264' })
     expect(read).toHaveBeenCalledWith('MAIN-264', 'chain', expect.any(AbortSignal))
+  })
+
+  // The address names the space at once; which store is the primary comes with the context.
+  it('waits for the context before it reads or refuses a chain the address names', async () => {
+    const read = vi.mocked(fetchWorkItemChain)
+    read.mockClear()
+    const wrapper = await render(null, primary, { view: 'list', chain: 'MAIN-264' }, null)
+    expect(read).not.toHaveBeenCalled()
+    await wrapper.setProps({ context, primaryWriteScopeId: primary.data_scope_id })
+    await flushPromises()
+    expect(read).toHaveBeenCalledWith('MAIN-264', 'chain', expect.any(AbortSignal))
+    expect(wrapper.emitted('notice')).not.toContainEqual([
+      'The chain is available only for work items of the primary store.',
+    ])
   })
 })

@@ -13,19 +13,21 @@ import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 export const CONTEXT_INTERFACE = 'valkama-context' as const
 export const UI_PREFS_INTERFACE = 'valkama-ui-prefs' as const
 
-export type BindingState = 'mapped' | 'unbound' | 'unavailable'
+/** A project as the shell names it: its id and the name a reader sees. */
+type ShellProject = { display_name: string; project_id: string }
 
-export type ProjectDirectoryResource = {
-  resource_ref: EntityRef
-  state: BindingState
-  reason?: string
-}
-
-type ProjectDirectory = {
-  binding_state: BindingState
-  project_id: string
-  resources: ProjectDirectoryResource[]
-  title: string
+/**
+ * One space the shell can open, with its projects, the default one first, and the
+ * projects of other spaces its items name, each with the key of the space it lives in
+ * (null when the registry binds it to no space).
+ */
+export type ShellSpace = {
+  data_scope_id: string
+  default_project: string | null
+  name: string
+  other_space_projects: Array<ShellProject & { space_key: string | null }>
+  projects: ShellProject[]
+  space_key: string
 }
 
 export type PlatformUiPrefs = {
@@ -41,7 +43,7 @@ export type PlatformUiPrefsResult = {
 
 export type PlatformContextReady = {
   primary: { data_scope_id: string; is_writable: true }
-  projects: ProjectDirectory[]
+  spaces: ShellSpace[]
   ui_prefs: PlatformUiPrefs | null
 }
 

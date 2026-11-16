@@ -83,7 +83,7 @@ class LiveWorkCase(unittest.TestCase):
         self.addCleanup(clock.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="live", name="Live", key=SPACE)
+        service.create_planning_space(self.conn, name="Live", key=SPACE)
         self._uid = 0
 
     # -- what the cases are made of --------------------------------------------
@@ -749,7 +749,7 @@ class SubagentWorkTests(LiveWorkCase):
 
     def test_an_item_held_in_another_space_counts_as_one_more(self) -> None:
         here = self.item()
-        service.create_planning_space(self.conn, project_id="far", name="Far", key="FAR")
+        service.create_planning_space(self.conn, name="Far", key="FAR")
         there = service.create_work_item(self.conn, space="FAR", title="Far")
         session = self.coordinator(here)
         self.claim(str(there["reference"]), session)
@@ -775,7 +775,7 @@ class SubagentWorkTests(LiveWorkCase):
 
     def test_a_label_on_another_space_leaves_the_parents_only_item_still(self) -> None:
         held = self.item()
-        service.create_planning_space(self.conn, project_id="far", name="Far", key="FAR")
+        service.create_planning_space(self.conn, name="Far", key="FAR")
         there = service.create_work_item(self.conn, space="FAR", title="Far")
         session = self.coordinator(held)
         self.subagent(session, "a1", f"build {there['reference']}")

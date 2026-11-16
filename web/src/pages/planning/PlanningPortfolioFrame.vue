@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * Every project and its spaces, to choose where to work.
+ * Every space, to choose where to work.
  *
- * It is the global scope's page, and it is also the answer to an address that
- * names a project this workstation does not have: that address can never load,
- * so instead of a panel offering «Retry», the page says which project is
+ * It is the page of «All spaces», and it is also the answer to an address that
+ * names a space this workstation does not have: that address can never load,
+ * so instead of a panel offering «Retry», the page says which space is
  * missing and lays out the ones that exist, each a click away.
  */
 import { computed } from 'vue'
@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 
 import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
 
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformPlanningReady } from '@/shared/api/platformPlanningTypes.ts'
 import { uiUnavailable } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
@@ -19,15 +20,15 @@ import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 
 const props = defineProps<{
   portfolio: PlatformUiState<PlatformPlanningReady>
-  /** The project the address named and this workstation does not have. */
-  missingProject?: string | null
+  /** The key of the space the address named and this workstation does not have. */
+  missingSpace?: string | null
 }>()
-const emit = defineEmits<{ 'open-project': [projectId: string]; 'retry': [] }>()
+const emit = defineEmits<{ 'open-space': [space: PlanningSpaceRef]; 'retry': [] }>()
 const { t } = useI18n()
 
 const missingState = computed(() =>
-  props.missingProject
-    ? uiUnavailable(t('platform.planning.projectMissing', { project: props.missingProject }))
+  props.missingSpace
+    ? uiUnavailable(t('platform.planning.spaceMissing', { space: props.missingSpace }))
     : null,
 )
 </script>
@@ -42,7 +43,7 @@ const missingState = computed(() =>
     <div class="planning-frame-content">
       <div
         v-if="missingState"
-        class="planning-missing-project"
+        class="planning-missing-space"
       >
         <PlatformStatePanel
           :state="missingState"
@@ -56,8 +57,8 @@ const missingState = computed(() =>
       >
         <template #default="{ payload }">
           <PlanningPortfolio
-            :projects="payload.projects"
-            @open-project="(id) => emit('open-project', id)"
+            :spaces="payload.spaces"
+            @open-space="(space) => emit('open-space', space)"
           />
         </template>
       </PlatformStatePanel>

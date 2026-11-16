@@ -4,8 +4,8 @@ Which rows: an open item with live work, `quiet` included; a pinned item, open o
 closed; every parent of those. Their order: groups first in the order of work, each
 followed by its own rows, then the rest, the rows that are not groups by number.
 `agents` counts the live subagents `ladder` places on a row, each on one item. A
-session at work or waiting on no row is listed under the space of the folder it was
-opened in, or in `elsewhere`, which places a row and binds nothing.
+session at work or waiting on no row is listed under the space of the folder that
+places it, or in `elsewhere`, which places a row and binds nothing.
 
 The cases build their sessions through the real hook ingest and their claims through
 the real write path, as `test_planning_live_work` does, with its clock.
@@ -18,6 +18,8 @@ import uuid
 from pathlib import Path
 from unittest import mock
 
+from server import sessions
+from server.analytics import usage
 from server.planning import executors, live_frame, live_work, model, service
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
@@ -85,7 +87,14 @@ class RowTests(FrameCase):
         session = self.working(reference)
         space = self.space()
         self.assertEqual(
-            {"key": SPACE, "name": "Live", "project_id": None, "sessions": []},
+            # The registry is not read here, so the space's projects are unknown.
+            {
+                "key": SPACE,
+                "name": "Live",
+                "projects": None,
+                "default_project": None,
+                "sessions": [],
+            },
             {name: value for name, value in space.items() if name != "rows"},
         )
         self.assertEqual(
@@ -275,9 +284,9 @@ class RowTests(FrameCase):
         self.assertEqual((None, "working"), (rows[epic]["state"], rows[task]["state"]))
 
     def test_spaces_come_by_key_and_a_space_with_no_rows_is_left_out(self) -> None:
-        service.create_planning_space(self.conn, project_id="a", name="Alpha", key="AA")
-        service.create_planning_space(self.conn, project_id="z", name="Zulu", key="ZZ")
-        service.create_planning_space(self.conn, project_id="m", name="Empty", key="MM")
+        service.create_planning_space(self.conn, name="Alpha", key="AA")
+        service.create_planning_space(self.conn, name="Zulu", key="ZZ")
+        service.create_planning_space(self.conn, name="Empty", key="MM")
         for key in ("ZZ", "AA"):
             self.pin(str(service.create_work_item(self.conn, space=key, title="x")["reference"]))
         self.pin(self.item())
@@ -414,7 +423,14 @@ class SessionPlaceTests(FrameCase):
         }
         bound = project_entry("bound-project", self.bound)
         bound["planning_binding"] = planning_space_entity(space_ref)
-        registry = registry_bytes([bound, project_entry("inner-project", self.unbound)])
+        self.other = self.root / "other"
+        registry = registry_bytes(
+            [
+                bound,
+                project_entry("inner-project", self.unbound),
+                project_entry("other-project", self.other),
+            ]
+        )
         patch = mock.patch.object(project_registry, "_read_registry_bytes", return_value=registry)
         patch.start()
         self.addCleanup(patch.stop)
@@ -433,7 +449,14 @@ class SessionPlaceTests(FrameCase):
     def test_a_session_on_no_row_is_listed_under_the_space_its_folder_is_bound_to(self) -> None:
         session = self.at_work(str(self.bound / "src"))
         space = self.space()
-        self.assertEqual(("bound-project", []), (space["project_id"], space["rows"]))
+        self.assertEqual(
+            (
+                "bound-project",
+                [{"project_id": "bound-project", "display_name": "bound-project"}],
+                [],
+            ),
+            (space["default_project"], space["projects"], space["rows"]),
+        )
         self.assertEqual([session], self.listed(space["sessions"]))
         self.assertEqual([], self.frame()["elsewhere"])
 
@@ -458,6 +481,51 @@ class SessionPlaceTests(FrameCase):
         self.hook(session, "stop", ago(minutes=1))
         (row,) = self.space()["sessions"]
         self.assertEqual((session, "waiting", False), (row["session"], row["state"], row["long"]))
+
+    def test_the_frame_and_analytics_put_a_session_that_moved_in_one_place(self) -> None:
+        """Opened in the bound project, its shell has since moved into another one."""
+
+        session = _session()
+        self.hook(session, "session-start", ago(minutes=30), cwd=str(self.bound / "src"))
+        sessions.record_place(
+            self.conn,
+            session,
+            opened_in="terminal",
+            opened_host="",
+            opened_folder=str(self.bound / "src"),
+            host_session_id="",
+            current=True,
+        )
+        self.hook(session, "user-prompt-submit", ago(minutes=10), cwd=str(self.other))
+        row = self.conn.execute(
+            "SELECT opened_folder, cwd FROM sessions WHERE id = ?", (session,)
+        ).fetchone()
+        self.assertEqual((str(self.bound / "src"), str(self.other)), tuple(row))
+        run = self.conn.execute(
+            "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at)"
+            " VALUES (?, '', 'claude', ?, ?, ?)",
+            (session, str(self.root / "run.jsonl"), ago(minutes=10), ago(minutes=5)),
+        ).lastrowid
+        self.conn.execute(
+            "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at,"
+            " ended_at, seconds, quality) VALUES (?, ?, '', 'claude-opus-5-5', ?, ?, 300,"
+            " 'observed')",
+            (run, session, ago(minutes=10), ago(minutes=5)),
+        )
+        self.conn.commit()
+        place = sessions.session_place(self.conn, session, project_registry.read_registry())
+        self.assertEqual(
+            {"project_id": "bound-project", "canonical_root": str(self.bound), "space_key": SPACE},
+            place,
+        )
+        self.assertEqual([session], self.listed(self.space()["sessions"]))
+        spent = usage.read(
+            self.conn, usage.query(start="2030-01-01", end="2030-01-02", group_by=("project",))
+        )
+        self.assertEqual(
+            [("bound-project", 300.0)],
+            [(row["group"]["project"]["id"], row["agent_seconds"]) for row in spent["rows"]],
+        )
 
     def test_listing_writes_nothing_and_binds_nothing(self) -> None:
         self.at_work(str(self.bound))

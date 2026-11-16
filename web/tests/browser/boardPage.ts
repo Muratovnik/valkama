@@ -5,12 +5,11 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page, TestInfo } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { chainResponse } from '../fixtures/chain.ts'
 import { BACKLOG, boardSpace, chainOf, DEV, DONE, endOf } from './boardFixtures.ts'
-import { projectScope, spaceRef, workItem } from './planningFixtures.ts'
+import { spaceScope, workItem } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
 interface Write {
@@ -78,8 +77,7 @@ export async function serve(page: Page, refuse: { message: string | null } = { m
 export function boardRoute(state: Record<string, string> = {}) {
   return serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
-    entity: planningSpaceEntity(spaceRef),
+    scope: spaceScope,
     state: { view: 'kanban', ...state },
   })
 }

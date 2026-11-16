@@ -5,7 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { box, linesTall, openCard, selection, settledBox } from './editorPage.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** What agents write: anchors the planning system resolves, a table and a fence. */
@@ -44,7 +44,7 @@ test('a comment with an anchor, a table and a fence is sent byte for byte as it 
 async function editDescription(page: Page, description: string) {
   const backend = await installDiscussionBackend(page)
   backend.item.description = description
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await drawer.getByRole('button', { name: 'Edit description', exact: true }).click()
@@ -104,7 +104,7 @@ async function pressEdit(
   await page.setViewportSize({ width, height })
   const backend = await installDiscussionBackend(page)
   backend.item.description = text
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer).toHaveCSS('transform', 'none')

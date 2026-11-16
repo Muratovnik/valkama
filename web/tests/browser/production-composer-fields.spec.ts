@@ -12,10 +12,10 @@ import type { Locator, Page } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { identity, projectScope, workItem } from './planningFixtures.ts'
+import { identity, spaceScope, workItem } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: spaceScope })
 /** As long as a real goal's: at a half-width field's 172px it took six lines. */
 const GOAL_TITLE = 'Parser rework: one grammar for tables, front matter, footnotes and fenced code'
 

@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sqlite3
+from collections.abc import Iterable
 
 from .projects import project_registry
 from .store_identity.metadata import read_store_metadata
@@ -327,6 +328,51 @@ def session_folders(row: sqlite3.Row) -> tuple[str, ...]:
         else ""
     )
     return (named, *known)
+
+
+def session_folder(row: sqlite3.Row) -> str:
+    """The folder that places a session: the first of `session_folders` that is not empty."""
+
+    return next((folder for folder in session_folders(row) if folder), "")
+
+
+_PLACED = (
+    "SELECT id, client, opened_folder, cwd, transcript_path FROM sessions"
+    " WHERE id IN (SELECT value FROM json_each(?))"
+)
+
+
+def session_places(
+    conn: sqlite3.Connection,
+    session_ids: Iterable[str],
+    listing: project_registry.RegistryResult,
+) -> dict[str, project_registry.FolderPlace | None]:
+    """`session_place` of each of these sessions that has a row, by id, in one read."""
+
+    named = sorted(set(session_ids))
+    if not named:
+        return {}
+    data_scope_id = str(read_store_metadata(conn)["data_scope_id"])
+    return {
+        str(row["id"]): project_registry.place_of_folder(
+            session_folder(row), listing, data_scope_id
+        )
+        for row in conn.execute(_PLACED, (json.dumps(named),))
+    }
+
+
+def session_place(
+    conn: sqlite3.Connection, session_id: str, listing: project_registry.RegistryResult
+) -> project_registry.FolderPlace | None:
+    """Where a session stands: `project_registry.place_of_folder` of its `session_folder`.
+
+    For Claude Code that is the folder its transcript names, else `opened_folder`, else
+    `cwd`; for Codex `opened_folder`, else `cwd`. None for a session with no row, no folder
+    or a folder under no root. This places a session and says nothing of the space its
+    work is in, which `session_context` reads from the items linked to it.
+    """
+
+    return session_places(conn, (session_id,), listing).get(session_id)
 
 
 def record_place(

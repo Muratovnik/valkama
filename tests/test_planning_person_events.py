@@ -54,7 +54,7 @@ class Harness(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        self.space = service.create_planning_space(self.conn, project_id="p", name="Quality Crew")
+        self.space = service.create_planning_space(self.conn, name="Quality Crew")
         self.item = service.create_work_item(
             self.conn, space=self.space["key"], title="Do the work", author="filer"
         )
@@ -702,7 +702,7 @@ class ToldOnWriteTests(Harness):
         self.assertNotIn("from_person", answer)
 
     def test_a_write_touching_no_item_answers_as_it_did(self) -> None:
-        space = self.agent("create_planning_space", project_id="q", name="Elsewhere")
+        space = self.agent("create_planning_space", name="Elsewhere")
         self.assertNotIn("from_person", space)
         self.assertNotIn(
             "from_person", self.agent("claim_ready_work_item", space=space["planning_space_id"])

@@ -1,103 +1,57 @@
 <script setup lang="ts">
 /**
- * Every project the platform knows, at global scope, with its Planning spaces.
+ * Every space this workstation has, at «All spaces», with its projects.
  *
- * Project identity leads each row. Binding state is a separate operational
- * fact, and an unbound project routes to the canonical Settings recovery view.
- * Only a project that is not mapped says its state: «Mapped» on every card, beside
- * the «Open project» that already says so, told the reader nothing.
+ * The space's name leads each card and its key stands under it, as the space choice names
+ * it. Under them its work and its projects in one line, and the way in at the foot: a space
+ * is a thing you read first and enter second.
  */
 import { useI18n } from 'vue-i18n'
 
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformPlanningReady } from '@/shared/api/platformPlanningTypes.ts'
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-defineProps<{ projects: PlatformPlanningReady['projects'] }>()
-const emit = defineEmits<{ 'open-project': [projectId: string] }>()
+defineProps<{ spaces: PlatformPlanningReady['spaces'] }>()
+const emit = defineEmits<{ 'open-space': [space: PlanningSpaceRef] }>()
 const { t } = useI18n()
 
-function bindingRecoveryRoute(projectId: string) {
-  return serializePlatformRoute({
-    module_id: 'settings',
-    scope: { kind: 'project', project_ref: { project_id: projectId } },
-  })
+/** The space's projects in one line, or that it has none. */
+function projectsLine(space: PlatformPlanningReady['spaces'][number]): string {
+  const names = space.projects.map((project) => project.display_name)
+  return names.length ? names.join(' · ') : t('platform.planning.noProjects')
 }
 </script>
 
 <template>
   <section class="portfolio-grid">
     <article
-      v-for="project in projects"
-      :key="project.project_id"
-      class="portfolio-project"
+      v-for="space in spaces"
+      :key="`${space.space_ref.data_scope_id}:${space.space_ref.space_key}`"
+      class="portfolio-space"
     >
-      <header class="project-head">
-        <div>
-          <strong class="project-title">{{ project.title || project.project_id }}</strong>
-          <small
-            v-if="project.title && project.title !== project.project_id"
-            class="project-id"
-            >{{ project.project_id }}</small
-          >
-        </div>
-        <SemanticState
-          v-if="project.binding_state !== 'mapped'"
-          dimension="project-binding"
-          variant="badge"
-          :label="t(`platform.bindings.${project.binding_state}`)"
-          :state="project.binding_state"
-        />
+      <header class="space-head">
+        <strong class="space-title">{{ space.title }}</strong>
+        <small class="space-key">{{ space.space_ref.space_key }}</small>
       </header>
-      <ul
-        v-if="project.planning_spaces.length"
-        class="project-spaces"
-      >
-        <li
-          v-for="space in project.planning_spaces"
-          :key="`${space.space_ref.data_scope_id}:${space.space_ref.space_key}`"
-          class="project-space"
-        >
-          <span
-            v-if="space.title !== project.title && space.title !== project.project_id"
-            class="space-name"
-            >{{ space.title }}</span
-          >
-          <span class="space-count">{{
-            t('platform.planning.workItemCount', { count: space.work_item_count })
-          }}</span>
-        </li>
-      </ul>
-      <DataEmptyState
-        v-else
-        :title="t('platform.planning.noSpaces')"
-        inline
-      />
+      <span class="space-count">{{
+        t('platform.planning.workItemCount', { count: space.work_item_count })
+      }}</span>
+      <div class="space-projects">
+        <span class="projects-label">{{ t('platform.planning.projects') }}</span>
+        <span class="projects-names">{{ projectsLine(space) }}</span>
+      </div>
       <VButton
-        v-if="project.binding_state === 'mapped'"
-        class="open-project"
-        @click="emit('open-project', project.project_id)"
+        class="open-space"
+        @click="emit('open-space', space.space_ref)"
       >
-        {{ t('platform.planning.openProject')
+        {{ t('platform.planning.openSpace')
         }}<VIcon
           name="chevron-right"
           :size="15"
         />
       </VButton>
-      <a
-        v-else
-        class="binding-recovery"
-        :href="bindingRecoveryRoute(project.project_id)"
-      >
-        {{ t('platform.planning.reviewBinding')
-        }}<VIcon
-          name="chevron-right"
-          :size="15"
-        />
-      </a>
     </article>
   </section>
 </template>
@@ -109,7 +63,7 @@ function bindingRecoveryRoute(projectId: string) {
   gap: var(--space-3);
 }
 
-.portfolio-project {
+.portfolio-space {
   display: grid;
   gap: var(--space-3);
   align-content: start;
@@ -118,58 +72,37 @@ function bindingRecoveryRoute(projectId: string) {
   border-radius: var(--radius-card);
 }
 
-.project-head {
-  display: flex;
-  gap: var(--space-3);
-  justify-content: space-between;
-  align-items: flex-start;
+.space-head {
+  display: grid;
+  gap: var(--space-1);
 }
 
-.project-id {
-  display: block;
-  margin-top: var(--space-1);
+.space-title {
+  font: var(--font-name);
+}
+
+.space-key {
   color: var(--color-text-muted);
   font: var(--font-detail);
 }
 
-.project-title {
-  display: block;
-  font: var(--font-name);
-}
-
-.project-spaces {
-  display: grid;
-  gap: var(--space-2);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.project-space {
-  display: flex;
-  gap: var(--space-3);
-  justify-content: space-between;
+.space-count {
   font-size: var(--font-size-dense);
 }
 
-.space-count {
+.space-projects {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--font-size-dense);
+}
+
+.projects-label {
   color: var(--color-text-muted);
   font-size: var(--font-size-meta);
 }
 
-/* The action stands at the foot of the card rather than filling it: a project is
-   a thing you read first and enter second. */
-:is(.open-project, .binding-recovery) {
+/* The action stands at the foot of the card rather than filling it. */
+.open-space {
   justify-self: start;
-}
-
-.binding-recovery {
-  display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
-  color: var(--color-accent);
-  font-size: var(--font-size-dense);
-  font-weight: 600;
-  text-underline-offset: 0.2em;
 }
 </style>

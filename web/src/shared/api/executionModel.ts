@@ -23,7 +23,8 @@ import {
   z,
 } from '@/shared/api/contract.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
-import { enumField, invalid, ISO } from '@/shared/api/platformApiGuards.ts'
+import { LAUNCH_PLACES } from '@/shared/api/planningSpaceModel.ts'
+import { enumField, invalid, ISO, PROJECT_ID } from '@/shared/api/platformApiGuards.ts'
 
 const EXECUTION_API = 'valkama-execution-api' as const
 
@@ -47,6 +48,26 @@ const TELEMETRY_CONFIGURATIONS = ['environment', 'client-config', 'none'] as con
 const DRIVER_HEALTH = ['ready', 'unavailable'] as const
 /** How a value was obtained. A zero nobody observed is not a zero. */
 const QUALITIES = ['observed', 'unknown'] as const
+/** On which runs a client takes the directories beside the one it runs in. */
+const ADDED_DIRS = ['fresh_and_resume', 'fresh_only', 'none'] as const
+/**
+ * How the suggested launch root stands, in the words a claim's roots use:
+ * `missing` when its directory is not there, `unregistered` when the item's
+ * project left the registry, `unavailable` when the registry could not be read,
+ * one that does not parse included. Two are the launch root's own: `unbound`
+ * when the item's space binds no project, `no_item` when the read names no item
+ * or one that does not exist.
+ */
+const LAUNCH_ROOT_STATUSES = [
+  'mapped',
+  'missing',
+  'unregistered',
+  'unavailable',
+  'unbound',
+  'no_item',
+] as const
+/** Roots beside the working one: a space's projects and an item's, at most. */
+const MAX_ADDED_ROOTS = 100
 
 const NAME = /^[\w.@:+-]{1,120}$/u
 
@@ -79,7 +100,14 @@ const driverSchema = strictObject({
   telemetry_configuration: enumField(TELEMETRY_CONFIGURATIONS),
   health: enumField(DRIVER_HEALTH),
   unavailable_reason: blank(400),
+  added_dirs: enumField(ADDED_DIRS),
 })
+
+/** A root beside the one a launch runs in, by its project. */
+const addedRootShape = {
+  project_id: boundedText(PROJECT_ID, 160),
+  root: blank(512),
+}
 
 const capabilitiesSchema = strictObject({
   interface_version: z.literal(EXECUTION_API),
@@ -92,10 +120,16 @@ const capabilitiesSchema = strictObject({
   review_modes: boundedList(blank(40), 10),
   review_verdicts: z.record(z.string(), boundedList(boundedText(NAME, 40), 10)),
   max_prompt_chars: positiveInt(),
-  // Where a launch for the named item would run, according to the registry that
-  // maps its space. The status travels with it so a blank field can say why.
+  // Where a launch for the named item would run: the root its space's launch
+  // place chooses, as the registry maps it. The status travels with it so a blank
+  // field can say why; the project and the launch place are null with no item.
   repository: blank(512),
-  repository_status: boundedText(NAME, 32),
+  repository_status: enumField(LAUNCH_ROOT_STATUSES),
+  repository_project: boundedText(PROJECT_ID, 160).nullable(),
+  launch_place: enumField(LAUNCH_PLACES).nullable(),
+  // The roots the launch gets beside that one; each driver's `added_dirs` says
+  // on which runs its client takes them.
+  added_roots: boundedList(strictObject(addedRootShape), MAX_ADDED_ROOTS),
 })
 
 const dispositionSchema = strictObject({
@@ -120,16 +154,15 @@ const resultSchema = strictObject({
   dispositions: boundedList(dispositionSchema, 100).optional(),
 })
 
-const baseArtifactSchema = strictObject({
+const baseReading = {
   repository: blank(512),
   head: blank(64),
   branch: blank(200),
   dirty: z.boolean().nullable(),
-  worktree: blank(512),
   quality: enumField(QUALITIES),
-})
+}
 
-const finalArtifactSchema = strictObject({
+const finalReading = {
   head: blank(64),
   branch: blank(200),
   dirty: z.boolean().nullable(),
@@ -138,6 +171,19 @@ const finalArtifactSchema = strictObject({
   deletions: positiveInt(true).nullable(),
   commits: boundedList(blank(64), 50),
   quality: enumField(QUALITIES),
+}
+
+// `added` reads each root the launch passed beside the working directory the
+// same way, so a change made only there is evidence too.
+const baseArtifactSchema = strictObject({
+  ...baseReading,
+  worktree: blank(512),
+  added: boundedList(strictObject({ ...addedRootShape, ...baseReading }), MAX_ADDED_ROOTS),
+})
+
+const finalArtifactSchema = strictObject({
+  ...finalReading,
+  added: boundedList(strictObject({ ...addedRootShape, ...finalReading }), MAX_ADDED_ROOTS),
 })
 
 const executionSessionSchema = strictObject({

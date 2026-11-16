@@ -1,22 +1,25 @@
-"""Which store answers a Planning read for one project's exact planning space.
+"""Which store answers a Planning read for one exactly named planning space.
 
-A request names a project and a planning space by its exact identity --
-`data_scope_id` and `space_key` -- and is answered only when the project
-registry binds that project to that space and the store holding the space is
-present: the primary store, or an attached store opened read-only. Nothing
-here falls back to the primary store or to a key-only lookup: two stores can
-each keep an `AW`, and a key alone says nothing between them.
+A request names a planning space by its exact identity -- `data_scope_id` and
+`space_key` -- and is answered when the store holding the space is present: the
+primary store, or an attached store opened read-only. Nothing here falls back to
+the primary store or to a key-only lookup: two stores can each keep a `MAIN`, and
+a key alone says nothing between them.
+
+A space is read whether or not the project registry binds a project to it: a
+space with no projects still holds its items. A project may narrow the read when
+it is one the registry binds to the space or one an item of the space names,
+which may be a project of another space. The registry has to be readable for
+any of it, so an unreadable registry answers a read as unavailable, not as half
+of one.
 
 A `PlanningRouting` is built per request from the project registry and the
 stores as they are at that moment, and it only reads. Answering a GET through
 it changes nothing on disk; a live stream builds a new one on every push, which
-is how a binding moved while the stream is open closes it.
+is how a space that went away while the stream is open closes it.
 
-Three binding states come out of it: `mapped`, `unbound` (no binding, another
-project's binding, or a space the bound store does not hold) and `unavailable`
-(the bound store is not the primary and is not attached and readable).
-`unavailable_reason` says which of those a source is in as a stable code, so a
-cross-project read can name what it could not check and why.
+`unavailable_reason` says why a space cannot be read as a stable code, so a read
+across spaces can name what it could not check and why.
 """
 
 from __future__ import annotations
@@ -28,8 +31,8 @@ from collections.abc import Callable, Iterator, Mapping
 
 from ..projects import project_registry, scopes
 from ..store_identity.metadata import ScopeError, read_store_metadata
+from ..store_identity.primitives import ContractError
 from ..store_identity.refs import (
-    planning_space_entity,
     planning_space_ref,
     validate_entity_ref,
     validate_operating_scope,
@@ -37,7 +40,15 @@ from ..store_identity.refs import (
 )
 from ..ui_state import PlatformHttpError
 
-_SPACE_MISSING = "Bound resource is unavailable"
+#: The fields that name one space exactly, and the one that may narrow it to a project.
+_SPACE_FIELDS = frozenset({"data_scope_id", "space_key"})
+_PROJECT_FIELD = "project"
+#: The projects the items of each space name, by space key.
+_NAMED_PROJECTS = (
+    "SELECT DISTINCT p.key, j.project_id FROM work_item_projects j"
+    " JOIN work_items w ON w.work_item_id = j.work_item_id"
+    " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+)
 
 
 def one(parameters: Mapping[str, list[str]], key: str) -> str:
@@ -54,29 +65,27 @@ def one(parameters: Mapping[str, list[str]], key: str) -> str:
     return values[0]
 
 
-def scope_parameters(
-    parameters: Mapping[str, list[str]], *, project_extras: tuple[str, ...] = ()
-) -> dict:
-    """The operating scope a query names, with exactly the fields that scope takes."""
+def scope_parameters(parameters: Mapping[str, list[str]], *, extras: tuple[str, ...] = ()) -> dict:
+    """The operating scope a query names, with exactly the fields that scope takes.
+
+    `scope_kind=space` names the space by `data_scope_id` and `space_key` and may
+    narrow it with `project_id`; `extras` are the fields the read itself takes.
+    """
 
     scope_kind = one(parameters, "scope_kind")
     if scope_kind == "global":
         if set(parameters) != {"scope_kind"}:
             raise PlatformHttpError(400, "error", "Global scope has unknown query fields")
         return {"kind": "global"}
-    if scope_kind != "project":
-        raise PlatformHttpError(400, "error", "scope_kind must be global or project")
-    expected = {"scope_kind", "project_id", *project_extras}
-    if set(parameters) != expected:
-        raise PlatformHttpError(
-            400, "error", "Project scope query fields are incomplete or unknown"
-        )
-    return validate_operating_scope(
-        {
-            "kind": "project",
-            "project_ref": {"project_id": one(parameters, "project_id")},
-        }
-    )
+    if scope_kind != "space":
+        raise PlatformHttpError(400, "error", "scope_kind must be global or space")
+    required = {"scope_kind", *_SPACE_FIELDS, *extras}
+    if not required <= set(parameters) or set(parameters) - required - {"project_id"}:
+        raise PlatformHttpError(400, "error", "Space scope query fields are incomplete or unknown")
+    scope: dict = {"kind": "space", "space_ref": space_ref_parameters(parameters)}
+    if "project_id" in parameters:
+        scope["project_ref"] = {"project_id": one(parameters, "project_id")}
+    return validate_operating_scope(scope)
 
 
 def space_ref_parameters(parameters: Mapping[str, list[str]]) -> dict:
@@ -88,15 +97,32 @@ def space_ref_parameters(parameters: Mapping[str, list[str]]) -> dict:
     )
 
 
-def _space_resources(conn: sqlite3.Connection, data_scope_id: str) -> list[dict]:
-    return [
-        planning_space_entity({"data_scope_id": data_scope_id, "space_key": str(row[0])})
-        for row in conn.execute("SELECT key FROM planning_spaces ORDER BY key")
-    ]
+def _space_names(conn: sqlite3.Connection) -> dict[str, str]:
+    return {
+        str(row[0]): str(row[1])
+        for row in conn.execute("SELECT key, name FROM planning_spaces ORDER BY key")
+    }
+
+
+def named_projects(conn: sqlite3.Connection) -> dict[str, set[str]]:
+    """The projects the items of each space of this store name, by space key.
+
+    An attached store written before items named their projects has no such
+    table, and names none.
+    """
+
+    found: dict[str, set[str]] = {}
+    try:
+        rows = conn.execute(_NAMED_PROJECTS).fetchall()
+    except sqlite3.Error:
+        return found
+    for key, project_id in rows:
+        found.setdefault(str(key), set()).add(str(project_id))
+    return found
 
 
 class PlanningRouting:
-    """One request's view of which project binds which space in which store."""
+    """One request's view of which spaces each store holds and which projects each has."""
 
     def __init__(
         self,
@@ -118,21 +144,17 @@ class PlanningRouting:
         self.unopened_attached = 0
         self.projects_result = project_registry.read_registry(reader=registry_reader)
         self.projects = self.projects_result["projects"]
-        # A binding is echoed to the browser in the context payload, so it has
-        # to pass the same boundary check every other entity ref does.
+        # The space a binding names reaches the browser in the context payload, so
+        # it has to pass the same boundary check every other entity ref does.
         for project in self.projects:
             if project["planning_binding"] is not None:
-                validate_entity_ref(project["planning_binding"])
+                validate_entity_ref(project_registry.binding_entity(project["planning_binding"]))
         self._stores = self._present_stores()
 
-    def _present_stores(self) -> dict[str, list[dict]]:
-        """Each readable store's planning spaces, keyed by its `data_scope_id`."""
+    def _present_stores(self) -> dict[str, dict[str, str]]:
+        """Each readable store's planning spaces, name by key, keyed by its `data_scope_id`."""
 
-        present = {
-            self.metadata["data_scope_id"]: _space_resources(
-                self.conn, self.metadata["data_scope_id"]
-            )
-        }
+        present = {self.metadata["data_scope_id"]: _space_names(self.conn)}
         try:
             attached = scopes.load(self.primary_db)
         except scopes.ScopeError:
@@ -145,7 +167,7 @@ class PlanningRouting:
                 store = scopes.open_readonly(item)
                 try:
                     data_scope_id = read_store_metadata(store)["data_scope_id"]
-                    present[data_scope_id] = _space_resources(store, data_scope_id)
+                    present[data_scope_id] = _space_names(store)
                 finally:
                     store.close()
             except (sqlite3.Error, scopes.ScopeError, ScopeError):
@@ -153,78 +175,135 @@ class PlanningRouting:
                 continue
         return present
 
+    @property
+    def registry_available(self) -> bool:
+        return self.projects_result["status"] == "available"
+
+    def present_spaces(self) -> list[dict]:
+        """Every space of every readable store: the primary store's first, each by key."""
+
+        primary = self.metadata["data_scope_id"]
+        return [
+            {"data_scope_id": data_scope_id, "space_key": key}
+            for data_scope_id in sorted(self._stores, key=lambda scope: (scope != primary, scope))
+            for key in self._stores[data_scope_id]
+        ]
+
+    def space_name(self, space_ref: dict) -> str | None:
+        return self._stores.get(space_ref["data_scope_id"], {}).get(space_ref["space_key"])
+
     def project(self, project_id: str) -> dict:
         matches = [item for item in self.projects if item["project_id"] == project_id]
         if len(matches) != 1:
             raise PlatformHttpError(404, "unavailable", "Project is not registered")
         return matches[0]
 
-    def resolve(self, project_id: str, resource_ref: dict) -> tuple[str, str | None]:
-        """The binding state of one planning-space resource for one project, and why.
+    def space_projects(self, space_ref: dict) -> list[Mapping[str, object]]:
+        """The projects the registry binds to this space: the default one first, then by id."""
 
-        The registry already refuses two projects binding one space, so a
-        resource has at most one owner here.
+        return project_registry.space_projects(self.projects, space_ref)
+
+    def other_space_projects(self, space_ref: dict, named: set[str]) -> list[dict]:
+        """The registered projects of other spaces that items of this space name, by id.
+
+        `named` is what the items of the space name. Each project says the key of the
+        space it lives in, or none when the registry binds it to no space.
         """
 
-        owners = [
-            item["project_id"] for item in self.projects if item["planning_binding"] == resource_ref
-        ]
-        if not owners:
-            return "unbound", "No owner Project binding"
-        if owners != [project_id]:
-            return "unbound", "Resource belongs to another Project"
-        resources = self._stores.get(planning_space_ref(resource_ref)["data_scope_id"])
-        if resources is None:
-            return "unavailable", "Bound store is unavailable"
-        if resource_ref not in resources:
-            return "unbound", _SPACE_MISSING
-        return "mapped", None
+        own = {project["project_id"] for project in self.space_projects(space_ref)}
+        found = []
+        for project in self.projects:
+            if project["project_id"] not in named or project["project_id"] in own:
+                continue
+            home = None
+            if project["planning_binding"] is not None:
+                with contextlib.suppress(ContractError):
+                    home = planning_space_ref(
+                        project_registry.binding_entity(project["planning_binding"])
+                    )
+            found.append(
+                {
+                    "project_id": project["project_id"],
+                    "display_name": project["display_name"],
+                    "space_key": None if home is None else home["space_key"],
+                }
+            )
+        return sorted(found, key=lambda project: project["project_id"])
 
-    def unavailable_reason(self, project_id: str, space_ref: dict) -> str | None:
-        """Why this project's space cannot be read, as a stable code, or None.
+    def unavailable_reason(self, space_ref: dict) -> str | None:
+        """Why this space cannot be read, as a stable code, or None when it can.
 
-        `store_not_attached`: the bound store is neither the primary nor attached.
-        `store_unreadable`: an attached store could not be opened, and it may be
-        the bound one -- an unopened store names no `data_scope_id` to tell.
+        `store_not_attached`: the space's store is neither the primary nor attached.
+        `store_unreadable`: an attached store could not be opened, and it may be the
+        space's -- an unopened store names no `data_scope_id` to tell.
         `attached_list_unreadable`: the list of attached stores could not be read.
-        `space_missing`: the bound store holds no such space.
-        `binding_conflict`: the registry binds the space to another project.
+        `space_missing`: the store holds no such space.
         """
 
-        resource_ref = planning_space_entity(space_ref)
-        state, reason = self.resolve(project_id, resource_ref)
-        if state == "mapped":
-            return None
-        if state == "unavailable":
+        names = self._stores.get(space_ref["data_scope_id"])
+        if names is None:
             if self.attached_list_unreadable:
                 return "attached_list_unreadable"
             return "store_unreadable" if self.unopened_attached else "store_not_attached"
-        if reason == _SPACE_MISSING:
+        if space_ref["space_key"] not in names:
             return "space_missing"
-        return "binding_conflict"
+        return None
 
-    def require_mapping(self, project_id: str, space_ref: dict) -> None:
-        state, reason = self.resolve(project_id, planning_space_entity(space_ref))
-        if state != "mapped":
-            raise PlatformHttpError(409, "unavailable", str(reason))
+    def require_space(self, space_ref: dict) -> None:
+        """Refuse a read of a space this request cannot answer, saying why."""
 
-    def directory_item(self, project: dict) -> dict:
-        """One project as the shell lists it: its binding and how that binding stands."""
+        if not self.registry_available:
+            raise PlatformHttpError(409, "unavailable", "Project registry is unavailable")
+        reason = self.unavailable_reason(space_ref)
+        if reason == "space_missing":
+            raise PlatformHttpError(409, "unavailable", "Planning space is unavailable")
+        if reason is not None:
+            raise PlatformHttpError(409, "unavailable", "Planning space store is unavailable")
 
-        resources = []
-        resource_ref = project["planning_binding"]
-        if resource_ref is not None:
-            state, reason = self.resolve(project["project_id"], resource_ref)
-            entry = {"resource_ref": resource_ref, "state": state}
-            if reason is not None:
-                entry["reason"] = reason
-            resources.append(entry)
-        return {
-            "project_id": project["project_id"],
-            "title": project["display_name"],
-            "binding_state": resources[0]["state"] if resources else "unbound",
-            "resources": resources,
-        }
+    def require_project(self, space_ref: dict, project_id: str) -> None:
+        """Refuse a project that does not narrow this space: neither its own nor named in it."""
+
+        self.project(project_id)
+        if any(item["project_id"] == project_id for item in self.space_projects(space_ref)):
+            return
+        with self.store_connection(space_ref) as store:
+            named = named_projects(store).get(space_ref["space_key"], set())
+        if project_id not in named:
+            raise PlatformHttpError(
+                409, "unavailable", "Project is not one of the space's and no item of it names it"
+            )
+
+    def require_scope(self, scope: dict) -> None:
+        """Refuse a space scope this request cannot answer; a global scope always stands."""
+
+        if scope["kind"] != "space":
+            return
+        self.require_space(scope["space_ref"])
+        if "project_ref" in scope:
+            self.require_project(scope["space_ref"], scope["project_ref"]["project_id"])
+
+    def spaces(self) -> list[dict]:
+        """Every readable space as the shell lists it, with its projects and the others named."""
+
+        named_by_store: dict[str, dict[str, set[str]]] = {}
+        listed = []
+        for space_ref in self.present_spaces():
+            scope = space_ref["data_scope_id"]
+            if scope not in named_by_store:
+                with self.store_connection(space_ref) as store:
+                    named_by_store[scope] = named_projects(store)
+            listed.append(
+                {
+                    "data_scope_id": scope,
+                    "space_key": space_ref["space_key"],
+                    "name": self.space_name(space_ref),
+                    **project_registry.projects_shown(self.space_projects(space_ref)),
+                    "other_space_projects": self.other_space_projects(
+                        space_ref, named_by_store[scope].get(space_ref["space_key"], set())
+                    ),
+                }
+            )
+        return listed
 
     @contextlib.contextmanager
     def store_connection(self, space_ref: dict) -> Iterator[sqlite3.Connection]:
@@ -259,27 +338,36 @@ class PlanningRouting:
     def planning_store(
         self, parameters: Mapping[str, list[str]]
     ) -> Iterator[tuple[sqlite3.Connection, str]]:
-        """Hold the authorized exact store for a read or a live subscription."""
+        """Hold the store of the exactly named space for a read or a live subscription.
 
-        if set(parameters) != {"project", "data_scope_id", "space_key"}:
+        The query names the space by `data_scope_id` and `space_key` and may narrow
+        it with `project`, which has to be a project the space reads for.
+        """
+
+        fields = set(parameters)
+        if not fields >= _SPACE_FIELDS or fields - _SPACE_FIELDS - {_PROJECT_FIELD}:
             raise PlatformHttpError(400, "error", "Exact Planning query fields are required")
-        project_id = one(parameters, "project")
-        self.project(project_id)
         space_ref = space_ref_parameters(parameters)
-        self.require_mapping(project_id, space_ref)
+        self.require_space(space_ref)
+        if _PROJECT_FIELD in parameters:
+            self.require_project(space_ref, one(parameters, _PROJECT_FIELD))
         with self.store_connection(space_ref) as store:
             yield store, space_ref["space_key"]
 
     def planning_read_model(
         self,
         parameters: Mapping[str, list[str]],
-        loader: Callable[[sqlite3.Connection, str], dict],
+        loader: Callable[[sqlite3.Connection, str, str | None], dict],
     ) -> dict:
-        """Read Planning's model through the exact owner binding and store.
+        """Read Planning's model of the exactly named space from the store holding it.
 
-        Planning owns the model; routing owns which connection may answer.
-        Attached connections are opened read-only by the shared store resolver.
+        Planning owns the model; routing owns which connection may answer. The
+        loader gets the store, the space's key and the project narrowing the read,
+        or None, and narrows it the same way in the primary store and in an
+        attached one. Attached connections are opened read-only by the shared
+        store resolver.
         """
 
+        project = one(parameters, _PROJECT_FIELD) if _PROJECT_FIELD in parameters else None
         with self.planning_store(parameters) as (store, key):
-            return loader(store, key)
+            return loader(store, key, project)

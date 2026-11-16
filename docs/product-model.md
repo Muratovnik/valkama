@@ -264,5 +264,7 @@ steps; a browser follows one per press. Apart from a command of the owner's own,
 the app runs as set, neither the page nor the app decides where a session goes.
 
 Memory reads through its own provider API. A work item keeps a typed `memory`
-pointer and its stored label, including when the provider is unavailable. Retiring
+pointer and its stored label, including when the provider is unavailable. The
+pointers Memory lists for a project are those of the work items that name it, in
+whichever space they lie, and of the goals and stages above them. Retiring
 the Skills catalogue does not alter installed skill files or client enablement.

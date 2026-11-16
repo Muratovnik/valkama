@@ -67,12 +67,26 @@ class UsageStore(unittest.TestCase):
             self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        planning.create_planning_space(self.conn, project_id="alpha", name="Alpha", key="MAIN")
+        planning.create_planning_space(self.conn, name="Alpha", key="MAIN")
         self.conn.commit()
         self.runs: dict[tuple[str, str], int] = {}
 
-    def item(self, title: str = "Work") -> tuple[str, str]:
-        created = planning.create_work_item(self.conn, space="MAIN", title=title)
+    def item(
+        self,
+        title: str = "Work",
+        *,
+        projects: Sequence[str] | None = None,
+        kind: str = "task",
+        parent: str | None = None,
+    ) -> tuple[str, str]:
+        created = planning.create_work_item(
+            self.conn,
+            space="MAIN",
+            title=title,
+            kind=kind,
+            parent=parent,
+            projects=None if projects is None else list(projects),
+        )
         self.conn.commit()
         return str(created["reference"]), str(created["work_item_id"])
 

@@ -55,11 +55,7 @@ export const UNBROKEN_TITLES = new Map([
     "a question's title",
   ],
   [
-    'pages/planning/PlanningPortfolio.vue {{ project.title || project.project_id }} in strong.project-title',
-    "a project's name",
-  ],
-  [
-    'pages/planning/PlanningPortfolio.vue {{ space.title }} in span.space-name',
+    'pages/planning/PlanningPortfolio.vue {{ space.title }} in strong.space-title',
     "a planning space's name",
   ],
   [

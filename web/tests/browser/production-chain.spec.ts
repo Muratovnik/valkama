@@ -31,14 +31,14 @@ import {
 } from './chainFixtures.ts'
 import { drawnColours } from './contrast.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 async function openCard(page: Page, view?: 'graph') {
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
       ...(view ? { state: { view } } : {}),
     }),
@@ -192,7 +192,7 @@ for (const width of [1440, 390]) {
     await page.keyboard.press('Enter')
     const opened = serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity({ ...workItemRef, reference: 'MAIN-2272' }),
     })
     await expect.poll(() => new URL(page.url()).search).toBe(new URL(opened, page.url()).search)

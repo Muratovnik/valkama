@@ -41,7 +41,7 @@ class ThreadTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="threads", name="Threads", key=SPACE)
+        service.create_planning_space(self.conn, name="Threads", key=SPACE)
         self.ref = self.item("A discussed change")
         self.conn.commit()
 
@@ -232,8 +232,7 @@ class ReplyWriteTests(ThreadTestCase):
         }
         wanted = {root: mark, reply: None, open_root: None}
         for name, arguments in (
-            ("full", {"full": True}),
-            ("default", {}),
+            ("comments", {"parts": ["comments"]}),
             ("thread", {"thread": reply}),
             ("comments_after", {"comments_after": 0}),
         ):
@@ -268,8 +267,8 @@ class ThreadReadTests(ThreadTestCase):
         # The oldest thread gets the newest activity.
         self.reply = self.comment("late reply", reply_to=self.roots[0])["comment_id"]
 
-    def test_the_default_read_is_the_threads_with_the_newest_activity(self) -> None:
-        answer = self.call("get_work_item", id=self.ref)
+    def test_the_comments_part_is_the_threads_with_the_newest_activity(self) -> None:
+        answer = self.call("get_work_item", id=self.ref, parts=["comments"])
         self.assertEqual(
             [self.roots[3], self.roots[4], self.roots[5], self.roots[6], self.roots[0]],
             [comment["id"] for comment in answer["comments"]],
@@ -285,18 +284,18 @@ class ThreadReadTests(ThreadTestCase):
         )
         self.assertEqual(
             (9, 7, True),
-            (answer["comments_total"], answer["threads_total"], answer["history_truncated"]),
+            (answer["comments_total"], answer["threads_total"], answer["truncated"]),
         )
 
-    def test_a_short_discussion_is_whole_in_the_default_read(self) -> None:
+    def test_a_short_discussion_is_whole_in_the_comments_part(self) -> None:
         reference = self.item("Short")
         root = self.comment("only", reference=reference)["comment_id"]
         self.comment("and its reply", reference=reference, reply_to=root)
-        answer = self.call("get_work_item", id=reference)
+        answer = self.call("get_work_item", id=reference, parts="comments")
         self.assertEqual([root], [comment["id"] for comment in answer["comments"]])
         self.assertEqual(
             (2, 1, False),
-            (answer["comments_total"], answer["threads_total"], answer["history_truncated"]),
+            (answer["comments_total"], answer["threads_total"], answer["truncated"]),
         )
 
     def test_thread_reads_a_root_and_its_replies_from_either_end(self) -> None:
@@ -338,20 +337,32 @@ class ThreadReadTests(ThreadTestCase):
         self.assertNotIn("replies", answer["comments"][0])
         self.assertEqual((9, 7), (answer["comments_total"], answer["threads_total"]))
 
-    def test_full_is_every_comment_flat_without_counters(self) -> None:
-        answer = self.call("get_work_item", id=self.ref, full=True)
-        self.assertEqual(9, len(answer["comments"]))
-        self.assertNotIn("threads_total", answer)
-        self.assertEqual(service.get_work_item(self.conn, self.ref)["comments"], answer["comments"])
+    def test_a_comment_mode_without_parts_reads_the_comments_part_alone(self) -> None:
+        part = {"comments", "comments_total", "threads_total", "unresolved_total", "truncated"}
+        for mode in (
+            {"unresolved": True},
+            {"thread": self.reply},
+            {"comments_after": self.roots[6]},
+            {"comments_after": 0},
+        ):
+            with self.subTest(mode=mode):
+                answer = self.call("get_work_item", id=self.ref, **mode)
+                # The reference and the revision name what was read; no other card field.
+                self.assertEqual({"reference", "revision"} | part, set(answer))
+                self.assertEqual(
+                    {"reference", "revision"}, set(answer) & set(read_model.CARD_FIELDS)
+                )
 
     def test_the_reads_that_exclude_each_other_are_refused(self) -> None:
         for extra, wanted in (
-            ({"full": True, "thread": self.roots[0]}, "full and thread exclude each other"),
             (
                 {"comments_after": 1, "thread": self.roots[0]},
                 "thread and comments_after exclude each other",
             ),
-            ({"full": True, "comments_after": 1}, "full and comments_after exclude each other"),
+            (
+                {"comments_after": 0, "thread": self.roots[0]},
+                "thread and comments_after exclude each other",
+            ),
             ({"thread": 0}, "thread must be a positive integer"),
         ):
             with self.subTest(extra=extra):
@@ -389,6 +400,61 @@ class ThreadReadTests(ThreadTestCase):
         self.assertEqual((self.roots[0], None), parents[self.reply])
         self.assertEqual((None, self.request_id), parents[self.on_question])
         self.assertEqual((None, None), parents[self.roots[0]])
+
+
+class CommentPageTests(ThreadTestCase):
+    """comments_after reads a long discussion one flat page at a time."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        # 120 comments in the order written, replies among the roots.
+        self.written: list[int] = []
+        root = 0
+        for number in range(120):
+            if number % 3 == 2:
+                answer = self.comment(f"reply {number}", reply_to=root)
+            else:
+                answer = self.comment(f"root {number}")
+                root = answer["comment_id"]
+            self.written.append(int(answer["comment_id"]))
+
+    def page(self, after: int) -> dict:
+        return self.call("get_work_item", id=self.ref, comments_after=after)
+
+    def test_three_pages_give_every_comment_once_in_order(self) -> None:
+        seen: list[int] = []
+        sizes: list[tuple[int, bool]] = []
+        after = 0
+        for _ in range(4):
+            page = self.page(after)
+            ids = [comment["id"] for comment in page["comments"]]
+            seen += ids
+            sizes.append((len(ids), page["truncated"]))
+            self.assertEqual(120, page["comments_total"])
+            if not page["truncated"]:
+                break
+            after = ids[-1]
+        self.assertEqual([(50, True), (50, True), (20, False)], sizes)
+        self.assertEqual(self.written, seen)
+
+    def test_zero_starts_from_the_first_comment_and_the_page_is_flat(self) -> None:
+        page = self.page(0)
+        self.assertEqual(self.written[:50], [comment["id"] for comment in page["comments"]])
+        reply = page["comments"][2]
+        self.assertEqual((self.written[1], None), (reply["reply_to"], reply["reply_to_request"]))
+        self.assertNotIn("replies", page["comments"][0])
+
+    def test_a_page_that_ends_at_the_last_comment_says_nothing_remains(self) -> None:
+        page = self.page(self.written[69])
+        self.assertEqual(
+            (self.written[70:], False),
+            ([comment["id"] for comment in page["comments"]], page["truncated"]),
+        )
+
+    def test_the_http_read_without_parts_is_not_paged(self) -> None:
+        whole = self.read({"comments_after": [str(self.written[0])]})
+        self.assertEqual(self.written[1:], [comment["id"] for comment in whole["comments"]])
+        self.assertNotIn("truncated", whole)
 
 
 _REPLY = {"id": 4, "author": "one", "by_person": True, "at": "2026-11-03T10:00:00Z"}

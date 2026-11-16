@@ -21,7 +21,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { busyFrame } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
-import { globalScope, projectScope } from './planningFixtures.ts'
+import { globalScope, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** What the chrome showed at one moment; a place that paints nothing reads as ''. */
@@ -164,37 +164,37 @@ function moved(samples: Sample[]): Record<string, [number, number][]> {
   return Object.fromEntries([...places].filter(([, seen]) => seen.length > 1))
 }
 
-const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: spaceScope })
 const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: globalScope })
 
 const launches = [
   {
-    name: 'a launch that comes back to a project, its module list read first',
+    name: 'a launch that comes back to a space, its module list read first',
     address: '/',
     holds: { modules: 300, context: 600, frame: 400 },
     title: 'Work',
-    scope: 'Example Project',
+    scope: 'MAIN',
   },
   {
-    name: 'a launch that comes back to a project, its projects read first',
+    name: 'a launch that comes back to a space, its spaces read first',
     address: '/',
     holds: { modules: 600, context: 300, frame: 400 },
     title: 'Work',
-    scope: 'Example Project',
+    scope: 'MAIN',
   },
   {
-    name: "a project's board opened by its address",
+    name: "a space's board opened by its address",
     address: BOARD,
     holds: { modules: 500, context: 300, frame: 400 },
     title: 'Work',
-    scope: 'Example Project',
+    scope: 'MAIN',
   },
   {
     name: 'Settings opened by its address',
     address: SETTINGS,
     holds: { modules: 500, context: 300, frame: 400 },
     title: 'Settings',
-    scope: 'Global',
+    scope: 'All spaces',
   },
 ] as const
 

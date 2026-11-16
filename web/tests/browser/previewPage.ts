@@ -18,8 +18,8 @@ import {
   doneState,
   now,
   planningReadModel,
-  projectScope,
   spaceRef,
+  spaceScope,
 } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
 import { installStreamDouble } from './streamDouble.ts'
@@ -112,7 +112,7 @@ export async function openReported(page: Page, body = REPORT, items: readonly Br
     checklist_item_id: null,
     checklist_item_text: null,
   } as WorkItem['comments'][number])
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-tile').filter({ hasText: 'MAIN-264' }).first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer).toHaveCSS('transform', 'none')
@@ -178,14 +178,14 @@ export interface BriefReads {
   answer: (next: (route: Route, reference: string) => Promise<void> | void) => void
 }
 
-/** The envelope of a brief read that found the item. */
+/** The envelope of a brief read that found the item, at the scope of the space it was read in. */
 export function briefAnswer(item: Brief, space = spaceRef) {
   // A place in the queue is the list's: one item's own answer carries none.
   const record = Object.fromEntries(Object.entries(item).filter(([key]) => key !== 'queue_order'))
   return {
     json: {
       interface_version: 'valkama-planning-work-item',
-      scope: projectScope,
+      scope: { kind: 'space', space_ref: space },
       work_item_ref: { space_ref: space, reference: item.reference },
       state: {
         interface_version: 'valkama-ui-state',
@@ -231,7 +231,7 @@ export async function openHub(
   await installBackend(page, backend)
   await installQuestions(page, [asked({ prompt: HUB_PROMPT })])
   const reads = await serveBrief(page, items)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.getByRole('button', { name: /^Needs my answer/ }).click()
   const dialog = page.getByRole('dialog', { name: 'Needs my answer', exact: true })
   await expect(dialog).toHaveCSS('transform', 'none')

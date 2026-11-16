@@ -138,14 +138,15 @@ describe('WorkItemPreview', () => {
     ).toBe(title)
   })
 
-  it('says what an item waits on, and the project of an item from elsewhere', () => {
+  it('says what an item waits on, and the space of an item from elsewhere', () => {
     const wrapper = card({
       item: item({}, 'backlog'),
       waitingOn: 'MAIN-12',
-      project: 'example-project',
+      space: 'Main',
     })
     expect(wrapper.get('[data-facet="readiness"]').text()).toBe('Waiting on MAIN-12')
-    expect(wrapper.get('.preview-when').text()).toBe(`example-project · ${day(UPDATED, 'en')}`)
+    expect(wrapper.get('.preview-space').text()).toBe('Main')
+    expect(wrapper.get('.preview-when').text()).toBe(`Main · ${day(UPDATED, 'en')}`)
   })
 
   it.each([
@@ -232,6 +233,14 @@ describe('what a screen reader hears', () => {
     expect(
       spoken({ reference: 'MAIN-1394', item: item({ claim_ref: 'codex', claim_state: 'stale' }) }),
     ).toContain('Held by codex. Stale claim.')
+  })
+
+  it('names the space of an item from elsewhere, in its order, and never as a project', () => {
+    const from = { reference: CLAIMED.reference, item: CLAIMED, space: 'Main' }
+    expect(spoken(from)).toContain(`Steps: 1 of 5. Space Main. Updated ${day(UPDATED, 'en')}.`)
+    expect(spoken(from)).not.toContain('Project')
+    expect(spoken(from, 'ru')).toContain('Пространство Main')
+    expect(spoken(from, 'ru')).not.toContain('Проект')
   })
 
   it('says what the card says when there is no item', () => {

@@ -41,11 +41,11 @@ if sys.platform == "win32":
 ROOT = Path(__file__).resolve().parents[1]
 
 #: Worked out by hand from the route grammar, with nothing from the module under
-#: test. `web/tests/platformRoute.test.ts` holds the same literal and reads it with
-#: the parser the browser runs, and `desktop/open_path.test.js` holds it too: the
-#: languages share this route and no code.
+#: test. `desktop/open_path.test.js` holds the same literal: the languages share
+#: this route and no code.
+SPACE_PATH = "/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN"
 TWIN_ROUTE = (
-    "/modules/planning/project/example-project?entity="
+    f"{SPACE_PATH}?entity="
     "eyJraW5kIjoid29yay1pdGVtIiwicmVzb3VyY2VfaWQiOiJleUp5WldabGNtVnVZMlVpT2lKTlFVbE9MVEV5SWl3aWMz"
     "QmhZMlZmY21WbUlqcDdJbVJoZEdGZmMyTnZjR1ZmYVdRaU9pSXdNVEl6TkRVMk55MDRPV0ZpTFRSa1pXWXRPREV5TXkw"
     "ME5UWTNPRGxoWW1Oa1pXWWlMQ0p6Y0dGalpWOXJaWGtpT2lKTlFVbE9JbjE5In0"
@@ -67,14 +67,11 @@ class RouteSpellingTests(unittest.TestCase):
                 "reference": "MAIN-12",
             }
         )
-        self.assertEqual(
-            TWIN_ROUTE,
-            f"/modules/planning/project/example-project?entity={route_entity_parameter(entity)}",
-        )
+        self.assertEqual(TWIN_ROUTE, f"{SPACE_PATH}?entity={route_entity_parameter(entity)}")
 
 
 class LinkedStoreCase(unittest.TestCase):
-    """A real listener over two stores, whose projects bind the spaces a link names."""
+    """A real listener over two stores; the registry binds some of their spaces."""
 
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
@@ -88,7 +85,7 @@ class LinkedStoreCase(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.main = self.seed(self.primary, "MAIN", items=1)
         self.docs = self.seed(self.primary, "DOCS", items=1)
-        self.seed(self.primary, "LOOSE", items=1)
+        self.loose = self.seed(self.primary, "LOOSE", items=1)
         self.other_main = self.seed(self.attached, "MAIN", items=2)
         scopes.attach(str(self.primary), "attached", str(self.attached))
         self.bind(
@@ -112,7 +109,7 @@ class LinkedStoreCase(unittest.TestCase):
         with mock.patch.dict(os.environ, {"VALKAMA_DB": str(path)}):
             conn = store.connect()
             try:
-                service.create_planning_space(conn, project_id="seeded", name=key, key=key)
+                service.create_planning_space(conn, name=key, key=key)
                 for index in range(items):
                     service.create_work_item(conn, space=key, title=f"{key} item {index}")
                 conn.commit()
@@ -150,7 +147,6 @@ class LinkedStoreCase(unittest.TestCase):
     def assert_leads_to(
         self,
         path: str,
-        project_id: str,
         space_ref: dict,
         reference: str,
         *,
@@ -161,7 +157,10 @@ class LinkedStoreCase(unittest.TestCase):
         self.assertEqual(302, response.status, path)
         location = urlsplit(response.getheader("Location") or "")
         self.assertEqual(("", ""), (location.scheme, location.netloc))
-        self.assertEqual(f"/modules/planning/project/{project_id}", location.path)
+        self.assertEqual(
+            f"/modules/planning/space/{space_ref['data_scope_id']}/{space_ref['space_key']}",
+            location.path,
+        )
         entity = _decoded(parse_qs(location.query)["entity"][0])
         self.assertEqual("work-item", entity["kind"])
         self.assertEqual(
@@ -183,10 +182,10 @@ class LinkedStoreCase(unittest.TestCase):
 
 class WorkItemLinkTests(LinkedStoreCase):
     def test_a_reference_redirects_to_the_card_in_any_case_and_any_space(self) -> None:
-        self.assert_leads_to("/open/MAIN-1", "example-project", self.main, "MAIN-1")
-        self.assert_leads_to("/open/main-1", "example-project", self.main, "MAIN-1")
-        self.assert_leads_to("/open/Main-1?from=chat", "example-project", self.main, "MAIN-1")
-        self.assert_leads_to("/open/docs-1", "docs-project", self.docs, "DOCS-1")
+        self.assert_leads_to("/open/MAIN-1", self.main, "MAIN-1")
+        self.assert_leads_to("/open/main-1", self.main, "MAIN-1")
+        self.assert_leads_to("/open/Main-1?from=chat", self.main, "MAIN-1")
+        self.assert_leads_to("/open/docs-1", self.docs, "DOCS-1")
 
     def test_the_reserved_word_leads_to_the_panel_of_questions(self) -> None:
         response = self.get("/open/questions")
@@ -258,7 +257,9 @@ class WorkItemLinkTests(LinkedStoreCase):
             f"{TWIN_ROUTE}&reveal=question\r\nX: y",
             f"{TWIN_ROUTE}?reveal=question",
             "/modules/planning/global?panel=questions&reveal=question",
-            "/modules/planning/project/example-project?reveal=question",
+            "/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?reveal=question",
+            # The address a card had before a space became the scope.
+            "/modules/planning/project/example-project?entity=abc",
         ):
             with self.subTest(route=route):
                 self.assertIsNone(match(route))
@@ -273,8 +274,8 @@ class WorkItemLinkTests(LinkedStoreCase):
         self.assertIsNone(planning_model.exact_reference("questions-1"))
         near = self.seed(self.primary, "QUESTION", items=1)
         self.bind({"example-project": self.main, "near-project": near})
-        self.assert_leads_to("/open/question-1", "near-project", near, "QUESTION-1")
-        self.assert_leads_to("/open/QUESTION-1", "near-project", near, "QUESTION-1")
+        self.assert_leads_to("/open/question-1", near, "QUESTION-1")
+        self.assert_leads_to("/open/QUESTION-1", near, "QUESTION-1")
         self.assert_shell_says_why("/open/question")
         response = self.get("/open/questions")
         response.read()
@@ -295,14 +296,16 @@ class WorkItemLinkTests(LinkedStoreCase):
 
     def test_the_primary_store_answers_first_and_an_attached_store_after_it(self) -> None:
         # Both stores keep a MAIN. MAIN-1 is in both, MAIN-2 only in the attached.
-        self.assert_leads_to("/open/MAIN-1", "example-project", self.main, "MAIN-1")
-        self.assert_leads_to("/open/MAIN-2", "other", self.other_main, "MAIN-2")
+        self.assert_leads_to("/open/MAIN-1", self.main, "MAIN-1")
+        self.assert_leads_to("/open/MAIN-2", self.other_main, "MAIN-2")
+
+    def test_a_space_no_project_binds_has_a_card_route_all_the_same(self) -> None:
+        self.assert_leads_to("/open/LOOSE-1", self.loose, "LOOSE-1")
 
     def test_an_address_that_leads_nowhere_gets_the_app_page(self) -> None:
         for path in (
             "/open/MAIN-99",  # no such number
             "/open/NOPE-1",  # no such space
-            "/open/LOOSE-1",  # a space no project binds: no card route can name it
             "/open/not-a-number",
             "/open/MAIN-0",
             "/open/MAIN",
@@ -356,10 +359,12 @@ class WorkItemLinkTests(LinkedStoreCase):
         # The domain cannot produce these today; this is what stops one that could.
         for location in (
             "https://evil.example/",
-            "//evil.example/modules/planning/project/example-project?entity=abc",
+            f"//evil.example{SPACE_PATH}?entity=abc",
             "/modules/planning/global",
-            "/modules/planning/project/example-project?entity=abc\r\nSet-Cookie: stolen=1",
-            "/modules/planning/project/example-project?entity=abc#//evil.example",
+            # The project form a card had before a space was its address.
+            "/modules/planning/project/example-project?entity=abc",
+            f"{SPACE_PATH}?entity=abc\r\nSet-Cookie: stolen=1",
+            f"{SPACE_PATH}?entity=abc#//evil.example",
         ):
             with (
                 self.subTest(location=location),
@@ -377,7 +382,7 @@ class WorkItemLinkTests(LinkedStoreCase):
         answer = mcp_surface.call_tool(conn, "get_work_item", {"id": "MAIN-1"})
         assert isinstance(answer, dict)
         path = urlsplit(answer["url"]).path
-        self.assert_leads_to(path, "example-project", self.main, "MAIN-1")
+        self.assert_leads_to(path, self.main, "MAIN-1")
 
     def test_a_foreign_host_is_refused_as_on_every_other_route(self) -> None:
         for host in ("evil.example", f"127.0.0.1:{self.server.server_port}.evil.example"):
@@ -453,7 +458,7 @@ class WorkItemLinkInAppTests(LinkedStoreCase):
         return response.getheader("Location") or ""
 
     def assert_stays_a_redirect(self, path: str, headers: Sequence[tuple[str, str]]) -> None:
-        self.assert_leads_to(path, "example-project", self.main, "MAIN-1", headers=headers)
+        self.assert_leads_to(path, self.main, "MAIN-1", headers=headers)
         self.assertEqual([], self.started, headers)
 
     @unittest.skipUnless(sys.platform == "win32", "the app is looked for only on Windows")
@@ -572,7 +577,7 @@ class WorkItemLinkInAppTests(LinkedStoreCase):
     def test_an_address_that_leads_nowhere_is_explained_by_the_app_page_and_starts_nothing(
         self,
     ) -> None:
-        for path in ("/open/MAIN-99", "/open/NOPE-1", "/open/LOOSE-1", "/open/not-a-number"):
+        for path in ("/open/MAIN-99", "/open/NOPE-1", "/open/not-a-number"):
             with self.subTest(path=path):
                 self.assert_shell_says_why(path, headers=PERSON)
         self.assertEqual([], self.started)
@@ -738,7 +743,7 @@ class WorkItemUrlTests(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="seeded", name="Main", key="MAIN")
+        service.create_planning_space(self.conn, name="Main", key="MAIN")
         service.create_work_item(self.conn, space="MAIN", title="One")
         self.conn.commit()
 
@@ -750,7 +755,6 @@ class WorkItemUrlTests(unittest.TestCase):
     def test_the_full_record_carries_the_address(self) -> None:
         expected = "http://127.0.0.1:8642/open/MAIN-1"
         self.assertEqual(expected, self.call("get_work_item", id="MAIN-1")["url"])
-        self.assertEqual(expected, self.call("get_work_item", id="MAIN-1", full=True)["url"])
         verbose = self.call(
             "apply_work_item_changes", id="MAIN-1", update={"title": "Two"}, verbose=True
         )

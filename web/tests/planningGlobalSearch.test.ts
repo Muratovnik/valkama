@@ -25,7 +25,6 @@ describe('global Planning search contract', () => {
     const result = await searchGlobalPlanningWorkItems('a & b', new AbortController().signal)
     expect(result.items[0]?.target).toEqual(finderTarget())
     expect(serializePlanningTarget(finderTarget())).toEqual({
-      project_id: 'attached-project',
       data_scope_id: '11111111-1111-4111-8111-111111111111',
       space_key: 'TASK',
     })
@@ -40,7 +39,7 @@ describe('global Planning search contract', () => {
       planningTargetSchema.safeParse({ ...finderTarget(), path: '/wrong-store' }).success,
     ).toBe(false)
     expect(
-      planningTargetSchema.safeParse({ ...finderTarget(), project_id: '../other' }).success,
+      planningTargetSchema.safeParse({ ...finderTarget(), project_id: 'attached' }).success,
     ).toBe(false)
   })
 

@@ -14,7 +14,7 @@ import { installBackend } from './backend.ts'
 import { shot } from './boardPage.ts'
 import { IN_VSCODE, openPlanFor } from './openSessionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { blockedWorkItem, projectScope, workItemRef } from './planningFixtures.ts'
+import { blockedWorkItem, spaceScope, workItemRef } from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
 import { drawnLines } from './textLines.ts'
@@ -67,7 +67,7 @@ const rowsOf = (...parents: object[]) =>
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

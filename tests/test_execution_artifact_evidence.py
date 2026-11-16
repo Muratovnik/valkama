@@ -39,13 +39,18 @@ class ArtifactEvidenceTests(unittest.TestCase):
         )
         self.env.start()
         self.addCleanup(self.env.stop)
-        self.repo = Path(self.scratch.name) / "repo"
-        self.repo.mkdir()
-        initialized = processes.run_text(["git", "-C", str(self.repo), "init", "-b", "main"])
+        self.repo = self.make_repo("repo")
+
+    def make_repo(self, name: str) -> Path:
+        """A repository with one committed file, clean."""
+
+        repo = Path(self.scratch.name) / name
+        repo.mkdir()
+        initialized = processes.run_text(["git", "-C", str(repo), "init", "-b", "main"])
         if initialized.returncode != 0:
             raise unittest.SkipTest(f"git unavailable: {initialized.stderr}")
-        self.write("tracked.txt", b"before\n")
-        self.git("add", "tracked.txt")
+        self.write("tracked.txt", b"before\n", repo)
+        self.git("add", "tracked.txt", repo=repo)
         self.git(
             "-c",
             "user.name=Test User",
@@ -54,15 +59,17 @@ class ArtifactEvidenceTests(unittest.TestCase):
             "commit",
             "-m",
             "initial",
+            repo=repo,
         )
+        return repo
 
-    def git(self, *args: str) -> str:
-        result = processes.run_text(["git", "-C", str(self.repo), *args])
+    def git(self, *args: str, repo: Path | None = None) -> str:
+        result = processes.run_text(["git", "-C", str(repo or self.repo), *args])
         self.assertEqual(0, result.returncode, result.stderr)
         return result.stdout
 
-    def write(self, name: str, content: bytes) -> None:
-        path = self.repo / name
+    def write(self, name: str, content: bytes, repo: Path | None = None) -> None:
+        path = (repo or self.repo) / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
 
@@ -149,6 +156,42 @@ class ArtifactEvidenceTests(unittest.TestCase):
             result = artifacts.outcome(str(self.repo), base)
         self.assertEqual("unknown", result["quality"])
         self.assertIsNone(result["changed_files"])
+
+    def test_a_change_only_in_a_root_beside_the_working_one_is_measured_there(self) -> None:
+        beside = self.make_repo("beside")
+        added = [{"project_id": "beside", "root": str(beside)}]
+        base = artifacts.baseline_with(str(self.repo), added)
+        [start] = base["added"]
+        self.assertEqual(
+            {"project_id", "root", "repository", "head", "branch", "dirty", "quality"}, set(start)
+        )
+        self.assertEqual(
+            ("beside", str(beside), "main", False, "observed"),
+            tuple(start[key] for key in ("project_id", "root", "branch", "dirty", "quality")),
+        )
+        self.assertEqual(self.git("rev-parse", "HEAD", repo=beside).strip(), start["head"])
+
+        self.write("new.txt", b"one\n", beside)
+        result = artifacts.outcome_with(str(self.repo), base)
+        self.assertEqual(0, result["changed_files"], "the working directory is unchanged")
+        [there] = result["added"]
+        self.assertEqual(
+            ("beside", str(beside), 1, 1, "observed"),
+            (
+                there["project_id"],
+                there["root"],
+                there["changed_files"],
+                there["insertions"],
+                there["quality"],
+            ),
+        )
+
+    def test_a_record_without_roots_beside_measures_none(self) -> None:
+        base = artifacts.baseline_with(str(self.repo), [])
+        self.assertEqual([], base["added"])
+        self.assertEqual([], artifacts.outcome_with(str(self.repo), base)["added"])
+        # A stop with no baseline still answers with the key.
+        self.assertEqual([], artifacts.outcome_with(str(self.repo), {})["added"])
 
 
 if __name__ == "__main__":

@@ -14,12 +14,12 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 
@@ -57,7 +57,7 @@ async function openCard(page: Page, width: number) {
     route.fulfill({
       json: {
         interface_version: 'valkama-planning-work-item',
-        scope: projectScope,
+        scope: spaceScope,
         work_item_ref: workItemRef,
         state: {
           interface_version: 'valkama-ui-state',

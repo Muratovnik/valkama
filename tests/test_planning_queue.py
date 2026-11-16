@@ -31,7 +31,7 @@ from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 from tests.planning_tree import Tree
-from tests.registry_fixtures import project_entry, registry_bytes
+from tests.registry_fixtures import project_binding, project_entry, registry_bytes
 
 #: The one field of a question to the owner.
 FIELD = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
@@ -769,9 +769,15 @@ class ClaimByNumberTests(QueueCase):
         rv.add("n", state="ready")
         root = Path(os.environ["VALKAMA_DB"]).parent / "aw"
         root.mkdir()
-        entry = project_entry("aw", root)
-        entry["planning_binding"] = planning_space_entity(
-            {"data_scope_id": read_store_metadata(self.conn)["data_scope_id"], "space_key": aw.key}
+        scope = str(read_store_metadata(self.conn)["data_scope_id"])
+        entry = project_entry(
+            "aw",
+            root,
+            bindings=[
+                project_binding(
+                    "aw", planning_space_entity({"data_scope_id": scope, "space_key": aw.key})
+                )
+            ],
         )
         reader = mock.patch.object(
             project_registry, "_read_registry_bytes", return_value=registry_bytes([entry])
@@ -783,8 +789,12 @@ class ClaimByNumberTests(QueueCase):
             self.conn, session, client="codex", at="2026-11-16T12:00:00Z", cwd=str(root / "src")
         )
         # The premise: the session's folder lies in the root of the project bound to ALPHA.
-        projects = project_registry.read_registry()["projects"]
-        self.assertEqual("aw", project_registry.project_holding(str(root / "src"), projects))
+        place = project_registry.place_of_folder(
+            str(root / "src"), project_registry.read_registry(), scope
+        )
+        self.assertIsNotNone(place)
+        assert place is not None
+        self.assertEqual(("aw", aw.key), (place["project_id"], place["space_key"]))
         meta = {"sessionId": session, "threadId": session, "callId": "call_0015"}
         answer = mcp_surface.call_tool(
             self.conn, "claim_work_item", {"id": rover.refs["n"], "author": "codex"}, meta=meta

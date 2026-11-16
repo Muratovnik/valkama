@@ -11,11 +11,11 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { PARENT_SESSION, sessionUsage, usageAnswer } from '../fixtures/usage.ts'
 import { installBackend } from './backend.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 
 export const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 
