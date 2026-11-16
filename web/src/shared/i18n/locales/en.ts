@@ -8,6 +8,7 @@ import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
+import { doctorProjectMessages } from '@/shared/i18n/doctorProjectMessages.ts'
 import { doctorQuotaMessages } from '@/shared/i18n/doctorQuotaMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { graphFrameMessages } from '@/shared/i18n/graphFrameMessages.ts'
@@ -498,6 +499,7 @@ export const en = {
       },
       ...doctorLoginMessages.en,
       ...doctorQuotaMessages.en,
+      ...doctorProjectMessages.en,
       'listener-offline': {
         title: 'Local server is not running',
         detail: 'Nothing is answering on port {port}.',
@@ -541,33 +543,6 @@ export const en = {
         detail:
           'The installed declaration does not match the adapter contract, so the adapter is not connected.',
         fix: 'Check the adapter again and reinstall it, or delete the record if it is no longer used. The rest of Valkama remains available.',
-      },
-      'registry-available': {
-        title: 'Project registry',
-        detail: '{count} projects are registered.',
-      },
-      'registry-unavailable': {
-        title: 'Project registry is unavailable',
-        detail: 'Valkama cannot read the project list.',
-        fix: 'Check that the registry file exists and contains valid JSON.',
-      },
-      'project-roots-available': {
-        title: 'Project folders',
-        detail: 'Every mapped project folder exists.',
-      },
-      'project-roots-missing': {
-        title: 'Project folders are missing',
-        detail: 'Folders are missing for: {projects}.',
-        fix: 'The project was moved or removed. Update canonical_root in the registry.',
-      },
-      'knowledge-roots-available': {
-        title: 'Knowledge folders',
-        detail: 'A {directory} folder is available for every project.',
-      },
-      'knowledge-roots-missing': {
-        title: 'Knowledge folders are missing',
-        detail: 'No {directory} folder was found in: {projects}.',
-        fix: 'Create the folder for knowledge search, or leave it absent if the project keeps knowledge elsewhere.',
       },
     },
   },

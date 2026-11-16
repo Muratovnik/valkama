@@ -8,6 +8,7 @@ import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
+import { doctorProjectMessages } from '@/shared/i18n/doctorProjectMessages.ts'
 import { doctorQuotaMessages } from '@/shared/i18n/doctorQuotaMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { graphFrameMessages } from '@/shared/i18n/graphFrameMessages.ts'
@@ -497,6 +498,7 @@ export const ru = {
       },
       ...doctorLoginMessages.ru,
       ...doctorQuotaMessages.ru,
+      ...doctorProjectMessages.ru,
       'listener-offline': {
         title: 'Локальный сервер не запущен',
         detail: 'На порту {port} нет ответа.',
@@ -540,33 +542,6 @@ export const ru = {
         detail:
           'Установленное объявление не соответствует контракту адаптера, поэтому адаптер не подключён.',
         fix: 'Проверьте адаптер заново и переустановите его или удалите запись, если она больше не нужна. Остальные части Valkama продолжают работать.',
-      },
-      'registry-available': {
-        title: 'Реестр проектов',
-        detail: 'Зарегистрировано проектов: {count}.',
-      },
-      'registry-unavailable': {
-        title: 'Реестр проектов недоступен',
-        detail: 'Valkama не может прочитать список проектов.',
-        fix: 'Проверьте, что файл реестра существует и содержит корректный JSON.',
-      },
-      'project-roots-available': {
-        title: 'Каталоги проектов',
-        detail: 'Все привязанные каталоги существуют.',
-      },
-      'project-roots-missing': {
-        title: 'Не найдены каталоги проектов',
-        detail: 'Отсутствуют каталоги: {projects}.',
-        fix: 'Проект был перемещён или удалён. Обновите canonical_root в реестре.',
-      },
-      'knowledge-roots-available': {
-        title: 'Каталоги знаний',
-        detail: 'Для каждого проекта доступен каталог {directory}.',
-      },
-      'knowledge-roots-missing': {
-        title: 'Нет каталогов знаний',
-        detail: 'Каталог {directory} не найден в: {projects}.',
-        fix: 'Создайте каталог для поиска по знаниям или оставьте его отсутствующим, если проект хранит знания в другом месте.',
       },
     },
   },
