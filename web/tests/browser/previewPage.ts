@@ -177,12 +177,12 @@ export interface BriefReads {
   answer: (next: (route: Route, reference: string) => Promise<void> | void) => void
 }
 
-/** The envelope of a brief read that found the item. */
+/** The envelope of a brief read that found the item, at the scope of the space it was read in. */
 export function briefAnswer(item: Brief, space = spaceRef) {
   return {
     json: {
       interface_version: 'valkama-planning-work-item',
-      scope: spaceScope,
+      scope: { kind: 'space', space_ref: space },
       work_item_ref: { space_ref: space, reference: item.reference },
       state: {
         interface_version: 'valkama-ui-state',
