@@ -28,7 +28,9 @@ store, and an internal error:
   session (see [the watcher](#the-watcher)).
 - **Stdout carries one JSON answer or nothing.** The one answer is a notice from
   `post-tool-use`, `user-prompt-submit` or `stop` (see
-  [Telling the agent what a person did](#telling-the-agent-what-a-person-did));
+  [Telling the agent what a person did](#telling-the-agent-what-a-person-did)),
+  or the note `session-start` gives after a resume or a compaction (see
+  [the resume note](#the-resume-note));
   `claude pre-tool-use` prints nothing (see [the call pair](#the-call-pair)).
   Claude Code adds `SessionStart` stdout to the model's context, and Codex reads
   stdout of `Stop` and `SubagentStop` as JSON, so a stray line there changes the
@@ -53,6 +55,8 @@ store, and an internal error:
 `post-tool-use`, `user-prompt-submit` and `stop` may also answer with a notice;
 for Codex, `post-tool-use` and `user-prompt-submit` do. That is described in
 [Telling the agent what a person did](#telling-the-agent-what-a-person-did).
+`session-start` with `source` `resume` or `compact` may answer, for both
+clients, with [the resume note](#the-resume-note).
 
 An event a client does not have, an unknown client, or input whose
 `hook_event_name` names a different hook than the command line is ignored, with
@@ -830,13 +834,14 @@ told, and may wake, once more, with a fresh budget, and the next write is whole.
 ### Switching it off
 
 `notify` in `config.json`, or `VALKAMA_NOTIFY`, set to `off` (or `0`, `false`,
-`no`) stops both the notices and the watcher. Nothing else changes: lifecycle
-events are still recorded, and a write still answers with `from_person`.
+`no`) stops the notices, the watcher and [the resume note](#the-resume-note).
+Nothing else changes: lifecycle events are still recorded, and a write still
+answers with `from_person`.
 
 The notice path reads one more variable, `VALKAMA_PROTECTED_STORE`, the guard a
 test environment sets on a store it must not touch. When it names the store the
 notices would read (`VALKAMA_DB`, `store` in `config.json`, or the default),
-there are no notices and no watcher, whatever `notify` says.
+there are no notices, no watcher and no resume note, whatever `notify` says.
 
 ### What it costs
 
@@ -941,6 +946,91 @@ news waits for the upgrade.
 - A thread or a question that a merge moved keeps its author's call, but that
   author reads the item it wrote to, not the survivor. Only the survivor's holders
   are sure to hear what follows there.
+
+## The resume note
+
+After a resume or a compaction an agent goes on with the work it holds, but its
+context no longer says where that work stood, and without help it reads each
+item again to find out. `valkama hook <client> session-start` answers such a
+start with a short note instead: what the agent holds, each item's state and
+next condition, and a last line saying that the note stands for that read.
+
+- **When.** Only when the input's `source` is `resume` or `compact`. `startup`,
+  `clear` and `fork` open a session with a new id, which holds nothing, so they
+  print nothing, and so does an input without `source`. Claude Code adds the
+  note to the context before the first prompt; Codex adds it as developer
+  context, and runs its `compact` start only for a root session.
+- **The answer.** One JSON object,
+  `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<note>"}}`.
+  The answer escapes every character outside ASCII; the note's length is that of
+  the string the client reads after parsing it.
+- **Who is told.** The orchestrator, an input without `agent_id`, is told what
+  its session holds, its subagents' holds with it. A subagent, an input with
+  `agent_id`, is told only what its own holder label holds. What counts as held
+  is what counts for [a notice](#who-is-told): an open item whose claim, or a
+  step not yet ticked, carries the recipient's label, while the claim's lease or
+  the step's session has not gone stale.
+
+### What the note says
+
+```text
+Valkama now: this session holds 4 open items; the 3 it wrote to last:
+- MAIN-12 «Widen the check», Dev. Next condition 2/5: «Add the probe for the second client». 3 open threads; 1 new answer. Stage MAIN-3 of goal MAIN-1.
+- MAIN-14 «Retire the old reader», Dev, held by a condition. Next condition 1/4: «Measure the cold start».
+- MAIN-9 «Draft the release note», Blocked. All 3 conditions ticked. 1 open question. Goal MAIN-1.
+Current: read an item only for what this note leaves out.
+```
+
+The first line counts every item the recipient holds, as `this session` or, to
+a subagent, `this agent`. It names how many follow when the note shows fewer
+than that, and says `holds no open item.` when there is none. The items come in
+the order the recipient last wrote to them, the newest first; the items it never
+wrote to come after them. At most three are shown.
+
+Each item's line says:
+
+- its number, its title and its state, then `held by a condition` when the
+  recipient holds a step of the item and not its claim;
+- `Next condition 2/5:` with that condition's text: the first step not yet
+  ticked that the recipient holds, or failing that the first step not yet
+  ticked. The numbers are the ticked steps and all of them. With no such step
+  it says `All 3 conditions ticked.`, and `No conditions.` for an item without
+  steps;
+- how many of the item's threads are open (a root without a resolved mark), how
+  many of its questions wait for a person, and how many questions were answered
+  after the recipient's newest write on the item, every answered one when it
+  wrote nothing there. A count of zero is left out;
+- `Stage MAIN-3 of goal MAIN-1.` for an item in a stage, and `Goal MAIN-1.` for
+  one directly under a goal.
+
+### How long it is
+
+The note is at most 600 characters, and that bound holds by construction, not by
+what the store happens to hold. The note tries three items, then two, then one.
+For each count it tries titles of at most 60, 44 and 32 characters with next
+conditions of at most 72, 52 and 36, and one item also gets 20 and 24. It takes
+the first version that fits. Inside a field every run of whitespace is one
+space, so a field never breaks a line; a field that is cut ends with `…`; a
+state is at most 20 characters; and a number past 999 is `999+`.
+
+### When there is no note
+
+Beside a start with another `source`, there is no note when notices are
+[switched off](#switching-it-off) or the store is protected, when the store is
+missing, at another schema, or cannot be opened to read, and when the recipient
+holds nothing. The hook prints nothing then and exits 0.
+
+The note is a stage of its own: the lifecycle event of the start is recorded in
+every case, and a note that fails is reported on stderr and costs nothing else.
+
+### What it reads
+
+The store, opened read-only and only at the schema this build writes. The note
+writes nothing, and it neither reads nor moves the places
+[the notices keep](#where-each-agents-place-is-kept), so news that arrived
+before or after the compaction is still told at the next tool call. The planning
+modules the note reads with are loaded only for a start it answers; a tool call
+loads nothing more than before.
 
 ## The transcript archive
 

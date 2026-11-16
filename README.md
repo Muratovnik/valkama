@@ -946,7 +946,9 @@ the store, so sessions stay visible while neither `serve` nor an MCP session is
 running. When the store is busy, missing or at another schema version, the
 event goes to a spool beside the store and lands later. The command always
 exits 0, and a lifecycle event prints nothing of its own, so it never blocks a
-client session.
+client session. The one exception is `session-start` after a resume or a
+compaction: it prints a short note of the work the session holds
+([details](docs/hook-contract.md#the-resume-note)).
 
 ```
 valkama hook claude session-start   < hook-input.json
