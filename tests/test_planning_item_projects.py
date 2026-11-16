@@ -138,6 +138,24 @@ class WriteAndReadTests(ItemProjectsCase):
         )
         self.assertEqual({("valkama", "named"), ("rover", "named")}, self.stored(reference))
 
+    def test_the_card_an_agent_reads_carries_the_projects_of_the_full_record(self) -> None:
+        # The default read and a write's verbose answer are the card, not the full
+        # record, and a goal's projects are read from the tasks under it.
+        goal = self.task("Goal", kind="goal")
+        task = self.task("Two projects", parent=goal, projects=["valkama", "rover"])
+        for reference in (task, goal):
+            with self.subTest(reference=reference):
+                card = self.tool("get_work_item", id=reference)
+                self.assertNotIn("work_item_id", card)
+                self.assertEqual(named("valkama", "rover"), card["projects"])
+                self.assertEqual(self.card(reference)["projects"], card["projects"])
+        edited = self.tool(
+            "apply_work_item_changes", id=task, update={"projects": ["atlas"]}, verbose=True
+        )
+        self.assertEqual(named("atlas"), edited["projects"])
+        self.assertEqual(named("atlas"), self.tool("get_work_item", id=goal)["projects"])
+        self.assertNotIn("projects", self.tool("get_work_item", id=task, parts=["links"]))
+
     def test_a_task_that_names_none_reads_an_empty_set(self) -> None:
         self.assertEqual([], self.card(self.task("No project"))["projects"])
 
