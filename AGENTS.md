@@ -75,6 +75,13 @@ cd ../desktop
 npm test
 ```
 
+The history step reads every commit and refuses a tracked tree with uncommitted
+changes, so it is not a step between commits: it runs on the clean head before
+that head is published, in the integrator's full run and before a push or a
+release. Between commits,
+`python .github/relkit.pyz audit --staged` in the commit step below checks what
+is about to be committed.
+
 On the owner workstation, install the private-value gate only when the user
 explicitly authorizes that hook mutation and its rollback:
 `python .github/relkit.pyz protect install`. Before the first push, verify with
@@ -84,12 +91,10 @@ When the work is split across parallel worktrees of this repository, the checks
 split with it:
 
 - The worker of one worktree runs, right after each commit, the targeted tests
-  of what the commit changed, `python tests/commit_subjects.py` and
-  `python .github/relkit.pyz audit --history`;
+  of what the commit changed and `python tests/commit_subjects.py`;
   when the commit touches `web/`, also `npm run lint` and
-  `npm run check:ui-system` there. The audit refuses a tracked tree with
-  uncommitted changes, so it finishes before the next edit starts. The worker
-  does not run the whole browser suite.
+  `npm run check:ui-system` there. The worker does not run the whole browser
+  suite or the history audit.
 - The integrator runs the full list above and the whole browser suite once, on
   the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
   such run goes on a machine at a time: two at once fail tests that pass alone.
@@ -316,9 +321,11 @@ force, and the gates hold each:
   subject is held to this too: `tests/commit_subjects.py` refuses Git's default.
 - After each coherent task-owned green boundary, create an incremental local
   commit by default. Staging is transient and only inside one uninterrupted
-  stage → inspect → commit step; never hand off task-owned staged changes, and
-  preserve any pre-existing staged state. Push only when the user explicitly
-  requests it.
+  stage → `python .github/relkit.pyz audit --staged` → inspect → commit step.
+  The staged audit takes seconds and stops a secret, or a home path in a
+  fixture, before a commit carries it into history. Never hand off task-owned
+  staged changes, and preserve any pre-existing staged state. Push only when the
+  user explicitly requests it.
 
 ## Web platform guidance
 

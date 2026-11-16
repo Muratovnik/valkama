@@ -1433,6 +1433,10 @@ cd ../desktop
 npm test
 ```
 
+The history audit reads every commit and needs a clean tracked tree, so it runs
+on the clean head before publication, not between commits. Before each commit,
+`python .github/relkit.pyz audit --staged` checks what is about to be committed.
+
 An owner checkout additionally runs `python .github/relkit.pyz protect install`
 once and `python .github/relkit.pyz audit --history --owner` before publication.
 
