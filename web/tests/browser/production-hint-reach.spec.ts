@@ -38,7 +38,7 @@ const ownPoint = (anchor: Locator) =>
   })
 
 /** What a hint stands over at a point, and the hints shown then. */
-const stepAt = (page: Page, anchor: Locator, at: { x: number; y: number }) =>
+const stepAt = (anchor: Locator, at: { x: number; y: number }) =>
   anchor.evaluate((own, { x, y }) => {
     const under = document.elementFromPoint(x, y)
     const other = under?.closest<HTMLElement>('[data-tooltip]')
@@ -88,11 +88,11 @@ async function reach(page: Page, anchor: Locator, info: TestInfo, name: string) 
     }
     await page.mouse.move(point.x, point.y)
     await pass(page, 16)
-    steps.push(await stepAt(page, anchor, point))
+    steps.push(await stepAt(anchor, point))
   }
   // Resting on the hint, past its grace.
   await pass(page, 400)
-  const end = await stepAt(page, anchor, to)
+  const end = await stepAt(anchor, to)
   const onHint = await page.evaluate(
     ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('.tooltip-hint')),
     to,
