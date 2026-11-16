@@ -433,6 +433,49 @@ class RegistryOwnerTests(unittest.TestCase):
             registry_owner.downgrade(self.inventory, self.target)
         self.assertEqual(before, self._state())
 
+    def _upgrade_write_and_downgrade(self, former_rollback: bytes | None) -> dict:
+        """Upgrade a former registry, write once in the new format, then downgrade."""
+
+        self._former([self.entry])
+        if former_rollback is not None:
+            registry_owner.rollback_path(self.target).write_bytes(former_rollback)
+        before = self._state()
+        registry_owner.upgrade(self.inventory, self.target)
+        self._bind("example", "EX")
+        self.assertTrue(registry_owner.downgrade(self.inventory, self.target))
+        return before
+
+    def test_downgrade_returns_the_one_write_snapshot_the_upgrade_found(self) -> None:
+        # What the former release's last write left for its own rollback.
+        former_rollback = registry_owner._snapshot(_former_inventory([]), _former_projection([]))
+        before = self._upgrade_write_and_downgrade(former_rollback)
+        digests = {name: registry_owner._digest(raw) for name, raw in self._state().items()}
+        self.assertEqual(
+            {name: registry_owner._digest(raw) for name, raw in before.items()}, digests
+        )
+        self.assertIsNone(digests[registry_owner.upgrade_path(self.target).name])
+
+    def test_downgrade_removes_a_one_write_snapshot_the_upgrade_did_not_find(self) -> None:
+        before = self._upgrade_write_and_downgrade(None)
+        self.assertEqual(before, self._state())
+        self.assertFalse(registry_owner.rollback_path(self.target).exists())
+
+    def test_downgrade_refuses_a_rollback_whose_hash_does_not_match(self) -> None:
+        self._former([self.entry])
+        registry_owner.rollback_path(self.target).write_bytes(
+            registry_owner._snapshot(_former_inventory([]), _former_projection([]))
+        )
+        registry_owner.upgrade(self.inventory, self.target)
+        self._bind("example", "EX")
+        snapshot = registry_owner.upgrade_path(self.target)
+        kept = json.loads(snapshot.read_bytes())
+        kept["rollback_sha256"] = "0" * 64
+        snapshot.write_bytes(json.dumps(kept).encode("ascii"))
+        before = self._state()
+        with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "SHA-256"):
+            registry_owner.downgrade(self.inventory, self.target)
+        self.assertEqual(before, self._state())
+
     def test_rollback_undoes_one_write_and_never_crosses_the_upgrade(self) -> None:
         self._former([self.entry])
         # The snapshot of the last write before the upgrade, in the former format.
@@ -476,6 +519,27 @@ class RegistryOwnerTests(unittest.TestCase):
         with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "differs"):
             registry_owner.import_inventory(self.inventory, self.target, source)
         self.assertEqual(imported, self._state())
+
+    def test_fresh_import_and_later_writes_downgrade_to_no_registry(self) -> None:
+        source = self.directory / "former.toml"
+        source.write_bytes(_former_inventory([self.entry]))
+        self.assertTrue(registry_owner.import_inventory(self.inventory, self.target, source))
+        self._bind("example", "EX")
+        self._add("second")
+        self.assertTrue(registry_owner.downgrade(self.inventory, self.target))
+        self.assertEqual(dict.fromkeys(self._state()), self._state())
+
+    def test_rollback_right_after_a_fresh_import_leaves_no_registry(self) -> None:
+        source = self.directory / "former.toml"
+        source.write_bytes(_former_inventory([self.entry]))
+        registry_owner.import_inventory(self.inventory, self.target, source)
+        imported = (self.inventory.read_bytes(), self.target.read_bytes())
+        self.assertTrue(registry_owner.rollback(self.inventory, self.target))
+        self.assertFalse(self.inventory.exists())
+        self.assertFalse(self.target.exists())
+        # The registry can be taken in again after that.
+        self.assertTrue(registry_owner.import_inventory(self.inventory, self.target, source))
+        self.assertEqual(imported, (self.inventory.read_bytes(), self.target.read_bytes()))
 
     def test_import_beside_a_former_projection_carries_it_across_for_downgrade(self) -> None:
         source = self.directory / "former.toml"
