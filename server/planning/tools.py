@@ -123,7 +123,7 @@ _PRIORITY_MEANING = (
 )
 _VERBOSE = {
     "type": "boolean",
-    "description": "Answer with the full work item instead of the short acknowledgement.",
+    "description": "Answer with the item's card instead of the short acknowledgement.",
 }
 #: One checklist step as a caller sends it: its text, or its text and whether it is done.
 _STEP = {
@@ -149,7 +149,7 @@ _STEPS = {
 COMPACT_LIMIT = 50
 _VERBOSE_ROWS = {
     "type": "boolean",
-    "description": "Answer with the full items instead of one compact row per item."
+    "description": "Answer with each item's list record instead of one compact row per item."
     " Without it the answer holds at most limit rows (default"
     f" {COMPACT_LIMIT}).",
 }
@@ -1201,26 +1201,33 @@ def _is_verbose(arguments: Mapping[str, object], name: str = "verbose") -> bool:
     return verbose
 
 
-def _with_url(answer: object) -> object:
-    """A full work item record with its address, which only an agent needs.
+#: Every field a full record carries: the card's, the parts' and those named off both,
+#: which `read_model` keeps apart. What a write answers with beyond them is its own.
+_RECORD_FIELDS = frozenset(read_model.CARD_FIELDS + read_model.PARTS + read_model.OFF_CARD)
 
-    The HTTP boundary answers without it: a browser is already on the origin and
-    routes by the item's identity.
+
+def _as_card(conn: sqlite3.Connection, answer: dict) -> dict:
+    """A write's answer with the item as its card, and what the write itself reports.
+
+    The HTTP boundary answers a write with the full record, which grows with the
+    item's history; an agent reads the card in its place, as `get_work_item` gives
+    it by default, and the parts by name. Read after the write and inside its
+    transaction, the card stands at the revision the write left. The keys a write
+    adds beside the record — what it applied, started, requeued, released or merged,
+    what the guards warned and a force overrode — stay as the write gave them.
     """
 
-    if isinstance(answer, dict) and isinstance(answer.get("reference"), str):
-        return {**answer, "url": acknowledgements.work_item_url(answer["reference"])}
-    return answer
+    card = _work_item(conn, {"id": answer["reference"]})
+    return {**card, **{name: value for name, value in answer.items() if name not in _RECORD_FIELDS}}
 
 
 def _acknowledged(
     path: str, acknowledge: acknowledgements.Acknowledge
 ) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
-    """A write that answers briefly unless the caller asks for the whole item.
+    """A write that answers briefly unless the caller asks for the item's card.
 
-    The full record is what the HTTP boundary returns and what `verbose` still
-    returns here, with its address; the short form is cut from it afterwards, so
-    the write itself is the same either way.
+    Both forms are cut from the full record the HTTP boundary returns, so the write
+    itself is the same either way.
     """
 
     write = _post(path)
@@ -1228,8 +1235,10 @@ def _acknowledged(
     def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
         verbose = _is_verbose(arguments)
         item = write(conn, {name: value for name, value in arguments.items() if name != "verbose"})
-        if verbose or not isinstance(item, dict):
-            return _with_url(item)
+        if not isinstance(item, dict):
+            return item
+        if verbose:
+            return _as_card(conn, item)
         return acknowledge(item, arguments)
 
     return run
@@ -1242,13 +1251,16 @@ def _with_similar(
 
     Read after the write, so the links the same call made are known and left out
     (`words.similar`). The HTTP boundary answers without it: the hint is for an
-    agent that has just filed an item and may have filed it twice.
+    agent that has just filed an item and may have filed it twice. The item is found
+    by its reference, which the acknowledgement and the card both carry; the card
+    names no `work_item_id`.
     """
 
     def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
         answer = write(conn, arguments)
-        if isinstance(answer, dict) and isinstance(answer.get("work_item_id"), str):
-            answer["similar"] = words.similar(conn, answer["work_item_id"])
+        if isinstance(answer, dict) and isinstance(answer.get("reference"), str):
+            created = read_model.item_row(conn, answer["reference"])
+            answer["similar"] = words.similar(conn, str(created["work_item_id"]))
         return answer
 
     return run
@@ -1288,11 +1300,11 @@ def _told(
 
 
 def _claim_ready(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    """The item the queue handed over, whole: the agent needs the item it just took."""
+    """The item the queue handed over as its card: the agent needs the item it just took."""
 
     answer = _post("/api/planning/work-item/claim-ready")(conn, arguments)
-    if isinstance(answer, dict) and answer.get("work_item") is not None:
-        return {**answer, "work_item": _with_url(answer["work_item"])}
+    if isinstance(answer, dict) and isinstance(answer.get("work_item"), dict):
+        return {**answer, "work_item": _as_card(conn, answer["work_item"])}
     return answer
 
 
@@ -1329,7 +1341,7 @@ _MODE_PARTS = {
 }
 
 
-def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> dict:
     """One item by parts: its card unless the caller names others or a mode.
 
     The boundary reads the parts, so a read over HTTP that names them answers the

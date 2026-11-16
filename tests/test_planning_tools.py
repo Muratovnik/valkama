@@ -377,11 +377,23 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         }[tool]
 
     def test_exactly_the_acknowledged_tools_publish_verbose_as_a_boolean(self) -> None:
+        said = {
+            **dict.fromkeys(
+                ACKNOWLEDGED, "Answer with the item's card instead of the short acknowledgement."
+            ),
+            **dict.fromkeys(
+                ROW_READS,
+                "Answer with each item's list record instead of one compact row per item."
+                " Without it the answer holds at most limit rows (default 50).",
+            ),
+        }
         for tool in planning_tools.TOOLS:
             schema = tool["inputSchema"]
             if tool["name"] in ACKNOWLEDGED or tool["name"] in ROW_READS:
                 self.assertEqual("boolean", schema["properties"]["verbose"]["type"], tool["name"])
-                self.assertIn("full", schema["properties"]["verbose"]["description"])
+                self.assertEqual(
+                    said[tool["name"]], schema["properties"]["verbose"]["description"], tool["name"]
+                )
                 self.assertNotIn("verbose", schema.get("required", []), tool["name"])
             else:
                 self.assertNotIn("verbose", schema["properties"], tool["name"])
@@ -408,31 +420,36 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 for key in FULL_ONLY:
                     self.assertNotIn(key, answer)
 
-    def test_a_verbose_answer_is_the_full_item(self) -> None:
+    def test_a_verbose_answer_is_the_card_and_what_the_write_reports(self) -> None:
+        # What each write says beside the item: a creation the items reading like
+        # it, a claim the state it started the item in and that no session confirmed
+        # the holder, a batch what each of its groups changed, a merge what each
+        # merged item handed over.
+        reports = {
+            "create_work_item": {"similar"},
+            "claim_work_item": {"started", "warnings"},
+            "claim_work_item_checklist_item": set(),
+            "apply_work_item_changes": {"applied"},
+            "merge_work_items": {"merged"},
+        }
         for tool in ACKNOWLEDGED:
             with self.subTest(tool):
                 answer = self.call(tool, verbose=True, **self.arguments_for(tool))
-                stored = self.full(answer["reference"])
-                # A transition also reports what the guards said about it, a
-                # claim the state it started the item in, a batch what each
-                # of its groups changed, and a creation the items reading like it.
-                self.assertEqual(
-                    stored,
-                    {
-                        k: v
-                        for k, v in answer.items()
-                        if k
-                        not in (
-                            "warnings",
-                            "applied",
-                            "started",
-                            "requeued",
-                            "merged",
-                            "overridden",
-                            "similar",
-                        )
-                    },
-                )
+                card = self.call("get_work_item", id=answer["reference"])
+                self.assertEqual(self.full(answer["reference"])["revision"], answer["revision"])
+                self.assertEqual(card, {name: answer[name] for name in card if name in answer})
+                self.assertEqual(reports[tool], set(answer) - set(card))
+                for name in ("events", "comments", "links", "refs", "mentions", "work_item_id"):
+                    self.assertNotIn(name, answer)
+
+    def test_a_verbose_creation_names_the_items_reading_like_it(self) -> None:
+        brief = self.call("create_work_item", space="QA", title="Busy item twice")
+        verbose = self.call("create_work_item", space="QA", title="Busy item again", verbose=True)
+        self.assertNotIn("work_item_id", verbose)
+        similar = [entry["reference"] for entry in verbose["similar"]]
+        self.assertIn(self.ref, similar)
+        self.assertIn(brief["reference"], similar)
+        self.assertNotIn(verbose["reference"], similar)
 
     def test_verbose_false_is_the_default_and_anything_else_is_refused(self) -> None:
         arguments = self.arguments_for("claim_work_item")
@@ -569,7 +586,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         # A new root names no parent.
         self.assertEqual((None, None), (written["reply_to"], written["reply_to_request"]))
 
-    def test_the_parts_and_the_take_next_queue_still_answer_in_full(self) -> None:
+    def test_the_parts_answer_in_full_and_the_take_next_queue_with_the_card(self) -> None:
         read = self.call(
             "get_work_item", id=self.ref, parts=["card", "comments", "events", "links", "refs"]
         )
@@ -581,8 +598,13 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         listed = self.call("list_work_items", space="QA", verbose=True)["work_items"]
         self.assertTrue(all("comment_count" in item and "events" not in item for item in listed))
         taken = self.call("claim_ready_work_item", space="QA", author="one")["work_item"]
-        for key in ("events", "checklist", "description", "comments"):
-            self.assertIn(key, taken)
+        card = self.call("get_work_item", id=taken["reference"])
+        self.assertEqual(card, {name: taken[name] for name in card if name in taken})
+        # The queue started what it handed over under a holder no session confirmed,
+        # and says both beside the card.
+        self.assertEqual({"started", "warnings"}, set(taken) - set(card))
+        for key in ("events", "comments", "links", "refs", "work_item_id"):
+            self.assertNotIn(key, taken)
 
     def test_the_http_boundary_still_answers_with_the_full_item(self) -> None:
         for path, payload in (

@@ -1896,13 +1896,15 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 self.assertIn(wanted, error["message"])
         self.assert_untouched()
 
-    def test_verbose_answers_with_the_full_item_and_what_was_applied(self) -> None:
+    def test_verbose_answers_with_the_card_and_what_was_applied(self) -> None:
         answer = self.answer(
             "apply_work_item_changes",
             {"id": self.reference, "comment": {"body": "only this"}, "verbose": True},
         )
-        self.assertEqual(["only this"], [entry["body"] for entry in answer["comments"]])
-        self.assertIn("events", answer)
+        # The card counts the comment the batch wrote; the comments part reads it.
+        self.assertEqual(1, answer["parts"]["comments"]["count"])
+        self.assertNotIn("comments", answer)
+        self.assertNotIn("events", answer)
         self.assertEqual(["comment"], list(answer["applied"]))
 
     def test_the_checklist_group_takes_the_steps_as_a_bare_list(self) -> None:
@@ -2133,7 +2135,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
             self.assertEqual("linked", events[-1]["action"])
             self.assertEqual("confirmed", events[-1]["identity"]["state"])
 
-    def test_verbose_answers_with_the_full_item_and_what_was_applied(self) -> None:
+    def test_verbose_answers_with_the_card_and_what_was_applied(self) -> None:
         answer = self.answer(
             "create_work_item",
             {
@@ -2143,7 +2145,9 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
                 "verbose": True,
             },
         )
-        self.assertIn("events", answer)
+        self.assertNotIn("events", answer)
+        self.assertEqual({"count": 1}, answer["parts"]["links"])
+        self.assertIsInstance(answer["similar"], list)
         self.assertEqual({"links": 1}, answer["applied"])
         self.assertEqual("", answer["claim_ref"])
 
@@ -2248,6 +2252,13 @@ class ServerInstructionTests(unittest.TestCase):
                 "only for an item that should never have existed."
             )
         )
+
+    def test_the_text_reads_an_item_by_parts_and_names_no_whole_record(self) -> None:
+        # `full` left get_work_item, and a verbose write answers with the card.
+        text = mcp_surface.PLANNING_INSTRUCTIONS
+        self.assertNotRegex(text, r"\bfull\b")
+        self.assertIn("get_work_item's events part returns it", text)
+        self.assertIn("verbose=true returns its card", text)
 
     def test_the_address_rule_names_a_link_for_the_owner_and_none_for_valkama(self) -> None:
         text = mcp_surface.PLANNING_INSTRUCTIONS

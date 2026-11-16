@@ -414,13 +414,13 @@ class ReadingTests(Harness):
         updated = self.agent(
             "apply_work_item_changes", id=self.target, update={"priority": "high"}, verbose=True
         )
-        for answer in (claimed, updated):
-            self.assertEqual(1, answer["mentions_total"])
-            self.assertEqual(
-                [self.source],
-                [entry["from"] for entry in answer["mentions"]],
-                "named by the source",
-            )
+        self.assertEqual(1, claimed["mentions_total"])
+        self.assertEqual(
+            [self.source], [entry["from"] for entry in claimed["mentions"]], "named by the source"
+        )
+        # An agent's verbose answer is the card, which counts them for the mentions part.
+        self.assertEqual({"count": 1}, updated["parts"]["mentions"])
+        self.assertNotIn("mentions", updated)
 
     def test_a_long_comment_is_quoted_short_and_a_deleted_one_by_nothing(self) -> None:
         self.tells(body="x" * 400)
