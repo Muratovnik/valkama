@@ -198,8 +198,9 @@ the returned space key:
 python valkama.py projects bind my-project --space MY
 ```
 
-Replace `MY` with the key returned for your Planning space. A binding must
-point to a space whose project id matches the registered project. Run
+Replace `MY` with the key returned for your Planning space. The first project
+bound to a space becomes its default project; see
+[Project registry](#project-registry) for several projects in one space. Run
 `python valkama.py projects list` to inspect the result.
 
 ### 6. Optional: the desktop app (Windows)
@@ -254,7 +255,7 @@ python valkama.py <command> [options]
 | `released --space KEY --repo PATH --range A..B [--json]` | list the open work items whose commit refs went into a release range, and how each was found: `hash` (the commit is in the range), `patch-id` (the same change arrived under another hash), or one of two weak matches: `changed-patch` (the commit is outside the range and not in the history before it, and a commit in the range has its subject with another patch) and `subject` (the object is gone and the ref's label has the subject of a commit in the range). A hint to check by hand when closing a release: partly released work shows too, an item with no commit ref cannot, and it changes neither the store nor the repository |
 | `hook CLIENT EVENT` | record one client hook event from stdin without a running server; see [Client hooks](#client-hooks) |
 | `runtime` | print this checkout's backend and static identity |
-| `projects list\|add\|update\|remove\|bind\|check\|apply\|doctor\|rollback\|import` | manage the local project inventory and its projection; see [Project registry](#project-registry) |
+| `projects list\|add\|update\|remove\|bind\|check\|apply\|doctor\|rollback\|upgrade\|downgrade\|import` | manage the local project inventory and its projection; see [Project registry](#project-registry) |
 | `config [--json]` | every setting, the layer it came from, and the value in use |
 | `setup [--json] [--apply]` | what this installation needs, and the exact command for each gap |
 | `adapter check --at URL \| --command ARGV \| --mcp ARGV \| --record FILE` | ask an adapter for its manifest, then probe it for the calls it should refuse |
@@ -404,23 +405,52 @@ rather than falling back to a default, and `python valkama.py doctor` says why.
 
 The project registry is managed by Valkama's `projects` command, separate from
 `config.json`. On Windows, Valkama keeps the authoritative project inventory at
-`%LOCALAPPDATA%\Valkama\project-registry.toml` and publishes a schema-v3
-projection at `%LOCALAPPDATA%\Valkama\projects.json`. Planning, Memory,
+`%LOCALAPPDATA%\Valkama\project-registry.toml` (format 2) and publishes a
+schema-v4 projection at `%LOCALAPPDATA%\Valkama\projects.json`. Planning, Memory,
 and the desktop read that complete projection. A missing or malformed projection
-exposes no partial project list.
+exposes no partial project list, and a projection of another schema version is
+malformed.
 
-Use `projects add` to register an existing directory and `projects bind` to
-connect it to an existing Planning space. `projects update ID --name NAME`
-changes its display name; `--root ABS` moves its root to an existing directory,
-even if the old root is gone. `projects remove ID` removes only the registration,
-leaving the Planning store untouched. `projects check` compares the inventory
-and projection; `projects doctor` reports the same health result.
-`projects apply` republishes the current inventory, and `projects rollback`
-restores the exact inventory and projection bytes saved before the preceding
-change. For a one-time transfer from an existing schema-1 TOML inventory, use
-`projects import --source <absolute-path-to-inventory>`. Import refuses to
-overwrite an inventory or projection with different project data. There is no
-project-registry path override.
+A Planning space holds any number of projects, and exactly one of them is its
+default project: the space's root is that project's root. In the projection
+each binding names its space and says whether the project is its default:
+
+```json
+"planning_binding": {"default": true, "kind": "planning-space", "resource_id": "<opaque>"}
+```
+
+Use `projects add` to register an existing directory and
+`projects bind ID --space KEY [--scope NAME] [--default]` to connect it to an
+existing Planning space. The first project bound to a space becomes its
+default; `--default` makes the project the default and takes the flag from the
+previous one in the same change. Binding a project to another space moves its
+home space; its work items stay where they are. The default project of a space
+that keeps other projects cannot leave it, by `bind` or by `remove`: first make
+another project the default with `projects bind OTHER --space KEY --default`.
+`bind` reads only the space's identity from the store, so it also works on a
+store that has not been migrated yet.
+
+`projects update ID --name NAME` changes its display name; `--root ABS` moves
+its root to an existing directory, even if the old root is gone.
+`projects remove ID` removes only the registration and its binding, leaving the
+Planning store untouched. `projects check` compares the inventory and
+projection; `projects doctor` reports the same health result. `projects apply`
+republishes the current inventory, and `projects rollback` restores the exact
+inventory and projection bytes saved before the preceding change. It never
+crosses a change of format.
+
+A registry an earlier release wrote (inventory format 1, projection schema v3)
+is carried across once with `projects upgrade`, which keeps the exact former
+bytes and their SHA-256 in `projects.json.valkama.upgrade`; on a registry that is
+already format 4 it answers `{"changed": false}` and touches nothing.
+`projects downgrade` restores those bytes exactly and removes the snapshot;
+changes made after the upgrade are lost with it. Downgrade before installing the
+earlier release, which cannot read format 4. For a one-time transfer from a
+former writer's format-1 TOML inventory, use
+`projects import --source <absolute-path-to-inventory>`: it writes inventory
+format 2 and projection schema v4, and importing the same inventory again writes
+nothing. Import refuses to overwrite an inventory or projection with different
+project data. There is no project-registry path override.
 
 The rest are environment-only, because each is either a one-shot switch or
 belongs to a process rather than to an installation:
