@@ -1880,9 +1880,16 @@ rather than being dropped, and a line to work folded away ends on the frame that
 holds it. Frames lie under the lines and cards over them, so a line runs across a
 frame and into the card it ends on. A link between an item and a frame it stands in
 is not drawn, since the frame already says it, nor one whose end is hidden finished
-work or lives in another space. All the links from one drawn end to another are one
-line, its arrow keeping their direction: solid when any of them blocks, since a
-block is the one hard dependency, and dashed as context otherwise.
+work or lives in another space. A line runs the way the work went, and the layout
+ranks its start before its arrow, over the whole space as in a chain: a block from the
+blocker to the work it holds, and a discovery from the work it was found in to the work
+that grew out of it, so a chain's root stands before what was discovered from it and the
+arrow lands on the new work. That is against the order the link is stored in, «A was
+discovered from B», which the card's links, the history and every other word for the
+link keep. Drawn as stored, the new task stood before its epic with the arrow on the
+epic, and the dashed line read as that task done into it. All the links from one drawn
+end to another are one line, its arrow keeping that direction: solid when any of them
+blocks, since a block is the one hard dependency, and dashed as context otherwise.
 
 Live work is what the read model's `live_work` says an agent's session is doing on
 an item now. A card says it at its foot as the session's sign (`SessionSign`), the one

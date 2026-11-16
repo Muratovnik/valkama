@@ -339,12 +339,12 @@ describe('the graph scoped to one chain', () => {
       'OTH-7',
       null,
     ])
-    // Only the link between two drawn nodes is drawn.
+    // Only the link between two drawn nodes is drawn: from 2 to 4, which was discovered from it.
     const flowEdges = graph.findComponent({ name: 'VueFlow' }).props('edges') as {
       source: string
       target: string
     }[]
-    expect(flowEdges.map((edge) => [edge.source, edge.target])).toEqual([[id(4), id(2)]])
+    expect(flowEdges.map((edge) => [edge.source, edge.target])).toEqual([[id(2), id(4)]])
   })
 
   it('names in its legend the groups it draws, and keeps the place of the one the switch adds', async () => {

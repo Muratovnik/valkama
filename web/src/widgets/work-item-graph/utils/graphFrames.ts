@@ -12,8 +12,9 @@
  * it, until the view can draw something there.
  *
  * A link is drawn between the drawn ends it reaches: a card itself, an epic's
- * frame, or the folded frame a card stands in. Several links between one pair
- * of drawn ends are one line, solid when any of them blocks. A link between a
+ * frame, or the folded frame a card stands in, and runs the way `drawnEnds`
+ * says. Several links between one ordered pair of drawn ends are one line,
+ * solid when any of them blocks. A link between a
  * card and its own frame is not drawn — the frame already says so — nor one
  * whose end is hidden finished work or lives in another space.
  *
@@ -21,7 +22,7 @@
  * open and closed, whatever is drawn or a filter lets through.
  */
 
-import { NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { drawnEnds, NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { FrameProgress } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { RoutedEdge } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
@@ -187,9 +188,11 @@ export function countedGroups(progress: FrameProgress) {
 type End = { at: string; inside: string[] }
 
 /**
- * One line per ordered pair of drawn ends, so an arrow keeps its direction:
- * solid when any link behind it blocks, and otherwise named by the first of
- * its kinds in order, whichever order the links arrived in.
+ * One line per ordered pair of drawn ends, so an arrow keeps its direction —
+ * the one `drawnEnds` gives, a discovery from the work it was found in: solid
+ * when any link behind it blocks, and otherwise named by the first of its kinds
+ * in order, whichever order the links arrived in. A line keeps its links as
+ * they are stored.
  */
 function drawnLines(
   links: readonly PlanningEdge[],
@@ -198,19 +201,20 @@ function drawnLines(
   const lines = new Map<string, ProjectedEdge>()
   for (const link of links) {
     if (link.kind === 'parent') continue
-    const from = endOf(link.from)
-    const to = endOf(link.to)
+    const drawn = drawnEnds(link)
+    const from = endOf(drawn.source)
+    const to = endOf(drawn.target)
     if (!from || !to || from.at === to.at) continue
     // A card and the frame it stands in: the frame already says it.
     if (from.inside.includes(to.at) || to.inside.includes(from.at)) continue
     const id = `${from.at}>${to.at}`
     const line = lines.get(id)
-    const ends = { from: link.from, to: link.to }
+    const stored = { from: link.from, to: link.to }
     lines.set(
       id,
       line
-        ? { ...line, kind: strongerKind(line.kind, link.kind), links: [...line.links, ends] }
-        : { id, source: from.at, target: to.at, kind: link.kind, links: [ends] },
+        ? { ...line, kind: strongerKind(line.kind, link.kind), links: [...line.links, stored] }
+        : { id, source: from.at, target: to.at, kind: link.kind, links: [stored] },
     )
   }
   return [...lines.values()]

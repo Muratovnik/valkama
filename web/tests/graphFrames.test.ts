@@ -90,10 +90,16 @@ const lines = (projected: ReturnType<typeof project>) =>
 describe('lines between what is drawn', () => {
   it.each([
     [
-      'to another epic ends on its frame',
+      'to another epic ends on its frame, drawn from the epic to the work found in it',
       [link('a1', ids.E2)],
       {},
-      [['a1', ids.E2, 'discovered-from', 1]],
+      [[ids.E2, 'a1', 'discovered-from', 1]],
+    ],
+    [
+      'that blocks runs from the blocker',
+      [link('a1', 'b1', 'blocks')],
+      {},
+      [['a1', 'b1', 'blocks', 1]],
     ],
     ['to its own epic draws nothing', [link('a1', ids.E1)], {}, []],
     ['to the epic round its own epic draws nothing', [link('d1', ids.E1)], {}, []],
@@ -102,19 +108,19 @@ describe('lines between what is drawn', () => {
       'to finished work in «All» is drawn',
       [link('a1', 'b2')],
       { showDone: true },
-      [['a1', 'b2', 'discovered-from', 1]],
+      [['b2', 'a1', 'discovered-from', 1]],
     ],
     ['to another space draws nothing', [link('a1', 'elsewhere', 'blocks')], {}, []],
     ['a parent edge is never a line', [link(ids.E2, 'b1', 'parent')], {}, []],
     [
       'into a folded frame lands on it, two links one solid line',
-      [link('a1', 'b1'), link('a1', 'b3', 'blocks')],
+      [link('b1', 'a1'), link('a1', 'b3', 'blocks')],
       { choices: { [ids.E2]: true } },
       [['a1', ids.E2, 'blocks', 2]],
     ],
     [
       'two links into a folded frame that do not block stay one dashed line',
-      [link('a1', 'b1'), link('a1', 'b3', 'relates-to')],
+      [link('b1', 'a1'), link('a1', 'b3', 'relates-to')],
       { choices: { [ids.E2]: true } },
       [['a1', ids.E2, 'discovered-from', 2]],
     ],
@@ -128,11 +134,11 @@ describe('lines between what is drawn', () => {
       'a nested card in a folded frame lands on the outer frame',
       [link('d1', 'b1')],
       { choices: { [ids.E1]: true } },
-      [[ids.E1, 'b1', 'discovered-from', 1]],
+      [['b1', ids.E1, 'discovered-from', 1]],
     ],
     [
       'each way round keeps its own arrow',
-      [link('a1', 'b1', 'blocks'), link('b1', 'a1')],
+      [link('a1', 'b1', 'blocks'), link('a1', 'b1')],
       {},
       [
         ['a1', 'b1', 'blocks', 1],

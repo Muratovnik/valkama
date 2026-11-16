@@ -1,6 +1,6 @@
 /** Shared card bounds keep layout, routing, and the Vue Flow wrapper in sync. */
 
-import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 /** What an agent's session behind an item is doing now: the read model's contract, as it is. */
 export type { LiveWork } from '@/shared/api/liveWorkModel.ts'
@@ -102,4 +102,25 @@ export function rowOrder(left: WorkItemBrief, right: WorkItemBrief): number {
     return leftParent < rightParent ? -1 : 1
   }
   return left.number - right.number
+}
+
+/**
+ * The ends a link is drawn between: the line runs from `source` to `target`, the arrow
+ * stands at the target, and the layout ranks the source before it. Every place that turns
+ * a stored link into a drawn line asks this, so the layout, the frames, the arrow and the
+ * comet agree on one direction.
+ *
+ * A link is stored the way its relation reads — `from` blocks `to`, `from` was discovered
+ * from `to` — and a block is drawn that way, blocker first. A discovery is drawn the other
+ * way round, from the work it was found in to the work that grew out of it: drawn as stored,
+ * the new task stood before its epic with the arrow on the epic, and the line read as that
+ * task done into it. The stored link, and every word that names it, keep the stored order.
+ */
+export function drawnEnds(link: Pick<PlanningEdge, 'from' | 'kind' | 'to'>): {
+  source: string
+  target: string
+} {
+  return link.kind === 'discovered-from'
+    ? { source: link.to, target: link.from }
+    : { source: link.from, target: link.to }
 }
