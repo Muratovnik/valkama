@@ -176,6 +176,28 @@ for (const width of [1280, 760, 390]) {
       })
     }
 
+    // On a phone the workspace is under 586px and the two choices stack at one width.
+    const stacked = width === 390
+
+    test('the two choices stand in one row, or stacked at one edge on a phone, at one height', async ({
+      page,
+    }) => {
+      await serveScopes(page)
+      await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
+      const space = await spaceChoice(page).boundingBox()
+      const project = await projectChoice(page).boundingBox()
+      expect(space && project).toBeTruthy()
+      const [a, b] = [
+        space ?? { x: 0, y: 0, width: 0, height: 0 },
+        project ?? { x: 0, y: 0, width: 0, height: 0 },
+      ]
+      expect(Math.abs(a.height - b.height)).toBeLessThan(1)
+      expect(Math.abs(a.y - b.y) < 1).toBe(!stacked)
+      expect(Math.abs(a.x - b.x) < 1).toBe(stacked)
+      expect(b.y >= a.y + a.height).toBe(stacked)
+      expect(b.x >= a.x + a.width).toBe(!stacked)
+    })
+
     test('the project choice stands only in a space with several projects, another space’s with its key', async ({
       page,
     }) => {
