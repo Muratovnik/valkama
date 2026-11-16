@@ -43,9 +43,7 @@ class RankingTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        self.space = service.create_planning_space(
-            self.conn, project_id="example-workspace", name="Quality Assurance"
-        )
+        self.space = service.create_planning_space(self.conn, name="Quality Assurance")
 
     def item(self, title: str, **kwargs: object) -> str:
         kwargs = {**basis_for(kwargs.get("state")), **kwargs}
@@ -132,7 +130,7 @@ class PlacementTests(RankingTestCase):
         self.assertEqual(self.d, self.order()[0])
 
     def test_a_refused_placement_writes_nothing(self) -> None:
-        other = service.create_planning_space(self.conn, project_id="other", name="Elsewhere")
+        other = service.create_planning_space(self.conn, name="Elsewhere")
         foreign = str(
             service.create_work_item(self.conn, space=other["key"], title="Theirs")["reference"]
         )

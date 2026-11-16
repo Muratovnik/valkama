@@ -17,7 +17,7 @@ import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { dayOf, named, withinToday } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
-import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
+import { isSeveral, valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 import { tokensAnew, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
@@ -51,10 +51,10 @@ const HOUR_SECONDS = 3600
 
 /**
  * The dimensions where work with no value is a value of its own (`id` null, not unknown): work
- * on no task, and a session's own run, which no one launched. Elsewhere the read has no such
- * value, and a filter's «none» admits an unknown one instead.
+ * on no task, a session's own run, which no one launched, and work on a task naming no project.
+ * Elsewhere the read has no such value, and a filter's «none» admits an unknown one instead.
  */
-const NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
+const NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class', 'project'])
 
 /** The space no line breaks at. */
 const NO_BREAK = '\u{A0}'
@@ -257,6 +257,7 @@ export function useSpendingWords() {
 
   function valueLabel(name: UsageDimension, value: UsageGroupValue) {
     const kind = valueKind(value)
+    if (kind === 'none' && isSeveral(value)) return t('analytics.values.several')
     if (kind === 'none') return noValue(name)
     if (kind === 'unknown') return t('analytics.values.unknown')
     return categoryLabel(name, value as UsageGroupValue & { id: string })

@@ -4,12 +4,7 @@ import { ref } from 'vue'
 
 import { test } from 'vitest'
 
-import {
-  cardInPlace,
-  resolveResourceSelection,
-  selectableProjectResources,
-  useModuleRouteAuthority,
-} from '@/app/composables/useModuleRouteAuthority.ts'
+import { cardInPlace, useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthority.ts'
 
 import {
   MODULES_INTERFACE,
@@ -20,26 +15,31 @@ import type { ModuleId, ModuleManifest } from '@/shared/api/platformModuleContra
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { resolveManifestRouteAuthority } from '@/shared/api/platformRoute.ts'
-import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+import type { PlatformRoute, PlatformRouteUnavailable } from '@/shared/api/platformRoute.ts'
 
 import { moduleRegistrations, modulesPayload } from './support/moduleRegistrations.ts'
 
 /** The entity kinds a module's secondary context admits, at each operating level, by module id. */
 type SecondaryKinds = Readonly<
-  Record<string, { global: readonly string[]; project: readonly string[] }>
+  Record<string, { global: readonly string[]; space: readonly string[] }>
 >
+
+const SPACE = {
+  kind: 'space' as const,
+  space_ref: { data_scope_id: '123e4567-e89b-42d3-a456-426614174000', space_key: 'MAIN' },
+}
 
 const EXPECTED_SECONDARY_CONTEXTS: SecondaryKinds = {
   planning: {
     global: ['project', 'planning-space'],
-    project: ['planning-space', 'work-item'],
+    space: ['planning-space', 'work-item'],
   },
-  sessions: { global: ['execution', 'session'], project: [] },
-  analytics: { global: ['work-item'], project: ['work-item'] },
-  improvements: { global: ['work-item', 'improvement-case'], project: [] },
-  skills: { global: ['skill'], project: ['skill'] },
-  memory: { global: ['memory-resource'], project: ['memory-resource', 'work-item'] },
-  settings: { global: ['work-item'], project: ['work-item'] },
+  sessions: { global: ['execution', 'session'], space: [] },
+  analytics: { global: ['work-item'], space: ['work-item'] },
+  improvements: { global: ['work-item', 'improvement-case'], space: [] },
+  skills: { global: ['skill'], space: ['skill'] },
+  memory: { global: ['memory-resource'], space: ['memory-resource', 'work-item'] },
+  settings: { global: ['work-item'], space: ['work-item'] },
 } as const
 
 test('valkama-modules has exactly four registrations with both operating levels', () => {
@@ -50,19 +50,16 @@ test('valkama-modules has exactly four registrations with both operating levels'
   )
   for (const module of OFFLINE_MODULE_FALLBACK) {
     assert.equal(module.interface_version, MODULES_INTERFACE)
-    assert.deepEqual(module.operating_levels, ['global', 'project'])
+    assert.deepEqual(module.operating_levels, ['global', 'space'])
     assert.equal(module.route_namespace, module.module_id)
     assert.ok(module.semantics.global)
-    assert.ok(module.semantics.project)
+    assert.ok(module.semantics.space)
     assert.ok(module.states.global.supported.includes('loading'))
     if (module.module_id === 'improvements') {
-      assert.deepEqual(module.states.project.supported, ['unavailable'])
-      assert.equal(
-        module.states.project.unsupported_reason,
-        'improvements_project_scope_unsupported',
-      )
+      assert.deepEqual(module.states.space.supported, ['unavailable'])
+      assert.equal(module.states.space.unsupported_reason, 'improvements_project_scope_unsupported')
     } else {
-      assert.ok(module.states.project.supported.includes('permission-denied'))
+      assert.ok(module.states.space.supported.includes('permission-denied'))
     }
   }
 })
@@ -71,9 +68,9 @@ test('offline secondary contexts exactly mirror the authoritative scoped contrac
   for (const manifest of OFFLINE_MODULE_FALLBACK) {
     const expected = EXPECTED_SECONDARY_CONTEXTS[manifest.module_id]
     assert.deepEqual(manifest.secondary_context.global.kinds, expected.global)
-    assert.deepEqual(manifest.secondary_context.project.kinds, expected.project)
+    assert.deepEqual(manifest.secondary_context.space.kinds, expected.space)
     const supported = new Set(manifest.supported_entity_kinds)
-    for (const scope of ['global', 'project'] as const) {
+    for (const scope of ['global', 'space'] as const) {
       const kinds = manifest.secondary_context[scope].kinds
       assert.equal(kinds.length, new Set(kinds).size)
       assert.ok(kinds.every((kind) => supported.has(kind)))
@@ -201,7 +198,10 @@ test('validated future registration remains authoritative with typed unsupported
   })
   assert.equal(authority.activeManifest.value, undefined)
   assert.equal(authority.routeUnavailable.value?.reason, 'unsupported-view')
-  assert.ok(authority.routeUnavailable.value?.recovery.available_modules.includes('future-module'))
+  assert.ok(
+    authority.routeUnavailable.value?.recovery.kind === 'choose-module' &&
+      authority.routeUnavailable.value.recovery.available_modules.includes('future-module'),
+  )
 })
 
 test('authoritative manifests reject unsupported entity and scoped secondary context', () => {
@@ -210,17 +210,17 @@ test('authoritative manifests reject unsupported entity and scoped secondary con
   assert.deepEqual(
     resolveManifestRouteAuthority(planning, {
       module_id: 'planning',
-      scope: { kind: 'project', project_ref: { project_id: 'project-alpha' } },
+      scope: SPACE,
       entity: { kind: 'session', client_family: 'codex', session_id: 'session-1' },
     }),
     { status: 'unavailable', reason: 'incompatible-entity' },
   )
   const noSecondaryContext = structuredClone(planning)
-  noSecondaryContext.secondary_context.project = { behavior: 'none', kinds: [] }
+  noSecondaryContext.secondary_context.space = { behavior: 'none', kinds: [] }
   assert.equal(
     resolveManifestRouteAuthority(noSecondaryContext, {
       module_id: 'planning',
-      scope: { kind: 'project', project_ref: { project_id: 'project-alpha' } },
+      scope: SPACE,
       entity: { kind: 'planning-space', resource_id: 'opaque-resource' },
     }).status,
     'unavailable',
@@ -232,7 +232,7 @@ test('each module accepts only the entity routes its scoped UI owns', () => {
     OFFLINE_MODULE_FALLBACK.map((manifest) => [manifest.module_id, manifest]),
   ) as Record<ModuleId, ModuleManifest>
   const global = { kind: 'global' as const }
-  const project = { kind: 'project' as const, project_ref: { project_id: 'project-alpha' } }
+  const project = { ...SPACE, project_ref: { project_id: 'project-alpha' } }
   const entities = {
     planningSpace: { kind: 'planning-space' as const, resource_id: 'planning-space-1' },
     workItem: { kind: 'work-item' as const, resource_id: 'work-item-1' },
@@ -250,7 +250,7 @@ test('each module accepts only the entity routes its scoped UI owns', () => {
   }
   const accepts = (
     module_id: ModuleId,
-    scope: typeof global | typeof project,
+    scope: typeof global | typeof SPACE,
     entity: PlatformRoute['entity'],
   ) =>
     resolveManifestRouteAuthority(manifests[module_id], { module_id, scope, entity }).status ===
@@ -270,7 +270,6 @@ test('a task pressed in Analytics or Settings is named in the page’s own route
     OFFLINE_MODULE_FALLBACK.map((manifest) => [manifest.module_id, manifest]),
   ) as Record<ModuleId, ModuleManifest>
   const target = {
-    project_id: 'project-alpha',
     space_ref: { data_scope_id: '123e4567-e89b-42d3-a456-426614174000', space_key: 'MAIN' },
     reference: 'MAIN-7',
     writable: true,
@@ -283,7 +282,7 @@ test('a task pressed in Analytics or Settings is named in the page’s own route
   for (const [module_id, state] of views)
     for (const scope of [
       { kind: 'global' as const },
-      { kind: 'project' as const, project_ref: { project_id: 'project-beta' } },
+      { ...SPACE, project_ref: { project_id: 'project-beta' } },
     ]) {
       const page: PlatformRoute = { module_id, scope, state }
       // The module, its scope and its view stay; only the card is named.
@@ -296,7 +295,7 @@ test('a task pressed in Analytics or Settings is named in the page’s own route
       })
     }
   const global = { kind: 'global' as const }
-  // The board opens its card in the task's own project, as it did.
+  // The board opens its card in the task's own space, as it did.
   assert.equal(
     cardInPlace(manifests.planning, { module_id: 'planning', scope: global }, target),
     null,
@@ -311,43 +310,38 @@ test('a task pressed in Analytics or Settings is named in the page’s own route
   assert.equal(cardInPlace(undefined, { module_id: 'analytics', scope: global }, target), null)
 })
 
-test('App resource emissions are derived from and rechecked against the active manifest', () => {
-  const manifests = Object.fromEntries(
-    OFFLINE_MODULE_FALLBACK.map((manifest) => [manifest.module_id, manifest]),
-  ) as Record<ModuleId, ModuleManifest>
-  const resources = ['planning-space-1', 'planning-space-2'].map((resource_id) => ({
-    resource_ref: { kind: 'planning-space' as const, resource_id },
-    state: 'mapped' as const,
-  }))
-  const projectScope = {
-    kind: 'project' as const,
-    project_ref: { project_id: 'project-alpha' },
+test('a retired address keeps the choice of a space as its way out', () => {
+  const registrations = moduleRegistrations()
+  const retired = {
+    status: 'unavailable' as const,
+    reason: 'retired-scope' as const,
+    input_module_id: 'planning',
+    input_scope: { kind: 'global' as const },
+    recovery: { kind: 'choose-space' as const },
   }
-
-  assert.deepEqual(selectableProjectResources(manifests.planning, resources), resources)
-  for (const module_id of ['memory', 'settings'] as const)
-    assert.deepEqual(selectableProjectResources(manifests[module_id], resources), [])
-
+  const authority = (parsedUnavailable: PlatformRouteUnavailable | null) =>
+    useModuleRouteAuthority({
+      modules: ref(registrations.map((registration) => registration.manifest)),
+      modulesAuthoritative: ref(true),
+      modulesSettled: ref(true),
+      parsedUnavailable: ref(parsedUnavailable),
+      registrations: ref(registrations),
+      route: ref<PlatformRoute>({ module_id: 'planning', scope: { kind: 'global' } }),
+      te: () => false,
+      translate: (key) => key,
+    }).routeUnavailable.value
+  assert.deepEqual(authority(retired), retired)
+  // Any other address the grammar cannot place offers the modules this build has.
   assert.deepEqual(
-    resolveResourceSelection(
-      manifests.planning,
-      { module_id: 'planning', scope: projectScope },
-      resources[1],
-    ),
+    authority({
+      ...retired,
+      reason: 'unknown-module',
+      recovery: { kind: 'choose-module', available_modules: [] },
+    })?.recovery,
     {
-      module_id: 'planning',
-      scope: projectScope,
-      entity: resources[1].resource_ref,
+      kind: 'choose-module',
+      available_modules: registrations.map((registration) => registration.manifest.module_id),
     },
-  )
-  assert.equal(
-    resolveResourceSelection(
-      manifests.planning,
-      { module_id: 'skills', scope: projectScope },
-      resources[0],
-    ),
-    null,
-    'a manifest from the previously active module cannot authorize a stale click',
   )
 })
 
@@ -355,7 +349,7 @@ test('direct and history route changes are rechecked against manifest authority'
   const registrations = moduleRegistrations()
   const route = ref<PlatformRoute>({
     module_id: 'planning' as const,
-    scope: { kind: 'project' as const, project_ref: { project_id: 'project-alpha' } },
+    scope: { ...SPACE, project_ref: { project_id: 'project-alpha' } },
   })
   const authority = useModuleRouteAuthority({
     modules: ref(registrations.map((registration) => registration.manifest)),
@@ -376,9 +370,6 @@ test('direct and history route changes are rechecked against manifest authority'
     entity: { kind: 'session', client_family: 'codex', session_id: 'session-1' },
   }
   assert.equal(unavailable()?.reason, 'incompatible-entity')
-  route.value = {
-    module_id: 'planning',
-    scope: { kind: 'project', project_ref: { project_id: 'project-alpha' } },
-  }
+  route.value = { module_id: 'planning', scope: SPACE }
   assert.equal(unavailable(), null)
 })

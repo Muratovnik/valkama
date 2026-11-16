@@ -49,7 +49,7 @@ class ReleasedTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="cli", name="Command Line", key=SPACE)
+        service.create_planning_space(self.conn, name="Command Line", key=SPACE)
         self.conn.commit()
         self.repo = self.repository("product")
         # The release is everything after `start` on `main`.

@@ -27,21 +27,25 @@ splitting one, or handing items to other agents.
 
 ## Start
 
-1. **Find the space.** Use the space the instructions name; otherwise
-   `list_planning_spaces` and pick the one whose project is the repository you
-   work in. A space is named by its key (`MAIN`), its name or its id.
+1. **Find the space.** Use the space the instructions name; otherwise the space
+   `list_planning_spaces` names as `session_space`, the one whose project root
+   holds your folder. A space is named by its key (`MAIN`), its name or its id.
 2. **Find the item before filing one.** `search_work_items` with two or three
    telling words of the change, not a sentence: an item matches when it holds
    every word, in any field, each by its first five letters (`searching` finds
    `search`), best match first. A query that is exactly a reference
    (`MAIN-12`), or a number alone (`12`) with `space`, answers that item
-   first. `list_work_items` filters by `state`, `category`, `kind`, `parent`
-   and `owner`. Claim the item that already covers the work.
-3. **File it only when none does.** `create_work_item` with `space`, `title`
-   and a `description` that is the brief: goal, context, constraints, the
-   "done when" and its verify command. A plan in the repository is referenced
-   by `source` (`docs/plan.md#kb:a7f3`), not copied, and a file the
-   description names is written as Naming a file says. Umbrella work is
+   first. `list_work_items` filters by `state`, `category`, `kind`, `parent`,
+   `owner` and `project`. Claim the item that already covers the work.
+3. **File it only when none does.** `create_work_item` with a `title` and a
+   `description` that is the brief: goal, context, constraints, the "done when"
+   and its verify command. Name the projects the change touches (`projects`).
+   Leave `space` out unless the projects live in two spaces: the server puts the
+   item under its parent's space, else in its projects' home space. A finding in
+   another project's code goes to that project, and so to its space. A plan in
+   the repository is referenced by `source` (`docs/plan.md#kb:a7f3`), not
+   copied, and a file the description names is written as Naming a file says.
+   Umbrella work is
    `kind: goal`, or `stage` under a parent at any depth; children name it as
    `parent`, and nobody claims it. Work filed outside accepted open goals and
    stages starts in triage: send `acceptance: "assignment"` only on the owner's word.
@@ -58,6 +62,8 @@ splitting one, or handing items to other agents.
    the holder when someone else has the item. It also starts the work: a task
    in a triage, deferred or ready state moves to the first active state, and the
    acknowledgement's `started` says so. Send no separate transition to start.
+   The answer's `project_roots` names the root of each project the task changes:
+   read each one's instructions before you edit it.
    A goal or stage is never claimed: claim a task under it.
 
 The holder is the session your client proved, written as
@@ -110,15 +116,8 @@ that existed before the call; `applied` lists the ids of the comments and
 questions the call wrote.
 
 **Claude Code's auto mode.** Valkama calls may share a response with any other
-tool. Valkama's hook records which session makes each call and leaves the call as
-you wrote it, so auto mode reviews every call in the response. An older Valkama
-release added your session to the input of each Valkama call instead, and a call
-beside it that needed the review then got no verdict: it failed with "another call
-in this response was changed by a hook", which says nothing about the failed call.
-If you see that failure, the older release is still installed: issue the failed
-call again exactly as it was, and for the rest of the session send Valkama calls in
-a response of their own, with the other tools in the next one. Another client or
-permission mode needs no such care.
+tool. A call that failed with "another call in this response was changed by a
+hook": see [the tool reference](references/tools.md#claude-codes-auto-mode).
 
 **Refs.** The `refs` group records a `commit`, a `memory` record id materially
 used, or a `url`. Your own session needs no ref: Valkama records every write's.
@@ -280,11 +279,12 @@ an address there is one more thing to go stale.
 
 **Naming a file.** In a description, a comment, a report, a summary, a question or
 an option's description, name a file or folder of the project as a Markdown link
-to its path from the root of the space's project, with a label that says what it
-is: `docs/plan.md#kb:a7f3`, `src/parse.ts:42`, `docs/plans/`. Valkama opens a
-Markdown file in its own viewer at the `#kb:…` anchor, heading or `:42` line the
-link names, another file in the owner's editor at that line, and a folder in the
-editor. A whole path in backticks works too; a label reads better.
+to its path from the root of the item's space (its default project's root), with
+a label that says what it is: `docs/plan.md#kb:a7f3`, `src/parse.ts:42`,
+`docs/plans/`. Valkama opens a Markdown file in its own viewer at the `#kb:…`
+anchor, heading or `:42` line the link names, another file in the owner's editor
+at that line, and a folder in the editor. A whole path in backticks works too; a
+label reads better.
 Write a path from that root, not from your working folder or another repository:
 a relative path is looked for there first, and in the projects registered inside
 it only when the root has nothing there. Use an absolute path only where there
@@ -412,9 +412,10 @@ When two items turn out to be one change — the same finding filed twice, one
 cause found from two places — `merge_work_items` folds them into the item that
 survives (`id`), with `items` the ones that fold in and a `reason`. The
 survivor takes their steps (ids, ticks and step claims kept), discussion
-threads whole, questions with their replies, refs and links; a report's thread
-stays on the merged item with the report. A list goes with the comment it stands
-under, so a report's list stays with the report. Each merged item is linked
+threads whole, questions with their replies, refs, links and projects (a project
+more than one of them names keeps the strongest source: named, then commits, then
+migrated); a report's thread stays on the merged item with the report. A list goes
+with the comment it stands under, so a report's list stays with the report. Each merged item is linked
 `duplicates` to it, gets a summary naming it and closes in its cancelled state. It is refused, writing nothing,
 for an item another session holds (unless `force`), a closed item, an item in
 another space, a goal or stage with a task, or a merged item with children. Merge before handing the work to

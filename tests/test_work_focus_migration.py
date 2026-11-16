@@ -30,7 +30,7 @@ class WorkFocusMigrationTests(unittest.TestCase):
         self.addCleanup(lambda: self.conn.close())
 
     def populated_source(self) -> dict:
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         item = planning.create_work_item(
             self.conn,
             space="TST",

@@ -1,4 +1,4 @@
-/** Canonical clean-start Platform route (module + required Global/Project scope). */
+/** Canonical clean-start Platform route (module + required Global/Space scope). */
 
 import {
   contractGuards,
@@ -6,27 +6,37 @@ import {
   MAX_CONTRACT_NODES,
   POLLUTION_KEYS,
 } from '@/shared/api/contractGuards.ts'
+import {
+  decodePathSegment,
+  invalid,
+  scopeOfPath,
+  scopePath,
+  validateOperatingScope,
+} from '@/shared/api/operatingScope.ts'
+import type { OperatingScope } from '@/shared/api/operatingScope.ts'
 import { validateEntityRef } from '@/shared/api/platformEntityRef.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import type { ModuleId, ModuleManifest } from '@/shared/api/platformModuleContract.ts'
 
-export type OperatingScope =
-  { kind: 'global' } | { kind: 'project'; project_ref: { project_id: string } }
+export { sameScope, validateOperatingScope } from '@/shared/api/operatingScope.ts'
+export type { OperatingScope } from '@/shared/api/operatingScope.ts'
 
 const MAX_ENTITY_BYTES = 4096
 const MAX_STATE_BYTES = 4096
 const BASE64URL = /^[A-Za-z0-9_-]+$/u
 const MODULE_ID = /^[a-z][a-z0-9-]{0,63}$/u
-const PROJECT_ID = /^[a-z][a-z0-9-]{0,159}$/u
 
 export type PlatformRouteUnavailable = {
   input_module_id: string
   input_scope: OperatingScope
-  reason: 'unknown-module' | 'unsupported-view' | 'unsupported-scope' | 'incompatible-entity'
-  recovery: {
-    available_modules: readonly ModuleId[]
-    kind: 'choose-module'
-  }
+  reason:
+    | 'unknown-module'
+    | 'unsupported-view'
+    | 'unsupported-scope'
+    | 'incompatible-entity'
+    | 'retired-scope'
+  recovery:
+    { available_modules: readonly ModuleId[]; kind: 'choose-module' } | { kind: 'choose-space' }
   status: 'unavailable'
 }
 
@@ -43,19 +53,6 @@ export type PlatformRoute = {
 export type ManifestRouteAuthority =
   | { status: 'ready' }
   | { reason: 'unsupported-scope' | 'incompatible-entity'; status: 'unavailable' }
-
-class PlatformRouteValidationError extends Error {
-  readonly code = 'platform_route_contract_invalid' as const
-
-  constructor(message: string) {
-    super(message)
-    this.name = 'PlatformRouteValidationError'
-  }
-}
-
-function invalid(path: string, detail: string): never {
-  throw new PlatformRouteValidationError(`${path}: ${detail}`)
-}
 
 const { plainObject, exactKeys } = contractGuards(invalid)
 
@@ -176,27 +173,6 @@ function decodeCanonicalJson<T>(encoded: string, path: string, maxBytes: number)
   return parsed as T
 }
 
-function validateScope(value: unknown, path = 'scope'): OperatingScope {
-  const object = plainObject(value, path)
-  if (object.kind === 'global') {
-    exactKeys(object, ['kind'], path)
-    return { kind: 'global' }
-  }
-  if (object.kind === 'project') {
-    exactKeys(object, ['kind', 'project_ref'], path)
-    const project = plainObject(object.project_ref, `${path}.project_ref`)
-    exactKeys(project, ['project_id'], `${path}.project_ref`)
-    if (typeof project.project_id !== 'string' || !PROJECT_ID.test(project.project_id))
-      invalid(`${path}.project_ref.project_id`, 'expected bounded project id')
-    return { kind: 'project', project_ref: { project_id: project.project_id } }
-  }
-  return invalid(`${path}.kind`, 'expected global or project')
-}
-
-export function validateOperatingScope(value: unknown, path = 'scope'): OperatingScope {
-  return validateScope(value, path)
-}
-
 export function validateManifestRouteState(
   manifest: ModuleManifest,
   value: unknown,
@@ -265,33 +241,8 @@ function inputUrl(input: string | URL): URL {
   }
 }
 
-function decodePathSegment(raw: string, path: string): string {
-  try {
-    return decodeURIComponent(raw)
-  } catch {
-    return invalid(path, 'invalid percent-encoding')
-  }
-}
-
-/**
- * The project id in the fourth path segment.
- *
- * Canonical means the encoded form round-trips exactly: two spellings of one id
- * would be two URLs for one place, and `.`/`..` are refused before they can be
- * read as a path at all.
- */
-function pathProjectId(raw: string): string {
-  if (raw.length === 0) invalid('url.pathname.project_id', 'project id is required')
-  const projectId = decodePathSegment(raw, 'url.pathname.project_id')
-  if (!PROJECT_ID.test(projectId) || projectId === '.' || projectId === '..')
-    invalid('url.pathname.project_id', 'invalid project id')
-  if (encodeURIComponent(projectId) !== raw)
-    invalid('url.pathname.project_id', 'project id must be canonically percent-encoded')
-  return projectId
-}
-
-/** The module id and operating scope named by a `/modules/<module_id>/<scope>` path. */
-function routePath(url: URL): { moduleSegment: string; scope: OperatingScope } {
+/** The module segment of a `/modules/<module_id>/…` path, and the segments after it. */
+function moduleSegments(url: URL): { moduleSegment: string; rest: string[] } {
   const rawSegments = url.pathname.split('/')
   if (
     rawSegments[0] !== '' ||
@@ -303,13 +254,27 @@ function routePath(url: URL): { moduleSegment: string; scope: OperatingScope } {
   const moduleSegment = decodePathSegment(rawSegments[2], 'url.pathname.module_id')
   if (!MODULE_ID.test(moduleSegment) || encodeURIComponent(moduleSegment) !== rawSegments[2])
     invalid('url.pathname.module_id', 'invalid module id')
-  const scopeKind = rawSegments[3]
-  if (scopeKind === 'global' && rawSegments.length === 4)
-    return { moduleSegment, scope: { kind: 'global' } }
-  if (scopeKind !== 'project' || rawSegments.length !== 5)
-    invalid('url.pathname', 'invalid operating scope route')
-  const project_id = pathProjectId(rawSegments[4])
-  return { moduleSegment, scope: { kind: 'project', project_ref: { project_id } } }
+  return { moduleSegment, rest: rawSegments.slice(3) }
+}
+
+/** The module id and operating scope a path names: see `scopeOfPath`. */
+function routePath(url: URL): { moduleSegment: string; scope: OperatingScope } {
+  const { moduleSegment, rest } = moduleSegments(url)
+  return { moduleSegment, scope: scopeOfPath(rest) }
+}
+
+/**
+ * The module an address of the former form `/modules/<module_id>/project/<id>` names, or
+ * null for any other address. Such an address chose work by a project, which is now chosen
+ * by its space. Which space it meant is not guessed, so nothing else of it is read.
+ */
+function retiredScopeModule(url: URL): string | null {
+  try {
+    const { moduleSegment, rest } = moduleSegments(url)
+    return rest.length === 2 && rest[0] === 'project' ? moduleSegment : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -349,12 +314,6 @@ export function parsePlatformRoute(input: string | URL): PlatformRoute {
           decodeCanonicalJson(encodedEntity, 'url.search.entity', MAX_ENTITY_BYTES),
           'url.search.entity',
         )
-  if (
-    scope.kind === 'project' &&
-    entity?.kind === 'project' &&
-    entity.project_id !== scope.project_ref.project_id
-  )
-    invalid('url.search.entity', 'project entity does not match route project')
   const decodedState =
     encodedState === undefined
       ? undefined
@@ -375,6 +334,15 @@ export function parsePlatformRoute(input: string | URL): PlatformRoute {
  * query keys and invalid payloads still throw PlatformRouteValidationError.
  */
 export function resolvePlatformRoute(input: string | URL): PlatformRouteResolution {
+  const retired = retiredScopeModule(inputUrl(input))
+  if (retired !== null)
+    return {
+      status: 'unavailable',
+      reason: 'retired-scope',
+      input_module_id: retired,
+      input_scope: { kind: 'global' },
+      recovery: { kind: 'choose-space' },
+    }
   return parsePlatformRoute(input)
 }
 
@@ -386,7 +354,8 @@ export function isPlatformRouteUnavailable(value: unknown): value is PlatformRou
     (object.reason === 'unknown-module' ||
       object.reason === 'unsupported-view' ||
       object.reason === 'unsupported-scope' ||
-      object.reason === 'incompatible-entity') &&
+      object.reason === 'incompatible-entity' ||
+      object.reason === 'retired-scope') &&
     typeof object.input_module_id === 'string' &&
     object.input_scope !== undefined
   )
@@ -450,12 +419,7 @@ function validateRoute(value: unknown): PlatformRoute {
   exactKeys(object, ['module_id', 'scope', 'entity', 'state'], 'route')
   const moduleId = object.module_id
   const resolvedModuleId = validateModuleId(moduleId, 'route.module_id')
-  const scope = validateScope(object.scope)
-  if (scope.kind === 'project' && object.entity !== undefined) {
-    const entity = validateEntityRef(object.entity, 'route.entity')
-    if (entity.kind === 'project' && entity.project_id !== scope.project_ref.project_id)
-      invalid('route.entity', 'project entity does not match route project')
-  }
+  const scope = validateOperatingScope(object.scope)
   const entity =
     object.entity === undefined ? undefined : validateEntityRef(object.entity, 'route.entity')
   const state =
@@ -470,11 +434,7 @@ function validateRoute(value: unknown): PlatformRoute {
 
 export function serializePlatformRoute(value: unknown): string {
   const route = validateRoute(value)
-  const projectSuffix =
-    route.scope.kind === 'global'
-      ? 'global'
-      : `project/${encodeURIComponent(route.scope.project_ref.project_id)}`
-  const path = `/modules/${route.module_id}/${projectSuffix}`
+  const path = `/modules/${route.module_id}/${scopePath(route.scope)}`
   const query: string[] = []
   if (route.entity !== undefined)
     query.push(

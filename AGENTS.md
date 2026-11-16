@@ -22,9 +22,11 @@ is complete on its own.
   `tests/test_skill_content.py` checks only that the tools it names exist, and
   `tests/test_planning_retired_words.py` that it names no retired word.
 - Preserve supported external MCP handshake and tool schemas. One exception
-  stands: Valkama 3.0 breaks them for the work model alone — its kinds,
+  stands: Valkama 3.0 breaks them for the work model — its kinds,
   categories and item record fields, the scope `tree`, `acceptance`, and the
-  retired words refused on input — as
+  retired words refused on input — and for spaces and projects — the registry
+  formats 2 and 4, a space without `project_id`, an optional `space` on
+  `create_work_item`, the scope `space` and the module levels — as
   `docs/decisions/0014-work-model-breaks-the-planning-schemas.md` records. It
   covers nothing else and no later change. Preserve existing
   local data through a verified backup, one forward-only migration, and a
@@ -272,9 +274,11 @@ Add a setting there and nowhere else; a second reader once moved the Kernel's
 view of the projects registry and nothing else's. Defaults stay with the module that owns them, so
 the store's path is not in a module the store imports.
 
-The project inventory and its schema-v3 projection are Valkama-owned user state,
+The project inventory and its schema-v4 projection are Valkama-owned user state,
 managed through `valkama.py projects`. Keep one writer, a fixed projection path
-for every reader, atomic writes, and exact-byte rollback.
+for every reader, atomic writes, and exact-byte rollback. Only `projects upgrade`
+and `projects import` read the former format, through one reader in
+`registry_owner`; `projects downgrade` returns the bytes the upgrade replaced.
 Host Runtime may invoke the public command for compatibility but must not write
 the projection independently. Do not add a path override or infer a Planning
 binding from a project name or directory.

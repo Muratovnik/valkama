@@ -23,7 +23,7 @@
  *
  * Where the listing says the question's space and project, the first line says them around the
  * number, «Field Notes · TASK-7 · Valkama»: the space the number belongs to before it, the
- * project after. Where it says neither, the line is what it was before spaces had names.
+ * project after. Where it says neither, the space's name stands before the number.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -36,8 +36,8 @@ import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { planningTargetRoute } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
+import { spaceName, useSpaceNames } from '@/shared/lib/spaceNames.ts'
 import LineEnd from '@/shared/ui/LineEnd.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
@@ -63,22 +63,20 @@ useResizeObserver(head, ([entry]) => {
 const request = computed(() => props.entry.request)
 /**
  * What stands before the number and after it: the space and the project where the listing names
- * them; otherwise the project, and the space where the reference does not already begin with its
- * key, before it.
+ * them; otherwise the space's name, which a space this workstation does not list leaves out, as
+ * its key already begins the number.
  */
-const projects = useProjectTitles()
+const spaces = useSpaceNames()
 const place = computed(() => {
   if (props.space || props.project)
     return {
       before: props.space ? `${props.space.name} ·` : '',
       after: props.project ? `· ${props.project.title}` : '',
     }
-  const { project_id: id, space_ref: space } = props.entry.target
-  const project = projectTitle(projects.value, id)
-  const before = request.value.reference.startsWith(`${space.space_key}-`)
-    ? project
-    : `${project} · ${space.space_key}`
-  return { before: `${before} ·`, after: '' }
+  const space = props.entry.target.space_ref
+  const name = spaceName(spaces.value, space)
+  const bare = name === space.space_key && request.value.reference.startsWith(`${name}-`)
+  return { before: bare ? '' : `${name} ·`, after: '' }
 })
 provideReferenceLinks((reference, parent) => {
   if (reference.kind !== 'work-item' || reference.value !== request.value.reference)

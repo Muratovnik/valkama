@@ -178,7 +178,7 @@ class AnswerTests(ListenerCase):
         content = self.displayed(batch("MAIN-1\n"))
         assert content is not None
         address = content[content.index("(") + 1 : content.index(")")]
-        self.assert_leads_to(urlsplit(address).path, "example-project", self.main, "MAIN-1")
+        self.assert_leads_to(urlsplit(address).path, self.main, "MAIN-1")
 
     def test_a_message_in_parts_keeps_its_fence_across_requests(self) -> None:
         self.assertIsNone(self.displayed(batch("```\n", index=0, final=False)))

@@ -9,8 +9,8 @@ import { enableExecutionTab } from './executionFixtures.ts'
 import {
   dataScopeId,
   projectId,
-  projectScope,
   spaceRef,
+  spaceScope,
   workItem,
   workItemRef,
 } from './planningFixtures.ts'
@@ -73,7 +73,7 @@ test('a card loaded from its address reads each of its parts once', async ({ pag
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
@@ -107,7 +107,7 @@ test('back from a dropped connection, the same space still reads the card again'
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )

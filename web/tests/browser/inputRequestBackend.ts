@@ -1,12 +1,11 @@
 import type { Page } from '@playwright/test'
 
 import { requestEntry, requestList } from '../support/inputRequests.ts'
-import { projectId, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceRef, workItem, workItemRef } from './planningFixtures.ts'
 
 export async function installInputRequestBackend(page: Page) {
   const entry = requestEntry()
   entry.target = {
-    project_id: projectId,
     space_ref: spaceRef,
     reference: workItemRef.reference,
     writable: true,
@@ -38,9 +37,7 @@ export async function installInputRequestBackend(page: Page) {
         return route.fulfill({
           json: {
             ...requestList(items),
-            coverage: [
-              { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
-            ],
+            coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
           },
         })
       }

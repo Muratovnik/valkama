@@ -2,7 +2,9 @@
 
 Every store here is built as 2.9 left one -- the captured schema-17 catalog with
 its word index, rows written as plain SQL in the shapes that build wrote them --
-in a temporary directory. The expectations are written out by hand from the rules
+in a temporary directory, beside a registry of format 4 binding each space's
+project to it and a file of item projects that names none, so every task takes its
+space's project. The expectations are written out by hand from the rules
 of the migration, item by item, rather than read back from the oracle the
 migration computes, so a rule both readings got wrong still fails here.
 """
@@ -30,7 +32,8 @@ from server.planning import images as planning_images
 from server.planning import store as planning_store
 from server.planning import words
 from server.planning import work_model_migration as migration
-from tests import schema9, schema17
+from server.store_identity.refs import planning_space_entity
+from tests import registry_fixtures, schema9, schema17
 
 T0 = "2026-07-26T00:00:00Z"
 T1 = "2026-08-01T10:00:00Z"
@@ -364,7 +367,8 @@ def build(path: str) -> dict[str, str]:
     conn = sqlite3.connect(path)
     try:
         ids = populate(conn)
-        words.bring_current(conn)
+        with schema17.words_as_2_9():
+            words.bring_current(conn)
         conn.commit()
     finally:
         conn.close()
@@ -373,6 +377,90 @@ def build(path: str) -> dict[str, str]:
     with open(os.path.join(folder, hashlib.sha256(PICTURE).hexdigest()), "wb") as handle:
         handle.write(PICTURE)
     return ids
+
+
+#: The store identity `schema17.build_2_9` writes, and the project of each space it holds.
+DATA_SCOPE = "00000000-0000-4000-8000-000000000029"
+SPACE_PROJECTS = {"KEEP": "kept", "WM": "work-model", "ALT": "other"}
+
+
+def registry(
+    case: unittest.TestCase,
+    directory: str,
+    bound: dict[str, str] | None = None,
+    unbound: tuple[str, ...] = (),
+    raw: bytes | None = None,
+) -> str:
+    """A registry of format 4 in a directory of its own, which `LOCALAPPDATA` names for
+    the rest of the test: each project in `bound` bound to its space, by key, those in
+    `unbound` to none. `raw` writes those bytes instead."""
+
+    folder = os.path.join(directory, "localappdata")
+    os.makedirs(os.path.join(folder, "Valkama"), exist_ok=True)
+    entries = [
+        {
+            "project_id": project,
+            "display_name": project.title(),
+            "canonical_root": os.path.join(directory, "roots", project),
+            "planning_binding": planning_space_entity(
+                {"data_scope_id": DATA_SCOPE, "space_key": key}
+            ),
+        }
+        for key, project in sorted((SPACE_PROJECTS if bound is None else bound).items())
+    ] + [
+        {
+            "project_id": project,
+            "display_name": project.title(),
+            "canonical_root": os.path.join(directory, "roots", project),
+            "planning_binding": None,
+        }
+        for project in unbound
+    ]
+    with open(os.path.join(folder, "Valkama", "projects.json"), "wb") as handle:
+        handle.write(registry_fixtures.registry_bytes(entries) if raw is None else raw)
+    patcher = mock.patch.dict(os.environ, {"LOCALAPPDATA": folder})
+    patcher.start()
+    case.addCleanup(patcher.stop)
+    return folder
+
+
+def items_digest(path: str) -> str:
+    """The contract's fingerprint of a store's items, read here from its rows: SHA-256
+    of every item id, sorted, one a line."""
+
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        identities = sorted(
+            str(row[0]) for row in conn.execute("SELECT work_item_id FROM work_items")
+        )
+    finally:
+        conn.close()
+    return hashlib.sha256("".join(f"{value}\n" for value in identities).encode()).hexdigest()
+
+
+def item_projects_file(
+    store_path: str,
+    directory: str,
+    items: dict | None = None,
+    labels: dict | None = None,
+    **overrides: object,
+) -> str:
+    """The file `projects map-items` writes, written out here: by default it names no
+    project, so every task takes its space's."""
+
+    document = {
+        "data_scope_id": DATA_SCOPE,
+        "format": "valkama-item-projects",
+        "items": items or {},
+        "items_digest": items_digest(store_path),
+        "labels": labels or {},
+        "version": 1,
+        **overrides,
+    }
+    path = os.path.join(directory, "item-projects.json")
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        json.dump(document, handle, sort_keys=True)
+    return path
 
 
 def identity(path: str) -> tuple[int, str]:
@@ -399,6 +487,21 @@ def file_digest(path: str) -> str:
         return hashlib.sha256(handle.read()).hexdigest()
 
 
+#: The steps a migration of a 2.9 store reports, in the order it takes them.
+STEP_NAMES = [f"M{number}" for number in range(12)]
+#: Its postconditions in the order it checks them: a second run, then the fault check, last.
+POSTCONDITION_NAMES = [
+    *(f"P{number}" for number in range(1, 16)),
+    "store-identity",
+    "space-projects",
+    "task-projects",
+    "labels-kept",
+    "routes",
+    "second-run",
+    "recovery-point",
+]
+
+
 class StoreCase(unittest.TestCase):
     """A 2.9 store of its own in a temporary directory."""
 
@@ -407,6 +510,8 @@ class StoreCase(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.path = os.path.join(self.directory.name, "valkama.sqlite3")
         self.ids = build(self.path)
+        registry(self, self.directory.name)
+        self.file = item_projects_file(self.path, self.directory.name)
 
     def read(self, sql: str, parameters: tuple = ()) -> list[sqlite3.Row]:
         conn = sqlite3.connect(self.path)
@@ -434,7 +539,7 @@ class StoreCase(unittest.TestCase):
         ]
 
     def migrate(self) -> dict:
-        return store.migrate_work_model(self.path)
+        return store.migrate_work_model(self.path, item_projects=self.file)
 
 
 class MigratedStoreTests(StoreCase):
@@ -447,11 +552,9 @@ class MigratedStoreTests(StoreCase):
     def test_the_run_is_reported_and_every_postcondition_holds(self) -> None:
         self.assertEqual("migrated", self.report["status"])
         self.assertEqual({"from": 17, "to": store.STORE_SCHEMA_VERSION}, self.report["schema"])
+        self.assertEqual(STEP_NAMES, [step["name"] for step in self.report["steps"]])
         self.assertEqual(
-            [f"M{number}" for number in range(8)], [step["name"] for step in self.report["steps"]]
-        )
-        self.assertEqual(
-            [(f"P{number}", True) for number in range(1, 18)],
+            [(name, True) for name in POSTCONDITION_NAMES],
             [(entry["name"], entry["passed"]) for entry in self.report["postconditions"]],
         )
         phases = [phase["name"] for phase in self.report["phases"]]
@@ -672,6 +775,79 @@ class MigratedStoreTests(StoreCase):
             )
         conn.rollback()
 
+    def test_m8_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
+        self,
+    ) -> None:
+        tasks = [number for number, expected in EXPECTED.items() if expected[0] == "task"]
+        step = next(entry for entry in self.report["steps"] if entry["name"] == "item-projects")
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        held = {
+            (str(row[0]), str(row[1]), str(row[2]))
+            for row in conn.execute(
+                "SELECT work_item_id, project_id, source FROM work_item_projects"
+            )
+        }
+        # Nothing in the file names a project, so each task takes its space's former
+        # one; a container none.
+        expected = {(self.ids[f"WM-{number}"], "work-model", "migrated") for number in tasks}
+        expected |= {(self.ids[f"ALT-{number}"], "other", "migrated") for number in (1, 2)}
+        self.assertEqual(expected, {row for row in held if row[1] != "kept"})
+        self.assertEqual({"migrated"}, {row[2] for row in held})
+        self.assertEqual({"rows": len(held), "migrated": len(held)}, step["result"])
+        conn.execute(
+            "INSERT INTO work_item_projects(work_item_id, project_id, source) VALUES(?,?,?)",
+            (self.ids["WM-9"], "valkama", "named"),
+        )
+        # A project gained marks the item for the word index, as in a fresh store.
+        self.assertEqual(
+            (1,),
+            conn.execute(
+                "SELECT stale FROM work_item_search_rows WHERE work_item_id = ?",
+                (self.ids["WM-9"],),
+            ).fetchone()[:],
+        )
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK"):
+            conn.execute(
+                "INSERT INTO work_item_projects(work_item_id, project_id, source) VALUES(?,?,?)",
+                (self.ids["WM-9"], "other", "label"),
+            )
+        conn.rollback()
+
+    def test_spaces_takes_the_project_off_each_space_and_keeps_the_rest_as_it_was(self) -> None:
+        columns = "planning_space_id, key, name, provider_kind, next_number, created_at, updated_at"
+        point = self.report["recovery_point"]
+        with contextlib.closing(sqlite3.connect(point)) as before:
+            kept = sorted(
+                tuple(row) for row in before.execute(f"SELECT {columns} FROM planning_spaces")
+            )
+            identity = before.execute(
+                "SELECT data_scope_id FROM platform_store_metadata"
+            ).fetchone()
+        self.assertTrue(kept)
+        after = self.read(f"SELECT {columns}, launch_place FROM planning_spaces")
+        self.assertEqual(kept, sorted(tuple(row)[:-1] for row in after))
+        self.assertEqual({"space"}, {row["launch_place"] for row in after})
+        self.assertNotIn(
+            "project_id", {row[1] for row in self.read("PRAGMA table_info(planning_spaces)")}
+        )
+        self.assertEqual(
+            tuple(identity),
+            tuple(self.read("SELECT data_scope_id FROM platform_store_metadata")[0]),
+        )
+        step_spaces = next(step for step in self.report["steps"] if step["name"] == "spaces")
+        self.assertEqual(len(kept), step_spaces["result"]["spaces"])
+        post_store_identity = next(
+            entry for entry in self.report["postconditions"] if entry["name"] == "store-identity"
+        )
+        self.assertEqual(len(kept), post_store_identity["detail"]["spaces"])
+        # A name is a space's alone now, as a fresh store holds it.
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "UNIQUE"):
+            self.read(
+                "INSERT INTO planning_spaces(planning_space_id, name, key) VALUES('x', ?, 'ZZ')",
+                (kept[0][2],),
+            )
+
     def test_the_derived_states_are_reported(self) -> None:
         derived = self.report["postconditions"][11]["detail"]["derived"]
         # WM-1 waits on a ready task nobody started; WM-6, WM-15 and WM-16 have work
@@ -794,7 +970,7 @@ class BoardEraSessionsTests(StoreCase):
         report = self.migrate()
         self.assertEqual("migrated", report["status"])
         self.assertEqual(
-            [(f"P{number}", True) for number in range(1, 18)],
+            [(name, True) for name in POSTCONDITION_NAMES],
             [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
         )
         declared = {row[1]: row[2] for row in self.read("PRAGMA table_info(sessions)")}
@@ -808,6 +984,56 @@ class BoardEraSessionsTests(StoreCase):
 
 
 #: A task at work whose holder took a step, and one whose step is all that holds it.
+def remember_route(path: str, scope: dict) -> str:
+    """Leave the shell's last route in the store, as 2.9 wrote it."""
+
+    record = json.dumps({"module_id": "planning", "scope": scope}, separators=(",", ":"))
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute(
+            "INSERT INTO platform_ui_prefs(key, record_json, updated_at)"
+            " VALUES ('last-route', ?, '2026-01-02T03:04:05Z')",
+            (record,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return record
+
+
+class LastRouteTests(StoreCase):
+    """The last route a project scoped has no address in 3.0, so the shell starts afresh."""
+
+    def route(self) -> list[str]:
+        return [str(row[0]) for row in self.read("SELECT record_json FROM platform_ui_prefs")]
+
+    def test_last_route_drops_a_route_a_project_scoped_and_row_counts_and_routes_hold(self) -> None:
+        remember_route(self.path, {"kind": "project", "project_ref": {"project_id": "valkama"}})
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(
+            [(name, True) for name in POSTCONDITION_NAMES],
+            [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
+        )
+        step_oracle = next(step for step in report["steps"] if step["name"] == "oracle")
+        self.assertEqual(1, step_oracle["result"]["remembered_routes_to_drop"])
+        step_last_route = next(step for step in report["steps"] if step["name"] == "last-route")
+        self.assertEqual({"dropped": 1}, step_last_route["result"])
+        self.assertEqual([], self.route())
+
+    def test_a_global_route_is_kept_as_it_was(self) -> None:
+        record = remember_route(self.path, {"kind": "global"})
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        step_oracle = next(step for step in report["steps"] if step["name"] == "oracle")
+        self.assertEqual(0, step_oracle["result"]["remembered_routes_to_drop"])
+        post_routes = next(entry for entry in report["postconditions"] if entry["name"] == "routes")
+        self.assertEqual(
+            (True, {"dropped": [], "kept": 1}), (post_routes["passed"], post_routes["detail"])
+        )
+        self.assertEqual([record], self.route())
+
+
 KEPT_STEPS = {"WM-7": ("Wire it", "agent-c"), "WM-8": ("Try it", "agent-f")}
 
 
@@ -826,17 +1052,18 @@ class KeptStepClaimTests(StoreCase):
                         self.ids[reference],
                     ),
                 )
-            words.bring_current(conn)
+            with schema17.words_as_2_9():
+                words.bring_current(conn)
             conn.commit()
         finally:
             conn.close()
         self.checklists = {reference: self.item(reference)["checklist"] for reference in KEPT_STEPS}
 
-    def test_a_claimed_step_on_a_task_at_work_is_kept_and_p14_holds(self) -> None:
+    def test_a_claimed_step_on_a_task_at_work_is_kept_and_identities_holds(self) -> None:
         report = self.migrate()
         self.assertEqual("migrated", report["status"])
         self.assertEqual(
-            [(f"P{number}", True) for number in range(1, 18)],
+            [(name, True) for name in POSTCONDITION_NAMES],
             [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
         )
         for reference in KEPT_STEPS:
@@ -1006,6 +1233,32 @@ FAULTS = (
         " WHERE workflow_id = work_items.workflow_id AND key = 'done') WHERE work_item_id = ?",
         lambda ids: (ids["WM-21"],),
     ),
+    fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
+    fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
+    fault(
+        "store-identity",
+        "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'",
+    ),
+    fault(
+        "space-projects",
+        "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'",
+    ),
+    fault(
+        "task-projects",
+        "DELETE FROM work_item_projects WHERE work_item_id = ?",
+        lambda ids: (ids["WM-9"],),
+    ),
+    fault(
+        "labels-kept",
+        """UPDATE work_items SET labels = '["stray"]' WHERE work_item_id = ?""",
+        lambda ids: (ids["WM-9"],),
+    ),
+    fault(
+        "routes",
+        "INSERT INTO platform_ui_prefs(key, record_json, updated_at)"
+        " VALUES ('last-route', ?, '2026-01-02T03:04:05Z')",
+        lambda _ids: ('{"module_id":"planning","scope":{"kind":"project"}}',),
+    ),
 )
 
 
@@ -1141,6 +1394,16 @@ CLAUSE_FAULTS: tuple[
     tuple[str, str, Callable[[dict[str, str]], list[tuple[str, tuple]]], list[str]], ...
 ] = (
     (
+        "row-counts",
+        "work_item_projects holds",
+        lambda ids: _quiet(
+            "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+            " VALUES(?, 'stray', 'named')",
+            (ids["WM-9"],),
+        ),
+        ["row-counts", "task-projects"],
+    ),
+    (
         "history-keys",
         "no opened record for the container",
         lambda ids: [
@@ -1208,7 +1471,8 @@ CLAUSE_FAULTS: tuple[
                 (ids["WM-9"],),
             )
         ],
-        ["row-counts", "indexes"],
+        # The tables FTS5 keeps the index in are not counted: `indexes` holds the index.
+        ["indexes"],
     ),
     (
         "indexes",
@@ -1256,7 +1520,8 @@ CLAUSE_FAULTS: tuple[
         lambda ids: _quiet(
             """UPDATE work_items SET labels = '["ui"]' WHERE work_item_id = ?""", (ids["WM-6"],)
         ),
-        ["identities"],
+        # The kind label `items` adds is gone, which the labels' own postcondition sees too.
+        ["identities", "labels-kept"],
     ),
 )
 
@@ -1278,6 +1543,7 @@ class RollbackTests(StoreCase):
         self.addCleanup(directory.cleanup)
         self.path = os.path.join(directory.name, "valkama.sqlite3")
         self.ids = build(self.path)
+        self.file = item_projects_file(self.path, directory.name)
 
     def refused(self, step: store_steps.Step) -> dict:
         before, digest = identity(self.path), file_digest(self.path)
@@ -1351,7 +1617,7 @@ class CommandTests(StoreCase):
             contextlib.redirect_stdout(output),
         ):
             try:
-                cli.main(["migrate", "work-model", *arguments])
+                cli.main(["migrate", "work-model", "--item-projects", self.file, *arguments])
                 code = 0
             except SystemExit as exit_:
                 code = exit_.code if isinstance(exit_.code, int) else 1

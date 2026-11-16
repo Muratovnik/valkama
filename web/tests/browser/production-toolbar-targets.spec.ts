@@ -12,7 +12,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** Half the target, less half a pixel so a probe lands inside a 44px box, not on its edge. */
@@ -92,7 +92,7 @@ test('every icon in the graph’s bar answers across 44px at 390px', async ({ pa
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       state: { view: 'graph' },
     }),
   )
@@ -107,7 +107,7 @@ test('every icon in a comment’s markdown toolbar answers across 44px at 390px'
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await installDiscussionBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const tools = page.locator('.drawer .markdown-tools')
   await expect(tools.first()).toBeVisible()

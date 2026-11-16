@@ -116,7 +116,7 @@ class QuestionCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="test", name="Questions", key="QST")
+        service.create_planning_space(self.conn, name="Questions", key="QST")
         self.reference = self.item("Pick a direction")
         self.conn.commit()
 
@@ -678,7 +678,7 @@ class KeptTests(QuestionCase):
 
     def test_an_export_of_one_space_carries_only_that_spaces_questions(self) -> None:
         self.ask()
-        service.create_planning_space(self.conn, project_id="else", name="Else", key="ELS")
+        service.create_planning_space(self.conn, name="Else", key="ELS")
         elsewhere = str(
             service.create_work_item(self.conn, space="ELS", title="There")["reference"]
         )

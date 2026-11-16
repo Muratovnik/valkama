@@ -25,13 +25,13 @@ export interface WorkItemPreviewSubject {
   reference: string
   /** Why there is no item; absent while it is still being read. */
   failure?: PreviewFailure | null
-  /** The project's name, for an item from somewhere other than the open space. */
-  project?: string | null
   /**
    * When the read the card waits on began (`Date.now()`): the card opens a moment after
    * it, and the delay before the wait is said is the read's, not the card's.
    */
   since?: number | null
+  /** The space's name, for an item from a space other than the open one. */
+  space?: string | null
   /** The reference of an open item this one waits on, where the caller knows it. */
   waitingOn?: string | null
 }
@@ -91,7 +91,7 @@ export function useWorkItemPreviewWords() {
       holder && (item.open ? t('workItem.preview.held', { holder: said(holder) }) : said(holder)),
       staleClaim(item) && t('workItem.lease.mark'),
       steps && t('workItem.preview.steps', stepCount(item)),
-      subject.project && t('workItem.preview.project', { project: subject.project }),
+      subject.space && t('workItem.preview.space', { space: subject.space }),
       t(date.closed ? 'workItem.preview.closed' : 'workItem.preview.updated', { date: date.text }),
     ]
     return sentences

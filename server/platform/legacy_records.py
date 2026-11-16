@@ -33,7 +33,7 @@ from ..store_identity.primitives import (
     _semver,
     _text,
 )
-from ..store_identity.refs import validate_entity_ref, validate_operating_scope
+from ..store_identity.refs import validate_entity_ref, validate_project_ref
 from .adapter_contract import ADAPTER_INTERFACE, HEALTH_STATES
 
 ACTIONS_INTERFACE = "valkama-actions"
@@ -50,6 +50,9 @@ LEGACY_ENTITY_KINDS = ENTITY_KINDS | REGISTRY_ENTITY_KINDS
 AUTHORIZATION_TARGET_KINDS = LEGACY_ENTITY_KINDS | {"adapter-resource"}
 ASSIGNMENT_STATES = frozenset({"enabled", "disabled"})
 ASSIGNMENT_SCOPE_KINDS = frozenset({"installation", "project"})
+#: The levels a module worked at, and an operating scope named, before a planning space
+#: became the scope: a persisted manifest or preference names these.
+LEGACY_OPERATING_LEVELS = ("global", "project")
 #: Every capability an assignment or a manifest could name.
 CAPABILITY_IDS = frozenset(
     {
@@ -144,6 +147,20 @@ def validate_legacy_entity_ref(value):
     return {"kind": kind, "registry_id": _identifier(obj["registry_id"], "entity_ref.registry_id")}
 
 
+def validate_legacy_operating_scope(value):
+    """An operating scope as rows persisted it then: everywhere, or one project."""
+
+    obj = _object(value, ("kind",), optional=("project_ref",), where="operating_scope")
+    kind = _enum(obj["kind"], frozenset(LEGACY_OPERATING_LEVELS), "operating_scope.kind")
+    if kind == "global":
+        if set(obj) != {"kind"}:
+            raise UnknownFieldError("global operating_scope cannot carry project_ref")
+        return {"kind": "global"}
+    if set(obj) != {"kind", "project_ref"}:
+        raise MissingFieldError("project operating_scope requires exactly project_ref")
+    return {"kind": "project", "project_ref": validate_project_ref(obj["project_ref"])}
+
+
 def validate_assignment_scope(value):
     obj = _object(value, ("kind",), optional=("project_id",), where="assignment_scope")
     kind = _enum(obj["kind"], ASSIGNMENT_SCOPE_KINDS, "assignment_scope.kind")
@@ -177,7 +194,7 @@ def validate_connection(value):
     _reject_unsafe_tree(obj, "connection")
     result = {
         "connection_ref": validate_connection_ref(obj["connection_ref"]),
-        "applicability": validate_operating_scope(obj["applicability"]),
+        "applicability": validate_legacy_operating_scope(obj["applicability"]),
         "configuration_owner": _identifier(
             obj["configuration_owner"], "connection.configuration_owner"
         ),

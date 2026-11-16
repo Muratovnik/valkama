@@ -23,9 +23,7 @@ class PlanningInteractionsMigrationTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(lambda: self.conn.close())
-        service.create_planning_space(
-            self.conn, project_id="test", name="Retained work", key="KEEP"
-        )
+        service.create_planning_space(self.conn, name="Retained work", key="KEEP")
         self.item = service.create_work_item(self.conn, space="KEEP", title="Retain all history")
         service.comment_work_item(self.conn, self.item["reference"], "Exact historical bytes")
         service.set_summary(

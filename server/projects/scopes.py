@@ -17,6 +17,9 @@ import os
 import re
 import sqlite3
 
+from ..store_identity import metadata as store_metadata
+from ..store_identity.primitives import ContractError
+
 REGISTRY_NAME = "scopes.json"
 # The store that existed before federation. It is always present, always first,
 # and is never migrated: it simply becomes the first scope.
@@ -172,6 +175,31 @@ def open_readonly(scope: dict) -> sqlite3.Connection:
         connection.close()
         raise ScopeError(f"scope {scope['name']!r} is not a Valkama store: {error}") from error
     return connection
+
+
+def data_scope_ids(primary_db: str) -> tuple[frozenset[str], int]:
+    """The identity of the main store and of each attached store, and how many could not be read.
+
+    A store that cannot be opened names no identity to compare a binding with, so the
+    count is what a caller reports beside a binding it cannot place.
+    """
+
+    try:
+        scopes = load(primary_db)
+    except ScopeError:
+        return frozenset(), 1
+    known: set[str] = set()
+    unreadable = 0
+    for scope in scopes:
+        try:
+            connection = open_readonly(scope)
+            try:
+                known.add(store_metadata.read_store_metadata(connection)["data_scope_id"])
+            finally:
+                connection.close()
+        except (sqlite3.Error, ScopeError, ContractError):
+            unreadable += 1
+    return frozenset(known), unreadable
 
 
 def qualified(scope_name: str, reference: str) -> str:

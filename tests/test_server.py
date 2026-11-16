@@ -164,7 +164,7 @@ class StdioTests(unittest.TestCase):
                     "params": {
                         **STDIO_META,
                         "name": "create_planning_space",
-                        "arguments": {"project_id": "s", "name": "S", "key": "SPC"},
+                        "arguments": {"name": "S", "key": "SPC"},
                     },
                 },
                 {
@@ -249,7 +249,7 @@ class StdioTests(unittest.TestCase):
                     "params": {
                         **STDIO_META,
                         "name": "create_planning_space",
-                        "arguments": {"project_id": "s", "name": "S", "key": "SPC"},
+                        "arguments": {"name": "S", "key": "SPC"},
                     },
                 },
                 {
@@ -259,7 +259,7 @@ class StdioTests(unittest.TestCase):
                     "params": {
                         **STDIO_META,
                         "name": "create_planning_space",
-                        "arguments": {"project_id": "s", "name": "S", "key": "SPC"},
+                        "arguments": {"name": "S", "key": "SPC"},
                     },
                 },
                 {
@@ -269,7 +269,7 @@ class StdioTests(unittest.TestCase):
                     "params": {
                         **STDIO_META,
                         "name": "create_planning_space",
-                        "arguments": {"project_id": "t", "name": "T", "key": "SPD"},
+                        "arguments": {"name": "T", "key": "SPD"},
                     },
                 },
             ]
@@ -308,7 +308,7 @@ class StdioTests(unittest.TestCase):
                     "params": {
                         **STDIO_META,
                         "name": "create_planning_space",
-                        "arguments": {"project_id": "s", "name": "S", "key": "SPC"},
+                        "arguments": {"name": "S", "key": "SPC"},
                     },
                 },
                 {
@@ -379,7 +379,7 @@ class StdioTests(unittest.TestCase):
                     "params": {
                         **STDIO_META,
                         "name": "create_planning_space",
-                        "arguments": {"project_id": "stdio", "name": "S"},
+                        "arguments": {"name": "S"},
                     },
                 },
                 {
@@ -477,7 +477,7 @@ class SearchAndRefTests(unittest.TestCase):
         self._dir = tempfile.TemporaryDirectory()
         os.environ["VALKAMA_DB"] = os.path.join(self._dir.name, "test.sqlite3")
         self.conn = store.connect()
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         self.conn.commit()
 
     def tearDown(self) -> None:
@@ -656,7 +656,7 @@ class WorkItemGraphTests(unittest.TestCase):
         self._dir = tempfile.TemporaryDirectory()
         os.environ["VALKAMA_DB"] = os.path.join(self._dir.name, "test.sqlite3")
         self.conn = store.connect()
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         self.conn.commit()
 
     def tearDown(self) -> None:
@@ -754,7 +754,7 @@ class SessionContextTests(unittest.TestCase):
         self._dir = tempfile.TemporaryDirectory()
         os.environ["VALKAMA_DB"] = os.path.join(self._dir.name, "test.sqlite3")
         self.conn = store.connect()
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         self.conn.commit()
 
     def tearDown(self) -> None:
@@ -904,7 +904,7 @@ class SessionContextTests(unittest.TestCase):
         self.assertEqual("", refused["effective_cwd"])
 
     def test_a_session_linked_across_spaces_is_not_cross_mapped(self) -> None:
-        planning.create_planning_space(self.conn, project_id="other", name="Other", key="OTH")
+        planning.create_planning_space(self.conn, name="Other", key="OTH")
         self.conn.commit()
         first = self.item("first")
         second = self.item("second", space="OTH")

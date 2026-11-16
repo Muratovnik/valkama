@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The top of the chrome: module, operating scope, selected resource, and activity.
+ * The top of the chrome: the module, and the scope its work is looked at in.
  *
  * It is not a band of its own — it takes the same ground as the rail beside it, so
  * the corner where the two meet is continuous. It used to paint a step lighter and
@@ -11,109 +11,207 @@
  * the module is said what the rail and the screen already show, and it took a
  * second row of the header to say it.
  *
+ * The scope is chosen in two steps: «All spaces» or one space, and then, in a space
+ * with more than one project to choose, one of them. A project of another space that
+ * items of this one name stands in that list with its own space's key under its name.
+ *
  * No caption before either selector. A control states its own subject — the
- * workspace or resource by its identifier — so a label beside it is
+ * space by its key and name, the project by its name — so a label beside it is
  * the same word twice, and it was taking a grid track from the value that has to
  * ellipsize. The word survives as the accessible name.
  */
-import { computed } from 'vue'
+import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type {
-  PlatformContextReady,
-  ProjectDirectoryResource,
-} from '@/shared/api/platformApiTypes.ts'
-import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
+import type { ShellSpace } from '@/shared/api/platformApiTypes.ts'
+import { sameSpace } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 const props = defineProps<{
-  /** Null until the projects have been read: a scope is named by its project's title. */
-  projects: PlatformContextReady['projects'] | null
-  resources: ProjectDirectoryResource[]
   /** Null while the shell does not yet know which scope it stands in. */
   scope: OperatingScope | null
+  /** Null until the spaces have been read: a scope is named by its space. */
+  spaces: readonly ShellSpace[] | null
   /** Empty while the module is not yet known; the line keeps its height. */
   title: string
-  resourceRef?: EntityRef
 }>()
 
-const emit = defineEmits<{
-  resource: [value: string]
-  scope: [value: string]
-}>()
+const emit = defineEmits<{ scope: [value: OperatingScope] }>()
 
 const { t } = useI18n()
 
-/**
- * A scope list long enough that finding an entry beats reading them all.
- *
- * Below seven the search field is a second control asking to be skipped.
- */
-const scopeSearchable = computed(() => scopeOptions.value.length > 7)
+const GLOBAL = 'global'
+const ALL_PROJECTS = 'all'
+const spaceValue = (dataScopeId: string, key: string) => `space:${dataScopeId}/${key}`
+const projectValue = (id: string) => `project:${id}`
 
 /**
  * The selector is drawn once it can name the scope. Before that it keeps its box and paints
- * nothing: it said «Global» over a project's address until the projects had been read, and
+ * nothing: it said «All spaces» over a space's address until the spaces had been read, and
  * an empty frame that then filled in would be a state of its own.
  */
-const scopeKnown = computed(() => props.scope !== null && props.projects !== null)
+const scopeKnown = computed(() => props.scope !== null && props.spaces !== null)
+/** With no space to choose there is no choice to show: the work area says there are none. */
+const spaceChoiceShown = computed(
+  () => !scopeKnown.value || props.scope?.kind === 'space' || Boolean(props.spaces?.length),
+)
 /** An empty heading is no heading: a reader is not told of one with nothing in it. */
 const titleHidden = computed(() => (props.title ? undefined : 'true'))
 
+/** The space the scope names, as the context lists it; undefined at the top or when absent. */
+const openSpace = computed(() => {
+  const { scope, spaces } = props
+  return scope?.kind === 'space'
+    ? spaces?.find((item) => sameSpace(item, scope.space_ref))
+    : undefined
+})
+
 /**
- * The project the address names when this workstation does not have it. The
- * selector stood blank over a page saying that project was not found; it names
- * the project the address asked for, marked as missing and not choosable.
+ * A space the address names that this workstation does not have. The selector stood blank
+ * over a page saying it was not found; it names the space the address asked for, marked as
+ * missing and not choosable.
  */
-const missingProject = computed<ChoiceOption[]>(() => {
-  const { projects, scope } = props
-  if (scope?.kind !== 'project' || !projects?.length) return []
-  const id = scope.project_ref.project_id
-  if (projects.some((project) => project.project_id === id)) return []
-  const missing = t('platform.bindings.missing')
+const missingSpace = computed<ChoiceOption[]>(() => {
+  const { scope } = props
+  if (!scopeKnown.value || scope?.kind !== 'space' || openSpace.value) return []
+  const { data_scope_id, space_key } = scope.space_ref
   return [
-    { value: `project:${id}`, label: id, description: missing, icon: 'client', disabled: true },
+    {
+      value: spaceValue(data_scope_id, space_key),
+      label: space_key,
+      description: t('platform.scope.spaceMissing'),
+      icon: 'board',
+      disabled: true,
+    },
   ]
 })
 
-const scopeOptions = computed<ChoiceOption[]>(() => [
-  { value: 'global', label: t('platform.scope.global'), icon: 'client' },
-  ...(props.projects ?? []).map((project) => ({
-    value: `project:${project.project_id}`,
-    label: project.title,
-    description:
-      project.binding_state === 'mapped'
-        ? project.project_id
-        : t(`platform.bindings.${project.binding_state}`),
-    icon: 'client' as const,
-    disabled: project.binding_state !== 'mapped',
+const spaceOptions = computed<ChoiceOption[]>(() => [
+  { value: GLOBAL, label: t('platform.scope.global'), icon: 'client' },
+  ...(props.spaces ?? []).map((space) => ({
+    value: spaceValue(space.data_scope_id, space.space_key),
+    label: space.space_key,
+    description: space.name,
+    icon: 'board' as const,
   })),
+  ...missingSpace.value,
+])
+
+/**
+ * A list long enough that finding an entry beats reading them all. Below seven the search
+ * field is a second control asking to be skipped.
+ */
+const spaceSearchable = computed(() => spaceOptions.value.length > 7)
+
+const selectedSpaceValue = computed(() => {
+  const { scope } = props
+  if (scope === null) return ''
+  return scope.kind === 'global'
+    ? GLOBAL
+    : spaceValue(scope.space_ref.data_scope_id, scope.space_ref.space_key)
+})
+
+/**
+ * The projects the open space can be narrowed to: its own, the default first, then those
+ * of other spaces its items name, each with its own space's key. A project whose space the
+ * registry does not name carries no key, and its hint says where it belongs.
+ */
+const projectChoices = computed<ChoiceOption[]>(() => {
+  const space = openSpace.value
+  if (space === undefined) return []
+  return [
+    ...space.projects.map((project) => ({
+      value: projectValue(project.project_id),
+      label: project.display_name,
+      icon: 'client' as const,
+    })),
+    ...space.other_space_projects.map((project) => ({
+      value: projectValue(project.project_id),
+      label: project.display_name,
+      icon: 'client' as const,
+      ...(project.space_key === null
+        ? { title: t('platform.scope.otherSpace') }
+        : { description: project.space_key }),
+    })),
+  ]
+})
+
+/** The project the address narrows to when the space does not list it. */
+const missingProject = computed<ChoiceOption[]>(() => {
+  const { scope } = props
+  if (scope?.kind !== 'space' || scope.project_ref === undefined) return []
+  const value = projectValue(scope.project_ref.project_id)
+  if (projectChoices.value.some((option) => option.value === value)) return []
+  return [
+    {
+      value,
+      label: scope.project_ref.project_id,
+      description: t('platform.bindings.missing'),
+      icon: 'client',
+      disabled: true,
+    },
+  ]
+})
+
+/**
+ * The second choice is there only where it chooses something: a space with one project has
+ * nothing to narrow. An address that narrows to a project keeps it on show, so a reader sees
+ * what the work on screen is narrowed to.
+ */
+const projectChoiceShown = computed(
+  () =>
+    openSpace.value !== undefined &&
+    (projectChoices.value.length > 1 ||
+      (props.scope?.kind === 'space' && props.scope.project_ref !== undefined)),
+)
+
+const projectOptions = computed<ChoiceOption[]>(() => [
+  { value: ALL_PROJECTS, label: t('platform.scope.allProjects'), icon: 'client' },
+  ...projectChoices.value,
   ...missingProject.value,
 ])
 
-const selectedScopeValue = computed(() => {
+const projectSearchable = computed(() => projectOptions.value.length > 7)
+
+const selectedProjectValue = computed(() => {
   const { scope } = props
-  if (scope === null) return ''
-  return scope.kind === 'global' ? 'global' : `project:${scope.project_ref.project_id}`
+  return scope?.kind === 'space' && scope.project_ref !== undefined
+    ? projectValue(scope.project_ref.project_id)
+    : ALL_PROJECTS
 })
 
-const resourceOptions = computed<ChoiceOption[]>(() =>
-  props.resources.map((resource) => ({
-    value: JSON.stringify(resource.resource_ref),
-    label:
-      'resource_id' in resource.resource_ref
-        ? resource.resource_ref.resource_id
-        : resource.resource_ref.kind,
-    icon: 'client',
-    disabled: resource.state !== 'mapped',
-  })),
-)
+function chooseSpace(value: string) {
+  if (value === GLOBAL) {
+    emit('scope', { kind: 'global' })
+    return
+  }
+  const space = props.spaces?.find(
+    (item) => spaceValue(item.data_scope_id, item.space_key) === value,
+  )
+  if (space)
+    emit('scope', {
+      kind: 'space',
+      space_ref: { data_scope_id: space.data_scope_id, space_key: space.space_key },
+    })
+}
 
-const selectedResourceValue = computed(() =>
-  props.resourceRef ? JSON.stringify(props.resourceRef) : '',
-)
+function chooseProject(value: string) {
+  const { scope } = props
+  if (scope?.kind !== 'space') return
+  const space_ref = scope.space_ref
+  emit(
+    'scope',
+    value === ALL_PROJECTS
+      ? { kind: 'space', space_ref }
+      : { kind: 'space', space_ref, project_ref: { project_id: value.replace(/^project:/u, '') } },
+  )
+}
+
+const spaceChoice = useTemplateRef<{ show: () => void }>('spaceChoice')
+/** Opens the choice of a space, for a page whose way out is to choose one. */
+defineExpose({ chooseSpace: () => spaceChoice.value?.show() })
 </script>
 
 <template>
@@ -128,29 +226,35 @@ const selectedResourceValue = computed(() =>
     </div>
     <div class="context-controls">
       <div
+        v-if="spaceChoiceShown"
         class="operating-scope"
+        data-scope-choice="space"
         :class="{ 'is-unknown': !scopeKnown }"
       >
         <ChoiceSelect
-          :model-value="selectedScopeValue"
-          :options="scopeOptions"
+          ref="spaceChoice"
+          :model-value="selectedSpaceValue"
+          :options="spaceOptions"
           :label="t('platform.scope.label')"
-          :searchable="scopeSearchable"
+          :searchable="spaceSearchable"
           :search-label="t('settings.searchOptions')"
           :empty-label="t('settings.noOptions')"
-          @update:model-value="(value) => emit('scope', value)"
+          @update:model-value="chooseSpace"
         />
       </div>
       <div
-        v-if="scopeKnown && scope?.kind === 'project' && resourceOptions.length > 1"
-        class="resource-scope"
+        v-if="scopeKnown && projectChoiceShown"
+        class="project-scope"
+        data-scope-choice="project"
       >
         <ChoiceSelect
-          :model-value="selectedResourceValue"
-          :options="resourceOptions"
-          :label="t('platform.scope.label')"
-          :empty-label="t('platform.planning.empty')"
-          @update:model-value="(value) => emit('resource', value)"
+          :model-value="selectedProjectValue"
+          :options="projectOptions"
+          :label="t('platform.scope.project')"
+          :searchable="projectSearchable"
+          :search-label="t('settings.searchOptions')"
+          :empty-label="t('settings.noOptions')"
+          @update:model-value="chooseProject"
         />
       </div>
     </div>
@@ -195,8 +299,8 @@ const selectedResourceValue = computed(() =>
   letter-spacing: -0.01em;
 }
 
-/* Keep the optional resource selector in the scope-control cluster so it takes
-   space only when a project has multiple resources. */
+/* The project's choice stands in the same cluster as the space's, after it, and takes
+   space only in a space that has projects to choose. */
 .context-controls {
   display: flex;
   flex-wrap: wrap;
@@ -217,13 +321,9 @@ const selectedResourceValue = computed(() =>
   }
 }
 
-.resource-scope {
+.project-scope {
   min-width: 180px;
   max-width: 280px;
-
-  &:empty {
-    display: none;
-  }
 }
 
 /* The bar measures the space it was given, not the window: the rail beside it
@@ -249,13 +349,14 @@ const selectedResourceValue = computed(() =>
 
   .context-controls {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
     justify-self: stretch;
     width: 100%;
     max-width: none;
   }
 
-  :is(.operating-scope, .resource-scope) {
+  :is(.operating-scope, .project-scope) {
     grid-column: 1;
     min-width: 0;
     max-width: none;

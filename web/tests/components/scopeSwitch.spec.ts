@@ -15,7 +15,9 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { resolvePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { projectScope, workItemRef } from '../browser/planningFixtures.ts'
+import { attachedSpaceRef, spaceScope, workItemRef } from '../browser/planningFixtures.ts'
+
+const other = { kind: 'space' as const, space_ref: attachedSpaceRef }
 
 const looked = { view: 'graph', group: 'goal', query: 'gateway', chain: 'MAIN-264', ready: true }
 
@@ -32,12 +34,12 @@ async function standingOn(route: PlatformRoute) {
 
 describe('a change of scope', () => {
   it.each([
-    ['choosing a project', (nav: Navigation) => nav.switchScope('project:other')],
-    ['opening a project', (nav: Navigation) => nav.openProject('other')],
+    ['choosing a space', (nav: Navigation) => nav.switchScope(other)],
+    ['opening a space', (nav: Navigation) => nav.openSpace(attachedSpaceRef)],
   ])('by %s takes the way of looking and leaves the open card and the rest', async (_, move) => {
     const { address, navigation, stop } = await standingOn({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
       state: looked,
     })
@@ -45,16 +47,34 @@ describe('a change of scope', () => {
     await flushPromises()
     expect(address()).toEqual({
       module_id: 'planning',
-      scope: { kind: 'project', project_ref: { project_id: 'other' } },
+      scope: other,
       state: { view: 'graph', group: 'goal' },
     })
     stop()
   })
 
-  it('going home takes it to all projects as well', async () => {
+  it('by choosing a project of the same space takes the way of looking as well', async () => {
     const { address, navigation, stop } = await standingOn({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
+      entity: planningWorkItemEntity(workItemRef),
+      state: looked,
+    })
+    const narrowed = { ...spaceScope, project_ref: { project_id: 'other' } }
+    navigation.switchScope(narrowed)
+    await flushPromises()
+    expect(address()).toEqual({
+      module_id: 'planning',
+      scope: narrowed,
+      state: { view: 'graph', group: 'goal' },
+    })
+    stop()
+  })
+
+  it('going home takes it to all spaces as well', async () => {
+    const { address, navigation, stop } = await standingOn({
+      module_id: 'planning',
+      scope: spaceScope,
       state: looked,
     })
     navigation.goHome()
@@ -70,10 +90,10 @@ describe('a change of scope', () => {
   it('carries nothing for a module that keeps nothing, and nothing from one module to another', async () => {
     const settings = await standingOn({
       module_id: 'settings',
-      scope: projectScope,
+      scope: spaceScope,
       state: { query: 'theme', view: 'graph' },
     })
-    settings.navigation.switchScope('global')
+    settings.navigation.switchScope({ kind: 'global' })
     await flushPromises()
     expect(settings.address()).toEqual({ module_id: 'settings', scope: { kind: 'global' } })
     settings.stop()
@@ -84,12 +104,9 @@ describe('a change of scope', () => {
       scope: { kind: 'global' },
       state: { view: 'graph' },
     })
-    fromSettings.navigation.openProject('other')
+    fromSettings.navigation.openSpace(attachedSpaceRef)
     await flushPromises()
-    expect(fromSettings.address()).toEqual({
-      module_id: 'planning',
-      scope: { kind: 'project', project_ref: { project_id: 'other' } },
-    })
+    expect(fromSettings.address()).toEqual({ module_id: 'planning', scope: other })
     fromSettings.stop()
   })
 })

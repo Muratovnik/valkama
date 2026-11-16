@@ -24,10 +24,17 @@ export const filterKey = (value: string | null) => (value === null ? 'none' : `$
 export const filterValue = (key: string) =>
   key.startsWith(CATEGORY) ? key.slice(CATEGORY.length) : null
 
+/**
+ * Work on items naming several projects: no category and no filter's value, as work naming none
+ * is, and still a row of its own apart from that.
+ */
+export const isSeveral = (value: UsageGroupValue) => Array.isArray(value.combinations)
+
 /** The key of a value as the read names it. */
 export function valueKey(value: UsageGroupValue): string {
   const kind = valueKind(value)
-  return kind === 'category' ? filterKey(value.id) : kind
+  if (kind === 'category') return filterKey(value.id)
+  return kind === 'none' && isSeveral(value) ? 'several' : kind
 }
 
 /**

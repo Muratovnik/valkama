@@ -56,7 +56,7 @@ class CliTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="cli", name=SPACE_NAME, key=SPACE_KEY)
+        service.create_planning_space(self.conn, name=SPACE_NAME, key=SPACE_KEY)
         self.conn.commit()
 
     def item(self, title: str, **fields) -> str:
@@ -112,7 +112,7 @@ class ScopeTests(CliTestCase):
         path = os.path.join(self.home.name, "other.sqlite3")
         with mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
             connection = store.connect()
-            service.create_planning_space(connection, project_id="elsewhere", name="Elsewhere")
+            service.create_planning_space(connection, name="Elsewhere")
             connection.commit()
             connection.close()
         return path
@@ -173,7 +173,7 @@ class ConsoleEncodingTests(CliTestCase):
 class ExportTests(CliTestCase):
     def setUp(self) -> None:
         super().setUp()
-        service.create_planning_space(self.conn, project_id="cli", name="Other", key="OTH")
+        service.create_planning_space(self.conn, name="Other", key="OTH")
         service.create_work_item(self.conn, space="OTH", title="not in the narrowed export")
         self.item("in the narrowed export")
         self.target = os.path.join(self.home.name, "export.json")

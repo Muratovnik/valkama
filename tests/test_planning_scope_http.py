@@ -47,9 +47,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"VALKAMA_DB": str(path)}):
                 conn = store.connect()
                 try:
-                    service.create_planning_space(
-                        conn, project_id="example-project", name="Shared name", key="SAME"
-                    )
+                    service.create_planning_space(conn, name="Shared name", key="SAME")
                     service.create_work_item(conn, space="SAME", title=f"{name}-only")
                     conn.commit()
                     self.refs[name] = {
@@ -78,6 +76,18 @@ class PlanningScopeHttpTests(unittest.TestCase):
         entry = project_entry("example-project", self.root)
         entry["planning_binding"] = planning_space_entity(self.refs[source])
         self.registry.write_bytes(registry_bytes([entry]))
+
+    def where(self, space_ref: dict) -> str:
+        """Which store's which space a target or a source names, as a test reads it."""
+
+        store_name = (
+            "primary"
+            if space_ref["data_scope_id"] == self.refs["primary"]["data_scope_id"]
+            else "attached"
+            if space_ref["data_scope_id"] == self.refs["attached"]["data_scope_id"]
+            else space_ref["data_scope_id"]
+        )
+        return f"{store_name}:{space_ref['space_key']}"
 
     def request(self, path: str, payload: dict | None = None) -> tuple[int, dict]:
         client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
@@ -163,12 +173,18 @@ class PlanningScopeHttpTests(unittest.TestCase):
                 self.assertEqual(400, status, refused)
                 self.assertEqual("invalid_request", refused["error"]["code"])
 
-    def test_mapped_global_search_uses_verified_attached_target(self) -> None:
-        self.bind("attached")
-        status, answer = self.request("/api/modules/planning/search?q=only&limit=1")
+    def test_global_search_reads_every_space_of_every_store_and_names_each_target(self) -> None:
+        """No binding decides what is searched: the attached store's space is read unbound."""
+
+        status, answer = self.request("/api/modules/planning/search?q=attached&limit=1")
         self.assertEqual(200, status, answer)
         self.assertEqual("valkama-planning-search", answer["interface_version"])
-        self.assertEqual("searched", answer["coverage"][0]["status"])
+        self.assertEqual(
+            [("primary:SAME", "searched"), ("attached:SAME", "searched")],
+            [(self.where(entry["space_ref"]), entry["status"]) for entry in answer["coverage"]],
+        )
+        self.assertNotIn("project_id", answer["coverage"][0])
+        self.assertNotIn("project_id", answer["items"][0]["target"])
         self.assertEqual("attached-only", answer["items"][0]["item"]["title"])
         self.assertEqual(self.refs["attached"], answer["items"][0]["target"]["space_ref"])
         self.assertFalse(answer["items"][0]["target"]["writable"])
@@ -187,17 +203,16 @@ class PlanningScopeHttpTests(unittest.TestCase):
             conn.commit()
         finally:
             conn.close()
-        self.bind_projects({"example-project": self.refs["primary"], "b": self.refs["attached"]})
         status, answer = self.request("/api/modules/planning/search?q=only")
         self.assertEqual(200, status, answer)
         self.assertEqual(
             {
-                ("b", "SAME-1"): ("task", "medium", "Triage", "triage", False),
-                ("example-project", "SAME-1"): ("task", "medium", "Triage", "triage", False),
-                ("example-project", "SAME-2"): ("bug", "urgent", "Done", "completed", True),
+                ("attached:SAME", "SAME-1"): ("task", "medium", "Triage", "triage", False),
+                ("primary:SAME", "SAME-1"): ("task", "medium", "Triage", "triage", False),
+                ("primary:SAME", "SAME-2"): ("bug", "urgent", "Done", "completed", True),
             },
             {
-                (entry["target"]["project_id"], entry["item"]["reference"]): (
+                (self.where(entry["target"]["space_ref"]), entry["item"]["reference"]): (
                     entry["item"]["kind"],
                     entry["item"]["priority"],
                     entry["item"]["state"]["name"],
@@ -226,8 +241,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.bind("attached")
         inspector = "/api/modules/planning/work-item?" + urlencode(
             {
-                "scope_kind": "project",
-                "project_id": "example-project",
+                "scope_kind": "space",
                 **self.refs["attached"],
                 "reference": "SAME-1",
             }
@@ -248,7 +262,6 @@ class PlanningScopeHttpTests(unittest.TestCase):
 
     def test_request_platform_create_answer_and_detail_share_exact_envelope(self) -> None:
         body = {
-            "project_id": "example-project",
             **self.refs["primary"],
             "id": "SAME-1",
             "kind": "decision",
@@ -276,7 +289,6 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, answered = self.request(
             "/api/modules/planning/request/answer",
             {
-                "project_id": "example-project",
                 **self.refs["primary"],
                 "id": identity,
                 "answers": {"proceed": False},
@@ -295,8 +307,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         )
         query = urlencode(
             {
-                "scope_kind": "project",
-                "project_id": "example-project",
+                "scope_kind": "space",
                 **self.refs["primary"],
                 "id": identity,
             }
@@ -307,7 +318,6 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, refusal = self.request(
             "/api/modules/planning/request/decline",
             {
-                "project_id": "example-project",
                 **self.refs["primary"],
                 "id": identity,
                 "expected_revision": 0,
@@ -345,8 +355,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         identity = created["request_id"]
         query = urlencode(
             {
-                "scope_kind": "project",
-                "project_id": "example-project",
+                "scope_kind": "space",
                 **self.refs["attached"],
                 "id": identity,
             }
@@ -358,7 +367,6 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, refused = self.request(
             "/api/modules/planning/request/answer",
             {
-                "project_id": "example-project",
                 **self.refs["attached"],
                 "id": identity,
                 "expected_revision": 0,
@@ -396,7 +404,6 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, answered = self.request(
             "/api/modules/planning/request/answer",
             {
-                "project_id": "example-project",
                 **self.refs["primary"],
                 "id": created["request_id"],
                 "expected_revision": 0,
@@ -434,7 +441,6 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, changed = self.request(
             "/api/modules/planning/request/change",
             {
-                "project_id": "example-project",
                 **self.refs["primary"],
                 "id": created["request_id"],
                 "expected_revision": answered["request"]["revision"],
@@ -459,8 +465,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         # The card reads the versions and not the thread, which it takes from the item.
         query = urlencode(
             {
-                "scope_kind": "project",
-                "project_id": "example-project",
+                "scope_kind": "space",
                 **self.refs["primary"],
                 "id": created["request_id"],
             }
@@ -478,7 +483,6 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, same = self.request(
             "/api/modules/planning/request/change",
             {
-                "project_id": "example-project",
                 **self.refs["primary"],
                 "id": created["request_id"],
                 "expected_revision": changed["request"]["revision"],
@@ -505,7 +509,6 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, refused = self.request(
             "/api/modules/planning/request/answer",
             {
-                "project_id": "example-project",
                 **self.refs["primary"],
                 "id": created["request_id"],
                 "expected_revision": 0,
@@ -531,11 +534,23 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.attached.rename(self.root / "unavailable.sqlite3")
         status, missing = self.request("/api/modules/planning/search?q=only")
         self.assertEqual(200, status, missing)
-        self.assertEqual([], missing["items"])
-        self.assertEqual("unavailable", missing["coverage"][0]["status"])
+        self.assertEqual(
+            {"primary:SAME"},
+            {self.where(entry["target"]["space_ref"]) for entry in missing["items"]},
+        )
         # The attached store is still listed but cannot be opened, and an
-        # unopened store names no identity, so this is all the read can say.
-        self.assertEqual("store_unreadable", missing["coverage"][0]["reason"])
+        # unopened store names no identity, so this is all the read can say of
+        # the space the registry binds there.
+        self.assertEqual(
+            [
+                ("primary:SAME", "searched", None),
+                ("attached:SAME", "unavailable", "store_unreadable"),
+            ],
+            [
+                (self.where(entry["space_ref"]), entry["status"], entry["reason"])
+                for entry in missing["coverage"]
+            ],
+        )
         self.assertNotIn(str(self.root), json.dumps(missing))
 
     def bind_projects(self, bindings: dict[str, dict]) -> None:
@@ -551,37 +566,29 @@ class PlanningScopeHttpTests(unittest.TestCase):
     def test_global_search_puts_the_item_a_reference_names_first(self) -> None:
         """The exact item leads: the primary's, then an attached one's, then mentions.
 
-        Sources are read project by project, so an earlier project's item that
-        only mentions the reference used to lead, and with a page of one the
-        item itself was cut off.
+        Sources are read space by space, so an earlier space's item that only
+        mentions the reference used to lead, and with a page of one the item
+        itself was cut off.
         """
 
         conn = store.connect()
-        service.create_planning_space(conn, project_id="a-project", name="Alpha", key="AAA")
+        service.create_planning_space(conn, name="Alpha", key="AAA")
         service.create_work_item(
             conn, space="AAA", title="Mentions the other", description="See SAME-1 first."
         )
         conn.commit()
         conn.close()
-        mention = {"data_scope_id": self.refs["primary"]["data_scope_id"], "space_key": "AAA"}
-        self.bind_projects(
-            {
-                "a-project": mention,
-                "b-project": self.refs["attached"],
-                "example-project": self.refs["primary"],
-            }
-        )
         status, answer = self.request("/api/modules/planning/search?q=%20same-1%20")
         self.assertEqual(200, status, answer)
         self.assertEqual(
             [
-                ("example-project", "SAME-1", True),
-                ("b-project", "SAME-1", False),
-                ("a-project", "AAA-1", True),
+                ("primary:SAME", "SAME-1", True),
+                ("attached:SAME", "SAME-1", False),
+                ("primary:AAA", "AAA-1", True),
             ],
             [
                 (
-                    entry["target"]["project_id"],
+                    self.where(entry["target"]["space_ref"]),
                     entry["item"]["reference"],
                     entry["target"]["writable"],
                 )
@@ -591,31 +598,32 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, page = self.request("/api/modules/planning/search?q=SAME-1&limit=1")
         self.assertEqual(200, status, page)
         self.assertEqual(
-            [("example-project", "SAME-1")],
+            [("primary:SAME", "SAME-1")],
             [
-                (entry["target"]["project_id"], entry["item"]["reference"])
+                (self.where(entry["target"]["space_ref"]), entry["item"]["reference"])
                 for entry in page["items"]
             ],
         )
         self.assertTrue(page["has_more"])
-        # A query that is not a reference keeps the order sources are read in.
+        # A query that is not a reference keeps the order sources are read in: the
+        # primary store's spaces by key, then the attached store's.
         status, plain = self.request("/api/modules/planning/search?q=SAME")
         self.assertEqual(200, status, plain)
         self.assertEqual(
-            ["a-project", "b-project", "example-project"],
-            [entry["target"]["project_id"] for entry in plain["items"]],
+            ["primary:AAA", "primary:SAME", "attached:SAME"],
+            [self.where(entry["target"]["space_ref"]) for entry in plain["items"]],
         )
 
     def test_global_search_puts_each_source_item_a_number_names_first(self) -> None:
         """`1` names each source's item 1, ahead of an earlier source's newer matches.
 
-        Each source answers its own item 1 first; the sources are read project by
-        project, so without the merge keeping them first a later source's item
+        Each source answers its own item 1 first; the sources are read space by
+        space, so without the merge keeping them first a later source's item
         came after every match of an earlier one, and a short page cut it off.
         """
 
         conn = store.connect()
-        service.create_planning_space(conn, project_id="a-project", name="Alpha", key="AAA")
+        service.create_planning_space(conn, name="Alpha", key="AAA")
         for number in range(1, 12):
             service.create_work_item(conn, space="AAA", title=f"Alpha {number}")
         for number, updated in ((1, "2020"), (10, "2021"), (11, "2022")):
@@ -626,35 +634,27 @@ class PlanningScopeHttpTests(unittest.TestCase):
             )
         conn.commit()
         conn.close()
-        alpha = {"data_scope_id": self.refs["primary"]["data_scope_id"], "space_key": "AAA"}
-        self.bind_projects(
-            {
-                "a-project": alpha,
-                "b-project": self.refs["attached"],
-                "example-project": self.refs["primary"],
-            }
-        )
         status, answer = self.request("/api/modules/planning/search?q=1")
         self.assertEqual(200, status, answer)
         self.assertEqual(
             [
-                ("a-project", "AAA-1"),
-                ("example-project", "SAME-1"),
-                ("b-project", "SAME-1"),
-                ("a-project", "AAA-11"),
-                ("a-project", "AAA-10"),
+                ("primary:AAA", "AAA-1"),
+                ("primary:SAME", "SAME-1"),
+                ("attached:SAME", "SAME-1"),
+                ("primary:AAA", "AAA-11"),
+                ("primary:AAA", "AAA-10"),
             ],
             [
-                (entry["target"]["project_id"], entry["item"]["reference"])
+                (self.where(entry["target"]["space_ref"]), entry["item"]["reference"])
                 for entry in answer["items"]
             ],
         )
         status, page = self.request("/api/modules/planning/search?q=1&limit=2")
         self.assertEqual(200, status, page)
         self.assertEqual(
-            [("a-project", "AAA-1"), ("example-project", "SAME-1")],
+            [("primary:AAA", "AAA-1"), ("primary:SAME", "SAME-1")],
             [
-                (entry["target"]["project_id"], entry["item"]["reference"])
+                (self.where(entry["target"]["space_ref"]), entry["item"]["reference"])
                 for entry in page["items"]
             ],
         )
@@ -673,25 +673,32 @@ class PlanningScopeHttpTests(unittest.TestCase):
         )
         status, answer = self.request("/api/modules/planning/search?q=only")
         self.assertEqual(200, status, answer)
+        expected = {
+            "primary:SAME": ("searched", None),
+            "attached:SAME": ("searched", None),
+            # A space the registry binds a project to that no store here holds.
+            self.where(foreign): ("unavailable", "store_not_attached"),
+            "primary:NONE": ("unavailable", "space_missing"),
+        }
         self.assertEqual(
+            expected,
             {
-                "example-project": ("searched", None),
-                "foreign-project": ("unavailable", "store_not_attached"),
-                "gone-project": ("unavailable", "space_missing"),
-            },
-            {
-                entry["project_id"]: (entry["status"], entry["reason"])
+                self.where(entry["space_ref"]): (entry["status"], entry["reason"])
                 for entry in answer["coverage"]
             },
         )
-        self.assertEqual(["primary-only"], [entry["item"]["title"] for entry in answer["items"]])
+        self.assertEqual(4, len(answer["coverage"]))
+        self.assertEqual(
+            ["attached-only", "primary-only"],
+            sorted(entry["item"]["title"] for entry in answer["items"]),
+        )
         status, questions = self.request(
             "/api/modules/planning/requests?scope_kind=global&status=pending"
         )
         self.assertEqual(200, status, questions)
         self.assertEqual(
-            [None, "store_not_attached", "space_missing"],
-            [entry["reason"] for entry in questions["coverage"]],
+            {key: reason for key, (_status, reason) in expected.items()},
+            {self.where(entry["space_ref"]): entry["reason"] for entry in questions["coverage"]},
         )
         # An attached store that answers no search this build can ask fails that
         # source alone, and says the search failed rather than the store vanished.
@@ -703,16 +710,25 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, failed = self.request("/api/modules/planning/search?q=only")
         self.assertEqual(200, status, failed)
         self.assertEqual(
-            [("unavailable", "search_failed")],
-            [(entry["status"], entry["reason"]) for entry in failed["coverage"]],
+            [("primary:SAME", "searched", None), ("attached:SAME", "unavailable", "search_failed")],
+            [
+                (self.where(entry["space_ref"]), entry["status"], entry["reason"])
+                for entry in failed["coverage"]
+            ],
         )
         # A list of attached stores that cannot be read is named as such.
         Path(scopes.registry_path(str(self.primary))).write_text("{", encoding="utf-8")
         status, unlisted = self.request("/api/modules/planning/search?q=only")
         self.assertEqual(200, status, unlisted)
         self.assertEqual(
-            [("unavailable", "attached_list_unreadable")],
-            [(entry["status"], entry["reason"]) for entry in unlisted["coverage"]],
+            [
+                ("primary:SAME", "searched", None),
+                ("attached:SAME", "unavailable", "attached_list_unreadable"),
+            ],
+            [
+                (self.where(entry["space_ref"]), entry["status"], entry["reason"])
+                for entry in unlisted["coverage"]
+            ],
         )
 
     def test_global_new_reads_refuse_malformed_queries_and_read_every_source(self) -> None:
@@ -752,7 +768,10 @@ class PlanningScopeHttpTests(unittest.TestCase):
         )
         self.assertEqual(200, status, answer)
         self.assertEqual([], answer["items"])
-        self.assertEqual("requests_unavailable", answer["coverage"][0]["reason"])
+        self.assertEqual(
+            {"primary:SAME": None, "attached:SAME": "requests_unavailable"},
+            {self.where(entry["space_ref"]): entry["reason"] for entry in answer["coverage"]},
+        )
         self.assertEqual(before, hashlib.sha256(self.attached.read_bytes()).hexdigest())
 
     def test_request_uuid_collision_and_other_space_never_escape_exact_target(self) -> None:
@@ -766,7 +785,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
                 {"id": "reply", "label": "Reply", "type": "text", "required": True, "options": []}
             ],
         )
-        service.create_planning_space(conn, project_id="other", name="Other space", key="ELSE")
+        service.create_planning_space(conn, name="Other space", key="ELSE")
         service.create_work_item(conn, space="ELSE", title="Other item")
         other = requests.create(
             conn,
@@ -781,8 +800,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         conn.close()
         query = urlencode(
             {
-                "scope_kind": "project",
-                "project_id": "example-project",
+                "scope_kind": "space",
                 **self.refs["primary"],
                 "id": other["request_id"],
             }
@@ -791,7 +809,6 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, refusal = self.request(
             "/api/modules/planning/request/decline",
             {
-                "project_id": "example-project",
                 **self.refs["primary"],
                 "id": other["request_id"],
                 "expected_revision": 0,
@@ -824,8 +841,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.bind("attached")
         query = urlencode(
             {
-                "scope_kind": "project",
-                "project_id": "example-project",
+                "scope_kind": "space",
                 **self.refs["attached"],
                 "id": first["request_id"],
             }
@@ -836,7 +852,6 @@ class PlanningScopeHttpTests(unittest.TestCase):
         status, refusal = self.request(
             "/api/modules/planning/request/decline",
             {
-                "project_id": "example-project",
                 **self.refs["attached"],
                 "id": first["request_id"],
                 "expected_revision": 0,
@@ -848,13 +863,35 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.assertEqual("pending", requests.get(conn, first["request_id"])["status"])
         self.assertEqual("pending", requests.get(conn, other["request_id"])["status"])
 
-    def model_path(self, source: str) -> str:
-        return "/api/planning?" + urlencode({"project": "example-project", **self.refs[source]})
+    def model_path(self, source: str, project: str | None = None) -> str:
+        narrowed = {} if project is None else {"project": project}
+        return "/api/planning?" + urlencode({**self.refs[source], **narrowed})
 
-    def stream_path(self, source: str) -> str:
-        return "/api/events?" + urlencode(
-            {"view": "planning", "project": "example-project", **self.refs[source]}
-        )
+    def unregister(self) -> None:
+        """Leave no project in the registry, so nothing narrows a read by one.
+
+        An item of the space still naming the project keeps it narrowing that space's
+        read wherever the registry binds it, so moving the binding no longer ends a
+        stream narrowed by it; a project that is not registered narrows nothing.
+        """
+
+        self.registry.write_bytes(registry_bytes([]))
+
+    def name_project(self, source: str) -> None:
+        """Make every item of one store name the project its space's stream is narrowed by."""
+
+        with contextlib.closing(
+            sqlite3.connect(self.attached if source == "attached" else self.primary)
+        ) as changed:
+            changed.execute(
+                "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+                " SELECT work_item_id, 'example-project', 'named' FROM work_items"
+            )
+            changed.commit()
+
+    def stream_path(self, source: str, project: str | None = None) -> str:
+        narrowed = {} if project is None else {"project": project}
+        return "/api/events?" + urlencode({"view": "planning", **narrowed, **self.refs[source]})
 
     def read_frame(self, response: http.client.HTTPResponse, event: str = "message") -> dict:
         """The next event of this name, as `EventSource` tells them apart: unnamed is `message`."""
@@ -874,6 +911,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
 
     def test_exact_stream_reads_and_observes_attached_store_without_primary_fallback(self) -> None:
         self.bind("attached")
+        self.name_project("attached")
         for path in (self.primary, self.attached):
             with mock.patch.dict(os.environ, {"VALKAMA_DB": str(path)}):
                 conn = store.connect()
@@ -885,7 +923,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         before = hashlib.sha256(self.attached.read_bytes()).digest()
         client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
         self.addCleanup(client.close)
-        client.request("GET", self.stream_path("attached"))
+        client.request("GET", self.stream_path("attached", "example-project"))
         response = client.getresponse()
         self.addCleanup(response.close)
         self.assertEqual(200, response.status)
@@ -900,13 +938,13 @@ class PlanningScopeHttpTests(unittest.TestCase):
             changed.commit()
         updated = self.read_frame(response)
         self.assertEqual(["External update"], [item["title"] for item in updated["work_items"]])
-        self.bind("primary")
+        self.unregister()
         http_surface.watchers.WATCHERS.publish("changed")
         for _ in range(20):
             if response.readline() == b"":
                 break
         else:
-            self.fail("Stream stayed open after its exact binding was revoked")
+            self.fail("Stream stayed open after its project was unregistered")
 
     def test_the_card_and_only_the_card_reads_the_agents_of_the_store_it_is_bound_to(self) -> None:
         self.bind("attached")
@@ -951,8 +989,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
                 conn.close()
         inspector = "/api/modules/planning/work-item?" + urlencode(
             {
-                "scope_kind": "project",
-                "project_id": "example-project",
+                "scope_kind": "space",
                 **self.refs["attached"],
                 "reference": "SAME-1",
             }
@@ -966,9 +1003,10 @@ class PlanningScopeHttpTests(unittest.TestCase):
 
     def test_the_stream_says_when_an_agent_changed_without_resending_the_model(self) -> None:
         self.bind("attached")
+        self.name_project("attached")
         client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
         self.addCleanup(client.close)
-        client.request("GET", self.stream_path("attached"))
+        client.request("GET", self.stream_path("attached", "example-project"))
         response = client.getresponse()
         self.addCleanup(response.close)
         self.read_frame(response)
@@ -991,7 +1029,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         line = response.readline()
         self.assertTrue(line.startswith(b"data: "))
         self.assertNotIn(b"work_items", line)
-        self.bind("primary")
+        self.unregister()
         http_surface.watchers.WATCHERS.publish("changed")
         for _ in range(20):
             if response.readline() == b"":
@@ -1094,8 +1132,8 @@ class PlanningScopeHttpTests(unittest.TestCase):
 
     def test_exact_stream_refuses_invalid_or_stale_scope_before_streaming(self) -> None:
         self.bind("attached")
-        self.assertEqual(409, self.request(self.stream_path("primary"))[0])
-        path = self.stream_path("attached")
+        self.assertEqual(409, self.request(self.stream_path("primary", "example-project"))[0])
+        path = self.stream_path("attached", "example-project")
         for suffix in (
             "&space=OTHER",
             "&space_key=SAME",
@@ -1115,15 +1153,31 @@ class PlanningScopeHttpTests(unittest.TestCase):
             with self.subTest(query=query):
                 self.assertEqual(400, self.request("/api/events?view=planning&" + query)[0])
 
-    def test_context_directory_matches_the_current_project_contract(self) -> None:
+    def test_context_lists_every_space_of_every_store_with_its_projects(self) -> None:
         status, context = self.request("/api/platform/context?scope_kind=global")
         self.assertEqual(200, status)
-        project = context["state"]["payload"]["projects"][0]
-        self.assertEqual({"project_id", "title", "binding_state", "resources"}, set(project))
-        self.assertEqual("mapped", project["binding_state"])
+        spaces = context["state"]["payload"]["spaces"]
+        self.assertEqual(["primary:SAME", "attached:SAME"], [self.where(space) for space in spaces])
         self.assertEqual(
-            planning_space_entity(self.refs["primary"]), project["resources"][0]["resource_ref"]
+            {
+                "data_scope_id",
+                "space_key",
+                "name",
+                "default_project",
+                "projects",
+                "other_space_projects",
+            },
+            set(spaces[0]),
         )
+        self.assertEqual(
+            ("Shared name", "example-project", ["example-project"]),
+            (
+                spaces[0]["name"],
+                spaces[0]["default_project"],
+                [project["project_id"] for project in spaces[0]["projects"]],
+            ),
+        )
+        self.assertEqual((None, []), (spaces[1]["default_project"], spaces[1]["projects"]))
 
     def test_exact_model_and_inspector_read_attached_without_changing_it(self) -> None:
         status, primary = self.request(self.model_path("primary"))
@@ -1137,8 +1191,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.assertEqual("SAME-1", attached["work_items"][0]["reference"])
         inspector = "/api/modules/planning/work-item?" + urlencode(
             {
-                "scope_kind": "project",
-                "project_id": "example-project",
+                "scope_kind": "space",
                 **self.refs["attached"],
                 "reference": "SAME-1",
             }
@@ -1147,7 +1200,39 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertEqual("attached-only", item["state"]["payload"]["work_item"]["title"])
         self.assertEqual(before, hashlib.sha256(self.attached.read_bytes()).digest())
-        self.assertEqual(409, self.request(self.model_path("primary"))[0])
+        # The project now lives in the attached store's space, and narrows no other.
+        self.assertEqual(200, self.request(self.model_path("primary"))[0])
+        self.assertEqual(409, self.request(self.model_path("primary", "example-project"))[0])
+        self.assertEqual(200, self.request(self.model_path("attached", "example-project"))[0])
+
+    def test_a_project_narrows_the_read_of_an_attached_store_as_of_the_primary(self) -> None:
+        """The read and its stream keep the items naming the project, in whichever store."""
+
+        self.bind("attached")
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.attached)}):
+            conn = store.connect()
+            try:
+                named = service.create_work_item(conn, space="SAME", title="names the project")
+                conn.execute(
+                    "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+                    " VALUES (?, 'example-project', 'named')",
+                    (named["work_item_id"],),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        whole = self.request(self.model_path("attached"))[1]
+        self.assertEqual(
+            ["attached-only", "names the project"], sorted(i["title"] for i in whole["work_items"])
+        )
+        status, narrowed = self.request(self.model_path("attached", "example-project"))
+        self.assertEqual(200, status, narrowed)
+        self.assertEqual(["names the project"], [i["title"] for i in narrowed["work_items"]])
+        response = self.open_stream(self.stream_path("attached", "example-project"))
+        ((_name, _event_id, data),) = self.opening(response)
+        self.assertEqual(
+            ["names the project"], [i["title"] for i in json.loads(data)["work_items"]]
+        )
 
     def test_exact_http_model_keeps_work_after_a_thousand_backlog_items(self) -> None:
         conn = store.connect()
@@ -1171,11 +1256,13 @@ class PlanningScopeHttpTests(unittest.TestCase):
             ],
         )
 
-    def test_changed_binding_and_detached_store_refuse_without_primary_fallback(self) -> None:
+    def test_a_moved_project_or_a_detached_store_refuses_without_primary_fallback(self) -> None:
         self.bind("attached")
-        self.assertEqual(200, self.request(self.model_path("attached"))[0])
+        self.assertEqual(200, self.request(self.model_path("attached", "example-project"))[0])
         self.bind("primary")
-        status, refused = self.request(self.model_path("attached"))
+        # The space reads without its project; narrowed to a project it no longer has, it refuses.
+        self.assertEqual(200, self.request(self.model_path("attached"))[0])
+        status, refused = self.request(self.model_path("attached", "example-project"))
         self.assertEqual(409, status)
         self.assertEqual("unavailable", refused["status"])
         self.assertNotIn("work_items", refused)
@@ -1188,9 +1275,9 @@ class PlanningScopeHttpTests(unittest.TestCase):
         for suffix in ("&space=OTHER", "&space_key=SAME", "&extra=1"):
             with self.subTest(suffix=suffix):
                 self.assertEqual(400, self.request(path + suffix)[0])
-        self.assertEqual(
-            400, self.request("/api/planning?project=example-project&space_key=SAME")[0]
-        )
+        for query in ("project=example-project&space_key=SAME", "space_key=SAME"):
+            with self.subTest(query=query):
+                self.assertEqual(400, self.request(f"/api/planning?{query}")[0])
         self.assertEqual(409, self.request(path.replace("SAME", "NONE"))[0])
 
     def test_attached_loader_is_readonly_and_primary_mutation_stays_primary(self) -> None:
@@ -1199,7 +1286,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.addCleanup(conn.close)
         routing = PlanningRouting(conn, str(self.primary))
 
-        def attempted_write(selected: sqlite3.Connection, _key: str) -> dict:
+        def attempted_write(selected: sqlite3.Connection, _key: str, _project: str | None) -> dict:
             selected.execute("UPDATE work_items SET title='forbidden'")
             return {}
 
@@ -1264,15 +1351,14 @@ class PlanningScopeHttpTests(unittest.TestCase):
         return str(created["request_id"])
 
     def exact_read_paths(self, source: str) -> dict[str, str]:
-        exact = {"scope_kind": "project", "project_id": "example-project", **self.refs[source]}
+        exact = {"scope_kind": "space", **self.refs[source]}
         request_id = self.pending_request(source)
         return {
             "request detail": "/api/modules/planning/request?"
             + urlencode({**exact, "id": request_id}),
             "modules": "/api/modules",
             "context global": "/api/platform/context?scope_kind=global",
-            "context project": "/api/platform/context?"
-            + urlencode({"scope_kind": "project", "project_id": "example-project"}),
+            "context space": "/api/platform/context?" + urlencode(exact),
             "portfolio global": "/api/platform/planning?scope_kind=global",
             "portfolio directory": "/api/platform/planning?scope_kind=global&directory_only=true",
             "portfolio exact": "/api/platform/planning?" + urlencode(exact),
@@ -1308,12 +1394,13 @@ class PlanningScopeHttpTests(unittest.TestCase):
 
     def test_exact_stream_snapshot_writes_nothing(self) -> None:
         self.bind("attached")
+        self.name_project("attached")
         observer = self.observe_primary()
         self.assertEqual(200, self.request("/api/modules")[0])
         before = self.data_version(observer)
         client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
         self.addCleanup(client.close)
-        client.request("GET", self.stream_path("attached"))
+        client.request("GET", self.stream_path("attached", "example-project"))
         response = client.getresponse()
         self.addCleanup(response.close)
         self.addCleanup(self.end_stream, response)
@@ -1323,9 +1410,9 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.assertEqual(before, self.data_version(observer))
 
     def end_stream(self, response: http.client.HTTPResponse) -> None:
-        """Revoke the binding so the server ends the stream and lets go of the store."""
+        """Unregister the project so the server ends the stream and lets go of the store."""
 
-        self.bind("primary")
+        self.unregister()
         http_surface.watchers.WATCHERS.publish("changed")
         for _ in range(20):
             if response.readline() == b"":

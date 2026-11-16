@@ -26,7 +26,7 @@ ENTITY_KINDS = frozenset(
         "improvement-case",
     }
 )
-SCOPE_KINDS = frozenset({"global", "project"})
+SCOPE_KINDS = frozenset({"global", "space"})
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _SAFE_TEXT = re.compile(r"^[^\x00\r\n]{0,512}$")
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")

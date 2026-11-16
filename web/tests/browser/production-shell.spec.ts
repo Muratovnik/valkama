@@ -2,7 +2,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { PLATFORM_MODULE_IDS } from '@/shared/api/platformModuleContract.ts'
-import { planningSpaceEntity, planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
+import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
@@ -14,20 +14,24 @@ import {
   blockedWorkItem,
   dataScopeId,
   globalScope,
-  projectId,
-  projectScope,
+  planningSpace,
   spaceRef,
+  spaceScope,
   workItem,
   workItemRef,
 } from './planningFixtures.ts'
 import { test } from './test.ts'
+
+/** The address of the fixture space's Planning, with nothing after it. */
+const SPACE_ADDRESS = new RegExp(`/modules/planning/space/${dataScopeId}/${spaceRef.space_key}$`)
 
 test('cold start at "/" restores a canonical route with no error states', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   await installBackend(page)
   await page.goto('/')
-  await expect(page).toHaveURL(new RegExp(`/modules/planning/project/${projectId}$`))
+  // The one space this workstation has is where a first start opens.
+  await expect(page).toHaveURL(SPACE_ADDRESS)
   await expect(page.locator('.work-item-board')).toBeVisible()
   await expect(
     page.locator('.platform-state-panel[data-tone="danger"], .route-recovery'),
@@ -43,16 +47,14 @@ test('cold start honors the saved server-side route preference', async ({ page }
   await expect(page.locator('.route-recovery')).toHaveCount(0)
 })
 
-test('global Planning opens a mapped project using the current context wire contract', async ({
-  page,
-}) => {
+test('«All spaces» opens a space using the current context wire contract', async ({ page }) => {
   const { platformReads } = await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: globalScope }))
-  const project = page.locator('.portfolio-project').filter({ hasText: projectId })
-  await expect(project).toBeVisible()
-  await project.getByRole('button', { name: /Open project/i }).click()
-  await expect(page).toHaveURL(new RegExp(`/modules/planning/project/${projectId}$`))
-  await expect(page.locator('.operating-scope [role="combobox"]')).toContainText('Example Project')
+  const space = page.locator('.portfolio-space').filter({ hasText: planningSpace.name })
+  await expect(space).toBeVisible()
+  await space.getByRole('button', { name: /Open space/i }).click()
+  await expect(page).toHaveURL(SPACE_ADDRESS)
+  await expect(page.locator('.operating-scope [role="combobox"]')).toContainText(spaceRef.space_key)
   await expect(page.locator('.work-item-board')).toBeVisible()
   expect(platformReads.find((entry) => entry.startsWith('/api/planning?'))).toContain(
     `data_scope_id=${dataScopeId}`,
@@ -84,12 +86,12 @@ function openReferenceReader(page: Page): () => string | null {
  * the test keeps every generated test asserting one thing unconditionally.
  */
 const ROUTE_MARKERS: Record<string, string> = {
-  'planning:global': '.portfolio-project',
-  'planning:project': '.work-item-board',
+  'planning:global': '.portfolio-space',
+  'planning:space': '.work-item-board',
 }
 
 for (const moduleId of PLATFORM_MODULE_IDS) {
-  for (const scopeKind of ['global', 'project'] as const) {
+  for (const scopeKind of ['global', 'space'] as const) {
     const marker = ROUTE_MARKERS[`${moduleId}:${scopeKind}`] ?? '.module-stage'
 
     test(`${moduleId} renders at canonical ${scopeKind} route`, async ({ page }) => {
@@ -98,7 +100,7 @@ for (const moduleId of PLATFORM_MODULE_IDS) {
       await installBackend(page)
       const href = serializePlatformRoute({
         module_id: moduleId,
-        scope: scopeKind === 'global' ? globalScope : projectScope,
+        scope: scopeKind === 'global' ? globalScope : spaceScope,
       })
       await page.goto(href)
       await expect(page.locator('.app-shell')).toBeVisible()
@@ -119,9 +121,9 @@ for (const moduleId of PLATFORM_MODULE_IDS) {
   }
 }
 
-test('planning project workspace switches between board, graph, and list', async ({ page }) => {
+test('a planning space switches between board, graph, and list', async ({ page }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await expect(page.locator('.work-item-board')).toBeVisible()
   // The column is named by the state's own key, which is what the space declares.
   await expect(page.locator('.work-item-column[data-state="dev"]')).toContainText(workItem.title)
@@ -132,12 +134,12 @@ test('planning project workspace switches between board, graph, and list', async
   await expect(page).toHaveURL(/state=/)
 })
 
-test('global planning is a portfolio that opens the exact project space', async ({ page }) => {
+test('«All spaces» lists every space and opens the exact one', async ({ page }) => {
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: globalScope }))
-  await expect(page.locator('.portfolio-project')).toHaveCount(1)
-  await page.getByRole('button', { name: /Open project/i }).click()
-  await expect(page).toHaveURL(new RegExp(`/modules/planning/project/${projectId}$`))
+  await expect(page.locator('.portfolio-space')).toHaveCount(1)
+  await page.getByRole('button', { name: /Open space/i }).click()
+  await expect(page).toHaveURL(SPACE_ADDRESS)
   await expect(page.locator('.work-item-board')).toBeVisible()
 })
 
@@ -146,8 +148,7 @@ test('exact work item journey survives Back and reload', async ({ page }) => {
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(spaceRef),
+      scope: spaceScope,
       state: { view: 'list' },
     }),
   )
@@ -165,7 +166,7 @@ test('exact work item journey survives Back and reload', async ({ page }) => {
 
 test('a column tile opens the exact work item', async ({ page }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   await expect(page.locator('.drawer')).toBeVisible()
   await expect(page.locator('.drawer .head-reference')).toHaveText(workItemRef.reference)
@@ -173,7 +174,7 @@ test('a column tile opens the exact work item', async ({ page }) => {
 
 test('a related item opens over the one it came from, and Back returns to it', async ({ page }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer).toBeVisible()
@@ -202,7 +203,7 @@ function centreY(box: { height: number; y: number } | null): number {
 async function openRelatedCard(page: Page, width: number) {
   await page.setViewportSize({ width, height: 700 })
   await installBackend(page, { longRead: true })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await drawer.getByRole('tab', { name: /Relations/i }).click()
@@ -266,8 +267,7 @@ test('an attached same-key space stays readable but never reaches primary-only p
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(attachedSpaceRef),
+      scope: { kind: 'space', space_ref: attachedSpaceRef },
       state: { view: 'list' },
     }),
   )
@@ -320,28 +320,27 @@ test('an address that names no section is the main region and claims no section'
   }
 })
 
-// An address naming a project this workstation lacks left the scope selector
-// blank, and every project card repeated «Mapped» beside «Open project».
-test('a missing project is named in the scope selector, and mapped cards carry no badge', async ({
+// An address naming a space this workstation lacks says which one, in the page and in
+// the space choice, and offers the spaces that exist.
+test('a missing space is named in the space choice, and the spaces that exist are offered', async ({
   page,
 }) => {
   await installBackend(page)
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: { kind: 'project', project_ref: { project_id: 'gone-project' } },
+      scope: { kind: 'space', space_ref: { data_scope_id: dataScopeId, space_key: 'GONE' } },
     }),
   )
-  await expect(page.locator('.planning-missing-project')).toContainText('gone-project')
-  await expect(page.locator('.operating-scope [role="combobox"]')).toContainText('gone-project')
-  const project = page.locator('.portfolio-project').filter({ hasText: projectId })
-  await expect(project.getByRole('button', { name: /Open project/i })).toBeVisible()
-  await expect(project.getByText('Mapped', { exact: true })).toHaveCount(0)
+  await expect(page.locator('.planning-missing-space')).toContainText('GONE')
+  await expect(page.locator('.operating-scope [role="combobox"]')).toContainText('GONE')
+  const space = page.locator('.portfolio-space').filter({ hasText: planningSpace.name })
+  await expect(space.getByRole('button', { name: /Open space/i })).toBeVisible()
 })
 
 const MODULE_SCOPES = PLATFORM_MODULE_IDS.map((moduleId) => ({
   moduleId,
-  scope: projectScope,
+  scope: spaceScope,
 }))
 
 for (const width of [1280, 900]) {

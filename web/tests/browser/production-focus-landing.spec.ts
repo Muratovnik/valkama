@@ -16,7 +16,7 @@ import { LINK } from './documentBackend.ts'
 import { openFromCard } from './documentFocusMoves.ts'
 import { openCard } from './editorPage.ts'
 import { frames } from './frames.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { asked, openQuestion, send } from './questionBackend.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
@@ -182,7 +182,7 @@ for (const input of INPUTS) {
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
+        scope: spaceScope,
         entity: planningWorkItemEntity(workItemRef),
       }),
     )

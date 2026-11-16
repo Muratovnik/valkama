@@ -22,6 +22,7 @@ from . import (
     api,
     calls,
     images,
+    item_projects,
     mention_records,
     model,
     person_events,
@@ -57,6 +58,12 @@ _EDITED_LABELS = {
         "description": "Labels to take off the item; one it does not have is"
         " ignored. Not with labels.",
     },
+}
+#: The projects an item changes, by their ids in the registry: the whole set.
+_PROJECTS = {
+    "type": "array",
+    "items": {"type": "string"},
+    "maxItems": item_projects.MAX_PROJECTS,
 }
 WORK_ITEM_REFERENCE = {
     "type": "string",
@@ -333,7 +340,9 @@ TOOLS = [
     _tool(
         "list_planning_spaces",
         "List planning spaces",
-        "Every planning space with its key, its project, and how much work it holds.",
+        "Every planning space with its key, its projects and default project, its launch"
+        " place and how much work it holds. session_space names the space whose project"
+        " root holds your session's folder.",
         READ_ONLY,
         {},
     ),
@@ -341,7 +350,8 @@ TOOLS = [
         "get_planning_space",
         "Read a planning space",
         "One space and its workflow: the states, their categories, and the"
-        " transitions between them. Read this before asking for a state by name.",
+        " transitions between them, its projects with their roots, and its launch place."
+        " Read this before asking for a state by name.",
         READ_ONLY,
         {"space": _SPACE},
         ["space"],
@@ -349,11 +359,12 @@ TOOLS = [
     _tool(
         "create_planning_space",
         "Create a planning space",
-        "A new space in one project, with the default workflow. Its key is derived"
-        " from the name unless you name one.",
+        "A new space with the default workflow and no projects. Its key is derived from"
+        " the name unless you name one. A project joins a space through the registry"
+        " command: valkama projects bind <project> --space <KEY>.",
         WRITES,
-        {"project_id": _STR, "name": _STR, "key": _STR},
-        ["project_id", "name"],
+        {"name": _STR, "key": _STR},
+        ["name"],
     ),
     _tool(
         "create_work_item",
@@ -375,7 +386,11 @@ TOOLS = [
         " space whose title or description share the new title's words, best first,"
         " each by reference and title: read them, and merge the new item into one that"
         " is the same change. A hint, not a check: nothing is refused on it, and an"
-        " empty list does not prove there is no duplicate.",
+        " empty list does not prove there is no duplicate. projects names the projects"
+        " the item changes. space is where it lies: leave it out and the server places it"
+        " under its parent's space, else in the home space of its projects, else in your"
+        " session's space. Projects of two spaces need space, one of them. A goal or"
+        " stage names no projects.",
         WRITES,
         {
             "space": _SPACE,
@@ -389,6 +404,7 @@ TOOLS = [
             },
             "description": _STR,
             "labels": _LABELS,
+            "projects": _PROJECTS,
             "source": {
                 "type": "string",
                 "description": "Anchor into the owning document, e.g."
@@ -428,7 +444,7 @@ TOOLS = [
             "author": _AUTHOR,
             "verbose": _VERBOSE,
         },
-        ["space", "title"],
+        ["title"],
     ),
     _tool(
         "get_work_item",
@@ -511,7 +527,10 @@ TOOLS = [
         " category, kind, holder or parent. One compact row per item: reference, title,"
         " kind, state, priority, parent and holder; an accepted open goal or stage has"
         " state null and adds its container_state. kind=goal lists the goals, kind=stage"
-        " the stages."
+        " the stages. With space, the list holds that space's items and other spaces'"
+        " items that name one of its projects, marked other_space. project keeps the"
+        " items that name that project, in every space unless space is given; a goal or"
+        " stage names what a task under it names."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -529,6 +548,11 @@ TOOLS = [
                 "type": "string",
                 "description": "Only the children of this item, by its reference (MAIN-142)"
                 " or its work_item_id.",
+            },
+            "project": {
+                "type": "string",
+                "description": "Only the items that name this project, by its id in the"
+                " project registry.",
             },
             "limit": _INT,
             "offset": _OFFSET,
@@ -568,8 +592,8 @@ TOOLS = [
         "search_work_items",
         "Search work items",
         "Find the items holding every word of the query, in any order and in any of their"
-        " title, description, labels, summary, comments and questions (a question's prompt,"
-        " field and option text and its answer and note), best match first, the title"
+        " title, description, labels, projects, summary, comments and questions (a question's"
+        " prompt, field and option text and its answer and note), best match first, the title"
         " weighing most. Each word matches by its first five letters, so searching finds"
         " search; two or three telling words find more than a sentence. A query that is"
         " exactly a reference, such as MAIN-12 in any case, is read as one phrase and"
@@ -605,6 +629,8 @@ TOOLS = [
         " nothing at work stands unheld, and so is taking over a stale claim there. A"
         " released blocked task stays blocked, held by nobody. A transition to any state"
         " but an active or blocked one releases the item already: no release follows it."
+        " The answer names the root of each project the task changes in project_roots:"
+        " read each one's instructions before editing it."
         " The answer carries from_person when"
         " a person acted on the item in the interface since an agent last wrote to it:"
         " their words about this work, to read before the next step.",
@@ -628,6 +654,8 @@ TOOLS = [
         " in apply_work_item_changes's update); priority only breaks a tie. A goal, a stage"
         " and deferred work are never taken. The claim starts the item"
         " as claim_work_item does, so it answers in its active state with started."
+        " The answer names the root of each project the task changes in project_roots:"
+        " read each one's instructions before editing it."
         " Answers with nothing when no task is workable.",
         WRITES,
         {"space": _SPACE, "author": _AUTHOR},
@@ -660,9 +688,10 @@ TOOLS = [
         "Fold items that are one change — one cause, one fix — into the item that"
         " survives (id), all or nothing. Their checklist steps, keeping ids, ticks"
         " and step claims, their discussion threads whole, questions with their"
-        " replies, refs and links move to it; each merged item is linked duplicates"
-        " to it, gets a summary naming it, is released and closes in its cancelled"
-        " state. Their history, reports with their threads, description and parent"
+        " replies, refs, links and projects move to it; each merged item is linked"
+        " duplicates to it, gets a summary naming it, is released and closes in its"
+        " cancelled state. A project more than one of them names keeps the strongest"
+        " source: named, then commits, then migrated. Their history, reports with their threads, description and parent"
         " stay on them. Refused before anything is written:"
         " an item in another space, a closed item, a merged item with children, a goal"
         " or stage with a task (goals and stages merge only with each other),"
@@ -757,6 +786,11 @@ TOOLS = [
                     },
                     "parent": _PARENT,
                     "rank": _RANK,
+                    "projects": _PROJECTS
+                    | {
+                        "description": "projects replaces the projects the item names;"
+                        " the item stays in its space.",
+                    },
                     "mentions": _TEXT_MENTIONS,
                 },
             },
@@ -1284,6 +1318,35 @@ def _told(
     return run
 
 
+def _rooted(
+    write: Callable[[sqlite3.Connection, Mapping[str, object]], object],
+    claims: Callable[[Mapping[str, object]], bool],
+) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
+    """A write whose claim began or held the item answers with its `project_roots`.
+
+    The roots are what the agent reads each project's instructions from before it
+    edits there, and they are named where the claim is, short answer or verbose.
+    The HTTP boundary answers without them: a browser does not edit a checkout.
+    """
+
+    def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+        answer = write(conn, arguments)
+        if not claims(arguments) or not isinstance(answer, dict):
+            return answer
+        item = answer.get("work_item", answer)
+        if not isinstance(item, dict) or not isinstance(item.get("work_item_id"), str):
+            return answer
+        return {**answer, "project_roots": item_projects.project_roots(conn, item["work_item_id"])}
+
+    return run
+
+
+def _claim_asked(arguments: Mapping[str, object]) -> bool:
+    """Whether a creation or a batch names `claim: true`, its one claim group."""
+
+    return arguments.get("claim") is True
+
+
 def _claim_ready(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     """The item the queue handed over, whole: the agent needs the item it just took."""
 
@@ -1409,6 +1472,9 @@ def _compact_row(conn: sqlite3.Connection, item: dict) -> dict:
     # What an accepted open goal or stage derives, where it stands in no state.
     if item["container_state"] is not None:
         row["container_state"] = item["container_state"]
+    # The space an item of another space lies in, where a space's list holds it.
+    if item.get("other_space") is not None:
+        row["other_space"] = item["other_space"]
     # Why a search returned the item; a row without it cannot be told from noise.
     hits = ("comment_hit", "question_hit", "summary_hit")
     return row | {name: item[name] for name in hits if name in item}
@@ -1535,16 +1601,33 @@ def _answer(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object
     return _post("/api/planning/request/answer")(conn, rest)
 
 
+def _spaces(conn: sqlite3.Connection, _arguments: Mapping[str, object]) -> object:
+    """The spaces, and the calling session's among them: the one its folder stands in.
+
+    Only a tool call has a session; the HTTP list a screen draws from has none.
+    """
+
+    read = api.handle_get(conn, "/api/planning/spaces", {})
+    if read is None:  # pragma: no cover - the path table above is closed
+        raise ValueError("no planning spaces read")
+    session_space = item_projects.session_space(conn, calls.confirmed_session())
+    return {**read[1], "session_space": session_space}
+
+
 def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    return service.get_planning_space(conn, str(arguments["space"]))
+    (shown,) = item_projects.spaces_shown(
+        conn, [service.get_planning_space(conn, str(arguments["space"]))]
+    )
+    return shown
 
 
 OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
-    "list_planning_spaces": _get("/api/planning/spaces"),
+    "list_planning_spaces": _spaces,
     "get_planning_space": _space,
     "create_planning_space": _post("/api/planning/spaces"),
-    "create_work_item": _with_similar(
-        _acknowledged("/api/planning/work-items", acknowledgements.created)
+    "create_work_item": _rooted(
+        _with_similar(_acknowledged("/api/planning/work-items", acknowledgements.created)),
+        _claim_asked,
     ),
     "get_work_item": _work_item,
     "read_work_item_image": _image,
@@ -1557,20 +1640,24 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
             "kind",
             "owner",
             "parent",
+            "project",
             "limit",
             "offset",
         )
     ),
     "get_work_item_chain": _chain,
     "search_work_items": _listing(_search),
-    "claim_work_item": _acknowledged("/api/planning/work-item/claim", acknowledgements.claimed),
-    "claim_ready_work_item": _claim_ready,
+    "claim_work_item": _rooted(
+        _acknowledged("/api/planning/work-item/claim", acknowledgements.claimed),
+        lambda arguments: arguments.get("release") is not True,
+    ),
+    "claim_ready_work_item": _rooted(_claim_ready, lambda _arguments: True),
     "claim_work_item_checklist_item": _acknowledged(
         "/api/planning/work-item/checklist/claim", acknowledgements.step_changed
     ),
     "merge_work_items": _acknowledged("/api/planning/work-item/merge", acknowledgements.merged),
-    "apply_work_item_changes": _acknowledged(
-        "/api/planning/work-item/apply", acknowledgements.applied
+    "apply_work_item_changes": _rooted(
+        _acknowledged("/api/planning/work-item/apply", acknowledgements.applied), _claim_asked
     ),
     "delete_work_item": _post("/api/planning/work-item/delete"),
     "create_work_item_request": _post("/api/planning/work-item/request"),

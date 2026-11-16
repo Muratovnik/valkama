@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 
 import type { Page } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
+import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 
 import { chainResponse, emptyChain } from '../fixtures/chain.ts'
 import { noSessionUsage, noUsage, usageAnswer } from '../fixtures/usage.ts'
@@ -37,11 +37,11 @@ import {
   blockedWorkItem,
   dataScopeId,
   doneState,
+  emptySpaceRef,
   globalScope,
   now,
   planningReadyFor,
-  projectId,
-  projectScope,
+  shellSpaceFor,
   spaceRef,
   workItem,
   workItemRef,
@@ -61,7 +61,8 @@ export type BackendOptions = {
   /** The history the card's read answers with. */
   events?: unknown[]
   includeAttachedDuplicate?: boolean
-  includeUnboundPlanningProject?: boolean
+  /** A second space in the primary store, with no work and no project. */
+  includeEmptySpace?: boolean
   /**
    * A card's body long enough to read well past its head, which a fixture card's
    * own body is not.
@@ -138,7 +139,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
       const request = route.request()
       const url = new URL(request.url())
       const path = url.pathname
-      const scope = url.searchParams.get('scope_kind') === 'project' ? projectScope : globalScope
+      const scope = scopeOf(url.searchParams)
       const fulfill = (body: unknown, status = 200) =>
         route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
 
@@ -268,19 +269,11 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
               status: 'ready',
               payload: {
                 primary: { data_scope_id: dataScopeId, is_writable: true },
-                projects: [
-                  {
-                    project_id: projectId,
-                    title: 'Example Project',
-                    binding_state: 'mapped',
-                    resources: [
-                      ...(options.includeAttachedDuplicate
-                        ? [{ resource_ref: planningSpaceEntity(attachedSpaceRef), state: 'mapped' }]
-                        : []),
-                      { resource_ref: planningSpaceEntity(spaceRef), state: 'mapped' },
-                    ],
-                  },
-                ],
+                spaces: [
+                  spaceRef,
+                  ...(options.includeAttachedDuplicate ? [attachedSpaceRef] : []),
+                  ...(options.includeEmptySpace ? [emptySpaceRef] : []),
+                ].map((space) => shellSpaceFor(space)),
                 ui_prefs: options.uiPrefs ?? null,
               },
             },
@@ -301,9 +294,9 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
 
         '/api/platform/planning': () => {
           let exactSpaceRef = spaceRef
-          if (scope.kind === 'project') {
-            const requestedScopeId = url.searchParams.get('data_scope_id')
-            const requestedKey = url.searchParams.get('space_key')
+          if (scope.kind === 'space') {
+            const requestedScopeId = scope.space_ref.data_scope_id
+            const requestedKey = scope.space_ref.space_key
             if (
               requestedKey !== spaceRef.space_key ||
               ![
@@ -322,7 +315,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
             }
             exactSpaceRef = requestedScopeId === attachedDataScopeId ? attachedSpaceRef : spaceRef
           }
-          const payload = planningReadyFor(exactSpaceRef, options.includeUnboundPlanningProject)
+          const payload = planningReadyFor(exactSpaceRef, options.includeEmptySpace)
           if (scope.kind === 'global' && url.searchParams.get('directory_only') === 'true')
             payload.planning_spaces = []
           platformReads.push(`${path}?${url.searchParams.toString()}`)
@@ -391,7 +384,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           platformReads.push(`${path}?${url.searchParams.toString()}`)
           return fulfill({
             interface_version: 'valkama-planning-work-item',
-            scope: projectScope,
+            scope,
             work_item_ref: exactRef,
             state: {
               interface_version: 'valkama-ui-state',
@@ -448,4 +441,17 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
     platformReads,
     prefsWrites,
   }
+}
+
+/** The scope a request names in its query, as the server reads it. */
+function scopeOf(query: URLSearchParams): OperatingScope {
+  if (query.get('scope_kind') !== 'space') return globalScope
+  const space_ref = {
+    data_scope_id: query.get('data_scope_id') ?? '',
+    space_key: query.get('space_key') ?? '',
+  }
+  const project = query.get('project_id')
+  return project === null
+    ? { kind: 'space', space_ref }
+    : { kind: 'space', space_ref, project_ref: { project_id: project } }
 }

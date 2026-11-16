@@ -15,7 +15,7 @@ export function hasModuleRenderer(value: string): value is PlatformRendererModul
 }
 
 export type NavigationGroup = 'work' | 'understand' | 'capabilities' | 'system'
-type ModuleOperatingLevel = 'global' | 'project'
+type ModuleOperatingLevel = 'global' | 'space'
 type SecondaryContextBehavior = 'all' | 'none' | 'unavailable'
 export type ModuleUiStateName =
   'loading' | 'ready' | 'empty' | 'error' | 'unavailable' | 'permission-denied' | 'degraded'
@@ -56,17 +56,17 @@ export type ModuleManifest = {
   secondary_actions: string[]
   secondary_context: {
     global: ModuleSecondaryContext
-    project: ModuleSecondaryContext
+    space: ModuleSecondaryContext
   }
   semantics: {
     global: ModuleLevelSemantics
-    project: ModuleLevelSemantics
+    space: ModuleLevelSemantics
   }
   sse_subscriptions: string[]
   state_schema: ModuleStateSchema
   states: {
     global: ModuleStateSupport
-    project: ModuleStateSupport
+    space: ModuleStateSupport
   }
   supported_entity_kinds: EntityKind[]
   title_key: string
@@ -277,15 +277,15 @@ export function validateModuleManifest(value: unknown, path = 'module'): ModuleM
     !Array.isArray(object.operating_levels) ||
     object.operating_levels.length !== 2 ||
     object.operating_levels[0] !== 'global' ||
-    object.operating_levels[1] !== 'project'
+    object.operating_levels[1] !== 'space'
   )
-    invalid(`${path}.operating_levels`, 'must be exactly [global, project]')
+    invalid(`${path}.operating_levels`, 'must be exactly [global, space]')
   const semantics = plainObject(object.semantics, `${path}.semantics`)
-  exactKeys(semantics, ['global', 'project'], `${path}.semantics`)
+  exactKeys(semantics, ['global', 'space'], `${path}.semantics`)
   const secondary = plainObject(object.secondary_context, `${path}.secondary_context`)
-  exactKeys(secondary, ['global', 'project'], `${path}.secondary_context`)
+  exactKeys(secondary, ['global', 'space'], `${path}.secondary_context`)
   const states = plainObject(object.states, `${path}.states`)
-  exactKeys(states, ['global', 'project'], `${path}.states`)
+  exactKeys(states, ['global', 'space'], `${path}.states`)
   const primaryActions = boundedList(
     object.primary_actions,
     `${path}.primary_actions`,
@@ -309,14 +309,14 @@ export function validateModuleManifest(value: unknown, path = 'module'): ModuleM
     navigation_group: navigationGroup,
     route_namespace: id,
     state_schema: stateSchema(object.state_schema, `${path}.state_schema`),
-    operating_levels: ['global', 'project'],
+    operating_levels: ['global', 'space'],
     semantics: {
       global: levelSemantics(semantics.global, `${path}.semantics.global`),
-      project: levelSemantics(semantics.project, `${path}.semantics.project`),
+      space: levelSemantics(semantics.space, `${path}.semantics.space`),
     },
     secondary_context: {
       global: secondaryContext(secondary.global, `${path}.secondary_context.global`),
-      project: secondaryContext(secondary.project, `${path}.secondary_context.project`),
+      space: secondaryContext(secondary.space, `${path}.secondary_context.space`),
     },
     required_read_models: boundedList(object.required_read_models, `${path}.required_read_models`),
     sse_subscriptions: boundedList(object.sse_subscriptions, `${path}.sse_subscriptions`),
@@ -330,7 +330,7 @@ export function validateModuleManifest(value: unknown, path = 'module'): ModuleM
     feature_capabilities: boundedList(object.feature_capabilities, `${path}.feature_capabilities`),
     states: {
       global: stateSupport(states.global, `${path}.states.global`),
-      project: stateSupport(states.project, `${path}.states.project`),
+      space: stateSupport(states.space, `${path}.states.space`),
     },
   }
 }

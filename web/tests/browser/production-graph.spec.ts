@@ -5,7 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { graphRoute, longChainHere, routeState, serve, smallChain } from './chainFixtures.ts'
-import { blockedWorkItem, doneState, projectScope } from './planningFixtures.ts'
+import { blockedWorkItem, doneState, spaceScope } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { test } from './test.ts'
 
@@ -18,7 +18,7 @@ for (const width of [1440, 390]) {
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
+        scope: spaceScope,
         state: { view: 'graph' },
       }),
     )
@@ -116,7 +116,7 @@ for (const width of [1440, 390]) {
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
+        scope: spaceScope,
         state: { view: 'graph' },
       }),
     )
@@ -148,7 +148,7 @@ for (const width of [1440, 390]) {
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
+        scope: spaceScope,
         state: { view: 'graph' },
       }),
     )

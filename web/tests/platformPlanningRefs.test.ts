@@ -23,44 +23,44 @@ test('Planning refs alone own canonical storage conversion', () => {
   assert.deepEqual(planningWorkItemRef(workItem), { space_ref: spaceRef, reference: 'MAIN-42' })
 })
 
-test('a present Planning entity must decode and belong to the selected project', () => {
-  const resources = [planningSpaceEntity(spaceRef)]
+test('a present Planning entity must decode and belong to the space the scope names', () => {
   const matching = planningWorkItemEntity({ space_ref: spaceRef, reference: 'MAIN-42' })
-  assert.equal(resolvePlanningRouteSelection(matching, resources, true).status, 'ready')
+  assert.deepEqual(resolvePlanningRouteSelection(matching, spaceRef), {
+    status: 'ready',
+    space_ref: spaceRef,
+    work_item_ref: { space_ref: spaceRef, reference: 'MAIN-42' },
+  })
+  assert.deepEqual(resolvePlanningRouteSelection(planningSpaceEntity(otherSpaceRef), spaceRef), {
+    status: 'unavailable',
+    reason: 'other-space',
+  })
   assert.deepEqual(
-    resolvePlanningRouteSelection(planningSpaceEntity(otherSpaceRef), resources, true),
-    { status: 'unavailable', reason: 'resource-not-mapped' },
-  )
-  assert.deepEqual(
-    resolvePlanningRouteSelection(
-      { kind: 'planning-space', resource_id: 'opaque' },
-      resources,
-      true,
-    ),
+    resolvePlanningRouteSelection({ kind: 'planning-space', resource_id: 'opaque' }, spaceRef),
     { status: 'unavailable', reason: 'invalid-planning-entity' },
   )
   assert.deepEqual(
     resolvePlanningRouteSelection(
       { kind: 'session', client_family: 'codex', session_id: 'session-1' },
-      resources,
-      true,
+      spaceRef,
     ),
     { status: 'unavailable', reason: 'invalid-planning-entity' },
   )
 })
 
-test('only an absent entity may use the exact sole mapped Planning resource', () => {
-  const resources = [planningSpaceEntity(spaceRef)]
-  assert.deepEqual(resolvePlanningRouteSelection(undefined, resources, true), {
+test('a space without an entity opens the space itself, and every space opens any card', () => {
+  assert.deepEqual(resolvePlanningRouteSelection(undefined, spaceRef), {
     status: 'ready',
     space_ref: spaceRef,
   })
+  assert.deepEqual(resolvePlanningRouteSelection(undefined), { status: 'ready' })
   assert.equal(
     resolvePlanningRouteSelection(
-      { kind: 'planning-space', resource_id: 'opaque' },
-      resources,
-      true,
+      planningWorkItemEntity({ space_ref: otherSpaceRef, reference: 'OTHER-1' }),
     ).status,
+    'ready',
+  )
+  assert.equal(
+    resolvePlanningRouteSelection({ kind: 'planning-space', resource_id: 'opaque' }).status,
     'unavailable',
   )
 })

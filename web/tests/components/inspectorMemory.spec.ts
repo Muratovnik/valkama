@@ -64,7 +64,8 @@ describe('InspectorMemory source identity', () => {
     expect(repair.text()).toBe('Diagnostics')
     expect(parsePlatformRoute(repair.attributes('href') ?? '')).toMatchObject({
       module_id: 'settings',
-      scope: { kind: 'project', project_ref: { project_id: projectId } },
+      // Diagnostics are the workstation's, read in no space.
+      scope: { kind: 'global' },
       state: { section: 'diagnostics' },
     })
     await wrapper.get('input').setValue('decision')

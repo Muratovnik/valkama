@@ -5,7 +5,7 @@ import { lookAcrossScopes } from '@/pages/planning/composables/usePlanningChainS
 
 import { planningSpaceRoute, planningTargetRoute } from '@/shared/api/planningTarget.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
-import { planningSpaceRef, planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
+import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 /** What of the live-work frame is on show: a space's board, or a card in it. */
@@ -18,24 +18,18 @@ export interface LiveShown {
 /** The place a row of the side panel names: a space and, for a row, its item. */
 export interface LivePlace {
   key: string
-  project_id: string | null
   reference: string | null
 }
 
+/** The space the page stands in, by its scope, and the card its address opens there. */
 function shownOn(route: PlatformRoute): (LiveShown & { scopeId: string }) | null {
-  if (route.module_id !== 'planning') return null
+  if (route.module_id !== 'planning' || route.scope.kind !== 'space') return null
+  const { data_scope_id: scopeId, space_key: key } = route.scope.space_ref
   try {
     const item = planningWorkItemRef(route.entity)
-    if (item)
-      return {
-        scopeId: item.space_ref.data_scope_id,
-        key: item.space_ref.space_key,
-        reference: item.reference,
-      }
-    const space = planningSpaceRef(route.entity)
-    return space ? { scopeId: space.data_scope_id, key: space.space_key, reference: null } : null
+    return { scopeId, key, reference: item?.reference ?? null }
   } catch {
-    return null
+    return { scopeId, key, reference: null }
   }
 }
 
@@ -46,7 +40,7 @@ function shownOn(route: PlatformRoute): (LiveShown & { scopeId: string }) | null
  * is the primary one. A row opens its card the way a card opens on the board: in its
  * own space the work is still looked at as it was, the whole state kept; in another
  * space what the module carries across scopes goes along, so the view does not
- * change under the reader. A space no project binds has nowhere to open.
+ * change under the reader. A row opens the whole space, not one project of it.
  */
 export function useLiveWorkNav(
   route: Ref<PlatformRoute>,
@@ -62,20 +56,15 @@ export function useLiveWorkNav(
 
   function target(place: LivePlace): PlatformRoute | null {
     const scopeId = primaryScopeId()
-    if (scopeId === null || place.project_id === null) return null
+    if (scopeId === null) return null
     const space_ref = { data_scope_id: scopeId, space_key: place.key }
     const next =
       place.reference === null
-        ? planningSpaceRoute(place.project_id, space_ref)
-        : planningTargetRoute({
-            project_id: place.project_id,
-            space_ref,
-            reference: place.reference,
-            writable: true,
-          })
+        ? planningSpaceRoute(space_ref)
+        : planningTargetRoute({ space_ref, reference: place.reference, writable: true })
     if (route.value.module_id !== 'planning') return next
-    const sameSpace = shown.value?.scopeId === scopeId && shown.value.key === place.key
-    const state = sameSpace ? route.value.state : lookAcrossScopes(route.value.state)
+    const inSpace = shown.value?.scopeId === scopeId && shown.value.key === place.key
+    const state = inSpace ? route.value.state : lookAcrossScopes(route.value.state)
     return state && Object.keys(state).length > 0 ? { ...next, state } : next
   }
 

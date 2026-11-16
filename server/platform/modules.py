@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from .module_manifest import MODULES_INTERFACE, validate_module_manifest
+from .module_manifest import MODULES_INTERFACE, OPERATING_LEVELS, validate_module_manifest
 
 _ALL_STATES = [
     "loading",
@@ -45,27 +45,25 @@ def _module(
     icon_key,
     allowed_keys,
     read_global,
-    read_project,
+    read_space,
     action_global,
-    action_project,
+    action_space,
     required_read_models,
     sse_subscriptions,
     supported_entity_kinds,
     secondary_global_kinds,
-    secondary_project_kinds,
+    secondary_space_kinds,
     feature_capabilities,
     *,
-    project_supported_states=None,
-    project_unsupported_reason=None,
-    project_secondary_behavior="all",
+    space_supported_states=None,
+    space_unsupported_reason=None,
+    space_secondary_behavior="all",
 ):
-    project_state = {
-        "supported": list(
-            _ALL_STATES if project_supported_states is None else project_supported_states
-        )
+    space_state = {
+        "supported": list(_ALL_STATES if space_supported_states is None else space_supported_states)
     }
-    if project_unsupported_reason is not None:
-        project_state["unsupported_reason"] = project_unsupported_reason
+    if space_unsupported_reason is not None:
+        space_state["unsupported_reason"] = space_unsupported_reason
     return validate_module_manifest(
         {
             "interface_version": MODULES_INTERFACE,
@@ -80,28 +78,25 @@ def _module(
                 "allowed_keys": allowed_keys,
                 "max_bytes": 2048,
             },
-            "operating_levels": ["global", "project"],
+            "operating_levels": list(OPERATING_LEVELS),
             "semantics": {
                 "global": {"read_models": read_global, "action_semantics": action_global},
-                "project": {"read_models": read_project, "action_semantics": action_project},
+                "space": {"read_models": read_space, "action_semantics": action_space},
             },
             "secondary_context": {
                 "global": {"kinds": secondary_global_kinds, "behavior": "all"},
-                "project": {
-                    "kinds": secondary_project_kinds,
-                    "behavior": project_secondary_behavior,
-                },
+                "space": {"kinds": secondary_space_kinds, "behavior": space_secondary_behavior},
             },
             "required_read_models": required_read_models,
             "sse_subscriptions": sse_subscriptions,
             "supported_entity_kinds": supported_entity_kinds,
-            "primary_actions": action_project,
+            "primary_actions": action_space,
             "secondary_actions": action_global,
             "inspector_owner": f"module.{module_id}",
             "feature_capabilities": feature_capabilities,
             "states": {
                 "global": {"supported": list(_ALL_STATES)},
-                "project": project_state,
+                "space": space_state,
             },
         }
     )
@@ -132,7 +127,7 @@ _MODULES = (
             "holder",
         ],
         ["planning.spaces", "planning.work-items"],
-        ["planning.project-spaces", "planning.work-items"],
+        ["planning.space", "planning.work-items"],
         ["module.planning.create-work-item", "module.planning.open-work-item"],
         ["module.planning.create-work-item", "module.planning.open-work-item"],
         ["planning-spaces", "work-items"],
@@ -185,9 +180,9 @@ _MODULES = (
         "settings-2",
         ["section", "query"],
         [],
-        ["project.bindings"],
+        ["space.projects"],
         ["module.settings.open-adapter"],
-        ["module.settings.configure-project"],
+        ["module.settings.configure-space"],
         ["settings"],
         [],
         # A task's card opens over the section and the address names it, so Back closes it.
@@ -201,7 +196,7 @@ _MODULES = (
 #: When the module list above last changed. A registration is never changed at
 #: runtime any more, so this is the one `updated_at` every registration reports;
 #: move it with a change to the list or to a manifest.
-DECLARED_AT = "2026-11-13T18:00:00Z"
+DECLARED_AT = "2026-11-16T12:00:00Z"
 
 
 def _registration(manifest: dict) -> dict:

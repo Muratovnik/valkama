@@ -9,7 +9,7 @@ a row of its own:
 |---|---|
 | `session` | its id, which opens it |
 | `title` | the name its client gave it, or null when there is none to read |
-| `folder` | the last part of the folder it was opened in, or empty |
+| `folder` | the last part of the folder that places it (`sessions.session_folder`), or empty |
 | `state` | `working` or `waiting`, as `live_work` reads the session |
 | `long` | whether it has waited for longer than `live_work.WAITING_LONG` |
 | `asks` | whether it waits for a person in the middle of a turn, not after one |
@@ -65,7 +65,11 @@ _SESSIONS = (
 
 @dataclass(frozen=True)
 class Listed:
-    """One session's row, with the folder that says which space it is drawn under."""
+    """One session's row, with the folder that says which space it is drawn under.
+
+    The folder is `sessions.session_folder`, the one `sessions.session_place` places a
+    session by, so the frame and every other reader of a session's place agree.
+    """
 
     folder: str
     row: dict
@@ -193,7 +197,7 @@ def listed(
     for row in conn.execute(_SESSIONS, (json.dumps(sorted(apart)),)):
         session = str(row["id"])
         work = apart[session]
-        folder = str(row["opened_folder"] or row["cwd"] or "")
+        folder = sessions.session_folder(row)
         found.append(
             Listed(
                 folder,

@@ -22,7 +22,10 @@ test.beforeEach(async ({ page }) => {
       contentType: 'application/json',
       body: JSON.stringify({
         interface_version: 'valkama-planning-work-item',
-        scope: { kind: 'project', project_ref: { project_id: 'example-project' } },
+        scope: {
+          kind: 'space',
+          space_ref: { data_scope_id: '00000000-0000-4000-8000-000000000700', space_key: 'MAIN' },
+        },
         work_item_ref: {
           space_ref: { data_scope_id: '00000000-0000-4000-8000-000000000700', space_key: 'MAIN' },
           reference: 'MAIN-241',
@@ -60,6 +63,7 @@ test.beforeEach(async ({ page }) => {
               },
               parent_id: null,
               labels: [],
+              projects: [],
               source: '',
               open: true,
               container_state: null,
@@ -151,6 +155,7 @@ test.beforeEach(async ({ page }) => {
               deletions: 4,
               commits: [],
               quality: 'observed',
+              added: [],
             },
             started_at: new Date().toISOString(),
             ended_at: new Date().toISOString(),

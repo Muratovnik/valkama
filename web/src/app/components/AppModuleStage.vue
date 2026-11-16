@@ -11,6 +11,7 @@ import ModuleFrame from '@/widgets/module-frame/components/ModuleFrame.vue'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 const props = defineProps<{
@@ -34,7 +35,7 @@ const emit = defineEmits<{
   'go': [route: PlatformRoute]
   'locale': [value: string]
   'notice': [message: string]
-  'open-project': [projectId: string, moduleId?: ModuleId]
+  'open-space': [space: PlanningSpaceRef]
   'question-taken': []
   'state': [state: Record<string, string | number | boolean>, mode?: 'push' | 'replace']
 }>()
@@ -48,9 +49,9 @@ async function refresh() {
 function stateValue(key: string, fallback = '') {
   return String(props.route.state?.[key] ?? fallback)
 }
-/** The project a module scoped to one reads alone; null at the top. */
+/** The project a scope narrowed to one reads alone; null in a whole space and at the top. */
 const scopeProject = computed(() =>
-  props.scope.kind === 'project' ? props.scope.project_ref.project_id : null,
+  props.scope.kind === 'space' ? (props.scope.project_ref?.project_id ?? null) : null,
 )
 /** The work item whose card is on show, for as long as its module is. */
 const openCardId = computed(
@@ -74,7 +75,7 @@ defineExpose({ openCardId, refresh })
     @find="(text) => emit('find', text)"
     @state="(state) => emit('state', state)"
     @notice="(message) => emit('notice', message)"
-    @open-project="(id) => emit('open-project', id)"
+    @open-space="(space) => emit('open-space', space)"
   />
 
   <ModuleFrame

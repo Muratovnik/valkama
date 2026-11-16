@@ -4,23 +4,41 @@
   "planning_spaces": [
     {
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
-      "project_id": "example-project",
       "name": "Contract",
       "key": "MAIN",
       "provider_kind": "local",
+      "launch_place": "space",
       "work_items": 14,
       "open": 13,
       "active": 2,
       "completed": 1,
-      "updated_at": "2026-01-02T03:04:05Z"
+      "updated_at": "2026-01-02T03:04:05Z",
+      "projects": [
+        {
+          "project_id": "example-project",
+          "display_name": "example-project",
+          "root": "/workspace",
+          "default": true
+        }
+      ],
+      "default_project": "example-project"
     }
   ],
   "planning_space": {
     "planning_space_id": "00000000-0000-4000-8000-000000000002",
-    "project_id": "example-project",
     "name": "Contract",
     "key": "MAIN",
-    "provider_kind": "local"
+    "provider_kind": "local",
+    "launch_place": "space",
+    "projects": [
+      {
+        "project_id": "example-project",
+        "display_name": "example-project",
+        "root": "/workspace",
+        "default": true
+      }
+    ],
+    "default_project": "example-project"
   },
   "workflow": {
     "workflow_id": "00000000-0000-4000-8000-000000000024",
@@ -344,6 +362,7 @@
       "claim_state": null,
       "parent_id": null,
       "labels": [],
+      "projects": [],
       "source": "",
       "checklist": [],
       "revision": 0,
@@ -352,7 +371,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": true,
-      "comment_count": 7
+      "comment_count": 7,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000001",
@@ -378,6 +398,7 @@
       "claim_state": null,
       "parent_id": null,
       "labels": [],
+      "projects": [],
       "source": "",
       "checklist": [],
       "revision": 1,
@@ -386,7 +407,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": true,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000031",
@@ -412,6 +434,7 @@
       "claim_state": null,
       "parent_id": null,
       "labels": [],
+      "projects": [],
       "source": "",
       "checklist": [],
       "revision": 0,
@@ -420,7 +443,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000032",
@@ -446,6 +470,7 @@
       "claim_state": null,
       "parent_id": null,
       "labels": [],
+      "projects": [],
       "source": "",
       "checklist": [],
       "revision": 0,
@@ -454,7 +479,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000033",
@@ -480,6 +506,7 @@
       "claim_state": null,
       "parent_id": "00000000-0000-4000-8000-000000000032",
       "labels": [],
+      "projects": [],
       "source": "",
       "checklist": [],
       "revision": 0,
@@ -488,7 +515,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000034",
@@ -514,6 +542,7 @@
       "claim_state": null,
       "parent_id": "00000000-0000-4000-8000-000000000033",
       "labels": [],
+      "projects": [],
       "source": "",
       "checklist": [],
       "revision": 0,
@@ -522,7 +551,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": true,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000035",
@@ -551,6 +581,13 @@
       "claim_state": null,
       "parent_id": "00000000-0000-4000-8000-000000000036",
       "labels": [],
+      "projects": [
+        {
+          "project_id": "example-project",
+          "display_name": "example-project",
+          "source": "named"
+        }
+      ],
       "source": "",
       "checklist": [],
       "revision": 0,
@@ -559,7 +596,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": true,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000037",
@@ -588,6 +626,7 @@
       "claim_state": null,
       "parent_id": "00000000-0000-4000-8000-000000000038",
       "labels": [],
+      "projects": [],
       "source": "",
       "checklist": [],
       "revision": 0,
@@ -596,7 +635,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": true,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000010",
@@ -625,6 +665,7 @@
       "claim_state": "live",
       "parent_id": null,
       "labels": [],
+      "projects": [],
       "source": "",
       "checklist": [
         {
@@ -655,7 +696,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 2
+      "comment_count": 2,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000039",
@@ -684,6 +726,7 @@
       "claim_state": "live",
       "parent_id": "00000000-0000-4000-8000-000000000031",
       "labels": [],
+      "projects": [],
       "source": "",
       "checklist": [],
       "revision": 1,
@@ -692,7 +735,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000040",
@@ -721,6 +765,7 @@
       "claim_state": null,
       "parent_id": "00000000-0000-4000-8000-000000000041",
       "labels": [],
+      "projects": [],
       "source": "",
       "checklist": [],
       "revision": 2,
@@ -729,7 +774,8 @@
       "closed_at": "2026-01-02T03:04:05Z",
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 1
+      "comment_count": 1,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000041",
@@ -752,6 +798,13 @@
       "claim_state": null,
       "parent_id": null,
       "labels": [],
+      "projects": [
+        {
+          "project_id": "example-project",
+          "display_name": "example-project",
+          "source": "named"
+        }
+      ],
       "source": "",
       "checklist": [],
       "revision": 0,
@@ -760,7 +813,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000038",
@@ -783,6 +837,13 @@
       "claim_state": null,
       "parent_id": "00000000-0000-4000-8000-000000000041",
       "labels": [],
+      "projects": [
+        {
+          "project_id": "example-project",
+          "display_name": "example-project",
+          "source": "named"
+        }
+      ],
       "source": "",
       "checklist": [],
       "revision": 0,
@@ -791,7 +852,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000036",
@@ -814,6 +876,13 @@
       "claim_state": null,
       "parent_id": "00000000-0000-4000-8000-000000000038",
       "labels": [],
+      "projects": [
+        {
+          "project_id": "example-project",
+          "display_name": "example-project",
+          "source": "named"
+        }
+      ],
       "source": "",
       "checklist": [],
       "revision": 0,
@@ -822,10 +891,12 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     }
   ],
   "links": [],
+  "other_space_ends": [],
   "stale_claims": [],
   "live_work": {
     "00000000-0000-4000-8000-000000000010": {

@@ -36,7 +36,9 @@ export function useWorkItemReferencePreview() {
  * drawn at once from the window's cache while it is read again in the background;
  * only an item nothing is known of holds the card for its answer.
  */
-export function useReadWorkItemPreview(projectTitle: (projectId: string) => string | null) {
+export function useReadWorkItemPreview(
+  spaceTitle: (space: PreviewCandidate['space_ref']) => string | null,
+) {
   const previewOf = useWorkItemReferencePreview()
   const reads = useWorkItemPreviewReads()
   const last = shallowRef<{ read: PreviewRead; reference: string } | null>(null)
@@ -52,7 +54,7 @@ export function useReadWorkItemPreview(projectTitle: (projectId: string) => stri
       return {
         reference,
         item: record?.item ?? null,
-        project: record ? projectTitle(record.candidate.project_id) : null,
+        space: record ? spaceTitle(record.candidate.space_ref) : null,
         since,
       }
     }

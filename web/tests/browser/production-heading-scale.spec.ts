@@ -23,7 +23,7 @@ import { REVIEW_PROMPT, reviewFields } from '../support/reviewQuestion.ts'
 import { installBackend } from './backend.ts'
 import { boardRoute } from './boardPage.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { asked, openQuestion } from './questionBackend.ts'
 import { test } from './test.ts'
 
@@ -45,7 +45,7 @@ type Heading = [what: string, selector: string, level: Level]
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 
@@ -191,7 +191,7 @@ test("a question's groups stand under the card's discussion and in the questions
 
 test('Settings and its Diagnostics step down from the module name', async ({ page }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   await expect(page.locator('.settings-group .section-heading').first()).toBeVisible()
   await expectScale(page, 'General', [
     moduleName,
@@ -248,7 +248,7 @@ test('Settings ranks its headings by their nesting, under the module name', asyn
   page,
 }, info) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   await expect(page.locator('.settings-group .section-heading').first()).toBeVisible()
   const general = await outline(page)
   expect.soft(skips(general), 'General: no rank skipped').toEqual([])

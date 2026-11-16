@@ -31,7 +31,7 @@ class _Store(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="words", name="Words", key="WRD")
+        service.create_planning_space(self.conn, name="Words", key="WRD")
 
     def item(self, title: str, **fields: object) -> dict:
         return service.create_work_item(self.conn, space="WRD", title=title, **fields)
@@ -176,7 +176,7 @@ class WordSearchTests(_Store):
         self.assertNotIn("summary_hit", hit)
 
     def test_a_space_scopes_the_word_search(self) -> None:
-        service.create_planning_space(self.conn, project_id="other", name="Other", key="OTH")
+        service.create_planning_space(self.conn, name="Other", key="OTH")
         here = self.item("Shared wording")
         service.create_work_item(self.conn, space="OTH", title="Shared wording")
         self.assertEqual([here["reference"]], self.found("wording", space="WRD"))
@@ -218,7 +218,7 @@ class SimilarTests(_Store):
 
     def test_a_linked_item_or_another_space_is_not_news(self) -> None:
         linked = self.item("Calibrate the hygrometer")
-        service.create_planning_space(self.conn, project_id="other", name="Other", key="OTH")
+        service.create_planning_space(self.conn, name="Other", key="OTH")
         service.create_work_item(self.conn, space="OTH", title="Calibrate the hygrometer")
         answer = self.create(
             title="Calibrate the hygrometer again",

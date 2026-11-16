@@ -781,13 +781,25 @@ as its one action; the wide rail refreshes on the press as it always did. A
 paragraph about paused updates once stood in the flow over the views and moved
 the board and the graph 46px down for as long as the server
 was away; a card read that never reached the server names the connection the
-same way, not a record that could not be loaded. The context bar keeps the
-selected Planning space or operating scope and global activity controls in
-fixed, predictable positions.
+same way, not a record that could not be loaded.
+
+The context bar holds the scope in two choices, at its end in fixed positions. The first
+is «All spaces» or one space, named by its key with its name under it; «All spaces» lists
+every space with its work count and its projects, each card opening the whole space. The
+second stands only in a space with more than one project to choose, and an address that
+narrows to a project keeps it on show: «All projects», the space's own projects, then the
+projects of other spaces that its items name, each with its own space's key beside its
+name. The board, the list and the graph show the work of the scope chosen. Saved views
+belong to the space, so narrowing it to a project keeps them. A space or a project the
+address names and this workstation lacks stands in its choice marked as missing, and
+cannot be chosen. An address in the retired form, which named a project alone, opens
+nothing: it says it is unavailable and offers «Choose a space», which opens the first
+choice, and it carries none of its state or open card over. Where the workspace is 586px
+wide or narrower, the two choices stack at its full width.
 
 The chrome says only what it has read. Until the module list names the module, the
-context bar's title stands empty on its line; until the projects are read and the
-place a launch comes back to is restored, the scope selector keeps its box and paints
+context bar's title stands empty on its line; until the spaces are read and the
+place a launch comes back to is restored, the space choice keeps its box and paints
 nothing, and the rail marks no entry as current. At launch it once said the module's id,
 then «Global» and «Work» as current, and then wherever the app actually came back to.
 The groups under the list of work going on now are drawn once the list has its first

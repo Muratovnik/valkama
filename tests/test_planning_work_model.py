@@ -107,9 +107,7 @@ class FreshStoreCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        space = service.create_planning_space(
-            self.conn, project_id="model", name="Model", key="MOD"
-        )
+        space = service.create_planning_space(self.conn, name="Model", key="MOD")
         self.workflow_id = str(space["workflow"]["workflow_id"])
         self.conn.commit()
 

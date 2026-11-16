@@ -6,7 +6,6 @@
   "items": [
     {
       "target": {
-        "project_id": "example-project",
         "space_ref": {
           "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
@@ -29,7 +28,6 @@
     },
     {
       "target": {
-        "project_id": "example-project",
         "space_ref": {
           "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
@@ -52,7 +50,6 @@
     },
     {
       "target": {
-        "project_id": "example-project",
         "space_ref": {
           "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
@@ -75,7 +72,6 @@
     },
     {
       "target": {
-        "project_id": "example-project",
         "space_ref": {
           "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
@@ -102,7 +98,6 @@
     },
     {
       "target": {
-        "project_id": "example-project",
         "space_ref": {
           "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
@@ -129,7 +124,6 @@
     },
     {
       "target": {
-        "project_id": "example-project",
         "space_ref": {
           "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
@@ -156,7 +150,6 @@
     },
     {
       "target": {
-        "project_id": "example-project",
         "space_ref": {
           "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
@@ -183,7 +176,6 @@
     },
     {
       "target": {
-        "project_id": "example-project",
         "space_ref": {
           "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
@@ -210,7 +202,6 @@
     },
     {
       "target": {
-        "project_id": "example-project",
         "space_ref": {
           "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
@@ -238,7 +229,6 @@
   ],
   "coverage": [
     {
-      "project_id": "example-project",
       "space_ref": {
         "data_scope_id": "00000000-0000-4000-8000-000000000004",
         "space_key": "MAIN"

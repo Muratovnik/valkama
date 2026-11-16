@@ -26,6 +26,7 @@ import sqlite3
 import sys
 
 from .. import runner
+from ..planning import item_projects
 from ..planning import model as planning_model
 from ..planning import service as planning_service
 from ..sessions import op_ingest_session_event
@@ -99,7 +100,7 @@ def _launch_reserved(
             conn,
             execution_id=execution_id,
             work_item_id=str(record["work_item_id"]),
-            project_id=_project_id(conn, str(record["planning_space_id"])),
+            project_id=_project_id(conn, str(record["work_item_id"])),
             packet=packet.as_dict(),
             adapter_lineage_id=capabilities_for(packet.client).adapter_lineage_id,
         )
@@ -116,9 +117,12 @@ def _launch_reserved(
         # against the one that was edited. On a worktree's first launch the two
         # agree by accident; on a reused or diverged one they do not. Resolved,
         # then read, then handed to the runner so all three name one directory.
+        # The roots beside it are read too, the ones this run passes the client:
+        # an attempt may change only one of them.
         directory = runner.launch_directory(packet, reference)
+        added = _added_roots(conn, str(record["work_item_id"]), packet)
         execution_service.record_baseline(
-            conn, execution_id, execution_service.observe_baseline(directory[0])
+            conn, execution_id, execution_service.observe_baseline(directory[0], added)
         )
         conn.commit()
     except Exception as error:
@@ -139,6 +143,7 @@ def _launch_reserved(
             correlation=_correlation(conn, execution_id, record),
             directory=directory,
             reservation=reservation,
+            added_dirs=[root["root"] for root in added],
         )
     except runner.LaunchError as error:
         # A process that never started must not leave a phantom executor or a
@@ -198,14 +203,23 @@ def _launch_reserved(
     return started
 
 
-def _project_id(conn: sqlite3.Connection, planning_space_id: str) -> str:
-    """Which project this space belongs to, or an empty string when none does."""
+def _added_roots(
+    conn: sqlite3.Connection, work_item_id: str, packet: runner.LaunchPacket
+) -> list[item_projects.AddedRoot]:
+    """The roots this run passes its client beside the one it runs in
+    (`item_projects.added_roots`): none on a run its driver takes none on, such
+    as a Codex resume."""
 
-    row = conn.execute(
-        "SELECT project_id FROM planning_spaces WHERE planning_space_id = ?",
-        (planning_space_id,),
-    ).fetchone()
-    return str(row[0] or "") if row is not None else ""
+    if not capabilities_for(packet.client).takes_added_dirs(resume=packet.resume):
+        return []
+    return item_projects.added_roots(conn, work_item_id)
+
+
+def _project_id(conn: sqlite3.Connection, work_item_id: str) -> str:
+    """The project of the root a launch from this item runs in, or an empty string
+    when no project is chosen or known (`item_projects.launch_root`)."""
+
+    return item_projects.launch_root(conn, work_item_id)["project_id"] or ""
 
 
 def _correlation(conn: sqlite3.Connection, execution_id: str, record: dict) -> dict[str, str]:
@@ -219,7 +233,7 @@ def _correlation(conn: sqlite3.Connection, execution_id: str, record: dict) -> d
 
     return {
         "valkama.execution.id": execution_id,
-        "valkama.project.id": _project_id(conn, str(record["planning_space_id"])),
+        "valkama.project.id": _project_id(conn, str(record["work_item_id"])),
         "valkama.planning_space.id": str(record["planning_space_id"]),
         "valkama.work_item.id": str(record["work_item_id"]),
         "valkama.work_item.reference": str(record["reference"]),

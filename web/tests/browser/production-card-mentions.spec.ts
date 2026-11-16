@@ -13,7 +13,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { blockedWorkItem, projectScope, workItemRef } from './planningFixtures.ts'
+import { blockedWorkItem, spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 import { drawnLines, expectUnitHeld } from './textLines.ts'
 import { root } from './threadFixtures.ts'
@@ -22,7 +22,7 @@ type Locale = 'en' | 'ru'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 
@@ -44,7 +44,7 @@ const records = [
     from: SOURCE,
     at: '2026-08-13T10:00:00Z',
     by_person: false,
-    author: 'kolo (session 019a2b3c-4d5e)',
+    author: 'worker-b (session 019a2b3c-4d5e)',
     quote: QUOTE,
   },
   {
@@ -62,7 +62,7 @@ const records = [
     from: null,
     at: '2026-08-13T14:00:00Z',
     by_person: false,
-    author: 'elko',
+    author: 'worker-a',
     quote: null,
   },
 ]
@@ -142,7 +142,7 @@ for (const width of [1280, 390] as const)
       const reportLine = lines.nth(1)
       const deletedLine = lines.nth(0)
       // Who wrote it, as a comment's head says it, and its words without their markup.
-      await expect(commentLine.locator('.meta-who')).toContainText('kolo')
+      await expect(commentLine.locator('.meta-who')).toContainText('worker-b')
       await expect(commentLine.locator('.meta-session')).toBeVisible()
       await expect(reportLine.locator('.meta-who')).toContainText(locale === 'en' ? 'you' : 'вы')
       await expect(reportLine.locator('.mention-quote')).toHaveText('Shipped the export.')

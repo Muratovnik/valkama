@@ -25,6 +25,7 @@ from . import agents as planning_agents
 from . import (
     calls,
     images,
+    item_projects,
     item_tree,
     leases,
     model,
@@ -55,17 +56,34 @@ MAX_SEARCH_PAGE = 200
 # -- reading -----------------------------------------------------------------
 
 
+#: The columns a space is read by, named: a store another build wrote answers a
+#: missing one with `StoreSchemaError` rather than with a record lacking a field.
+_SPACE_COLUMNS = "planning_space_id, name, key, provider_kind, launch_place, updated_at"
+
+
+def _space_record(row: sqlite3.Row) -> dict:
+    """A space as the store knows it. Its projects are the registry's, which
+    `item_projects.with_projects` adds where a space is shown."""
+
+    return {
+        "planning_space_id": row["planning_space_id"],
+        "name": row["name"],
+        "key": row["key"],
+        "provider_kind": row["provider_kind"],
+        "launch_place": row["launch_place"],
+    }
+
+
+@read_model.whole_store_read()
 def list_planning_spaces(conn: sqlite3.Connection) -> list[dict]:
     spaces = []
-    for row in conn.execute("SELECT * FROM planning_spaces ORDER BY name"):
+    for row in conn.execute(
+        f"SELECT {_SPACE_COLUMNS} FROM planning_spaces ORDER BY name"  # noqa: S608
+    ):
         counts = _space_counts(conn, str(row["planning_space_id"]))
         spaces.append(
             {
-                "planning_space_id": row["planning_space_id"],
-                "project_id": row["project_id"],
-                "name": row["name"],
-                "key": row["key"],
-                "provider_kind": row["provider_kind"],
+                **_space_record(row),
                 "work_items": counts["total"],
                 "open": counts["open"],
                 "active": counts["active"],
@@ -76,19 +94,17 @@ def list_planning_spaces(conn: sqlite3.Connection) -> list[dict]:
     return spaces
 
 
+@read_model.whole_store_read()
 def get_planning_space(conn: sqlite3.Connection, reference: str) -> dict:
     """One space, by id, key or name — whichever the caller has."""
 
-    row = _space_row(conn, reference)
-    workflow = store.workflow_for_space(conn, str(row["planning_space_id"]))
-    return {
-        "planning_space_id": row["planning_space_id"],
-        "project_id": row["project_id"],
-        "name": row["name"],
-        "key": row["key"],
-        "provider_kind": row["provider_kind"],
-        "workflow": _workflow_payload(conn, workflow),
-    }
+    identity = space_identity(conn, reference)
+    row = conn.execute(
+        f"SELECT {_SPACE_COLUMNS} FROM planning_spaces WHERE planning_space_id = ?",  # noqa: S608
+        (identity,),
+    ).fetchone()
+    workflow = store.workflow_for_space(conn, identity)
+    return {**_space_record(row), "workflow": _workflow_payload(conn, workflow)}
 
 
 @read_model.whole_store_read()
@@ -155,12 +171,26 @@ def list_work_items(
     kind: str | None = None,
     owner: str | None = None,
     parent: str | None = None,
+    project: str | None = None,
+    other_spaces: bool = False,
     limit: int | None = 200,
     offset: int = 0,
 ) -> list[dict]:
     """Exactly `limit` items from `offset` on, or every one of them when limit is None.
 
     `parent` keeps only the children of that item, named as any item is named.
+    `project` keeps the items that name that project (`item_projects.naming`: a goal
+    or stage names what a task under it names), in every space unless `space` is
+    given; a project no item names lists none.
+
+    `other_spaces` makes `space` a read of that space: its items, and the items of
+    other spaces that name one of the projects the registry binds to it, each record
+    marked with `other_space`, the `{key, name}` of the space it lies in, or None
+    for the space's own. With `project` too, another space's item is kept only when
+    that project is one of the space's. Without it `space` keeps the space's items
+    alone, which is what a reader that accounts for a space's items, an export,
+    asks for.
+
     `kind` is named as a caller names it: `goal` keeps the containers under no
     parent and `stage` those under one. The service state is no state and no
     category a caller names: `container` is refused for either with the word that
@@ -174,10 +204,27 @@ def list_work_items(
 
     clauses: list[str] = []
     parameters: list[object] = []
-    space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
-    if space_id is not None:
-        clauses.append("i.planning_space_id = ?")
-        parameters.append(space_id)
+    space_row = _space_row(conn, space) if space is not None else None
+    space_id = str(space_row["planning_space_id"]) if space_row is not None else None
+    wanted = item_projects.project_id(project, "project") if project is not None else None
+    kept = item_projects.naming(conn, [wanted]) if wanted is not None else None
+    marked = space_row is not None and other_spaces
+    if space_row is not None:
+        foreign = (
+            item_projects.space_project_ids(conn, str(space_row["key"])) if other_spaces else []
+        )
+        if kept is not None:
+            # Narrowed to one project, other spaces bring what names it, if it is the space's.
+            foreign = [found for found in foreign if found == wanted]
+        if foreign:
+            clauses.append(
+                "(i.planning_space_id = ? OR i.work_item_id IN (SELECT value FROM json_each(?)))"
+            )
+            reached = kept if kept is not None else item_projects.naming(conn, foreign)
+            parameters.extend([space_id, json.dumps(reached)])
+        else:
+            clauses.append("i.planning_space_id = ?")
+            parameters.append(space_id)
     if state is not None:
         workflows = (
             [str(store.workflow_for_space(conn, space_id)["workflow_id"])]
@@ -205,8 +252,14 @@ def list_work_items(
     if parent is not None:
         clauses.append("i.parent_id = ?")
         parameters.append(str(read_model.item_row(conn, parent)["work_item_id"]))
+    if kept is not None:
+        clauses.append("i.work_item_id IN (SELECT value FROM json_each(?))")
+        parameters.append(json.dumps(kept))
     query = with_clauses(
-        "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
+        "SELECT i.*, p.key AS space_key, p.name AS space_name FROM work_items i"
+        " JOIN workflow_states s ON s.state_id = i.state_id"
+        " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id",
+        clauses,
     )
     # The work item id closes the order: two spaces can tie on every other key,
     # and an order with ties lets one page repeat an item the next page skips.
@@ -218,7 +271,18 @@ def list_work_items(
     rows = conn.execute(query, parameters).fetchall()
     closed = read_model.closings(conn, rows)
     tree = _page_tree(conn, rows)
-    return [read_model.present(conn, row, closed=closed, tree=tree) for row in rows]
+    projects = item_projects.of_items(conn, rows)
+    found = [
+        read_model.present(conn, row, closed=closed, tree=tree, projects=projects) for row in rows
+    ]
+    if marked:
+        for row, record in zip(rows, found, strict=True):
+            record["other_space"] = (
+                None
+                if str(row["planning_space_id"]) == space_id
+                else {"key": row["space_key"], "name": row["space_name"]}
+            )
+    return found
 
 
 def _page_tree(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> item_tree.Tree:
@@ -236,6 +300,8 @@ def list_work_items_page(
     kind: str | None = None,
     owner: str | None = None,
     parent: str | None = None,
+    project: str | None = None,
+    other_spaces: bool = False,
     limit: int = 200,
     offset: int = 0,
 ) -> dict:
@@ -250,6 +316,8 @@ def list_work_items_page(
         kind=kind,
         owner=owner,
         parent=parent,
+        project=project,
+        other_spaces=other_spaces,
         limit=size + 1,
         offset=offset,
     )
@@ -322,7 +390,7 @@ def search_work_items(
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict]:
-    """Items whose text, labels, source, summary, comments or questions carry the query.
+    """Items whose text, labels, source, projects, summary, comments or questions carry the query.
 
     A comment counts: an item is often findable only by what somebody wrote
     under it, and a hit there is reported as the matching line rather than as a
@@ -358,16 +426,24 @@ def search_work_items(
         )
         if rows is not None:
             tree = _page_tree(conn, rows)
-            return [_word_hit(conn, row, found, tree) for row in rows]
+            projects = item_projects.of_items(conn, rows)
+            return [_word_hit(conn, row, found, tree, projects) for row in rows]
     return _phrase_search(conn, text, space_id=space_id, limit=limit, offset=offset)
 
 
 def _word_hit(
-    conn: sqlite3.Connection, row: sqlite3.Row, found: list[str], tree: item_tree.Tree
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    found: list[str],
+    tree: item_tree.Tree,
+    projects: Mapping[str, list[dict]],
 ) -> dict:
     """One item a word search found, with the lines that say why (`words.hits`)."""
 
-    return {**read_model.present(conn, row, tree=tree), **words.hits(conn, row, found)}
+    return {
+        **read_model.present(conn, row, tree=tree, projects=projects),
+        **words.hits(conn, row, found),
+    }
 
 
 def _phrase_search(
@@ -383,6 +459,7 @@ def _phrase_search(
     like = f"%{text}%"
     questions = _question_hits(conn, like)
     decisions = _decision_hits(conn, like)
+    projects_found = item_projects.naming_like(conn, like)
     parameters: list[object] = [like, like]
     clauses = [
         "(i.title LIKE ? OR i.description LIKE ? OR i.labels LIKE ? OR i.source LIKE ?"
@@ -393,7 +470,7 @@ def _phrase_search(
         " OR i.work_item_id IN (SELECT value FROM json_each(?)))"
     ]
     parameters.extend([like] * 8)
-    parameters.append(json.dumps([*questions, *decisions]))
+    parameters.append(json.dumps([*questions, *decisions, *projects_found]))
     if space_id is not None:
         clauses.append("i.planning_space_id = ?")
         parameters.append(space_id)
@@ -424,8 +501,9 @@ def _phrase_search(
     ).fetchall()
     found = []
     tree = _page_tree(conn, rows)
+    projects = item_projects.of_items(conn, rows)
     for row in rows:
-        item = read_model.present(conn, row, tree=tree)
+        item = read_model.present(conn, row, tree=tree, projects=projects)
         comment_hit = row["comment_hit"] or decisions.get(str(row["work_item_id"]))
         if comment_hit:
             item["comment_hit"] = str(comment_hit)[:240]
@@ -471,11 +549,29 @@ def _page(found: list[dict], size: int, offset: int) -> dict:
 # -- writing -----------------------------------------------------------------
 
 
-def create_planning_space(
-    conn: sqlite3.Connection, *, project_id: str, name: str, key: str | None = None
-) -> dict:
-    space = store.create_space(conn, project_id=project_id, name=name, key=key)
+def create_planning_space(conn: sqlite3.Connection, *, name: str, key: str | None = None) -> dict:
+    space = store.create_space(conn, name=name, key=key)
     return get_planning_space(conn, space["planning_space_id"])
+
+
+def set_launch_place(conn: sqlite3.Connection, space: str, launch_place: object) -> dict:
+    """Choose where a launch from this space's items runs (`item_projects.launch_root`).
+
+    The owner's setting, not an agent's: no planning tool writes it.
+    """
+
+    if launch_place not in model.LAUNCH_PLACES:
+        raise model.PlanningError("launch_place must be " + " or ".join(model.LAUNCH_PLACES))
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    identity = space_identity(conn, space)
+    conn.execute(
+        "UPDATE planning_spaces SET launch_place = ?,"
+        " updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')"
+        " WHERE planning_space_id = ? AND launch_place != ?",
+        (launch_place, identity, launch_place),
+    )
+    return get_planning_space(conn, identity)
 
 
 def _parent_row(
@@ -518,7 +614,7 @@ def _parent_row(
 def create_work_item(
     conn: sqlite3.Connection,
     *,
-    space: str,
+    space: str | None = None,
     title: str,
     state: str | None = None,
     kind: str = "task",
@@ -529,6 +625,7 @@ def create_work_item(
     parent: str | None = None,
     author: str | None = None,
     acceptance: object = None,
+    projects: object = None,
 ) -> dict:
     """A new item, placed where the work model puts it, accepted when it is accepted work.
 
@@ -538,16 +635,21 @@ def create_work_item(
     in ready, and a goal or stage accepted at once stands in the service state:
     `created` names no state for it, and `accepted` and `opened` follow. A named
     state is held to the refusals a move there meets (`transitions.placement`).
+    `projects` names the projects a task changes, each `named`
+    (`item_projects`); a goal or stage names none. `space` may be left out: the
+    item then lies where `item_projects.placement` puts it.
     """
 
-    space_row = _space_row(conn, space)
-    space_id = str(space_row["planning_space_id"])
-    workflow = store.workflow_for_space(conn, space_id)
-    workflow_id = str(workflow["workflow_id"])
     named_kind = model.public_kind(kind)
     stored_kind = model.work_item_kind(named_kind)
     if named_kind == "stage" and not parent:
         raise model.PlanningError("a stage is a container under a parent; without one it is a goal")
+    changes = item_projects.named(projects) or []
+    item_projects.require_nameable(changes, container=stored_kind == model.CONTAINER_KIND)
+    space_row = _placed_space(conn, space, changes, parent)
+    space_id = str(space_row["planning_space_id"])
+    workflow = store.workflow_for_space(conn, space_id)
+    workflow_id = str(workflow["workflow_id"])
     named = model.named_basis(acceptance)
     parent_row = _parent_row(conn, space_id, parent)
     parent_id = None if parent_row is None else str(parent_row["work_item_id"])
@@ -598,6 +700,7 @@ def create_work_item(
             starts,
         ),
     )
+    item_projects.replace(conn, item_id, changes)
     opened = target["category"] == model.SERVICE_CATEGORY
     # A goal or stage accepted at once names no state: its opening says where it stands.
     _log(conn, item_id, "created", "" if opened else str(target["key"]), author)
@@ -607,6 +710,30 @@ def create_work_item(
         _log(conn, item_id, "opened", "", author)
     words.bring_current(conn)
     return read_model.present(conn, read_model.item_by_id(conn, item_id), full=True)
+
+
+def _placed_space(
+    conn: sqlite3.Connection, space: str | None, projects: Sequence[str], parent: str | None
+) -> sqlite3.Row:
+    """The space a new item lies in: the one it names, held to `item_projects.placement`."""
+
+    named = None if space is None else _space_row(conn, space)
+    parent_space = None
+    if parent:
+        parent_space = str(
+            conn.execute(
+                "SELECT key FROM planning_spaces WHERE planning_space_id = ?",
+                (str(read_model.item_row(conn, parent)["planning_space_id"]),),
+            ).fetchone()["key"]
+        )
+    key = item_projects.placement(
+        conn,
+        space=None if named is None else str(named["key"]),
+        projects=projects,
+        parent_space=parent_space,
+        session_id=calls.confirmed_session(),
+    )
+    return named if named is not None and str(named["key"]) == key else _space_row(conn, key)
 
 
 def update_work_item(
@@ -623,6 +750,7 @@ def update_work_item(
     kind: str | None = None,
     parent: str | None = None,
     rank: str | None = None,
+    projects: object = None,
     expected_revision: int | None = None,
     author: str | None = None,
 ) -> dict:
@@ -634,9 +762,15 @@ def update_work_item(
     item has, read under the write lock (`model.edited_labels`). An edit that
     changes the set is the one edit the history records: a `labels_changed` event
     with the set before and after (`model.labels_change`), under `author`.
+    `projects` replaces the projects the item names, each then `named`
+    (`item_projects.replace`); the item stays in its space. Like `rank`, it is an
+    edit with no history event.
     """
 
     row = _row_for_write(conn, reference, expected_revision)
+    changes = item_projects.named(projects)
+    if changes is not None:
+        item_projects.require_nameable(changes, container=row["kind"] == model.CONTAINER_KIND)
     current = model.labels(json.loads(str(row["labels"])))
     labels = model.edited_labels(current, labels, labels_add, labels_remove)
     change = model.labels_change(current, labels)
@@ -675,8 +809,15 @@ def update_work_item(
         parameters.append(moved_to)
         if row["parent_id"] is not None and str(row["parent_id"]) != moved_to:
             left = str(row["parent_id"])
-    edited = _edited(row, updates, parameters)
-    if edited is not None:
+    reprojected = changes is not None and item_projects.differs(
+        conn, str(row["work_item_id"]), changes
+    )
+    edited = ",".join(
+        name
+        for name in (_edited(row, updates, parameters), "projects" if reprojected else None)
+        if name
+    )
+    if edited:
         # Before the placement, which may write first: the row is inserted once.
         calls.call_id(conn, str(row["work_item_id"]), edited=edited)
     if placement is not None:
@@ -688,9 +829,11 @@ def update_work_item(
         if placed is not None:
             updates.append("position = ?")
             parameters.append(placed)
-    if not updates:
+    if not updates and not reprojected:
         return read_model.present(conn, row, full=True)
     _write(conn, row, updates, parameters)
+    if reprojected and changes is not None:
+        item_projects.replace(conn, str(row["work_item_id"]), changes)
     if left is not None:
         # The container keeps that it had this child: what it derives counts the child.
         _log(conn, left, "child_left", read_model.reference(conn, row), author)
@@ -1885,8 +2028,9 @@ def merge_work_items(
     the steps someone ticked, the discussion, the commits, the links that made
     other work wait. Here the survivor takes all of that — the steps with their
     ids, ticks and step claims, the discussion threads whole, the questions with
-    their replies, a list with the comment it stands under, the refs, and the
-    links in their own direction — and each
+    their replies, a list with the comment it stands under, the refs, the
+    links in their own direction, and the projects, a project more than one of
+    them names keeping its strongest source — and each
     merged item is linked `duplicates` to it, given a summary naming it,
     released and closed in its cancelled state. What describes the merged item
     itself stays with it: its history, its reports with their threads, its
@@ -2105,6 +2249,8 @@ def _fold(
                 (survivor_id, identity),
             ).rowcount,
             "links": _repoint_links(conn, identity, survivor_id, involved, author),
+            # A project both name keeps the stronger source (`item_projects.carry`).
+            "projects": item_projects.carry(conn, identity, survivor_id),
         }
         # The person's pin follows the work. A survivor pinned already keeps its own
         # pin, from when it was pinned, and the merged item is left with none.
@@ -2635,6 +2781,16 @@ def _space_counts(conn: sqlite3.Connection, planning_space_id: str) -> dict:
         "active": int(row["active"] or 0),
         "completed": int(row["completed"] or 0),
     }
+
+
+def space_identity(conn: sqlite3.Connection, reference: object) -> str:
+    """The id of the space a caller named by its id, key or name.
+
+    It reads nothing but the space's identity, so a store another build wrote,
+    whose spaces lack a column the record reads, still answers it.
+    """
+
+    return str(_space_row(conn, reference)["planning_space_id"])
 
 
 def _space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:

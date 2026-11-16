@@ -34,7 +34,7 @@ class Harness(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        self.space = service.create_planning_space(self.conn, project_id="p", name="Crew")
+        self.space = service.create_planning_space(self.conn, name="Crew")
         self.ref = self.item("Watched")
         self.conn.commit()
 

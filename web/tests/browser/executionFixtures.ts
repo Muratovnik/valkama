@@ -45,6 +45,7 @@ export const executionCapabilities = {
       telemetry_configuration: 'environment',
       health: 'ready',
       unavailable_reason: '',
+      added_dirs: 'fresh_and_resume',
     },
     {
       client: 'codex',
@@ -58,6 +59,7 @@ export const executionCapabilities = {
       telemetry_configuration: 'client-config',
       health: 'unavailable',
       unavailable_reason: 'codex is not on PATH; set VALKAMA_CODEX_BIN to its absolute path',
+      added_dirs: 'fresh_only',
     },
   ],
   roles: ['executor', 'orchestrator'],
@@ -72,6 +74,9 @@ export const executionCapabilities = {
   max_prompt_chars: 8000,
   repository: 'C:/work/valkama',
   repository_status: 'mapped',
+  repository_project: 'valkama',
+  launch_place: 'space',
+  added_roots: [{ project_id: 'rover', root: 'C:/work/rover' }],
 }
 
 /** One finished attempt, with the evidence half a reported delivery is checked against. */
@@ -113,6 +118,17 @@ export const executionHistory = {
         dirty: false,
         worktree: 'C:/work/valkama',
         quality: 'observed',
+        added: [
+          {
+            project_id: 'rover',
+            root: 'C:/work/rover',
+            repository: 'C:/work/rover',
+            head: '3333333333333333333333333333333333333333',
+            branch: 'main',
+            dirty: false,
+            quality: 'observed',
+          },
+        ],
       },
       final_artifact: {
         head: '2222222222222222222222222222222222222222',
@@ -123,6 +139,20 @@ export const executionHistory = {
         deletions: 7,
         commits: ['2222222222222222222222222222222222222222'],
         quality: 'observed',
+        added: [
+          {
+            project_id: 'rover',
+            root: 'C:/work/rover',
+            head: '3333333333333333333333333333333333333333',
+            branch: 'main',
+            dirty: true,
+            changed_files: 1,
+            insertions: 4,
+            deletions: 0,
+            commits: [],
+            quality: 'observed',
+          },
+        ],
       },
       started_at: now,
       ended_at: now,

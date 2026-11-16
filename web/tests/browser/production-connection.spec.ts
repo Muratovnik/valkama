@@ -15,7 +15,7 @@ import { expect } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
 
@@ -34,7 +34,7 @@ for (const viewport of [
       const stream = await installStreamDouble(page)
       const read = page.waitForResponse((response) => response.url().includes('/api/planning?'))
       await page.goto(
-        serializePlatformRoute({ module_id: 'planning', scope: projectScope, state: { view } }),
+        serializePlatformRoute({ module_id: 'planning', scope: spaceScope, state: { view } }),
       )
       const response = await read
       const model = await response.text()
@@ -73,7 +73,7 @@ for (const viewport of [
   }) => {
     await page.setViewportSize(viewport)
     await installBackend(page)
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.route('**/api/modules/planning/work-item?*', (route) =>
       route.abort('connectionrefused'),
     )
@@ -98,7 +98,7 @@ test('a press on a lost connection on a narrow rail says why, and Escape closes 
   await installBackend(page)
   const stream = await installStreamDouble(page)
   const read = page.waitForResponse((response) => response.url().includes('/api/planning?'))
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   const response = await read
   await stream.deliver(await response.text())
   const rail = page.locator('.nav-refresh')
@@ -140,7 +140,7 @@ test('on a wide rail a press on a lost connection refreshes and opens nothing', 
   await installBackend(page)
   const stream = await installStreamDouble(page)
   const read = page.waitForResponse((response) => response.url().includes('/api/planning?'))
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   const response = await read
   await stream.deliver(await response.text())
   const rail = page.locator('.nav-refresh')
@@ -159,7 +159,7 @@ test('a connection regained under focus hands focus to the entry on show', async
   await installBackend(page)
   const stream = await installStreamDouble(page)
   const read = page.waitForResponse((response) => response.url().includes('/api/planning?'))
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   const response = await read
   const model = await response.text()
   await stream.deliver(model)

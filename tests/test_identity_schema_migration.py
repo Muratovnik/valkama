@@ -57,7 +57,7 @@ class IdentitySchemaMigrationTests(unittest.TestCase):
     def test_a_claim_written_without_naming_its_call_loses_the_link(self) -> None:
         conn = store.connect()
         self.addCleanup(conn.close)
-        planning.create_planning_space(conn, project_id="lease", name="Lease", key="LEASE")
+        planning.create_planning_space(conn, name="Lease", key="LEASE")
         item = planning.create_work_item(conn, space="LEASE", title="Held")
         identity = item["work_item_id"]
 
@@ -119,7 +119,7 @@ class IdentitySchemaMigrationTests(unittest.TestCase):
     def test_execution_events_are_appended_to_and_outlive_the_item_they_name(self) -> None:
         conn = store.connect()
         self.addCleanup(conn.close)
-        planning.create_planning_space(conn, project_id="tree", name="Tree", key="TREE")
+        planning.create_planning_space(conn, name="Tree", key="TREE")
         item = planning.create_work_item(conn, space="TREE", title="Deleted later")
         call = _call(conn, session_id="session-a", work_item_id=item["work_item_id"])
         conn.commit()

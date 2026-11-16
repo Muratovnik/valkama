@@ -21,6 +21,14 @@ checkouts are therefore distinguishable even at the same version.
   checked before it commits. It prints a JSON report with the time of each step;
   `--dry-run` migrates a copy, kept with `--into`. A store that is not one 2.9 left is
   refused and left as it was.
+- **`valkama projects map-items` gives each work item its projects for the migration.**
+  It reads a copy of the store, the registry and the registered repositories and
+  writes a file: a task takes the projects of its commits, else those of its labels
+  that name a project of its space (or one `--label` maps), else its space's project.
+  `migrate work-model --item-projects <file>` writes those projects, takes off the
+  labels a project now carries and refuses to start, before any write, on a registry
+  that is not format 4, a space whose project is not bound to it, two spaces of one
+  name or a file of another store or state.
 
 ### Changed
 

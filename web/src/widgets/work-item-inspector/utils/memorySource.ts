@@ -7,6 +7,20 @@ import type { MemoryProvider } from '@/shared/api/memoryApi.ts'
 type MemorySource = ReturnType<typeof readMemorySource>
 
 const MEMORY_SOURCE: InjectionKey<MemorySource> = Symbol('memory-source')
+const DEFAULT_PROJECT: InjectionKey<() => boolean> = Symbol('memory-default-project')
+
+/**
+ * Whether the cards a host opens search the space's default project, as its scope narrows to
+ * none. The host knows its scope; the card only the project it was handed.
+ */
+export function provideDefaultProject(defaultProject: () => boolean) {
+  provide(DEFAULT_PROJECT, defaultProject)
+}
+
+/** Whether this card's project is its space's default one; no host says so, and it is not. */
+export function useDefaultProject(): () => boolean {
+  return inject(DEFAULT_PROJECT, () => false)
+}
 
 /**
  * Which knowledge source answers for a project, read for as long as its holder lives.

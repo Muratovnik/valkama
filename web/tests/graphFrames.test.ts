@@ -53,6 +53,7 @@ function item(
     waits_for: [],
     workable: true,
     labels: [],
+    projects: [],
     source: '',
     checklist: [],
     revision: 0,

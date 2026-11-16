@@ -10,16 +10,26 @@ from __future__ import annotations
 import sqlite3
 
 from .documents import search_documents
+from .planning import item_projects as planning_item_projects
 from .planning import model as planning_model
 from .planning import service as planning_service
-from .projects import scopes
+from .projects import project_registry, scopes
 from .store import connect, db_path
+from .store_identity.metadata import read_store_metadata
+from .store_identity.primitives import ContractError
 
 
 def federated_spaces() -> dict:
-    """Every planning space in every attached scope, labelled by where it lives."""
+    """Every planning space in every attached scope, labelled by where it lives.
+
+    Each space carries the projects the registry binds to it in its own store. A
+    store this build cannot read -- one an earlier build wrote answers without the
+    columns asked for -- is marked unavailable with the reason, and the others are
+    listed as they are.
+    """
 
     result: dict[str, list[dict]] = {"scopes": [], "planning_spaces": []}
+    listing = project_registry.read_registry()
     for scope in scopes.load(db_path()):
         entry = {
             "name": scope["name"],
@@ -37,9 +47,11 @@ def federated_spaces() -> dict:
             result["scopes"].append(entry)
             continue
         try:
-            for space in planning_service.list_planning_spaces(connection):
+            spaces = planning_service.list_planning_spaces(connection)
+            data_scope_id = str(read_store_metadata(connection)["data_scope_id"])
+            for space in planning_item_projects.with_projects(spaces, listing, data_scope_id):
                 result["planning_spaces"].append({**space, "scope": scope["name"]})
-        except sqlite3.Error as error:
+        except (sqlite3.Error, planning_model.StoreSchemaError, ContractError) as error:
             entry["available"] = False
             entry["detail"] = str(error)
         finally:

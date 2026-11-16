@@ -36,7 +36,8 @@ async function open(page: Page, viewport: { height: number; width: number }) {
   frame.spaces.push({
     key: 'LONG',
     name: LONG_NAME,
-    project_id: 'example-project',
+    projects: [{ project_id: 'example-project', display_name: 'Example project' }],
+    default_project: 'example-project',
     rows: [frameRow('LONG-1', { title: LONG_TITLE, state: 'working' })],
     sessions: [],
   })

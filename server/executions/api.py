@@ -20,10 +20,8 @@ from collections.abc import Callable, Mapping
 
 from .. import query_params, runner
 from ..planning import api as planning_api
+from ..planning import item_projects, read_model
 from ..planning import service as planning_service
-from ..projects import project_registry
-from ..store_identity.metadata import read_store_metadata
-from ..store_identity.refs import planning_space_entity
 from ..telemetry import projections as telemetry
 from . import drivers, results
 from . import service as execution_service
@@ -114,40 +112,43 @@ def _capabilities(conn: sqlite3.Connection, parameters: Mapping[str, list[str]])
 
 
 def _suggested_repository(conn: sqlite3.Connection, reference: str | None) -> dict:
-    """The directory this item's space is mapped to, or an honest nothing.
+    """The root a launch from this item runs in, or an honest nothing.
 
-    Resolved through the project registry, which is where a mapping is written
-    down, rather than from the platform's own working directory or from the
-    last launch. Those two are the guesses that put an agent in the wrong
-    checkout, and a form that prefills a wrong path is worse than one that
-    prefills none: the operator reads the field as an answer.
+    Resolved through the project registry by the item's space's launch place
+    (`item_projects.launch_root`), rather than from the platform's own working
+    directory or from the last launch. Those two are the guesses that put an
+    agent in the wrong checkout, and a form that prefills a wrong path is worse
+    than one that prefills none: the operator reads the field as an answer.
 
     The status travels with it so an interface can say why the field is empty
-    instead of looking like it forgot.
+    instead of looking like it forgot, in the words of
+    `item_projects.LAUNCH_ROOT_STATUSES`: `no_item` when the read names no item
+    or one there is not. `repository_project` names the project whose root it
+    is. `added_roots` are the roots the launch gets beside it
+    (`item_projects.added_roots`); each driver's `added_dirs` says on which runs
+    its client takes them.
     """
 
+    nothing: dict[str, object] = {
+        "repository": "",
+        "repository_status": item_projects.NO_ITEM,
+        "repository_project": None,
+        "launch_place": None,
+        "added_roots": [],
+    }
     if not reference:
-        return {"repository": "", "repository_status": "missing"}
+        return nothing
     try:
-        record = planning_service.get_work_item(conn, reference)
+        row = read_model.item_row(conn, reference)
     except Exception:  # noqa: BLE001 -- a bad reference is not a reason to hide the clients
-        return {"repository": "", "repository_status": "missing"}
-    row = conn.execute(
-        "SELECT key FROM planning_spaces WHERE planning_space_id = ?",
-        (str(record["planning_space_id"]),),
-    ).fetchone()
-    if row is None:
-        return {"repository": "", "repository_status": "missing"}
-    resource_ref = planning_space_entity(
-        {
-            "data_scope_id": read_store_metadata(conn)["data_scope_id"],
-            "space_key": str(row[0]),
-        }
-    )
-    resolved = project_registry.resolve_space_root(resource_ref)
+        return nothing
+    found = item_projects.launch_root(conn, str(row["work_item_id"]))
     return {
-        "repository": str(resolved.get("canonical_root") or ""),
-        "repository_status": str(resolved.get("status") or "missing"),
+        "repository": found["root"] or "",
+        "repository_status": found["status"],
+        "repository_project": found["project_id"],
+        "launch_place": found["launch_place"],
+        "added_roots": item_projects.added_roots(conn, str(row["work_item_id"])),
     }
 
 

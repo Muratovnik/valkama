@@ -24,7 +24,7 @@ class PlanningScaleTests(unittest.TestCase):
             mock.patch.dict(os.environ, {"VALKAMA_DB": os.path.join(directory, "valkama.sqlite3")}),
             closing(store.connect()) as conn,
         ):
-            space = service.create_planning_space(conn, project_id="test", name="Scale", key="SC")
+            space = service.create_planning_space(conn, name="Scale", key="SC")
             state = space["workflow"]["states"][0]["state_id"]
             identities = [str(uuid.uuid4()) for _ in range(1200)]
             conn.executemany(
@@ -81,7 +81,7 @@ class PlanningScaleTests(unittest.TestCase):
             mock.patch.dict(os.environ, {"VALKAMA_DB": os.path.join(directory, "valkama.sqlite3")}),
             closing(store.connect()) as conn,
         ):
-            service.create_planning_space(conn, project_id="test", name="Links", key="LK")
+            service.create_planning_space(conn, name="Links", key="LK")
             few = service.create_work_item(conn, space="LK", title="Few links")["reference"]
             many = service.create_work_item(conn, space="LK", title="Many links")["reference"]
             for number in range(150):
@@ -123,14 +123,14 @@ class PlanningScaleTests(unittest.TestCase):
         ):
             roots = {}
             for key, blockers in (("FEW", 2), ("MANY", 150)):
-                service.create_planning_space(conn, project_id=key.lower(), name=key, key=key)
+                service.create_planning_space(conn, name=key, key=key)
                 roots[key] = service.create_work_item(conn, space=key, title="Root", kind="goal")
                 member = service.create_work_item(
                     conn, space=key, title="Member", parent=roots[key]["reference"]
                 )
                 roots[key]["blockers"] = blockers
                 roots[key]["member"] = member["work_item_id"]
-            service.create_planning_space(conn, project_id="out", name="Outside", key="OUT")
+            service.create_planning_space(conn, name="Outside", key="OUT")
             for key, root in roots.items():
                 for number in range(root["blockers"]):
                     other = service.create_work_item(conn, space="OUT", title=f"{key} {number}")
@@ -174,9 +174,7 @@ class PlanningScaleTests(unittest.TestCase):
                 mock.patch.dict(os.environ, {"VALKAMA_DB": db}),
                 closing(store.connect()) as conn,
             ):
-                space = service.create_planning_space(
-                    conn, project_id="example-project", name="Main", key="MAIN"
-                )
+                space = service.create_planning_space(conn, name="Main", key="MAIN")
                 done = next(
                     state["state_id"]
                     for state in space["workflow"]["states"]
@@ -228,8 +226,7 @@ class PlanningScaleTests(unittest.TestCase):
                         answer = exact_api.work_item_payload(
                             PlanningRouting(conn, db, registry_reader=registry.read_bytes),
                             {
-                                "scope_kind": ["project"],
-                                "project_id": ["example-project"],
+                                "scope_kind": ["space"],
                                 "data_scope_id": [space_ref["data_scope_id"]],
                                 "space_key": ["MAIN"],
                                 "reference": [reference],

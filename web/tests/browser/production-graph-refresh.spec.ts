@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { test } from './test.ts'
 
@@ -49,7 +49,7 @@ async function openRecorded(page: Page) {
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       state: { view: 'graph' },
     }),
   )
@@ -137,7 +137,7 @@ test('a new filter keeps the zoom the operator chose', async ({ page }) => {
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       state: { view: 'graph' },
     }),
   )

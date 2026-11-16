@@ -107,7 +107,7 @@ class _Scenario:
         self.root = root
         conn = store.connect()
         try:
-            service.create_planning_space(conn, project_id=PROJECT, name="Contract", key=SPACE)
+            service.create_planning_space(conn, name="Contract", key=SPACE)
             self.reference = str(
                 service.create_work_item(conn, space=SPACE, title="Contract card")["reference"]
             )
@@ -214,8 +214,7 @@ class _Scenario:
     def scope(self, **others: str) -> str:
         return urlencode(
             {
-                "scope_kind": "project",
-                "project_id": PROJECT,
+                "scope_kind": "space",
                 "data_scope_id": self.space_ref["data_scope_id"],
                 "space_key": SPACE,
                 **others,
@@ -601,7 +600,8 @@ class _Scenario:
             goal = item("Tree goal", kind="goal", acceptance="assignment")
             stage = item("Tree stage", kind="stage", parent=goal)
             nested = item("Tree nested stage", kind="stage", parent=stage)
-            item("Tree work in the nested stage", parent=nested)
+            # The goal and both stages above it read this project from it.
+            item("Tree work in the nested stage", parent=nested, projects=[PROJECT])
             item("Tree work under the stage", parent=stage)
             finished = item("Tree work finished under the goal", parent=goal)
             service.set_summary(conn, finished, {"done": "Finished.", "next": "Nothing."})
@@ -612,8 +612,9 @@ class _Scenario:
             conn.commit()
         finally:
             conn.close()
-        space = urlencode({"project": PROJECT, **self.space_ref})
-        model = self.http(f"/api/planning?{space}")
+        # The board reads the whole space: narrowed by its project, it would keep only the
+        # items naming it.
+        model = self.http(f"/api/planning?{urlencode(self.space_ref)}")
         # A digest of the whole answer, ids and instants included, which change run to run.
         model["revision"] = "0" * 64
         # The workflow's moves stand in the order of their states' ids; put them in the states'.

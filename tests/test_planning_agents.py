@@ -62,7 +62,7 @@ class AgentsCase(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="agents", name="Agents", key="AG")
+        service.create_planning_space(self.conn, name="Agents", key="AG")
         self.item = self.new_item("On the card")
         self.other = self.new_item("Elsewhere")
         self._uid = 0

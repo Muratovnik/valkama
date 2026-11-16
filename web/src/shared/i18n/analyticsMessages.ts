@@ -55,8 +55,10 @@ export const analyticsMessages = {
         none: {
           work_item: 'No task',
           launch_class: 'The session itself',
+          project: 'No project',
           other: 'No value',
         },
+        several: 'Several projects',
         unknown: 'Unknown',
         deleted: 'Deleted task',
         other: 'Other, {count} more | Other, {count} more',
@@ -246,8 +248,10 @@ export const analyticsMessages = {
         none: {
           work_item: 'Без задачи',
           launch_class: 'Сама сессия',
+          project: 'Без проекта',
           other: 'Без значения',
         },
+        several: 'Несколько проектов',
         unknown: 'Неизвестно',
         deleted: 'Удалённая задача',
         other: 'Остальное, ещё {count} | Остальное, ещё {count} | Остальное, ещё {count}',

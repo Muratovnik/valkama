@@ -50,6 +50,9 @@ _CAPABILITIES = DriverCapabilities(
     mechanical_executor=False,
     result_transport="file",
     telemetry_configuration="client-config",
+    # `codex exec` takes `--add-dir`; `codex exec resume` does not, and its one
+    # other way, `writable_roots` through `-c`, would replace the owner's own list.
+    added_dirs="fresh_only",
 )
 
 
@@ -62,7 +65,8 @@ def argv(request: CommandRequest) -> list[str]:
 
     Options come before the positional task on a resume as well as on a fresh
     run: `codex exec resume <session> <prompt>` reads its two positionals in
-    order, so an option placed after them is taken for one of them.
+    order, so an option placed after them is taken for one of them. Directories
+    beside the working one go only on a fresh run: a resume takes no `--add-dir`.
     """
 
     if request.effort and request.effort not in EFFORTS:
@@ -90,7 +94,8 @@ def argv(request: CommandRequest) -> list[str]:
             request.session_id,
             request.prompt,
         ]
-    return [request.binary, "exec", "--json", *options, request.prompt]
+    added = [part for directory in request.added_dirs for part in ("--add-dir", directory)]
+    return [request.binary, "exec", "--json", *options, *added, request.prompt]
 
 
 def read_stdout_event(event: Mapping[str, object]) -> StdoutReading:

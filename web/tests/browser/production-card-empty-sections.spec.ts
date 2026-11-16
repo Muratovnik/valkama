@@ -15,7 +15,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { requestEntry, requestList } from '../support/inputRequests.ts'
 import { installBackend } from './backend.ts'
-import { projectId, projectScope, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceRef, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 interface Stream {
@@ -59,7 +59,7 @@ async function serveCard(page: Page) {
     return route.fulfill({
       json: {
         interface_version: 'valkama-planning-work-item',
-        scope: projectScope,
+        scope: spaceScope,
         work_item_ref: workItemRef,
         state: {
           interface_version: 'valkama-ui-state',
@@ -75,9 +75,7 @@ async function serveCard(page: Page) {
       : route.fulfill({
           json: {
             ...requestList(held.questions),
-            coverage: [
-              { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
-            ],
+            coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
           },
         }),
   )
@@ -88,7 +86,7 @@ const openCard = (page: Page) =>
   page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
@@ -96,7 +94,6 @@ const openCard = (page: Page) =>
 function aQuestion() {
   const entry = requestEntry()
   entry.target = {
-    project_id: projectId,
     space_ref: spaceRef,
     reference: workItemRef.reference,
     writable: true,

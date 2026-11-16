@@ -11,7 +11,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { rootFramed, routeState, serve, showChain, smallChain } from './chainFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CHAIN = { view: 'graph', chain: 'MAIN-264', chain_scope: 'chain' }
@@ -21,7 +21,7 @@ const REFERENCE = '.flow-node-id, .flow-node-overview-reference'
 /** The chain's root opened as a card, at its chain section. */
 async function chainSection(page: Page) {
   const entity = planningWorkItemEntity(workItemRef)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope, entity }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope, entity }))
   await showChain(page)
   const section = page.locator('.drawer section.chain')
   await expect(section).toBeVisible()
