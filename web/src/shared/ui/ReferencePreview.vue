@@ -29,7 +29,9 @@
  * - Tab goes from the reference through the card's controls and on from the reference, since the
  *   card is portalled away from it and the document's own order would never reach them. Focus in
  *   the card keeps it, and focus the card had when it closes goes back to its reference.
- * - The reference is described by the card's text while the card shows.
+ * - The reference is described by the card's words while the card shows. They are kept apart
+ *   from the card, out of sight and out of reading order, so the card holds its words once and
+ *   a reader going through it does not meet them again after its controls.
  *
  * A preview that has to read waits for its answer a moment before it shows, so a quick answer is
  * never preceded by a line saying it is on its way; one that answers after the pointer left its
@@ -38,7 +40,7 @@
 import { computed, onBeforeUnmount, shallowRef, useId, watch } from 'vue'
 
 import { useEventListener } from '@vueuse/core'
-import { HoverCardContent, HoverCardPortal, HoverCardRoot, VisuallyHidden } from 'reka-ui'
+import { HoverCardContent, HoverCardPortal, HoverCardRoot } from 'reka-ui'
 
 import type { ReferencePreview } from '@/shared/lib/referenceLinks.ts'
 import {
@@ -88,7 +90,7 @@ const description = computed(() => drawn.value?.preview.describe())
 const open = computed(() => mine.value !== null && drawn.value !== null)
 /** How the card opened: after the pointer's rest, when it settles in, or at once. */
 const opened = computed(() => (mine.value?.rested ? 'after-rest' : 'at-once'))
-/** The card's text, which describes its reference while it shows. */
+/** The card's words in one line, which describe its reference while it shows. */
 const copyId = useId()
 
 let reading: AbortController | null = null
@@ -294,14 +296,18 @@ watch([drawn, open], ([shown, isOpen], [before]) => {
         hide-when-detached
         @mousedown="pressInCard"
       >
-        <Drawn /><VisuallyHidden
-          :id="copyId"
-          role="tooltip"
-          >{{ description }}</VisuallyHidden
-        >
+        <Drawn />
       </HoverCardContent>
     </HoverCardPortal>
   </HoverCardRoot>
+  <!-- The words the reference is described by while its card shows, out of the card's own text. -->
+  <div hidden>
+    <span
+      :id="copyId"
+      data-reference-description
+      >{{ description }}</span
+    >
+  </div>
 </template>
 
 <!-- The card is portalled out of this component, so its surface is not scoped. -->

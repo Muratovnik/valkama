@@ -86,6 +86,12 @@ test('a Tab shows the card at once and describes the reference; leaving takes it
   expect(opened.description).toContain('Keep the reader in place when a card closes')
   expect(opened.description).toContain('Steps: 1 of 3')
   await expect(link).toHaveAttribute('aria-describedby', /.+/u)
+  // The card holds its words once: those its reference is described by stand apart from it.
+  const copy = await link.getAttribute('aria-describedby')
+  await expect(shown.locator(`[id="${copy}"]`)).toHaveCount(0)
+  await expect(shown.locator('[role="tooltip"]')).toHaveCount(0)
+  const said = await shown.textContent()
+  expect(said?.split('Keep the reader in place when a card closes')).toHaveLength(2)
 
   // Through the card's two controls and on to the next reference, whose card it becomes.
   await page.keyboard.press('Tab')

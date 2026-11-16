@@ -260,7 +260,12 @@ async function afterTheScroll(page: Page, at: { x: number; y: number }) {
       const id = under?.getAttribute('aria-describedby')
       return {
         cards: cards.length,
-        describedByTheCard: Boolean(id && cards[0]?.querySelector(`[id="${id}"]`)),
+        // The card's words, kept apart from it, describe the reference whose card shows.
+        describedByTheCard: Boolean(
+          id &&
+          cards.length === 1 &&
+          document.querySelector(`[data-reference-description][id="${id}"]`)?.textContent?.trim(),
+        ),
         under: under
           ? [...document.querySelectorAll('[data-reference-preview]')].indexOf(under)
           : -1,
