@@ -404,7 +404,7 @@ STREAMED_HOLDS: dict[str, tuple[Callable[[Surfaces], tuple[str, object]], ...]] 
 
 
 #: Every place a state leaves the server, by how it gives it: 13 build it through
-#: `states.public_state`, 14 read the record that function published and 4 read the
+#: `states.public_state`, 15 read the record that function published and 4 read the
 #: history. Each names what its source holds for that: a builder its call of the
 #: boundary or what carries the boundary's answer on, a reader of a record the
 #: field it reads instead of the state, a reader of the history the entry it tells.
@@ -436,6 +436,7 @@ PLACES: tuple[tuple[str, str, str, str], ...] = (
     ("reads the record", "server.cli", "summary_main", "_shown_state"),
     ("reads the record", "server.executions.lifecycle", "_launch_reserved", '("goal", "stage")'),
     ("reads the record", "server.planning.read_model", "card", 'record["state"]'),
+    ("reads the record", "server.hooks.held_note", "_task_line", 'item["state"]'),
     ("reads the history", "server.planning.views", "activity_feed", "('created', 'transitioned')"),
     ("reads the history", "server.planning.person_events", "_BLOCKER_CHANGES", "'opened'"),
     ("reads the history", "server.planning.person_events", "_event_entry", "OPENED"),
@@ -855,7 +856,7 @@ class Surfaces(unittest.TestCase):
     def test_each_place_says_how_it_gives_its_state(self) -> None:
         ways = [way for way, _module, _name, _token in PLACES]
         self.assertEqual(
-            (13, 14, 4),
+            (13, 15, 4),
             (ways.count("builds"), ways.count("reads the record"), ways.count("reads the history")),
         )
         for way, module, name, token in PLACES:

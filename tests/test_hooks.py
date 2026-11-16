@@ -1,7 +1,8 @@
 """`valkama hook`: what a client hook records, where it goes when it cannot, and what it prints.
 
 The contract with the client is the strictest one in the product: exit 0 and
-print nothing, whatever arrives on stdin and whatever state the store is in.
+print nothing but a notice or a resume note, whatever arrives on stdin and
+whatever state the store is in.
 The cases that state it run the real entry point in a child process, because
 an exit status and a stdout are properties of a process. The rest drive the
 modules in-process against throwaway stores.
@@ -28,8 +29,9 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server import housekeeping, sessions, store
-from server.hooks import entry, ingest, normalize, pairs, spool
+from server import housekeeping, mcp_surface, sessions, store
+from server.hooks import entry, held_note, ingest, normalize, pairs, spool
+from server.planning import service
 
 UID_A = "00000000-0000-4000-8000-00000000000a"
 UID_B = "00000000-0000-4000-8000-00000000000b"
@@ -991,6 +993,171 @@ class EntryProcessTests(unittest.TestCase):
         self.assertIn("server.store", lifecycle_modules)
         for surface in ("server.cli", "server.mcp_surface", "server.http_surface"):
             self.assertNotIn(surface, lifecycle_modules)
+
+
+#: The store a test must never touch: the default one, read before a test moves the home.
+LIVE_STORE = os.path.join(os.path.expanduser("~"), ".valkama", "valkama.sqlite3")
+NOTE_SESSION = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
+
+
+class SessionStartNoteCase(StoreCase):
+    """A store where one session holds one item, claimed through the tools as an agent does."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        patch = mock.patch.dict(os.environ, {"VALKAMA_PROTECTED_STORE": LIVE_STORE})
+        patch.start()
+        self.addCleanup(patch.stop)
+        service.create_planning_space(self.conn, project_id="note", name="Note", key="NT")
+        self.reference = str(
+            service.create_work_item(self.conn, space="NT", title="Held over a compaction")[
+                "reference"
+            ]
+        )
+        meta = {"sessionId": NOTE_SESSION, "threadId": NOTE_SESSION}
+        mcp_surface.call_tool(self.conn, "claim_work_item", {"id": self.reference}, meta=meta)
+        self.conn.commit()
+
+    def start(self, source: str | None, session: str = NOTE_SESSION) -> bytes:
+        payload = {"session_id": session, "cwd": "C:/w", "hook_event_name": "SessionStart"}
+        if source is not None:
+            payload["source"] = source
+        return json.dumps(payload).encode()
+
+    def starts_recorded(self) -> int:
+        found = self.conn.execute(
+            "SELECT COUNT(*) FROM execution_events WHERE kind = 'session_start'"
+        ).fetchone()
+        return int(found[0])
+
+
+class SessionStartNoteTests(SessionStartNoteCase):
+    """When a session start is silent; the event is recorded every time."""
+
+    def run_hook(self, client: str, stdin: bytes) -> tuple[int, bytes, str]:
+        out = io.BytesIO()
+        err = io.StringIO()
+        with mock.patch.object(sys, "stderr", err):
+            code = entry.main([client, "session-start"], io.BytesIO(stdin), out)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_start_with_a_new_id_or_with_nothing_held_prints_nothing(self) -> None:
+        cases = [
+            (client, self.start(source))
+            for client in ("claude", "codex")
+            for source in ("startup", "clear", "fork", None)
+        ]
+        cases += [
+            ("claude", self.start("compact", session="holds-nothing")),
+            ("codex", self.start("resume", session="holds-nothing")),
+        ]
+        for number, (client, stdin) in enumerate(cases, start=1):
+            with self.subTest(client=client, stdin=stdin):
+                code, out, err = self.run_hook(client, stdin)
+                self.assertEqual((0, b"", ""), (code, out, err))
+                self.assertEqual(number, self.starts_recorded())
+
+    def test_switched_off_notices_give_no_note(self) -> None:
+        with mock.patch.dict(os.environ, {"VALKAMA_NOTIFY": "off"}):
+            code, out, _ = self.run_hook("claude", self.start("compact"))
+        self.assertEqual((0, b""), (code, out))
+        self.assertEqual(1, self.starts_recorded())
+        # The same start with notices on is told.
+        self.assertIn(self.reference.encode(), self.run_hook("claude", self.start("compact"))[1])
+
+    def test_a_missing_store_or_one_at_another_schema_gives_no_note(self) -> None:
+        other = os.path.join(self.home.name, "other", "valkama.sqlite3")
+        os.makedirs(os.path.dirname(other))
+        older = sqlite3.connect(other)
+        older.execute(f"PRAGMA user_version = {store.STORE_SCHEMA_VERSION - 1}")
+        older.close()
+        missing = os.path.join(self.home.name, "missing", "valkama.sqlite3")
+        os.makedirs(os.path.dirname(missing))
+        for path in (missing, other):
+            with self.subTest(path=path), mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
+                code, out, err = self.run_hook("codex", self.start("resume"))
+                # No note is tried, so no failed read is reported either.
+                self.assertEqual((0, b"", ""), (code, out, err))
+                # The store cannot take the event, so it waits in the spool.
+                self.assertEqual(1, len(spool.pending(spool.directory(path))))
+        self.assertFalse(os.path.exists(missing))
+
+    def test_a_note_that_fails_costs_only_the_note(self) -> None:
+        with mock.patch.object(held_note, "note", side_effect=sqlite3.OperationalError("busy")):
+            code, out, err = self.run_hook("claude", self.start("resume"))
+        self.assertEqual((0, b""), (code, out))
+        self.assertIn("busy", err)
+        self.assertEqual(1, self.starts_recorded())
+
+
+class SessionStartNoteProcessTests(SessionStartNoteCase):
+    """The note as a client reads it, from the real entry point."""
+
+    def hook(self, client: str, stdin: bytes) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, os.path.join(ROOT, "valkama.py"), "hook", client, "session-start"],
+            input=stdin,
+            capture_output=True,
+            env={**os.environ},
+            timeout=60,
+            check=False,
+        )
+
+    def test_a_resume_or_a_compaction_prints_the_note_as_one_json_answer(self) -> None:
+        cases = [
+            (client, source) for client in ("claude", "codex") for source in ("resume", "compact")
+        ]
+        for number, (client, source) in enumerate(cases, start=1):
+            with self.subTest(client=client, source=source):
+                done = self.hook(client, self.start(source))
+                self.assertEqual(0, done.returncode, done.stderr[:400])
+                self.assertEqual(b"", done.stderr)
+                answer = json.loads(done.stdout)
+                self.assertEqual({"hookSpecificOutput"}, set(answer))
+                self.assertEqual(
+                    {"hookEventName", "additionalContext"}, set(answer["hookSpecificOutput"])
+                )
+                self.assertEqual("SessionStart", answer["hookSpecificOutput"]["hookEventName"])
+                text = answer["hookSpecificOutput"]["additionalContext"]
+                self.assertLessEqual(len(text), 600)
+                self.assertIn(f"- {self.reference} «Held over a compaction», Dev.", text)
+                self.assertEqual(number, self.starts_recorded())
+
+    def test_only_a_start_that_gets_a_note_loads_what_the_note_reads(self) -> None:
+        script = (
+            "import io, json, sys\n"
+            "from server.hooks import entry\n"
+            "def loaded(event, **fields):\n"
+            "    given = {'session_id': sys.argv[1], 'cwd': 'C:/w', **fields}\n"
+            "    out = io.BytesIO()\n"
+            "    entry.main(['claude', event], io.BytesIO(json.dumps(given).encode()), out)\n"
+            "    return out.getvalue().decode(), sorted(m for m in sys.modules if m.startswith('server.'))\n"
+            "sys.stdout.write(json.dumps([\n"
+            "    loaded('post-tool-use', tool_name='Read'),\n"
+            "    loaded('session-start', source='startup'),\n"
+            "    loaded('session-start', source='compact'),\n"
+            "]))\n"
+        )
+        done = subprocess.run(
+            [sys.executable, "-c", script, NOTE_SESSION],
+            capture_output=True,
+            cwd=ROOT,
+            env={**os.environ},
+            timeout=60,
+            check=True,
+        )
+        (_, at_call), (quiet, at_startup), (told, at_compact) = json.loads(done.stdout)
+        # The lifecycle write loads the store, and planning's own store modules with
+        # it; what only the note reads loads for a start the note answers.
+        for name in ("server.planning.held", "server.planning.requests"):
+            self.assertNotIn(name, at_call)
+            self.assertNotIn(name, at_startup)
+            self.assertIn(name, at_compact)
+        self.assertNotIn("server.hooks.held_note", at_call)
+        self.assertEqual("", quiet)
+        self.assertIn(self.reference, told)
+        for surface in ("server.cli", "server.mcp_surface", "server.http_surface"):
+            self.assertNotIn(surface, at_compact)
 
 
 def agent_launch(**overrides: object) -> dict:

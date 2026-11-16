@@ -7,10 +7,12 @@ handling that call reads its session, and prints nothing: it neither changes the
 call nor decides its permission, and never opens the store. `post-tool-use`,
 `user-prompt-submit` and `stop` may also answer with a notice of what a person
 did on the work this session holds, and `claude watch` is the background hook
-that wakes an idle session with that notice (`notify`).
+that wakes an idle session with that notice (`notify`). A `session-start` after
+a resume or a compaction may answer with a note of the work the session holds
+(`held_note`).
 
 The contract with the client is the same in every case: exit 0, and print
-nothing but a notice. A hook that failed its client
+nothing but a notice or that note. A hook that failed its client
 because Valkama is down would make Valkama the thing that breaks a session, and
 Claude adds `SessionStart` stdout to the model's context, so a stray line there
 is a prompt injection. A diagnostic goes to stderr. The one other exit status
@@ -19,7 +21,8 @@ is the watcher's 2, which is how Claude Code's `asyncRewake` is told to wake.
 `valkama.py` dispatches here before it imports the command line, so a hook
 loads neither the MCP nor the HTTP surface. Nothing is imported here at module
 level: `post-tool-use` runs on every tool call, and the notice path loads only
-`notify`. The lifecycle path imports the store module for the store's path and
+`notify`. The note loads the planning modules, and only for a start it answers.
+The lifecycle path imports the store module for the store's path and
 schema version; the call pair takes the path from `notify.settings`, as the
 status line command does, and does not.
 """
@@ -111,11 +114,16 @@ def _run(arguments: list[str], stdin: BinaryIO, stdout: BinaryIO) -> int:
     # event, and a session end must stop its watcher whatever the store says.
     if event == "session-end" and payload is not None and client == "claude":
         _stage(notify.session_ended, payload)
+    answer = None
     if event in notify.DELIVERY_EVENTS.get(client, {}) and payload is not None:
         answer = _stage(notify.deliver, client, event, payload)
-        if answer is not None:
-            stdout.write(answer)
-            stdout.flush()
+    elif event == SESSION_START and client in notify.DELIVERY_EVENTS and payload is not None:
+        from . import held_note
+
+        answer = _stage(held_note.answer, payload)
+    if answer is not None:
+        stdout.write(answer)
+        stdout.flush()
     if event == "post-tool-use" and (
         client != "claude" or payload is None or payload.get("tool_name") not in _AGENT_TOOLS
     ):
