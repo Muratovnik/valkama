@@ -317,15 +317,34 @@ def lapsed_claims(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> dict
         str(state[0])
         for state in conn.execute("SELECT state_id FROM workflow_states WHERE is_terminal = 0")
     }
-    unheld = [
-        str(row["work_item_id"])
-        for row in rows
-        if not row["claim_ref"] and str(row["state_id"]) in open_states
-    ]
+    return _lapsed(
+        conn,
+        [
+            str(row["work_item_id"])
+            for row in rows
+            if not row["claim_ref"] and str(row["state_id"]) in open_states
+        ],
+    )
+
+
+def _lapsed(conn: sqlite3.Connection, unheld: list[str]) -> dict[str, dict]:
+    """The lapsed claims of `unheld`, open items nobody holds, in one statement.
+
+    An attached store an earlier build wrote, before calls were recorded, has no
+    `execution_events`. It is read as it is, so it is asked directly rather than
+    probed first, and none of its items has a lapsed claim.
+    """
+
     found: dict[str, dict] = {}
     if not unheld:
         return found
-    for identity, detail, at in conn.execute(_LAPSED, (json.dumps(unheld), leases.EXPIRY_TOOL)):
+    try:
+        released = conn.execute(_LAPSED, (json.dumps(unheld), leases.EXPIRY_TOOL)).fetchall()
+    except sqlite3.OperationalError as error:
+        if not str(error).startswith("no such table: execution_events"):
+            raise
+        return found
+    for identity, detail, at in released:
         expiry = leases.expiry_of(str(detail))
         if expiry is not None:
             found[str(identity)] = {"holder": expiry[1], "reason": expiry[0], "at": at}
@@ -826,9 +845,13 @@ def present(
     # what reads workable, and the codes say why anything else is not given.
     record["withheld"] = queue.withheld(conn, row, facts)
     record["workable"] = not record["withheld"]
-    record["lapsed_claim"] = (lapsed if lapsed is not None else lapsed_claims(conn, [row])).get(
-        identity
-    )
+    if lapsed is not None:
+        record["lapsed_claim"] = lapsed.get(identity)
+    else:
+        # Asked only of open work nobody holds, the one kind that can have it: the
+        # state is read already, and a brief read's statement count is bounded.
+        unheld = not row["claim_ref"] and not state["is_terminal"]
+        record["lapsed_claim"] = _lapsed(conn, [identity]).get(identity) if unheld else None
     if not full:
         # A count, under its own name. Calling it `comments` in the brief and
         # `comments` in the full record made one key mean two shapes, which a
