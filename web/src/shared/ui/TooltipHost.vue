@@ -27,7 +27,8 @@
  *   the same manager, so it and a hint replace each other as any two hints do.
  * - A hint the pointer raised can be entered by the pointer. One the keyboard holds up lets a
  *   press through to what it covers, since it stands over every control the keyboard reaches,
- *   and a chart period's lets the pointer through, since it follows the pointer along the plot.
+ *   and a chart period's lets the pointer through, since it follows the pointer along the plot, as
+ *   one inside its element's frame does, since it stands over what the frame holds.
  * - A hint of words is a tooltip itself and holds its words once; a hint drawn as a grid keeps
  *   its text, for assistive technology alone, beside a grid drawn for the eye alone. The element
  *   is described by its hint through the hidden copies under this host, whether or not it shows.
@@ -90,15 +91,22 @@ const open = computed(() => hint.value !== undefined)
  * neighbour or brought by a key, when it is already there.
  */
 const opened = computed(() => (mine.value?.rested ? 'after-rest' : 'at-once'))
+/** Where the shown hint stands and what it stands against, decided as it opens. */
+const place = shallowRef<ReturnType<typeof hintPlaceOf> | null>(null)
+
 /**
  * The pointer and a press go through the hint rather than onto it: a hint focus a key brought
- * stands over every control the keyboard reaches, and a chart period's follows the pointer along
- * the plot, standing beside its column over the periods that come next. Every other hint the
- * pointer raised can be entered.
+ * stands over every control the keyboard reaches, a chart period's follows the pointer along
+ * the plot, standing beside its column over the periods that come next, and one inside its
+ * element's frame stands over what the frame holds, the next period of a small chart among it.
+ * Every other hint the pointer raised can be entered.
  */
 const passedThrough = computed(() => {
   const now = mine.value
-  return now !== null && (now.by === 'focus' || inTooltipArea(now.anchor))
+  return (
+    now !== null &&
+    (now.by === 'focus' || inTooltipArea(now.anchor) || place.value?.inside !== undefined)
+  )
 })
 /** The shown element's own words are cut, so its hint says them first. */
 const whole = ref(false)
@@ -135,9 +143,6 @@ const current = computed(() => {
     ? tooltipRowOf(element, part)
     : tooltipRowOf(element, focusedPart.value)
 })
-
-/** Where the shown hint stands and what it stands against, decided as it opens. */
-const place = shallowRef<ReturnType<typeof hintPlaceOf> | null>(null)
 
 /** What the hint is placed against: its element, or the box aside of the list it stands in. */
 const reference = computed(() => (shown.value ? place.value?.reference : undefined))

@@ -17,6 +17,14 @@
  *   of every row; a list of rows across (`data-hint-list="columns"`, a chart's periods) puts it
  *   beside its row.
  *   A list declares itself once on its container, and its rows say nothing.
+ * - A list of columns in a frame that keeps its hints inside (`data-hint-frame="inside"`, each
+ *   chart of a small multiple) puts a column's hint inside that frame, as wide as it at most, from
+ *   its start: against its top edge where the column stands in its lower half, else against its
+ *   bottom edge, over part of its own chart and never over a neighbouring one; one taller than the
+ *   chart, as a long name's in a narrow window, runs on into the air between the charts. It lets the pointer
+ *   through to what it covers, as a chart period's does: resting on a period, it stands over the
+ *   next. Below its period, as a detail stands, it stood over the charts of the next row; beside
+ *   it, a chart a few columns wide had no room, and the window's side put it over the next chart.
  *
  * A hint stands on the right of a list where its lines fit there, else on the left, else on the
  * roomier side drawn narrower, down to `NARROWEST_BESIDE`, and above its element where neither
@@ -73,8 +81,11 @@ export interface HintSetting {
   window: number
   /** The side a registered exception writes (`SIDED_TOOLTIPS`), placed against its element. */
   asked?: { align: HintAlign; side: HintSide } | null
-  /** The box a list of columns keeps its hints inside across, where it declares one. */
-  frame?: Pick<Box, 'left' | 'right'> | null
+  /**
+   * The frame a list of columns keeps its hints inside (`data-hint-frame`): across, and with its
+   * top and bottom where it keeps them wholly inside (`inside`).
+   */
+  frame?: (Pick<Box, 'left' | 'right'> & { inside?: Pick<Box, 'bottom' | 'top'> }) | null
 }
 
 export interface HintPlace {
@@ -82,6 +93,8 @@ export interface HintPlace {
   /** The hint stands against the aside box rather than its element. */
   aside: boolean
   side: HintSide
+  /** The edge of the frame that keeps it inside (`data-hint-frame="inside"`) it stands against. */
+  inside?: 'top' | 'bottom'
   /** How wide the hint is drawn at most where it stands, in px, where narrower than `WIDEST`. */
   widest?: number
 }
@@ -93,8 +106,23 @@ export function placeHint(setting: HintSetting): HintPlace {
   const { asked, kind, list } = setting
   if (asked?.side === 'top' || asked?.side === 'bottom') return { ...asked, aside: false }
   if (asked) return { ...beside(setting, asked.side, asked.align), aside: false }
+  const { frame } = setting
+  if (list === 'columns' && frame?.inside)
+    return within(setting.aside, { ...frame, ...frame.inside })
   if (list) return beside(setting, 'right', 'start')
   return { align: kind === 'name' ? 'center' : 'start', aside: false, side: 'bottom' }
+}
+
+/** A hint inside the frame `column` stands in: at the edge away from it, as wide as the frame. */
+function within(column: Box, frame: Box): HintPlace {
+  const lower = column.top + column.bottom > frame.top + frame.bottom
+  return {
+    align: 'start',
+    aside: false,
+    inside: lower ? 'top' : 'bottom',
+    side: lower ? 'bottom' : 'top',
+    widest: frame.right - frame.left,
+  }
 }
 
 /** What decides where the whole of a cut text is laid, measured as it opens. */
@@ -179,12 +207,25 @@ function beside(
 
 const LISTS: readonly HintList[] = ['rows', 'columns']
 
-/** The frame a list of columns keeps its hints inside, as the nearest `data-hint-frame` says. */
-function frameOf(container: HTMLElement, list: HintList): Pick<Box, 'left' | 'right'> | null {
-  const frame = list === 'columns' ? container.closest('[data-hint-frame]') : null
+/**
+ * The frame a list of columns keeps its hints inside, as the nearest `data-hint-frame` says, and
+ * whether it keeps them wholly inside.
+ */
+function frameOf(container: HTMLElement, list: HintList): HintSetting['frame'] {
+  const frame = list === 'columns' ? container.closest<HTMLElement>('[data-hint-frame]') : null
   if (!frame) return null
-  const { left, right } = frame.getBoundingClientRect()
-  return { left, right }
+  const { bottom, left, right, top } = frame.getBoundingClientRect()
+  return { inside: frame.dataset.hintFrame === 'inside' ? { bottom, top } : undefined, left, right }
+}
+
+/**
+ * The edge of the frame of `container`'s list a hint inside it stands against, as a line
+ * `OFFSET` out from it, so the hint placed against that line at `OFFSET` stands on the edge.
+ */
+function frameEdge(container: HTMLElement, inside: 'top' | 'bottom'): DOMRect {
+  const frame = (container.closest('[data-hint-frame]') ?? container).getBoundingClientRect()
+  const at = inside === 'top' ? frame.top - OFFSET : frame.bottom + OFFSET
+  return new DOMRect(frame.left, at, frame.width, 0)
 }
 
 /** The list `element` stands in, as the nearest container that declares one says. */
@@ -267,8 +308,18 @@ export function hintPlaceOf(
     width,
     window: document.documentElement.clientWidth,
   })
-  if (!place.aside || !declared) return { ...place, reference: element }
+  if (!declared) return { ...place, reference: element }
   const { container, list } = declared
+  const { inside } = place
+  if (inside)
+    return {
+      ...place,
+      reference: {
+        contextElement: element,
+        getBoundingClientRect: () => frameEdge(container, inside),
+      },
+    }
+  if (!place.aside) return { ...place, reference: element }
   return {
     ...place,
     reference: {

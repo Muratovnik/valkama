@@ -14,6 +14,7 @@
  * Every mark has its hint (`markHints.ts`): a chart's name says its share of the whole where the
  * caller says how a share reads (`formatShare`), and while the name is cut says it whole first; a
  * period of a chart, where the caller names the periods (`periods`), says its name and its figure.
+ * Each chart keeps the hints of its periods, a list of columns, inside it (`data-hint-frame`).
  * Presentational: a name whose value acts (`MarkAction`) is pressed as its value's row is, a link
  * sent out as `follow` with the press, a button as `select` with the key; the rest only show. A
  * name named by what it does is described by its whole words where that names a part of them.
@@ -123,10 +124,13 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
     <template v-else>
       <p class="multiples-scale">{{ words.scale }} {{ top }}</p>
       <ul class="multiples-grid">
+        <!-- Each chart keeps its periods' hints inside it: a period's hint stands over part of
+             its own chart, rather than below it over the charts of the next row. -->
         <li
           v-for="one in placed.shared"
           :key="one.key"
           class="multiple"
+          data-hint-frame="inside"
           :data-key="one.key"
           :data-kind="one.kind"
         >
@@ -146,6 +150,7 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
           <span
             class="multiple-plot"
             aria-hidden="true"
+            data-hint-list="columns"
           >
             <span
               v-for="(height, index) in one.heights"

@@ -968,6 +968,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   the widest hint, not of its own: the right inside the frame for every period that has it,
   the left past them, so along the chart the side changes once and never jumps between
   neighbours; a frame with that room on neither side gives the roomier side of the window.
+  A frame that keeps its hints inside (`data-hint-frame="inside"`), as each chart of a small
+  multiple does for its periods, takes a period's hint inside it instead: no wider than the
+  chart, from its top, over part of its own plot and over no other chart, letting the pointer
+  through to the next period as a day's hint does.
   A hint keeps 8px from the window's edge. `check:ui-system` refuses a side written at a
   call site, save an exception its register names with the reason. Every hint states its kind, and the kind says when it shows: `name` is
   the words of an element that shows only a glyph, shown whenever it is pointed at;

@@ -171,6 +171,31 @@ test('along a chart every period puts its hint on one side, inside the frame, wh
   }
 })
 
+test('a small chart that keeps its hints inside puts a period’s inside it, away from the period', () => {
+  // A chart 209px wide and 90px high, from 978 to 1187 and 497 to 587; its periods stand in its
+  // plot, the lower half, and a name over them would stand in its upper half.
+  const frame = { left: 978, right: 1187, inside: { top: 497, bottom: 587 } }
+  const period = box(1048, 1117, 539, 586)
+  for (const width of [180, 320])
+    assert.deepEqual(placeHint(setting({ aside: period, frame, list: 'columns', width })), {
+      align: 'start',
+      aside: false,
+      inside: 'top',
+      side: 'bottom',
+      widest: 209,
+    })
+  assert.equal(
+    placeHint(setting({ aside: box(978, 1187, 497, 513), frame, list: 'columns' })).inside,
+    'bottom',
+  )
+  // A frame that keeps its hints across alone leaves a period's hint beside it, as before.
+  assert.equal(
+    placeHint(setting({ aside: period, frame: { left: 978, right: 1187 }, list: 'columns' }))
+      .inside,
+    undefined,
+  )
+})
+
 test('a chart’s frame narrower than the window leaves less room beside a period', () => {
   // 1440 - 1000 - 14 = 426 in the window; 1200 - 1000 - 6 = 194 inside the frame.
   const aside = box(970, 1000)
