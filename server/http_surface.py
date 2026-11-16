@@ -493,7 +493,9 @@ def _planning_read(call: _Call) -> _Answer | None:
         return _read_model_answer(
             routing.planning_read_model(
                 call.parameters,
-                lambda conn, key: planning_views.planning_payload(conn, space=key),
+                lambda conn, key, project: planning_views.planning_payload(
+                    conn, space=key, project=project
+                ),
             )
         )
     answer = planning_api.handle_get(call.store(), call.path, call.parameters)
@@ -1582,8 +1584,8 @@ class Handler(BaseHTTPRequestHandler):
                         # the stream is open refuses here and closes the stream.
                         model = PlanningRouting(conn, db_path()).planning_read_model(
                             exact_parameters,
-                            lambda selected, key: planning_views.planning_payload(
-                                selected, space=key
+                            lambda selected, key, project: planning_views.planning_payload(
+                                selected, space=key, project=project
                             ),
                         )
                     else:

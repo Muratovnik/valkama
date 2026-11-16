@@ -357,13 +357,17 @@ class PlanningRouting:
     def planning_read_model(
         self,
         parameters: Mapping[str, list[str]],
-        loader: Callable[[sqlite3.Connection, str], dict],
+        loader: Callable[[sqlite3.Connection, str, str | None], dict],
     ) -> dict:
         """Read Planning's model of the exactly named space from the store holding it.
 
-        Planning owns the model; routing owns which connection may answer.
-        Attached connections are opened read-only by the shared store resolver.
+        Planning owns the model; routing owns which connection may answer. The
+        loader gets the store, the space's key and the project narrowing the read,
+        or None, and narrows it the same way in the primary store and in an
+        attached one. Attached connections are opened read-only by the shared
+        store resolver.
         """
 
+        project = one(parameters, _PROJECT_FIELD) if _PROJECT_FIELD in parameters else None
         with self.planning_store(parameters) as (store, key):
-            return loader(store, key)
+            return loader(store, key, project)

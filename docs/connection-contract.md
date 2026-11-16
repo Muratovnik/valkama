@@ -183,11 +183,17 @@ phrase finds an item when it stands in the id of one of its projects as well.
 `list_work_items` also takes `parent`, a work item by reference or id, and then
 lists only that item's children; the HTTP read `GET /api/planning/work-items`
 takes the same `parent` parameter. An unknown `parent` is refused with
-`not_found`. `list_work_items` and `GET /api/planning/work-items` take
+`not_found`. With `space`, `list_work_items` and `GET /api/planning/work-items`
+read that space: its items, and the items of other spaces that name one of the
+projects the registry binds to it. Each item of such a read carries
+`other_space`, the `{key, name}` of the space it lies in, or `null` for the
+space's own; a compact row carries it only for another space's item. They take
 `project` too, a project id: the list keeps the items that name that project,
-in every space unless `space` is given, and with `space` only that space's. A
-goal or stage names no projects and is not kept for those of its tasks; a
-project no item names lists nothing.
+in every space unless `space` is given. With `space`, it keeps that space's
+items that name it, and other spaces' items that name it when it is one of the
+space's projects. A goal or stage stores no projects and names those of every
+task under it, at any depth, so it is kept when one of them names the project;
+a project no item names lists nothing.
 
 Each answer is one page. `truncated` is true when more items match than the page
 holds, and `next_offset` is then the offset of the next page; on the last page
@@ -969,11 +975,18 @@ to read the other item to know.
   each link, in either direction, names its other end: `state_name`,
   `state_category`, `is_terminal` and `state_unavailable`.
 - In a space's view (`links` in `GET /api/planning` and
-  `/api/events?view=planning`, `edges` in `GET /api/planning/graph`), the links
-  leaving the space come with every `blocks` link into it from another space,
-  so `from` can name an item the view does not hold. Each link names its source
-  end, `from`: its `reference` and the same four state fields. A graph's
-  `parent` edges carry none of them.
+  `/api/events?view=planning`, `edges` in `GET /api/planning/graph`), the view
+  holds the space's items and other spaces' items that name one of its
+  projects, as a list with `space` does, and every link with an end among them,
+  in either direction and of every kind. So `from` or `to` can name an item the
+  view does not hold, and `other_space_ends` names each such end: its
+  `work_item_id`, `reference`, `title`, `kind`, `state` (`key`, `name`,
+  `category`, `is_terminal`, or `null` for an accepted open goal or stage and
+  for a state the store cannot resolve) and `space` as `{key, name}`. Each link
+  names its source end, `from`: its `reference` and the same four state fields.
+  A graph's `parent` edges carry none of them, and its nodes carry `other_space`
+  as the items do. `project` beside `space` narrows the view as it narrows that
+  list; without `space` it is refused.
 - A chain's `edges` name their source the same way; see
   [Reading a chain of work](#reading-a-chain-of-work).
 

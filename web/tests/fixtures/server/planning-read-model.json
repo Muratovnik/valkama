@@ -371,7 +371,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": true,
-      "comment_count": 7
+      "comment_count": 7,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000001",
@@ -406,7 +407,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": true,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000031",
@@ -441,7 +443,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000032",
@@ -476,7 +479,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000033",
@@ -511,7 +515,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000034",
@@ -546,7 +551,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": true,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000035",
@@ -590,7 +596,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": true,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000037",
@@ -628,7 +635,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": true,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000010",
@@ -688,7 +696,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 2
+      "comment_count": 2,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000039",
@@ -726,7 +735,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000040",
@@ -764,7 +774,8 @@
       "closed_at": "2026-01-02T03:04:05Z",
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 1
+      "comment_count": 1,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000041",
@@ -802,7 +813,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000038",
@@ -840,7 +852,8 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000036",
@@ -878,10 +891,12 @@
       "closed_at": null,
       "last_claim_ref": null,
       "workable": false,
-      "comment_count": 0
+      "comment_count": 0,
+      "other_space": null
     }
   ],
   "links": [],
+  "other_space_ends": [],
   "stale_claims": [],
   "live_work": {
     "00000000-0000-4000-8000-000000000010": {

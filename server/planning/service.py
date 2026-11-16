@@ -172,14 +172,25 @@ def list_work_items(
     owner: str | None = None,
     parent: str | None = None,
     project: str | None = None,
+    other_spaces: bool = False,
     limit: int | None = 200,
     offset: int = 0,
 ) -> list[dict]:
     """Exactly `limit` items from `offset` on, or every one of them when limit is None.
 
     `parent` keeps only the children of that item, named as any item is named.
-    `project` keeps the items that name that project (`item_projects.NAMES_PROJECT`),
-    in every space unless `space` is given; a project no item names lists none.
+    `project` keeps the items that name that project (`item_projects.naming`: a goal
+    or stage names what a task under it names), in every space unless `space` is
+    given; a project no item names lists none.
+
+    `other_spaces` makes `space` a read of that space: its items, and the items of
+    other spaces that name one of the projects the registry binds to it, each record
+    marked with `other_space`, the `{key, name}` of the space it lies in, or None
+    for the space's own. With `project` too, another space's item is kept only when
+    that project is one of the space's. Without it `space` keeps the space's items
+    alone, which is what a reader that accounts for a space's items, an export,
+    asks for.
+
     `kind` is named as a caller names it: `goal` keeps the containers under no
     parent and `stage` those under one. The service state is no state and no
     category a caller names: `container` is refused for either with the word that
@@ -193,10 +204,27 @@ def list_work_items(
 
     clauses: list[str] = []
     parameters: list[object] = []
-    space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
-    if space_id is not None:
-        clauses.append("i.planning_space_id = ?")
-        parameters.append(space_id)
+    space_row = _space_row(conn, space) if space is not None else None
+    space_id = str(space_row["planning_space_id"]) if space_row is not None else None
+    wanted = item_projects.project_id(project, "project") if project is not None else None
+    kept = item_projects.naming(conn, [wanted]) if wanted is not None else None
+    marked = space_row is not None and other_spaces
+    if space_row is not None:
+        foreign = (
+            item_projects.space_project_ids(conn, str(space_row["key"])) if other_spaces else []
+        )
+        if kept is not None:
+            # Narrowed to one project, other spaces bring what names it, if it is the space's.
+            foreign = [found for found in foreign if found == wanted]
+        if foreign:
+            clauses.append(
+                "(i.planning_space_id = ? OR i.work_item_id IN (SELECT value FROM json_each(?)))"
+            )
+            reached = kept if kept is not None else item_projects.naming(conn, foreign)
+            parameters.extend([space_id, json.dumps(reached)])
+        else:
+            clauses.append("i.planning_space_id = ?")
+            parameters.append(space_id)
     if state is not None:
         workflows = (
             [str(store.workflow_for_space(conn, space_id)["workflow_id"])]
@@ -224,11 +252,14 @@ def list_work_items(
     if parent is not None:
         clauses.append("i.parent_id = ?")
         parameters.append(str(read_model.item_row(conn, parent)["work_item_id"]))
-    if project is not None:
-        clauses.append(item_projects.NAMES_PROJECT)
-        parameters.append(item_projects.project_id(project, "project"))
+    if kept is not None:
+        clauses.append("i.work_item_id IN (SELECT value FROM json_each(?))")
+        parameters.append(json.dumps(kept))
     query = with_clauses(
-        "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
+        "SELECT i.*, p.key AS space_key, p.name AS space_name FROM work_items i"
+        " JOIN workflow_states s ON s.state_id = i.state_id"
+        " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id",
+        clauses,
     )
     # The work item id closes the order: two spaces can tie on every other key,
     # and an order with ties lets one page repeat an item the next page skips.
@@ -241,9 +272,17 @@ def list_work_items(
     closed = read_model.closings(conn, rows)
     tree = _page_tree(conn, rows)
     projects = item_projects.of_items(conn, rows)
-    return [
+    found = [
         read_model.present(conn, row, closed=closed, tree=tree, projects=projects) for row in rows
     ]
+    if marked:
+        for row, record in zip(rows, found, strict=True):
+            record["other_space"] = (
+                None
+                if str(row["planning_space_id"]) == space_id
+                else {"key": row["space_key"], "name": row["space_name"]}
+            )
+    return found
 
 
 def _page_tree(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> item_tree.Tree:
@@ -262,6 +301,7 @@ def list_work_items_page(
     owner: str | None = None,
     parent: str | None = None,
     project: str | None = None,
+    other_spaces: bool = False,
     limit: int = 200,
     offset: int = 0,
 ) -> dict:
@@ -277,6 +317,7 @@ def list_work_items_page(
         owner=owner,
         parent=parent,
         project=project,
+        other_spaces=other_spaces,
         limit=size + 1,
         offset=offset,
     )

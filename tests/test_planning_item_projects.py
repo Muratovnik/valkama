@@ -452,7 +452,8 @@ class ProjectFilterTests(ItemProjectsCase):
         here = self.task("Here", projects=["rover"])
         goal = self.task("Umbrella", kind="goal")
         under = self.task("Under the goal", parent=goal, projects=["rover"])
-        self.task("Another project", projects=["valkama"])
+        other_goal = self.task("Another umbrella", kind="goal")
+        self.task("Another project", parent=other_goal, projects=["valkama"])
         self.task("No project")
         there = str(
             service.create_work_item(
@@ -460,9 +461,9 @@ class ProjectFilterTests(ItemProjectsCase):
             )["reference"]
         )
         self.conn.commit()
-        # The goal names none itself, so its task's project does not keep it.
-        self.assertEqual(sorted([here, under, there]), self.listed(project="rover"))
-        self.assertEqual(sorted([here, under]), self.listed(project="rover", space=SPACE))
+        # A goal names what a task under it names, and nothing else.
+        self.assertEqual(sorted([here, goal, under, there]), self.listed(project="rover"))
+        self.assertEqual(sorted([here, goal, under]), self.listed(project="rover", space=SPACE))
         self.assertEqual([there], self.listed(project="atlas"))
         self.assertEqual([], self.listed(project="atlas", space=SPACE))
         self.assertEqual([], self.listed(project="unnamed"))

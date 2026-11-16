@@ -169,19 +169,20 @@ def _spaces(conn: sqlite3.Connection, _parameters: Mapping[str, list[str]]) -> d
     }
 
 
-def _chosen_space(parameters: Mapping[str, list[str]]) -> str | None:
-    """Which space the caller means: the one it names, or the first when it names none.
+def _chosen_space(parameters: Mapping[str, list[str]]) -> tuple[str | None, str | None]:
+    """Which space the caller reads, the first when it names none, and the project narrowing it.
 
     A space holds no project, so a project does not name one: several spaces'
     projects are the registry's to bind, and one project may be named by items of
-    any space.
+    any space. It narrows the read of the space named beside it.
     """
 
-    if _first(parameters, "project") is not None:
+    space, project = _first(parameters, "space"), _first(parameters, "project")
+    if project is not None and space is None:
         raise PlanningHttpError(
             400, "invalid_request", "a project does not choose a planning space: name the space"
         )
-    return _first(parameters, "space")
+    return space, project
 
 
 def _read_model(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
@@ -191,11 +192,13 @@ def _read_model(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             "invalid_request",
             "The complete read model does not accept limit; use /api/planning/work-items",
         )
-    return views.planning_payload(conn, space=_chosen_space(parameters))
+    space, project = _chosen_space(parameters)
+    return views.planning_payload(conn, space=space, project=project)
 
 
 def _graph(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    return views.graph_payload(conn, space=_chosen_space(parameters))
+    space, project = _chosen_space(parameters)
+    return views.graph_payload(conn, space=space, project=project)
 
 
 def _activity(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
@@ -252,6 +255,8 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             owner=_first(parameters, "owner"),
             parent=_first(parameters, "parent"),
             project=_first(parameters, "project"),
+            # The list of a space is a read of it: other spaces' items naming its projects too.
+            other_spaces=True,
             limit=_int(_first(parameters, "limit"), "limit", 200),
             offset=_offset(parameters),
         ),

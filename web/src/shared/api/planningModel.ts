@@ -25,7 +25,12 @@ import {
   EVENT_DETAIL_MAX,
   LABELS_DETAIL_MAX,
 } from '@/shared/api/planningEventActions.ts'
-import { spaceBriefSchema, spaceIdentitySchema, TITLE } from '@/shared/api/planningSpaceModel.ts'
+import {
+  otherSpaceSchema,
+  spaceBriefSchema,
+  spaceIdentitySchema,
+  TITLE,
+} from '@/shared/api/planningSpaceModel.ts'
 import { enumField, ID, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
 export { SPACE_KEY, TITLE } from '@/shared/api/planningSpaceModel.ts'
@@ -75,13 +80,14 @@ const actor = () => blankable(128)
 /** A holder that is somebody: `claim_ref` as it reads while the item is held. */
 const holderField = () => boundedText(/^[^\u{0}]{1,128}$/u, 128)
 
-const stateShape = {
-  state_id: boundedText(UUID, 36),
+/** A state as it reads outside its workflow: no id, which only that workflow resolves. */
+const publicStateShape = {
   key: boundedText(STATE_KEY, 32),
   name: boundedText(TITLE, 200),
   category: enumField(STATE_CATEGORIES),
   is_terminal: z.boolean(),
 }
+const stateShape = { state_id: boundedText(UUID, 36), ...publicStateShape }
 const stateSchema = strictObject(stateShape)
 const workflowStateSchema = strictObject({ ...stateShape, position: positiveInt(true) })
 
@@ -131,6 +137,11 @@ const workItemBriefShape = {
   labels: boundedList(boundedText(/^[^\u{0}]{1,64}$/u, 64), 32),
   /** The projects it changes; a goal or stage reads its tasks'. */
   projects: itemProjectsField(),
+  /**
+   * In a space's read, the space an item of another space lies in, which names one
+   * of this space's projects; null for the space's own. Absent outside such a read.
+   */
+  other_space: otherSpaceSchema.nullable().optional(),
   source: blankable(512),
   checklist: boundedList(checklistStepSchema, 100),
   revision: positiveInt(true),
@@ -466,6 +477,17 @@ const staleClaimSchema = strictObject({
   quiet_days: positiveInt(true),
 })
 
+/** The end of a link the read holds no item for, which may lie in another space. */
+const otherSpaceEndSchema = strictObject({
+  work_item_id: boundedText(UUID, 36),
+  reference: boundedText(WORK_ITEM_REFERENCE, 20),
+  title: boundedText(TITLE, 200),
+  kind: enumField(WORK_ITEM_KINDS),
+  // Null for an accepted open goal or stage, and for a state the store cannot resolve.
+  state: strictObject(publicStateShape).nullable(),
+  space: otherSpaceSchema,
+})
+
 const readModelSchema = strictObject({
   interface_version: z.literal(PLANNING_READ_MODEL, {
     message: `expected ${PLANNING_READ_MODEL}`,
@@ -478,6 +500,8 @@ const readModelSchema = strictObject({
   workflow: workflowSchema.nullable(),
   work_items: z.array(workItemBriefSchema),
   links: z.array(edgeSchema),
+  // The ends of those links the read holds no item for; optional, as an older server sends none.
+  other_space_ends: z.array(otherSpaceEndSchema).optional(),
   stale_claims: z.array(staleClaimSchema),
   // Only the items with live work, by id; optional, as a server older than it sends none.
   live_work: liveWorkMapSchema.optional(),
@@ -490,6 +514,8 @@ const readModelSchema = strictObject({
       payload.work_items.every(
         (item) =>
           item.state === null ||
+          // Another space's item stands in a state of its own space's workflow.
+          (item.other_space ?? null) !== null ||
           payload.workflow?.states.some((state) => state.state_id === item.state?.state_id),
       ),
     { message: 'every item names a state its workflow declares' },

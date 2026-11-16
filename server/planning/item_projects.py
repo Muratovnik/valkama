@@ -426,11 +426,48 @@ def carry(conn: sqlite3.Connection, source_id: str, target_id: str) -> int:
     return len(moving)
 
 
-#: A list's clause on `work_items i`: the item names the project bound to it. A goal or
-#: stage names none, so it is not kept for the projects of the tasks under it.
-NAMES_PROJECT = (
-    "i.work_item_id IN (SELECT work_item_id FROM work_item_projects WHERE project_id = ?)"
+#: The items that name one of the projects of a JSON list, and every goal or stage above
+#: them: a container names what the tasks under it name, at any depth.
+_NAMING = (
+    "WITH RECURSIVE naming(work_item_id) AS ("
+    " SELECT work_item_id FROM work_item_projects"
+    "  WHERE project_id IN (SELECT value FROM json_each(?))"
+    " UNION SELECT w.parent_id FROM work_items w"
+    "  JOIN naming n ON w.work_item_id = n.work_item_id WHERE w.parent_id IS NOT NULL)"
+    " SELECT work_item_id FROM naming"
 )
+
+
+def naming(conn: sqlite3.Connection, projects: Iterable[str]) -> list[str]:
+    """The items that name one of these projects, as a read sees them, by work item id.
+
+    A task names its own; a goal or stage names those of every task under it, so it
+    is among them when a task under it is. An attached store an earlier build wrote
+    is read as it is: it has no such table, and none of its items names a project.
+    """
+
+    wanted = sorted(set(projects))
+    if not wanted:
+        return []
+    try:
+        rows = conn.execute(_NAMING, (json.dumps(wanted),)).fetchall()
+    except sqlite3.OperationalError as error:
+        if not str(error).startswith("no such table: work_item_projects"):
+            raise
+        return []
+    return [str(row[0]) for row in rows]
+
+
+def space_project_ids(conn: sqlite3.Connection, space_key: str) -> list[str]:
+    """The ids of the projects the registry binds to one space of the store `conn` reads.
+
+    A registry that was not read binds none that a read could rely on.
+    """
+
+    listing = project_registry.read_registry()
+    if listing["status"] != "available":
+        return []
+    return [str(project["project_id"]) for project in _bound(conn, listing, space_key)]
 
 
 def naming_like(conn: sqlite3.Connection, like: str) -> list[str]:

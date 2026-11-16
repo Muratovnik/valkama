@@ -612,8 +612,9 @@ class _Scenario:
             conn.commit()
         finally:
             conn.close()
-        space = urlencode({"project": PROJECT, **self.space_ref})
-        model = self.http(f"/api/planning?{space}")
+        # The board reads the whole space: narrowed by its project, it would keep only the
+        # items naming it.
+        model = self.http(f"/api/planning?{urlencode(self.space_ref)}")
         # A digest of the whole answer, ids and instants included, which change run to run.
         model["revision"] = "0" * 64
         # The workflow's moves stand in the order of their states' ids; put them in the states'.

@@ -448,6 +448,7 @@ class PlanningDomainTests(unittest.TestCase):
                 "planning_space": None,
                 "nodes": [],
                 "edges": [],
+                "other_space_ends": [],
             },
             views.graph_payload(self.conn),
         )
@@ -889,7 +890,8 @@ class PlanningDomainTests(unittest.TestCase):
 
         It used to read only the links leaving the space, so an item blocked
         from another space was shown with nothing to say why it could not be
-        taken, and the graph could not name what it waited on.
+        taken, and the graph could not name what it waited on. Every kind of link
+        from there is drawn now, the blocker's other links among them.
         """
 
         blocked = self.item("Blocked from elsewhere")
@@ -902,12 +904,14 @@ class PlanningDomainTests(unittest.TestCase):
             acceptance="assignment",
         )
         service.link_work_items(self.conn, foreign["reference"], blocked["reference"], "blocks")
-        # Another kind of link from there stays that space's to show.
         service.link_work_items(self.conn, foreign["reference"], blocked["reference"], "relates-to")
 
         here = views.planning_payload(self.conn, space=self.space["key"])
         self.assertEqual(
-            [(foreign["reference"], "blocks", "Review", "review", False, None)],
+            [
+                (foreign["reference"], "blocks", "Review", "review", False, None),
+                (foreign["reference"], "relates-to", "Review", "review", False, None),
+            ],
             self.source_of(here, blocked["work_item_id"]),
         )
         # The other space's view still carries the same link, leaving it.
@@ -926,7 +930,10 @@ class PlanningDomainTests(unittest.TestCase):
         self.close(foreign["reference"], "done")
         here = views.planning_payload(self.conn, space=self.space["key"])
         self.assertEqual(
-            [(foreign["reference"], "blocks", "Done", "completed", True, None)],
+            [
+                (foreign["reference"], "blocks", "Done", "completed", True, None),
+                (foreign["reference"], "relates-to", "Done", "completed", True, None),
+            ],
             self.source_of(here, blocked["work_item_id"]),
         )
         graph = {

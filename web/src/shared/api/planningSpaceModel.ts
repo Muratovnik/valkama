@@ -44,3 +44,9 @@ export const spaceBriefSchema = strictObject({
   completed: positiveInt(true),
   updated_at: boundedText(ISO, 96),
 })
+
+/** A space as an item of another space in a space's read names it: by key and by name. */
+export const otherSpaceSchema = strictObject({
+  key: boundedText(SPACE_KEY, 8),
+  name: boundedText(TITLE, 200),
+})

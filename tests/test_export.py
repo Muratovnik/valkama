@@ -9,6 +9,7 @@ import sqlite3
 import tempfile
 import time
 import unittest
+from pathlib import Path
 from typing import Any
 from unittest import mock
 
@@ -17,7 +18,10 @@ from server.hooks import ingest, normalize
 from server.ops import doctor, export
 from server.planning import model as planning_model
 from server.planning import service as planning_service
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
 from tests.planning_fixtures import bulk_items, item_ids
+from tests.registry_fixtures import project_entry, registry_bytes
 
 
 class ExportSectionTests(unittest.TestCase):
@@ -210,6 +214,36 @@ class CompleteExportTests(unittest.TestCase):
     def test_the_read_leaves_no_transaction_open(self) -> None:
         export.export_installation(self.conn, spaces=(self.SMALL,))
         self.assertFalse(self.conn.in_transaction)
+
+    def test_a_space_whose_project_another_spaces_item_names_exports_only_its_own(self) -> None:
+        """A space's read brings that item; the export of the space does not."""
+
+        local = os.path.join(os.path.dirname(os.environ["VALKAMA_DB"]), "local")
+        registry = Path(local, "Valkama", "projects.json")
+        registry.parent.mkdir(parents=True)
+        entry = project_entry("small-project", Path(local, "small-project"))
+        entry["planning_binding"] = planning_space_entity(
+            {
+                "data_scope_id": read_store_metadata(self.conn)["data_scope_id"],
+                "space_key": self.SMALL,
+            }
+        )
+        registry.write_bytes(registry_bytes([entry]))
+        with mock.patch.dict(os.environ, {"LOCALAPPDATA": local}):
+            foreign = planning_service.create_work_item(
+                self.conn,
+                space=self.BIG,
+                title="Names the small space's project",
+                projects=["small-project"],
+            )
+            self.conn.commit()
+            read = planning_service.list_work_items(
+                self.conn, space=self.SMALL, other_spaces=True, limit=None
+            )
+            self.assertIn(foreign["work_item_id"], {item["work_item_id"] for item in read})
+            payload = export.export_installation(self.conn, spaces=(self.SMALL,))
+        self.assertEqual(item_ids(self.conn, self.SMALL), set(self.exported_ids(payload)))
+        self.assertNotIn(foreign["work_item_id"], self.exported_ids(payload))
 
 
 class ExportFileTests(unittest.TestCase):

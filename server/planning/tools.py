@@ -523,8 +523,10 @@ TOOLS = [
         " category, kind, holder or parent. One compact row per item: reference, title,"
         " kind, state, priority, parent and holder; an accepted open goal or stage has"
         " state null and adds its container_state. kind=goal lists the goals, kind=stage"
-        " the stages. project keeps the items that name that project, in every space"
-        " unless space is given."
+        " the stages. With space, the list holds that space's items and other spaces'"
+        " items that name one of its projects, marked other_space. project keeps the"
+        " items that name that project, in every space unless space is given; a goal or"
+        " stage names what a task under it names."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -1466,6 +1468,9 @@ def _compact_row(conn: sqlite3.Connection, item: dict) -> dict:
     # What an accepted open goal or stage derives, where it stands in no state.
     if item["container_state"] is not None:
         row["container_state"] = item["container_state"]
+    # The space an item of another space lies in, where a space's list holds it.
+    if item.get("other_space") is not None:
+        row["other_space"] = item["other_space"]
     # Why a search returned the item; a row without it cannot be told from noise.
     hits = ("comment_hit", "question_hit", "summary_hit")
     return row | {name: item[name] for name in hits if name in item}

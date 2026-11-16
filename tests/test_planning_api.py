@@ -172,20 +172,20 @@ class PlanningApiTests(unittest.TestCase):
         self.assertTrue(graph["nodes"][0]["workable"])
 
     def test_a_project_does_not_choose_the_space_a_read_shows(self) -> None:
-        """A space holds no project, so the read and the graph are of the space named."""
+        """A space holds no project, so a project only narrows the read of a space named."""
 
-        for path in ("/api/planning", "/api/planning/graph"):
-            for parameters in (
-                {"project": ["example-workspace"]},
-                {"space": ["QA"], "project": ["x"]},
+        service.create_work_item(self.conn, space="QA", title="Names no project")
+        for path, key in (("/api/planning", "work_items"), ("/api/planning/graph", "nodes")):
+            with (
+                self.subTest(path=path),
+                self.assertRaisesRegex(
+                    planning_api.PlanningHttpError, "a project does not choose a planning space"
+                ),
             ):
-                with (
-                    self.subTest(path=path, parameters=parameters),
-                    self.assertRaisesRegex(
-                        planning_api.PlanningHttpError, "a project does not choose a planning space"
-                    ),
-                ):
-                    planning_api.handle_get(self.conn, path, parameters)
+                planning_api.handle_get(self.conn, path, {"project": ["example-workspace"]})
+            answer = planning_api.handle_get(self.conn, path, {"space": ["QA"], "project": ["x"]})
+            assert answer is not None
+            self.assertEqual([], answer[1][key])
 
     def test_a_read_refuses_a_repeated_parameter_and_a_missing_one(self) -> None:
         with self.assertRaisesRegex(planning_api.PlanningHttpError, "at most once"):

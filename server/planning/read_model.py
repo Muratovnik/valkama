@@ -18,7 +18,7 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 from . import calls, item_projects, item_tree, leases, mentions, model, states, subscriptions
 
@@ -180,6 +180,42 @@ def links(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
             }
         )
     return found
+
+
+def other_space_ends(conn: sqlite3.Connection, identities: Iterable[str]) -> list[dict]:
+    """The ends of a read's links that the read does not hold, by space key and number.
+
+    Each names what a reader draws it by: its `work_item_id`, which the link's
+    `from` or `to` names, `reference`, `title`, `kind`, `state` and the `space`
+    it lies in as `{key, name}`. `state` is null where the item stands in no state
+    of its own, an accepted open goal or stage, or the store cannot resolve it.
+    """
+
+    wanted = sorted(set(identities))
+    if not wanted:
+        return []
+    rows = conn.execute(
+        "SELECT w.work_item_id, w.number, w.title, w.kind, w.parent_id,"
+        " p.key AS space_key, p.name AS space_name,"
+        " s.key, s.name, s.category, s.is_terminal"
+        " FROM work_items w"
+        " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+        " LEFT JOIN workflow_states s ON s.state_id = w.state_id"
+        " WHERE w.work_item_id IN (SELECT value FROM json_each(?))"
+        " ORDER BY p.key, w.number",
+        (json.dumps(wanted),),
+    ).fetchall()
+    return [
+        {
+            "work_item_id": str(row["work_item_id"]),
+            "reference": model.human_id(str(row["space_key"]), int(row["number"])),
+            "title": row["title"],
+            "kind": outward_kind(row["kind"], row["parent_id"]),
+            "state": states.public_state(row) if row["category"] is not None else None,
+            "space": {"key": row["space_key"], "name": row["space_name"]},
+        }
+        for row in rows
+    ]
 
 
 def blocked(conn: sqlite3.Connection, work_item_id: str) -> bool:
