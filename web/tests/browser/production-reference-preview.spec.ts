@@ -9,12 +9,14 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { clear, longestStill, paced, stroke } from './hintFramesPage.ts'
 import {
   card,
   CARD,
   cardsAfterTheDelay,
   coolDown,
   middle,
+  ontoCard,
   openReported,
   reference,
   rest,
@@ -98,8 +100,7 @@ test('the pointer can reach the card, stays on it, and closes it by leaving', as
   await rest(page, link)
   const shown = card(page)
   await expect(shown).toBeVisible()
-  const { x, y } = await middle(shown)
-  await page.mouse.move(x, y, { steps: 8 })
+  await ontoCard(page, link, { ...(await middle(shown)), steps: 8 })
   expect(await cardsAfterTheDelay(page)).toBe(1)
   await page.mouse.move(5, 5, { steps: 8 })
   await expect(shown).toHaveCount(0)
@@ -156,9 +157,21 @@ test('down a list, the card keeps the pointer over the reference it covers', asy
   // Onto the card past the end of the references, then along it to the covered one's
   // place: the card stays, or nothing next to a reference could ever be reached on it.
   const edge = { top: box.y + box.height - 8, bottom: box.y + 8 }[side]
-  await page.mouse.move(start.x + start.width - 2, start.y + start.height / 2, { steps: 2 })
-  await page.mouse.move(start.x + start.width + 40, edge, { steps: 6 })
-  await page.mouse.move(under.x, under.y, { steps: 6 })
+  const onHeld = await middle(held)
+  const via = [
+    { x: start.x + start.width - 2, y: start.y + start.height / 2, steps: 2 },
+    { x: start.x + start.width + 40, y: edge, steps: 6 },
+  ]
+  // Again from the start if the pointer stood still on its way to the card (`paced`).
+  const again = async () => {
+    await clear(page, { x: 5, y: 5 })
+    await rest(page, held)
+    await expect(shown).toContainText('MAIN-15')
+  }
+  await paced('along the card', async (round) => {
+    if (round > 1) await again()
+    return { pause: longestStill(await stroke(page, onHeld, [...via, { ...under, steps: 6 }])) }
+  })
   expect(await cardsAfterTheDelay(page)).toBe(1)
   await expect(shown).toContainText('MAIN-15')
 
@@ -196,11 +209,11 @@ test('a press opens the task, as it did, and leaves no card before or after', as
 
 test('a press outside closes the card, and a wheel over it does nothing', async ({ page }) => {
   const { drawer, entry } = await openReported(page)
-  await rest(page, reference(entry, 'MAIN-12'))
+  const link = reference(entry, 'MAIN-12')
+  await rest(page, link)
   const shown = card(page)
   await expect(shown).toBeVisible()
-  const { x, y } = await middle(shown)
-  await page.mouse.move(x, y, { steps: 8 })
+  await ontoCard(page, link, { ...(await middle(shown)), steps: 8 })
   await page.mouse.wheel(0, 200)
   expect(await cardsAfterTheDelay(page)).toBe(1)
 
@@ -216,11 +229,11 @@ test('a press in the card takes no focus, so the draft holds it and Tab stays in
   const draft = drawer.locator('.discussion-form').getByRole('textbox')
   await draft.fill('A draft in progress')
   await draft.focus()
-  await rest(page, reference(entry, 'MAIN-12'))
+  const link = reference(entry, 'MAIN-12')
+  await rest(page, link)
   const shown = card(page)
   await expect(shown).toBeVisible()
-  const { x, y } = await middle(shown)
-  await page.mouse.move(x, y, { steps: 8 })
+  await ontoCard(page, link, { ...(await middle(shown)), steps: 8 })
   await page.mouse.down()
   await page.mouse.up()
   await expect(draft).toBeFocused()

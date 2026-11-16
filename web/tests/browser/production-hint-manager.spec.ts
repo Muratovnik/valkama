@@ -24,7 +24,19 @@ import {
   pastTheDelay,
   settledHint,
 } from './dayHintPage.ts'
-import { boxOf, hint, pass, quietPoint, watched, watchHints } from './hintFramesPage.ts'
+import {
+  boxOf,
+  clear,
+  crossing,
+  hint,
+  paced,
+  pacedStroke,
+  pass,
+  quietPoint,
+  stroke,
+  watched,
+  watchHints,
+} from './hintFramesPage.ts'
 import type { Watched } from './hintFramesPage.ts'
 import { test } from './test.ts'
 
@@ -76,14 +88,25 @@ test('the pointer can move onto a hint, which stays there, and off it the hint g
   const { number, quiet } = await drawerAt(page)
   const anchor = await boxOf(number)
   const from = middleOf(anchor)
-  await page.mouse.move(from.x, from.y)
-  await expect(hint(page)).toHaveCount(1)
+  const raise = async () => {
+    await page.mouse.move(from.x, from.y)
+    await expect(hint(page)).toHaveCount(1)
+    await watched(page)
+  }
+  await raise()
   const words = await number.getAttribute('data-tooltip')
   const onHint = middleOf(await boxOf(hint(page)))
-  await watched(page)
 
-  // Straight from the element onto its hint, across the room between them.
-  await page.mouse.move(onHint.x, onHint.y, { steps: 6 })
+  // Straight from the element onto its hint, across the room between them; again from the start
+  // if the pointer stood still on the way (`pacedStroke`).
+  await pacedStroke(page, 'onto the hint', {
+    again: async () => {
+      await clear(page, quiet)
+      await raise()
+    },
+    from,
+    to: { ...onHint, steps: 6 },
+  })
   await pass(page, 700)
   const stayed = await watched(page)
   const under = await page.evaluate(
@@ -151,13 +174,24 @@ test('moving between neighbouring legend entries of the day chart leaves no fram
   )
   const [first = boxes[0], ...rest] = boxes
   const start = middleOf(first ?? { left: 0, top: 0, right: 0, bottom: 0 })
-  await page.mouse.move(start.x, start.y)
-  await expect(hint(page)).toHaveCount(1)
-  await watched(page)
-  for (const next of rest) await page.mouse.move(middleOf(next).x, middleOf(next).y, { steps: 8 })
-  await expect(hint(page)).toContainText(rest.at(-1)?.words.split('\n')[0] ?? '')
-  await pass(page, 200)
-  const { frames } = await watched(page)
+  // Off one entry its hint holds for its grace: a pointer slower than that to the next one lets it
+  // go, as it should, and the walk is done again (`paced`).
+  const { frames } = await paced('along the legend', async (round) => {
+    if (round > 1) await clear(page, { x: 0, y: 0 })
+    await page.mouse.move(start.x, start.y)
+    await expect(hint(page)).toHaveCount(1)
+    await watched(page)
+    const crossings: number[] = []
+    let from = start
+    for (const next of rest) {
+      const to = middleOf(next)
+      crossings.push(crossing(await stroke(page, from, [{ ...to, steps: 8 }])))
+      from = to
+    }
+    await expect(hint(page)).toContainText(rest.at(-1)?.words.split('\n')[0] ?? '')
+    await pass(page, 200)
+    return { ...(await watched(page)), pause: Math.max(0, ...crossings) }
+  })
   await record(info, 'hint-legend-frames', { boxes, frames })
 
   expect(frames.length, 'frames noted').toBeGreaterThan(5)

@@ -22,7 +22,7 @@ import {
   watched,
   watchHints,
 } from './hintFramesPage.ts'
-import { card, middle, openReported, reference, rest } from './previewPage.ts'
+import { card, middle, ontoCard, openReported, reference, rest } from './previewPage.ts'
 import { test } from './test.ts'
 
 /**
@@ -123,7 +123,8 @@ test('the pointer can move onto a card, which stays there, and off it the card g
   const onCard = middleOf(await boxOf(card(page)))
   await watched(page)
 
-  await page.mouse.move(onCard.x, onCard.y, { steps: 6 })
+  // What was noted starts over with each attempt (`ontoCard`).
+  await ontoCard(page, link, { ...onCard, steps: 6 }, () => watched(page))
   await pass(page, 700)
   const stayed = await watched(page)
 

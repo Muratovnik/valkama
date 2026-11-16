@@ -152,7 +152,7 @@ interface Point {
 }
 
 /** A point the pointer goes to, and in how many steps it gets there. */
-type Leg = Point & { steps: number }
+export type Leg = Point & { steps: number }
 
 /** A move of the pointer, as the page heard it. */
 export interface Move {
@@ -307,3 +307,19 @@ export async function clear(page: Page, away: Point) {
   await expect(page.locator('.tooltip-hint, .whole-text, .reference-preview')).toHaveCount(0)
   await pass(page, 400)
 }
+
+/**
+ * Moves the pointer from `from` onto `to` in `steps`, as `stroke` does, with the surface it raised
+ * from `from` up. A stroke that stood still on the way as long as the grace is done again
+ * (`paced`), once `again` has brought the pointer back to `from` and the surface up.
+ */
+export const pacedStroke = (
+  page: Page,
+  name: string,
+  { from, to, again }: { from: Point; to: Leg; again: () => Promise<void> },
+) =>
+  paced(name, async (round) => {
+    if (round > 1) await again()
+    const moves = await stroke(page, from, [to])
+    return { moves, pause: longestStill(moves) }
+  })
