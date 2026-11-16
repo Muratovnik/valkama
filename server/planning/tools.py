@@ -1351,6 +1351,8 @@ def _rooted(
     The roots are what the agent reads each project's instructions from before it
     edits there, and they are named where the claim is, short answer or verbose.
     The HTTP boundary answers without them: a browser does not edit a checkout.
+    The item is found by its reference, which the acknowledgement and the card
+    both carry; the card names no `work_item_id`.
     """
 
     def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
@@ -1358,9 +1360,13 @@ def _rooted(
         if not claims(arguments) or not isinstance(answer, dict):
             return answer
         item = answer.get("work_item", answer)
-        if not isinstance(item, dict) or not isinstance(item.get("work_item_id"), str):
+        if not isinstance(item, dict) or not isinstance(item.get("reference"), str):
             return answer
-        return {**answer, "project_roots": item_projects.project_roots(conn, item["work_item_id"])}
+        claimed = read_model.item_row(conn, item["reference"])
+        return {
+            **answer,
+            "project_roots": item_projects.project_roots(conn, str(claimed["work_item_id"])),
+        }
 
     return run
 
