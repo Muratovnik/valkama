@@ -269,6 +269,7 @@ const freshHint = computed(() =>
         </p>
         <VButton
           ref="refreshButton"
+          v-tooltip.clipped="t('analytics.frame.refresh')"
           class="analytics-refresh"
           size="compact"
           @click="emit('refresh')"
@@ -457,7 +458,7 @@ const freshHint = computed(() =>
 }
 
 /* A short bar (`short`) says the read again by its icon. Its words stay in the button for
-   assistive technology, hidden from sight. */
+   assistive technology, hidden from sight, and its hint names it. */
 .analytics-bar-short .analytics-refresh-words {
   position: absolute;
   inline-size: 1px;

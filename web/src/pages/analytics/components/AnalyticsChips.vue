@@ -35,6 +35,7 @@ import { filterKey } from '@/pages/analytics/utils/usageValues.ts'
 
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -159,6 +160,7 @@ const removeLabel = (label: string) => t('analytics.filters.remove', { label })
     <div class="analytics-bar-filters">
       <VButton
         ref="add"
+        v-tooltip.clipped="t('analytics.frame.addFilter')"
         class="analytics-filter-add"
         variant="ghost"
         size="compact"
@@ -288,7 +290,8 @@ const removeLabel = (label: string) => t('analytics.filters.remove', { label })
   display: none;
 }
 
-/* The words stay in the button for assistive technology, hidden from sight. */
+/* The words stay in the button for assistive technology, hidden from sight, and its hint names
+   it. */
 :is(.analytics-chips-short, .analytics-chips-folded) .analytics-filter-add-words {
   position: absolute;
   inline-size: 1px;
