@@ -223,11 +223,15 @@ const leaseText = computed(() => {
   const claim = lease.value
   if (!claim) return ''
   let detail = t('workItem.lease.unconfirmedDetail')
-  if (claim.state === 'live' && claim.expires_at)
-    detail = t('workItem.lease.liveDetail', { date: when(claim.expires_at) })
+  // A live lease with no date is one an open question to the owner holds: it names none.
+  if (claim.state === 'live')
+    detail = claim.expires_at
+      ? t('workItem.lease.liveDetail', { date: when(claim.expires_at) })
+      : ''
   else if (claim.state === 'stale') detail = t('workItem.lease.staleDetail')
   const state = t(`workItem.lease.${claim.state}`)
-  return `${t('workItem.lease.label')}: ${state} — ${detail}`
+  const said = `${t('workItem.lease.label')}: ${state}`
+  return detail ? `${said} — ${detail}` : said
 })
 const holder = computed(() => holderRef(props.item))
 /** What the row calls its holder: who is on it, or on finished work who was. */

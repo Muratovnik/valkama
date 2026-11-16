@@ -886,7 +886,7 @@ export const en = {
       unconfirmed: 'Unconfirmed',
       liveDetail: 'until {date}, unless the session shows a sign of life',
       staleDetail: 'the session behind it is gone',
-      unconfirmedDetail: 'held until someone releases it',
+      unconfirmedDetail: 'lapses after 3 days without an event on the item',
       mark: 'Stale claim',
       takeOver: 'Take over',
     },
