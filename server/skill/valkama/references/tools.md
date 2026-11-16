@@ -84,7 +84,8 @@ A claim of a task or of a step also answers with `waiting` when a person acted o
 a goal or stage over the task while no live session worked under it: one entry per
 goal or stage, with its `reference`, `title` and `said`, what the person did there
 from that act on, in the entries of `from_person` (the newest 20, and `omitted`
-counting the earlier ones). The claim takes them: the next one under that goal gets
+counting the earlier ones); a record of Valkama's that asks for a session waits the
+same way, with `via: "valkama"`. The claim takes them: the next one under that goal gets
 nothing until a person acts there again with nobody working. No key when nothing
 waited.
 

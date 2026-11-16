@@ -2616,6 +2616,9 @@ stage: a later act adds to what it holds rather than adding another. Words also
 wait when the session that worked there went quiet past its lease or ended
 without hearing them: Valkama's release of its lapsed claim leaves what a person
 did over the work after that session's last call, if nobody else works there.
+A record Valkama makes on a goal or stage in a call of its own waits the same way
+when its kind is one that asks for a session, which wakes whoever works there; no
+kind asks yet, so today only a person's words wait.
 
 A claim of a task, or of one of its steps, by an agent session its client proved
 takes every word waiting on the goals and stages over the task, in the claim's
@@ -2631,7 +2634,8 @@ own transaction: a refused claim takes nothing. The MCP answer of the claim --
 ```
 
 `said` holds what a person did there from the act that left the words to the
-claim, as the entries of `from_person`: the newest 20, with `omitted` counting the
+claim, as the entries of `from_person`, and such a record of Valkama's with
+`via: "valkama"`: the newest 20, with `omitted` counting the
 earlier ones when there are more, and each text whole up to 1500 characters, a
 longer one cut there with `cut: true`. A whole text has no `cut`. The words are
 taken once: the next claim under the same goal gets nothing until a person acts

@@ -16,7 +16,7 @@ import unittest
 from unittest import mock
 
 from server import mcp_surface, store
-from server.planning import api, calls, leases, model, service, waiting
+from server.planning import api, calls, leases, model, person_events, service, waiting
 
 B = "b0000000-0000-4000-8000-00000000000b"
 E = "e0000000-0000-4000-8000-00000000000e"
@@ -293,6 +293,40 @@ class LapsedParticipantTests(Harness):
         self.assertEqual(1, service.expire_leases(self.conn))
         self.conn.commit()
         self.assertEqual([], self.rows(self.goal), "B called after the words, so it heard them")
+
+    def recorded(self) -> int:
+        """A record Valkama makes on the goal in a call of its own, as a stage writing for the
+        server would, after B's last call; the call it came in."""
+
+        with calls.bind(calls.valkama(), "test-record"):
+            service._log(self.conn, self.goal_id(), "opened", "confirm the close", "valkama")
+            call = calls.call_id(self.conn, self.goal_id())
+        self.conn.commit()
+        assert call is not None
+        return call
+
+    def goal_id(self) -> str:
+        return str(service.get_work_item(self.conn, self.goal)["work_item_id"])
+
+    def test_a_record_of_valkamas_that_asks_waits_as_a_persons_words_do(self) -> None:
+        with mock.patch.object(person_events, "SERVER_ASKS", frozenset({"status"})):
+            record = self.recorded()
+            self.quiet(B)
+            self.assertEqual(1, service.expire_leases(self.conn))
+            self.conn.commit()
+            [row] = self.rows(self.goal)
+            self.assertEqual(record, row["from_call"], "from the record nobody heard")
+            [left] = self.agent("claim_work_item", N, id=self.t7)["waiting"]
+        [said] = left["said"]
+        self.assertEqual(("status", "valkama"), (said["kind"], said["via"]))
+        self.assertIn("confirm the close", said["text"])
+
+    def test_a_record_of_valkamas_that_asks_for_nobody_leaves_nothing(self) -> None:
+        self.recorded()
+        self.quiet(B)
+        self.assertEqual(1, service.expire_leases(self.conn))
+        self.conn.commit()
+        self.assertEqual([], self.rows(self.goal), "it wakes nobody, so nobody missed it")
 
     def test_recovering_twice_leaves_one_row_and_a_delivered_one_counts(self) -> None:
         said = self.says(self.goal)
