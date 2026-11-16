@@ -11,7 +11,8 @@
  *   it down where the text no longer stands in sight.
  * - Its first letter stands on the cut text's first letter, in that letter's type and ink, and it
  *   runs on to the right up to 8px short of the window's edge, wrapping by words only where the
- *   whole text does not fit there (`placeWhole`). On one line it covers its own line alone.
+ *   whole text does not fit there (`placeWhole`). On one line it covers its own line alone; over
+ *   a text a clamp cuts to its lines it covers every line the clamp shows, and its ellipsis.
  * - It is laid on the ground its text stands on, every see-through ground down to the first
  *   opaque one laid together as the page lays them (`groundOf`), so over its own element it reads
  *   as the element's words running on, and a rim and a shadow mark where it lies over the rest of
@@ -34,6 +35,7 @@ import { placeWhole } from '@/shared/ui/hintPlacement.ts'
 import type { WholePlace } from '@/shared/ui/hintPlacement.ts'
 import { previewAnchorOf } from '@/shared/ui/referencePreviewAnchors.ts'
 import {
+  cutLinesOf,
   firstLetterOf,
   focusAnchorOf,
   inTooltipArea,
@@ -107,6 +109,8 @@ const boxStyle = computed(() => {
         left: `${at.left}px`,
         top: `${at.top}px`,
         maxInlineSize: `${at.widest}px`,
+        minInlineSize: at.least ? `${at.least.inline}px` : undefined,
+        minBlockSize: at.least ? `${at.least.block}px` : undefined,
         transform: seen.scale === 1 ? 'none' : `scale(${seen.scale})`,
       }
     : null
@@ -166,6 +170,7 @@ async function lay(element: HTMLElement) {
   }
   const setting = {
     letter: letter.box,
+    lines: cutLinesOf(element),
     scale: look.value.scale,
     window: document.documentElement.clientWidth,
   }
@@ -257,7 +262,8 @@ useEventListener(window, 'resize', relay, { passive: true })
 <style scoped>
 /* Laid in the window over the cut text: as wide as its words up to the room the place leaves,
    then wrapped by words. A word longer than that room breaks rather than run out of the window.
-   Its box is its line high, with a pixel over and under for the rim, so it covers no other line.
+   Its box is its line high, with a pixel over and under for the rim, so it covers no other line;
+   over a clamp of several lines, as high and wide as the lines the clamp shows (`placeWhole`).
    It stands over the menus and sheets (120) whose rows it speaks for: level with them, the menu
    opened after it was drawn over it, and a cut state in the card's state menu never read whole. */
 .whole-text {

@@ -82,6 +82,43 @@ test('a first letter past the room leaves the whole words no width rather than a
   assert.equal(laid.widest, 0)
 })
 
+test('over a text clamped to its lines the whole words are at least as large as those lines', () => {
+  // A clamp of two lines 20px high, 150px wide, its first letter 3px down its first line; the
+  // whole words' own letter stands 4px in and 4px down their box, so the box starts 1px over the
+  // lines and reaches 1px past them.
+  const lines = { left: 100, right: 250, top: 50, bottom: 90 }
+  assert.deepEqual(
+    placeWhole({
+      inset: { left: 4, top: 4 },
+      letter: { left: 104, top: 53 },
+      lines,
+      scale: 1,
+      window: 1440,
+    }),
+    { left: 100, top: 49, widest: 1332, least: { block: 42, inline: 150 } },
+  )
+  // Drawn at half size, they take as large a room in their own type.
+  assert.deepEqual(
+    placeWhole({
+      inset: { left: 2, top: 2 },
+      letter: { left: 102, top: 51.5 },
+      lines,
+      scale: 0.5,
+      window: 1440,
+    }).least,
+    { block: 82, inline: 300 },
+  )
+  // Never wider than the room to the window's edge.
+  const atEdge = placeWhole({
+    inset: { left: 0, top: 0 },
+    letter: { left: 1400, top: 50 },
+    lines: { left: 1400, right: 1440, top: 50, bottom: 90 },
+    scale: 1,
+    window: 1440,
+  })
+  assert.equal(atEdge.least?.inline, atEdge.widest)
+})
+
 test('out of a list the room beside an element does not move a hint', () => {
   // An element at the window's right edge: the library keeps the hint inside, not this rule.
   for (const kind of ['name', 'detail'] as const)

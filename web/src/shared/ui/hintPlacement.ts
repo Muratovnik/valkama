@@ -107,6 +107,8 @@ export interface WholeSetting {
   scale: number
   /** The window's width, without its scrollbar. */
   window: number
+  /** The box the cut text's lines show in where they are cut down, as a clamp's (`cutLinesOf`). */
+  lines?: Box | null
 }
 
 export interface WholePlace {
@@ -115,18 +117,32 @@ export interface WholePlace {
   top: number
   /** How wide it is drawn at most before it wraps, in px of its own type. */
   widest: number
+  /** How large it is drawn at least, so that it covers every line the cut text shows, in px of its own type. */
+  least?: { block: number; inline: number }
 }
 
 /**
  * Where the whole of a cut text is laid: its box placed so that its first letter stands on the
  * cut text's, and as wide as the room from there to `EDGE` short of the window's right edge.
+ * Over a text cut down to its lines it is at least as large as they are, standing as far past
+ * their end as it stands before their start, so none of them and no ellipsis shows beside or
+ * under it, however few lines its own words take.
  */
-export function placeWhole({ inset, letter, scale, window }: WholeSetting): WholePlace {
+export function placeWhole({ inset, letter, lines, scale, window }: WholeSetting): WholePlace {
   const left = letter.left - inset.left
+  const top = letter.top - inset.top
+  const widest = Math.max(0, (window - EDGE - left) / scale)
+  if (!lines) return { left, top, widest }
+  const past = (start: number, end: number, from: number) =>
+    Math.max(0, end - from + Math.max(0, start - from)) / scale
   return {
     left,
-    top: letter.top - inset.top,
-    widest: Math.max(0, (window - EDGE - left) / scale),
+    top,
+    widest,
+    least: {
+      block: past(lines.top, lines.bottom, top),
+      inline: Math.min(widest, past(lines.left, lines.right, left)),
+    },
   }
 }
 

@@ -60,7 +60,7 @@ import type { Directive, DirectiveBinding } from 'vue'
 
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import { hintAnchorGone, hintAnchorResized } from '@/shared/ui/hintManager.ts'
-import type { HintAlign, HintSide } from '@/shared/ui/hintPlacement.ts'
+import type { Box, HintAlign, HintSide } from '@/shared/ui/hintPlacement.ts'
 
 /** A registered exception's argument: a side, and `-start` to stand level with the element's start. */
 type TooltipPlace = HintSide | `${HintSide}-start`
@@ -462,14 +462,63 @@ function hidesText(box: HTMLElement, across: boolean): boolean {
  * of room is hidden by a rule of its own, and counts: its hint names the element (`namesHidden`).
  */
 export function textIsClipped(element: HTMLElement): boolean {
-  const boxes = [element, ...[...element.querySelectorAll<HTMLElement>('*')].slice(0, LOOK_AT)]
-  return boxes.some((box) => {
-    if (!box.textContent?.trim() || box.classList.contains('visually-hidden')) return false
-    const style = getComputedStyle(box)
-    const across =
-      CUTS.has(style.overflowX) && box.scrollWidth > box.clientWidth && hidesText(box, true)
-    const down =
-      CUTS.has(style.overflowY) && box.scrollHeight > box.clientHeight + 1 && hidesText(box, false)
-    return across || down
+  return boxesOf(element).some((box) => {
+    const cut = cutOf(box)
+    return cut.across || cut.down
   })
+}
+
+/** The element and what it holds, as far as a hint looks. */
+const boxesOf = (element: HTMLElement) => [
+  element,
+  ...[...element.querySelectorAll<HTMLElement>('*')].slice(0, LOOK_AT),
+]
+
+/** Whether `box` hides text it holds across or down (`textIsClipped`). */
+function cutOf(box: HTMLElement): { across: boolean; down: boolean } {
+  if (!box.textContent?.trim() || box.classList.contains('visually-hidden'))
+    return { across: false, down: false }
+  const style = getComputedStyle(box)
+  return {
+    across: CUTS.has(style.overflowX) && box.scrollWidth > box.clientWidth && hidesText(box, true),
+    down:
+      CUTS.has(style.overflowY) && box.scrollHeight > box.clientHeight + 1 && hidesText(box, false),
+  }
+}
+
+/**
+ * The box the lines of a text cut down show in, as a clamp of two lines shows two with an
+ * ellipsis ending the second, in the window's coordinates: the content box of each box that cuts
+ * the element's text down, together. Null where its text is cut across alone, on its one line.
+ * The whole words laid over it cover all of it: laid from the first letter on one line, they
+ * left the clamp's second line and its ellipsis showing under them, and the text read twice.
+ */
+export function cutLinesOf(element: HTMLElement): Box | null {
+  let lines: Box | null = null
+  for (const box of boxesOf(element)) {
+    if (!cutOf(box).down) continue
+    const style = getComputedStyle(box)
+    const edges = box.getBoundingClientRect()
+    // Drawn larger or smaller than its type, as on a zoomed canvas, its insets are too.
+    const scale = box.offsetHeight > 0 ? edges.height / box.offsetHeight : 1
+    const inset = (side: 'Left' | 'Right' | 'Top' | 'Bottom') =>
+      ((Number.parseFloat(style[`border${side}Width`]) || 0) +
+        (Number.parseFloat(style[`padding${side}`]) || 0)) *
+      scale
+    const content = {
+      left: edges.left + inset('Left'),
+      right: edges.right - inset('Right'),
+      top: edges.top + inset('Top'),
+      bottom: edges.bottom - inset('Bottom'),
+    }
+    lines = lines
+      ? {
+          left: Math.min(lines.left, content.left),
+          right: Math.max(lines.right, content.right),
+          top: Math.min(lines.top, content.top),
+          bottom: Math.max(lines.bottom, content.bottom),
+        }
+      : content
+  }
+  return lines
 }
