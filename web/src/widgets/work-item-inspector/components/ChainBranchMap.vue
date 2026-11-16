@@ -14,9 +14,9 @@
  * draw, each lane's counts are text, and the task under the pointer or the
  * keyboard cursor is named in full.
  */
-import { computed, onMounted, ref, useId } from 'vue'
+import { computed, onMounted, ref, useId, useTemplateRef } from 'vue'
 
-import { useResizeObserver } from '@vueuse/core'
+import { useElementSize, useResizeObserver } from '@vueuse/core'
 
 import ChainBranchKey from '@/widgets/work-item-inspector/components/ChainBranchKey.vue'
 import ChainBranchTip from '@/widgets/work-item-inspector/components/ChainBranchTip.vue'
@@ -122,8 +122,12 @@ function place(box: Box) {
 
 /** The mark over the task being looked at, and its readout over the lane. */
 const TIP_WIDTH = 280
-/** The readout's height, near enough to know whether it fits above a lane. */
-const TIP_HEIGHT = 100
+/**
+ * The readout's size as drawn, whose height decides whether it fits above a lane. Read again as
+ * it changes, after layout and before the frame is painted, so a title of several lines is placed
+ * by its own height on the frame it first shows in.
+ */
+const tipBox = useElementSize(useTemplateRef('readout'), undefined, { box: 'border-box' })
 const mark = computed(() => {
   const current = shown.value
   return current && { ...markAt(current.lane, current.index), group: current.group }
@@ -131,8 +135,8 @@ const mark = computed(() => {
 const tipStyle = computed(() => {
   const current = shown.value
   if (!current) return {}
-  const above = roomAbove(current.lane) >= TIP_HEIGHT
-  return place(tipAt(current.lane, current.index, drawing.value, { above, width: TIP_WIDTH }))
+  const tip = { height: tipBox.height.value, room: roomAbove(current.lane), width: TIP_WIDTH }
+  return place(tipAt(current.lane, current.index, drawing.value, tip))
 })
 
 const hintId = useId()
@@ -274,6 +278,7 @@ function countId(lane: LaneDrawing): string {
 
       <ChainBranchTip
         v-if="shown"
+        ref="readout"
         :style="tipStyle"
         :group="shown.group"
         :member="shown.member"

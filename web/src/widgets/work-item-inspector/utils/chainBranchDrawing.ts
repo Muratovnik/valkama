@@ -494,20 +494,23 @@ export function markAt(lane: LaneDrawing, index: number) {
  * The readout for the task it names, centred on the task inside the map's
  * width. It stands above the lane's label line, so the lane's own name and
  * counts stay readable while its tasks are read one by one, and so do the lanes
- * below; unless there is not room for it there — the first lane at the top of a
- * scrolled panel — and then just below the lane's line.
+ * below; unless the `room` the panel shows above that line does not hold its
+ * `height` as drawn — the first lane at the top of a scrolled panel — and then
+ * just below the lane's line. A title is named whole, so the height is the
+ * readout's own: a guess at it put a title of several lines above the lane and
+ * past the panel's top edge, which cut it.
  */
 export function tipAt(
   lane: LaneDrawing,
   index: number,
   drawing: BranchDrawing,
-  tip: { above: boolean; width: number },
+  tip: { height: number; room: number; width: number },
 ): Box {
   const width = Math.min(tip.width, drawing.width)
   const span = taskSpan(lane, index)
   const centre = (span.left + span.right) / 2
   const left = Math.max(0, Math.min(drawing.width - width, centre - width / 2))
-  return tip.above
+  return tip.room >= tip.height + TIP_GAP
     ? { bottom: drawing.height - (lane.top - TIP_GAP), left, width }
     : { top: (lane.band.top ?? 0) + LANE_BAND + TIP_GAP, left, width }
 }

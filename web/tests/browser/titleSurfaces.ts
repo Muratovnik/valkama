@@ -17,7 +17,7 @@ import { branchedChain } from '../fixtures/chainMap.ts'
 import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { boardRoute, openList } from './boardPage.ts'
-import { graphRoute, serve as serveChain, showChain } from './chainFixtures.ts'
+import { graphRoute, retitledChain, serve as serveChain, showChain } from './chainFixtures.ts'
 import { projectId, projectScope, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { held, openReported, reference, rest, SPACE } from './previewPage.ts'
@@ -259,11 +259,4 @@ export const TITLE_SURFACES: Record<string, (page: Page, title: string) => Promi
     const { entry } = await openReported(page, `Read ${path} now.`)
     return entry.locator('.rich-reference').filter({ hasText: path }).first()
   },
-}
-
-/** A chain whose every member is under `title`, so whichever the pointer lands on says it. */
-function retitledChain<Value>(chain: Value, title: string): Value {
-  return JSON.parse(
-    JSON.stringify(chain).replaceAll(/"title":"[^"]*"/gu, `"title":${JSON.stringify(title)}`),
-  ) as Value
 }

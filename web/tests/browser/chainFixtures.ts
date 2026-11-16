@@ -6,7 +6,7 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { chainResponse, largeEpicChain } from '../fixtures/chain.ts'
@@ -235,6 +235,22 @@ export async function showChain(page: Page) {
   await expect(page.locator('.drawer section.chain')).toBeVisible()
 }
 
+/** The card of the suite's item on its Chain tab, or on the graph's, and the chain section on it. */
+export async function openChainCard(page: Page, view?: 'graph') {
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningWorkItemEntity(workItemRef),
+      ...(view ? { state: { view } } : {}),
+    }),
+  )
+  await showChain(page)
+  const section = page.locator('.drawer section.chain')
+  await expect(section).toBeVisible()
+  return section
+}
+
 /** What the address's module state says, decoded. */
 export function routeState(page: Page): Record<string, unknown> {
   const encoded = new URL(page.url()).searchParams.get('state')
@@ -278,4 +294,11 @@ export async function pointAtWorkUnderWay(page: Page, section: Locator, word: Lo
     await new Promise((done) => setTimeout(done, 100))
     if (await word.count()) return
   }
+}
+
+/** A chain whose every member is under `title`, so whichever the pointer lands on says it. */
+export function retitledChain<Value>(chain: Value, title: string): Value {
+  return JSON.parse(
+    JSON.stringify(chain).replaceAll(/"title":"[^"]*"/gu, `"title":${JSON.stringify(title)}`),
+  ) as Value
 }
