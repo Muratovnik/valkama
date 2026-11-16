@@ -242,6 +242,8 @@ class Oracle:
     numbers: set[tuple[str, int]] = field(default_factory=set)
     containers: int = 0
     started_from_created: int = 0
+    #: The rows `item-projects` leaves in `work_item_projects`, a table the store `oracle` reads lacks.
+    item_projects: int = 0
 
 
 def _oracle(context: Context) -> Oracle:
@@ -1159,6 +1161,30 @@ def _check_trigger(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError("the trigger that keeps each kind in its states is missing")
 
 
+def _item_projects_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'work_item_projects'"
+        ).fetchone()
+        is None
+    )
+
+
+def _create_item_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`item-projects`: the table of the projects each item changes, as a fresh store holds it."""
+
+    del context
+    for statement in planning_store.ITEM_PROJECTS:
+        conn.execute(statement)
+    return {"rows": int(conn.execute("SELECT COUNT(*) FROM work_item_projects").fetchone()[0])}
+
+
+def _check_item_projects(conn: sqlite3.Connection, context: Context) -> None:
+    if _item_projects_needed(conn, context):
+        raise UnmetError("the table of the items' projects is missing")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1170,6 +1196,7 @@ STEPS = (
         "children-left", "closed containers with open children", _take_out_children, _left_needed, _check_left
     ),
     Step("checks", "checks", _create_trigger, _trigger_needed, _check_trigger),
+    Step("item-projects", "item projects", _create_item_projects, _item_projects_needed, _check_item_projects),
 )
 
 
@@ -1252,6 +1279,7 @@ def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
         found["transitions"] for found in oracle.workflows.values()
     )
     expected["work_item_events"] += sum(oracle.events.values())
+    expected["work_item_projects"] = expected.get("work_item_projects", 0) + oracle.item_projects
     found = [
         f"{table} holds {counts.get(table)} rows, not {expected.get(table)}"
         for table in sorted(set(counts) | set(expected))

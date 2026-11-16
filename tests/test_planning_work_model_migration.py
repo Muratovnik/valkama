@@ -448,7 +448,7 @@ class MigratedStoreTests(StoreCase):
         self.assertEqual("migrated", self.report["status"])
         self.assertEqual({"from": 17, "to": store.STORE_SCHEMA_VERSION}, self.report["schema"])
         self.assertEqual(
-            [f"M{number}" for number in range(8)], [step["name"] for step in self.report["steps"]]
+            [f"M{number}" for number in range(9)], [step["name"] for step in self.report["steps"]]
         )
         self.assertEqual(
             [(f"P{number}", True) for number in range(1, 18)],
@@ -672,6 +672,23 @@ class MigratedStoreTests(StoreCase):
             )
         conn.rollback()
 
+    def test_m8_adds_the_items_projects_table_empty_and_shaped_as_a_fresh_one(self) -> None:
+        step = next(entry for entry in self.report["steps"] if entry["name"] == "item-projects")
+        self.assertEqual({"rows": 0}, step["result"])
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM work_item_projects").fetchone()[0])
+        conn.execute(
+            "INSERT INTO work_item_projects(work_item_id, project_id, source) VALUES(?,?,?)",
+            (self.ids["WM-9"], "valkama", "named"),
+        )
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK"):
+            conn.execute(
+                "INSERT INTO work_item_projects(work_item_id, project_id, source) VALUES(?,?,?)",
+                (self.ids["WM-9"], "other", "label"),
+            )
+        conn.rollback()
+
     def test_the_derived_states_are_reported(self) -> None:
         derived = self.report["postconditions"][11]["detail"]["derived"]
         # WM-1 waits on a ready task nobody started; WM-6, WM-15 and WM-16 have work
@@ -846,7 +863,7 @@ class KeptStepClaimTests(StoreCase):
                 self.assertEqual("active", row["category"])
                 self.assertEqual([], self.events(reference, "checklist_released"))
 
-    def test_identities_refuses_a_migration_that_clears_a_kept_claim(self) -> None:
+    def test_p14_refuses_a_migration_that_clears_a_kept_claim(self) -> None:
         identity_before, digest = identity(self.path), file_digest(self.path)
         clear = writing(
             "UPDATE work_items SET checklist = json_set(checklist, '$[0].claimed_by', '')"
@@ -858,10 +875,8 @@ class KeptStepClaimTests(StoreCase):
             self.migrate()
         report = raised.exception.report
         self.assertIn("identities", report["failed"])
-        post_identities = next(
-            entry for entry in report["postconditions"] if entry["name"] == "identities"
-        )
-        self.assertIn(f"{self.ids['WM-7']} changed its checklist", post_identities["error"])
+        p14 = next(entry for entry in report["postconditions"] if entry["name"] == "identities")
+        self.assertIn(f"{self.ids['WM-7']} changed its checklist", p14["error"])
         self.assertEqual((identity_before, digest), (identity(self.path), file_digest(self.path)))
 
 
@@ -1140,6 +1155,18 @@ def _quiet(sql: str, parameters: tuple) -> list[tuple[str, tuple]]:
 CLAUSE_FAULTS: tuple[
     tuple[str, str, Callable[[dict[str, str]], list[tuple[str, tuple]]], list[str]], ...
 ] = (
+    (
+        "row-counts",
+        "work_item_projects holds 1 rows, not 0",
+        lambda ids: [
+            (
+                "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+                " VALUES(?, 'stray', 'named')",
+                (ids["WM-9"],),
+            )
+        ],
+        ["row-counts"],
+    ),
     (
         "history-keys",
         "no opened record for the container",

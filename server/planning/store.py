@@ -163,6 +163,22 @@ _WORK_ITEMS = f"""(
 )"""
 _REBUILT = {"workflow_states": _WORKFLOW_STATES, "work_items": _WORK_ITEMS}
 
+_PROJECT_SOURCE_SQL = ",".join(f"'{source}'" for source in model.PROJECT_SOURCES)
+#: The projects each item changes (`planning.item_projects`), one row per project with
+#: the source it came by. Its own table rather than a column of `work_items`: what
+#: names a project is read across every space, by the index on the project. A fresh
+#: store creates it from this text, and so does the work-model migration.
+ITEM_PROJECTS = (
+    "CREATE TABLE IF NOT EXISTS work_item_projects(\n"
+    "    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,\n"
+    "    project_id TEXT NOT NULL,\n"
+    f"    source TEXT NOT NULL CHECK(source IN ({_PROJECT_SOURCE_SQL})),\n"
+    "    PRIMARY KEY(work_item_id, project_id)\n"
+    ") WITHOUT ROWID",
+    "CREATE INDEX IF NOT EXISTS work_item_projects_by_project ON work_item_projects(project_id)",
+)
+_ITEM_PROJECTS = "".join(f"{statement};\n" for statement in ITEM_PROJECTS)
+
 
 def table_definition(table: str, name: str) -> str:
     """The `CREATE TABLE` of one rebuilt table under `name`, as a fresh store holds it."""
@@ -325,7 +341,7 @@ CREATE TABLE IF NOT EXISTS work_item_images(
 );
 -- Whether any item still holds a picture, asked when one is let go.
 CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
-
+{_ITEM_PROJECTS}
 """
 
 
@@ -740,6 +756,7 @@ SCHEMA_TABLES = (
     "pinned_work_items",
     "work_item_subscriptions",
     "work_item_images",
+    "work_item_projects",
 )
 
 

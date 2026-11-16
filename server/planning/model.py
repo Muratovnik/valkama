@@ -75,6 +75,9 @@ _CONTAINER_WORDS = frozenset({"goal", "stage"})
 #: Why accepted work was accepted: the basis an acceptance records. `migrated` is
 #: the work-model migration's alone: no tool and no HTTP write takes it.
 ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "migrated")
+#: How a project came to an item (`item_projects`), strongest first: named by whoever
+#: filed or edited it, derived from its commits, or its space's former project.
+PROJECT_SOURCES = ("named", "commits", "migrated")
 #: The one basis a caller names itself: an agent taking on work it was asked to do.
 #: A person's write is the owner's without naming it, and the rest the server gives.
 NAMED_BASIS = "assignment"

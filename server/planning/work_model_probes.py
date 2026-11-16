@@ -125,6 +125,7 @@ _ROWS: dict[str, dict[str, object]] = {
         "size": 1,
     },
     "work_item_links": {"from_id": _NEW, "to_id": _NEW, "kind": "blocks"},
+    "work_item_projects": {"work_item_id": _NEW, "project_id": _NEW, "source": "named"},
     "work_item_refs": {"work_item_id": _NEW, "kind": "commit", "value": "probe"},
     "work_item_request_answers": {
         "request_id": _NEW,
