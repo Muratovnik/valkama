@@ -399,6 +399,12 @@ def file_digest(path: str) -> str:
         return hashlib.sha256(handle.read()).hexdigest()
 
 
+#: The steps a migration of a 2.9 store reports, in the order it takes them.
+STEP_NAMES = [*(f"M{number}" for number in range(9)), "last-route"]
+#: Its postconditions in the order it checks them: a second run, then the fault check, last.
+POSTCONDITION_NAMES = [*(f"P{number}" for number in range(1, 16)), "routes", "second-run", "recovery-point"]
+
+
 class StoreCase(unittest.TestCase):
     """A 2.9 store of its own in a temporary directory."""
 
@@ -447,11 +453,9 @@ class MigratedStoreTests(StoreCase):
     def test_the_run_is_reported_and_every_postcondition_holds(self) -> None:
         self.assertEqual("migrated", self.report["status"])
         self.assertEqual({"from": 17, "to": store.STORE_SCHEMA_VERSION}, self.report["schema"])
+        self.assertEqual(STEP_NAMES, [step["name"] for step in self.report["steps"]])
         self.assertEqual(
-            [f"M{number}" for number in range(9)], [step["name"] for step in self.report["steps"]]
-        )
-        self.assertEqual(
-            [(f"P{number}", True) for number in range(1, 18)],
+            [(name, True) for name in POSTCONDITION_NAMES],
             [(entry["name"], entry["passed"]) for entry in self.report["postconditions"]],
         )
         phases = [phase["name"] for phase in self.report["phases"]]
@@ -811,7 +815,7 @@ class BoardEraSessionsTests(StoreCase):
         report = self.migrate()
         self.assertEqual("migrated", report["status"])
         self.assertEqual(
-            [(f"P{number}", True) for number in range(1, 18)],
+            [(name, True) for name in POSTCONDITION_NAMES],
             [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
         )
         declared = {row[1]: row[2] for row in self.read("PRAGMA table_info(sessions)")}
@@ -825,6 +829,56 @@ class BoardEraSessionsTests(StoreCase):
 
 
 #: A task at work whose holder took a step, and one whose step is all that holds it.
+def remember_route(path: str, scope: dict) -> str:
+    """Leave the shell's last route in the store, as 2.9 wrote it."""
+
+    record = json.dumps({"module_id": "planning", "scope": scope}, separators=(",", ":"))
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute(
+            "INSERT INTO platform_ui_prefs(key, record_json, updated_at)"
+            " VALUES ('last-route', ?, '2026-01-02T03:04:05Z')",
+            (record,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return record
+
+
+class LastRouteTests(StoreCase):
+    """The last route a project scoped has no address in 3.0, so the shell starts afresh."""
+
+    def route(self) -> list[str]:
+        return [str(row[0]) for row in self.read("SELECT record_json FROM platform_ui_prefs")]
+
+    def test_last_route_drops_a_route_a_project_scoped_and_row_counts_and_routes_hold(self) -> None:
+        remember_route(self.path, {"kind": "project", "project_ref": {"project_id": "valkama"}})
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(
+            [(name, True) for name in POSTCONDITION_NAMES],
+            [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
+        )
+        step_oracle = next(step for step in report["steps"] if step["name"] == "oracle")
+        self.assertEqual(1, step_oracle["result"]["remembered_routes_to_drop"])
+        step_last_route = next(step for step in report["steps"] if step["name"] == "last-route")
+        self.assertEqual({"dropped": 1}, step_last_route["result"])
+        self.assertEqual([], self.route())
+
+    def test_a_global_route_is_kept_as_it_was(self) -> None:
+        record = remember_route(self.path, {"kind": "global"})
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        step_oracle = next(step for step in report["steps"] if step["name"] == "oracle")
+        self.assertEqual(0, step_oracle["result"]["remembered_routes_to_drop"])
+        post_routes = next(entry for entry in report["postconditions"] if entry["name"] == "routes")
+        self.assertEqual(
+            (True, {"dropped": [], "kept": 1}), (post_routes["passed"], post_routes["detail"])
+        )
+        self.assertEqual([record], self.route())
+
+
 KEPT_STEPS = {"WM-7": ("Wire it", "agent-c"), "WM-8": ("Try it", "agent-f")}
 
 
@@ -853,7 +907,7 @@ class KeptStepClaimTests(StoreCase):
         report = self.migrate()
         self.assertEqual("migrated", report["status"])
         self.assertEqual(
-            [(f"P{number}", True) for number in range(1, 18)],
+            [(name, True) for name in POSTCONDITION_NAMES],
             [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
         )
         for reference in KEPT_STEPS:
@@ -863,7 +917,7 @@ class KeptStepClaimTests(StoreCase):
                 self.assertEqual("active", row["category"])
                 self.assertEqual([], self.events(reference, "checklist_released"))
 
-    def test_p14_refuses_a_migration_that_clears_a_kept_claim(self) -> None:
+    def test_identities_refuses_a_migration_that_clears_a_kept_claim(self) -> None:
         identity_before, digest = identity(self.path), file_digest(self.path)
         clear = writing(
             "UPDATE work_items SET checklist = json_set(checklist, '$[0].claimed_by', '')"
@@ -875,8 +929,10 @@ class KeptStepClaimTests(StoreCase):
             self.migrate()
         report = raised.exception.report
         self.assertIn("identities", report["failed"])
-        p14 = next(entry for entry in report["postconditions"] if entry["name"] == "identities")
-        self.assertIn(f"{self.ids['WM-7']} changed its checklist", p14["error"])
+        post_identities = next(
+            entry for entry in report["postconditions"] if entry["name"] == "identities"
+        )
+        self.assertIn(f"{self.ids['WM-7']} changed its checklist", post_identities["error"])
         self.assertEqual((identity_before, digest), (identity(self.path), file_digest(self.path)))
 
 
@@ -1020,6 +1076,12 @@ FAULTS = (
         "UPDATE work_items SET state_id = (SELECT state_id FROM workflow_states"
         " WHERE workflow_id = work_items.workflow_id AND key = 'done') WHERE work_item_id = ?",
         lambda ids: (ids["WM-21"],),
+    ),
+    fault(
+        "routes",
+        "INSERT INTO platform_ui_prefs(key, record_json, updated_at)"
+        " VALUES ('last-route', ?, '2026-01-02T03:04:05Z')",
+        lambda _ids: ('{"module_id":"planning","scope":{"kind":"project"}}',),
     ),
 )
 

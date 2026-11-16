@@ -27,6 +27,9 @@ otherwise cascade into them:
   and gives an active task nobody holds back to ready; **children-left** takes each open child
   out of a closed container into triage.
 - **checks** creates the trigger that keeps every kind where it may stand.
+- **item-projects** creates the table of the projects each item changes.
+- **last-route** drops the last route the shell remembered when its scope is a project:
+  a space is the scope now, and the address it names no longer opens.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -34,7 +37,7 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
-The postconditions `fresh-shape` to `second-run` are checked after the steps, inside the same
+The postconditions `fresh-shape` to `second-run` and `routes` are checked after the steps, inside the same
 transaction; `store` adds `recovery-point`, the recovery point.
 """
 
@@ -244,6 +247,9 @@ class Oracle:
     started_from_created: int = 0
     #: The rows `item-projects` leaves in `work_item_projects`, a table the store `oracle` reads lacks.
     item_projects: int = 0
+    #: Every remembered preference, record by key, and the keys `last-route` drops.
+    ui_prefs: dict[str, str] = field(default_factory=dict)
+    dropped_prefs: list[str] = field(default_factory=list)
 
 
 def _oracle(context: Context) -> Oracle:
@@ -597,6 +603,15 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         [identity for identity, found in expect.items() if found["category"] == _SERVICE],
     )
     oracle.search = _search_sample(conn)
+    oracle.ui_prefs = {
+        str(key): str(record)
+        for key, record in conn.execute("SELECT key, record_json FROM platform_ui_prefs")
+    }
+    oracle.dropped_prefs = sorted(
+        key
+        for key, record in oracle.ui_prefs.items()
+        if key == _LAST_ROUTE and _project_scoped(record)
+    )
     context.memo["oracle"] = oracle
     context.memo["renames"] = renames
     return {
@@ -610,7 +625,19 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         "events_to_write": dict(sorted(oracle.events.items())),
         "children_to_take_out": len(oracle.moved),
         "accepted_open_containers": len(oracle.derived),
+        "remembered_routes_to_drop": len(oracle.dropped_prefs),
     }
+
+
+def _project_scoped(record: str) -> bool:
+    """Whether a remembered route's scope is a project, read in Python for `oracle`."""
+
+    try:
+        value = json.loads(record)
+    except ValueError:
+        return False
+    scope = value.get("scope") if isinstance(value, dict) else None
+    return isinstance(scope, dict) and scope.get("kind") == "project"
 
 
 def _oracle_needed(conn: sqlite3.Connection, context: Context) -> bool:
@@ -1185,6 +1212,38 @@ def _check_item_projects(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError("the table of the items' projects is missing")
 
 
+# -- the last route ------------------------------------------------------------
+
+_LAST_ROUTE = "last-route"
+#: The remembered route whose scope is a project, read in SQL for `last-route`.
+_PROJECT_ROUTE = (
+    "key = 'last-route' AND json_valid(record_json)"
+    " AND json_type(record_json, '$.scope') = 'object'"
+    " AND json_extract(record_json, '$.scope.kind') = 'project'"
+)
+
+
+def _route_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return (
+        conn.execute(f"SELECT 1 FROM platform_ui_prefs WHERE {_PROJECT_ROUTE}").fetchone()  # noqa: S608
+        is not None
+    )
+
+
+def _drop_project_route(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`last-route`: the last route a project scoped goes; the shell then opens where it starts."""
+
+    del context
+    dropped = conn.execute(f"DELETE FROM platform_ui_prefs WHERE {_PROJECT_ROUTE}").rowcount  # noqa: S608
+    return {"dropped": dropped}
+
+
+def _check_route(conn: sqlite3.Connection, context: Context) -> None:
+    if _route_needed(conn, context):
+        raise UnmetError("a remembered route still has a project as its scope")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1197,6 +1256,7 @@ STEPS = (
     ),
     Step("checks", "checks", _create_trigger, _trigger_needed, _check_trigger),
     Step("item-projects", "item projects", _create_item_projects, _item_projects_needed, _check_item_projects),
+    Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
 )
 
 
@@ -1280,6 +1340,7 @@ def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     )
     expected["work_item_events"] += sum(oracle.events.values())
     expected["work_item_projects"] = expected.get("work_item_projects", 0) + oracle.item_projects
+    expected["platform_ui_prefs"] = expected.get("platform_ui_prefs", 0) - len(oracle.dropped_prefs)
     found = [
         f"{table} holds {counts.get(table)} rows, not {expected.get(table)}"
         for table in sorted(set(counts) | set(expected))
@@ -1316,7 +1377,7 @@ def _p4(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     return {"containers": int(containers or 0)}
 
 
-def _p5(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_parents(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     del context
     references = _references(conn)
     found = [
@@ -1666,7 +1727,29 @@ def _holds_known_exceptions(conn: sqlite3.Connection, context: Context) -> Mappi
     return {"taken_out_of_closed_containers": moved, "tasks_left_in_review": review}
 
 
-def _holds_second_run(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_routes(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    oracle = _oracle(context)
+    after = {
+        str(key): str(record)
+        for key, record in conn.execute("SELECT key, record_json FROM platform_ui_prefs")
+    }
+    kept = {
+        key: record for key, record in oracle.ui_prefs.items() if key not in oracle.dropped_prefs
+    }
+    found = [
+        f"{key} carries a project as its scope"
+        for key, record in after.items()
+        if _project_scoped(record)
+    ]
+    if after != kept:
+        found.append(
+            f"the preferences are {sorted(after)}, the oracle expected {sorted(kept)} as they were"
+        )
+    _unmet(found, "remembered routes")
+    return {"dropped": oracle.dropped_prefs, "kept": len(after)}
+
+
+def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
     return {"steps_needed_again": again}
@@ -1688,6 +1771,7 @@ POSTCONDITIONS = (
     Postcondition("indexes", "indexes, triggers and the word index", _p13),
     Postcondition("identities", "identities and content", _p14),
     Postcondition("known-exceptions", "known exceptions", _p15),
+    Postcondition("routes", "no remembered route has a project as its scope", _p22),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 
