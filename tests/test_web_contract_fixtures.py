@@ -55,6 +55,8 @@ SPACE = "MAIN"
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 _ISO = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
 _INSTANT = "2026-01-02T03:04:05"
+# A day alone, as a chain's series names today.
+_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _uri_path(root: Path) -> str:
@@ -83,6 +85,8 @@ class _Normalizer:
         if found is not None:
             fraction = found.group(2) or ""
             return _INSTANT + ("." + "0" * (len(fraction) - 1) if fraction else "") + found.group(3)
+        if _DAY.match(value):
+            return _INSTANT[:10]
         # As a path and as a link encodes it; the plan names both.
         for spelling in (str(self.root), self.root.as_posix(), _uri_path(self.root)):
             value = value.replace(spelling, "/workspace")
