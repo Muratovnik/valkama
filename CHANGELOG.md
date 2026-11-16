@@ -36,6 +36,12 @@ checkouts are therefore distinguishable even at the same version.
   or a list filter, or as a category is refused with the text that says what replaces
   it, and `list_work_items(kind=goal)` keeps the containers under no parent while
   `kind=stage` keeps those under one.
+- **An orchestrator hears its subagents' work.** A state change, a summary, a release,
+  a takeover or a question to the owner that a subagent writes, on any item its session
+  wrote to, reaches the orchestrator at its next tool call as one line, `by your agent
+  <id>`, that quotes nothing and never wakes it, the call that took and closed an item
+  at once included. Nobody hears its own writes, and a subagent still hears nothing of
+  its session; the person sees "what a subagent of this session wrote".
 
 ### Removed
 

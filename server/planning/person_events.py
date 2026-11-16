@@ -82,6 +82,12 @@ KINDS = {
     # A person's words about this item, written on another one in a comment's `mentions`.
     "mentioned": "mentioned",
 }
+#: The kinds that say where the work stands: its state changed, it got its summary, it
+#: was left without a holder or changed holders, it came to wait for the owner or
+#: stopped waiting. An orchestrator hears these of its own subagents' writes.
+WORK_KINDS = frozenset(
+    {"status", "summary_selected", "released", "taken_over", "question_asked", "question_withdrawn"}
+)
 #: The actions never told. `created`: an item a person filed says what it says, in
 #: the description an agent reads when it takes it. `execution_attached`: a launch
 #: or an observed session, which the agent in question already knows. `overridden`:

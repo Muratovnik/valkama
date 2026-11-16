@@ -124,6 +124,22 @@ class WhatCountsTests(Harness):
         self.assertEqual(set(), told & untold)
         self.assertEqual(set(model.EVENT_ACTIONS), told | untold)
 
+    def test_where_the_work_stands_is_six_kinds_that_are_told(self) -> None:
+        """A kind no action is told by would leave an orchestrator deaf to it unnoticed."""
+
+        self.assertEqual(
+            {
+                "status",
+                "summary_selected",
+                "released",
+                "taken_over",
+                "question_asked",
+                "question_withdrawn",
+            },
+            set(person_events.WORK_KINDS),
+        )
+        self.assertLessEqual(person_events.WORK_KINDS, set(person_events.KINDS.values()))
+
     def test_the_browser_and_kind_spellings_are_the_call_rows_own(self) -> None:
         self.assertEqual(calls.BROWSER, person_events.BROWSER)
         self.assertEqual(calls.VALKAMA, person_events.VALKAMA)

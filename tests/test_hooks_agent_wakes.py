@@ -397,9 +397,35 @@ class AddresseeTests(Wakes):
         self.assertIn("marker J-1", told)
 
     def test_a_question_from_bs_own_subagent_asks_b_nothing(self) -> None:
-        self.comment({"sessionId": B, "threadId": A_CHILD}, self.held, "Mine", awaits_reply=True)
+        """A comment awaiting a reply is no news; a question to the owner is a line, later."""
+
+        own = {"sessionId": B, "threadId": A_CHILD}
+        self.comment(own, self.held, "Mine", awaits_reply=True)
         self.assertIsNone(self.stop(B))
         self.assertIsNone(self.hook(session=B))
+        self.agent(
+            "create_work_item_request",
+            own,
+            id=self.held,
+            kind="question",
+            prompt="Which parser, marker OQ-1?",
+            fields=[
+                {
+                    "id": "way",
+                    "label": "Way",
+                    "type": "choice",
+                    "required": True,
+                    "options": [{"id": "a", "label": "Long"}],
+                }
+            ],
+        )
+        self.assertIsNone(self.stop(B), "it continues no turn")
+        self.assertEqual((0, ""), self.watch_as(B), "and wakes nothing")
+        told = self.hook(session=B)
+        assert told is not None, "told at the next tool call"
+        self.assertRegex(told, rf"\n- question_asked at \S+ by your agent {A_CHILD}\n")
+        self.assertNotIn("OQ-1", told)
+        self.assertIsNone(self.hook(session=B), "once")
 
 
 TRANSITION = "/api/planning/work-item/transition"
@@ -455,6 +481,18 @@ class BlockerTests(Wakes):
         self.assertEqual((0, ""), self.watch_as(B))
         self.assertIsNone(self.hook(session=B))
         self.assertIsNone(self.stop(A))
+
+    def test_its_own_subagent_closing_it_wakes_nobody_and_is_a_line_on_the_blocker(self) -> None:
+        self.close_as(AS_CHILD)
+        self.assertIsNone(self.stop(B))
+        self.assertEqual((0, ""), self.watch_as(B))
+        told = self.hook(session=B)
+        assert told is not None, "the orchestrator hears its subagent's close, on the blocker"
+        self.assertIn(f"\n{self.blocker} «The parser rewrite»:\n", told)
+        self.assertRegex(told, rf"\n- status at \S+ by your agent {CHILD}\n")
+        self.assertNotIn("blocker_closed", told)
+        self.assertIsNone(self.hook(session=B), "once")
+        self.assertIsNone(self.hook(CHILD, session=B), "and the subagent nothing")
 
     def test_closed_again_after_a_reopen_it_wakes_again_and_busy_it_waits(self) -> None:
         self.close_as(AS_A)

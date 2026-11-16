@@ -468,7 +468,8 @@ reads only the events addressed to it there.
 
 Every recipient is told each event once. Where an item's news starts the first
 time is the recipient's own last write on it, which is where the answer to that
-write left off. A recipient's write answering with `from_person` and its hook
+write left off; for an orchestrator whose subagents did all the writing there, it
+is before the session's first call on the item. A recipient's write answering with `from_person` and its hook
 can name the same event; one notice too many is the price of never missing one.
 
 **A mention** is told to the work on the item it names, whoever wrote it:
@@ -483,9 +484,10 @@ can name the same event; one notice too many is the price of never missing one.
 
 Who spoke is the session and agent of the call that wrote the comment, read from
 its call row and never from `author`: an agent that signs `user` speaks as an
-agent. A recipient is not told its own session's words: a session's conversation
-and its subagents are one speaker, so neither an orchestrator nor any of its
-subagents hears a mention another of them wrote. An agent's mention is told only when its call was `confirmed`;
+agent. No recipient hears a mention its own session wrote: an orchestrator hears
+of its subagents' writes only where the work stands (see
+[the speaker](#another-agent-sessions-news)), and a mention is not that, and a
+subagent hears nothing its session wrote. An agent's mention is told only when its call was `confirmed`;
 an unconfirmed one is on the item and is told to nobody.
 
 ### Another agent session's news
@@ -510,8 +512,24 @@ the same rules as a person's act and beside the mentions above:
   still reaches it, and so do the replies after it asked there with
   `awaits_reply`. Once the session no longer holds the item the mute counts for
   nothing, and the item is heard as any other it does not hold.
-- **One speaker.** A session's own conversation and its subagents are one
-  speaker: none of them is told what another of them wrote, a mention included.
+- **The speaker is a session and an agent.** Nobody is told its own writes, and
+  a subagent is told nothing its session wrote, its orchestrator's or another
+  subagent's. An orchestrator is told what its subagents did to where the work
+  stands: a status change, a summary selected, a release, a take-over, a question
+  to the owner asked or withdrawn. That holds on any item the session wrote to,
+  held or not, since a close lets go of the claim in the same write; a mute (see
+  above) keeps it out as well. Each is one short line,
+  `- status at <time> by your agent <id>`, that quotes nothing: the subagent's
+  report reaches the orchestrator anyway. Two such events of one kind by one agent
+  at one time are one line, as the claim that starts an item and the close in one
+  call are. Nothing else its subagents wrote is told, a comment, a reply or a
+  mention included. These lines never wake the session or continue its turn: at
+  `Stop` and in the watcher they wait for the next tool call or prompt, and they
+  fold past three notices on an item as any other agent's news. Where an
+  orchestrator never wrote on the item itself, its place for this news starts
+  before its session's first call there, so the one call in which a subagent took
+  and closed an item is heard too; that first call is the session's own, so no other
+  session's news is added by it.
 - **Who wrote it** is the confirmed call's session and agent, never `author`. A
   call that proved no session, the interface and Valkama's own writes are not
   another session's news.
@@ -524,7 +542,8 @@ the same rules as a person's act and beside the mentions above:
   state and is still there, `blocker_changed` for any other state, a reopen
   included, and for a close another transition undid before it was read. A
   person's change is in the person's block, another session's in this one; a
-  change by the holder's own session is told to nobody. Only a close wakes (see
+  change by the holder's own session is told to nobody, though its orchestrator
+  hears a subagent's change on the blocker itself, as above. Only a close wakes (see
   [when another session's news wakes](#when-another-sessions-news-wakes)): a
   person's other changes, like another session's, wait for the next tool call.
 
@@ -566,14 +585,16 @@ was:
 Valkama told the agent what you did on MAIN-12 «Pick the route»
 Valkama told the agent what another agent wrote on MAIN-14 «Drop the old route»
 Valkama told the agent what you did and what another agent wrote on MAIN-15 «Ship it»
+Valkama told the agent what a subagent of this session wrote on MAIN-16 «Split the parser»
 ```
 
 The language is the one owner alerts are written in: `locale` in the alert
 settings, which falls back to the system language, as it does on a store too old
 to hold alert settings. In Russian a line reads `Valkama передала
 агенту ваши действия по задаче MAIN-12 «Pick the route»`, `… запись другого
-агента …` for another agent's news, and `… ваши действия и запись другого агента
-…` for both. An item the notice leaves out for its bound (see
+агента …` for another agent's news, `… запись субагента этой сессии …` for a
+subagent's of this session, and `… ваши действия и запись другого агента
+…` for two of them; three read `…, … и …`. An item the notice leaves out for its bound (see
 [what a notice says](#what-a-notice-says)) gets no line, because the agent was
 not told it. Control characters in a title are dropped, since the client prints
 the line to a terminal. The settings are read on the connection the hook already
@@ -619,8 +640,11 @@ its orchestrator once when it idles, or continue its turn once at `Stop`:
   that, the news waits for the next tool call, which says how many events would
   have woken the session; those never wake it later. A wake that a person's news
   makes anyway is the person's: not counted, and never held back.
-- **Never by itself.** Nothing the recipient's own session wrote, its subagents'
-  included, wakes it or is told to it. A subagent is never woken: its orchestrator
+- **Never by itself.** Nothing the recipient's own session wrote wakes it, its
+  subagents' included. Its own writes are told to nobody; its subagents' state
+  changes, summaries, releases, take-overs and questions to the owner are told to
+  their orchestrator at its next tool call, as
+  [one short line](#another-agent-sessions-news). A subagent is never woken: its orchestrator
   is, since the watcher and `Stop` are the orchestrator's. Codex has no `Stop` hook
   and no watcher, so a Codex session hears all of it at its next tool call or
   prompt.
@@ -697,7 +721,13 @@ holds, follows or started threads on", and every line names who wrote it:
 
 A subagent's heading says "work you hold" or "you hold, follow or started threads
 on". Words a session's own conversation wrote, with no agent, read
-`by session <id>`; an id is written as a holder label writes it.
+`by session <id>`; an id is written as a holder label writes it. An
+orchestrator's own subagent is `your agent`, and its line quotes nothing:
+
+```text
+- status at 2026-11-06T09:20:00Z by your agent ab12
+- released at 2026-11-06T09:20:00Z by your agent ab12
+```
 
 A comment that waits for a reply, and the reply that answered a wait, say so on
 their line, and a blocker's change names the item and the state it reached:
@@ -727,7 +757,8 @@ session if anything did, and counts the ones it left out. A notice with no news 
 **Folded past three notices.** One recipient hears another session's words on one
 item in at most 3 notices an hour. After that, until an hour has passed since the
 first of them, each notice that has news of the item gives it one line instead,
-which names the item, counts the events and says who wrote them, and nothing is
+which names the item, counts the events and says who wrote them, an
+orchestrator's own subagent as `your agent <id>`, and nothing is
 dropped: the item holds every word.
 
 ```text

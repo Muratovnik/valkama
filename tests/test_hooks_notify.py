@@ -246,6 +246,15 @@ class AddressedTests(Harness):
         for agent in agents:
             self.assertIsNone(self.hook(agent), f"before the person acted: {agent}")
 
+    def told_its_agent_asked(self) -> None:
+        """The orchestrator's first read: its subagent's question, one line with no quote."""
+
+        told = self.hook()
+        assert told is not None
+        self.assertRegex(told, rf"\n- question_asked at \S+ by your agent {CHILD}\n")
+        self.assertNotIn("«Which way?»", told)
+        self.assertNotIn("«Take on»", told)
+
     def asked_by(self, meta: object) -> str:
         return str(
             self.agent(
@@ -304,6 +313,7 @@ class AddressedTests(Harness):
             },
         )["applied"]["comment"]["list_request_id"]
         self.root_by({"sessionId": SESSION, "threadId": STRANGER}, "Another report")
+        self.told_its_agent_asked()
         self.settle(None, CHILD, STRANGER)
         self.person(
             "/api/planning/request/answer",
@@ -411,6 +421,7 @@ class AddressedTests(Harness):
         self.agent("claim_work_item", id=self.ref)
         request = self.asked_by(SUBAGENT)
         self.root_by({"sessionId": SESSION, "threadId": STRANGER}, "In scope, did not ask")
+        self.told_its_agent_asked()
         self.settle(None, CHILD, STRANGER)
         self.answers(request, "a")
         self.assertIn("question_answered", self.hook(CHILD) or "")
@@ -441,6 +452,7 @@ class AddressedTests(Harness):
 
     def test_a_reply_in_a_questions_thread_reaches_who_asked(self) -> None:
         request = self.asked_by(SUBAGENT)
+        self.told_its_agent_asked()
         self.settle(None, CHILD)
         self.person(
             "/api/planning/work-item/comment",

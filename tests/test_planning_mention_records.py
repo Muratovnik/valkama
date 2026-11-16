@@ -781,7 +781,9 @@ class AgentMentionTests(Harness):
             self.assertIsNone(self.hook(agent), f"nothing yet: {agent}")
         self.spoken(SUBAGENT, body="From the step")
         self.assertIsNone(self.hook(CHILD), "the subagent that spoke")
-        self.assertIsNone(self.hook(), "nor its orchestrator: one session is one speaker")
+        self.assertIsNone(
+            self.hook(), "nor its orchestrator: a mention is not where the work stands"
+        )
         self.spoken(ORCHESTRATOR, body="From the orchestrator")
         self.assertIsNone(self.hook(), "the orchestrator that spoke")
         self.assertIsNone(self.hook(CHILD), "nor its subagent holding a step")

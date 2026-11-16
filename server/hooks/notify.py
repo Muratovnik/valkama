@@ -30,8 +30,12 @@ it, a transition, a claim, a link, a step, a summary, a thread's mark, a mention
 It reaches the same recipients by the same rules, and beside them a session that
 subscribed to the item (`planning.subscriptions`); a holder that muted the item
 hears none of it while it holds the item, but for the replies to what it asked there
-with `awaits_reply`. A session's own conversation and its subagents are one speaker:
-none of them is told what another of them wrote, a mention included. A `Stop`
+with `awaits_reply`. The speaker is the pair of a session and an agent: nobody is
+told its own writes, and a subagent nothing its session wrote. An orchestrator is
+told what its subagents did to where the work stands, a state change, a summary, a
+release, a takeover, a question to the owner asked or withdrawn, on any item its
+session wrote to, one short line each that quotes nothing and never wakes it; of
+the rest they wrote, a mention included, nothing. A `Stop`
 notice continues the turn and the watcher wakes the session, so either would turn
 agents telling one another into a loop that keeps sessions busy; they carry such
 news only when it asks for the session: the reply it awaited, a comment awaiting
@@ -344,12 +348,15 @@ def recipient_key(session_id: str, agent_id: str | None) -> str:
 
 # --- what is new ----------------------------------------------------------------
 
+#: Per item, the recipient's own last write and where its news starts without one: before
+#: the session's first call there, so the call in which a subagent took and closed the
+#: item is read too, or where a subscription starts hearing.
 _SCOPE = (
-    "SELECT work_item_id, MAX(own), MIN(id) FROM (SELECT work_item_id,"
-    " CASE WHEN agent_id IS ? THEN id END AS own, id FROM execution_events"
+    "SELECT work_item_id, MAX(own), MIN(first) FROM (SELECT work_item_id,"
+    " CASE WHEN agent_id IS ? THEN id END AS own, id, id - 1 AS first FROM execution_events"
     " WHERE session_id = ? AND kind = 'planning_write' AND identity_state = 'confirmed'"
     " AND work_item_id IS NOT NULL{agent} UNION ALL SELECT work_item_id, NULL,"
-    " COALESCE(heard_after, call_id)"
+    " COALESCE(heard_after, call_id), COALESCE(heard_after, call_id)"
     " FROM work_item_subscriptions WHERE session_id = ? AND follows = 1{follower}"
     " AND {stands}) GROUP BY work_item_id ORDER BY MAX(id) DESC LIMIT {most}"
 )
@@ -403,7 +410,9 @@ def _in_scope(
 
     Each comes with where its news starts the first time: this recipient's own
     last write on it, or for an orchestrator whose subagent did all the writing,
-    the session's first; for an item it only follows, the call that subscribed, or
+    the call before the session's first, which is the session's own, so the call
+    that took and closed the item at once is heard and nobody else's is added;
+    for an item it only follows, the call that subscribed, or
     for one a merge carried it to, the call before the merge. An orchestrator
     follows what any agent of its session subscribed to; a mute is only its
     writer's. A subscription or mute counts while its session stands by the
@@ -896,10 +905,11 @@ def _fold(
         return entries, times
     if len(times) < MOST_NOTICES:
         return entries, (*times, now)
-    speakers: list[tuple[str, str | None]] = []
+    speakers: list[tuple[str, str | None, bool]] = []
     for entry in foldable:
-        if (entry["session"], entry.get("agent")) not in speakers:
-            speakers.append((entry["session"], entry.get("agent")))
+        speaker = (entry["session"], entry.get("agent"), bool(entry.get("yours")))
+        if speaker not in speakers:
+            speakers.append(speaker)
     folded = {
         "kind": "folded",
         "via": "agent",
@@ -951,18 +961,22 @@ def _agents_for_recipient(
     holds: bool = False,
     muted: bool = False,
 ) -> list[dict]:
-    """What one recipient hears of other sessions' news on an item.
+    """What one recipient hears of other agents' news on an item.
 
-    Nothing its own session wrote: a session's conversation and its subagents are
-    one speaker, and a mention is no exception. Another session's mention reaches
-    whoever follows the item now.
+    Nobody hears its own writes, and a subagent hears nothing its session wrote.
+    An orchestrator hears of its subagents' writes the ones that say where the work
+    stands (`person_events.WORK_KINDS`), on any item the session wrote to, held or
+    not: a close lets go of the claim in the same write. `_own_agents` says which;
+    nothing else its session wrote, a mention included. Another session's mention
+    reaches whoever follows the item now.
 
     A comment that waits for a reply, written on this item or naming it in its
     mentions, asks for the holders of the item while it is `recent`: it says so,
     `asks: true`.
 
     A holder that `muted` the item hears only the replies after it asked there with
-    `awaits_reply`: what it waits for is never another session's noise.
+    `awaits_reply`: what it waits for is never another session's noise, nor its own
+    subagents' news.
     """
 
     others = [entry for entry in entries if entry["session"] != session_id]
@@ -973,8 +987,41 @@ def _agents_for_recipient(
         for entry in [*told, *mentions]:
             if entry.get("recent"):
                 entry["asks"] = True
+    ours = [] if muted else _own_agents(entries, session_id, agent_id)
     order = {id(entry): place for place, entry in enumerate(entries)}
-    return sorted([*told, *mentions], key=lambda entry: order[id(entry)])
+    return sorted([*told, *mentions, *ours], key=lambda entry: order[id(entry)])
+
+
+def _own_agents(entries: list[dict], session_id: str, agent_id: str | None) -> list[dict]:
+    """What an orchestrator hears of its own subagents' writes on an item: where the work
+    stands, one short line each (`yours`), never quoted and never asking for it.
+
+    Its subagent's report reaches the orchestrator anyway, so a quote would say it
+    twice. Without a quote, two events of one kind by one agent at one time read the
+    same, as a claim that started the item and the close in one call do: the line is
+    told once. It never wakes: nothing here says `asks` or `answers`, so at `Stop` and
+    in the watcher it waits for the next tool call as any news that does not ask. A
+    subagent hears none of this.
+    """
+
+    from ..planning import person_events
+
+    if agent_id is not None:
+        return []
+    ours = []
+    lines = set()
+    for entry in entries:
+        if (
+            entry["session"] == session_id
+            and entry.get("agent") is not None
+            and entry["kind"] in person_events.WORK_KINDS
+            and (entry["kind"], entry["at"], entry["agent"]) not in lines
+        ):
+            lines.add((entry["kind"], entry["at"], entry["agent"]))
+            entry.pop("text", None)
+            entry["yours"] = True
+            ours.append(entry)
+    return ours
 
 
 def _for_recipient(
@@ -1273,10 +1320,12 @@ def _folded(entry: dict) -> str:
     """The line that stands for an item's news past `MOST_NOTICES` notices in the window."""
 
     names = [
-        f"agent {label_id(agent)} of session {label_id(session)}"
+        f"your agent {label_id(str(agent))}"
+        if yours
+        else f"agent {label_id(agent)} of session {label_id(session)}"
         if agent
         else f"session {label_id(session)}"
-        for session, agent in entry["speakers"]
+        for session, agent, yours in entry["speakers"]
     ]
     shown = ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
     count = entry["count"]
@@ -1299,14 +1348,16 @@ def _flags(entry: dict) -> str:
 
 
 def _where(entry: dict) -> str:
-    """Which thread a line is about, and whose; for another session's, who wrote it."""
+    """Which thread a line is about, and whose; for another agent's, who wrote it."""
 
     where = _thread(entry)
     if entry.get("via") != "agent":
         return where
     # Who spoke, as a holder label writes the ids: a client chose them.
-    session = f"session {label_id(entry['session'])}"
     agent = entry.get("agent")
+    if entry.get("yours"):
+        return f" by your agent {label_id(str(agent))}"
+    session = f"session {label_id(entry['session'])}"
     speaker = f"agent {label_id(agent)} of {session}" if agent else session
     return f" by {speaker}" + (f",{where}" if where else "")
 
@@ -1365,7 +1416,8 @@ _SHOWN = {
         "line": "Valkama передала агенту {what} по задаче {reference} {title}",
         "person": "ваши действия",
         "agent": "запись другого агента",
-        "both": "ваши действия и запись другого агента",
+        "subagent": "запись субагента этой сессии",
+        "and": " и ",
         "rest": "Valkama передала агенту новости ещё по {count} {items}",
         "one": "задаче",
         "many": "задачам",
@@ -1374,12 +1426,15 @@ _SHOWN = {
         "line": "Valkama told the agent {what} on {reference} {title}",
         "person": "what you did",
         "agent": "what another agent wrote",
-        "both": "what you did and what another agent wrote",
+        "subagent": "what a subagent of this session wrote",
+        "and": " and ",
         "rest": "Valkama told the agent about {count} more {items}",
         "one": "item",
         "many": "items",
     },
 }
+#: Whose news an item's line names, in the order it names them.
+_WHOSE = ("person", "agent", "subagent")
 
 
 def shown(told: list[tuple[str, str, dict]], language: str) -> str:
@@ -1395,13 +1450,21 @@ def shown(told: list[tuple[str, str, dict]], language: str) -> str:
     words = _SHOWN.get(language, _SHOWN["en"])
     items: dict[str, tuple[str, set[str]]] = {}
     for reference, title, entry in told:
-        whose = "agent" if entry.get("via") == "agent" else "person"
+        whose = (
+            "person"
+            if entry.get("via") != "agent"
+            else "subagent"
+            if entry.get("yours")
+            else "agent"
+        )
         items.setdefault(reference, (title, set()))[1].add(whose)
     lines = []
     for reference, (title, kinds) in list(items.items())[:MOST_SHOWN]:
+        named = [words[whose] for whose in _WHOSE if whose in kinds]
+        what = ", ".join(named[:-1]) + words["and"] + named[-1] if len(named) > 1 else named[0]
         lines.append(
             words["line"].format(
-                what=words["both" if len(kinds) > 1 else kinds.pop()],
+                what=what,
                 reference=_printable(reference),
                 title=_quote(_name(_printable(title))),
             )
