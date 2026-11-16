@@ -298,17 +298,24 @@ def place_of_folder(folder: str, listing: RegistryResult, data_scope_id: str) ->
     if found is None:
         return None
     holder = found[1]
-    binding = holder["planning_binding"]
-    space = None if binding is None else _binding_space(binding)
     return {
         "project_id": str(holder["project_id"]),
         "canonical_root": str(holder["canonical_root"]),
-        "space_key": (
-            str(space["space_key"])
-            if space is not None and space["data_scope_id"] == data_scope_id
-            else None
-        ),
+        "space_key": home_space(holder, data_scope_id),
     }
+
+
+def home_space(project: Mapping[str, Any], data_scope_id: str) -> str | None:
+    """The key of the space of `data_scope_id` a registered project is bound to.
+
+    None when the project binds no space, or a space of another store.
+    """
+
+    binding = project["planning_binding"]
+    space = None if binding is None else _binding_space(binding)
+    if space is None or space["data_scope_id"] != data_scope_id:
+        return None
+    return str(space["space_key"])
 
 
 def _space_result(

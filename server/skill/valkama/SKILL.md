@@ -27,9 +27,9 @@ splitting one, or handing items to other agents.
 
 ## Start
 
-1. **Find the space.** Use the space the instructions name; otherwise
-   `list_planning_spaces` and pick the one whose project is the repository you
-   work in. A space is named by its key (`MAIN`), its name or its id.
+1. **Find the space.** Use the space the instructions name; otherwise the space
+   `list_planning_spaces` names as `session_space`, the one whose project root
+   holds your folder. A space is named by its key (`MAIN`), its name or its id.
 2. **Find the item before filing one.** `search_work_items` with two or three
    telling words of the change, not a sentence: an item matches when it holds
    every word, in any field, each by its first five letters (`searching` finds
@@ -37,11 +37,15 @@ splitting one, or handing items to other agents.
    (`MAIN-12`), or a number alone (`12`) with `space`, answers that item
    first. `list_work_items` filters by `state`, `category`, `kind`, `parent`,
    `owner` and `project`. Claim the item that already covers the work.
-3. **File it only when none does.** `create_work_item` with `space`, `title`
-   and a `description` that is the brief: goal, context, constraints, the
-   "done when" and its verify command. A plan in the repository is referenced
-   by `source` (`docs/plan.md#kb:a7f3`), not copied, and a file the
-   description names is written as Naming a file says. Umbrella work is
+3. **File it only when none does.** `create_work_item` with a `title` and a
+   `description` that is the brief: goal, context, constraints, the "done when"
+   and its verify command. Name the projects the change touches (`projects`).
+   Leave `space` out unless the projects live in two spaces: the server puts the
+   item under its parent's space, else in its projects' home space. A finding in
+   another project's code goes to that project, and so to its space. A plan in
+   the repository is referenced by `source` (`docs/plan.md#kb:a7f3`), not
+   copied, and a file the description names is written as Naming a file says.
+   Umbrella work is
    `kind: goal`, or `stage` under a parent at any depth; children name it as
    `parent`, and nobody claims it. Work filed outside accepted open goals and
    stages starts in triage: send `acceptance: "assignment"` only on the owner's word.

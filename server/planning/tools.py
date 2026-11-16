@@ -341,7 +341,8 @@ TOOLS = [
         "list_planning_spaces",
         "List planning spaces",
         "Every planning space with its key, its projects and default project, its launch"
-        " place and how much work it holds.",
+        " place and how much work it holds. session_space names the space whose project"
+        " root holds your session's folder.",
         READ_ONLY,
         {},
     ),
@@ -386,7 +387,10 @@ TOOLS = [
         " each by reference and title: read them, and merge the new item into one that"
         " is the same change. A hint, not a check: nothing is refused on it, and an"
         " empty list does not prove there is no duplicate. projects names the projects"
-        " the item changes. A goal or stage names no projects.",
+        " the item changes. space is where it lies: leave it out and the server places it"
+        " under its parent's space, else in the home space of its projects, else in your"
+        " session's space. Projects of two spaces need space, one of them. A goal or"
+        " stage names no projects.",
         WRITES,
         {
             "space": _SPACE,
@@ -440,7 +444,7 @@ TOOLS = [
             "author": _AUTHOR,
             "verbose": _VERBOSE,
         },
-        ["space", "title"],
+        ["title"],
     ),
     _tool(
         "get_work_item",
@@ -1597,6 +1601,19 @@ def _answer(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object
     return _post("/api/planning/request/answer")(conn, rest)
 
 
+def _spaces(conn: sqlite3.Connection, _arguments: Mapping[str, object]) -> object:
+    """The spaces, and the calling session's among them: the one its folder stands in.
+
+    Only a tool call has a session; the HTTP list a screen draws from has none.
+    """
+
+    read = api.handle_get(conn, "/api/planning/spaces", {})
+    if read is None:  # pragma: no cover - the path table above is closed
+        raise ValueError("no planning spaces read")
+    session_space = item_projects.session_space(conn, calls.confirmed_session())
+    return {**read[1], "session_space": session_space}
+
+
 def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     (shown,) = item_projects.spaces_shown(
         conn, [service.get_planning_space(conn, str(arguments["space"]))]
@@ -1605,7 +1622,7 @@ def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
 
 
 OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
-    "list_planning_spaces": _get("/api/planning/spaces"),
+    "list_planning_spaces": _spaces,
     "get_planning_space": _space,
     "create_planning_space": _post("/api/planning/spaces"),
     "create_work_item": _rooted(

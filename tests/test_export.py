@@ -230,11 +230,12 @@ class CompleteExportTests(unittest.TestCase):
         )
         registry.write_bytes(registry_bytes([entry]))
         with mock.patch.dict(os.environ, {"LOCALAPPDATA": local}):
+            # Filed with the project it would lie in the small space; an edit does not move it.
             foreign = planning_service.create_work_item(
-                self.conn,
-                space=self.BIG,
-                title="Names the small space's project",
-                projects=["small-project"],
+                self.conn, space=self.BIG, title="Names the small space's project"
+            )
+            planning_service.update_work_item(
+                self.conn, str(foreign["work_item_id"]), projects=["small-project"]
             )
             self.conn.commit()
             read = planning_service.list_work_items(

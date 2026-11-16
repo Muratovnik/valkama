@@ -78,9 +78,12 @@ class SpaceReadCase(unittest.TestCase):
     def task(
         self, space: str, title: str, projects: list[str] | None = None, **fields: object
     ) -> str:
-        created = service.create_work_item(
-            self.conn, space=space, title=title, projects=projects, **fields
-        )
+        """An item of `space` naming `projects`, given by an edit: filed with them it
+        would lie in their home space, and an edit does not move it."""
+
+        created = service.create_work_item(self.conn, space=space, title=title, **fields)
+        if projects is not None:
+            service.update_work_item(self.conn, str(created["work_item_id"]), projects=projects)
         self.conn.commit()
         return str(created["reference"])
 

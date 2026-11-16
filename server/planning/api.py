@@ -419,7 +419,7 @@ def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.create_work_item(
         conn,
-        space=_text(payload, "space"),
+        space=_optional_text(payload, "space"),
         title=_text(payload, "title"),
         state=_optional_text(payload, "state"),
         kind=str(payload.get("kind") or "task"),

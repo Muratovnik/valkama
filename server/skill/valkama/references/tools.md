@@ -104,9 +104,14 @@ permission mode needs no such care.
 
 ## Creating an item
 
-`create_work_item` takes `space`, `title`, and optionally `description`,
-`kind`, `priority`, `labels`, `source`, `parent`, `state` and `author`. Three
-more arguments act on the new item in the same call, all or nothing:
+`create_work_item` takes `title`, and optionally `space`, `projects`,
+`description`, `kind`, `priority`, `labels`, `source`, `parent`, `state` and
+`author`. Without `space` the item lies under its parent's space, else in the
+home space of its projects, else in your session's space; projects of two
+spaces need `space`, one of them. A named `space` must be the parent's space,
+or one of the projects' home spaces when they have one; a `[placement]` refusal
+names the candidates. Three more arguments act on the
+new item in the same call, all or nothing:
 
 | Argument | Shape |
 | --- | --- |

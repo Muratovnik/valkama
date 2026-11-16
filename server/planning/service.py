@@ -614,7 +614,7 @@ def _parent_row(
 def create_work_item(
     conn: sqlite3.Connection,
     *,
-    space: str,
+    space: str | None = None,
     title: str,
     state: str | None = None,
     kind: str = "task",
@@ -636,19 +636,20 @@ def create_work_item(
     `created` names no state for it, and `accepted` and `opened` follow. A named
     state is held to the refusals a move there meets (`transitions.placement`).
     `projects` names the projects a task changes, each `named`
-    (`item_projects`); a goal or stage names none.
+    (`item_projects`); a goal or stage names none. `space` may be left out: the
+    item then lies where `item_projects.placement` puts it.
     """
 
-    space_row = _space_row(conn, space)
-    space_id = str(space_row["planning_space_id"])
-    workflow = store.workflow_for_space(conn, space_id)
-    workflow_id = str(workflow["workflow_id"])
     named_kind = model.public_kind(kind)
     stored_kind = model.work_item_kind(named_kind)
     if named_kind == "stage" and not parent:
         raise model.PlanningError("a stage is a container under a parent; without one it is a goal")
     changes = item_projects.named(projects) or []
     item_projects.require_nameable(changes, container=stored_kind == model.CONTAINER_KIND)
+    space_row = _placed_space(conn, space, changes, parent)
+    space_id = str(space_row["planning_space_id"])
+    workflow = store.workflow_for_space(conn, space_id)
+    workflow_id = str(workflow["workflow_id"])
     named = model.named_basis(acceptance)
     parent_row = _parent_row(conn, space_id, parent)
     parent_id = None if parent_row is None else str(parent_row["work_item_id"])
@@ -709,6 +710,30 @@ def create_work_item(
         _log(conn, item_id, "opened", "", author)
     words.bring_current(conn)
     return read_model.present(conn, read_model.item_by_id(conn, item_id), full=True)
+
+
+def _placed_space(
+    conn: sqlite3.Connection, space: str | None, projects: Sequence[str], parent: str | None
+) -> sqlite3.Row:
+    """The space a new item lies in: the one it names, held to `item_projects.placement`."""
+
+    named = None if space is None else _space_row(conn, space)
+    parent_space = None
+    if parent:
+        parent_space = str(
+            conn.execute(
+                "SELECT key FROM planning_spaces WHERE planning_space_id = ?",
+                (str(read_model.item_row(conn, parent)["planning_space_id"]),),
+            ).fetchone()["key"]
+        )
+    key = item_projects.placement(
+        conn,
+        space=None if named is None else str(named["key"]),
+        projects=projects,
+        parent_space=parent_space,
+        session_id=calls.confirmed_session(),
+    )
+    return named if named is not None and str(named["key"]) == key else _space_row(conn, key)
 
 
 def update_work_item(

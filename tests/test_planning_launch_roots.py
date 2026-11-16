@@ -117,15 +117,19 @@ class RootsCase(unittest.TestCase):
         kind: str = "task",
         parent: str | None = None,
     ) -> dict:
+        """An item of `space` naming `projects`, given by an edit: an item lies in the
+        home space of the projects it is filed with, and an edit does not move it."""
+
         made = service.create_work_item(
             self.conn,
             space=space,
             title=title,
-            projects=projects,
             kind=kind,
             parent=parent,
             acceptance="assignment",
         )
+        if projects is not None:
+            made = service.update_work_item(self.conn, str(made["work_item_id"]), projects=projects)
         self.conn.commit()
         return made
 

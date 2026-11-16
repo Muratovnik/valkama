@@ -2219,7 +2219,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
         tools = {tool["name"]: tool for tool in answer["result"]["tools"]}
         self.assertEqual(len(mcp_surface.catalogue()), len(tools))
         schema = tools["create_work_item"]["inputSchema"]
-        self.assertEqual(["space", "title"], schema["required"])
+        self.assertEqual(["title"], schema["required"])
         self.assertEqual("boolean", schema["properties"]["claim"]["type"])
         links = schema["properties"]["links"]
         self.assertEqual(planning_api.MAX_APPLY_ENTRIES, links["maxItems"])

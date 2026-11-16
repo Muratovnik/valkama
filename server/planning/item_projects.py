@@ -16,9 +16,9 @@ A goal or stage stores none: its projects are those of every task under it, at
 any depth, each with the strongest source any of them gives it. The name a reader
 sees is the registry's, read when the item is, since the store holds only the id.
 
-Where a launch from an item runs is `launch_root`, the roots a claim names
-`project_roots`, and the roots a launch gets beside its own `added_roots`: each is
-the one answer to its question.
+Where a new item lies is `placement`, where a launch from an item runs
+`launch_root`, the roots a claim names `project_roots`, and the roots a launch gets
+beside its own `added_roots`: each is the one answer to its question.
 
 Which project a commit belongs to is `commit_projects`: the one answer to it, asked
 of Git in the registered roots.
@@ -34,7 +34,7 @@ import subprocess
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, TypedDict
 
-from .. import processes
+from .. import processes, sessions
 from ..projects import project_registry
 from ..store_identity.metadata import read_store_metadata
 from . import model
@@ -165,6 +165,117 @@ def spaces_shown(conn: sqlite3.Connection, spaces: Iterable[Mapping[str, Any]]) 
 
     data_scope_id = str(read_store_metadata(conn)["data_scope_id"])
     return with_projects(spaces, project_registry.read_registry(), data_scope_id)
+
+
+# -- where a new item lies ------------------------------------------------------
+
+PLACEMENT_UNNAMED = "[placement] name the space, or the projects the item changes"
+
+
+def _listed(words: Sequence[str]) -> str:
+    """`A`, `A and B`, `A, B and C`."""
+
+    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
+
+
+def session_space(
+    conn: sqlite3.Connection,
+    session_id: str | None,
+    *,
+    listing: project_registry.RegistryResult | None = None,
+) -> str | None:
+    """The key of the space whose project root holds the session's folder.
+
+    The place is `sessions.session_place`'s; None without a session, without a
+    folder under a registered root, or when that root's project binds no space of
+    this store, a key the registry still binds after its space is gone included.
+    `listing` is the registry as a caller already read it.
+    """
+
+    if session_id is None:
+        return None
+    if listing is None:
+        listing = project_registry.read_registry()
+    place = sessions.session_place(conn, session_id, listing)
+    key = None if place is None else place["space_key"]
+    if (
+        key is None
+        or conn.execute("SELECT 1 FROM planning_spaces WHERE key = ?", (key,)).fetchone()
+    ):
+        return key
+    return None
+
+
+def placement(
+    conn: sqlite3.Connection,
+    *,
+    space: str | None,
+    projects: Sequence[str],
+    parent_space: str | None,
+    session_id: str | None,
+) -> str:
+    """The key of the space a new item lies in, or a `[placement]` refusal naming the candidates.
+
+    Under a parent it is the parent's space, as an item and its parent share one.
+    Else the projects decide by their home spaces, the spaces of this store the
+    registry binds them to: one home is where the item lies, between several
+    `space` names one, and with none `space` is needed. Without projects it is
+    `space`, and without that the space of the calling session (`session_space`).
+    A set of projects has no first one, and a session may stand anywhere, so
+    neither breaks a tie. `space` and `parent_space` are keys; where `space` is
+    named it must be the space this chooses. The projects are nameable already
+    (`require_nameable`).
+    """
+
+    if parent_space is not None:
+        if space is not None and space != parent_space:
+            raise model.PlanningError(
+                f"[placement] the parent lies in {parent_space}: an item lies in its parent's space"
+            )
+        return parent_space
+    if not projects:
+        found = space if space is not None else session_space(conn, session_id)
+        if found is None:
+            raise model.PlanningError(PLACEMENT_UNNAMED)
+        return found
+    homes = _homes(conn, projects)
+    candidates = sorted(set(homes.values()))
+    if space is not None and (not candidates or space in candidates):
+        return space
+    if space is not None:
+        raise model.PlanningError(
+            f"[placement] space {space} is none of the spaces of the item's projects:"
+            f" {', '.join(candidates)}"
+        )
+    if len(candidates) == 1:
+        return candidates[0]
+    if candidates:
+        raise model.PlanningError(
+            f"[placement] projects {_listed(sorted(homes))} live in {_listed(candidates)}:"
+            " name one of them as space"
+        )
+    homeless = sorted(projects)
+    subject = (
+        f"project {homeless[0]} lives"
+        if len(homeless) == 1
+        else f"projects {_listed(homeless)} live"
+    )
+    raise model.PlanningError(f"[placement] {subject} in no space of this store: name the space")
+
+
+def _homes(conn: sqlite3.Connection, projects: Sequence[str]) -> dict[str, str]:
+    """The key of each project's home space in this store, for the projects that have one."""
+
+    listing = project_registry.read_registry()
+    if listing["status"] != "available":
+        raise model.PlanningError(REGISTRY_UNREADABLE)
+    data_scope_id = str(read_store_metadata(conn)["data_scope_id"])
+    homes: dict[str, str] = {}
+    for entry in listing["projects"]:
+        home = project_registry.home_space(entry, data_scope_id)
+        if home is not None and str(entry["project_id"]) in projects:
+            homes[str(entry["project_id"])] = home
+    return homes
 
 
 # -- the roots a launch and a claim name -----------------------------------------

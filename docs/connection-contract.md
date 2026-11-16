@@ -404,6 +404,36 @@ written:
 - projects on a goal or stage: `a goal or stage names no projects: the tasks
   under it do`.
 
+### Where a new item lies
+
+`space` is optional on `create_work_item` and on `POST /api/planning/work-items`.
+The server places the new item:
+
+1. under a `parent`, in the parent's space;
+2. else, with `projects`, in their home space, the space of this store the
+   registry binds each to: one home is where the item lies; between several,
+   `space` must name one of them; projects without a home need `space`;
+3. else in the space it names, and without one in the space of the calling
+   session, the space whose project root holds the session's folder. The same
+   space is `session_space` in the answer of `list_planning_spaces`, `null`
+   when the call proved no session or its folder lies in no space; the HTTP
+   list has no session and no such field.
+
+A later edit of `projects` does not move the item: its number stays. Refused
+with `invalid_request` and the code `[placement]`, each refusal naming the
+candidates, before anything is written:
+
+- projects of two spaces without `space`: `projects A and B live in ALPHA and
+  ROVER: name one of them as space`;
+- a `space` that is not one of the projects' homes: `space TEST is none of the
+  spaces of the item's projects: ALPHA, ROVER`;
+- a `space` that is not the parent's: `the parent lies in ALPHA: an item lies in
+  its parent's space`;
+- projects without a home and no `space`: `project X lives in no space of this
+  store: name the space`;
+- no parent, projects, space or session space: `name the space, or the projects
+  the item changes`.
+
 ### Naming a state
 
 A workflow's states are rows, so their keys belong to the space: the default
