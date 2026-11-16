@@ -1440,7 +1440,9 @@ def _claim_lost(conn: sqlite3.Connection, row: sqlite3.Row, actor: str) -> dict:
     raise model.RevisionConflictError(int(row["revision"]), int(fresh["revision"])) from None
 
 
-def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> int:
+def expire_leases(
+    conn: sqlite3.Connection, *, space_id: str | None = None, limit: int | None = None
+) -> int:
     """Release every lapsed hold, in one space or all; on how many items it released one.
 
     A hold is an item's claim or a claimed step of it, and each lapses by its
@@ -1449,7 +1451,31 @@ def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> i
     the owner on the item stops the count of silence for every hold there. A
     lease in its grace waits for its session to come back, since nobody asked
     for that item in particular. An item another writer changed in the meantime
-    is left to it.
+    is left to it. With `limit`, it stops after releasing on that many items, by
+    number, and leaves the rest to the next call.
+    """
+
+    expired = 0
+    for row, claim, steps in lapsed_holds(conn, space_id=space_id):
+        if limit is not None and expired >= limit:
+            break
+        try:
+            _expire(conn, row, claim, steps)
+        except model.RevisionConflictError:
+            continue
+        expired += 1
+    return expired
+
+
+def lapsed_holds(
+    conn: sqlite3.Connection, *, space_id: str | None = None
+) -> Iterator[tuple[sqlite3.Row, leases.Lease | None, dict[str, leases.Lease]]]:
+    """Each item `expire_leases` would release a hold on, by number: its row, claim and steps.
+
+    The claim is the lapsed lease to release, or None when only steps lapsed. It
+    only reads, so a caller that asks whether there is anything to release takes
+    no write lock; an item whose release would leave it at work unheld for good
+    (`_strands`) is not one.
     """
 
     clauses = [
@@ -1464,7 +1490,6 @@ def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> i
     query = with_clauses(
         "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
-    expired = 0
     for row in conn.execute(query + " ORDER BY i.number", parameters).fetchall():
         asked = leases.question_stands(conn, row)
         lease = leases.lease(conn, row, asked=asked)
@@ -1479,12 +1504,7 @@ def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> i
         if _strands(conn, row, "" if claim is not None else str(row["claim_ref"]), left):
             # Its release would leave it at work unheld: the hold stays until it moves.
             continue
-        try:
-            _expire(conn, row, claim, steps)
-        except model.RevisionConflictError:
-            continue
-        expired += 1
-    return expired
+        yield row, claim, steps
 
 
 def _lapsed_steps(

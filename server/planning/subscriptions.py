@@ -21,14 +21,16 @@ silence of its own: a session gone without a row, failed, ended longer ago than
 because the costs differ: a subscription left over costs a row and a name among
 the subscribers, while one lost leaves a session deaf to the owner's answer it
 still waits for; a lease holds work away from other sessions. A lapsed one is
-read as gone at once and removed by the start-up sweep that releases lapsed
-claims; a session coming back within its grace finds it standing, as it finds
-its claims.
+read as gone at once and removed by the planning sweep (`sweep`) that releases
+lapsed claims; a session coming back within its grace finds it standing, as it
+finds its claims.
 """
 
 from __future__ import annotations
 
+import itertools
 import sqlite3
+from collections.abc import Iterator
 from datetime import timedelta
 
 from . import calls, leases, model
@@ -174,14 +176,18 @@ def subscribers(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
     return listed
 
 
-def expire(conn: sqlite3.Connection) -> int:
-    """Remove every subscription and mute whose session has lapsed; how many went."""
+def lapsed(conn: sqlite3.Connection) -> Iterator[tuple[str, str, str]]:
+    """Each subscription or mute whose session has lapsed: its item, session and agent."""
 
-    gone = [
-        (str(row["work_item_id"]), str(row["follower"]), str(row["follower_agent"]))
-        for row in conn.execute(_LISTED)
-        if _lapsed(row)
-    ]
+    for row in conn.execute(_LISTED).fetchall():
+        if _lapsed(row):
+            yield str(row["work_item_id"]), str(row["follower"]), str(row["follower_agent"])
+
+
+def expire(conn: sqlite3.Connection, *, limit: int | None = None) -> int:
+    """Remove every subscription and mute whose session lapsed, at most `limit`; how many went."""
+
+    gone = list(itertools.islice(lapsed(conn), limit))
     conn.executemany(
         "DELETE FROM work_item_subscriptions"
         " WHERE work_item_id = ? AND session_id = ? AND agent_id = ?",

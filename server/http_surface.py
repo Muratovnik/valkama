@@ -1768,7 +1768,7 @@ def serve_main(
         startup.commit()
         maintenance = housekeeping.start_up(startup)
         # Unbounded, so beside the listener rather than before it.
-        housekeeping.start_sweep(startup, lambda line: print(line, file=sys.stderr))  # noqa: T201
+        housekeeping.start_transcript_sweep(startup, lambda line: print(line, file=sys.stderr))  # noqa: T201
         poll_on = quota_settings.read(startup)["poll"]
     finally:
         startup.close()
@@ -1787,6 +1787,10 @@ def serve_main(
         daemon=True,
     ).start()
     pulse = housekeeping.start_pulse(lambda line: print(line, file=sys.stderr))  # noqa: T201
+    # The start-up pass ran above; this repeats it while the listener serves.
+    planning_sweep = housekeeping.start_planning_sweep(
+        lambda line: print(line, file=sys.stderr)  # noqa: T201
+    )
     usage = housekeeping.start_usage(
         lambda line: print(line, file=sys.stderr),  # noqa: T201
         alerts=server.server_port == configuration.listener_port(),
@@ -1814,6 +1818,7 @@ def serve_main(
         server.serve_forever()
     finally:
         pulse.stop()
+        planning_sweep.stop()
         usage.set()
         quota_poll.SUPERVISOR = None
         poll.stop()

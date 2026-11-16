@@ -39,7 +39,7 @@ from unittest import mock
 from server import housekeeping, http_surface, mcp_surface, store
 from server.hooks import ingest, normalize
 from server.ops import tray
-from server.planning import leases, requests, service, views
+from server.planning import leases, requests, service, sweep, views
 
 PROTOCOL = {"io.modelcontextprotocol/protocolVersion": mcp_surface.MODERN_PROTOCOL}
 ONE = "019a3c2e-0001-7c11-9e0f-2f4b6d8a1c3e"
@@ -812,18 +812,21 @@ class StartUpTests(unittest.TestCase):
             )
 
     def test_a_failed_lease_sweep_is_reported_and_the_drain_still_counts(self) -> None:
+        failed = sweep.Pass(failures={sweep.LEASES: store.sqlite3.OperationalError("disk I/O")})
         with (
             mock.patch.object(
                 housekeeping,
                 "drain_spool",
                 return_value=housekeeping.ingest.DrainResult(stopped="busy"),
             ),
-            mock.patch.object(
-                housekeeping, "expire_leases", side_effect=store.sqlite3.OperationalError("locked")
-            ),
+            mock.patch.object(sweep, "run_pass", return_value=failed),
+            mock.patch.object(housekeeping, "prune_quota_samples", return_value=0),
         ):
             self.assertEqual(
-                ["start-up maintenance: lease expiry: locked", "hook spool drain stopped: busy"],
+                [
+                    "start-up maintenance: planning sweep leases: disk I/O",
+                    "hook spool drain stopped: busy",
+                ],
                 housekeeping.start_up(mock.Mock()),
             )
 
@@ -837,29 +840,43 @@ class StartUpTests(unittest.TestCase):
             steps.append("drain")
             return housekeeping.ingest.DrainResult()
 
+        def planning(conn: object, *, deadline: float) -> sweep.Pass:
+            self.assertIs(connection, conn)
+            # The pass shares the start-up budget.
+            self.assertLessEqual(deadline, time.monotonic() + housekeeping.START_UP_SECONDS)
+            steps.append("planning sweep")
+            return sweep.Pass()
+
         with (
             mock.patch.object(housekeeping, "drain_spool", side_effect=drain),
-            mock.patch.object(
-                housekeeping, "expire_leases", side_effect=lambda _conn: steps.append("leases") or 0
-            ),
-            mock.patch.object(housekeeping.transcripts, "sweep") as sweep,
+            mock.patch.object(sweep, "run_pass", side_effect=planning),
+            mock.patch.object(housekeeping, "prune_quota_samples", return_value=0),
+            mock.patch.object(housekeeping.transcripts, "sweep") as transcripts,
         ):
             self.assertEqual([], housekeeping.start_up(connection))
-        self.assertEqual(["drain", "leases"], steps)
-        sweep.assert_not_called()
+        self.assertEqual(["drain", "planning sweep"], steps)
+        transcripts.assert_not_called()
 
-    def test_a_drain_that_spends_the_budget_leaves_the_leases_to_the_next_start(self) -> None:
+    def test_a_drain_that_spends_the_budget_leaves_the_sweep_to_its_next_pass(self) -> None:
+        later = "no time left; it runs at the next pass"
         with (
             mock.patch.object(
                 housekeeping,
                 "drain_spool",
                 return_value=housekeeping.ingest.DrainResult(),
             ),
-            mock.patch.object(housekeeping, "expire_leases") as expire,
+            mock.patch.object(service, "expire_leases") as expire,
         ):
             report = housekeeping.run(mock.Mock(), seconds=-1.0)
         expire.assert_not_called()
-        self.assertEqual(["lease expiry: no time left; it runs at the next start"], report.failures)
+        self.assertEqual(
+            [
+                f"planning sweep leases: {later}",
+                f"planning sweep subscriptions: {later}",
+                "quota retention: no time left; it runs at the next start",
+            ],
+            report.failures,
+        )
 
     def test_the_lease_expiry_gives_up_quickly_on_a_store_another_writer_holds(self) -> None:
         directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
@@ -870,6 +887,13 @@ class StartUpTests(unittest.TestCase):
         ):
             conn = store.connect()
             self.addCleanup(conn.close)
+            # A hold no session proved, quiet for long enough: the lease step has work.
+            service.create_planning_space(conn, project_id="lease", name="Lease", key="LSE")
+            reference = service.create_work_item(conn, space="LSE", title="Held")["reference"]
+            service.claim_work_item(conn, reference, author="old")
+            conn.execute("UPDATE work_item_events SET created_at = '2020-01-01T00:00:00Z'")
+            conn.execute("UPDATE work_items SET updated_at = '2020-01-01T00:00:00Z'")
+            conn.commit()
             holder = store.sqlite3.connect(path, isolation_level=None)
             self.addCleanup(holder.close)
             holder.execute("BEGIN EXCLUSIVE")
@@ -879,10 +903,14 @@ class StartUpTests(unittest.TestCase):
             holder.execute("ROLLBACK")
             busy = conn.execute("PRAGMA busy_timeout").fetchone()[0]
         self.assertLess(elapsed, housekeeping.START_UP_SECONDS)
-        # Each step after the drain gives the held store up on its own.
+        # Each step after the drain that has work gives the held store up on its own.
         self.assertEqual(2, len(report.failures), report.failures)
-        self.assertIn("lease expiry", report.failures[0])
+        self.assertEqual(
+            "planning sweep leases: the store is busy; it runs at the next pass",
+            report.failures[0],
+        )
         self.assertIn("quota retention", report.failures[1])
+        self.assertEqual("old", service.get_work_item(conn, reference)["claim_ref"])
         # The connection's own timeout is back for the requests that follow.
         self.assertEqual(5000, busy)
 

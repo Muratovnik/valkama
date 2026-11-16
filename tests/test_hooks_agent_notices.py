@@ -27,10 +27,10 @@ import time
 import unittest
 from unittest import mock
 
-from server import housekeeping, mcp_surface, store
+from server import mcp_surface, store
 from server.alerts import settings as alert_settings
 from server.hooks import notify
-from server.planning import api, calls, service
+from server.planning import api, calls, service, sweep
 
 B = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
 CHILD = "019a3c2e-9999-7c11-9e0f-2f4b6d8a1c3e"
@@ -399,7 +399,7 @@ class WhoListensTests(Harness):
             (B,),
         )
         self.conn.commit()
-        housekeeping.expire_leases(self.conn)
+        sweep.run_pass(self.conn)
         self.comment(AS_A, self.followed, "After the session lapsed")
         self.assertIsNone(self.hook())
 

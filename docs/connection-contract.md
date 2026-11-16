@@ -1848,8 +1848,8 @@ its session has no row, failed, ended more than 12 hours ago or has not been see
 for 14 days. That silence is a subscription's own and longer than a lease's three
 days: a subscription left over costs a row and a name among the subscribers, while
 one lost leaves a session deaf to the owner's answer it still waits for. A lapsed subscription or mute reads as gone at once, to the card and
-to the hook alike, and the sweep that releases lapsed claims when a server starts
-removes it; a session that comes back within its grace finds it standing. A merge
+to the hook alike, and [the planning sweep](#the-planning-sweep) that releases
+lapsed claims removes it; a session that comes back within its grace finds it standing. A merge
 gives the survivor the subscriptions of the items merged into it, keeping the
 survivor's own where both have one, and a carried one hears the survivor from the
 merge on; a deleted item takes them with it.
@@ -2409,10 +2409,10 @@ Who may release or take over a claim follows the lease:
   The owner's own claim made in the browser lapses the same way, as does a claim
   a launch took for its runner. It reads `unconfirmed` until the release.
 
-An MCP server and `serve` also release every lapsed hold once when they start:
-each claim and claimed step whose stale lease is past its grace, or whose
-`unconfirmed` hold is past its 3 days. A grace is over at exactly 12 hours after
-`ended_at`, so a start at that second releases the lease.
+With nobody calling, [the planning sweep](#the-planning-sweep) releases every
+lapsed hold: each claim and claimed step whose stale lease is past its grace, or
+whose `unconfirmed` hold is past its 3 days. A grace is over at exactly 12 hours
+after `ended_at`, so a pass at that second releases the lease.
 
 The space's list of abandoned claims (`stale_claims` in the read model) holds
 every claim of an item at work or blocked whose lease is `stale`, in its grace or
@@ -2422,6 +2422,43 @@ a release takes it away.
 A claim still counts as the executor that starting an item requires. Starting
 an item under an `unconfirmed` or a `stale` claim answers with a warning, not a
 refusal, unless the claim was taken in the browser.
+
+### The planning sweep
+
+Of Planning's rules only the planning sweep acts by time rather than on a call.
+An MCP server and `serve` run its first pass when they start, before the first
+request and within the start-up budget, and then again every 10 minutes on a
+connection of their own, on the thread `valkama-planning-sweep`, for as long as
+they run. Two processes passing at once need no agreement: a step changes
+nothing the second time, and every write checks the revision it read. Ten minutes is a
+margin against terms of 12 hours and 3 days, and between passes
+`claim_ready_work_item` and `claim_work_item` still release what they meet.
+
+A pass runs its steps in order, each in a transaction of its own:
+
+| Step | What it does |
+| --- | --- |
+| `leases` | releases every lapsed claim and claimed step, as [above](#who-holds-a-claim-or-a-step), and marks the lapsed holder's ticks |
+| `subscriptions` | removes every [subscription](#subscriptions) and mute whose session lapsed |
+
+Every step keeps the same contract:
+
+1. A second pass in a row changes nothing.
+2. It writes as Valkama's own call, with the step's name as the call's tool
+   unless its writes carry a name of their own -- a lease expiry is `released`
+   by `valkama` under the tool `lease-expiry`, one call per item -- so the history
+   says who released what and why.
+3. It changes at most 200 items in one pass; the next pass takes the rest, by
+   number.
+4. It reads the time from the one clock the lease terms are read against.
+
+A step asks first, without the write lock, whether it has anything to do, and
+one that has nothing takes no lock. A store another writer holds is given up
+after a quarter of a second, and the step waits for the next pass. A step that
+fails is rolled back and said once on the process's stderr -- again only after
+a pass it got through -- and the steps after it still run. The start-up pass
+says on stderr how many items it released a hold on, and which steps it left
+for the next pass.
 
 ### A claim starts the work
 

@@ -13,9 +13,9 @@ import time
 import unittest
 from unittest import mock
 
-from server import housekeeping, mcp_surface, store
+from server import mcp_surface, store
 from server.hooks import notify
-from server.planning import api, calls, model, service, subscriptions
+from server.planning import api, calls, model, service, subscriptions, sweep
 
 SESSION = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
 CHILD = "019a3c2e-9999-7c11-9e0f-2f4b6d8a1c3e"
@@ -223,7 +223,7 @@ class LifetimeTests(Harness):
         self.conn.commit()
 
     def sweep(self) -> None:
-        housekeeping.expire_leases(self.conn)
+        sweep.run_pass(self.conn)
 
     def test_a_session_ended_within_its_grace_still_follows(self) -> None:
         self.subscribe(True)

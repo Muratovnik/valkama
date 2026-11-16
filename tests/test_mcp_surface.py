@@ -124,7 +124,7 @@ class McpSurfaceTestCase(unittest.TestCase):
             mock.patch.object(sys, "stdin", Stdin(b"")),
             mock.patch.object(mcp_surface, "connect", return_value=connection),
             mock.patch.object(housekeeping, "start_up", return_value=[]),
-            mock.patch.object(housekeeping, "start_sweep", return_value=None),
+            mock.patch.object(housekeeping, "start_transcript_sweep", return_value=None),
             mock.patch.object(tray, "start", return_value=None),
         ):
             mcp_surface.mcp_main()
@@ -135,7 +135,7 @@ class McpSurfaceTestCase(unittest.TestCase):
         with (
             mock.patch.object(mcp_surface, "connect", return_value=connection),
             mock.patch.object(housekeeping, "start_up", return_value=[]),
-            mock.patch.object(housekeeping, "start_sweep", return_value=None),
+            mock.patch.object(housekeeping, "start_transcript_sweep", return_value=None),
             mock.patch.object(mcp_surface, "_mcp_loop", side_effect=RuntimeError("stdin failed")),
             self.assertRaisesRegex(RuntimeError, "stdin failed"),
         ):
@@ -258,7 +258,7 @@ class StartUpMaintenanceTests(McpSurfaceTestCase):
             elapsed = time.monotonic() - started
             release.set()
             for thread in threading.enumerate():
-                if thread.name == housekeeping.SWEEP_THREAD:
+                if thread.name == housekeeping.TRANSCRIPT_SWEEP_THREAD:
                     thread.join(10)
         self.assertEqual(1, len(answers))
         self.assertLess(elapsed, 5.0)
