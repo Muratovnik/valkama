@@ -517,8 +517,11 @@ the browser reads. An `unconfirmed` claim lapses after 3 days without an event
 on the item, the owner's own included. An open question to the owner on the item
 stops both counts. Another session needs `force` to take a live claim, even when
 it signs with the same author. A stale claim is released by whoever meets it
-next, and taking it over needs no `force`; the history shows the expiry as a
-`released` event by `valkama`, and the claimed steps of that session go with it. The board marks stale claims, and the inspector
+next, or by the
+[planning sweep](docs/connection-contract.md#the-planning-sweep) a running server
+repeats every ten minutes, and taking it over needs no `force`; the history
+shows the expiry as a `released` event by `valkama`, and the claimed steps of
+that session go with it. The board marks stale claims, and the inspector
 shows the lease and when it expires. The exact rules are in
 [the connection contract](docs/connection-contract.md#claims-are-leases).
 
