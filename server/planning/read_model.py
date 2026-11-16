@@ -330,25 +330,38 @@ def lapsed_claims(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> dict
 def _lapsed(conn: sqlite3.Connection, unheld: list[str]) -> dict[str, dict]:
     """The lapsed claims of `unheld`, open items nobody holds, in one statement.
 
-    An attached store an earlier build wrote, before calls were recorded, has no
-    `execution_events`. It is read as it is, so it is asked directly rather than
-    probed first, and none of its items has a lapsed claim.
+    It asks the schema this build knows, so a store without `execution_events`
+    fails the read: a list or a board is a whole-store read (`whole_store_read`),
+    and such a store answers it with `StoreSchemaError`.
     """
 
     found: dict[str, dict] = {}
     if not unheld:
         return found
-    try:
-        released = conn.execute(_LAPSED, (json.dumps(unheld), leases.EXPIRY_TOOL)).fetchall()
-    except sqlite3.OperationalError as error:
-        if not str(error).startswith("no such table: execution_events"):
-            raise
-        return found
+    released = conn.execute(_LAPSED, (json.dumps(unheld), leases.EXPIRY_TOOL)).fetchall()
     for identity, detail, at in released:
         expiry = leases.expiry_of(str(detail))
         if expiry is not None:
             found[str(identity)] = {"holder": expiry[1], "reason": expiry[0], "at": at}
     return found
+
+
+def _lapsed_of_one(conn: sqlite3.Connection, identity: str) -> dict | None:
+    """The lapsed claim of one open item nobody holds, for a record read on its own.
+
+    A brief record needs no later column, so it is read from an attached store an
+    earlier build wrote, before calls were recorded: such a store has no
+    `execution_events`, and none of its items has a lapsed claim. It is asked
+    directly rather than probed first. Only this one-item read forgives the
+    missing table; the batch `lapsed_claims` of a list or a board does not.
+    """
+
+    try:
+        return _lapsed(conn, [identity]).get(identity)
+    except sqlite3.OperationalError as error:
+        if not str(error).startswith("no such table: execution_events"):
+            raise
+        return None
 
 
 def _closed(row: sqlite3.Row, found: _Closed) -> tuple[str, str | None]:
@@ -851,7 +864,7 @@ def present(
         # Asked only of open work nobody holds, the one kind that can have it: the
         # state is read already, and a brief read's statement count is bounded.
         unheld = not row["claim_ref"] and not state["is_terminal"]
-        record["lapsed_claim"] = _lapsed(conn, [identity]).get(identity) if unheld else None
+        record["lapsed_claim"] = _lapsed_of_one(conn, identity) if unheld else None
     if not full:
         # A count, under its own name. Calling it `comments` in the brief and
         # `comments` in the full record made one key mean two shapes, which a
