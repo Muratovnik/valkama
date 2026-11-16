@@ -378,10 +378,10 @@ def _parts_of(
         "comments_after": ("comments", comments_after),
         "events": ("events", events),
     }
-    for mode, (part, value) in modes.items():
-        if value is not None and part not in names:
+    for mode, (cut, value) in modes.items():
+        if value is not None and cut not in names:
             raise model.PlanningError(
-                f"{mode} reads the {part} part: add {part} to parts or leave parts out"
+                f"{mode} reads the {cut} part: add {cut} to parts or leave parts out"
             )
     answer: dict[str, object] = {
         "reference": read_model.reference(conn, row),

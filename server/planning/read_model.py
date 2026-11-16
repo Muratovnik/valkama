@@ -1156,8 +1156,8 @@ def comments_part(
     # Any `comments_after`, 0 too, is a page start a thread read cannot take.
     _exclusive(thread=thread, comments_after=comments_after)
     if comments_after is not None and not unresolved:
-        page, more = _comments_page(conn, identity, comments_after)
-        return {"comments": page, **_thread_counts(conn, identity), "truncated": more}
+        page, follows = _comments_page(conn, identity, comments_after)
+        return {"comments": page, **_thread_counts(conn, identity), "truncated": follows}
     newest = thread is None and comments_after is None and not unresolved
     found, shown, more = _cut_comments(
         conn,
