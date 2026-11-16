@@ -10,7 +10,18 @@ import type { Page } from '@playwright/test'
 import { record } from './analyticsPage.ts'
 import { middleOf, pastTheDelay } from './dayHintPage.ts'
 import type { Arrival, Frame } from './hintFramesPage.ts'
-import { boxOf, hint, pass, quietPoint, watched, watchHints } from './hintFramesPage.ts'
+import {
+  boxOf,
+  clear,
+  crossing,
+  hint,
+  paced,
+  pass,
+  quietPoint,
+  stroke,
+  watched,
+  watchHints,
+} from './hintFramesPage.ts'
 import { card, middle, openReported, reference, rest } from './previewPage.ts'
 import { test } from './test.ts'
 
@@ -49,28 +60,42 @@ const shownAlone = (frames: Frame[], surface: 'card' | 'hint') =>
 test('a hint, a card and a hint again take over from each other at once, one surface a frame', async ({
   page,
 }, info) => {
-  const { link, onHead } = await cardAt(page)
+  const { entry, link, onHead } = await cardAt(page)
   const onLink = await middle(link)
-  await page.mouse.move(onHead.x, onHead.y)
-  await expect(hint(page)).toHaveCount(1)
-  await watched(page)
+  // Each way the surface the pointer leaves holds for its grace: a pointer slower than that between
+  // the two lets it go, as it should, and that attempt is done again (`paced`).
+  const { delays, toCard, toHint } = await paced('hint-card-hint', async (round) => {
+    // Off the head's hint, which the last attempt left up, onto nothing well away from it and its
+    // title's whole words.
+    if (round > 1) await clear(page, await quietPoint(entry))
+    await page.mouse.move(onHead.x, onHead.y)
+    await expect(hint(page)).toHaveCount(1)
+    await watched(page)
 
-  // Straight from the head onto the reference, while the head's hint is up.
-  await page.mouse.move(onLink.x, onLink.y, { steps: 3 })
-  await expect(card(page)).toContainText('Keep the reader in place')
-  await pass(page, 200)
-  const toCard = await watched(page)
-  // And back onto the head, while the card is up.
-  await page.mouse.move(onHead.x, onHead.y, { steps: 3 })
-  await expect(hint(page)).toHaveCount(1)
-  await pass(page, 200)
-  const toHint = await watched(page)
-  // A frame is stamped as it starts, so one drawn after an arrival may read a little before it.
-  const delays = {
-    card: shownAlone(toCard.frames, 'card') - arrived(toCard),
-    hint: shownAlone(toHint.frames, 'hint') - arrived(toHint),
-  }
-  await record(info, 'hint-card-hint-frames', { delays, toCard, toHint })
+    // Straight from the head onto the reference, while the head's hint is up.
+    const movesToCard = await stroke(page, onHead, [{ ...onLink, steps: 3 }])
+    await expect(card(page)).toContainText('Keep the reader in place')
+    await pass(page, 200)
+    const toCard = await watched(page)
+    // And back onto the head, while the card is up.
+    const movesToHint = await stroke(page, onLink, [{ ...onHead, steps: 3 }])
+    await expect(hint(page)).toHaveCount(1)
+    await pass(page, 200)
+    const toHint = await watched(page)
+    // A frame is stamped as it starts, so one drawn after an arrival may read a little before it.
+    const delays = {
+      card: shownAlone(toCard.frames, 'card') - arrived(toCard),
+      hint: shownAlone(toHint.frames, 'hint') - arrived(toHint),
+    }
+    const crossed = { card: crossing(movesToCard), hint: crossing(movesToHint) }
+    await record(info, round === 1 ? 'hint-card-hint-frames' : `hint-card-hint-frames-${round}`, {
+      crossed,
+      delays,
+      toCard,
+      toHint,
+    })
+    return { delays, pause: Math.max(crossed.card, crossed.hint), toCard, toHint }
+  })
 
   for (const [name, noted] of [
     ['hint to card', toCard],

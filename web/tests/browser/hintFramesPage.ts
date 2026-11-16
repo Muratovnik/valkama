@@ -3,6 +3,7 @@
  * card's, a cut text's whole words laid over it counting as a hint: every frame, every change of the count of hints, every arrival of the pointer and key,
  * all on the page's own clock, and the points and boxes they aim the pointer at.
  */
+import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 export interface Frame {
@@ -137,3 +138,172 @@ export const hintsFadedIn = (page: Page) =>
 /** Real time passing in the page, `ms` long, while its frames are noted. */
 export const pass = (page: Page, ms: number) =>
   page.evaluate((wait) => new Promise((done) => setTimeout(done, wait)), ms)
+
+/**
+ * How long the hint manager waits on a pointer that stopped moving, in ms (`GRACE_MS` in
+ * `hintManager.ts`): a hint stays that long after the pointer leaves its anchor, and on the way to
+ * a hint what the pointer crosses takes over once it stands still on it that long.
+ */
+const GRACE_MS = 120
+
+interface Point {
+  x: number
+  y: number
+}
+
+/** A point the pointer goes to, and in how many steps it gets there. */
+type Leg = Point & { steps: number }
+
+/** A move of the pointer, as the page heard it. */
+export interface Move {
+  /** When the page heard it, on its own clock, before any handler of the page's own did. */
+  at: number
+  /** The words of every hint the next frame showed. */
+  hints: string[]
+  /**
+   * What it was on: the element with a hint or the surface at the stroke's start (`from`) or at
+   * its end (`to`), another hover surface (`surface`), another element with a hint by its class,
+   * or nothing (`''`).
+   */
+  on: string
+  /** How many cut texts the next frame laid whole. */
+  wholes: number
+  x: number
+  y: number
+}
+
+/**
+ * Teaches the page to note every move of the pointer from now on, in place of what it noted before
+ * (`moved`): the pointer is to go from `from` to `to`, and each move says which of them, or what
+ * else, it was on. It is heard before the page's own handlers, at the time they hear it.
+ */
+const watchMoves = (page: Page, from: Point, to: Point) =>
+  page.evaluate(
+    ({ start, end }) => {
+      const host = window as unknown as { moves: Move[]; movesHeard?: AbortController }
+      host.movesHeard?.abort()
+      const heard = new AbortController()
+      host.movesHeard = heard
+      host.moves = []
+      const surfaces = '[data-hint-surface]'
+      const holder = (element: Element | null) =>
+        element?.closest(surfaces) ??
+        element?.closest('[data-tooltip], [data-reference-preview]') ??
+        null
+      const holderAt = ({ x, y }: Point) => holder(document.elementFromPoint(x, y))
+      const [first, last] = [holderAt(start), holderAt(end)]
+      const named = (element: Element | null) => {
+        if (element === null) return ''
+        if (element === first) return 'from'
+        if (element === last) return 'to'
+        return element.matches(surfaces) ? 'surface' : (element.getAttribute('class') ?? '')
+      }
+      addEventListener(
+        'pointermove',
+        (event) => {
+          const target = event.target instanceof Element ? event.target : null
+          const move: Move = {
+            at: performance.now(),
+            hints: [],
+            on: named(holder(target)),
+            wholes: 0,
+            x: event.clientX,
+            y: event.clientY,
+          }
+          host.moves.push(move)
+          requestAnimationFrame(() => {
+            move.hints = [...document.querySelectorAll('.tooltip-hint')].map(
+              (hint) => hint.textContent ?? '',
+            )
+            move.wholes = document.querySelectorAll('.whole-text').length
+          })
+        },
+        { capture: true, signal: heard.signal },
+      )
+    },
+    { start: from, end: to },
+  )
+
+/** The moves the page noted since `watchMoves`, once the last one's frame came. */
+const moved = (page: Page) =>
+  page.evaluate(async () => {
+    await new Promise(requestAnimationFrame)
+    return (window as unknown as { moves: Move[] }).moves.splice(0)
+  })
+
+/**
+ * Moves the pointer from `from`, where it stands, along `legs`, each in its own steps, the last
+ * ending where the stroke goes: the moves the page heard.
+ */
+export async function stroke(page: Page, from: Point, legs: readonly Leg[]) {
+  const to = legs.at(-1) ?? from
+  await watchMoves(page, from, to)
+  for (const leg of legs) await page.mouse.move(leg.x, leg.y, { steps: leg.steps })
+  return moved(page)
+}
+
+/**
+ * The longest the pointer stood still on its way from `from` to `to`, in ms: from a move off both
+ * to the next move. There each move restarts the grace of what it crosses; on either end none runs.
+ */
+export function longestStill(moves: readonly Move[]) {
+  let longest = 0
+  for (const [at, move] of moves.entries()) {
+    const next = moves[at + 1]
+    if (next && move.on !== 'from' && move.on !== 'to')
+      longest = Math.max(longest, next.at - move.at)
+  }
+  return longest
+}
+
+/**
+ * How long the pointer was between the two elements, in ms: from its first move off `from`'s to
+ * its first move onto `to`'s, the grace the first one's surface runs in.
+ */
+export function crossing(moves: readonly Move[]) {
+  const left = moves.findIndex((move) => move.on !== 'from')
+  const off = moves[left]
+  const on = moves.find((move, at) => at >= left && move.on === 'to')
+  if (!off || !on) {
+    const way = moves.map((move) => move.on || '-').join(' → ')
+    throw new Error(`the pointer went ${way}, not from one element to the other`)
+  }
+  return on.at - off.at
+}
+
+/**
+ * Runs `attempt`, a move of the pointer from a clean state and what the page showed along it,
+ * until one went at the pace the hint manager's rules are about: `pause`, what the page measured of
+ * it, under `GRACE_MS`. A slower one, as a loaded machine makes, legitimately lets those rules fire
+ * and says nothing of them: it is noted on the test and done again, `tries` times at most, and then
+ * the test fails on the pace it measured.
+ */
+export async function paced<T extends { pause: number }>(
+  name: string,
+  attempt: (round: number) => Promise<T>,
+  tries = 5,
+): Promise<T> {
+  const pauses: number[] = []
+  for (let round = 1; round <= tries; round += 1) {
+    const done = await attempt(round)
+    if (done.pause < GRACE_MS) return done
+    pauses.push(Math.round(done.pause))
+    const note = `${name}: attempt ${round} of ${tries} redone, the pointer took ${pauses.at(-1)} ms where the hint manager waits ${GRACE_MS} ms`
+    test.info().annotations.push({ type: 'redone', description: note })
+    console.log(`redone ${note}`)
+  }
+  throw new Error(
+    `${name}: no attempt moved the pointer within the hint manager's ${GRACE_MS} ms; ` +
+      `it took ${pauses.join(', ')} ms, so none says whether the rule holds`,
+  )
+}
+
+/**
+ * The pointer moved to `away`, on nothing with a hint, until no hover surface shows, and past the
+ * time the next one would still open at once (`WARM_MS`): the state a test starts from.
+ */
+export async function clear(page: Page, away: Point) {
+  await page.mouse.move(away.x, away.y)
+  await expect(page.locator('.tooltip-hint, .whole-text, .reference-preview')).toHaveCount(0)
+  await pass(page, 400)
+}

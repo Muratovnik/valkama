@@ -15,17 +15,9 @@ import type { Locator, Page, TestInfo } from '@playwright/test'
 
 import { pageAt as analyticsAt, record, serve as serveAnalytics } from './analyticsPage.ts'
 import { openRail } from './cutRailPage.ts'
-import { pass, wholeText } from './hintFramesPage.ts'
+import type { Move } from './hintFramesPage.ts'
+import { longestStill, paced, pass, stroke, wholeText } from './hintFramesPage.ts'
 import { test } from './test.ts'
-
-interface Step {
-  /** The hint of another element the pointer stood on, if any. */
-  crossed: string
-  hints: string[]
-  wholes: number
-  x: number
-  y: number
-}
 
 /** A point on `anchor` where the pointer is on the anchor itself, not on an element inside it. */
 const ownPoint = (anchor: Locator) =>
@@ -37,74 +29,71 @@ const ownPoint = (anchor: Locator) =>
     throw new Error('no point on the anchor itself')
   })
 
-/** What a hint stands over at a point, and the hints shown then. */
-const stepAt = (anchor: Locator, at: { x: number; y: number }) =>
-  anchor.evaluate((own, { x, y }) => {
-    const under = document.elementFromPoint(x, y)
-    const other = under?.closest<HTMLElement>('[data-tooltip]')
-    return {
-      x,
-      y,
-      crossed:
-        other && other !== own && !under?.closest('[data-hint-surface]') ? other.className : '',
-      hints: [...document.querySelectorAll('.tooltip-hint')].map((hint) => hint.textContent ?? ''),
-      wholes: document.querySelectorAll('.whole-text').length,
-    }
-  }, at)
+/** The hints shown now, and how many cut texts lie whole. */
+const shownNow = (page: Page) =>
+  page.evaluate(() => ({
+    hints: [...document.querySelectorAll('.tooltip-hint')].map((hint) => hint.textContent ?? ''),
+    wholes: document.querySelectorAll('.whole-text').length,
+  }))
 
 /** The words a hint says: its first line, which every hint of the anchor starts with. */
 const wordsOf = async (anchor: Locator) =>
   ((await anchor.getAttribute('data-tooltip')) ?? '').split('\n')[0] ?? ''
 
+/** A step of the way that stood on another element with a hint, not on a hover surface. */
+const crossed = (step: Move) => !['', 'from', 'surface', 'to'].includes(step.on)
+
 /**
- * Raises `anchor`'s hint and moves the pointer from the anchor to it, a step each frame or so, as
- * a hand does: what the hint shows at every step, and whether it is there at the end.
+ * Raises `anchor`'s hint and moves the pointer from the anchor to it in one stroke of small steps,
+ * as a hand does: what the hint shows at every step, and whether it is there at the end. A stroke
+ * the page heard with a gap of the hint's grace between two steps stood still on the way, and is
+ * done again (`paced`).
  */
 async function reach(page: Page, anchor: Locator, info: TestInfo, name: string) {
   const words = await wordsOf(anchor)
   const viewport = page.viewportSize() ?? { width: 0, height: 0 }
-  await page.mouse.move(viewport.width - 2, viewport.height - 2)
-  await pass(page, 400)
-  const from = await ownPoint(anchor)
-  await page.mouse.move(from.x, from.y)
-  const hint = page.locator('.tooltip-hint')
-  await expect(hint).toHaveCount(1)
-  await expect(hint).toContainText(words)
-  const box = await hint.evaluate((node) => {
-    const { left, right, top, bottom } = node.getBoundingClientRect()
-    return { left, right, top, bottom }
-  })
-  // Into the hint by a few pixels, level with its middle, from whichever side it stands on.
-  const to = {
-    x: box.left >= from.x ? box.left + 6 : box.right - 6,
-    y: (box.top + box.bottom) / 2,
-  }
-  const steps: Step[] = []
-  const count = 24
-  for (let at = 1; at <= count; at += 1) {
-    const point = {
-      x: from.x + ((to.x - from.x) * at) / count,
-      y: from.y + ((to.y - from.y) * at) / count,
+  return paced(name, async (round) => {
+    await page.mouse.move(viewport.width - 2, viewport.height - 2)
+    await pass(page, 400)
+    const from = await ownPoint(anchor)
+    await page.mouse.move(from.x, from.y)
+    const hint = page.locator('.tooltip-hint')
+    await expect(hint).toHaveCount(1)
+    await expect(hint).toContainText(words)
+    const box = await hint.evaluate((node) => {
+      const { left, right, top, bottom } = node.getBoundingClientRect()
+      return { left, right, top, bottom }
+    })
+    // Into the hint by a few pixels, level with its middle, from whichever side it stands on.
+    const to = {
+      x: box.left >= from.x ? box.left + 6 : box.right - 6,
+      y: (box.top + box.bottom) / 2,
     }
-    await page.mouse.move(point.x, point.y)
-    await pass(page, 16)
-    steps.push(await stepAt(anchor, point))
-  }
-  // Resting on the hint, past its grace.
-  await pass(page, 400)
-  const end = await stepAt(anchor, to)
-  const onHint = await page.evaluate(
-    ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('.tooltip-hint')),
-    to,
-  )
-  await record(info, name, { from, to, box, steps, end })
-  return { end, onHint, steps, words }
+    const steps = await stroke(page, from, [{ ...to, steps: 24 }])
+    // Resting on the hint, past its grace.
+    await pass(page, 400)
+    const end = await shownNow(page)
+    const onHint = await page.evaluate(
+      ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('.tooltip-hint')),
+      to,
+    )
+    const pause = longestStill(steps)
+    await record(info, round === 1 ? name : `${name}-${round}`, {
+      from,
+      to,
+      box,
+      pause,
+      steps,
+      end,
+    })
+    return { end, onHint, pause, steps, words }
+  })
 }
 
 /** Every step of the way across other elements kept the anchor's own hint, and nothing else. */
 function expectWayKept({ steps, words }: Awaited<ReturnType<typeof reach>>) {
   expect(
-    steps.filter((step) => step.crossed),
+    steps.filter((step) => crossed(step)),
     'the way crosses another element with a hint',
   ).not.toEqual([])
   expect(
