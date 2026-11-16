@@ -556,6 +556,48 @@ A subscription or a mute that lapsed with its session tells nothing more from th
 moment it lapsed, before the sweep removes it as after: the hook reads its session
 by the rule the lease does, in the two queries it makes anyway.
 
+### Under a goal
+
+**Since 3.0**, an orchestrator works on the goals and stages over its work, and
+hears what happens under them from items it never wrote to. A session works on a
+goal or stage while it is a
+[participant](connection-contract.md#participants) of it, or of a goal or stage over it: it
+or one of its subagents holds the claim or an open step of a task anywhere under
+it, or follows it or one over it, and the session is live by the lease and has not
+ended. The tree it hears is every item under those goals and stages. A subagent
+hears no tree: the orchestrator keeps the whole and passes it on.
+
+| Item in the tree | What reaches the orchestrator |
+| --- | --- |
+| a task | where the work stands: a status change, a summary selected, a release, a take-over, a question to the owner asked or withdrawn, by another session or a person; a list on a comment is not one |
+| a goal or stage | everything its holder would hear if it had one: a person's acts, edits included, and other sessions' writes |
+
+- **A wake.** A person's act on the goal or on any stage under it wakes the
+  session, or continues its turn at `Stop`, as one on a held item does. A task's
+  state change, another session's write on a goal or stage and anything else wait
+  for the next tool call or prompt, and come then with what woke it if something did.
+- **One path a recipient and an item.** A goal or stage the session wrote to or
+  follows is read by its own path, and working on it counts as holding it: all of
+  a person's acts there are told whole and wake, and other sessions' news there
+  is told as to a holder. A task it holds or follows is told by its own path as
+  before. A task it only wrote to, or never touched, has its addressed news, a
+  reply in its thread, on its own path and where its work stands from the tree, and
+  the two never overlap. Nothing the session wrote is told by the tree: its own
+  writes reach nobody, and its subagents' work reaches it by
+  [the speaker rule](#another-agent-sessions-news).
+- **The line** names the goal or stage the item came under, the nearest one the
+  session works on when that is not the item itself:
+  `MAIN-15 «Parse the input», under MAIN-10 «Ship the parser»:`.
+
+The tree is read as one feed, not item by item: each call reads the event, comment
+and call rows written since its own places, at most 2 000 of each, climbs from
+their items to the roots the session works on and keeps the items of its tree. The
+rest of a long backlog comes at the next call, and nothing is lost. A `Stop` or a
+watcher read that finds only news that waits leaves the places where they were.
+A session's first read, and a place file from before the tree, start at the end
+of the tables: what was written under a goal before is not retold, and the item
+itself holds it. See [where each agent's place is kept](#where-each-agents-place-is-kept).
+
 ### When it is told
 
 | Hook | Notice |
@@ -839,7 +881,7 @@ exists, as `spool/` is:
 
 | File | What it holds |
 | --- | --- |
-| `<session>.marks`, `<session>--<agent>.marks` | per item the recipient wrote to, the last call read, the item's revision, newest event, newest comment and its blockers' newest event at that read, and whether it held the item then; apart from that, the last call whose other sessions' news it read, and whether some of it still waits; and for an orchestrator, the times of the wakes other sessions' news made in the last hour, and how many events the limit held back; and per item, the times of the notices in the last hour that quoted other sessions' words on it |
+| `<session>.marks`, `<session>--<agent>.marks` | per item the recipient wrote to, the last call read, the item's revision, newest event, newest comment and its blockers' newest event at that read, and whether it held the item then; apart from that, the last call whose other sessions' news it read, and whether some of it still waits; and for an orchestrator, the times of the wakes other sessions' news made in the last hour, and how many events the limit held back; and per item, the times of the notices in the last hour that quoted other sessions' words on it; and for an orchestrator, its places in the [tree under its goals](#under-a-goal) |
 | `<…>.lock` | held while one hook of that recipient reads and records, so parallel tool calls tell the news once |
 | `<session>.watch` | the watcher's lock |
 | `<session>.idle` | written by a `Stop` that told nothing, removed by `UserPromptSubmit` |
@@ -876,6 +918,17 @@ a build from before `v4` reads a `v4` file as empty. The one-shot rule needs no
 more than the places: what woke a session is behind its place afterwards. A damaged
 file costs at most one repeat: the news since the recipient's own last writes is
 told, and may wake, once more, with a fresh budget, and the next write is whole.
+
+**Since 3.0** the file is headed `v5`. An orchestrator's file adds one line,
+`@tree <event> <comment> <call> <waiting>`: the last event, comment and call row
+its [tree's feed](#under-a-goal) read, and the last words left waiting it was
+handed, one place for the whole tree, so a goal of any size costs one line. The
+tree's news has no separate place for a person, so it is told whole or waits
+whole: at a `Stop` or in the watcher, a person's act on a goal or stage is told with
+everything the feed read beside it, and without one the feed's places stay. A `v4`
+file reads as before with no `@tree` line, and the tree starts at the end of the
+tables then, as for a new recipient: nothing written under a goal before it is
+told. A build from before `v5` reads a `v5` file as empty.
 
 ### Switching it off
 
@@ -964,6 +1017,22 @@ busier machine, two runs:
 | before subscriptions | watcher poll | 2 | 2.78 / 2.53 ms | 3.75 / 3.34 ms |
 | with subscriptions | watcher poll | 2 | 2.96 / 2.54 ms | 3.97 / 3.44 ms |
 | with wakes | watcher poll | 2 | 3.19 / 2.86 ms | 4.29 / 3.79 ms |
+
+The tree under a goal adds no query to a call with nothing new either: where each
+of its three tables ends is three more columns of the second query, each read once
+by its primary key, and compared with the `@tree` places. Only when something was
+written anywhere since does the feed run: the rows after each place by key, the
+items they name climbed to their roots a level at a time, and the watched roots
+read through the calls' index on the session. Its cost grows with the rows written
+since, not with the size of the tree. Measured in-process on Windows, a goal of 274
+items, the orchestrator holding one task in it, `collect` with the feed against
+the same call answered from its two reads, median of 200 runs each, interleaved,
+three runs (`tests/test_hooks_tree_cost.py` holds the bounds, 0.5 ms and 2 ms):
+
+| Since the last read | Added |
+| --- | --- |
+| nothing written | 0.00 / 0.01 / 0.00 ms |
+| 100 comments by another session across the tree, 200 rows | 0.86 / 0.87 / 0.85 ms |
 
 A hook of a newer release can meet a store that release has not opened yet, for
 the seconds between `launcher install` and the first session that switches. When

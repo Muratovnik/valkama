@@ -31,7 +31,9 @@ would end it before the session's orchestrator was told. The hook remembers the
 last call it has read for each item and asks for what came after that. The same
 hook reads what other agents wrote apart (`agents_since`), from the same rows and
 into the same entries: it is told to the holders and followers, and never as a
-person's.
+person's. What is written under a goal an orchestrator works on reaches it from
+items it never wrote to, so for those the hook reads every item's new rows at once,
+from three places of its own (`tree_since`), and keeps the items of its tree.
 
 Nothing here is imported at module level past `sqlite3`: a client hook calls this
 on a read-only connection of its own, in a process that starts for one tool call,
@@ -43,6 +45,12 @@ read by position for the same reason, since such a connection sets no factory.
 from __future__ import annotations
 
 import sqlite3
+
+# `typing` and `collections.abc` cost a client hook time it does not spend; the checker
+# reads the names.
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
 
 #: What `execution_events.identity_source` says about a call; `calls` publishes these.
 BROWSER = "browser"
@@ -263,6 +271,138 @@ def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> lis
             )
         )
     return [(order[0], entry) for order, entry in sorted(found, key=lambda pair: pair[0])]
+
+
+#: How many rows of each source one read of the tree's news takes: the rest is read the
+#: next time, from where this one stopped, so nothing is lost and no read grows unbounded.
+MOST_FEED_ROWS = 2000
+#: The rows after a place, of every item, in order, with what the call that wrote each
+#: proved: whose words they are is decided here, from the call row, as for one item.
+_FEED_EVENTS = (
+    "SELECT e.id, e.action, e.detail, e.created_at, e.call_id, e.work_item_id,"
+    " c.identity_source, c.identity_state, c.tool, c.session_id, c.agent_id"
+    " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.id > ? ORDER BY e.id LIMIT ?"
+)
+_FEED_COMMENTS = (
+    "SELECT m.id, m.body, m.report, m.created_at, m.call_id, m.reply_to, m.reply_to_request,"
+    " m.work_item_id, c.identity_source, c.identity_state, c.tool, c.session_id, c.agent_id,"
+    " m.awaits_reply, m.created_at >= (SELECT strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?))"
+    " FROM work_item_comments m LEFT JOIN execution_events c ON c.id = m.call_id"
+    " WHERE m.id > ? ORDER BY m.id LIMIT ?"
+)
+#: The call rows are read by key alone: the last of the next ones a read takes, and among
+#: those the person's edits, which no event or comment row names.
+_FEED_LAST_CALL = (
+    "SELECT MAX(id) FROM (SELECT id FROM execution_events WHERE id > ? ORDER BY id LIMIT ?)"
+)
+_FEED_EDITS = (
+    "SELECT id, identity_source, tool, reason, received_at, work_item_id FROM execution_events"
+    " WHERE id > ? AND id <= ? AND kind = ? AND identity_source = ? AND tool = ?"
+    " AND reason <> '' AND work_item_id IS NOT NULL ORDER BY id"
+)
+#: The tools a person's write comes through, the `LIKE` of `_PERSON_EVENTS` as prefixes.
+_PERSON_TOOLS = ("/api/planning/", "/api/modules/planning/")
+
+
+def tree_since(
+    conn: sqlite3.Connection,
+    after: tuple[int, int, int],
+    choose: Callable[[set[str]], Mapping[str, bool]],
+) -> tuple[list[tuple[str, int, dict]], tuple[int, int, int]]:
+    """What was written on any item after three places, for the items `choose` keeps.
+
+    The places are an event, a comment and a call row: the three sources a person's
+    or an agent's write lands in, an edit being found on its call row alone. Each
+    source is read by its primary key after its place, at most `MOST_FEED_ROWS` rows,
+    and `choose` is asked once which of the items those rows name to read, so a reader
+    of a whole tree pays for the rows written since, not for the size of the tree.
+    For each item it keeps it says whether everything there is read, or only what
+    says where the work stands (`WORK_KINDS`).
+
+    Each entry is the one `since_call` or `agents_since` gives for that item: a
+    person's act with `via: "interface"`, an edit with what it edited as it reads
+    now, another agent's write with its `session` and `agent`. A row whose call
+    proved nobody, and Valkama's own, is nobody's words and is left out. They come
+    as `(work_item_id, call, entry)` in the order the calls were made, with the
+    places the next read starts from: the last row read of each source.
+    """
+
+    most = MOST_FEED_ROWS
+    events = conn.execute(_FEED_EVENTS, (after[0], most)).fetchall()
+    comments = conn.execute(_FEED_COMMENTS, (ASKS_FOR, after[1], most)).fetchall()
+    last = conn.execute(_FEED_LAST_CALL, (after[2], most)).fetchone()[0]
+    edits = (
+        conn.execute(_FEED_EDITS, (after[2], last, KIND, BROWSER, _EDIT_TOOL)).fetchall()
+        if last
+        else []
+    )
+    places = (
+        int(events[-1][0]) if events else after[0],
+        int(comments[-1][0]) if comments else after[1],
+        int(last) if last else after[2],
+    )
+    named = {str(row[5]) for row in events} | {str(row[7]) for row in comments}
+    named |= {str(row[5]) for row in edits}
+    kept = choose(named) if named else {}
+    found: list[tuple[tuple[int, int, int], str, dict]] = []
+    reports: set[int] = set()
+    for row in comments:
+        item = str(row[7])
+        if not kept.get(item):
+            continue  # not kept, or a task, where no comment says where the work stands
+        speaker = _feed_speaker(row[8], row[9], row[10], row[11])
+        if speaker is None:
+            continue
+        if row[2]:
+            reports.add(int(row[4]))
+        entry = _comment_entry(row)
+        if speaker != BROWSER:
+            entry = _spoken(entry, row[11], row[12])
+            if row[13]:
+                entry["awaits_reply"] = True
+                if row[14]:
+                    entry["recent"] = True
+        found.append(((int(row[4]), 1, int(row[0])), item, entry))
+    for row in events:
+        item, action = str(row[5]), str(row[1])
+        if (
+            item not in kept
+            or action not in KINDS
+            or not (kept[item] or KINDS[action] in WORK_KINDS)
+        ):
+            continue
+        speaker = _feed_speaker(row[6], row[7], row[8], row[9])
+        if speaker is None:
+            continue
+        if action == "summarized" and int(row[4]) in reports:
+            continue
+        entry = _event_entry(conn, row, item)
+        if speaker != BROWSER:
+            entry = _spoken(entry, row[9], row[10])
+        found.append(((int(row[4]), 2, int(row[0])), item, entry))
+    by_item: dict[str, list[tuple]] = {}
+    for row in edits:
+        if kept.get(str(row[5])):
+            by_item.setdefault(str(row[5]), []).append(row)
+    for item, rows in by_item.items():
+        found.extend((order, item, entry) for order, entry in _edit_entries(conn, item, rows))
+    found.sort(key=lambda each: each[0])
+    return [(item, order[0], entry) for order, item, entry in found], places
+
+
+def _feed_speaker(source: object, state: object, tool: object, session: object) -> str | None:
+    """Whose a row of the tree's news is: `browser` for a person, the session for an agent.
+
+    The rules of `_PERSON_EVENTS` and `_AGENT_EVENTS`, read off the call row: a person
+    through Planning's own paths, an agent through a call that proved its session.
+    """
+
+    if source == BROWSER:
+        return BROWSER if isinstance(tool, str) and tool.startswith(_PERSON_TOOLS) else None
+    if source == VALKAMA or state != "confirmed" or session is None:
+        return None
+    return str(session)
 
 
 #: A thread's comments in order, with what the call that wrote each proved: whoever

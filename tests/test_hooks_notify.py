@@ -1169,7 +1169,9 @@ class StatementsTests(Harness):
         self.held_and_unheld()
         self.says("Plain, on the unheld item", ref=self.unheld)
         seen = self.statements()
-        self.assertFalse([sql for sql in seen if "tool =" in sql], seen)
+        # The scan of one item's call rows for its edits; the tree's news reads the edits
+        # of every item by a bounded range of keys instead.
+        self.assertFalse([sql for sql in seen if "tool =" in sql and "AND work_item_id =" in sql])
         self.assertFalse([sql for sql in seen if "m.id =" in sql], "nothing to address")
 
     def test_a_held_item_without_a_reply_does_not_read_the_author(self) -> None:
