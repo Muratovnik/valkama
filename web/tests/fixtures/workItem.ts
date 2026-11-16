@@ -49,6 +49,7 @@ export function workItemFixture(title: string, revision: number): WorkItem {
     claim_state: null,
     parent_id: null,
     labels: [],
+    projects: [],
     source: '',
     checklist: [],
     revision,

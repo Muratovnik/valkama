@@ -8,6 +8,7 @@
  */
 
 import {
+  blankable,
   boundedList,
   boundedText,
   parseContract,
@@ -17,6 +18,7 @@ import {
   z,
 } from '@/shared/api/contract.ts'
 import { executorSchema } from '@/shared/api/executorModel.ts'
+import { itemProjectsField } from '@/shared/api/itemProjectsModel.ts'
 import { liveWorkMapSchema } from '@/shared/api/liveWorkModel.ts'
 import {
   EVENT_ACTIONS,
@@ -56,19 +58,6 @@ export const WORK_ITEM_REFERENCE = /^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u
 export const SPACE_KEY = /^[A-Z][A-Z0-9]{1,7}$/u
 export const STATE_KEY = /^[a-z][a-z0-9-]{0,31}$/u
 export const TITLE = /^[^\u{0}]{1,200}$/u
-
-/**
- * A field that may be blank, which several of these are: an unheld item has no
- * claim, an item raised by hand has no source, an event needs no detail.
- * `boundedText` requires one character, so blank needs its own reader rather
- * than a pattern pretending an empty string is a value.
- */
-export function blankable(max: number) {
-  return z
-    .string()
-    .max(max)
-    .refine((value) => !/\u{0}/u.test(value), { message: 'expected bounded string' })
-}
 
 /**
  * Text the server composes itself (a warning, a refusal joining its guards),
@@ -139,6 +128,8 @@ const workItemBriefShape = {
   claim_state: claimStateField(),
   parent_id: boundedText(UUID, 36).nullable(),
   labels: boundedList(boundedText(/^[^\u{0}]{1,64}$/u, 64), 32),
+  /** The projects it changes; a goal or stage reads its tasks'. */
+  projects: itemProjectsField(),
   source: blankable(512),
   checklist: boundedList(checklistStepSchema, 100),
   revision: positiveInt(true),

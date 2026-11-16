@@ -41,6 +41,7 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
     claim_state: null,
     parent_id: null,
     labels: [],
+    projects: [],
     source: '',
     checklist: [],
     revision: 0,

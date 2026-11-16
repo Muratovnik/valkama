@@ -88,6 +88,7 @@ const testItem: WorkItemBrief = {
   // 264px column is where this product keeps losing content off the edge and a
   // tame fixture is why no test ever saw it.
   labels: ['example-project', 'design-system', 'accessibility'],
+  projects: [],
   source: '',
   open: true,
   container_state: null,

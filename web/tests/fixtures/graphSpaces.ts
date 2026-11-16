@@ -147,6 +147,7 @@ function maker(plan: ShapePlan) {
       waits_for: [],
       workable: false,
       labels: [],
+      projects: [],
       source: '',
       checklist: [],
       revision: 0,

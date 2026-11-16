@@ -13,6 +13,7 @@
  */
 
 import {
+  blankable,
   boundedList,
   boundedText,
   parseContract,
@@ -23,7 +24,6 @@ import {
 import { executorSchema } from '@/shared/api/executorModel.ts'
 import { TIMELESS_LIVE_STATES } from '@/shared/api/liveWorkModel.ts'
 import {
-  blankable,
   CONTAINER_STATES,
   SPACE_KEY,
   TITLE,

@@ -75,6 +75,7 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
     waits_for: [],
     workable: false,
     labels: [],
+    projects: [],
     source: '',
     checklist: [],
     revision: 0,

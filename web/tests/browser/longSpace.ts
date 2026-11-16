@@ -61,6 +61,7 @@ export function brief(number: number, state: ReturnType<typeof stateOf>, extra: 
     claim_state: null,
     parent_id: null,
     labels: [],
+    projects: [],
     workable: false,
     checklist: [],
     revision: 1,

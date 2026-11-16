@@ -48,6 +48,7 @@ function planningWorkItemPayload() {
           },
           parent_id: null,
           labels: ['platform'],
+          projects: [],
           source: '',
           checklist: [],
           open: true,
