@@ -15,6 +15,7 @@
   "started_at": null,
   "waits_for": [],
   "workable": true,
+  "projects": [],
   "claim_ref": "",
   "claim_state": null,
   "last_claim_ref": null,

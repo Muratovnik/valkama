@@ -55,7 +55,7 @@ export function useWorkItemResource(
     try {
       const space = planningSpaceRef(scope.resource)
       if (space === undefined) throw new Error('Exact Planning space is required')
-      const record = await fetchWorkItem(current, { project: scope.project, space })
+      const record = await fetchWorkItem(current, space)
       await alongside?.(record)
       resource.value = resolveResource(resource.value, generation, key, {
         at: new Date().toISOString(),

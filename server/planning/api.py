@@ -25,6 +25,7 @@ from . import (
     chain,
     held,
     images,
+    item_projects,
     live_frame,
     mention_records,
     model,
@@ -165,33 +166,24 @@ def handle_get(
 def _spaces(conn: sqlite3.Connection, _parameters: Mapping[str, list[str]]) -> dict:
     return {
         "interface_version": PLANNING_API_INTERFACE,
-        "planning_spaces": service.list_planning_spaces(conn),
+        "planning_spaces": item_projects.spaces_shown(conn, service.list_planning_spaces(conn)),
     }
 
 
-def _chosen_space(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> str | None:
-    """Which space the caller means: named outright, or the one its project binds.
+def _chosen_space(parameters: Mapping[str, list[str]]) -> tuple[str | None, str | None]:
+    """Which space the caller reads, the first when it names none, and the project narrowing it.
 
-    A browser knows which project it is in long before it knows a space id, and
-    a Kernel binding still names the space the way the Board era did. Resolving
-    the project here keeps that translation in one place instead of making every
-    view carry it.
+    A space holds no project, so a project does not name one: several spaces'
+    projects are the registry's to bind, and one project may be named by items of
+    any space. It narrows the read of the space named beside it.
     """
 
-    space = _first(parameters, "space")
-    project = _first(parameters, "project")
-    if space is not None and project is not None:
+    space, project = _first(parameters, "space"), _first(parameters, "project")
+    if project is not None and space is None:
         raise PlanningHttpError(
-            400, "invalid_request", "space and project are two answers to one question"
+            400, "invalid_request", "a project does not choose a planning space: name the space"
         )
-    if space is not None:
-        return space
-    if project is None:
-        return None
-    bound = views.space_for_project(conn, project)
-    if bound is None:
-        raise PlanningHttpError(404, "unavailable", f"project {project} has no planning space yet")
-    return str(bound["planning_space_id"])
+    return space, project
 
 
 def _read_model(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
@@ -201,11 +193,13 @@ def _read_model(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             "invalid_request",
             "The complete read model does not accept limit; use /api/planning/work-items",
         )
-    return views.planning_payload(conn, space=_chosen_space(conn, parameters))
+    space, project = _chosen_space(parameters)
+    return views.planning_payload(conn, space=space, project=project)
 
 
 def _graph(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    return views.graph_payload(conn, space=_chosen_space(conn, parameters))
+    space, project = _chosen_space(parameters)
+    return views.graph_payload(conn, space=space, project=project)
 
 
 def _activity(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
@@ -261,6 +255,9 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             kind=_first(parameters, "kind"),
             owner=_first(parameters, "owner"),
             parent=_first(parameters, "parent"),
+            project=_first(parameters, "project"),
+            # The list of a space is a read of it: other spaces' items naming its projects too.
+            other_spaces=True,
             limit=_int(_first(parameters, "limit"), "limit", 200),
             offset=_offset(parameters),
         ),
@@ -561,7 +558,7 @@ def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.create_work_item(
         conn,
-        space=_text(payload, "space"),
+        space=_optional_text(payload, "space"),
         title=_text(payload, "title"),
         state=_optional_text(payload, "state"),
         kind=str(payload.get("kind") or "task"),
@@ -572,6 +569,7 @@ def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         parent=_optional_text(payload, "parent"),
         author=_author(payload),
         acceptance=payload.get("acceptance"),
+        projects=payload.get("projects"),
     )
 
 
@@ -610,6 +608,7 @@ def _edited(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         kind=_optional_text(payload, "kind"),
         parent=_optional_text(payload, "parent"),
         rank=_optional_text(payload, "rank"),
+        projects=payload.get("projects"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
     )
@@ -963,12 +962,19 @@ def _ref(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
 
 def _space(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    return service.create_planning_space(
-        conn,
-        project_id=_text(payload, "project_id"),
-        name=_text(payload, "name"),
-        key=_optional_text(payload, "key"),
+    created = service.create_planning_space(
+        conn, name=_text(payload, "name"), key=_optional_text(payload, "key")
     )
+    (shown,) = item_projects.spaces_shown(conn, [created])
+    return shown
+
+
+def _space_settings(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """The owner's settings of one space, answered with the space record."""
+
+    changed = service.set_launch_place(conn, _text(payload, "space"), payload.get("launch_place"))
+    (shown,) = item_projects.spaces_shown(conn, [changed])
+    return shown
 
 
 def _author(payload: Mapping[str, object]) -> str | None:
@@ -1323,6 +1329,7 @@ def _run_steps(
 
 _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] = {
     "/api/planning/spaces": _space,
+    "/api/planning/space/settings": _space_settings,
     "/api/planning/work-items": _create,
     "/api/planning/work-item/update": _update,
     "/api/planning/work-item/delete": _delete,

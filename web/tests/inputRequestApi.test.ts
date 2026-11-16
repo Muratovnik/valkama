@@ -28,11 +28,10 @@ function serve(payload: unknown, status = 200) {
 }
 
 describe('input request wire contract', () => {
-  it('reads the exact project and space and preserves explicit partial coverage', async () => {
+  it('reads the exact space and preserves explicit partial coverage', async () => {
     const entry = requestEntry()
     const payload = requestList()
     payload.coverage[0] = {
-      project_id: entry.target.project_id,
       space_ref: entry.target.space_ref,
       status: 'unavailable',
       reason: 'store_unavailable',
@@ -47,9 +46,8 @@ describe('input request wire contract', () => {
       'https://test.example',
     ).searchParams
     expect(Object.fromEntries(query)).toEqual({
-      scope_kind: 'project',
+      scope_kind: 'space',
       limit: '100',
-      project_id: entry.target.project_id,
       data_scope_id: entry.target.space_ref.data_scope_id,
       space_key: 'TASK',
       reference: 'TASK-7',
@@ -75,7 +73,6 @@ describe('input request wire contract', () => {
     expect(await answerInputRequest(entry, { proceed: false })).toEqual(answered)
     const write = fetchMock.mock.calls.find(([url]) => requestUrl(url).endsWith('/request/answer'))
     expect(JSON.parse(requestBody(write?.[1]?.body))).toEqual({
-      project_id: entry.target.project_id,
       data_scope_id: entry.target.space_ref.data_scope_id,
       space_key: 'TASK',
       id: entry.request.request_id,

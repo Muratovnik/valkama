@@ -16,7 +16,7 @@ from server.store_identity.metadata import (
     read_store_metadata,
     store_owner_migration_needed,
 )
-from server.store_identity.primitives import ContractError, UnknownFieldError
+from server.store_identity.primitives import ContractError, MissingFieldError, UnknownFieldError
 from server.store_identity.refs import (
     validate_entity_ref,
     validate_operating_scope,
@@ -78,19 +78,38 @@ class RefContractTests(unittest.TestCase):
                 validate_planning_space_ref({"data_scope_id": value, "space_key": "MAIN"})
 
     def test_operating_scope_is_exact_discriminated_wire(self):
+        space = {"data_scope_id": "01234567-89ab-4def-8123-456789abcdef", "space_key": "MAIN"}
         self.assertEqual({"kind": "global"}, validate_operating_scope({"kind": "global"}))
         self.assertEqual(
-            {"kind": "project", "project_ref": {"project_id": "project-a"}},
+            {"kind": "space", "space_ref": space},
+            validate_operating_scope({"kind": "space", "space_ref": space}),
+        )
+        # A project narrows a space, and may be a project of another space.
+        self.assertEqual(
+            {"kind": "space", "space_ref": space, "project_ref": {"project_id": "project-a"}},
             validate_operating_scope(
-                {"kind": "project", "project_ref": {"project_id": "project-a"}}
+                {"kind": "space", "space_ref": space, "project_ref": {"project_id": "project-a"}}
             ),
         )
         with self.assertRaises(UnknownFieldError):
             validate_operating_scope({"kind": "global", "project_ref": {"project_id": "project-a"}})
         with self.assertRaises(UnknownFieldError):
+            validate_operating_scope({"kind": "global", "space_ref": space})
+        with self.assertRaises(UnknownFieldError):
             validate_operating_scope(
-                {"kind": "project", "project_ref": {"project_id": "project-a", "alias": "a"}}
+                {
+                    "kind": "space",
+                    "space_ref": space,
+                    "project_ref": {"project_id": "project-a", "alias": "a"},
+                }
             )
+        # A project alone names no scope any more: the space is what a module works in.
+        with self.assertRaises(MissingFieldError):
+            validate_operating_scope({"kind": "space", "project_ref": {"project_id": "project-a"}})
+        with self.assertRaises(ContractError):
+            validate_operating_scope({"kind": "project", "project_ref": {"project_id": "a"}})
+        with self.assertRaises(ContractError):
+            validate_operating_scope({"kind": "space", "space_ref": {**space, "space_key": "a"}})
 
     def test_entity_discriminants_and_ref_shapes_are_strict(self):
         self.assertEqual(

@@ -24,7 +24,7 @@ import {
 } from './cardTabsRow.ts'
 import { serve as serveChain, smallChain } from './chainFixtures.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 test('at 390px the row fades at the end that has more sections, and only there', async ({
@@ -66,7 +66,7 @@ test('at 390px a card with a chain scrolls its row of six sections to the last, 
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )

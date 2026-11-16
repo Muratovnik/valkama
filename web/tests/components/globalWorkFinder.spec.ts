@@ -10,9 +10,11 @@ import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearch
 import type { GlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { messages } from '@/shared/i18n/index.ts'
+import type { SpaceName } from '@/shared/lib/spaceNames.ts'
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
 
+import { inAnotherStore } from '../support/anotherStore.ts'
 import { finderResponse, finderTarget } from '../support/globalFinder.ts'
 import { present } from '../support/present.ts'
 
@@ -22,9 +24,9 @@ vi.mock('@/shared/api/planningGlobalSearchApi.ts', () => ({
 const wrappers: ReturnType<typeof mount>[] = []
 const i18n = () => createI18n({ legacy: false, locale: 'en', messages })
 
-function finder(projects: { project_id: string; title: string }[] = []) {
+function finder(spaces: SpaceName[] = []) {
   const wrapper = mount(GlobalWorkFinder, {
-    props: { open: true, projects },
+    props: { open: true, spaces },
     attachTo: document.body,
     global: { plugins: [i18n()], stubs: { teleport: true } },
   })
@@ -38,10 +40,9 @@ async function search(wrapper: ReturnType<typeof finder>, query = 'needle') {
   await flushPromises()
 }
 
-/** A source the search could not read, and the code it gave for why. */
-function away(project: string, key: string, reason: string) {
+/** A space the search could not read, by its key, and the code it gave for why. */
+function away(key: string, reason: string) {
   return {
-    project_id: project,
     space_ref: { data_scope_id: '44444444-4444-4444-8444-444444444444', space_key: key },
     status: 'unavailable' as const,
     reason,
@@ -69,7 +70,8 @@ describe('global task finder', () => {
     expect(wrapper.text()).toContain('All mapped projects')
     await search(wrapper)
     const option = wrapper.get('[role="option"]')
-    expect(option.text()).toContain('attached-project')
+    // A space this workstation does not list is named by its key.
+    expect(option.get('.command-detail').text()).toContain('TASK ·')
     expect(option.text()).toContain('TASK-7')
     expect(option.text()).toContain('In progress')
     expect(option.text()).toContain('Read only')
@@ -166,7 +168,7 @@ describe('global task finder', () => {
     await search(wrapper, 'other query')
     expect(wrapper.text()).toContain('No matching tasks in the projects that were searched.')
     expect(wrapper.text()).toContain('Not every project was searched')
-    expect(wrapper.text()).toContain('Could not be read: attached-project · TASK')
+    expect(wrapper.text()).toContain('Could not be read: TASK')
     expect(wrapper.text()).toContain('More matches are available.')
     expect(wrapper.text()).not.toContain('No matching tasks.')
     expect(wrapper.text()).not.toContain('database.sqlite')
@@ -196,20 +198,18 @@ describe('global task finder', () => {
     const searched = present(response.coverage[0], 'searched source')
     response.coverage = [
       searched,
-      away('demo-project', 'AWAY', 'store_not_attached'),
-      ...['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].map((key) =>
-        away(`${key.toLowerCase()}-project`, key, 'store_unreadable'),
-      ),
-      away('odd-project', 'ODD', 'C:/private/reason'),
+      away('AWAY', 'store_not_attached'),
+      ...['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].map((key) => away(key, 'store_unreadable')),
+      away('ODD', 'C:/private/reason'),
     ]
     vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(response)
     const wrapper = finder()
     await search(wrapper)
     const lines = wrapper.findAll('.finder-skipped-line').map((line) => line.text())
     expect(lines).toEqual([
-      'Store not attached: demo-project · AWAY',
-      'Store could not be opened: one-project · ONE, two-project · TWO, three-project · THREE and 2 more',
-      'Could not be read: odd-project · ODD',
+      'Store not attached: AWAY',
+      'Store could not be opened: ONE, TWO, THREE and 2 more',
+      'Could not be read: ODD',
     ])
     expect(wrapper.text()).not.toContain('C:/private')
     // The notice is in the live region and comes before the rows it qualifies,
@@ -228,7 +228,7 @@ describe('global task finder', () => {
     response.items = [
       exact,
       {
-        target: { ...exact.target, project_id: 'other-project' },
+        target: inAnotherStore(exact.target),
         item: { ...exact.item, work_item_id: '55555555-5555-4555-8555-555555555555' },
       },
     ]
@@ -343,8 +343,8 @@ describe('global task finder', () => {
     expect(wrapper.findAll('[role="option"]')).toHaveLength(1)
   })
 
-  // A result said the project's slug, which is what the server routes by and
-  // what nobody reads. The title the app already lists is what the rail shows.
+  // A result names its space by the name the app already lists, and by its key
+  // when the app does not list it.
   it('reads a result from a server that sends no marks as before', async () => {
     const plain = finderResponse()
     plain.items[0].item = { ...plain.items[0].item, kind: undefined, state: { name: 'Dev' } }
@@ -352,21 +352,19 @@ describe('global task finder', () => {
     const wrapper = finder()
     await search(wrapper)
     expect(wrapper.find('[role="option"] [data-facet]').exists()).toBe(false)
-    expect(wrapper.get('.command-detail').text()).toBe('attached-project · In progress · Read only')
+    expect(wrapper.get('.command-detail').text()).toBe('TASK · In progress · Read only')
   })
 
-  it('names a result and a skipped source by the project title, and falls back to the id', async () => {
+  it('names a result and a skipped source by the space name, and falls back to the key', async () => {
     const response = finderResponse()
-    response.coverage.push(away('unlisted-project', 'GONE', 'store_unreadable'))
+    response.coverage.push(away('GONE', 'store_unreadable'))
     vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(response)
-    const wrapper = finder([{ project_id: 'attached-project', title: 'Attached title' }])
+    const wrapper = finder([{ ...finderTarget().space_ref, name: 'Task space' }])
     await search(wrapper)
     const option = wrapper.get('[role="option"]').text()
-    expect(option).toContain('In progress · Attached title')
-    expect(option).not.toContain('attached-project')
-    expect(wrapper.get('.finder-skipped-line').text()).toBe(
-      'Store could not be opened: unlisted-project · GONE',
-    )
+    expect(option).toContain('In progress · Task space')
+    expect(option).not.toContain('TASK ·')
+    expect(wrapper.get('.finder-skipped-line').text()).toBe('Store could not be opened: GONE')
   })
 
   // The shared reason mapping is the one the question list uses, so every code
@@ -383,7 +381,7 @@ describe('global task finder', () => {
       'a raw server sentence',
     ]
     const response = finderResponse()
-    response.coverage = codes.map((code, index) => away(`p${index}`, `K${index}`, code))
+    response.coverage = codes.map((code, index) => away(`K${index}`, code))
     vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(response)
     const wrapper = finder()
     await search(wrapper)

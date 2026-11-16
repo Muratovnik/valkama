@@ -87,9 +87,7 @@ class McpSurfaceTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        planning_service.create_planning_space(
-            self.conn, project_id="mcp", name=SPACE_NAME, key=SPACE_KEY
-        )
+        planning_service.create_planning_space(self.conn, name=SPACE_NAME, key=SPACE_KEY)
         self.conn.commit()
 
     def converse(self, *messages: dict | bytes) -> list[dict]:
@@ -2230,7 +2228,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
         tools = {tool["name"]: tool for tool in answer["result"]["tools"]}
         self.assertEqual(len(mcp_surface.catalogue()), len(tools))
         schema = tools["create_work_item"]["inputSchema"]
-        self.assertEqual(["space", "title"], schema["required"])
+        self.assertEqual(["title"], schema["required"])
         self.assertEqual("boolean", schema["properties"]["claim"]["type"])
         links = schema["properties"]["links"]
         self.assertEqual(planning_api.MAX_APPLY_ENTRIES, links["maxItems"])

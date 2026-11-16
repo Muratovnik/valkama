@@ -8,7 +8,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { PLAN_PATH } from './planDocumentFixture.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
@@ -17,7 +17,7 @@ import { test } from './test.ts'
  * the desktop app alike, and one that cannot be opened is copied with the reason.
  */
 
-const ANCHOR = `${PLAN_PATH}#kb:arch-plan`
+const ANCHOR = `${PLAN_PATH}#kb:architecture`
 
 /** The page's side of the desktop bridge, and what it was asked to carry out. */
 async function inTheApp(page: Page) {
@@ -55,7 +55,7 @@ async function openCard(
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )

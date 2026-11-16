@@ -377,7 +377,7 @@ class Case(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        planning.create_planning_space(self.conn, project_id="work", name="Work", key=SPACE)
+        planning.create_planning_space(self.conn, name="Work", key=SPACE)
         self.conn.commit()
         self.reader = ingest.open_light(self.store_path, store.STORE_SCHEMA_VERSION)
         self.addCleanup(self.reader.close)

@@ -14,7 +14,7 @@ import type { Stretch, TimedStretch } from '../fixtures/analytics.ts'
 import { quotaAnswer, quotaAt } from '../fixtures/quota.ts'
 import { installBackend } from './backend.ts'
 import type { BackendOptions } from './backend.ts'
-import { globalScope, projectId, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
+import { globalScope, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
 
 export const pageAt = (state: Record<string, string> = {}) =>
   serializePlatformRoute({ module_id: 'analytics', scope: globalScope, state })
@@ -189,7 +189,7 @@ export async function serveTask(page: Page) {
         has_more: false,
         items: [
           {
-            target: { ...workItemRef, project_id: projectId, writable: true },
+            target: { ...workItemRef, writable: true },
             item: {
               work_item_id: workItem.work_item_id,
               planning_space_id: workItem.planning_space_id,
@@ -202,9 +202,7 @@ export async function serveTask(page: Page) {
             },
           },
         ],
-        coverage: [
-          { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
-        ],
+        coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
       },
     }),
   )

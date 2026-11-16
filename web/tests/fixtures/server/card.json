@@ -1,9 +1,10 @@
 {
   "interface_version": "valkama-planning-work-item",
   "scope": {
-    "kind": "project",
-    "project_ref": {
-      "project_id": "example-project"
+    "kind": "space",
+    "space_ref": {
+      "data_scope_id": "00000000-0000-4000-8000-000000000004",
+      "space_key": "MAIN"
     }
   },
   "work_item_ref": {
@@ -41,6 +42,7 @@
         "claim_state": null,
         "parent_id": null,
         "labels": [],
+        "projects": [],
         "source": "",
         "checklist": [],
         "revision": 0,

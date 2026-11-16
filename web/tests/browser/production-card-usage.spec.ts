@@ -17,7 +17,12 @@ import { installBackend } from './backend.ts'
 import { shot } from './boardPage.ts'
 import { largeChainHere, serve, showChain } from './chainFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { attachedWorkItemRef, projectScope, workItemRef } from './planningFixtures.ts'
+import {
+  attachedSpaceRef,
+  attachedWorkItemRef,
+  spaceScope,
+  workItemRef,
+} from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
 
@@ -25,7 +30,7 @@ const USAGE_PATH = '/api/planning/work-item/usage'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 
@@ -205,7 +210,7 @@ test('an item of an attached store asks nothing of a read that answers for the p
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: { kind: 'space', space_ref: attachedSpaceRef },
       entity: planningWorkItemEntity(attachedWorkItemRef),
     }),
   )

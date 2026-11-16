@@ -33,7 +33,7 @@ class CloseTestCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        self.space = service.create_planning_space(self.conn, project_id="close", name="Close")
+        self.space = service.create_planning_space(self.conn, name="Close")
         self.key = self.space["key"]
 
     def held_item(self, *steps: str) -> str:

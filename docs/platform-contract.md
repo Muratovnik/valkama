@@ -22,17 +22,18 @@ records why.
 
 `Global` is the portfolio and governance workspace; it may inspect aggregates
 and manage project-owned records, but it is never a wildcard permission or a
-pseudo-project named `all`. `Project(ProjectRef)` is the bounded workspace for
-one exact project. Every module declares its semantics for both levels (or a
+pseudo-project named `all`. `Space(SpaceRef)` is the bounded workspace for
+one exact Planning space, which a project of the space or one its items name may
+narrow. Every module declares its semantics for both levels (or a
 typed unsupported state) in its manifest; switching modules never silently
 changes the level.
 
-| Module | Global | Project |
+| Module | Global | Space |
 | --- | --- | --- |
-| Planning | Portfolio of Planning spaces and their work; its current Kanban storage uses Planning-specific boards/cards | Views and actions for the exact ProjectRef; current Kanban writes require an exact Planning BoardRef |
-| Analytics | Usage of agent work across projects; until usage is collected the page shows its empty state | The same for the exact project |
-| Memory | The knowledge provider that answers for each registered project, and its health | Search and exact references linked to work items in the project |
-| Settings | Language and installation health | The same installation settings; Settings holds nothing project-owned |
+| Planning | Portfolio of Planning spaces and their work; its current Kanban storage uses Planning-specific boards/cards | Views and actions for the exact space, narrowed to one of its projects when the route names one |
+| Analytics | Usage of agent work across projects; until usage is collected the page shows its empty state | The same for the exact space |
+| Memory | The knowledge provider that answers for each registered project, and its health | Search and exact references linked to work items in the space |
+| Settings | Language and installation health | The same installation settings and the projects of the space; Settings holds nothing project-owned |
 
 All modules use the same state grammar: `loading`, `ready`, `empty`,
 `degraded`, `unavailable`, `permission-denied`, and `error`. A state is not

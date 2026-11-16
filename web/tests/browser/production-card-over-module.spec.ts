@@ -10,13 +10,13 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page, Route } from '@playwright/test'
 
-import { planningSpaceEntity, planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
+import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { pageAt, record, serve, serveTask } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import type { BackendOptions } from './backend.ts'
-import { globalScope, projectScope, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
+import { globalScope, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
 import { test } from './test.ts'
 
@@ -123,8 +123,7 @@ test('a card over Settings whose space cannot be read says so as the board does,
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(spaceRef),
+      scope: spaceScope,
     }),
   )
   const boardPanel = page.locator('.platform-state-panel .platform-state-reason')

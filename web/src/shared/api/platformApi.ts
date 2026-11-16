@@ -26,7 +26,10 @@ import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
 export function scopeQuery(scope: OperatingScope): URLSearchParams {
   const query = new URLSearchParams({ scope_kind: scope.kind })
-  if (scope.kind === 'project') query.set('project_id', scope.project_ref.project_id)
+  if (scope.kind === 'global') return query
+  query.set('data_scope_id', scope.space_ref.data_scope_id)
+  query.set('space_key', scope.space_ref.space_key)
+  if (scope.project_ref !== undefined) query.set('project_id', scope.project_ref.project_id)
   return query
 }
 

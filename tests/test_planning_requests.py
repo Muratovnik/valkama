@@ -36,7 +36,7 @@ class PlanningRequestTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="test", name="Requests", key="REQ")
+        service.create_planning_space(self.conn, name="Requests", key="REQ")
         self.item = service.create_work_item(self.conn, space="REQ", title="Pick a direction")
         self.conn.commit()
 

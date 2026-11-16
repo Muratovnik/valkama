@@ -47,11 +47,14 @@ SAFE_TEXT = st.text(alphabet=TEXT_ALPHABET, min_size=1, max_size=60).map(str.str
 SPACE_KEYS = st.from_regex(r"[A-Z][A-Z0-9]{1,7}", fullmatch=True)
 
 PROJECT_REFS = st.fixed_dictionaries({"project_id": PROJECT_IDS})
+SPACE_REFS = st.fixed_dictionaries({"data_scope_id": UUIDS, "space_key": SPACE_KEYS})
+# A space scope narrowed to a project is valid without its project as well, so it
+# would break the law that every carried field is required; `test_store_identity`
+# holds that form.
 OPERATING_SCOPES = st.one_of(
     st.just({"kind": "global"}),
-    st.fixed_dictionaries({"kind": st.just("project"), "project_ref": PROJECT_REFS}),
+    st.fixed_dictionaries({"kind": st.just("space"), "space_ref": SPACE_REFS}),
 )
-SPACE_REFS = st.fixed_dictionaries({"data_scope_id": UUIDS, "space_key": SPACE_KEYS})
 WORK_ITEM_REFS = SPACE_REFS.flatmap(
     lambda space: st.integers(min_value=1, max_value=1_000_000).map(
         lambda number: {"space_ref": space, "reference": f"{space['space_key']}-{number}"}

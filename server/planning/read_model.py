@@ -23,6 +23,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from . import (
     acknowledgements,
     calls,
+    item_projects,
     item_tree,
     leases,
     mentions,
@@ -190,6 +191,42 @@ def links(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
             }
         )
     return found
+
+
+def other_space_ends(conn: sqlite3.Connection, identities: Iterable[str]) -> list[dict]:
+    """The ends of a read's links that the read does not hold, by space key and number.
+
+    Each names what a reader draws it by: its `work_item_id`, which the link's
+    `from` or `to` names, `reference`, `title`, `kind`, `state` and the `space`
+    it lies in as `{key, name}`. `state` is null where the item stands in no state
+    of its own, an accepted open goal or stage, or the store cannot resolve it.
+    """
+
+    wanted = sorted(set(identities))
+    if not wanted:
+        return []
+    rows = conn.execute(
+        "SELECT w.work_item_id, w.number, w.title, w.kind, w.parent_id,"
+        " p.key AS space_key, p.name AS space_name,"
+        " s.key, s.name, s.category, s.is_terminal"
+        " FROM work_items w"
+        " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+        " LEFT JOIN workflow_states s ON s.state_id = w.state_id"
+        " WHERE w.work_item_id IN (SELECT value FROM json_each(?))"
+        " ORDER BY p.key, w.number",
+        (json.dumps(wanted),),
+    ).fetchall()
+    return [
+        {
+            "work_item_id": str(row["work_item_id"]),
+            "reference": model.human_id(str(row["space_key"]), int(row["number"])),
+            "title": row["title"],
+            "kind": outward_kind(row["kind"], row["parent_id"]),
+            "state": states.public_state(row) if row["category"] is not None else None,
+            "space": {"key": row["space_key"], "name": row["space_name"]},
+        }
+        for row in rows
+    ]
 
 
 def blocked(conn: sqlite3.Connection, work_item_id: str) -> bool:
@@ -767,6 +804,7 @@ def present(
     events: int | None = None,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
     tree: item_tree.Tree | None = None,
+    projects: Mapping[str, list[dict]] | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
 
@@ -783,14 +821,15 @@ def present(
     what a screen draws from. `closed` is what `closings` loaded for a read of
     many items; absent, the item asks `closing` itself. `tree` is what such a read
     loaded of its spaces (`item_tree.of_spaces`); absent, the item loads what is
-    under it.
+    under it. `projects` is what `item_projects.of_items` read for such a read in
+    one walk; absent, the item reads its own.
 
     `state` is what `states.public_state` makes of the item's state: null for an
     accepted open container, which says what it derives as `container_state`
     instead. `open` says whether work on it is over, whatever its kind.
     """
 
-    record, lease = _record(conn, row, closed=closed, tree=tree)
+    record, lease = _record(conn, row, closed=closed, tree=tree, projects=projects)
     identity = str(row["work_item_id"])
     if not full:
         # A count, under its own name. Calling it `comments` in the brief and
@@ -842,6 +881,7 @@ def _record(
     *,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
     tree: item_tree.Tree | None = None,
+    projects: Mapping[str, list[dict]] | None = None,
 ) -> tuple[dict, leases.Lease | None]:
     """What the brief record, the full one and the card share, and the lease it read.
 
@@ -869,6 +909,11 @@ def _record(
         "claim_state": None,
         "parent_id": row["parent_id"],
         "labels": model.labels(loads(row["labels"])),
+        "projects": (
+            item_projects.of_item(conn, row)
+            if projects is None
+            else projects.get(str(row["work_item_id"]), [])
+        ),
         "source": row["source"],
         "checklist": model.checklist(row["checklist"]),
         "revision": int(row["revision"]),
@@ -923,9 +968,9 @@ PARTS = (
     "sections",
     "participants",
 )
-#: The card's fields, in the order it carries them. `withheld`, `projects` and
-#: `lapsed_claim` are named ahead of the builds that add them to the record, and a
-#: card carries each when its record has it, so no build edits this list for them.
+#: The card's fields, in the order it carries them. `withheld` and `lapsed_claim`
+#: are named ahead of the builds that add them to the record, and a card carries
+#: each when its record has it, so no build edits this list for them.
 CARD_FIELDS = (
     "reference",
     "title",

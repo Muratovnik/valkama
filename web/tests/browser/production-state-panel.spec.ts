@@ -5,7 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { openPage } from './documentPageSurface.ts'
-import { globalScope, projectScope, spaceRef } from './planningFixtures.ts'
+import { globalScope, spaceRef, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
@@ -55,7 +55,7 @@ const seam = (panel: Locator) =>
 async function cardReading(page: Page, answer: 'fails' | 'waits') {
   await page.setViewportSize({ width: 1500, height: 900 })
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.route('**/api/modules/planning/work-item?*', async (route) => {
     if (answer === 'fails') await route.fulfill({ status: 503, json: { error: { code: 'busy' } } })
   })
@@ -115,7 +115,7 @@ test('a failed read of the alerts lies inside its settings group, apart from the
   await page.route('**/api/alerts/settings', (route) =>
     route.fulfill({ status: 503, json: { error: { code: 'busy' } } }),
   )
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   const group = page.locator('.settings-group').filter({ hasText: 'Windows notifications' })
   const panel = group.locator('.platform-state-panel')
   await expect(panel).toBeVisible()
@@ -145,7 +145,7 @@ const BUSY = { status: 503, json: { error: { code: 'busy' } } }
 /** The Work module whose read failed: the panel on the workspace panel, in the module's frame. */
 async function openModule(page: Page) {
   await page.route('**/api/planning?*', (route) => route.fulfill(BUSY))
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   return page.locator('.planning-frame .platform-state-panel')
 }
 
@@ -168,7 +168,7 @@ const ON_THE_WORKSPACE: { name: string; open: (page: Page) => Promise<Locator> }
     name: 'the installation’s health',
     open: async (page) => {
       await page.route('**/api/doctor', (route) => route.fulfill(BUSY))
-      await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+      await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
       await page.locator('.settings-page-sections').getByRole('tab').nth(1).click()
       return page.locator('.installation-health .platform-state-panel')
     },
@@ -177,7 +177,7 @@ const ON_THE_WORKSPACE: { name: string; open: (page: Page) => Promise<Locator> }
     name: 'the sections',
     open: async (page) => {
       await page.route('**/api/modules', (route) => route.fulfill(BUSY))
-      await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+      await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
       return page.locator('.route-recovery .platform-state-panel')
     },
   },

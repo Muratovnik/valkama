@@ -113,11 +113,21 @@ changed. `url` is described in [The address of a work item](#the-address-of-a-wo
 
 | Tool | Also carries |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
-| `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
+| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
+| `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)); `project_roots` unless it released |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items |
+| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim` |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
+
+`project_roots` is the root of each project the claimed task changes, or of its
+space's default project when it names none: a list of `{project_id, display_name,
+root, status}`, `status` one of `mapped`, `missing` (no directory at the root),
+`unregistered` (the registry no longer records the project) and `unavailable` (the
+registry was not read; `root` and `display_name` are then null, and a task that
+names no project has an empty list). The projects of the task's space come first,
+its default project before the others, then every other project, each part by
+`project_id`; with an unread registry all come by `project_id`. The claim does not
+check them. `claim_ready_work_item` carries it beside the `work_item` it took.
 
 A comment the batch wrote is named in `applied` by its `comment_id`, and the
 `reply_to` and `reply_to_request` of the root a reply landed under; a resolved
@@ -151,9 +161,14 @@ reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
 stage has `state` `null` and adds its `container_state` (see
 [The work model](#the-work-model)). Without a `limit` they return at most 50 rows.
 A search reads its query as words: an item matches when its title, description,
-labels, source, summary, comments, decisions or questions hold every word, in
-any order and across fields, each word matched by its first five letters as a
-prefix. Words such as `the` or `and` are left out of a query that has others.
+labels, source, the ids of its projects (see
+[The projects an item changes](#the-projects-an-item-changes)), summary,
+comments, decisions or questions hold every word, in any order and across
+fields, each word matched by its first five letters as a prefix. A project id
+is split into words as any text is, so `relay` and `service` each find an item
+that names `event-relay-service`; a project's display name is not searched, and
+a goal or stage, which names no projects, is not found by those of its tasks.
+Words such as `the` or `and` are left out of a query that has others.
 The best match comes first, the title weighing three times the rest, and a tie
 goes to the most recently changed item. `comment_hit`, `question_hit` and
 `summary_hit` then name the newest comment, decision or question holding every
@@ -164,11 +179,22 @@ every other match keeps its order, most recently changed first. A query that is
 a number alone -- `12` -- does the same for the item numbered 12: in a search
 scoped to a space that is one item, and without a space it is each space's item
 12. A store whose word index cannot be read -- a SQLite without FTS5, or an
-attached store an earlier build wrote -- reads every query as one phrase.
+attached store an earlier build wrote -- reads every query as one phrase, and a
+phrase finds an item when it stands in the id of one of its projects as well.
 `list_work_items` also takes `parent`, a work item by reference or id, and then
 lists only that item's children; the HTTP read `GET /api/planning/work-items`
 takes the same `parent` parameter. An unknown `parent` is refused with
-`not_found`.
+`not_found`. With `space`, `list_work_items` and `GET /api/planning/work-items`
+read that space: its items, and the items of other spaces that name one of the
+projects the registry binds to it. Each item of such a read carries
+`other_space`, the `{key, name}` of the space it lies in, or `null` for the
+space's own; a compact row carries it only for another space's item. They take
+`project` too, a project id: the list keeps the items that name that project,
+in every space unless `space` is given. With `space`, it keeps that space's
+items that name it, and other spaces' items that name it when it is one of the
+space's projects. A goal or stage stores no projects and names those of every
+task under it, at any depth, so it is kept when one of them names the project;
+a project no item names lists nothing.
 
 Each answer is one page. `truncated` is true when more items match than the page
 holds, and `next_offset` is then the offset of the next page; on the last page
@@ -279,6 +305,7 @@ model; the card's `state` has no `is_terminal`:
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
 | `workable` | whether it may be taken now: a task, held by nobody, in `triage` or `ready` in a workflow that leads from there to an active state, with nothing unfinished blocking it. It is the rule `claim_ready_work_item` takes work by |
+| `projects` | the projects it changes, by `project_id`: each with the registry's `display_name` (`null` while the registry does not record it) and its `source`, `named`, `commits` or `migrated` (see [The projects an item changes](#the-projects-an-item-changes)). A goal's or stage's are those of every task under it |
 
 Four other answers carry only some of these fields:
 
@@ -351,6 +378,63 @@ replaces the word; none is read as its replacement.
 | `category` of a list, and `state` wherever it is named | `backlog`, `queued` | `backlog is now triage` or `queued is now ready`, then what the input takes: the categories, or the workflow's states as an unknown name lists them |
 | `state` wherever it is named | `todo` | what an unknown state name gets, listing the workflow's states |
 | `category` of a list, and `state` wherever it is named | `container` | `container is not a category: an accepted goal or stage shows container_state; accept one with ready` |
+
+### The projects an item changes
+
+A task names the projects it changes, at most 20 and each once, by their ids in
+the [project registry](../README.md#project-registry); the space it lies in does
+not change with them. `create_work_item` takes them as `projects`, and the
+`update` group of `apply_work_item_changes` (and `POST
+/api/planning/work-item/update`) replaces the whole set with `projects`, each
+project it names then `named`. That edit is guarded by `expected_revision` and
+bumps the revision once, records no history event, and writes nothing when the
+set and its sources are what the item has. Each project has one `source`: `named`
+by whoever filed or edited the item, `commits` derived from the repositories of
+its commits, or `migrated`, its space's former project when the migration found
+nothing else. A project that comes by two ways keeps the strongest, in that
+order.
+
+A goal or stage names no projects. Its `projects` are those of every task under
+it at any depth, each project once with the strongest source any of them gives
+it. Refused with `invalid_request` and the code `[project]`, before anything is
+written:
+
+- a project the registry does not record: `project X is not registered:
+  registered projects are …`;
+- any project while the registry cannot be read: `the project registry cannot be
+  read, so projects cannot be named now`. A write that names no projects passes;
+- projects on a goal or stage: `a goal or stage names no projects: the tasks
+  under it do`.
+
+### Where a new item lies
+
+`space` is optional on `create_work_item` and on `POST /api/planning/work-items`.
+The server places the new item:
+
+1. under a `parent`, in the parent's space;
+2. else, with `projects`, in their home space, the space of this store the
+   registry binds each to: one home is where the item lies; between several,
+   `space` must name one of them; projects without a home need `space`;
+3. else in the space it names, and without one in the space of the calling
+   session, the space whose project root holds the session's folder. The same
+   space is `session_space` in the answer of `list_planning_spaces`, `null`
+   when the call proved no session or its folder lies in no space; the HTTP
+   list has no session and no such field.
+
+A later edit of `projects` does not move the item: its number stays. Refused
+with `invalid_request` and the code `[placement]`, naming the candidates where
+there are any, before anything is written:
+
+- projects of two spaces without `space`: `projects A and B live in ALPHA and
+  ROVER: name one of them as space`;
+- a `space` that is not one of the projects' homes: `space TEST is none of the
+  spaces of the item's projects: ALPHA, ROVER`;
+- a `space` that is not the parent's: `the parent lies in ALPHA: an item lies in
+  its parent's space`;
+- projects without a home and no `space`: `project X lives in no space of this
+  store: name the space`;
+- no parent, projects, space or session space: `name the space, or the projects
+  the item changes`.
 
 ### Naming a state
 
@@ -693,7 +777,7 @@ and a `sessions` other than `true` or `false` are refused with
 
 **Since 2.5.** The HTTP read stays flat: comments are rows in id order, each
 with its `reply_to` and `reply_to_request`, and a reader groups them into
-threads itself. Neither it nor the card's read through the exact project scope
+threads itself. Neither it nor the card's read through the exact space scope
 (`GET /api/modules/planning/work-item`) caps how many comments or events it
 returns: the web interface draws an item from the whole record, however long its
 discussion and history are, and a client must not refuse a record for its length.
@@ -702,14 +786,14 @@ Without `parts` the same read takes the comment modes as cuts of the full record
 `comments_after`, `thread=<id>`, and `threads=<count>` for that many threads with
 the latest activity. `unresolved` other than `true` or `false` is `invalid_request`.
 
-**Since 2.5.** The card's read through the exact project scope also takes
+**Since 2.5.** The card's read through the exact space scope also takes
 `brief=true`, which answers in the same envelope with the brief record a space's
 list carries instead of the full one: state, title, holder, steps and dates,
 with `comment_count` in place of the comments and no history, links, refs or
 agents. Its size does not grow with the item's history, and it is what a
 preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
-refused with 400; an unknown item is 404 and a binding that no longer resolves
-is 409, as for the full read.
+refused with 400; an unknown item is 404 and a space that is not there is 409,
+as for the full read.
 
 ### Pictures on an item
 
@@ -870,7 +954,7 @@ with the answer, each once, is in the
 `GET /open/<reference>` opens one work item in the web UI, so that an agent can
 hand a person a link built from nothing but a number. A client does not turn a
 bare number into a link, and the address of a card itself cannot be written from a
-number: it names the project and the store.
+number: it names the store and the space.
 
 The reference is read as a search reads one, so `main-12` is `MAIN-12`, and its
 prefix names the space. The route is a loopback address under the same `Host` rule
@@ -878,8 +962,8 @@ as every other, and it answers:
 
 | The address | Answer |
 | --- | --- |
-| names an item in a space a project binds, followed by a person, with the desktop app installed | `200` and a small page, after starting the app on the card; see below |
-| names an item in a space a project binds, in any other case | `302` to `/modules/planning/project/<project>?entity=<entity>`, the route the card has when it is opened any other way, with `Cache-Control: no-store` |
+| names an item, followed by a person, with the desktop app installed | `200` and a small page, after starting the app on the card; see below |
+| names an item, in any other case | `302` to `/modules/planning/space/<data_scope_id>/<KEY>?entity=<entity>`, the route the card has when it is opened any other way, with `Cache-Control: no-store` |
 | is exactly `/open/questions` | as for an item, but the panel of open questions in place of a card; see [The panel of open questions](#the-panel-of-open-questions) |
 | names anything else | the app page with `404`, which says what is wrong and offers the next step |
 | reaches a store or a project registry that cannot be read | the app page with `503`, which offers another try |
@@ -890,11 +974,14 @@ redirect but a reference the grammar accepted and a store confirmed, and the
 surface checks the result against the one shape a card route has: `/open//evil`,
 `/open/https:%2F%2Fevil` and the like get the app page, never a `Location`. Primary
 and attached stores can each keep a space with one key; the primary answers first.
-A space no project binds has no card route, so the page says there is no such space.
+Every space has a card route, whether or not a project is bound to it. The shell
+also opens on the project route a card had before 3.0,
+`/modules/planning/project/<project>`, so a kept bookmark lands in the app rather
+than on an error; what it shows there is the shell's to say.
 
 The page reads why from `GET /api/modules/planning/search`, whose coverage names
-each source it read and each it could not: a number nobody filed, a key no project
-binds, and a store that did not answer read differently, and an item is never
+each source it read and each it could not: a number nobody filed, a key no store
+here holds, and a store that did not answer read differently, and an item is never
 called missing while a store that may hold it stayed silent.
 
 An agent client's chat keeps a link only for ordinary schemes and opens it in the
@@ -1062,11 +1149,18 @@ to read the other item to know.
   part, each link, in either direction, names its other end: `state_name`,
   `state_category`, `is_terminal` and `state_unavailable`.
 - In a space's view (`links` in `GET /api/planning` and
-  `/api/events?view=planning`, `edges` in `GET /api/planning/graph`), the links
-  leaving the space come with every `blocks` link into it from another space,
-  so `from` can name an item the view does not hold. Each link names its source
-  end, `from`: its `reference` and the same four state fields. A graph's
-  `parent` edges carry none of them.
+  `/api/events?view=planning`, `edges` in `GET /api/planning/graph`), the view
+  holds the space's items and other spaces' items that name one of its
+  projects, as a list with `space` does, and every link with an end among them,
+  in either direction and of every kind. So `from` or `to` can name an item the
+  view does not hold, and `other_space_ends` names each such end: its
+  `work_item_id`, `reference`, `title`, `kind`, `state` (`key`, `name`,
+  `category`, `is_terminal`, or `null` for an accepted open goal or stage and
+  for a state the store cannot resolve) and `space` as `{key, name}`. Each link
+  names its source end, `from`: its `reference` and the same four state fields.
+  A graph's `parent` edges carry none of them, and its nodes carry `other_space`
+  as the items do. `project` beside `space` narrows the view as it narrows that
+  list; without `space` it is refused.
 - A chain's `edges` name their source the same way; see
   [Reading a chain of work](#reading-a-chain-of-work).
 
@@ -1076,7 +1170,7 @@ otherwise `state_unavailable` is `null`. An end whose state is unknown is not
 open, and as a blocker it blocks nothing. A reader of an older server finds no
 such fields and looks the end up among the items it holds.
 
-The cross-project search, `GET /api/modules/planning/search`, marks each result
+The search across spaces, `GET /api/modules/planning/search`, marks each result
 the same way: `item` carries `kind` and `priority`, and `item.state` carries
 `category` and `is_terminal` beside its name.
 
@@ -1294,7 +1388,7 @@ MCP tool reads it, for the same reason as above.
 | `utc_offset` | the caller's offset from UTC in minutes, from `-840` to `840`; `0` by default. A day, an hour or a minute of the series starts at the caller's midnight, full hour or full minute. The server has no time-zone database: a period across a change of daylight saving time is cut at one offset, so a caller that minds asks for it in two |
 | `group_by` | none, one or two dimensions, separated by a comma: `account`, `project`, `work_item`, `executor`, `role`, `launch_class`, `model`, `effort`, `environment`, `seat` |
 | a dimension's name | a filter: the values admitted, separated by a comma, up to 100 of 1 to 512 characters; `role` takes only `main`, `subagent` and `advisor`. A work item is named by its `work_item_id`, an executor by its session id, a project by its `project_id`, a seat by its `id` |
-| `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, a session's own run for `launch_class`, an unknown value for the rest. `none=launch_class` does not admit a subagent's run whose launch class is unknown, and `none=role` admits nothing, since every stretch has a role. Alone it keeps only the work with no value there |
+| `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, a session's own run for `launch_class`, work on an item that names no project for `project`, an unknown value for the rest. `none=launch_class` does not admit a subagent's run whose launch class is unknown, `none=project` does not admit work whose project is unknown, and `none=role` admits nothing, since every stretch has a role. Alone it keeps only the work with no value there |
 | `compare` | `true` adds the preceding period of the same length; `false` by default |
 
 A filter admits a stretch of work when its value is among those named, and every filter
@@ -1376,13 +1470,14 @@ millionth of a dollar per stretch, and the rounding of each read's own sum.
 
 A value in `group` carries `id` and `unknown`, which is `true` when the store does not
 hold the value; such a value is its own group and no string stands in for it. Work on no
-item, and for `launch_class` a session's own run, are groups of their own too, with an
-`id` of `null` and `unknown` `false`: there is nothing to know.
+item, for `launch_class` a session's own run, and for `project` work on an item that names
+no project or several, are groups of their own too, with an `id` of `null` and `unknown`
+`false`: there is nothing to know.
 
 | Dimension | Value | Beside `id` |
 | --- | --- | --- |
 | `account` | the organization the work was billed to, as the usage rows hold it; unknown until the reader fills it | — |
-| `project` | the project whose planning space holds the item; for work on no item, the project whose registered root holds the session's working directory. Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null` |
+| `project` | the project the item names (see [The projects an item changes](#the-projects-an-item-changes)), in whichever space the item lies; a goal or stage names the projects of the tasks under it. An item that names several is one group of its own, `id` `null` and `unknown` `false`, rather than a share in each, so the groups still add up to the total; an item that names none is its own group too, with `combinations` `null`. A filter admits an item by any project it names, so a project's row in a breakdown is smaller than the filter on it by the work on items naming several, and `none=project` admits the items that name none. For work on no item, the project whose registered root holds the session's folder, the folder that places it in the live-work frame (see [The live-work frame](#the-live-work-frame)). Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null`; `combinations`, on the group of several, every set of projects the work in that group names, each a list of `{"id", "name"}` by id, the sets ordered by their ids; `null` on every other value |
 | `work_item` | the item the work is counted to | `reference` and `title`, `null` for an item since deleted |
 | `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in` and `opened_host`, as a card's executor gives them, and `title`, the name its client gave the session, as the live work beside the board names it, or `null` when there is none to read. Not its live `state`, which changes while the period's figures do not |
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |
@@ -1769,7 +1864,9 @@ it changes only when a state does: with a write to the store, with a client writ
 transcript or falling silent, and with a session's title. Attached stores are not read.
 
 ```json
-{"spaces": [{"key": "MAIN", "name": "Main", "project_id": "example-project",
+{"spaces": [{"key": "MAIN", "name": "Main",
+   "projects": [{"project_id": "example-project", "display_name": "Example project"}],
+   "default_project": "example-project",
    "rows": [
      {"reference": "MAIN-4", "title": "Structured answers", "kind": "goal", "parent": null,
       "state": null, "agents": 0, "long": false, "asks": false, "since": null,
@@ -1820,7 +1917,9 @@ transcript or falling silent, and with a session's title. Attached stores are no
 
 | Field | What it holds |
 | --- | --- |
-| `key`, `name`, `project_id` | the space, and the project that binds it; `project_id` is `null` when none does |
+| `key`, `name` | the space |
+| `projects` | the projects the registry binds to the space, each with its `project_id` and `display_name`, the default one first and the others by id; empty when none is bound, and `null` when the registry could not be read |
+| `default_project` | the `project_id` of the space's default project, `null` when no project is bound or the registry could not be read |
 | `rows` | the space's rows, in the order they are drawn |
 | `sessions` | the sessions under this space that work or wait on no row, freshest first |
 | `elsewhere` | the same list for sessions whose folder lies under no space |
@@ -1844,7 +1943,7 @@ A session of `sessions` or `elsewhere`:
 | --- | --- |
 | `session` | the session's id, which a click opens (see [What a click opens](#what-a-click-opens)) |
 | `title` | the name its client shows for it, or `null` when there is none to read |
-| `folder` | the last part of the folder it was opened in, or empty |
+| `folder` | the last part of the folder that places it (see below), or empty |
 | `state` | `working` while a turn of its own runs or it has a live subagent, else `waiting` |
 | `long` | for a `waiting` session, whether it has been silent for more than 4 hours |
 | `asks` | for a `waiting` session, whether it stopped in the middle of a turn to ask a person |
@@ -1883,12 +1982,19 @@ is already in order, and a client that lists it as it came does not sort it. The
 interface's side panel draws its own order from it: the rows at work, freshest
 `updated_at` first; the rest folded or apart (see `DESIGN.md`).
 
-**`sessions` and `elsewhere`.** A session's space is the space bound to the
-project whose root is the longest one that contains the session's
-`opened_folder`, or else its `cwd`. A session whose folder lies under no root, or
-under a project that binds no space, is listed in `elsewhere`. This places a row
-and nothing more: nothing is written, nothing is routed, and no binding is ever
-inferred from a folder.
+**`sessions` and `elsewhere`.** A session is placed by its first folder that is
+not empty: for Claude Code the folder its transcript names, then its
+`opened_folder`, then its `cwd`; for Codex its `opened_folder`, then its `cwd`. The
+project whose root is the longest one that contains that folder holds it, compared
+as the platform compares paths (on Windows without regard to case) and without
+following links, and the session's space is the space that project is bound to in
+this store. A shorter root does not stand in: a session under a project that binds
+no space here is in no space, even inside the root of one that does. Such a
+session, and one whose folder lies under no root, is listed in `elsewhere`.
+Analytics counts a session's work on no item to the project of the same place (see
+[What agent work spent in a period](#what-agent-work-spent-in-a-period)). This
+places a row and nothing more: nothing is written, nothing is routed, and no
+binding is ever inferred from a folder.
 
 **How it arrives.** There is no route to poll. A stream opened with
 `GET /api/events?view=planning`, with or without an exact scope, carries the frame
@@ -2192,12 +2298,15 @@ What moves to the survivor:
   same merge stays on the merged item, because moved it would tie the survivor
   to itself. A `blocks` link that arrives can make the survivor block work it
   did not block before, and one into it can make it wait.
+- the [projects](#the-projects-an-item-changes), a project more than one of them
+  names keeping the strongest source: `named`, then `commits`, then `migrated`.
+  `moved.projects` counts the merged item's projects.
 
 Each merged item is then linked `duplicates` to the survivor, gets a summary
-naming it ("Merged into MAIN-12, which now holds its 2 steps, 1 comment, 0 refs
-and 1 link.", `next` "Continue in MAIN-12.", `why` the reason), loses its claim
-and closes in the first `cancelled` state its workflow reaches from where it
-stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
+naming it ("Merged into MAIN-12, which now holds its 2 steps, 1 comment, 0 refs,
+1 link and 0 projects.", `next` "Continue in MAIN-12.", `why` the reason), loses
+its claim and closes in the first `cancelled` state its workflow reaches from
+where it stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
 saying what came in. What describes the merged item itself stays with it: its
 history, the [mentions](#mentions) of it, its reports, its description, labels and
 parent. The
@@ -3022,7 +3131,7 @@ the neutral boundary). The body is the answer's, with the request's
 `expected_revision` required:
 
 ```json
-{"project_id": "example-project", "data_scope_id": "…", "space_key": "MAIN",
+{"data_scope_id": "…", "space_key": "MAIN",
  "id": "7d1c2a9e-3f4b-4c5d-8e6f-0a1b2c3d4e5f", "expected_revision": 2,
  "author": "user", "answers": {"route": "threads"},
  "field_notes": {"route": "Threads serve the digest too"}}
@@ -3262,18 +3371,23 @@ An export carries every question in `planning.requests`, whole. Since 2.5 a sear
 also reads own variants and field comments, and the decision of a resolved mark
 with the comments.
 
-The browser's mapped search and request endpoints return exact project and
-Planning-space identities. Their list envelopes include source coverage and a
-truncation flag. A source that was not read says why in `reason`, as one stable
-code: `store_not_attached` (the project's space lives in a store this server
-neither owns nor has attached), `store_unreadable` (an attached store could not
-be opened), `attached_list_unreadable` (the list of attached stores could not be
-read), `space_missing` (the bound store holds no such space), `binding_conflict`
-(the space is bound to another project), `search_failed` (the store opened but
-the search failed there) or `requests_unavailable` (an attached store predates
-human requests). The mapped search answers the item a reference query names
-first, the primary store's ahead of an attached store's, before it cuts the
-page; a query that is a number alone answers each source's item of that number
+The browser's mapped search and request endpoints read every space of the
+primary store and of each attached store, and every space the registry binds a
+project to that cannot be read; a space with no project is read like any other.
+Each result names its exact Planning space in `target.space_ref`, and each source
+of the coverage is one space, by `space_ref`. Their list envelopes include source
+coverage and a truncation flag. A source that was not read says why in `reason`,
+as one stable code: `store_not_attached` (a project's space lives in a store this
+server neither owns nor has attached), `store_unreadable` (an attached store could
+not be opened), `attached_list_unreadable` (the list of attached stores could not
+be read), `space_missing` (the store holds no such space), `search_failed` (the
+store opened but the search failed there) or `requests_unavailable` (an attached
+store predates human requests). The exact reads and writes name one space by
+`scope_kind=space` with `data_scope_id` and `space_key`; a read may narrow it with
+`project_id`, a project of the space or one its items name: a project the
+registry does not hold is 404, and a registered one that is neither is 409. The
+mapped search answers the item a reference query names first, the primary
+store's ahead of an attached store's, before it cuts the page; a query that is a number alone answers each source's item of that number
 first the same way. A request detail or mutation returns the confirmed request with
 its target; attached stores remain read-only. Existing Planning searches and
 the complete space read model keep their existing scope and limits.

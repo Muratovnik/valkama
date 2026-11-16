@@ -25,7 +25,7 @@ import { graphRoute, serve as serveChain, smallChain } from './chainFixtures.ts'
 import { settled } from './documentBeside.ts'
 import { serveWide } from './laneWideFixture.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
-import { projectId, projectScope, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceRef, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** The state the space renamed its «Dev» to. */
@@ -285,7 +285,6 @@ function finderAnswer() {
     items: [
       {
         target: {
-          project_id: projectId,
           space_ref: spaceRef,
           reference: 'MAIN-264',
           writable: true,
@@ -304,7 +303,7 @@ function finderAnswer() {
         },
       },
     ],
-    coverage: [{ project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null }],
+    coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
   }
 }
 
@@ -435,7 +434,7 @@ async function railRows(page: Page) {
 const cardRoute = () =>
   serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
+    scope: spaceScope,
     entity: planningWorkItemEntity(workItemRef),
   })
 

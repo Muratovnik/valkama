@@ -4,6 +4,10 @@ status: draft
 
 # ADR 0014: The work model breaks the planning schemas and the handshake once
 
+This record covers the one break of Valkama 3.0: the work model (decisions 1
+to 3), the spaces and projects that come with it (decision 4), and reading a
+work item by parts (its own section below).
+
 ## Context
 
 Valkama keeps the MCP handshake and the tool schemas its clients already use:
@@ -42,8 +46,9 @@ and no compatibility layer.
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
-   what [Reading a work item by parts](#reading-a-work-item-by-parts) changes
-   in the same release.
+   what decision 4 lists and what
+   [Reading a work item by parts](#reading-a-work-item-by-parts) changes in the
+   same release.
 
 2. **A retired word is refused, never translated.** `kind: epic`,
    `scope: epic`, the categories and state names `backlog` and `queued`, the key
@@ -57,6 +62,30 @@ and no compatibility layer.
    app's contract layer and the connection contract change in the same release,
    and a test fails when a tool schema, the handshake or a page of the skill
    names a retired word.
+
+4. **Spaces and projects break in the same release.** In 3.0 a planning
+   space holds any number of projects, one of them its default, and the
+   project registry is where that is written; a space no longer belongs to
+   one project. What breaks with it:
+   - the project registry: the inventory goes to format 2 and its projection
+     to format 4, where a binding carries `default` and several projects may
+     bind one space, each bound space with exactly one default project;
+   - `create_planning_space` takes no `project_id`, and a space record has no
+     `project_id`;
+   - `space` on `create_work_item` is optional;
+   - the scope `project` becomes `space`, with the project an optional
+     refinement of it, and the module levels are `global` and `space`.
+
+   The rule for a format is one way: the former reader refuses the new format,
+   and the new reader does not read the former one. A 2.9 build reads a format-4
+   projection as malformed and a 3.0 build reads a format-3 one the same way.
+   Only `valkama projects upgrade`, which carries a registry across and keeps its
+   former bytes once for `valkama projects downgrade`, and `valkama projects
+   import`, which takes a former writer's inventory of format 1, read the former
+   format, through one reader and one translation. What is kept is three files —
+   the inventory, the projection and the one-write snapshot `rollback` restores
+   from — each with its SHA-256 or recorded as absent; an import onto a machine
+   with no registry keeps that absence the same way.
 
 ## What a client does instead
 
@@ -72,6 +101,10 @@ and no compatibility layer.
 | state key `todo` | `ready` |
 | `scope: "epic"` | `scope: "tree"` |
 | creating work an agent was asked for | `acceptance: "assignment"` |
+| a registry projection of `schema_version: 3` | `4`, after `valkama projects upgrade` |
+| one project binds a space | each binding says `default`; a space has one default project |
+| `create_planning_space` with `project_id` | `{name, key}`; `valkama projects bind` joins a project |
+| scope `project` | scope `space`, the project an optional refinement |
 
 ## Consequences
 
@@ -80,11 +113,15 @@ and no compatibility layer.
 - A client written against 2.9 reads a 3.0 answer wrongly or is refused; a 3.0
   answer has no field that means what `ready` or `container` meant. The web app
   and the server therefore ship together.
-- The exception closes with the 3.0 release. A later change to the handshake or
-  the schemas meets the usual rule again, and the retired words stay refused,
-  not reused.
-- Rollback is the whole set: the store from the `pre3.0` recovery point and the
-  previous release together.
+- The exception is closed past what this record lists and closes with the 3.0
+  release. A later change to the handshake or the schemas meets the usual rule
+  again, and the retired words stay refused, not reused.
+- Rollback is the whole set: the store from the `pre3.0` recovery point, the
+  registry from `valkama projects downgrade` and the previous release together.
+  The registry is returned before the previous release is installed, because a
+  2.9 build has no `downgrade` and its `rollback` refuses a format-4 snapshot;
+  `downgrade` puts back the one-write snapshot the upgrade found, so that
+  `rollback` of the previous release undoes its own last write again.
 - Rejected: aliases from the old words to the new ones (two spellings of one
   contract, and a dual reading the store rule forbids); keeping `ready` and
   `container` beside the new fields (a field that contradicts the category it

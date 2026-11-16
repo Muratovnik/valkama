@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from collections.abc import Mapping, Sequence
 
 from . import artifacts, store
 
@@ -330,16 +331,18 @@ def _record(value: object) -> dict | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def observe_baseline(repo: str) -> dict:
-    """The checkout an attempt is about to run in, as evidence rather than a claim."""
+def observe_baseline(repo: str, added: Sequence[Mapping[str, object]] = ()) -> dict:
+    """The checkout an attempt is about to run in, and each root it gets beside it,
+    as evidence rather than a claim."""
 
-    return artifacts.baseline(repo)
+    return artifacts.baseline_with(repo, added)
 
 
 def observe_outcome(repo: str, base: dict | None) -> dict:
-    """What the attempt changed in that checkout, measured from the same base."""
+    """What the attempt changed in that checkout and in each root beside it,
+    measured from the same base."""
 
-    return artifacts.outcome(repo, base or {})
+    return artifacts.outcome_with(repo, base or {})
 
 
 __all__ = [

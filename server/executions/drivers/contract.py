@@ -16,6 +16,10 @@ from typing import Protocol
 #: longer than this announced something that is not an identity.
 MAX_SESSION_ID_CHARS = 128
 
+#: When a client takes directories beside the one it runs in: on a fresh run and
+#: on a resume, on a fresh run only, or never.
+ADDED_DIRS = ("fresh_and_resume", "fresh_only", "none")
+
 
 class DriverError(ValueError):
     """This driver cannot build the command it was asked for."""
@@ -95,6 +99,14 @@ class DriverCapabilities:
     #: variables a launch can set, through the client's own configuration file,
     #: or not at all.
     telemetry_configuration: str
+    #: When its command line takes directories beside the one it runs in, one of
+    #: `ADDED_DIRS`. A form says from it which runs get them.
+    added_dirs: str
+
+    def takes_added_dirs(self, *, resume: bool) -> bool:
+        """Whether this run's command line carries the directories beside its own."""
+
+        return self.added_dirs == ADDED_DIRS[0] or (self.added_dirs == ADDED_DIRS[1] and not resume)
 
     def as_dict(self) -> dict:
         """The wire form, for a surface that hands this to an interface."""
@@ -109,6 +121,7 @@ class DriverCapabilities:
             "mechanical_executor": self.mechanical_executor,
             "result_transport": self.result_transport,
             "telemetry_configuration": self.telemetry_configuration,
+            "added_dirs": self.added_dirs,
         }
 
 
@@ -138,6 +151,9 @@ class CommandRequest:
     #: `mechanical_executor` is true; a driver that cannot enforce it ignores
     #: the flag rather than pretending in a prompt.
     no_delegation: bool = False
+    #: Directories the client may reach beside the one it runs in. A driver
+    #: passes them only on the runs its `added_dirs` says it takes them on.
+    added_dirs: tuple[str, ...] = ()
 
 
 class ExecutionDriver(Protocol):
@@ -157,6 +173,7 @@ class ExecutionDriver(Protocol):
 
 
 __all__ = [
+    "ADDED_DIRS",
     "MAX_SESSION_ID_CHARS",
     "CommandRequest",
     "DriverCapabilities",

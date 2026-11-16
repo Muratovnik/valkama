@@ -7,7 +7,7 @@
  * the reference, a priority that is not the ordinary one, and its state, with
  * what it waits on if anything does (`MarkHead`);
  * the whole title, wrapped wherever it has to be; who holds it and how far its
- * steps are; and when it last changed or closed, after the project it comes
+ * steps are; and when it last changed or closed, after the space it comes
  * from when that is not the open one. Each fact is the facet registry's
  * (`surface: 'preview'`), drawn as a tile draws its own, so a stale claim reads
  * the same here as on the board.
@@ -40,7 +40,7 @@ import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 const props = withDefaults(defineProps<WorkItemPreviewSubject>(), {
   failure: null,
   waitingOn: null,
-  project: null,
+  space: null,
 })
 
 const { t } = useI18n()
@@ -123,8 +123,8 @@ const copied = useWorkItemCopy(() => props.reference)
         class="preview-when"
         aria-hidden="true"
       >
-        <template v-if="project"
-          ><span class="preview-project">{{ project }}</span> ·
+        <template v-if="space"
+          ><span class="preview-space">{{ space }}</span> ·
         </template>
         <time :datetime="when.iso">{{ when.text }}</time>
       </p>
@@ -202,7 +202,7 @@ const copied = useWorkItemCopy(() => props.reference)
   min-block-size: 1lh;
 }
 
-.preview-project {
+.preview-space {
   overflow-wrap: anywhere;
 }
 </style>

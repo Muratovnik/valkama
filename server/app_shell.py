@@ -1,8 +1,8 @@
 """What the web app shell reads before any module renders, and what it remembers.
 
 Three answers, all the shell's own: the modules this build ships
-(`/api/modules`, read from `platform.modules` rather than the store), the context -- the primary store's identity and the project
-directory with each project's binding state (`/api/platform/context`) -- and
+(`/api/modules`, read from `platform.modules` rather than the store), the context -- the primary store's identity and every planning space with
+its projects (`/api/platform/context`) -- and
 the last route the shell restores on its next start (`/api/platform/ui-prefs`).
 
 Reads here write nothing. Saving the last route is the only write, and it
@@ -89,20 +89,25 @@ def save_ui_prefs(conn: sqlite3.Connection, payload) -> dict:
 
 
 def context_payload(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
+    """The shell's context: the primary store, every space it can read, the last route.
+
+    Each space names its projects, the default one first, and the projects of other
+    spaces its items name, each with the key of the space it lives in.
+    """
+
     scope = scope_parameters(parameters)
     payload = {
         "primary": {
             "data_scope_id": routing.metadata["data_scope_id"],
             "is_writable": True,
         },
-        "projects": [routing.directory_item(item) for item in routing.projects],
+        "spaces": routing.spaces(),
         "ui_prefs": ui_prefs_record(routing.conn),
     }
-    if routing.projects_result["status"] != "available":
+    if not routing.registry_available:
         state = envelope("unavailable", reason="platform.planning.registryUnavailable")
     else:
-        if scope["kind"] == "project":
-            routing.project(scope["project_ref"]["project_id"])
+        routing.require_scope(scope)
         state = envelope("ready", payload=payload)
     return {"interface_version": CONTEXT_INTERFACE, "scope": scope, "state": state}
 

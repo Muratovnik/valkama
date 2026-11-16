@@ -42,9 +42,7 @@ class PlanningConcurrencyTests(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
         self.conn = self.open()
-        self.space = service.create_planning_space(
-            self.conn, project_id="example-workspace", name="Quality Assurance"
-        )
+        self.space = service.create_planning_space(self.conn, name="Quality Assurance")
         self.conn.commit()
 
     def open(self) -> sqlite3.Connection:
@@ -346,9 +344,7 @@ class ReadThenWriteTests(unittest.TestCase):
         self.conn = self.open()
         self.other = self.open()
         self.other.execute("PRAGMA busy_timeout=0")
-        self.space = service.create_planning_space(
-            self.conn, project_id="example-workspace", name="Quality Assurance"
-        )
+        self.space = service.create_planning_space(self.conn, name="Quality Assurance")
         self.conn.commit()
 
     def open(self) -> sqlite3.Connection:
@@ -441,10 +437,11 @@ class ReadThenWriteTests(unittest.TestCase):
 
     def test_two_spaces_deriving_one_key_at_once_get_two_keys(self) -> None:
         def other_space() -> None:
-            service.create_planning_space(self.other, project_id="theirs", name="Valkama")
+            service.create_planning_space(self.other, name="Valkama")
 
         landed = self.before("INSERT INTO planning_spaces", other_space)
-        mine = service.create_planning_space(self.conn, project_id="mine", name="Valkama")
+        # A name is a space's own, so the two names differ and derive one key.
+        mine = service.create_planning_space(self.conn, name="Valley")
         self.conn.commit()
         self.conn.set_trace_callback(None)
         self.assertEqual(1, len(landed))
@@ -455,11 +452,11 @@ class ReadThenWriteTests(unittest.TestCase):
         self.assertEqual({"QA", "VAL", "VAL2"}, keys)
         self.assertIn(mine["key"], keys)
 
-    def test_one_project_taking_one_space_name_twice_is_refused_in_words(self) -> None:
-        with self.assertRaisesRegex(model.PlanningError, "already has a planning space"):
-            service.create_planning_space(
-                self.conn, project_id="example-workspace", name="Quality Assurance"
-            )
+    def test_a_space_name_taken_twice_is_refused_in_words(self) -> None:
+        with self.assertRaisesRegex(
+            model.PlanningError, "a planning space named Quality Assurance already exists"
+        ):
+            service.create_planning_space(self.conn, name="Quality Assurance")
         self.conn.rollback()
 
     def test_a_summary_takes_its_lock_before_it_reads_its_call(self) -> None:

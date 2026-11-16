@@ -54,7 +54,7 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { grantFocus, NO_FOCUS_RIGHT } from '@/shared/lib/focusRight.ts'
 import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
-import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
+import { spaceName, useSpaceNames } from '@/shared/lib/spaceNames.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -129,7 +129,7 @@ const statusText = computed(() => {
   if (all.value.length) return t('requests.noneWaiting')
   return ''
 })
-const projects = useProjectTitles()
+const spaces = useSpaceNames()
 /** The sources not read, each with the reason the finder names it by. */
 const skipped = computed(() =>
   (props.result?.coverage ?? [])
@@ -137,10 +137,9 @@ const skipped = computed(() =>
     .map((source) => {
       const reason = skippedSourceReason(source.reason)
       return {
-        key: JSON.stringify([source.project_id, source.space_ref]),
+        key: JSON.stringify(source.space_ref),
         text: t('requests.sourceUnavailable', {
-          project: projectTitle(projects.value, source.project_id),
-          space: source.space_ref.space_key,
+          space: spaceName(spaces.value, source.space_ref),
           reason: t(
             reason === 'requests_unavailable' ? 'requests.unreadable' : `finder.reasons.${reason}`,
           ),

@@ -21,9 +21,7 @@ class PlanningDomainTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        self.space = service.create_planning_space(
-            self.conn, project_id="example-workspace", name="Quality Assurance"
-        )
+        self.space = service.create_planning_space(self.conn, name="Quality Assurance")
 
     def item(self, title: str, **kwargs) -> dict:
         return service.create_work_item(
@@ -34,17 +32,15 @@ class PlanningDomainTests(unittest.TestCase):
 
     def test_a_space_key_is_derived_and_never_shared(self) -> None:
         self.assertEqual("QA", self.space["key"])
-        second = service.create_planning_space(
-            self.conn, project_id="other", name="Quality Assurance Two"
-        )
-        third = service.create_planning_space(self.conn, project_id="third", name="Valkama")
+        second = service.create_planning_space(self.conn, name="Quality Assurance Two")
+        third = service.create_planning_space(self.conn, name="Valkama")
         self.assertEqual("QAT", second["key"])
         self.assertEqual("VAL", third["key"])
         keys = {row[0] for row in self.conn.execute("SELECT key FROM planning_spaces")}
         self.assertEqual(3, len(keys))
 
     def test_a_derived_key_that_collides_is_numbered(self) -> None:
-        service.create_planning_space(self.conn, project_id="p2", name="Quick Analysis")
+        service.create_planning_space(self.conn, name="Quick Analysis")
         keys = sorted(row[0] for row in self.conn.execute("SELECT key FROM planning_spaces"))
         self.assertEqual(["QA", "QA2"], keys)
 
@@ -452,6 +448,7 @@ class PlanningDomainTests(unittest.TestCase):
                 "planning_space": None,
                 "nodes": [],
                 "edges": [],
+                "other_space_ends": [],
             },
             views.graph_payload(self.conn),
         )
@@ -504,9 +501,7 @@ class PlanningDomainTests(unittest.TestCase):
         them, and a page of one cut it off.
         """
 
-        other = service.create_planning_space(
-            self.conn, project_id="second", name="Release", key="REL"
-        )
+        other = service.create_planning_space(self.conn, name="Release", key="REL")
         exact = self.item("Asked for by number")
         for number in range(2, 13):
             self.item(f"Filler {number}")
@@ -548,14 +543,44 @@ class PlanningDomainTests(unittest.TestCase):
         )
         self.assertEqual("QA-1", feed[0]["reference"])
 
-    def test_a_project_gets_its_space_on_first_use(self) -> None:
-        self.assertIsNone(views.space_for_project(self.conn, "sims"))
-        made = views.ensure_space_for_project(self.conn, "sims", name="Sample Mods Manager")
-        self.assertEqual("sims", made["project_id"])
+    def test_a_space_is_made_by_its_name_alone_and_its_name_is_its_own(self) -> None:
+        made = service.create_planning_space(self.conn, name="Sample Mods Manager", key="SMM")
         self.assertEqual(
-            made["planning_space_id"],
-            views.ensure_space_for_project(self.conn, "sims")["planning_space_id"],
+            {
+                "planning_space_id": made["planning_space_id"],
+                "name": "Sample Mods Manager",
+                "key": "SMM",
+                "provider_kind": "local",
+                "launch_place": "space",
+            },
+            {name: value for name, value in made.items() if name != "workflow"},
         )
+        columns = {row[1] for row in self.conn.execute("PRAGMA table_info(planning_spaces)")}
+        self.assertNotIn("project_id", columns)
+        # A space is found by its name as well as by its key, so a second one by the
+        # same name is refused, whatever its key, and the store holds the same.
+        with self.assertRaisesRegex(
+            model.PlanningError, "a planning space named Sample Mods Manager already exists"
+        ):
+            service.create_planning_space(self.conn, name="Sample Mods Manager", key="SM2")
+        self.assertEqual(
+            [("SMM",)],
+            [
+                tuple(row)
+                for row in self.conn.execute(
+                    "SELECT key FROM planning_spaces WHERE name = 'Sample Mods Manager'"
+                )
+            ],
+        )
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "UNIQUE"):
+            self.conn.execute(
+                "INSERT INTO planning_spaces(planning_space_id, name, key) VALUES('x', ?, 'SM3')",
+                ("Sample Mods Manager",),
+            )
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK"):
+            self.conn.execute(
+                "UPDATE planning_spaces SET launch_place = 'elsewhere' WHERE key = 'SMM'"
+            )
 
     # -- hierarchy and links -------------------------------------------------
 
@@ -576,7 +601,7 @@ class PlanningDomainTests(unittest.TestCase):
         self.assertIsNone(service.get_work_item(self.conn, item["reference"])["parent_id"])
 
     def test_reparenting_refuses_a_parent_in_another_planning_space(self) -> None:
-        other = service.create_planning_space(self.conn, project_id="other", name="Other Work")
+        other = service.create_planning_space(self.conn, name="Other Work")
         foreign = service.create_work_item(
             self.conn, space=other["key"], title="Elsewhere", kind="goal", author="tester"
         )
@@ -782,9 +807,7 @@ class PlanningDomainTests(unittest.TestCase):
         open_blocker = self.item("Still open")
         done_blocker = self.item("Finished")
         cancelled_blocker = self.item("Not needed")
-        other_space = service.create_planning_space(
-            self.conn, project_id="other-project", name="Other Space", key="OTH"
-        )
+        other_space = service.create_planning_space(self.conn, name="Other Space", key="OTH")
         foreign = service.create_work_item(
             self.conn,
             space=other_space["key"],
@@ -867,13 +890,12 @@ class PlanningDomainTests(unittest.TestCase):
 
         It used to read only the links leaving the space, so an item blocked
         from another space was shown with nothing to say why it could not be
-        taken, and the graph could not name what it waited on.
+        taken, and the graph could not name what it waited on. Every kind of link
+        from there is drawn now, the blocker's other links among them.
         """
 
         blocked = self.item("Blocked from elsewhere")
-        other_space = service.create_planning_space(
-            self.conn, project_id="other-project", name="Other Space", key="OTH"
-        )
+        other_space = service.create_planning_space(self.conn, name="Other Space", key="OTH")
         foreign = service.create_work_item(
             self.conn,
             space=other_space["key"],
@@ -882,12 +904,14 @@ class PlanningDomainTests(unittest.TestCase):
             acceptance="assignment",
         )
         service.link_work_items(self.conn, foreign["reference"], blocked["reference"], "blocks")
-        # Another kind of link from there stays that space's to show.
         service.link_work_items(self.conn, foreign["reference"], blocked["reference"], "relates-to")
 
         here = views.planning_payload(self.conn, space=self.space["key"])
         self.assertEqual(
-            [(foreign["reference"], "blocks", "Review", "review", False, None)],
+            [
+                (foreign["reference"], "blocks", "Review", "review", False, None),
+                (foreign["reference"], "relates-to", "Review", "review", False, None),
+            ],
             self.source_of(here, blocked["work_item_id"]),
         )
         # The other space's view still carries the same link, leaving it.
@@ -906,7 +930,10 @@ class PlanningDomainTests(unittest.TestCase):
         self.close(foreign["reference"], "done")
         here = views.planning_payload(self.conn, space=self.space["key"])
         self.assertEqual(
-            [(foreign["reference"], "blocks", "Done", "completed", True, None)],
+            [
+                (foreign["reference"], "blocks", "Done", "completed", True, None),
+                (foreign["reference"], "relates-to", "Done", "completed", True, None),
+            ],
             self.source_of(here, blocked["work_item_id"]),
         )
         graph = {

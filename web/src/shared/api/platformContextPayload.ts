@@ -1,39 +1,40 @@
 /**
- * The context a shell opens with: which project directory it can see, and the
- * route preference it left behind.
+ * The context a shell opens with: which spaces it can open, with their projects,
+ * and the route preference it left behind.
  */
 
 import {
-  boundedList,
   boundedText,
   fromValidator,
   parseContract,
-  safeText,
   strictObject,
   z,
 } from '@/shared/api/contract.ts'
+import { SPACE_KEY, TITLE } from '@/shared/api/planningSpaceModel.ts'
 import { validateEntityRef } from '@/shared/api/platformEntityRef.ts'
 import { validateOperatingScope } from '@/shared/api/platformRoute.ts'
 import { validatePlatformUiState } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 
-const projectResourceSchema = strictObject({
-  resource_ref: fromValidator(validateEntityRef),
-  state: z.enum([...BINDING_STATES] as [BindingState, ...BindingState[]], {
-    message: 'unknown binding state',
-  }),
-  reason: safeText().optional(),
-})
-
-const projectDirectorySchema = strictObject({
+// The registry keeps a project's name and a space's in up to 200 characters, brackets
+// included; each is shown as text, never as markup.
+const shellProjectShape = {
   project_id: boundedText(PROJECT_ID, 160),
-  // The registry keeps a project's name in up to 200 characters, brackets
-  // included; it is shown as text, never as markup.
-  title: boundedText(/^[^\u{0}]{1,200}$/u, 200),
-  binding_state: z.enum([...BINDING_STATES] as [BindingState, ...BindingState[]], {
-    message: 'unknown binding state',
-  }),
-  resources: boundedList(projectResourceSchema, 128),
+  display_name: boundedText(TITLE, 200),
+}
+
+const shellSpaceSchema = strictObject({
+  data_scope_id: boundedText(UUID, 36),
+  space_key: boundedText(SPACE_KEY, 8),
+  name: boundedText(TITLE, 200),
+  /** Null when the registry binds no project to the space. */
+  default_project: boundedText(PROJECT_ID, 160).nullable(),
+  /** The default one first, then by id. */
+  projects: z.array(strictObject(shellProjectShape)),
+  /** Projects of other spaces the items of this one name, by id. */
+  other_space_projects: z.array(
+    strictObject({ ...shellProjectShape, space_key: boundedText(SPACE_KEY, 8).nullable() }),
+  ),
 })
 
 const MODULE_ID = /^[a-z][a-z0-9-]{0,63}$/u
@@ -73,7 +74,8 @@ const contextReadySchema = strictObject({
     data_scope_id: boundedText(UUID, 36),
     is_writable: z.literal(true, { message: 'primary must be explicitly writable' }),
   }),
-  projects: z.array(projectDirectorySchema),
+  // The registry holds as many spaces and projects as it has.
+  spaces: z.array(shellSpaceSchema),
   ui_prefs: savedUiPrefsSchema,
 })
 
@@ -123,10 +125,9 @@ export function validatePlatformContextPayload(
     state: validateTypedState(record.state, `${path}.state`, contextReady),
   }
 }
-import { BINDING_STATES, invalid, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
+import { invalid, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 import { CONTEXT_INTERFACE, UI_PREFS_INTERFACE } from '@/shared/api/platformApiTypes.ts'
 import type {
-  BindingState,
   PlatformContextPayload,
   PlatformContextReady,
   PlatformUiPrefs,

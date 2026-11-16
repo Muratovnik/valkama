@@ -285,7 +285,7 @@ class Figures:
 class ReferenceTests(UsageStore):
     def setUp(self) -> None:
         super().setUp()
-        _, self.item_id = self.item()
+        _, self.item_id = self.item(projects=["alpha"])
         self.session("s-1", self.beta_root / "src")
         self.session("s-2", self.root / "elsewhere")
 

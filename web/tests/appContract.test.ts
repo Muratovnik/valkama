@@ -18,7 +18,6 @@ const liveFeed = source('../src/app/composables/usePlatformLiveFeed.ts')
 const sessionWorkItemRoute = source('../src/features/session-open/sessionWorkItemRoute.ts')
 const sessionOpening = source('../src/app/composables/useSessionOpening.ts')
 const moduleAuthority = source('../src/app/composables/useModuleRouteAuthority.ts')
-const projectResources = source('../src/app/composables/useProjectResources.ts')
 const api = source('../src/shared/api/platformApi.ts')
 const planningApi = source('../src/shared/api/platformPlanningApi.ts')
 const coreApi = source('../src/shared/api/api.ts')
@@ -46,19 +45,11 @@ test('platformRoute is the sole route owner for the six-module shell', () => {
   assert.doesNotMatch(nav, /useStorage|localStorage|navigation-collapsed|goal-index-collapsed/)
 })
 
-test('one explicit operating-scope grammar owns Global, Project, and neutral resources', () => {
+test('one explicit operating-scope grammar owns every space, a space and its project', () => {
   assert.match(contextBar, /platform\.scope\.label/)
+  assert.match(contextBar, /platform\.scope\.project/)
   assert.match(app, /switchScope/)
-  assert.match(app, /availableProjectResources/)
-  assert.match(app, /selectResource/)
-  assert.match(
-    projectResources,
-    /selectableProjectResources\(activeManifest\.value, mappedProjectResources\.value\)/,
-  )
-  assert.match(
-    projectResources,
-    /resolveResourceSelection\(activeManifest\.value, route\.value, selected\)/,
-  )
+  assert.match(app, /:spaces="barSpaces"/)
   assert.doesNotMatch(
     app,
     /scope_kind:\s*['"]all['"]|\?scope=|\?board=|localStorage\.getItem\([^)]*scope/,
@@ -102,7 +93,6 @@ test('the inspector reads no extension registry', () => {
 
 test('a plan anchor is asked about under the exact Planning space of its card', () => {
   assert.match(planningSurface, /boundSpaceResourceRef/)
-  assert.match(planningSurface, /planningSpaceEntity\(space\)/)
   assert.match(planningSurface, /resourceRef: boundSpaceResourceRef\.value/)
   assert.match(inspector, /:resource-ref="resourceRef"/)
   // The head's icon stands outside the card's layer of links, so it asks for its
@@ -118,12 +108,13 @@ test('a plan anchor is asked about under the exact Planning space of its card', 
   )
 })
 
-test('session navigation refuses ambiguous project ownership', () => {
-  assert.match(sessionWorkItemRoute, /binding_state === 'mapped'/)
+test('session navigation opens only a space this workstation lists', () => {
   assert.match(sessionWorkItemRoute, /resolveManifestRouteAuthority/)
   assert.match(sessionWorkItemRoute, /planningWorkItemEntity\(\{ space_ref: space, reference \}/)
-  assert.match(sessionWorkItemRoute, /resource_ref\.resource_id === resourceRef\.resource_id/)
-  assert.match(sessionWorkItemRoute, /candidates\.length !== 1/)
+  assert.match(
+    sessionWorkItemRoute,
+    /spaces \?\? \[\]\)\.some\(\(item\) => sameSpace\(item, held\)\)/,
+  )
   assert.match(sessionOpening, /resolveSessionWorkItemRoute\(/)
   assert.match(app, /useSessionOpening\(/)
   assert.doesNotMatch(liveFeed, /kind: 'work-item'/)
@@ -140,7 +131,7 @@ test('Settings changes nothing about which modules exist', () => {
 test('planning projects three views from one read of the space', () => {
   // The three views take the same model apart rather than each fetching their
   // own: one `/api/planning` answer carries the workflow, the items and the links.
-  assert.match(planningSurface, /fetchPlanning\(\{ project, \.\.\.space \}\)/)
+  assert.match(planningSurface, /fetchPlanning\(target\)/)
   assert.match(workspace, /<WorkItemBoard/)
   assert.match(workspace, /<WorkItemList/)
   assert.match(workspace, /<WorkItemGraph/)
@@ -150,16 +141,14 @@ test('planning projects three views from one read of the space', () => {
   assert.match(planningSurface, /usePlanningMoves\(/)
   assert.match(planningMoves, /transitionWorkItem\(/)
   assert.match(planningMoves, /rankWorkItem\(/)
-  // `openProject` is the portfolio's own event; the surface's part is routing it on.
+  // `open-space` is the portfolio's own event; the surface's part is routing it on.
   assert.match(planningSurface, /<PlanningPortfolio/)
-  assert.match(planningSurface, /'open-project': \[projectId: string\]/)
+  assert.match(planningSurface, /'open-space': \[space: PlanningSpaceRef\]/)
   // An opened item is a route, not module state: that is what makes it survive a
   // reload and what makes Back close it.
   assert.match(planningSurface, /planningWorkItemEntity\(\{ space_ref: space, reference \}\)/)
   assert.doesNotMatch(planningSurface, /open\.value = /)
-  assert.match(portfolio, /platform\.planning\.openProject/)
-  assert.match(portfolio, /serializePlatformRoute/)
-  assert.match(portfolio, /platform\.planning\.reviewBinding/)
+  assert.match(portfolio, /platform\.planning\.openSpace/)
   assert.doesNotMatch(portfolio, /:disabled=/)
   assert.match(itemList, /workItem\.listEmpty/)
   assert.doesNotMatch(planningSurface, /fetchDashboard|fetchBoard/)
@@ -172,9 +161,9 @@ test('clean entry restores the last server-side route without legacy storage', (
   assert.match(entryRestore, /restoredEntryRoute/)
   assert.match(entryRestore, /savePlatformUiPrefs/)
   // The restored destination must still resolve, or the app lands on a dead one.
-  assert.match(entryRestore, /binding_state === 'mapped'/)
+  assert.match(entryRestore, /restoredScope/)
   assert.match(entryRestore, /modulesSettled/)
-  assert.match(contextBar, /resourceOptions\.length > 1/)
+  assert.match(contextBar, /projectChoices\.value\.length > 1/)
   for (const shellSource of [app, entryRestore]) {
     assert.doesNotMatch(
       shellSource,
@@ -200,10 +189,11 @@ test('generic shell and contracts contain no Planning storage identity', () => {
     assert.doesNotMatch(genericSource, /BoardRef|CardRef|board_name|board_ref|card_ref/)
   }
   assert.doesNotMatch(source('../src/shared/api/platformRoute.ts'), /LEGACY_QUERY_KEYS/)
-  // Planning's ref grammar has exactly one owner. The live feed is left out of
-  // this list on purpose: resolving an activity row to a project *is* reading
-  // that grammar, and it reads it through the module above rather than by
-  // re-deriving a key from a string.
+  // Planning's ref grammar has exactly one owner. A scope names its space by the
+  // space's own reference, which the shell passes on as it is; decoding an entity
+  // into a space or an item is Planning's alone. The live feed is left out of this
+  // list on purpose: resolving an activity row to a space *is* reading that grammar,
+  // and it reads it through the module above rather than by re-deriving a key.
   for (const genericSource of [
     app,
     contextBar,
@@ -214,7 +204,7 @@ test('generic shell and contracts contain no Planning storage identity', () => {
     source('../src/shared/api/platformEntityRef.ts'),
     source('../src/shared/api/platformRoute.ts'),
   ]) {
-    assert.doesNotMatch(genericSource, /PlanningSpaceRef|WorkItemRef|space_key/)
+    assert.doesNotMatch(genericSource, /WorkItemRef|planningSpaceRef\(|planningWorkItemRef\(/)
   }
   assert.match(source('../src/shared/api/platformPlanningRefs.ts'), /PlanningSpaceRef|WorkItemRef/)
   assert.match(moduleAuthority, /resolveManifestRouteAuthority/)

@@ -22,9 +22,8 @@ import { fetchPlanningWorkItemBrief } from '@/shared/api/platformPlanningApi.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
 
-/** A project that maps a space with the reference's key, through one exact binding. */
+/** A space with the reference's key, where the item may be. */
 export interface PreviewCandidate {
-  project_id: string
   space_ref: PlanningSpaceRef
 }
 
@@ -59,17 +58,13 @@ export const PREVIEW_FRESH_MS = 10_000
 export const PREVIEW_CACHE_LIMIT = 100
 
 /**
- * The cache key. The same reference may name another item once the projects
+ * The cache key. The same reference may name another item once the spaces
  * change, so the places it was looked for are part of what was read.
  */
 function keyOf(reference: string, candidates: readonly PreviewCandidate[]) {
   return JSON.stringify([
     reference,
-    candidates.map(({ project_id, space_ref }) => [
-      project_id,
-      space_ref.data_scope_id,
-      space_ref.space_key,
-    ]),
+    candidates.map(({ space_ref }) => [space_ref.data_scope_id, space_ref.space_key]),
   ])
 }
 
@@ -107,7 +102,6 @@ export function createWorkItemPreviewReads(
     for (const candidate of candidates) {
       try {
         const payload = await fetchPlanningWorkItemBrief(
-          { kind: 'project', project_ref: { project_id: candidate.project_id } },
           { space_ref: candidate.space_ref, reference },
           signal,
         )

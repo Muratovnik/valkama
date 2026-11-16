@@ -6,7 +6,7 @@ import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { installBackend } from './backend.ts'
 import { watchLoading } from './loadingWatch.ts'
-import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
 import { test } from './test.ts'
 
@@ -41,7 +41,7 @@ async function openBoard(page: Page, prepare?: () => Promise<unknown>) {
   await installBackend(page)
   await prepare?.()
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
 }
 
@@ -370,7 +370,7 @@ test('a link to Settings whose code fails to download offers Retry in the module
   })
   await installBackend(page)
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
 
   const loading = page.locator('.module-frame [aria-busy="true"]')
   await expect(loading).toContainText('Loading')

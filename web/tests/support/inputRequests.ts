@@ -3,7 +3,6 @@ import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequ
 export function requestEntry(): InputRequestEntry {
   return {
     target: {
-      project_id: 'requests-project',
       space_ref: { data_scope_id: '11111111-1111-4111-8111-111111111111', space_key: 'TASK' },
       reference: 'TASK-7',
       writable: true,
@@ -44,7 +43,6 @@ export function requestList(items = [requestEntry()]): InputRequestList {
     items,
     coverage: [
       {
-        project_id: target.project_id,
         space_ref: target.space_ref,
         status: 'searched',
         reason: null,
@@ -85,11 +83,13 @@ export const answered = (entry: InputRequestEntry, by = 'user'): InputRequestEnt
   },
 })
 
-/** A source the listing could not read, for the reason the server gave. */
-export function unavailableSource(project: string, reason: string) {
+/** A space the listing could not read, by its key, for the reason the server gave. */
+export function unavailableSource(spaceKey: string, reason: string) {
   return {
-    project_id: project,
-    space_ref: requestEntry().target.space_ref,
+    space_ref: {
+      data_scope_id: requestEntry().target.space_ref.data_scope_id,
+      space_key: spaceKey,
+    },
     status: 'unavailable' as const,
     reason,
   }

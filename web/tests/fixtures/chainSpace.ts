@@ -59,6 +59,7 @@ function brief(
     waits_for: [],
     workable: !closed,
     labels: [],
+    projects: [],
     source: '',
     checklist: [],
     revision: 0,

@@ -8,12 +8,12 @@ import { branchedChain } from '../fixtures/chainMap.ts'
 import { asRoot } from '../support/threads.ts'
 import { installBackend } from './backend.ts'
 import { largeChainHere, serve, showChain } from './chainFixtures.ts'
-import { now, projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { now, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

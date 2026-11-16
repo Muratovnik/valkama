@@ -14,7 +14,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { expectStripOnColumn } from './confirmStrip.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { openCard } from './editorPage.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { asked, openQuestion } from './questionBackend.ts'
 import { test } from './test.ts'
 
@@ -40,7 +40,7 @@ for (const locale of ['en', 'ru'] as const)
     }) => {
       await inLocale(page, locale, width)
       await installDiscussionBackend(page)
-      await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+      await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
       await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
       const drawer = page.locator('.drawer')
       await expect(drawer).toHaveCSS('transform', 'none')

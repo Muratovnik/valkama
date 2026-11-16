@@ -347,7 +347,7 @@ def list_page(
     parameters: list[object] = []
     if space is not None:
         clauses.append("i.planning_space_id=?")
-        parameters.append(service.get_planning_space(conn, space)["planning_space_id"])
+        parameters.append(service.space_identity(conn, space))
     if reference is not None:
         item = read_model.item_row(conn, reference)
         if space is not None and item["planning_space_id"] != parameters[0]:

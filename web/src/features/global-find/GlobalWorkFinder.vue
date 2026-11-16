@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * Every mapped project's work, searched from anywhere, a result opened by Enter.
+ * Every space's work, searched from anywhere, a result opened by Enter.
  *
  * A result row prints the facets the registry gives the finder: the priority
  * when it asks for attention, the kind when it is not a plain task, the
- * reference, the title, then the state's dot and name and the project. The
+ * reference, the title, then the state's dot and name and the space. The
  * marks are read, not pressed: a row opens its item, and the finder filters
  * nothing. A result from a server that does not send them reads as before.
  */
@@ -20,7 +20,8 @@ import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
 import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
-import { projectTitle } from '@/shared/lib/projectTitles.ts'
+import { spaceName } from '@/shared/lib/spaceNames.ts'
+import type { SpaceName } from '@/shared/lib/spaceNames.ts'
 import { useStandingName } from '@/shared/lib/useStateName.ts'
 import CommandList from '@/shared/ui/CommandList.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
@@ -31,12 +32,12 @@ import VButton from '@/shared/ui/VButton.vue'
 const props = withDefaults(
   defineProps<{
     open: boolean
-    /** The projects the app already lists, so a result can name its project by title. */
-    projects?: readonly { project_id: string; title: string }[]
+    /** The spaces the app already lists, so a result can name its space. */
+    spaces?: readonly SpaceName[]
     /** Text to search for as it opens, handed over by another search; blank keeps the last one. */
     text?: string
   }>(),
-  { projects: () => [], text: '' },
+  { spaces: () => [], text: '' },
 )
 const emit = defineEmits<{ close: []; select: [target: PlanningTarget] }>()
 const { t } = useI18n()
@@ -75,7 +76,7 @@ const skipped = computed(() => {
     if (entry.status !== 'unavailable') continue
     const reason = skippedSourceReason(entry.reason)
     const sources = groups.get(reason) ?? []
-    sources.push(`${projectTitle(props.projects, entry.project_id)} · ${entry.space_ref.space_key}`)
+    sources.push(spaceName(props.spaces, entry.space_ref))
     groups.set(reason, sources)
   }
   return [...groups].map(([reason, sources]) => ({
@@ -157,16 +158,16 @@ function subjectOf({ item }: Found): FacetSubject | null {
 const choices = computed(() =>
   (waitHeld.value ? [] : (result.value?.items ?? [])).map((entry) => {
     const subject = subjectOf(entry)
-    const project = projectTitle(props.projects, entry.target.project_id)
+    const space = spaceName(props.spaces, entry.target.space_ref)
     const readonly = entry.target.writable ? [] : [t('finder.readonly')]
     return {
-      key: `${entry.target.project_id}:${entry.target.space_ref.data_scope_id}:${entry.item.work_item_id}`,
+      key: `${entry.target.space_ref.data_scope_id}:${entry.item.work_item_id}`,
       title: entry.item.title,
       reference: entry.item.reference,
       subject,
       // With its marks the state is drawn, so the words after it are the rest.
-      place: [project, ...readonly].join(' · '),
-      detail: [project, stateName(entry.item), ...readonly].join(' · '),
+      place: [space, ...readonly].join(' · '),
+      detail: [space, stateName(entry.item), ...readonly].join(' · '),
     }
   }),
 )

@@ -2,7 +2,7 @@
  * A session named by its id, from a reference in free text or from an address the shell
  * recovered: its context, read from the server, shown beside the workspace. Asked to go
  * there, as an address that named a session is, it opens the session's work item instead
- * when that item's space is bound to exactly one known project, and shows the context
+ * when this workstation lists that item's space, and shows the context
  * only when it is not.
  *
  * An address waits until the modules and the context are known, since the item's route

@@ -7,45 +7,30 @@ import { useReadWorkItemPreview } from '@/entities/work-item/composables/useWork
 import { fetchSessionContext } from '@/shared/api/api.ts'
 import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearchApi.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
-import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import type { ShellSpace } from '@/shared/api/platformApiTypes.ts'
+import { sameSpace } from '@/shared/api/platformPlanningRefs.ts'
 import { workItemLinkAddress } from '@/shared/api/platformRoute.ts'
 import type { SayNotice } from '@/shared/lib/notice.ts'
 import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 
-type Project = PlatformContextReady['projects'][number]
-
-/** A resource's planning space, or nothing for one that is not mapped to a space. */
-function mappedSpace(resource: Project['resources'][number]) {
-  if (resource.state !== 'mapped') return null
-  try {
-    return planningSpaceRef(resource.resource_ref) ?? null
-  } catch {
-    return null
-  }
-}
-
-/** Every planning space a known project maps, by its key, where a press looks first leading. */
-function spacesByKey(projects: readonly Project[], primary: string | undefined) {
+/** Every space this workstation lists, by its key, where a press looks first leading. */
+function spacesByKey(spaces: readonly ShellSpace[], primary: string | undefined) {
   const keys = new Map<string, PreviewCandidate[]>()
-  for (const project of projects)
-    for (const resource of project.resources) {
-      const space = mappedSpace(resource)
-      if (!space) continue
-      const found = keys.get(space.space_key) ?? []
-      const candidate = { project_id: project.project_id, space_ref: space }
-      if (space.data_scope_id === primary) found.unshift(candidate)
-      else found.push(candidate)
-      keys.set(space.space_key, found)
-    }
+  for (const { data_scope_id, space_key } of spaces) {
+    const found = keys.get(space_key) ?? []
+    const candidate = { space_ref: { data_scope_id, space_key } }
+    if (data_scope_id === primary) found.unshift(candidate)
+    else found.push(candidate)
+    keys.set(space_key, found)
+  }
   return keys
 }
 
 /**
  * The top layer of reference links: what the shell can answer from anywhere.
  *
- * - A work item reference is a link when its key names a space of a project
- *   this installation knows; `SHA-256` names none and stays text. Opening it
+ * - A work item reference is a link when its key names a space this
+ *   installation knows; `SHA-256` names none and stays text. Opening it
  *   asks the global search for that exact reference — the finder's own path —
  *   and opens what it finds, or says it found nothing. Its address is the item's
  *   short one, `/open/<number>`, which the server leads to the same card by the
@@ -64,7 +49,7 @@ export function useAppReferenceLinks(options: {
   openTarget: (target: PlanningTarget) => void
   /** The store whose space a press finds first when two stores hold one key. */
   primaryScope: () => string | undefined
-  projects: () => readonly PlatformContextReady['projects'][number][]
+  spaces: () => readonly ShellSpace[]
 }) {
   const { t } = useI18n()
   /** Per session id the server answered for: whether it knows it. */
@@ -73,10 +58,10 @@ export function useAppReferenceLinks(options: {
   const asked = new Set<string>()
 
   const previewRead = useReadWorkItemPreview(
-    (id) => options.projects().find((project) => project.project_id === id)?.title ?? null,
+    (space) => options.spaces().find((item) => sameSpace(item, space))?.name ?? null,
   )
 
-  const spaces = computed(() => spacesByKey(options.projects(), options.primaryScope()))
+  const spaces = computed(() => spacesByKey(options.spaces(), options.primaryScope()))
 
   function knownSession(id: string): boolean {
     if (!asked.has(id)) {

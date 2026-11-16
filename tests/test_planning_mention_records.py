@@ -79,7 +79,7 @@ class Harness(unittest.TestCase):
             os.environ.pop(name, None)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="p", name="Quality", key="MAIN")
+        service.create_planning_space(self.conn, name="Quality", key="MAIN")
         #: Where the comment is written, and the item it names.
         self.source = self.item("Decide the route")
         self.target = self.item("Drop the old route")

@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test'
 
-import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { present } from '../support/present.ts'
@@ -13,9 +13,8 @@ import {
   attachedDataScopeId,
   attachedSpaceRef,
   attachedWorkItemRef,
-  projectId,
-  projectScope,
   spaceRef,
+  spaceScope,
   workItem,
 } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -45,7 +44,6 @@ test('root keyboard finder opens the exact attached result with partial coverage
         items: [
           {
             target: {
-              project_id: projectId,
               space_ref: attachedSpaceRef,
               reference: 'MAIN-264',
               writable: false,
@@ -63,9 +61,8 @@ test('root keyboard finder opens the exact attached result with partial coverage
           },
         ],
         coverage: [
-          { project_id: projectId, space_ref: attachedSpaceRef, status: 'searched', reason: null },
+          { space_ref: attachedSpaceRef, status: 'searched', reason: null },
           {
-            project_id: 'offline-project',
             space_ref: spaceRef,
             status: 'unavailable',
             reason: 'offline',
@@ -77,8 +74,7 @@ test('root keyboard finder opens the exact attached result with partial coverage
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(spaceRef),
+      scope: spaceScope,
     }),
   )
   await expect(page.locator('.work-item-board')).toBeVisible()
@@ -88,9 +84,7 @@ test('root keyboard finder opens the exact attached result with partial coverage
   await expect(search).toBeFocused()
   await search.fill('MAIN-264')
   await expect(dialog.getByRole('option')).toContainText('Read only')
-  await expect(dialog.getByRole('status')).toContainText(
-    'Could not be read: offline-project · MAIN',
-  )
+  await expect(dialog.getByRole('status')).toContainText('Could not be read: Main')
   await expect(dialog.getByRole('status')).toContainText('More matches are available.')
   await expectNoSilentClipping(page, 'Finder at 390px')
   await page.screenshot({ path: testInfo.outputPath('finder-narrow.png') })
@@ -101,7 +95,7 @@ test('root keyboard finder opens the exact attached result with partial coverage
   await expect(page).toHaveURL(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: { kind: 'space', space_ref: attachedSpaceRef },
       entity: planningWorkItemEntity(attachedWorkItemRef),
     }),
   )
@@ -117,7 +111,7 @@ test('root keyboard finder opens the exact attached result with partial coverage
 
 test('native skip link focuses content and preserves the canonical route', async ({ page }) => {
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await expect(page.locator('.work-item-board')).toBeVisible()
   const original = page.url()
   await page.keyboard.press('Tab')
@@ -186,7 +180,6 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   ).toBeVisible()
   expect(requests.writes).toEqual([
     {
-      project_id: projectId,
       data_scope_id: spaceRef.data_scope_id,
       space_key: 'MAIN',
       id: requests.entry.request.request_id,
@@ -249,7 +242,7 @@ test('Discuss step reveals the composer and retains a frozen quote after rename 
 }) => {
   await page.setViewportSize({ width: 390, height: 900 })
   const backend = await installDiscussionBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   const discuss = drawer.getByRole('button', {

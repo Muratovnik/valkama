@@ -28,7 +28,7 @@ import { ASKING_HEAD, openHead } from './cardHeadPage.ts'
 import { serve as serveChain, smallChain } from './chainFixtures.ts'
 import { openMentionList } from './editorPage.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
-import { globalScope, projectScope, workItemRef } from './planningFixtures.ts'
+import { globalScope, spaceScope, workItemRef } from './planningFixtures.ts'
 import { asked, openQuestion } from './questionBackend.ts'
 import { test } from './test.ts'
 
@@ -43,7 +43,7 @@ const VIEWPORTS: Record<Width, number> = {
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 const PORTFOLIO = serializePlatformRoute({ module_id: 'planning', scope: globalScope })
@@ -111,7 +111,7 @@ async function portfolio(page: Page) {
   await withLiveWork(page, async () => {
     await page.goto(PORTFOLIO)
   })
-  await expect(page.locator('.portfolio-project').first()).toBeVisible()
+  await expect(page.locator('.portfolio-space').first()).toBeVisible()
 }
 
 async function card(page: Page, before?: () => Promise<unknown>) {

@@ -190,16 +190,18 @@ python valkama.py projects check
 ```
 
 The check reports `"ok": true` when Valkama's inventory and the projection
-used by its modules agree. To connect the project to Planning, use the MCP
-`create_planning_space` tool with `project_id` set to `my-project`, then bind
-the returned space key:
+used by its modules agree. To connect the project to Planning, create a space
+with the MCP `create_planning_space` tool, giving it a name no other space has (a
+key is derived from the name unless you give one); a space holds no project until
+one is bound to it. Then bind the project to the returned space key:
 
 ```powershell
 python valkama.py projects bind my-project --space MY
 ```
 
-Replace `MY` with the key returned for your Planning space. A binding must
-point to a space whose project id matches the registered project. Run
+Replace `MY` with the key returned for your Planning space. The first project
+bound to a space becomes its default project; see
+[Project registry](#project-registry) for several projects in one space. Run
 `python valkama.py projects list` to inspect the result.
 
 ### 6. Optional: the desktop app (Windows)
@@ -254,7 +256,7 @@ python valkama.py <command> [options]
 | `released --space KEY --repo PATH --range A..B [--json]` | list the open work items whose commit refs went into a release range, and how each was found: `hash` (the commit is in the range), `patch-id` (the same change arrived under another hash), or one of two weak matches: `changed-patch` (the commit is outside the range and not in the history before it, and a commit in the range has its subject with another patch) and `subject` (the object is gone and the ref's label has the subject of a commit in the range). A hint to check by hand when closing a release: partly released work shows too, an item with no commit ref cannot, and it changes neither the store nor the repository |
 | `hook CLIENT EVENT` | record one client hook event from stdin without a running server; see [Client hooks](#client-hooks) |
 | `runtime` | print this checkout's backend and static identity |
-| `projects list\|add\|update\|remove\|bind\|check\|apply\|doctor\|rollback\|import` | manage the local project inventory and its projection; see [Project registry](#project-registry) |
+| `projects list\|add\|update\|remove\|bind\|check\|apply\|doctor\|rollback\|upgrade\|downgrade\|import` | manage the local project inventory and its projection; see [Project registry](#project-registry) |
 | `config [--json]` | every setting, the layer it came from, and the value in use |
 | `setup [--json] [--apply]` | what this installation needs, and the exact command for each gap |
 | `adapter check --at URL \| --command ARGV \| --mcp ARGV \| --record FILE` | ask an adapter for its manifest, then probe it for the calls it should refuse |
@@ -404,23 +406,63 @@ rather than falling back to a default, and `python valkama.py doctor` says why.
 
 The project registry is managed by Valkama's `projects` command, separate from
 `config.json`. On Windows, Valkama keeps the authoritative project inventory at
-`%LOCALAPPDATA%\Valkama\project-registry.toml` and publishes a schema-v3
-projection at `%LOCALAPPDATA%\Valkama\projects.json`. Planning, Memory,
+`%LOCALAPPDATA%\Valkama\project-registry.toml` (format 2) and publishes a
+schema-v4 projection at `%LOCALAPPDATA%\Valkama\projects.json`. Planning, Memory,
 and the desktop read that complete projection. A missing or malformed projection
-exposes no partial project list.
+exposes no partial project list, and a projection of another schema version is
+malformed.
 
-Use `projects add` to register an existing directory and `projects bind` to
-connect it to an existing Planning space. `projects update ID --name NAME`
-changes its display name; `--root ABS` moves its root to an existing directory,
-even if the old root is gone. `projects remove ID` removes only the registration,
-leaving the Planning store untouched. `projects check` compares the inventory
-and projection; `projects doctor` reports the same health result.
-`projects apply` republishes the current inventory, and `projects rollback`
-restores the exact inventory and projection bytes saved before the preceding
-change. For a one-time transfer from an existing schema-1 TOML inventory, use
-`projects import --source <absolute-path-to-inventory>`. Import refuses to
-overwrite an inventory or projection with different project data. There is no
-project-registry path override.
+A Planning space holds any number of projects, and exactly one of them is its
+default project: the space's root is that project's root. In the projection
+each binding names its space and says whether the project is its default:
+
+```json
+"planning_binding": {"default": true, "kind": "planning-space", "resource_id": "<opaque>"}
+```
+
+Use `projects add` to register an existing directory and
+`projects bind ID --space KEY [--scope NAME] [--default]` to connect it to an
+existing Planning space. The first project bound to a space becomes its
+default; `--default` makes the project the default and takes the flag from the
+previous one in the same change. Binding a project to another space moves its
+home space; its work items stay where they are. The default project of a space
+that keeps other projects cannot leave it, by `bind` or by `remove`: first make
+another project the default with `projects bind OTHER --space KEY --default`.
+`bind` reads only the space's identity from the store, so it also works on a
+store that has not been migrated yet.
+
+`projects update ID --name NAME` changes its display name; `--root ABS` moves
+its root to an existing directory, even if the old root is gone.
+`projects remove ID` removes only the registration and its binding, leaving the
+Planning store untouched. `projects check` compares the inventory and
+projection; `projects doctor` reports the same health result. Both also list
+in `foreign_bindings` each planning binding whose space lives in neither the
+main store nor an attached one, and `unreadable_stores` counts the stores, main
+or attached, that could not be read. A foreign binding leaves `ok` unchanged,
+since the inventory and projection still agree. `projects apply`
+republishes the current inventory, and `projects rollback` restores the exact
+inventory and projection bytes saved before the preceding change. It never
+crosses a change of format.
+
+A registry an earlier release wrote (inventory format 1, projection schema v3)
+is carried across once with `projects upgrade`. It keeps, in
+`projects.json.valkama.upgrade`, the exact former bytes of three files with
+their SHA-256: the inventory, the projection and the one-write snapshot
+`projects.json.valkama.rollback`, each recorded as absent when it was. On a
+registry that is already format 4 it answers `{"changed": false}` and touches
+nothing. `projects downgrade` returns all three files to those bytes exactly,
+removing a file that was absent, and removes the upgrade snapshot; changes made
+after the upgrade are lost with it, and the earlier release's `rollback` again
+undoes its own last write. Downgrade before installing the earlier release,
+which cannot read format 4. For a one-time transfer from a former writer's
+format-1 TOML inventory, use
+`projects import --source <absolute-path-to-inventory>`: it writes inventory
+format 2 and projection schema v4, and importing the same inventory again writes
+nothing. An import onto a machine with no inventory and no projection keeps
+that state in the upgrade snapshot too, so `projects downgrade` later returns
+the machine to no registry. Import refuses to overwrite an inventory or
+projection with different project data. There is no project-registry path
+override.
 
 The rest are environment-only, because each is either a one-shot switch or
 belongs to a process rather than to an installation:
@@ -511,8 +553,8 @@ exact shapes are in
 
 Two items filed for one change — the same finding twice, or one cause found in
 two places — are folded together with `merge_work_items`. The surviving item
-takes their steps, discussion, refs and links, and each merged item closes as
-its duplicate with its own history intact
+takes their steps, discussion, refs, links and projects, and each merged item
+closes as its duplicate with its own history intact
 ([details](docs/connection-contract.md#merging-items-that-are-one-change)).
 
 A claim also says whether anyone is still behind it. When the client proves its
@@ -608,14 +650,39 @@ exactly as it was, with no snapshot and no write. Open it with Valkama 2.9 once,
 which carries a store of any earlier schema forward under its own snapshots as that
 release describes, and then come back.
 
-To carry a 2.9 store to the work model, stop every process that holds the store --
-the listener and every agent client, since each one runs its own server -- and run:
+To carry a 2.9 store to the work model, first upgrade the project registry
+(`projects upgrade`), register and bind the projects its spaces hold (`projects add`,
+`projects bind`), and write the file that gives each work item its projects:
 
 ```powershell
-valkama migrate work-model
+valkama projects map-items --output item-projects.json
 ```
 
-It migrates the configured store (`store` or `VALKAMA_DB`). Before its first write
+`map-items` reads a copy of the store, the registry and the registered repositories,
+and writes nothing else. For each task its commits decide first: a value
+`project@hash` names a registered project, and a bare hash belongs to the one
+registered repository holding it. Without such a commit, a label equal to the id of
+a project bound to the task's space names that project, and `--label LABEL=PROJECT`
+carries another label in any space, provided its words are words of the project's
+id. A task with neither keeps its space's project. A carried label leaves the task,
+and the project's id still finds it in a search. The command prints the tasks it
+counted by space and by source, each task whose label names another project than
+its commits, and each task holding the label of a project of another space: read
+the file before migrating, and add a project where it is right. It refuses a file
+that already exists.
+
+Then stop every process that holds the store -- the listener and every agent
+client, since each one runs its own server -- and run:
+
+```powershell
+valkama migrate work-model --item-projects item-projects.json
+```
+
+It migrates the configured store (`store` or `VALKAMA_DB`). First it checks, only
+reading, that the registry is format 4 and binds each space's project to it, that no
+two spaces share a name, and that the file belongs to this store as it is now and
+names registered projects only; a store holding work items needs the file. A
+refusal names what to run, and nothing is written. Before its first write
 it takes a verified snapshot labelled `pre3.0` in `backups/` beside the store, with
 the pictures in a `.images` folder beside it, and then runs every step and checks
 every postcondition in one transaction: a step that fails or a postcondition that
@@ -715,6 +782,47 @@ Turn it on under Settings → General → Interface, on each device you use; it 
 effect at once. With the tab off, a card does not offer launching and does not read
 attempts, and launching itself keeps working as described here.
 
+The dialog suggests the directory a launch runs in by the space's launch place,
+`space` by default. With `space` it is the space's root, the root of its default
+project. With `item_project` it is the root of the card's project when the card
+names exactly one, even a project of another space; with none or several it is
+the space's root, since a set of projects has no first one. A goal or stage
+always takes the space's root. The launch place is the owner's setting,
+written through `POST /api/planning/space/settings` with `{space, launch_place}`;
+no planning tool writes it. The attempt records the project of that root as its
+`project_id`. Each claim answers with the root of every project the card changes
+(`project_roots`), so the agent reads each one's instructions before editing there.
+The capabilities read names the suggested directory as `repository`, with
+`repository_project` and `repository_status`, which uses the words of
+`project_roots` with the same meaning: `mapped` (the root is registered and its directory is there),
+`missing` (its directory is not there), `unregistered` (the card's project is
+no longer in the registry) and `unavailable` (the registry could not be read,
+one that does not parse included). Two cases only the launch root has:
+`unbound`, the card's space binds no project, and `no_item`, the read names no
+card or one that does not exist. With `missing` the suggested directory is the
+registered root that is not there; with every other word but `mapped` it is
+empty.
+
+A launch also gets the roots of the other projects it may touch, as directories
+beside the one it runs in: the root of every project of the card's space and of
+every other project the card names, whose directory is there, except the launch
+root and the roots inside it. The card's own come first, in the order of
+`project_roots`, then the space's other projects by id. The card's projects do
+not narrow this: a launch may edit every root of its space's projects that lies
+outside its own. Claude Code receives
+each as `--add-dir` on a fresh run and on a resume. Codex receives them as
+`--add-dir` on `codex exec`; `codex exec resume` takes none, and Valkama does not
+pass `sandbox_workspace_write.writable_roots` through `-c`, which would replace
+the owner's own list, so a resumed Codex run has only its working root. Neither
+client reliably reads the instructions of an added directory, which is why the
+claim names every root. The capabilities read
+(`GET /api/execution/capabilities?work_item=…`) lists them as `added_roots`, and
+each client's `added_dirs` says on which runs it takes them (`fresh_and_resume`,
+`fresh_only` or `none`). The attempt reads every root it passed: its
+`base_artifact` and `final_artifact` carry `added`, one entry per root with its
+project, its root and the same Git reading the working directory gets, so a
+change made only beside the working directory is evidence too.
+
 The launch dialog records a delivery contract, not just a command: an
 `expected_effect` (`change_required`, `no_change_acceptable` or
 `read_only_finding`), an optional review mode, and an interface version.
@@ -746,9 +854,11 @@ identity; resume never chooses a session by title, directory, time, or recency.
 `GET /api/session?id=<id>` resolves compact session context by exact identity
 or a unique stored prefix. A successful
 response has `resolved: true` and includes `session`, `client_family`,
-`work_item`, `space_root`, `status`, `detail`, and `at`. Missing or ambiguous
-identity returns `resolved: false` with the corresponding status. This endpoint
-does not return an event feed.
+`work_item`, `space_root`, `status`, `detail`, and `at`. `space_root` is the
+root of the default project of the space the session's work item lives in: a
+space may have several projects, and the registry names one of them its default.
+Missing or ambiguous identity returns `resolved: false` with the corresponding
+status. This endpoint does not return an event feed.
 
 Planning owns `POST /api/ingest`, which accepts only `session_start`,
 `session_end`, `attention`, and `turn_end` lifecycle events. The standalone
@@ -1338,6 +1448,10 @@ npm run build
 cd ../desktop
 npm test
 ```
+
+The history audit reads every commit and needs a clean tracked tree, so it runs
+on the clean head before publication, not between commits. Before each commit,
+`python .github/relkit.pyz audit --staged` checks what is about to be committed.
 
 An owner checkout additionally runs `python .github/relkit.pyz protect install`
 once and `python .github/relkit.pyz audit --history --owner` before publication.

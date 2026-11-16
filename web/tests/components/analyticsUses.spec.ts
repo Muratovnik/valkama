@@ -18,7 +18,11 @@ import { usageAnswer } from '../fixtures/analytics.ts'
 
 const USES = '/api/analytics/uses'
 const GLOBAL = { kind: 'global' as const }
-const PROJECT = { kind: 'project' as const, project_ref: { project_id: 'sample' } }
+const PROJECT = {
+  kind: 'space' as const,
+  space_ref: { data_scope_id: '123e4567-e89b-42d3-a456-426614174000', space_key: 'MAIN' },
+  project_ref: { project_id: 'sample' },
+}
 
 function i18n() {
   return createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages, pluralRules })

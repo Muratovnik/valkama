@@ -79,7 +79,7 @@ class LeaseTestCase(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="lease", name="Lease", key="LSE")
+        service.create_planning_space(self.conn, name="Lease", key="LSE")
         self.reference = service.create_work_item(self.conn, space="LSE", title="Held")["reference"]
         self.conn.commit()
 

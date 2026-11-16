@@ -134,7 +134,7 @@ def populate(conn: sqlite3.Connection) -> None:
         space = old_space(conn, project_id="kept", name="Kept", key="KEEP")
         waiting = "backlog"
     else:
-        created = planning_store.create_space(conn, project_id="kept", name="Kept", key="KEEP")
+        created = planning_store.create_space(conn, name="Kept", key="KEEP")
         space = {
             **created,
             "states": {

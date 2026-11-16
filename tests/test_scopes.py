@@ -26,7 +26,7 @@ class ScopeCase(unittest.TestCase):
         self.primary = os.path.join(self._dir.name, "valkama.sqlite3")
         os.environ["VALKAMA_DB"] = self.primary
         connection = store.connect()
-        planning_service.create_planning_space(connection, project_id="personal", name="Personal")
+        planning_service.create_planning_space(connection, name="Personal")
         # The planning service leaves the transaction to its caller, unlike the
         # board operations it replaced.
         connection.commit()
@@ -34,7 +34,7 @@ class ScopeCase(unittest.TestCase):
         self.work = os.path.join(self._dir.name, "work.sqlite3")
         os.environ["VALKAMA_DB"] = self.work
         connection = store.connect()
-        planning_service.create_planning_space(connection, project_id="work", name="Work")
+        planning_service.create_planning_space(connection, name="Work")
         planning_service.create_work_item(connection, space="WOR", title="work item")
         connection.commit()
         connection.close()
@@ -188,9 +188,7 @@ class FederatedSearchTests(ScopeCase):
 
         scopes.attach(self.primary, "work", self.work)
         connection = store.connect()
-        planning_service.create_planning_space(
-            connection, project_id="mirror", name="Work mirror", key="WOR"
-        )
+        planning_service.create_planning_space(connection, name="Work mirror", key="WOR")
         planning_service.create_work_item(connection, space="WOR", title="primary item")
         planning_service.create_work_item(
             connection, space="PER", title="later note", description="Depends on WOR-1."

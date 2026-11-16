@@ -30,7 +30,7 @@ class StateNameTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        self.space = service.create_planning_space(self.conn, project_id="states", name="States")
+        self.space = service.create_planning_space(self.conn, name="States")
         self.workflow_id = str(self.space["workflow"]["workflow_id"])
 
     def item(self, **kwargs: object) -> dict:

@@ -19,7 +19,8 @@ says what they mean together.
   under a parent, at any depth. A goal or stage is never claimed. A task's kind
   changes only among the first three.
 - **A file or folder** in a text is a Markdown link to its path from the root of
-  the space's project, or a whole path in backticks; a label reads better.
+  the item's space (its default project's root), or a whole path in backticks; a
+  label reads better.
   Valkama opens a Markdown file in its own viewer at the `#kb:…` anchor, heading
   or `:42` line the link names, another file in the owner's editor at that line,
   and a folder in the editor. A relative path is looked for in that root first,
@@ -88,11 +89,39 @@ the `comments` part of `get_work_item` has the whole text. It lists the newest 2
 `from_person_omitted` counts the earlier ones. Each event is told once, to
 whichever agent writes to the item next.
 
+An answer where a claim began or held the item -- `claim_work_item`,
+`claim_ready_work_item`, and `create_work_item` or `apply_work_item_changes` with
+`claim: true` -- carries `project_roots`: for each project the task changes, or
+its space's default project when it names none, `project_id`, `display_name`,
+`root` and `status`: `mapped`, `missing` (no directory at the root),
+`unregistered` (the registry no longer records it) or `unavailable` (the registry
+was not read, so `root` and `display_name` are null). The projects of the item's
+space come first, its default one before the others, then the rest, each part by
+id. The claim does not depend on them.
+
+## Claude Code's auto mode
+
+Valkama calls may share a response with any other
+tool. Valkama's hook records which session makes each call and leaves the call as
+you wrote it, so auto mode reviews every call in the response. An older Valkama
+release added your session to the input of each Valkama call instead, and a call
+beside it that needed the review then got no verdict: it failed with "another call
+in this response was changed by a hook", which says nothing about the failed call.
+If you see that failure, the older release is still installed: issue the failed
+call again exactly as it was, and for the rest of the session send Valkama calls in
+a response of their own, with the other tools in the next one. Another client or
+permission mode needs no such care.
+
 ## Creating an item
 
-`create_work_item` takes `space`, `title`, and optionally `description`,
-`kind`, `priority`, `labels`, `source`, `parent`, `state` and `author`. Three
-more arguments act on the new item in the same call, all or nothing:
+`create_work_item` takes `title`, and optionally `space`, `projects`,
+`description`, `kind`, `priority`, `labels`, `source`, `parent`, `state` and
+`author`. Without `space` the item lies under its parent's space, else in the
+home space of its projects, else in your session's space; projects of two
+spaces need `space`, one of them. A named `space` must be the parent's space,
+or one of the projects' home spaces when they have one; a `[placement]` refusal
+names the candidates. Three more arguments act on the
+new item in the same call, all or nothing:
 
 | Argument | Shape |
 | --- | --- |

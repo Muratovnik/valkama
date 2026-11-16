@@ -19,8 +19,8 @@ import {
   blockedWorkItem,
   now,
   planningSpace,
-  projectScope,
   spaceRef,
+  spaceScope,
   workItem,
 } from './planningFixtures.ts'
 import { pointerBand } from './pointerBand.ts'
@@ -82,7 +82,7 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
       },
     })
   })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   const entry = drawer.locator('.thread-entry').filter({ hasText: 'Delivered' })
@@ -203,7 +203,7 @@ test('a line that holds a reference is as tall as a line of plain text', async (
     checklist_item_id: null,
     checklist_item_text: null,
   })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   // The panel slides in from past the screen's edge, where a hit test finds nothing.
   await expect(page.locator('.drawer')).toHaveCSS('transform', 'none')
@@ -273,7 +273,7 @@ test('a new task is described in the markdown editor, inside the dialog that own
     created.push(route.request().postDataJSON() as Record<string, unknown>)
     return route.fulfill({ json: workItem })
   })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   const opener = page.getByRole('button', { name: 'New work item' })
   await opener.click()
   const dialog = page.getByRole('dialog', { name: 'New work' })
@@ -326,7 +326,7 @@ test('Escape closes the new-task dialog once no list is open, and focus goes bac
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installDiscussionBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   const opener = page.getByRole('button', { name: 'New work item' })
   await opener.click()
   const dialog = page.getByRole('dialog', { name: 'New work' })

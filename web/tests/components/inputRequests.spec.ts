@@ -22,6 +22,7 @@ import type { InputRequestList } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
+import { inAnotherStore } from '../support/anotherStore.ts'
 import {
   answered,
   requestEntry,
@@ -249,7 +250,7 @@ describe('human input requests', () => {
   it('aborts obsolete item reads, ignores late responses and keeps same-reference sources distinct', async () => {
     let finishOld: (value: InputRequestList) => void = vi.fn()
     const second = requestEntry()
-    second.target = { ...second.target, project_id: 'another-project' }
+    second.target = inAnotherStore(second.target)
     second.request = { ...second.request, title: 'Second source' }
     vi.mocked(fetchInputRequests)
       .mockReturnValueOnce(
@@ -408,7 +409,7 @@ describe('human input requests', () => {
 
   it('names the reader as the one who answered, without repeating the space key', () => {
     const own = card(answered(requestEntry()), true)
-    expect(own.get('.request-context').text()).toBe('requests-project · TASK-7')
+    expect(own.get('.request-context').text()).toBe('TASK-7')
     expect(own.get('.request-state').text()).toMatch(/^You answered/u)
     expect(own.text()).not.toContain('user')
     const byAgent = card(answered(requestEntry(), 'codex-session-1'))
@@ -419,9 +420,9 @@ describe('human input requests', () => {
     vi.mocked(fetchInputRequests).mockResolvedValue({
       ...requestList([]),
       coverage: [
-        unavailableSource('detached', 'store_not_attached'),
-        unavailableSource('failing', 'requests_unavailable'),
-        unavailableSource('strange', 'a raw server sentence'),
+        unavailableSource('DETACHED', 'store_not_attached'),
+        unavailableSource('FAILING', 'requests_unavailable'),
+        unavailableSource('STRANGE', 'a raw server sentence'),
       ],
     })
     const wrapper = hub()
@@ -429,9 +430,9 @@ describe('human input requests', () => {
     const notes = wrapper.findAll('.request-note').map((note) => note.text())
     expect(notes).toEqual(
       expect.arrayContaining([
-        'detached · TASK: Store not attached',
-        'failing · TASK: Questions could not be read',
-        'strange · TASK: Could not be read',
+        'DETACHED: Store not attached',
+        'FAILING: Questions could not be read',
+        'STRANGE: Could not be read',
       ]),
     )
     expect(wrapper.text()).not.toContain('source unavailable')

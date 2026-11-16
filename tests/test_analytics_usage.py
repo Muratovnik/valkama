@@ -15,6 +15,10 @@ from server.planning import usage as item_usage
 from server.projects import project_registry
 from tests.analytics_fixtures import DAY, HOUR, UsageStore, day, stamp, tokens_sum
 
+#: A project value with nothing to name: work on an item that names no project.
+NO_PROJECT = {"id": None, "unknown": False, "name": None, "combinations": None}
+UNKNOWN_PROJECT = {**NO_PROJECT, "unknown": True}
+
 #: What the read may miss a per-session read by, for each stretch: it counts a stretch's
 #: seconds in whole milliseconds and its cost in whole millionths of a dollar.
 _HALF_MILLISECOND = 0.0005
@@ -247,7 +251,7 @@ class GroupTests(UsageStore):
         )
 
     def test_with_no_readable_registry_a_folder_reads_as_no_known_project(self) -> None:
-        _, item = self.item()
+        _, item = self.item(projects=["alpha"])
         self.session("s-in-beta", self.beta_root / "src")
         self.segment("s-in-beta", 0, 300)
         self.segment("s-in-beta", 300, 400, item=item)
@@ -259,15 +263,15 @@ class GroupTests(UsageStore):
             read = self.read(**{"from": day(0), "to": day(1), "group_by": "project"})
         self.assertEqual(
             [
-                ({"id": None, "unknown": True, "name": None}, 300.0),
-                # The item's space still names its project.
-                ({"id": "alpha", "unknown": False, "name": None}, 100.0),
+                (UNKNOWN_PROJECT, 300.0),
+                # The item still names its project: the store holds it.
+                ({**NO_PROJECT, "id": "alpha"}, 100.0),
             ],
             [(row["group"]["project"], row["agent_seconds"]) for row in read["rows"]],
         )
 
-    def test_a_project_is_the_items_space_or_the_root_holding_the_working_directory(self) -> None:
-        _, item = self.item()
+    def test_a_project_is_the_items_or_the_root_holding_the_working_directory(self) -> None:
+        _, item = self.item(projects=["alpha"])
         self.session("s-in-beta", self.beta_root / "src" / "deep")
         self.session("s-nowhere", self.root / "elsewhere")
         self.segment("s-nowhere", 0, 400, item=item)
@@ -277,9 +281,9 @@ class GroupTests(UsageStore):
         read = self.read(**{"from": day(0), "to": day(1), "group_by": "project"})
         self.assertEqual(
             [
-                ({"id": "alpha", "unknown": False, "name": "Alpha project"}, 400.0),
-                ({"id": None, "unknown": True, "name": None}, 300.0),
-                ({"id": "beta", "unknown": False, "name": "Beta project"}, 300.0),
+                ({**NO_PROJECT, "id": "alpha", "name": "Alpha project"}, 400.0),
+                (UNKNOWN_PROJECT, 300.0),
+                ({**NO_PROJECT, "id": "beta", "name": "Beta project"}, 300.0),
             ],
             [(row["group"]["project"], row["agent_seconds"]) for row in read["rows"]],
         )
@@ -514,8 +518,93 @@ class FilterTests(UsageStore):
         self.assertEqual(120.0, self.seconds(model="m-2", none="account"))
 
     def test_a_filter_on_a_project_reads_the_derived_project(self) -> None:
-        self.assertEqual(420.0, self.seconds(none="project"))
+        # The session stands under no root, so its project is unknown, and `none`
+        # admits only work on an item that names no project.
+        self.assertEqual(0.0, self.seconds(none="project"))
         self.assertEqual(0.0, self.seconds(project="alpha"))
+
+
+class ProjectTests(UsageStore):
+    """The projects an item names, in any space, and work on no item by its place."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        _, self.alpha = self.item("Alpha work", projects=["alpha"])
+        _, self.both = self.item("Work across both", projects=["alpha", "beta"])
+        _, self.bare = self.item("Work naming none")
+        _, self.goal = self.item("A goal", kind="goal")
+        self.item("Its task", projects=["beta"], parent=self.goal)
+        self.session("s-1")
+        self.session("s-in-beta", self.beta_root)
+        self.segment("s-1", 0, 100, item=self.alpha)
+        self.segment("s-1", 100, 300, item=self.both)
+        self.segment("s-1", 300, 350, item=self.bare)
+        # A goal names the projects of the tasks under it.
+        self.segment("s-1", 350, 380, item=self.goal)
+        self.segment("s-1", 380, 400, item="00000000-0000-4000-8000-00000000dead")
+        self.segment("s-in-beta", 400, 500)
+
+    def read_day(self, **parameters: str) -> dict:
+        return self.read(**{"from": day(0), "to": day(1), **parameters})
+
+    def test_an_item_naming_several_projects_is_one_group_and_the_groups_make_the_total(
+        self,
+    ) -> None:
+        read = self.read_day(group_by="project")
+        several = {
+            **NO_PROJECT,
+            "combinations": [
+                [{"id": "alpha", "name": "Alpha project"}, {"id": "beta", "name": "Beta project"}]
+            ],
+        }
+        self.assertEqual(
+            [
+                (several, 200.0),
+                ({**NO_PROJECT, "id": "beta", "name": "Beta project"}, 130.0),
+                ({**NO_PROJECT, "id": "alpha", "name": "Alpha project"}, 100.0),
+                (NO_PROJECT, 50.0),
+                # The item is gone, so nothing says what it named.
+                (UNKNOWN_PROJECT, 20.0),
+            ],
+            [(row["group"]["project"], row["agent_seconds"]) for row in read["rows"]],
+        )
+        self.assertEqual(500.0, read["total"]["agent_seconds"])
+        self.assertEqual(
+            read["total"]["agent_seconds"], sum(row["agent_seconds"] for row in read["rows"])
+        )
+        self.assertEqual(read["total"]["tokens"], tokens_sum(read["rows"]))
+        (step,) = read["series"]
+        self.assertEqual(
+            [row["group"] for row in read["rows"]], [group["group"] for group in step["groups"]]
+        )
+
+    def test_a_filter_admits_an_item_by_any_project_it_names(self) -> None:
+        self.assertEqual(300.0, self.read_day(project="alpha")["total"]["agent_seconds"])
+        self.assertEqual(330.0, self.read_day(project="beta")["total"]["agent_seconds"])
+        # An item naming both is counted once.
+        self.assertEqual(430.0, self.read_day(project="alpha,beta")["total"]["agent_seconds"])
+        self.assertEqual(50.0, self.read_day(none="project")["total"]["agent_seconds"])
+
+    def test_a_projects_group_is_smaller_than_its_filter_by_the_items_naming_several(
+        self,
+    ) -> None:
+        read = self.read_day(project="alpha", group_by="project")
+        self.assertEqual(
+            [(None, 200.0), ("alpha", 100.0)],
+            [(row["group"]["project"]["id"], row["agent_seconds"]) for row in read["rows"]],
+        )
+        self.assertEqual(300.0, read["total"]["agent_seconds"])
+
+    def test_beside_another_dimension_several_names_the_combinations_of_its_own_work(
+        self,
+    ) -> None:
+        read = self.read_day(group_by="work_item,project")
+        groups = {row["group"]["work_item"]["id"]: row["group"]["project"] for row in read["rows"]}
+        self.assertEqual(
+            [[{"id": "alpha", "name": "Alpha project"}, {"id": "beta", "name": "Beta project"}]],
+            groups[self.both]["combinations"],
+        )
+        self.assertIsNone(groups[self.alpha]["combinations"])
 
 
 class ComparisonTests(UsageStore):

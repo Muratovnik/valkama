@@ -17,9 +17,7 @@ from server.planning import tools as planning_tools
 def seed_quality_assurance(conn) -> None:
     """The space these tests call QA, holding one item, QA-1, committed."""
 
-    service.create_planning_space(
-        conn, project_id="example-workspace", name="Quality Assurance", key="QA"
-    )
+    service.create_planning_space(conn, name="Quality Assurance", key="QA")
     service.create_work_item(conn, space="QA", title="Carried over")
     conn.commit()
 
@@ -422,12 +420,12 @@ class PlanningAcknowledgementTests(unittest.TestCase):
 
     def test_a_verbose_answer_is_the_card_and_what_the_write_reports(self) -> None:
         # What each write says beside the item: a creation the items reading like
-        # it, a claim the state it started the item in and that no session confirmed
-        # the holder, a batch what each of its groups changed, a merge what each
-        # merged item handed over.
+        # it, a claim the state it started the item in, that no session confirmed
+        # the holder and its projects' roots, a batch what each of its groups
+        # changed, a merge what each merged item handed over.
         reports = {
             "create_work_item": {"similar"},
-            "claim_work_item": {"started", "warnings"},
+            "claim_work_item": {"started", "warnings", "project_roots"},
             "claim_work_item_checklist_item": set(),
             "apply_work_item_changes": {"applied"},
             "merge_work_items": {"merged"},
@@ -645,7 +643,7 @@ class PlanningCompactReadTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="tools", name="Quality", key="QA")
+        service.create_planning_space(self.conn, name="Quality", key="QA")
         self.epic = self.call("create_work_item", space="QA", title="Umbrella", kind="goal")
         self.child = self.call(
             "create_work_item",

@@ -11,7 +11,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { frames } from './frames.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 
 export async function openCard(page: Page, width: number, locale: 'en' | 'ru' = 'ru') {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
@@ -19,7 +19,7 @@ export async function openCard(page: Page, width: number, locale: 'en' | 'ru' = 
   await enableExecutionTab(page)
   await page.setViewportSize({ width, height: 700 })
   await installBackend(page, { longRead: true })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer).toHaveCSS('transform', 'none')

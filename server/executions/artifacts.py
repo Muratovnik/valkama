@@ -15,9 +15,16 @@ Every value carries how it was obtained, because a repository that is not a Git
 checkout is a normal answer here — a launch may run anywhere — and a zero that
 means "nothing changed" must never be confused with a zero that means "nobody
 looked". `quality` is the field that separates them.
+
+A launch may get directories beside the one it runs in, the roots of other
+projects, and an attempt may change only those. So each record carries `added`:
+one entry per such root, its project and root with the same reading the working
+directory gets, so a change there is evidence too.
 """
 
 from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
 
 from .. import git_worktrees
 
@@ -66,6 +73,43 @@ def baseline(repo: str) -> dict:
 
 def _branch(name: str) -> str:
     return "" if name in ("", "HEAD") else name
+
+
+def baseline_with(repo: str, added: Sequence[Mapping[str, object]]) -> dict:
+    """`baseline` of the working directory, with `added`: one of each root beside it.
+
+    Each entry is the root's project and root and its own baseline, without the
+    `worktree` that would repeat the root.
+    """
+
+    record = baseline(repo)
+    entries = []
+    for root in added:
+        reading = baseline(str(root["root"]))
+        del reading["worktree"]
+        entries.append(
+            {"project_id": str(root["project_id"]), "root": str(root["root"]), **reading}
+        )
+    return {**record, "added": entries}
+
+
+def outcome_with(repo: str, base: Mapping[str, object]) -> dict:
+    """`outcome` of the working directory, with `added`: each root the base recorded,
+    measured against its own reading there."""
+
+    entries = base.get("added") if isinstance(base, Mapping) else None
+    return {
+        **outcome(repo, dict(base) if isinstance(base, Mapping) else {}),
+        "added": [
+            {
+                "project_id": str(entry.get("project_id") or ""),
+                "root": str(entry.get("root") or ""),
+                **outcome(str(entry.get("root") or ""), entry),
+            }
+            for entry in (entries if isinstance(entries, list) else [])
+            if isinstance(entry, dict)
+        ],
+    }
 
 
 def outcome(repo: str, base: dict) -> dict:
@@ -190,4 +234,4 @@ def _counts(record: str) -> tuple[int, int] | None:
     return int(added), int(removed)
 
 
-__all__ = ["MAX_COMMITS", "baseline", "outcome"]
+__all__ = ["MAX_COMMITS", "baseline", "baseline_with", "outcome", "outcome_with"]

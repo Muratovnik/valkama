@@ -43,7 +43,7 @@ export async function readWorkItemLink(
         kind: 'no-item',
         reference,
         space,
-        spaceRoute: planningSpaceRoute(searched.project_id, searched.space_ref),
+        spaceRoute: planningSpaceRoute(searched.space_ref),
       }
     : { kind: 'no-space', reference, space }
 }

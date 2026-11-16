@@ -18,8 +18,8 @@ import {
   blockedWorkItem,
   identity,
   now,
-  projectScope,
   spaceRef,
+  spaceScope,
   workItemRef,
 } from './planningFixtures.ts'
 import { asked, installQuestions, QUESTION_ID } from './questionBackend.ts'
@@ -32,7 +32,7 @@ const REVEAL = 'reveal=question'
 const cardRoute = (reference: string) =>
   serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
+    scope: spaceScope,
     entity: planningWorkItemEntity({ space_ref: spaceRef, reference }),
   })
 const askingRoute = (reference: string) => `${cardRoute(reference)}&${REVEAL}`
@@ -200,7 +200,7 @@ test.describe('a page that is up', () => {
   }) => {
     const app = await asDesktop(page)
     await installLongCard(page, [asked()])
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await expect(page.locator('.work-item-tile').first()).toBeVisible()
     await app.handOver(toastAddress(ASKED))
     await expectBroughtToQuestion(page)
@@ -259,7 +259,7 @@ test.describe('a page that is up', () => {
   }) => {
     const app = await asDesktop(page)
     await installLongCard(page, [asked()])
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.getByRole('button', { name: /^Needs my answer/u }).click()
     const hub = page.getByRole('dialog', { name: 'Needs my answer' })
     await expect(hub).toBeVisible()

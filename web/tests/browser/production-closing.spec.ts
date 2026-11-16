@@ -6,7 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { asRoot } from '../support/threads.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
-import { doneState, now, projectScope } from './planningFixtures.ts'
+import { doneState, now, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
@@ -17,7 +17,7 @@ import { test } from './test.ts'
 async function refusedClose(page: Page, prepare?: Parameters<typeof seed>[0]) {
   const backend = await installDiscussionBackend(page)
   prepare?.(backend.item)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await drawer.getByRole('combobox', { name: /^State: In progress/u }).click()

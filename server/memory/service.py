@@ -177,20 +177,27 @@ MAX_LINKED = 100
 
 
 def linked(conn: sqlite3.Connection, project_id: str) -> dict:
-    """The memory pointers attached to this project's work, newest first.
+    """The memory pointers attached to the work that names this project, newest first.
 
     This is the half of the module that does not need a provider. An attached
     pointer is Valkama's own record with its own stored label, so it still reads
     when the source behind it is unreachable — which is the whole reason MEM-001
     stores the label instead of resolving one.
 
-    Joined through the planning space rather than through a binding: a space
-    names its project directly, and a second resolution path for the same fact
-    is a second answer waiting to disagree with the first.
+    The work is every item that names the project, in whichever space it lies,
+    and every goal or stage above one: a container names the projects of the
+    tasks under it (`planning.item_projects`). The space an item lies in is not
+    one of its projects, so it is not read here.
     """
 
     rows = conn.execute(
-        """SELECT ref.value AS value,
+        """WITH RECURSIVE naming(work_item_id) AS (
+                SELECT work_item_id FROM work_item_projects WHERE project_id = ?
+                UNION
+                SELECT child.parent_id FROM work_items AS child
+                  JOIN naming ON child.work_item_id = naming.work_item_id
+                 WHERE child.parent_id IS NOT NULL)
+           SELECT ref.value AS value,
                   ref.label AS label,
                   ref.author AS author,
                   ref.created_at AS created_at,
@@ -199,10 +206,11 @@ def linked(conn: sqlite3.Connection, project_id: str) -> dict:
                   space.key AS space_key,
                   item.number AS number
              FROM work_item_refs AS ref
+             JOIN naming ON naming.work_item_id = ref.work_item_id
              JOIN work_items AS item ON item.work_item_id = ref.work_item_id
              JOIN planning_spaces AS space
                ON space.planning_space_id = item.planning_space_id
-            WHERE ref.kind = 'memory' AND space.project_id = ?
+            WHERE ref.kind = 'memory'
             ORDER BY ref.created_at DESC, ref.id DESC
             LIMIT ?""",
         (str(project_id), MAX_LINKED + 1),

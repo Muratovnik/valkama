@@ -21,10 +21,9 @@ import { busyFrame } from '../support/liveFrame.ts'
 
 const SCOPE = '123e4567-e89b-42d3-a456-426614174000'
 
-function target(place: { key: string; project_id: string | null; reference: string | null }) {
-  if (place.project_id === null || place.reference === null) return null
+function target(place: { key: string; reference: string | null }) {
+  if (place.reference === null) return null
   return planningTargetRoute({
-    project_id: place.project_id,
     space_ref: { data_scope_id: SCOPE, space_key: place.key },
     reference: place.reference,
     writable: true,

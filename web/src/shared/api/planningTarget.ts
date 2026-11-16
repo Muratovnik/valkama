@@ -1,7 +1,5 @@
-import { boundedText, fromValidator, strictObject, z } from '@/shared/api/contract.ts'
-import { PROJECT_ID } from '@/shared/api/platformApiGuards.ts'
+import { fromValidator, strictObject, z } from '@/shared/api/contract.ts'
 import {
-  planningSpaceEntity,
   planningWorkItemEntity,
   validatePlanningSpaceRef,
 } from '@/shared/api/platformPlanningRefs.ts'
@@ -11,7 +9,6 @@ import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 const spaceRefSchema = fromValidator(validatePlanningSpaceRef)
 
 export const planningTargetSchema = strictObject({
-  project_id: boundedText(PROJECT_ID, 160),
   space_ref: spaceRefSchema,
   reference: z.string().min(1).max(18),
   writable: z.boolean(),
@@ -30,7 +27,6 @@ export const planningTargetSchema = strictObject({
 export type PlanningTarget = z.infer<typeof planningTargetSchema>
 
 export const planningCoverageSchema = strictObject({
-  project_id: boundedText(PROJECT_ID, 160),
   space_ref: spaceRefSchema,
   status: z.enum(['searched', 'unavailable']),
   reason: z.string().min(1).max(240).nullable(),
@@ -56,28 +52,23 @@ export function skippedSourceReason(reason: string | null): string {
   return reason !== null && SKIPPED_SOURCE_REASONS.has(reason) ? reason : 'other'
 }
 
-/** The route of one card, in the project that binds its space. */
+/** The route of one card: its space, as the server's card route spells it. */
 export function planningTargetRoute(target: PlanningTarget): PlatformRoute {
   return {
     module_id: 'planning',
-    scope: { kind: 'project', project_ref: { project_id: target.project_id } },
+    scope: { kind: 'space', space_ref: target.space_ref },
     entity: planningWorkItemEntity({ space_ref: target.space_ref, reference: target.reference }),
   }
 }
 
-/** The route of one space, in the project that binds it. */
-export function planningSpaceRoute(projectId: string, spaceRef: PlanningSpaceRef): PlatformRoute {
-  return {
-    module_id: 'planning',
-    scope: { kind: 'project', project_ref: { project_id: projectId } },
-    entity: planningSpaceEntity(spaceRef),
-  }
+/** The route of one space: its work, every project of it. */
+export function planningSpaceRoute(spaceRef: PlanningSpaceRef): PlatformRoute {
+  return { module_id: 'planning', scope: { kind: 'space', space_ref: spaceRef } }
 }
 
 export function serializePlanningTarget(target: PlanningTarget) {
   const validated = planningTargetSchema.parse(target)
   return {
-    project_id: validated.project_id,
     data_scope_id: validated.space_ref.data_scope_id,
     space_key: validated.space_ref.space_key,
   }

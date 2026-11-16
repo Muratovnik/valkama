@@ -13,7 +13,6 @@ import { fetchExecutionHistory } from '@/shared/api/executionApi.ts'
 import { validateHistory } from '@/shared/api/executionModel.ts'
 import { fetchPlatformPlanning } from '@/shared/api/platformPlanningApi.ts'
 import type { PlatformPlanningPayload } from '@/shared/api/platformPlanningTypes.ts'
-import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import { uiReady } from '@/shared/api/platformUiState.ts'
 import { messages } from '@/shared/i18n/index.ts'
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
@@ -159,15 +158,14 @@ describe('background work leaves what is drawn in place', () => {
     expect(reads.error.value).toBe('')
   })
 
-  it('keeps the project directory drawn while it is refreshed and says when the refresh failed', async () => {
-    const scope = ref<OperatingScope>({ kind: 'global' })
+  it('keeps the space directory drawn while it is refreshed and says when the refresh failed', async () => {
     const directory: PlatformPlanningPayload = {
       interface_version: 'valkama-planning',
-      scope: scope.value,
-      state: uiReady({ planning_spaces: [], projects: [] }),
+      scope: { kind: 'global' },
+      state: uiReady({ planning_spaces: [], spaces: [] }),
     }
     vi.mocked(fetchPlatformPlanning).mockResolvedValueOnce(directory)
-    const portfolio = host(() => usePlanningPortfolio(() => scope.value))
+    const portfolio = host(() => usePlanningPortfolio())
     void portfolio.load()
     expect(portfolio.state.value.status).toBe('loading')
     await flushPromises()
@@ -176,18 +174,12 @@ describe('background work leaves what is drawn in place', () => {
     const again = deferred<PlatformPlanningPayload>()
     vi.mocked(fetchPlatformPlanning).mockReturnValueOnce(again.promise)
     void portfolio.load()
-    // The same scope read again is a refresh: its payload stays, marked stale.
-    expect(portfolio.state.value).toMatchObject({ status: 'degraded', payload: { projects: [] } })
+    // A second read is a refresh: its payload stays, marked stale.
+    expect(portfolio.state.value).toMatchObject({ status: 'degraded', payload: { spaces: [] } })
     expect('reason' in portfolio.state.value).toBe(false)
     again.refuse(new Error('offline'))
     await flushPromises()
-    expect(portfolio.state.value).toMatchObject({ status: 'degraded', payload: { projects: [] } })
+    expect(portfolio.state.value).toMatchObject({ status: 'degraded', payload: { spaces: [] } })
     expect('reason' in portfolio.state.value).toBe(true)
-
-    // Another scope is a new directory, which starts from loading.
-    vi.mocked(fetchPlatformPlanning).mockReturnValueOnce(new Promise(() => {}))
-    scope.value = { kind: 'project', project_ref: { project_id: 'example-project' } }
-    void portfolio.load()
-    expect(portfolio.state.value.status).toBe('loading')
   })
 })
