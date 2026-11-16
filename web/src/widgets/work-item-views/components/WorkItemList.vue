@@ -162,8 +162,6 @@ const rowClass = (entry: ListEntry<WorkItemBrief>) =>
   entry.kind === 'gap' ? 'list-gap' : ['list-row', { 'list-row-held': list.held(entry.row) }]
 const gapOf = (gap: { height: number }) => `${gap.height}px`
 
-const pass = (token: WorkFilterToken) => emit('filter', token)
-
 /**
  * A row's runs are drawn here as plain elements. A row holds seven of them, and
  * a component for each came to eleven instances a row, some fourteen thousand on
@@ -178,7 +176,7 @@ const fact = (item: WorkItemBrief, facet: readonly FacetId[]) =>
 const filterRun = (filterable = true) => ({
   filter: props.filter,
   filterable,
-  onFilter: pass,
+  onFilter: (token: WorkFilterToken) => emit('filter', token),
   surface: 'list' as const,
   tabbable: false,
   words,
@@ -214,6 +212,7 @@ const said = (item: WorkItemBrief) =>
     >
       <table
         class="list-table"
+        data-hint-list="rows"
         :aria-rowcount="rowCount"
       >
         <caption class="visually-hidden">

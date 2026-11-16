@@ -46,7 +46,12 @@ function emitLocale(value: string) {
     class="settings-general"
     :aria-label="t('settings.section.general')"
   >
-    <div class="settings-general-sheet">
+    <!-- The sheet is a list of rows: a field's or a switch's hint stands past its edge, level
+         with its row, rather than under the control and over the row after it. -->
+    <div
+      class="settings-general-sheet"
+      data-hint-list="rows"
+    >
       <SettingsGroup
         class="settings-general-group"
         :title="t('settings.interface')"

@@ -1,7 +1,8 @@
 /**
  * Where a hint stands in the built app: never over its own element, and in a list never over
  * another of its rows. Every element with a hint is pointed at on the rail, a board, the list,
- * the Analytics day chart and its ranked bars and an opened card, at 1440px and 1024px.
+ * the Analytics day chart, its ranked bars and its rail of tiles, an opened card and its
+ * checklist, and the settings, at 1440px and 1024px.
  *
  * Where a hint stands follows its kind and the list its element stands in, and no call site
  * names a side (`hintPlacement.ts`). Before that, a name in the rail written without the side
@@ -14,12 +15,17 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
+
 import { busyFrame } from '../support/liveFrame.ts'
+import { pageAt as analyticsAt, serve as serveAnalytics } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
 import { openCard } from './cardHeadPage.ts'
 import { openDays } from './dayHintPage.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
+import { projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 interface Placed {
@@ -45,6 +51,34 @@ interface List {
 const RAIL: List = { across: false, holder: '.app-nav-shell' }
 const PERIODS: List = { across: true, holder: '.period-slot' }
 const RANKING: List = { across: false, holder: '.ranked-grid' }
+const STEPS: List = { across: false, holder: '.checklist' }
+const SETTINGS: List = { across: false, holder: '.settings-general-sheet' }
+const RAIL_TILES: List = { across: false, holder: '.analytics-rail-list' }
+const LIST_ROWS: List = { across: false, holder: '.list-table' }
+
+/** Steps enough that each but the last has a step under it, one held and one done. */
+const STEP_LIST = [1, 2, 3, 4].map((number) => ({
+  id: `123e4567-e89b-42d3-a456-42661417410${number}`,
+  text: `Step ${number} of the work, said in a few words`,
+  done: number === 2,
+  claimed_by: number === 3 ? 'own-b' : '',
+  done_by: number === 2 ? 'own-a' : '',
+}))
+
+/** An item's card with its checklist, open at the window the page has. */
+async function openSteps(page: Page) {
+  await installBackend(page, { card: (read) => ({ ...read, checklist: STEP_LIST }) })
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningWorkItemEntity(workItemRef),
+    }),
+  )
+  const drawer = page.locator('.drawer')
+  await expect(drawer.locator('.step-row')).toHaveCount(STEP_LIST.length)
+  await expect(drawer).toHaveCSS('transform', 'none')
+}
 
 /**
  * Where the hint that shows under the pointer at `x, y` stands against the element there. A
@@ -132,15 +166,55 @@ for (const width of [1440, 1024]) {
       expect(board.covered).toEqual([])
     })
 
-    test('no hint of the list covers its element', async ({ page }) => {
+    test('no hint of the list covers its element, nor a row of the list', async ({ page }) => {
       await installBackend(page)
       await serve(page)
       await openBoard(page)
       await page.getByRole('radio', { name: 'List', exact: true }).click()
       await expect(page.locator('main table')).toBeVisible()
-      const list = await sweep(page, page.locator('main'))
+      // A mark's name stood under it, over the row after its own.
+      const list = await sweep(page, page.locator('main'), LIST_ROWS)
       expect(list.placed.length).toBeGreaterThan(0)
       expect(list.covered).toEqual([])
+    })
+
+    test('no hint of a card’s steps covers its element, nor a step of the checklist', async ({
+      page,
+    }) => {
+      await openSteps(page)
+      const steps = page.locator('.drawer .checklist')
+      await steps.evaluate((list) => list.scrollIntoView({ block: 'center', inline: 'nearest' }))
+      // A step's action named itself under its icon, over the step after it.
+      const placed = await sweep(page, steps, STEPS)
+      expect(placed.placed.length).toBeGreaterThan(2)
+      expect(placed.covered).toEqual([])
+    })
+
+    test('no hint of the settings covers its element, nor a row of the settings', async ({
+      page,
+    }) => {
+      await installBackend(page)
+      await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+      const sheet = page.locator('.settings-general-sheet')
+      await expect(sheet.locator('.settings-row').first()).toBeVisible()
+      // A field's and a switch's detail stood under it, over the row after it.
+      const placed = await sweep(page, sheet, SETTINGS)
+      expect(placed.placed.length).toBeGreaterThan(2)
+      expect(placed.covered).toEqual([])
+    })
+
+    test('no hint of the Analytics rail covers its element, nor a tile of the rail', async ({
+      page,
+    }) => {
+      await serveAnalytics(page)
+      // Beside the panel at a wide window; the whole screen, a list, at a narrower one.
+      await page.goto(analyticsAt())
+      const rail = page.locator('.analytics-rail-list')
+      await expect(rail.locator('.window-bar').first()).toBeVisible()
+      // A tile's bar and its lead said their details under them, over the tile after.
+      const placed = await sweep(page, rail, RAIL_TILES)
+      expect(placed.placed.length).toBeGreaterThan(2)
+      expect(placed.covered).toEqual([])
     })
 
     test('no hint of the Analytics day chart covers its element or its own column', async ({

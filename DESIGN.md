@@ -949,7 +949,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   its container (`data-hint-list`), and its rows say nothing: in it every other hint stands
   aside of the list, level with its row's
   top, over no other row — the rail's past the rail's edge, a ranked bar's past the
-  ranking's edge, a chart period's beside its column
+  ranking's edge, a step's past its card's checklist, a setting's past the settings sheet, a
+  tile's past the Analytics rail, a row's past the list view's table, a chart period's beside
+  its column
   at the plot's top — on the left where the right has no room, on the roomier side drawn
   narrower down to 12rem where neither holds it, and above its element where neither has even
   that. A hint keeps 8px from the window's edge. `check:ui-system` refuses a side written at a
