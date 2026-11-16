@@ -19,7 +19,9 @@
  *   and refusing the press refused the selection too, so a press on text goes through and focus
  *   goes back: when the press ends with nothing selected, otherwise at the next Tab or as the card
  *   closes, since a text field taking focus would clear what the reader just selected. A press on
- *   a control is refused, so no focus moves at all.
+ *   a control is refused, so no focus moves at all, and so is a press on the card's ground, on no
+ *   line of its text: the browser starts a selection there from the nearest letter, so a drag from
+ *   the card's edge that selected nothing the reader aimed at held the card up after it.
  * - A selection holds the card up. While the press that makes it is down the card does not close,
  *   wherever the pointer goes, and once made it stays until the reader's own press elsewhere,
  *   Escape or a scroll: a card closing under a pointer on its way to nothing would take the
@@ -58,7 +60,10 @@ const READ_PATIENCE_MS = 120
 const OFFSET = 6
 const EDGE = 8
 
-/** A press that began on the card's text is still down: it may be a selection being made. */
+/**
+ * A press that began on the card, off its controls, is still down: on its text it may be a
+ * selection being made, and wherever it began the card stays until it ends.
+ */
 let pressing = false
 /** The card holds a selection the reader made. */
 let pinned = false
@@ -195,9 +200,20 @@ function tabThroughCard(event: KeyboardEvent) {
   anchor?.focus()
 }
 
-/** A press on a control moves no focus and clears no selection. */
+/** Whether the point stands on a line of the card's text, where a press starts a selection. */
+function onText(x: number, y: number) {
+  const node = document.caretPositionFromPoint(x, y)?.offsetNode
+  if (!(node instanceof Text)) return false
+  const range = document.createRange()
+  range.selectNodeContents(node)
+  return [...range.getClientRects()].some(
+    (line) => x >= line.left && x <= line.right && y >= line.top && y <= line.bottom,
+  )
+}
+
+/** A press on a control or on the card's ground moves no focus and starts no selection. */
 function pressInCard(event: MouseEvent) {
-  if (onControl(event.target)) event.preventDefault()
+  if (onControl(event.target) || !onText(event.clientX, event.clientY)) event.preventDefault()
 }
 
 useEventListener(

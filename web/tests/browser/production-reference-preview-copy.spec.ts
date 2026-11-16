@@ -185,6 +185,9 @@ test('a drag with no selection that ends outside leaves as the pointer did', asy
   await page.mouse.down()
   await page.mouse.move(box.x + box.width + 300, box.y + box.height + 300, { steps: 8 })
   await page.mouse.up()
+  // The press on no text started no selection from the nearest letter, as the state's in the
+  // card's corner once did, and nothing held the card up.
+  expect(await selected(page)).toBe('')
   await expect(card(page)).toHaveCount(0)
 })
 
