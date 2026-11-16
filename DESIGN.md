@@ -933,7 +933,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   pointer keeps it over whatever it crosses, as a rail row's cut name and pin: what it
   crosses takes over once the pointer rests on it a moment or turns off the way, never as
   it passes. Escape closes the hint and nothing else, never the
-  drawer or menu under it; with no hint up it reaches them as before. A hint focus holds,
+  drawer or menu under it; with no hint up it reaches them as before. One surface speaks at a
+  time: while a menu, a choice or combobox list or a help a press pinned open is up, no hint
+  of an element outside it shows and one already up goes, while its own rows' hints still
+  speak. A hint focus holds,
   and a chart period's, lets the pointer and a press through to what it covers. Where a hint
   stands follows what it is to its element, never a side its place writes: a detail stands
   below its element from the element's start, 6px off and at most 20rem wide, and above it only

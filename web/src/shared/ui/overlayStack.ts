@@ -138,6 +138,28 @@ const OPEN_POPUP = [
 export const popupOpen = () =>
   typeof document !== 'undefined' && document.querySelector(OPEN_POPUP) !== null
 
+/**
+ * The surface of a popup open on the page: Reka's floating content that is no hint's (a menu, a
+ * choice list, a combobox's list), on its way in or standing, and a panel a press pinned open
+ * (`data-popup-surface`, as `InfoTip`'s). A control that says it is expanded names no surface:
+ * the command palette's field is always expanded, over a list that is the palette itself.
+ */
+const POPUP_SURFACE = [
+  '[data-reka-popper-content-wrapper] > :not([data-hint-surface]):not([data-state="closed"])',
+  '[data-popup-surface]',
+].join(', ')
+
+/**
+ * Whether `element` stands under an open popup, outside every popup open on the page: one
+ * surface speaks at a time, so an open menu or a pinned help silences the hints under it, and
+ * the hints of its own rows still speak.
+ */
+export function underPopup(element: Element): boolean {
+  if (typeof document === 'undefined') return false
+  const surfaces = [...document.querySelectorAll(POPUP_SURFACE)]
+  return surfaces.length > 0 && !surfaces.some((surface) => surface.contains(element))
+}
+
 /** Remove only this lease; stale releases cannot dismiss or unlock another host. */
 export function releaseOverlayOwnership(lease: OverlayOwnership | null): void {
   if (!lease) return

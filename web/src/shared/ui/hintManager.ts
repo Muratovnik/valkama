@@ -39,13 +39,15 @@
  *   scroll brought under it. A hint focus holds stays, since a Tab scrolls what it lands on into
  *   view.
  * - A finger shows none, and nor does a pointer with a button down: it is dragging.
- * - One surface shows at a time, and a surface claimed in `overlayStack` closes it.
+ * - One surface shows at a time, and a surface claimed in `overlayStack` closes it. An open menu,
+ *   choice list or pinned help is a surface too (`underPopup`): while one is open, no hint of an
+ *   element outside it shows, and one that shows goes as it opens; its own rows' hints speak.
  */
 import { computed, effectScope, onScopeDispose, shallowRef, watch } from 'vue'
 
 import { onWayTo } from '@/shared/ui/hintWay.ts'
 import type { Point } from '@/shared/ui/hintWay.ts'
-import { overlayTop } from '@/shared/ui/overlayStack.ts'
+import { overlayTop, underPopup } from '@/shared/ui/overlayStack.ts'
 
 /** How long the pointer rests on an anchor before its hint shows, in ms. */
 const REST_MS = 500
@@ -210,7 +212,8 @@ function resolve(target: EventTarget | null, by: Raiser): Asked | null {
  */
 function open(asked: Asked, by: Raiser, rested = false) {
   const rules = kinds.get(asked.kind)
-  if (!rules || !asked.anchor.isConnected || !rules.shows(asked.anchor)) return
+  if (!rules || !asked.anchor.isConnected || underPopup(asked.anchor) || !rules.shows(asked.anchor))
+    return
   stopRest()
   stopGrace()
   clearTimeout(coolTimer)
@@ -503,10 +506,29 @@ function listen(): () => void {
   document.addEventListener('focusout', focusOut, { signal })
   document.addEventListener('scroll', scrolled, quietly)
   document.addEventListener('scrollend', scrollEnded, quietly)
+  // A popup opens with no event this hears, from a key or the page itself: while a hint shows,
+  // what the page adds or opens is looked at, and a popup over the hint's element takes it down.
+  // A hint the pointer raised on a menu's button stayed up over the menu Enter opened under it.
+  const popups = new MutationObserver(() => {
+    const now = shown.value
+    if (now && underPopup(now.anchor)) close()
+  })
   const scope = effectScope(true)
-  scope.run(() => watch(overlayTop, close))
+  scope.run(() => {
+    watch(overlayTop, close)
+    watch(shown, (now, before) => {
+      if (now && !before)
+        popups.observe(document.body, {
+          attributeFilter: ['data-state'],
+          childList: true,
+          subtree: true,
+        })
+      else if (!now) popups.disconnect()
+    })
+  })
   return () => {
     listening.abort()
+    popups.disconnect()
     scope.stop()
   }
 }
