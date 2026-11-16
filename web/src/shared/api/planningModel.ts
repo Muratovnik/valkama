@@ -23,6 +23,7 @@ import {
   EVENT_DETAIL_MAX,
   LABELS_DETAIL_MAX,
 } from '@/shared/api/planningEventActions.ts'
+import { recordObject, withheldField } from '@/shared/api/planningRecordRules.ts'
 import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 
 export const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
@@ -144,8 +145,10 @@ const workItemBriefShape = {
   revision: positiveInt(true),
   created_at: boundedText(ISO, 96),
   updated_at: boundedText(ISO, 96),
-  /** Workable now, by the take-next queue's rule: a task, unheld, unblocked, in triage or ready. */
+  /** Workable now: its space's take-next queue may give it, and `withheld` is empty. */
   workable: z.boolean(),
+  /** Why the queue does not give it, each reason once, in the server's one order. */
+  withheld: withheldField(),
   /**
    * When a finished item closed: its latest transition. Null for open work, and
    * absent from a server that predates it.
@@ -158,17 +161,10 @@ const workItemBriefShape = {
    */
   last_claim_ref: holderField().nullable().optional(),
 }
-/** A record stands in a state or derives one as an accepted open container: one of the two. */
-const stateOrDerived = [
-  (item: { container_state: unknown; state: unknown }) =>
-    (item.state === null) !== (item.container_state === null),
-  { message: 'expected a state or a container state' },
-] as const
-
-const workItemBriefSchema = strictObject({
+const workItemBriefSchema = recordObject({
   ...workItemBriefShape,
   comment_count: positiveInt(true),
-}).refine(...stateOrDerived)
+})
 
 const summarySchema = strictObject({
   done: blankable(4000),
@@ -398,7 +394,7 @@ const workItemAgentSchema = strictObject({
   executor: executorSchema.optional(),
 })
 
-const workItemSchema = strictObject({
+const workItemSchema = recordObject({
   ...workItemBriefShape,
   agents: z.array(workItemAgentSchema).optional(),
   claim: claimSchema.nullable(),
@@ -430,7 +426,7 @@ const workItemSchema = strictObject({
   requeued: stateMoveSchema.optional(),
   // The holder whose claim a close ended.
   released: holderField().optional(),
-}).refine(...stateOrDerived)
+})
 
 const spaceIdentityShape = {
   planning_space_id: boundedText(UUID, 36),

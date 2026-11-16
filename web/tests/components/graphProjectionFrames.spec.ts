@@ -57,6 +57,7 @@ function item(id: string, number: number, parent: string | null = null): WorkIte
     started_at: null,
     waits_for: [],
     workable: true,
+    withheld: [],
     labels: [],
     source: '',
     checklist: [],

@@ -60,6 +60,7 @@ export function workItemFixture(title: string, revision: number): WorkItem {
     started_at: null,
     waits_for: [],
     workable: false,
+    withheld: ['not_ready'],
     comment_count: 0,
     claim: null,
     description: '',

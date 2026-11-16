@@ -63,7 +63,8 @@ class ChainFixture(unittest.TestCase):
         make("C1", parent="QA-1")
         make("C2", parent="QA-1")
         make("C3", parent="QA-1")
-        make("D0")
+        # Accepted, so it is the member the queue gives once its blocker is done.
+        make("D0", state="ready")
         make("D1", state="review")
         make("E", kind="goal")
         make("E1", parent=self.refs["E"])
@@ -196,7 +197,7 @@ class ChainBoundaryTests(ChainFixture):
         self.assertEqual("tree", found["scope"])
         self.assertEqual(["C1", "C2", "C3"], self.names([m["reference"] for m in found["members"]]))
         self.assertEqual(
-            (3, 1, 2, 1), (found["total"], found["closed"], found["open"], found["workable"])
+            (3, 1, 2, 0), (found["total"], found["closed"], found["open"], found["workable"])
         )
         self.assertEqual(
             [("R", 3, 2)],
@@ -247,10 +248,10 @@ class ChainBoundaryTests(ChainFixture):
     def test_counts_and_categories(self) -> None:
         found = self.read(id=self.refs["R"])
         self.assertEqual(
-            (10, 4, 6, 2), (found["total"], found["closed"], found["open"], found["workable"])
+            (10, 4, 6, 1), (found["total"], found["closed"], found["open"], found["workable"])
         )
         self.assertEqual(
-            {"active": 1, "triage": 3, "cancelled": 1, "completed": 3, "ready": 1, "review": 1},
+            {"active": 1, "triage": 2, "cancelled": 1, "completed": 3, "ready": 2, "review": 1},
             found["by_category"],
         )
 
@@ -287,7 +288,8 @@ class ChainBoundaryTests(ChainFixture):
         self.assertEqual("2026-10-10T08:00:00Z", members["C3"]["created_at"])
         # Ready: unheld, uncontained, not started, and nothing unfinished blocks
         # it. D0's only blocker is finished; E is a container; E2 waits on C3.
-        self.assertEqual({"C2", "D0"}, {name for name, m in members.items() if m["workable"]})
+        # C2 waits in triage under a goal in triage: the queue does not give it.
+        self.assertEqual({"D0"}, {name for name, m in members.items() if m["workable"]})
         self.assertEqual(
             ("one", "unconfirmed"), (members["C3"]["claim_ref"], members["C3"]["claim_state"])
         )

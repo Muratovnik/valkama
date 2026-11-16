@@ -82,6 +82,7 @@ function node(id: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief
     started_at: null,
     waits_for: [],
     workable: true,
+    withheld: [],
     labels: [],
     source: '',
     checklist: [],

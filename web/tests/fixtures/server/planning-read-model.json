@@ -351,7 +351,11 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
-      "workable": true,
+      "withheld": [
+        "not_ready",
+        "question"
+      ],
+      "workable": false,
       "comment_count": 7
     },
     {
@@ -385,7 +389,10 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
-      "workable": true,
+      "withheld": [
+        "not_ready"
+      ],
+      "workable": false,
       "comment_count": 0
     },
     {
@@ -419,6 +426,9 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
+      "withheld": [
+        "container"
+      ],
       "workable": false,
       "comment_count": 0
     },
@@ -453,6 +463,9 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
+      "withheld": [
+        "container"
+      ],
       "workable": false,
       "comment_count": 0
     },
@@ -487,6 +500,9 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
+      "withheld": [
+        "container"
+      ],
       "workable": false,
       "comment_count": 0
     },
@@ -521,7 +537,11 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
-      "workable": true,
+      "withheld": [
+        "not_ready",
+        "ancestor_triage"
+      ],
+      "workable": false,
       "comment_count": 0
     },
     {
@@ -558,6 +578,7 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
+      "withheld": [],
       "workable": true,
       "comment_count": 0
     },
@@ -595,6 +616,7 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
+      "withheld": [],
       "workable": true,
       "comment_count": 0
     },
@@ -654,6 +676,10 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
+      "withheld": [
+        "not_ready",
+        "held"
+      ],
       "workable": false,
       "comment_count": 2
     },
@@ -691,6 +717,11 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
+      "withheld": [
+        "not_ready",
+        "held",
+        "ancestor_triage"
+      ],
       "workable": false,
       "comment_count": 0
     },
@@ -728,6 +759,9 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": "2026-01-02T03:04:05Z",
       "last_claim_ref": null,
+      "withheld": [
+        "not_ready"
+      ],
       "workable": false,
       "comment_count": 1
     },
@@ -759,6 +793,9 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
+      "withheld": [
+        "container"
+      ],
       "workable": false,
       "comment_count": 0
     },
@@ -790,6 +827,9 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
+      "withheld": [
+        "container"
+      ],
       "workable": false,
       "comment_count": 0
     },
@@ -821,6 +861,9 @@
       "updated_at": "2026-01-02T03:04:05Z",
       "closed_at": null,
       "last_claim_ref": null,
+      "withheld": [
+        "container"
+      ],
       "workable": false,
       "comment_count": 0
     }

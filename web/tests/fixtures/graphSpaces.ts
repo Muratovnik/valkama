@@ -146,6 +146,7 @@ function maker(plan: ShapePlan) {
       started_at: null,
       waits_for: [],
       workable: false,
+      withheld: ['not_ready'],
       labels: [],
       source: '',
       checklist: [],
@@ -185,6 +186,7 @@ function hold(plan: ShapePlan, openWork: readonly WorkItemBrief[], next: () => n
     }
     item.workable =
       item.claim_ref === '' && ['ready', 'triage'].includes(item.state?.category ?? '')
+    item.withheld = item.workable ? [] : ['not_ready']
   }
 }
 

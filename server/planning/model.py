@@ -56,8 +56,9 @@ HELD_CATEGORIES = ("active", "blocked")
 #: Entering one of these is a start, recorded once: completed work was done even
 #: if nobody claimed it, and cancelled work was not.
 STARTING_CATEGORIES = ("active", "review", "completed")
-#: Where the take-next queue takes work from, and where an item is `workable`.
-WORKABLE_CATEGORIES = ("triage", "ready")
+#: Where the take-next queue takes work from, and where an item may be `workable`:
+#: work in triage or deferred is not accepted, so nobody is given it unasked.
+WORKABLE_CATEGORIES = ("ready",)
 #: Why nothing claims a goal or a stage, by any way in: work is held, a container is not.
 CONTAINER_UNHELD = "a goal or stage has no holder; claim a task under it"
 

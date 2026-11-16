@@ -10,6 +10,9 @@ from server import store
 from server.planning import calls, model, service, views
 from server.planning import store as planning_store
 
+#: Accepted work, in the ready state the take-next queue gives work from.
+READY = {"state": "ready", "acceptance": "assignment"}
+
 
 class PlanningDomainTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -387,10 +390,10 @@ class PlanningDomainTests(unittest.TestCase):
     def test_claim_ready_skips_a_blocked_item_and_follows_the_planned_order(self) -> None:
         # Priority no longer jumps the order: the urgent item was created last,
         # so it is last in its state and waits until somebody places it first.
-        blocked = self.item("Blocked work")
-        blocker = self.item("The blocker")
+        blocked = self.item("Blocked work", **READY)
+        blocker = self.item("The blocker", **READY)
         service.link_work_items(self.conn, blocker["reference"], blocked["reference"], "blocks")
-        urgent = self.item("Urgent work", priority="urgent")
+        urgent = self.item("Urgent work", priority="urgent", **READY)
         picked = service.claim_ready_work_item(self.conn, space=self.space["key"], author="tester")
         self.assertEqual(blocker["reference"], picked["reference"])
         second = service.claim_ready_work_item(self.conn, space=self.space["key"], author="tester")
@@ -399,7 +402,7 @@ class PlanningDomainTests(unittest.TestCase):
         self.assertIsNone(third)
 
     def test_a_finished_blocker_stops_blocking(self) -> None:
-        blocked = self.item("Blocked work")
+        blocked = self.item("Blocked work", **READY)
         blocker = self.item("The blocker")
         service.link_work_items(self.conn, blocker["reference"], blocked["reference"], "blocks")
         service.set_summary(self.conn, blocker["reference"], {"done": "d", "next": "n"})
@@ -870,7 +873,7 @@ class PlanningDomainTests(unittest.TestCase):
         taken, and the graph could not name what it waited on.
         """
 
-        blocked = self.item("Blocked from elsewhere")
+        blocked = self.item("Blocked from elsewhere", **READY)
         other_space = service.create_planning_space(
             self.conn, project_id="other-project", name="Other Space", key="OTH"
         )

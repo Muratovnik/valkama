@@ -66,7 +66,9 @@ class PlanningScaleTests(unittest.TestCase):
             self.assertEqual("goal", items[0]["kind"])
             self.assertFalse(items[0]["workable"])
             self.assertEqual(identities[0], items[1]["parent_id"])
-            self.assertTrue(items[2]["workable"])
+            # Every item stands in triage, and the one under the goal says so of the goal too.
+            self.assertEqual(["not_ready", "ancestor_triage"], items[1]["withheld"])
+            self.assertEqual(["not_ready"], items[2]["withheld"])
             self.assertEqual({1}, {item["comment_count"] for item in items})
 
     def test_an_item_read_costs_the_same_however_many_links_it_has(self) -> None:

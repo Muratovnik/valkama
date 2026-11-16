@@ -632,7 +632,9 @@ class EndedSessionGraceTests(HookedLeaseTestCase):
         )
 
     def test_the_take_next_queue_neither_gives_nor_releases_it_within_the_grace(self) -> None:
-        other = service.create_work_item(self.conn, space="LSE", title="Unheld")["reference"]
+        other = service.create_work_item(
+            self.conn, space="LSE", title="Unheld", state="ready", acceptance="assignment"
+        )["reference"]
         self.conn.commit()
         self.revision = self.item()["revision"]
         with self.clock(END + timedelta(hours=1)):

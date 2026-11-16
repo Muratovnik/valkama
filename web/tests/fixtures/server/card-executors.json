@@ -97,6 +97,10 @@
         "updated_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "last_claim_ref": null,
+        "withheld": [
+          "not_ready",
+          "held"
+        ],
         "workable": false,
         "claim": {
           "holder": "claude (session 00000000-0000-4000-8000-000000000012)",

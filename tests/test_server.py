@@ -678,9 +678,9 @@ class WorkItemGraphTests(unittest.TestCase):
         return {node[key]: node for node in planning_views.graph_payload(self.conn)["nodes"]}
 
     def test_depth_counts_open_blockers_and_a_closed_one_frees_the_chain(self) -> None:
-        first = self.item("first")
-        second = self.item("second")
-        third = self.item("third")
+        first = self.item("first", state="ready")
+        second = self.item("second", state="ready")
+        third = self.item("third", state="ready")
         self.blocks(first, second)
         self.blocks(second, third)
 
@@ -694,7 +694,7 @@ class WorkItemGraphTests(unittest.TestCase):
         self.assertEqual(0, self.nodes()[second]["depth"], "a closed blocker no longer counts")
 
     def test_a_container_is_never_offered_as_workable(self) -> None:
-        goal = self.item("goal", kind="goal", state="triage")
+        goal = self.item("goal", kind="goal", acceptance="assignment")
         child = self.item("child", state="ready", parent=goal)
         nodes = self.nodes()
         self.assertEqual("goal", nodes[goal]["kind"])

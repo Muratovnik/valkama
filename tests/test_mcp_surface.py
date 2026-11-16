@@ -2637,8 +2637,10 @@ class ChainToolTests(WireCallTestCase):
 
     def setUp(self) -> None:
         super().setUp()
+        # Accepted, so the work under it is too: under a goal in triage the queue
+        # would give none of it.
         self.root = planning_service.create_work_item(
-            self.conn, space=SPACE_KEY, title="Root", kind="goal"
+            self.conn, space=SPACE_KEY, title="Root", kind="goal", acceptance="assignment"
         )["reference"]
         self.children: dict[str, str] = {}
         for name, state in (
@@ -2680,9 +2682,9 @@ class ChainToolTests(WireCallTestCase):
                 "UPDATE work_items SET created_at = ?, updated_at = ? WHERE work_item_id = ?",
                 (stamp, stamp, done["work_item_id"]),
             )
-        self.found = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="found")[
-            "reference"
-        ]
+        self.found = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="found", state="ready", acceptance="assignment"
+        )["reference"]
         planning_service.link_work_items(
             self.conn, self.found, self.children["ready"], "discovered-from"
         )

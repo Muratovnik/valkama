@@ -52,6 +52,7 @@ function item(
     started_at: null,
     waits_for: [],
     workable: true,
+    withheld: [],
     labels: [],
     source: '',
     checklist: [],

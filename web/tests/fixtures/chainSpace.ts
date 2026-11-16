@@ -58,6 +58,7 @@ function brief(
     started_at: null,
     waits_for: [],
     workable: !closed,
+    withheld: closed ? ['not_ready'] : [],
     labels: [],
     source: '',
     checklist: [],

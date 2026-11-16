@@ -171,7 +171,8 @@ class PlanningApiTests(unittest.TestCase):
         )
         graph = self.get("/api/planning/graph")
         self.assertEqual([created["reference"]], [node["reference"] for node in graph["nodes"]])
-        self.assertTrue(graph["nodes"][0]["workable"])
+        # Filed without an acceptance, it waits in triage, which the queue does not give.
+        self.assertFalse(graph["nodes"][0]["workable"])
 
     def test_a_read_resolves_the_space_from_the_project_that_binds_it(self) -> None:
         """A browser knows its project long before it knows a space id."""
@@ -305,7 +306,16 @@ class PlanningApiTests(unittest.TestCase):
 
     def test_claim_ready_answers_with_nothing_when_no_item_is_ready(self) -> None:
         self.assertIsNone(self.post("/api/planning/work-item/claim-ready", space="QA")["work_item"])
-        created = self.post("/api/planning/work-items", space="QA", title="Ready")
+        # Work in triage is not accepted, so the queue gives nobody it unasked.
+        self.post("/api/planning/work-items", space="QA", title="In triage")
+        self.assertIsNone(self.post("/api/planning/work-item/claim-ready", space="QA")["work_item"])
+        created = self.post(
+            "/api/planning/work-items",
+            space="QA",
+            title="Ready",
+            state="ready",
+            acceptance="assignment",
+        )
         picked = self.post("/api/planning/work-item/claim-ready", space="QA", author="one")
         self.assertEqual(created["reference"], picked["work_item"]["reference"])
 

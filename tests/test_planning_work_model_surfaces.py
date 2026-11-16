@@ -442,6 +442,10 @@ PLACES: tuple[tuple[str, str, str, str], ...] = (
 )
 
 
+#: Where `_walk` stands on one code of a record's `withheld`.
+_WITHHELD_CODE = re.compile(r"\.withheld\[\d+\]$")
+
+
 def _walk(value: object, path: str = "") -> Iterator[tuple[str, object]]:
     yield path, value
     if isinstance(value, dict):
@@ -633,7 +637,10 @@ class Surfaces(unittest.TestCase):
         self.assertNotIn(MARKER, text, where)
         self.assertNotIn("search_failed", text, where)
         for path, value in _walk(answer):
-            self.assertNotEqual("container", value, f"{where}: {path}")
+            # `withheld` names why the queue gives no goal or stage with the code
+            # `container`: a reason, not the state the item stands in.
+            if not _WITHHELD_CODE.search(path):
+                self.assertNotEqual("container", value, f"{where}: {path}")
             if isinstance(value, dict):
                 self._record(value, f"{where}: {path}")
 

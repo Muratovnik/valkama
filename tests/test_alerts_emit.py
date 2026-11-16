@@ -27,7 +27,7 @@ from server import mcp_surface, store
 from server.alerts import emit, messages
 from server.alerts import settings as alert_settings
 from server.ops import toast
-from server.planning import api, calls, requests, service
+from server.planning import api, calls, questions, requests, service
 from server.planning import model as planning_model
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -226,7 +226,7 @@ class BatchQuestionTests(EmitHarness):
         self.conn.rollback()
         self.settle()
         self.assertEqual([], self.shown)
-        self.assertEqual([], requests.open_rows(self.conn))
+        self.assertEqual([], questions.open_rows(self.conn))
 
 
 class ListTests(EmitHarness):

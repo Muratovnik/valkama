@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import acknowledgements, calls, leases, model, read_model, requests, states, subscriptions
+from . import acknowledgements, calls, leases, model, questions, read_model, states, subscriptions
 
 CLAIM = "claim"
 STEP = "step"
@@ -97,6 +97,6 @@ def _item(conn: sqlite3.Connection, row: sqlite3.Row, held_as: str) -> dict:
         else {name: shown[name] for name in ("key", "name", "category")},
         "held_as": held_as,
         "steps": {"done": sum(1 for step in steps if step["done"]), "total": len(steps)},
-        "pending_questions": len(requests.open_rows(conn, str(row["work_item_id"]))),
+        "pending_questions": len(questions.open_rows(conn, str(row["work_item_id"]))),
         "url": acknowledgements.work_item_url(reference),
     }

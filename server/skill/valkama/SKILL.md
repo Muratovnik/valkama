@@ -54,7 +54,8 @@ splitting one, or handing items to other agents.
    merge the new item into one that is the same change (`merge_work_items`)
    and link a related one; an empty `similar` does not rule out a duplicate.
 4. **Claim before working.** `claim_work_item`, or `claim_ready_work_item` to
-   take the next workable task of a space. A claim is atomic and refuses naming
+   take the next workable task of a space: accepted work in a ready state, never
+   triage; a record's `withheld` says why a task is not given. A claim is atomic and refuses naming
    the holder when someone else has the item. It also starts the work: a task
    in a triage, deferred or ready state moves to the first active state, and the
    acknowledgement's `started` says so. Send no separate transition to start.

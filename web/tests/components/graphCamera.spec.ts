@@ -80,6 +80,7 @@ const item: WorkItemBrief = {
   started_at: null,
   waits_for: [],
   workable: true,
+  withheld: [],
   labels: [],
   source: '',
   checklist: [],
@@ -213,6 +214,7 @@ describe('graph camera ownership', () => {
       ...item,
       work_item_id: 'done-1',
       workable: false,
+      withheld: ['not_ready' as const],
       open: false,
       state: { ...stateOf(item), name: 'Done', category: 'completed' as const, is_terminal: true },
     }

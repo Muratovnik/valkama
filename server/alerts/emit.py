@@ -50,7 +50,7 @@ from urllib.parse import urlencode
 
 from ..executions import results as execution_results
 from ..ops import configuration, toast
-from ..planning import calls, model, read_model, requests
+from ..planning import calls, model, questions, read_model
 from . import messages
 from . import settings as alert_settings
 
@@ -180,7 +180,7 @@ def _item_dues(
     state = read_model.state_by_id(conn, str(item["state_id"]))
     moves = [int(event["id"]) for event in events if event["action"] == "transitioned"]
     created = [str(event["detail"]) for event in events if event["action"] == "request_created"]
-    open_rows = requests.open_rows(conn, work_item_id)
+    open_rows = questions.open_rows(conn, work_item_id)
     dues: list[Due] = []
     closing = (moves and state["is_terminal"]) or any(
         event["action"] in _CLOSED_QUESTION for event in events
@@ -231,7 +231,7 @@ def _write_dues(conn: sqlite3.Connection) -> list[Due]:
     ]
     # A summary names several items under its own tag, so no item's removal reaches
     # it. It says answers are waiting, which stops being true only here.
-    if any(isinstance(due, TakeBack) for due in dues) and not requests.open_rows(conn):
+    if any(isinstance(due, TakeBack) for due in dues) and not questions.open_rows(conn):
         dues.append(TakeBack(messages.SUMMARY_TAG))
     return dues
 

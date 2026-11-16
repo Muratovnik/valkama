@@ -236,23 +236,21 @@ class OrderReaderTests(RankingTestCase):
         taken = service.claim_ready_work_item(self.conn, space=self.space["key"], author="agent")
         return None if taken is None else str(taken["reference"])
 
-    def test_the_queue_takes_todo_before_the_backlog_and_each_in_its_order(self) -> None:
+    def test_the_queue_takes_ready_work_in_its_order_and_never_triage(self) -> None:
         backlog = [self.item(f"Triage {index}") for index in range(2)]
         todo = [self.item(f"Ready {index}", state="ready") for index in range(2)]
         service.update_work_item(self.conn, todo[1], rank="first")
         service.update_work_item(self.conn, backlog[1], rank="first")
-        self.assertEqual(
-            [todo[1], todo[0], backlog[1], backlog[0], None], [self.take() for _ in range(5)]
-        )
+        # Work in triage is not accepted: placed first or not, nobody is given it.
+        self.assertEqual([todo[1], todo[0], None], [self.take() for _ in range(3)])
 
     def test_priority_only_breaks_a_tie_in_the_order(self) -> None:
-        first = self.item("Placed first")
-        urgent = self.item("Urgent but last", priority="urgent")
+        first = self.item("Placed first", state="ready")
+        urgent = self.item("Urgent but last", state="ready", priority="urgent")
         self.assertEqual(first, self.take())
-        service.claim_work_item(self.conn, first, release=True, author="agent")
-        # The release put the started item in the queued state; back beside the
+        # The release puts the started item back in the ready state, beside the
         # urgent one, so the two share a state.
-        service.transition_work_item(self.conn, first, "triage", acceptance="assignment")
+        service.claim_work_item(self.conn, first, release=True, author="agent")
         # Two rows an earlier build left at one position: the urgent one goes first.
         self.conn.execute("UPDATE work_items SET position = 7.0")
         self.assertEqual(urgent, self.take())

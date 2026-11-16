@@ -455,8 +455,10 @@ TOOLS = [
         " An accepted open goal or stage shows state null and container_state:"
         " not_started, in_progress or awaiting_confirmation. acceptance is the basis it was"
         " accepted on and when, null in triage or deferred; started_at is when work on it"
-        " began, waits_for the open items blocking it, and workable whether a task may be"
-        " taken now.",
+        " began, waits_for the open items blocking it, workable whether its space's queue"
+        " may give it now and withheld why not: container, not_ready, held, waits,"
+        " question, no_start, ancestor_triage, ancestor_deferred, ancestor_waits or"
+        " ancestor_closed.",
         READ_ONLY,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -622,13 +624,14 @@ TOOLS = [
     _tool(
         "claim_ready_work_item",
         "Claim the next ready work item",
-        "Choose and claim in one step: the first workable task — unheld, in a triage or"
-        " ready state, with nothing unfinished blocking it — in the order of work: a"
-        " ready state before a triage one, and inside a state the planned order (see rank"
-        " in apply_work_item_changes's update); priority only breaks a tie. A goal, a stage"
-        " and deferred work are never taken. The claim starts the item"
-        " as claim_work_item does, so it answers in its active state with started."
-        " Answers with nothing when no task is workable.",
+        "Choose and claim in one step the next task the queue gives: a task in a ready"
+        " state, unheld, with nothing unfinished blocking it and no open question to the"
+        " owner, under no goal or stage that is in triage, deferred, closed or blocked."
+        " Order: inside a state the planned order (see rank in apply_work_item_changes's"
+        " update); priority only breaks a tie. The claim starts the task as"
+        " claim_work_item does, so it answers in its active state with started."
+        " Answers with nothing when no task is workable; a record's withheld says why an"
+        " item is not given.",
         WRITES,
         {"space": _SPACE, "author": _AUTHOR},
     ),

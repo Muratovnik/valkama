@@ -19,6 +19,10 @@ decides what a goal whose work was all cancelled is for. Children with one open 
 A container records no start of its own: it started when the first thing under it
 did. A record also says which open items block it, `waits_for`, by reference.
 
+A tree also holds what the take-next queue asks of an item and the items over it
+(`queue.withheld`): each item's category, what blocks each, and which items an open
+question to the owner holds up.
+
 The rule is stated once, here, over a `Tree` of loaded facts, and every read asks
 it: one item's record loads the tree below that item, and a read of many items
 loads the whole of their spaces in one statement, however many containers they
@@ -32,7 +36,7 @@ import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from . import model, states
+from . import model, questions, states
 
 #: What an accepted open container derives, in the order the work goes through them.
 CONTAINER_STATES = ("not_started", "in_progress", "awaiting_confirmation")
@@ -55,6 +59,13 @@ _BELOW = (
     " UNION SELECT w.work_item_id FROM below b JOIN work_items w ON w.parent_id = b.id)"
     + _FACTS
     + " JOIN below b ON b.id = i.work_item_id"
+)
+#: Every item over the one named, at any height. `UNION` keeps each once, so a cycle
+#: in a damaged store ends instead of looping.
+_OVER = (
+    "WITH RECURSIVE over(id) AS (SELECT parent_id FROM work_items WHERE work_item_id = ?"  # noqa: S608 - constant text
+    " UNION SELECT w.parent_id FROM over o JOIN work_items w ON w.work_item_id = o.id"
+    " WHERE w.parent_id IS NOT NULL)" + _FACTS + " JOIN over o ON o.id = i.work_item_id"
 )
 #: The open items that block each item named: its open blockers, by reference.
 _WAITS = (
@@ -85,6 +96,8 @@ def _facts(conn: sqlite3.Connection, query: str) -> str:
 class _Node:
     parent_id: str | None
     container: bool
+    #: Its stored state's category; `model.SERVICE_CATEGORY` for an accepted open container.
+    category: str
     #: Accepted and open: a container standing in the service state.
     accepted_open: bool
     #: Its stored category is completed or cancelled.
@@ -104,6 +117,12 @@ class Tree:
     nodes: Mapping[str, _Node]
     waits: Mapping[str, tuple[str, ...]]
     children: Mapping[str, tuple[str, ...]] = field(init=False)
+    #: The items over the ones loaded with what is under them: one task's record loads
+    #: its own row and these, and nothing here derives what they derive.
+    over: Mapping[str, _Node] = field(default_factory=dict)
+    #: The items an open question to the owner holds up (`questions.asked`); None
+    #: where the tree was loaded without them, as for what a link's end derives.
+    asked: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         children: dict[str, list[str]] = {}
@@ -149,6 +168,29 @@ class Tree:
         node = self.nodes.get(identity)
         return None if node is None else node.startable
 
+    def node(self, identity: str) -> _Node | None:
+        """The loaded facts of one item, wherever in the tree they were loaded."""
+
+        return self.nodes.get(identity) or self.over.get(identity)
+
+    def ancestors(self, identity: str) -> list[str]:
+        """Every item over this one up to its root, nearest first, as far as the tree holds them."""
+
+        found: list[str] = []
+        node = self.node(identity)
+        while node is not None and node.parent_id is not None and node.parent_id not in found:
+            # A cycle is a damaged store; the climb still ends.
+            found.append(node.parent_id)
+            node = self.node(node.parent_id)
+        return found
+
+    def question(self, identity: str) -> bool:
+        """Whether an open question to the owner holds this item up."""
+
+        if self.asked is None:
+            raise LookupError("this tree was loaded without the questions to the owner")
+        return identity in self.asked
+
     def _first_start(self, identity: str) -> str | None:
         found: str | None = None
         pending = list(self.children.get(identity, ()))
@@ -171,6 +213,7 @@ def _node(row: sqlite3.Row | tuple[object, ...]) -> _Node:
     return _Node(
         parent_id=None if row[1] is None else str(row[1]),
         container=container,
+        category=str(row[4]),
         accepted_open=container and str(row[4]) == model.SERVICE_CATEGORY,
         closed=str(row[4]) in model.TERMINAL_CATEGORIES,
         started_at=None if row[3] is None else str(row[3]),
@@ -187,12 +230,14 @@ def _waits(rows: Iterable[sqlite3.Row]) -> dict[str, tuple[str, ...]]:
 
 
 def of_spaces(conn: sqlite3.Connection, space_ids: Iterable[str]) -> Tree:
-    """Every item of these spaces: two statements, whatever the spaces hold."""
+    """Every item of these spaces: three statements, whatever the spaces hold."""
 
-    spaces = json.dumps(sorted(set(space_ids)))
+    named = sorted(set(space_ids))
+    spaces = json.dumps(named)
     return Tree(
         nodes={str(row[0]): _node(row) for row in conn.execute(_facts(conn, _SPACES), (spaces,))},
         waits=_waits(conn.execute(_WAITS_IN_SPACES, (spaces,))),
+        asked=questions.asked(conn, spaces=named),
     )
 
 
@@ -259,19 +304,29 @@ def accepted_chain(conn: sqlite3.Connection, parent_id: str | None) -> bool:
 
 
 def of_item(conn: sqlite3.Connection, row: sqlite3.Row, category: str) -> Tree:
-    """One item and what is under it: all a record of that item derives from.
+    """One item and what is under it, or over it: all a record of that item derives from.
 
-    `category` is the item's own state's. A task has nothing under it to read, so its
-    facts come from its row, and only its waits cost a statement.
+    `category` is the item's own state's. A container's record derives from what is
+    under it, and the queue gives no container whatever is over it. A task has
+    nothing under it to read, so its facts come from its row; the queue asks about
+    the items over it, what blocks it and them, and its questions to the owner. Its
+    own row says whether the store records a start, so that costs no statement, and
+    a closed task has no open question to ask for: closing ended them
+    (`questions.lapse`).
     """
 
     identity = str(row["work_item_id"])
     if str(row["kind"]) == model.CONTAINER_KIND:
         return below(conn, [identity])
     columns = row.keys()  # `in row` would search a Row's values, not its names
-    started = row["started_at"] if "started_at" in columns else None
+    recorded = "started_at" in columns
+    started = row["started_at"] if recorded else None
     node = _node((identity, row["parent_id"], row["kind"], started, category, 0))
+    query = _OVER.format(started="i.started_at" if recorded else "NULL")
+    over = {str(found[0]): _node(found) for found in conn.execute(query, (identity,))}
     return Tree(
         nodes={identity: node},
-        waits=_waits(conn.execute(_WAITS_ON_ITEMS, (json.dumps([identity]),))),
+        waits=_waits(conn.execute(_WAITS_ON_ITEMS, (json.dumps([identity, *over]),))),
+        over=over,
+        asked=frozenset() if node.closed else questions.asked(conn, items=[identity]),
     )

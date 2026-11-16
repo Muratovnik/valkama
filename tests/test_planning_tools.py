@@ -586,6 +586,11 @@ class PlanningAcknowledgementTests(unittest.TestCase):
             self.assertIn(key, full)
         listed = self.call("list_work_items", space="QA", verbose=True)["work_items"]
         self.assertTrue(all("comment_count" in item and "events" not in item for item in listed))
+        self.call(
+            "apply_work_item_changes",
+            id=self.ref,
+            transition={"state": "ready", "acceptance": "assignment"},
+        )
         taken = self.call("claim_ready_work_item", space="QA", author="one")["work_item"]
         for key in ("events", "checklist", "description", "comments"):
             self.assertIn(key, taken)

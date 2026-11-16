@@ -72,6 +72,7 @@ export function boardItem(
     started_at: null,
     waits_for: [],
     workable: state === 'backlog' || state === 'todo',
+    withheld: state === 'backlog' || state === 'todo' ? [] : ['not_ready'],
     comment_count: 0,
     ...overrides,
   }
@@ -83,7 +84,12 @@ export function boardGoal(
   state: BoardStateKey = 'dev',
   overrides: Partial<WorkItemBrief> = {},
 ) {
-  return boardItem(n, state, { kind: 'goal', workable: false, ...overrides })
+  return boardItem(n, state, {
+    kind: 'goal',
+    workable: false,
+    withheld: ['container'],
+    ...overrides,
+  })
 }
 
 /** References in the order they are listed. */

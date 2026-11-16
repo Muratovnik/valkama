@@ -651,6 +651,9 @@ class ToldOnWriteTests(Harness):
                 )
 
     def test_the_next_item_of_the_queue_comes_with_what_was_said_on_it(self) -> None:
+        # Accepted, it stands where the queue gives work from.
+        service.transition_work_item(self.conn, self.ref, "ready", acceptance="assignment")
+        self.conn.commit()
         self.says()
         taken = self.agent("claim_ready_work_item", space=self.space["key"])
         self.assertEqual(self.ref, taken["work_item"]["reference"])

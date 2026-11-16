@@ -276,7 +276,8 @@ HTTP answer of a write to an item -- carries these fields of the model:
 | `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule` or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
-| `workable` | whether it may be taken now: a task, held by nobody, in `triage` or `ready` in a workflow that leads from there to an active state, with nothing unfinished blocking it. It is the rule `claim_ready_work_item` takes work by |
+| `workable` | whether its space's take-next queue may give it now: `withheld` is empty. It is the rule `claim_ready_work_item` takes work by |
+| `withheld` | why the queue does not give it, as codes in this order: `container` (a goal or stage, which has no other code), `not_ready` (not in a `ready` state), `held` (a claim, or a claimed step), `waits` (an unfinished blocker), `question` (an open question to the owner), `no_start` (in a `ready` state its workflow leads nowhere into work from), `ancestor_triage` and `ancestor_deferred` (a goal or stage over it stands there), `ancestor_waits` (a goal or stage over it has an unfinished blocker), `ancestor_closed` (a goal or stage over it is closed while it is open). Empty exactly when `workable` |
 
 Four other answers carry only some of these fields:
 
@@ -464,9 +465,9 @@ places the item in the state it moves to; the anchor must then be in that state.
 Without `rank` a moved item goes last in its new state, as it did before
 placements existed, and a new item goes last in its first state.
 
-`claim_ready_work_item` takes the first `workable` task in that order: one in a
-`ready` state before one in a `triage` state, then the states in the
-workflow's order, then the place inside the state. Priority only breaks a tie
+`claim_ready_work_item` takes the first `workable` task in that order: the
+`ready` states in the workflow's order, then the place inside the state. Work in
+`triage` or `deferred` is not accepted and is never given. Priority only breaks a tie
 between two items at the same place, which a store written before placements
 can hold, and the item number breaks what is left. Placing an item first is what
 makes it next; an urgent item nobody placed waits its turn.

@@ -7,7 +7,7 @@ import json
 import sqlite3
 from collections.abc import Iterator
 
-from . import calls, model, read_model, request_model, service, words
+from . import calls, model, questions, read_model, request_model, service, words
 
 #: How many questions a read of one item carries; `questions.total` says the rest.
 ITEM_QUESTIONS = 5
@@ -37,30 +37,9 @@ def _row(conn: sqlite3.Connection, identity: object) -> sqlite3.Row:
     return row
 
 
-def _expired(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> str | None:
-    if row["status"] != "pending":
-        return row["expired_reason"]
-    if row["expires_at"] and row["expires_at"] <= at:
-        return "deadline"
-    item = read_model.item_by_id(conn, row["work_item_id"])
-    if read_model.state_by_id(conn, item["state_id"])["is_terminal"]:
-        return "task_closed"
-    if row["execution_id"]:
-        execution = conn.execute(
-            "SELECT ended_at,status FROM executions WHERE execution_id=?", (row["execution_id"],)
-        ).fetchone()
-        if (
-            execution is None
-            or execution["ended_at"]
-            or execution["status"] not in {"starting", "running"}
-        ):
-            return "execution_closed"
-    return None
-
-
 def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
     item = read_model.item_by_id(conn, row["work_item_id"])
-    reason = _expired(conn, row, at)
+    reason = questions.expired(conn, str(row["request_id"]), at)
     parts = request_model.split_answers(
         json.loads(row["answers_json"]) if row["answers_json"] is not None else None
     )
@@ -467,7 +446,7 @@ def create(
                 at,
             ),
         )
-        if _expired(conn, _row(conn, identity), at):
+        if questions.expired(conn, identity, at):
             raise model.PlanningError(
                 "a request requires a live work item, live execution and future deadline"
             )
@@ -575,7 +554,7 @@ def resolve(
         if row["revision"] != expected_revision:
             raise model.RevisionConflictError(expected_revision, row["revision"])
         at = request_model.now()
-        if row["status"] != "pending" or _expired(conn, row, at):
+        if row["status"] != "pending" or questions.expired(conn, str(row["request_id"]), at):
             raise model.WorkflowGuardError("request is no longer pending")
         parsed = _stored(row, answers, own, field_notes, said) if status == "answered" else None
         changed = conn.execute(
@@ -703,26 +682,6 @@ def _stored(row: sqlite3.Row, answers: object, own: object, field_notes: object,
         own=variants,
         field_notes=comments,
     )
-
-
-def open_rows(conn: sqlite3.Connection, work_item_id: str | None = None) -> list[sqlite3.Row]:
-    """The questions still open for a person to answer, on one item or everywhere in this store.
-
-    Open as a reader sees it: a pending row past its deadline, on a closed item or
-    on a finished execution has lapsed although nothing wrote that down. A list on
-    a comment is never one: nobody waits for it, so it raises no alert and holds
-    none up.
-    """
-
-    query = "SELECT * FROM work_item_requests WHERE status='pending' AND comment_id IS NULL"
-    parameters: tuple[str, ...] = ()
-    if work_item_id is not None:
-        query += " AND work_item_id=?"
-        parameters = (work_item_id,)
-    at = request_model.now()
-    return [
-        row for row in conn.execute(query, parameters).fetchall() if not _expired(conn, row, at)
-    ]
 
 
 def _event(
