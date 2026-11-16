@@ -29,19 +29,27 @@ def paragraph_key(text: str) -> str:
 
 class KeyTests(unittest.TestCase):
     def test_a_heading_opens_a_section_that_holds_its_subsections(self) -> None:
+        start, plan, steps, notes = (
+            "Why this exists.\n\n",
+            "# Plan\nFirst do this.\n\n## Steps\nOne, two.\n\n",
+            "## Steps\nOne, two.\n\n",
+            "# Notes\nAside.\n",
+        )
         self.assertEqual(
             [
-                {"key": "(start)", "level": 0, "chars": 16},
-                {"key": "Plan", "level": 1, "chars": 41},
-                {"key": "Steps", "level": 2, "chars": 18},
-                {"key": "Notes", "level": 1, "chars": 14},
+                {"key": "(start)", "level": 0, "chars": len(start)},
+                {"key": "Plan", "level": 1, "chars": len(plan)},
+                {"key": "Steps", "level": 2, "chars": len(steps)},
+                {"key": "Notes", "level": 1, "chars": len(notes)},
             ],
             sections.contents(PLAN),
         )
         self.assertEqual(
-            "# Plan\nFirst do this.\n\n## Steps\nOne, two.",
-            sections.named(PLAN, ["Plan"])[0]["text"],
+            [start, plan, steps, notes],
+            [entry["text"] for entry in sections.named(PLAN, keys(PLAN))],
         )
+        # The sections no other holds, in order, are the description without loss.
+        self.assertEqual(PLAN, start + plan + notes)
 
     def test_an_edit_to_a_section_changes_no_key(self) -> None:
         edits = (
@@ -61,7 +69,7 @@ class KeyTests(unittest.TestCase):
         text = "Lead.\n# Plan\na\n# plan\nb\n## Plan\nc\n# (start)\nd\n"
         self.assertEqual(["(start)", "Plan", "plan (2)", "Plan (3)", "(start) (2)"], keys(text))
         # The numbered key reads its own section, and keys compare without case.
-        self.assertEqual("# plan\nb\n## Plan\nc", sections.named(text, ["PLAN (2)"])[0]["text"])
+        self.assertEqual("# plan\nb\n## Plan\nc\n", sections.named(text, ["PLAN (2)"])[0]["text"])
 
     def test_a_hash_in_a_fenced_block_opens_no_section(self) -> None:
         for fence in ("```", "~~~", "````"):
@@ -123,8 +131,8 @@ class KeyTests(unittest.TestCase):
         read = sections.named(PLAN, ["Notes", "(start)", "notes"])
         self.assertEqual(
             [
-                {"key": "(start)", "level": 0, "chars": 16, "text": "Why this exists."},
-                {"key": "Notes", "level": 1, "chars": 14, "text": "# Notes\nAside."},
+                {"key": "(start)", "level": 0, "chars": 18, "text": "Why this exists.\n\n"},
+                {"key": "Notes", "level": 1, "chars": 15, "text": "# Notes\nAside.\n"},
             ],
             read,
         )
@@ -134,13 +142,19 @@ class ReadTests(CardCase):
     def setUp(self) -> None:
         super().setUp()
         self.ref = self.item("Sections", description=PLAN)
+        # The store keeps a description without its closing line break.
+        self.text = str(self.http()["description"])
+        self.assertEqual(PLAN.rstrip(), self.text)
 
     def test_the_sections_part_reads_the_contents(self) -> None:
         answer = self.read(parts=["sections"])
         revision = int(self.http()["revision"])
         self.assertEqual(
-            {"reference": self.ref, "revision": revision, "sections": sections.contents(PLAN)},
+            {"reference": self.ref, "revision": revision, "sections": sections.contents(self.text)},
             answer,
+        )
+        self.assertEqual(
+            ["(start)", "Plan", "Steps", "Notes"], [entry["key"] for entry in answer["sections"]]
         )
 
     def test_section_without_parts_reads_the_named_sections_alone(self) -> None:
@@ -148,12 +162,12 @@ class ReadTests(CardCase):
             {
                 "reference": self.ref,
                 "revision": int(self.http()["revision"]),
-                "sections": sections.named(PLAN, ["Steps"]),
+                "sections": sections.named(self.text, ["Steps"]),
             },
             self.read(section="Steps"),
         )
         self.assertEqual(
-            sections.named(PLAN, ["Plan", "Notes"]),
+            sections.named(self.text, ["Plan", "Notes"]),
             self.read(section=["Notes", "Plan"])["sections"],
         )
         beside = self.read(parts=["card", "sections"], section="Notes")

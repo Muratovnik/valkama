@@ -6,7 +6,9 @@ a long one reads that piece by its key instead of the whole text again.
 A line that starts with one to six `#` and a space, outside a fenced code block,
 opens a section, and the section lasts until the next heading of its level or a
 higher one, so it holds its subsections. The text before the first heading is the
-section `(start)`. A description without a heading is divided into paragraphs: the
+section `(start)`. A section's text is the span it covers, its heading line and the
+blank lines after it included, so the sections no other holds, read in order, are the
+description itself. A description without a heading is divided into paragraphs: the
 text between blank lines outside a fenced block.
 
 A heading's key is its text with the spaces run together; a paragraph's is `p` and
@@ -142,13 +144,13 @@ def _by_heading(description: str, headings: list[tuple[int, int, str]]) -> list[
     first = headings[0][0]
     found = []
     if description[:first].strip():
-        found.append(Section(START, 0, _trimmed(description[:first])))
+        found.append(Section(START, 0, description[:first]))
     for index, (start, level, title) in enumerate(headings):
         end = next(
             (other for other, deeper, _ in headings[index + 1 :] if deeper <= level),
             len(description),
         )
-        found.append(Section(title, level, _trimmed(description[start:end])))
+        found.append(Section(title, level, description[start:end]))
     return found
 
 
@@ -157,7 +159,8 @@ def _by_paragraph(description: str, lines: list[tuple[int, int, str, bool]]) -> 
     start: int | None = None
     for offset, _level, _title, blank in [*lines, (len(description), 0, "", True)]:
         if blank and start is not None:
-            text = _trimmed(description[start:offset])
+            # A paragraph is its lines, without the break before the blank line.
+            text = description[start:offset].rstrip("\r\n")
             found.append(Section("p" + _digest(text), None, text))
             start = None
         elif not blank and start is None:
@@ -199,12 +202,3 @@ def _spaced(text: str) -> str:
 
 def _digest(text: str) -> str:
     return hashlib.sha256(_spaced(text).encode("utf-8")).hexdigest()[:8]
-
-
-def _trimmed(text: str) -> str:
-    """A section's text without the blank lines before it or the space after it."""
-
-    lines = text.splitlines(keepends=True)
-    while lines and not lines[0].strip():
-        lines.pop(0)
-    return "".join(lines).rstrip()
