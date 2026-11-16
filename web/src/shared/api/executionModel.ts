@@ -48,6 +48,23 @@ const TELEMETRY_CONFIGURATIONS = ['environment', 'client-config', 'none'] as con
 const DRIVER_HEALTH = ['ready', 'unavailable'] as const
 /** How a value was obtained. A zero nobody observed is not a zero. */
 const QUALITIES = ['observed', 'unknown'] as const
+/** On which runs a client takes the directories beside the one it runs in. */
+const ADDED_DIRS = ['fresh_and_resume', 'fresh_only', 'none'] as const
+/**
+ * How the suggested launch root stands: `missing` when the space binds no
+ * project, `unregistered` when the item's project left the registry,
+ * `unavailable` when the registry or the directory is not there, `malformed`
+ * when the registry cannot be read as one.
+ */
+const LAUNCH_ROOT_STATUSES = [
+  'mapped',
+  'missing',
+  'unregistered',
+  'unavailable',
+  'malformed',
+] as const
+/** Roots beside the working one: a space's projects and an item's, at most. */
+const MAX_ADDED_ROOTS = 100
 
 const NAME = /^[\w.@:+-]{1,120}$/u
 
@@ -80,7 +97,14 @@ const driverSchema = strictObject({
   telemetry_configuration: enumField(TELEMETRY_CONFIGURATIONS),
   health: enumField(DRIVER_HEALTH),
   unavailable_reason: blank(400),
+  added_dirs: enumField(ADDED_DIRS),
 })
+
+/** A root beside the one a launch runs in, by its project. */
+const addedRootShape = {
+  project_id: boundedText(PROJECT_ID, 160),
+  root: blank(512),
+}
 
 const capabilitiesSchema = strictObject({
   interface_version: z.literal(EXECUTION_API),
@@ -97,9 +121,12 @@ const capabilitiesSchema = strictObject({
   // place chooses, as the registry maps it. The status travels with it so a blank
   // field can say why; the project and the launch place are null with no item.
   repository: blank(512),
-  repository_status: boundedText(NAME, 32),
+  repository_status: enumField(LAUNCH_ROOT_STATUSES),
   repository_project: boundedText(PROJECT_ID, 160).nullable(),
   launch_place: enumField(LAUNCH_PLACES).nullable(),
+  // The roots the launch gets beside that one; each driver's `added_dirs` says
+  // on which runs its client takes them.
+  added_roots: boundedList(strictObject(addedRootShape), MAX_ADDED_ROOTS),
 })
 
 const dispositionSchema = strictObject({
@@ -124,16 +151,15 @@ const resultSchema = strictObject({
   dispositions: boundedList(dispositionSchema, 100).optional(),
 })
 
-const baseArtifactSchema = strictObject({
+const baseReading = {
   repository: blank(512),
   head: blank(64),
   branch: blank(200),
   dirty: z.boolean().nullable(),
-  worktree: blank(512),
   quality: enumField(QUALITIES),
-})
+}
 
-const finalArtifactSchema = strictObject({
+const finalReading = {
   head: blank(64),
   branch: blank(200),
   dirty: z.boolean().nullable(),
@@ -142,6 +168,19 @@ const finalArtifactSchema = strictObject({
   deletions: positiveInt(true).nullable(),
   commits: boundedList(blank(64), 50),
   quality: enumField(QUALITIES),
+}
+
+// `added` reads each root the launch passed beside the working directory the
+// same way, so a change made only there is evidence too.
+const baseArtifactSchema = strictObject({
+  ...baseReading,
+  worktree: blank(512),
+  added: boundedList(strictObject({ ...addedRootShape, ...baseReading }), MAX_ADDED_ROOTS),
+})
+
+const finalArtifactSchema = strictObject({
+  ...finalReading,
+  added: boundedList(strictObject({ ...addedRootShape, ...finalReading }), MAX_ADDED_ROOTS),
 })
 
 const executionSessionSchema = strictObject({

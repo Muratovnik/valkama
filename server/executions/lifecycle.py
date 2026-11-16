@@ -117,9 +117,12 @@ def _launch_reserved(
         # against the one that was edited. On a worktree's first launch the two
         # agree by accident; on a reused or diverged one they do not. Resolved,
         # then read, then handed to the runner so all three name one directory.
+        # The roots beside it are read too, the ones this run passes the client:
+        # an attempt may change only one of them.
         directory = runner.launch_directory(packet, reference)
+        added = _added_roots(conn, str(record["work_item_id"]), packet)
         execution_service.record_baseline(
-            conn, execution_id, execution_service.observe_baseline(directory[0])
+            conn, execution_id, execution_service.observe_baseline(directory[0], added)
         )
         conn.commit()
     except Exception as error:
@@ -140,6 +143,7 @@ def _launch_reserved(
             correlation=_correlation(conn, execution_id, record),
             directory=directory,
             reservation=reservation,
+            added_dirs=[root["root"] for root in added],
         )
     except runner.LaunchError as error:
         # A process that never started must not leave a phantom executor or a
@@ -197,6 +201,18 @@ def _launch_reserved(
     )
     conn.commit()
     return started
+
+
+def _added_roots(
+    conn: sqlite3.Connection, work_item_id: str, packet: runner.LaunchPacket
+) -> list[item_projects.AddedRoot]:
+    """The roots this run passes its client beside the one it runs in
+    (`item_projects.added_roots`): none on a run its driver takes none on, such
+    as a Codex resume."""
+
+    if not capabilities_for(packet.client).takes_added_dirs(resume=packet.resume):
+        return []
+    return item_projects.added_roots(conn, work_item_id)
 
 
 def _project_id(conn: sqlite3.Connection, work_item_id: str) -> str:

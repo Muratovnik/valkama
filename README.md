@@ -778,6 +778,28 @@ written through `POST /api/planning/space/settings` with `{space, launch_place}`
 no planning tool writes it. The attempt records the project of that root as its
 `project_id`. Each claim answers with the root of every project the card changes
 (`project_roots`), so the agent reads each one's instructions before editing there.
+When the card's project is no longer in the registry, the suggested directory is
+empty and its status is `unregistered`, the word `project_roots` uses for it.
+
+A launch also gets the roots of the other projects it may touch, as directories
+beside the one it runs in: the root of every project of the card's space and of
+every other project the card names, whose directory is there, except the launch
+root and the roots inside it. The card's own come first, in the order of
+`project_roots`, then the space's other projects by id. The card's projects do
+not narrow this: a launch may edit every root of its space's projects that lies
+outside its own. Claude Code receives
+each as `--add-dir` on a fresh run and on a resume. Codex receives them as
+`--add-dir` on `codex exec`; `codex exec resume` takes none, and Valkama does not
+pass `sandbox_workspace_write.writable_roots` through `-c`, which would replace
+the owner's own list, so a resumed Codex run has only its working root. Neither
+client reliably reads the instructions of an added directory, which is why the
+claim names every root. The capabilities read
+(`GET /api/execution/capabilities?work_item=…`) lists them as `added_roots`, and
+each client's `added_dirs` says on which runs it takes them (`fresh_and_resume`,
+`fresh_only` or `none`). The attempt reads every root it passed: its
+`base_artifact` and `final_artifact` carry `added`, one entry per root with its
+project, its root and the same Git reading the working directory gets, so a
+change made only beside the working directory is evidence too.
 
 The launch dialog records a delivery contract, not just a command: an
 `expected_effect` (`change_required`, `no_change_acceptable` or

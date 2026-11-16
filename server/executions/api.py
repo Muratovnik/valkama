@@ -122,14 +122,17 @@ def _suggested_repository(conn: sqlite3.Connection, reference: str | None) -> di
 
     The status travels with it so an interface can say why the field is empty
     instead of looking like it forgot, and `repository_project` names the
-    project whose root it is.
+    project whose root it is. `added_roots` are the roots the launch gets beside
+    it (`item_projects.added_roots`); each driver's `added_dirs` says on which
+    runs its client takes them.
     """
 
-    nothing = {
+    nothing: dict[str, object] = {
         "repository": "",
         "repository_status": "missing",
         "repository_project": None,
         "launch_place": None,
+        "added_roots": [],
     }
     if not reference:
         return nothing
@@ -143,6 +146,7 @@ def _suggested_repository(conn: sqlite3.Connection, reference: str | None) -> di
         "repository_status": found["status"],
         "repository_project": found["project_id"],
         "launch_place": found["launch_place"],
+        "added_roots": item_projects.added_roots(conn, str(row["work_item_id"])),
     }
 
 

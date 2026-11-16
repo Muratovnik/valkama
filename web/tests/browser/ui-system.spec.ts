@@ -151,6 +151,7 @@ test.beforeEach(async ({ page }) => {
               deletions: 4,
               commits: [],
               quality: 'observed',
+              added: [],
             },
             started_at: new Date().toISOString(),
             ended_at: new Date().toISOString(),

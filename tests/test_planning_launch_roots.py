@@ -11,6 +11,11 @@ or of its space's default project when it names none, with how each stands. The
 projects of the item's space come first, the default before the others, then every
 other project, each part by id.
 
+A launch gets `added_roots` beside its own: the roots of the item's space's
+projects and of the item's other projects whose directory is there, outside the
+launch root. Claude takes them on every run, Codex on a fresh one, and the attempt
+reads each root it passed.
+
 The registry here: HOME binds `umbrella` (its default, whose root holds `inner`),
 `inner` and `side`; ROVER binds `rover`; `ghost` (no directory) and `loose` are bound
 nowhere. Item D names `inner` and `rover`, item V only `inner`.
@@ -18,15 +23,18 @@ nowhere. Item D names `inner` and `rover`, item V only `inner`.
 
 from __future__ import annotations
 
+import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import mcp_surface, store
+from server import mcp_surface, processes, runner, store
 from server.executions import api as execution_api
 from server.executions import lifecycle
+from server.executions import service as execution_service
 from server.planning import api, item_projects, service
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -362,7 +370,7 @@ class LaunchRootTests(RootsCase):
             {},
         )
         self.assertEqual(
-            ("", "missing", None, None),
+            ("", "missing", None, None, []),
             tuple(
                 body[name]
                 for name in (
@@ -370,6 +378,7 @@ class LaunchRootTests(RootsCase):
                     "repository_status",
                     "repository_project",
                     "launch_place",
+                    "added_roots",
                 )
             ),
         )
@@ -425,6 +434,21 @@ class AddedRootsTests(RootsCase):
         d = self.item("D", ["inner", "rover"])
         self.registry.write_bytes(b"{ not json")
         self.assertEqual([], self.added(d))
+
+    def test_the_capabilities_read_names_the_roots_and_which_runs_take_them(self) -> None:
+        self.place("item_project")
+        body = self.capabilities(self.item("D", ["inner", "rover"]))
+        self.assertEqual(
+            [
+                {"project_id": "rover", "root": str(self.dirs["rover"])},
+                {"project_id": "side", "root": str(self.dirs["side"])},
+            ],
+            body["added_roots"],
+        )
+        self.assertEqual(
+            {"claude": "fresh_and_resume", "codex": "fresh_only"},
+            {driver["client"]: driver["added_dirs"] for driver in body["drivers"]},
+        )
 
 
 class LaunchPlaceSettingTests(RootsCase):
@@ -515,6 +539,150 @@ class LaunchedProjectTests(LaunchHarness):
                 ).fetchone()[0]
             )
         self.assertEqual(["home", "extra"], launched)
+
+
+class LaunchedRootsTests(LaunchHarness):
+    """A launch passes the roots beside its own, and its attempt reads each of them.
+
+    The launch runs in `home`, the space's root; the item names `beside`, a project
+    of no space, whose root is outside it. Both are clean repositories.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        local = Path(directory.name)
+        patch = mock.patch.dict(
+            os.environ,
+            {
+                "LOCALAPPDATA": str(local),
+                "VALKAMA_CODEX_BIN": sys.executable,
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": os.devnull,
+            },
+        )
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.beside = local / "beside"
+        self.beside.mkdir()
+        for repo in (Path(self.repo), self.beside):
+            self.git(repo, "init", "-b", "main")
+            (repo / "tracked.txt").write_bytes(b"before\n")
+            self.git(repo, "add", "tracked.txt")
+            self.git(
+                repo,
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-m",
+                "i",
+            )
+        scope = str(read_store_metadata(self.conn)["data_scope_id"])
+        home = project_entry("home", self.repo)
+        home["planning_binding"] = {
+            **planning_space_entity({"data_scope_id": scope, "space_key": "TST"}),
+            "default": True,
+        }
+        registry = local / "Valkama" / "projects.json"
+        registry.parent.mkdir(parents=True)
+        registry.write_bytes(registry_bytes([home, project_entry("beside", self.beside)]))
+
+    def git(self, repo: Path, *args: str) -> None:
+        completed = processes.run_text(["git", "-C", str(repo), *args])
+        if completed.returncode != 0:
+            raise unittest.SkipTest(f"git is unavailable here: {completed.stderr.strip()}")
+
+    def named(self, title: str) -> str:
+        made = service.create_work_item(
+            self.conn, space="TST", title=title, projects=["beside"], acceptance="assignment"
+        )
+        self.conn.commit()
+        return str(made["reference"])
+
+    def attempt(self, reference: str) -> dict:
+        item = service.get_work_item(self.conn, reference)
+        return execution_service.executions_for_work_item(self.conn, str(item["work_item_id"]))[0]
+
+    def directories(self) -> list[str]:
+        argv = self.spawned[-1][0]
+        return [argv[index + 1] for index, part in enumerate(argv) if part == "--add-dir"]
+
+    def test_a_change_only_beside_is_evidence_and_a_complete_delivery_stays_complete(self) -> None:
+        reference = self.named("claude")
+        lifecycle.launch_work_item(self.conn, self.packet(reference))
+        self.assertEqual(self.repo, self.spawned[-1][1])
+        self.assertEqual([str(self.beside)], self.directories())
+        base = self.attempt(reference)["base_artifact"]
+        assert base is not None
+        self.assertEqual(
+            [("beside", str(self.beside), "observed")],
+            [(entry["project_id"], entry["root"], entry["quality"]) for entry in base["added"]],
+        )
+
+        (self.beside / "new.txt").write_bytes(b"one\n")
+        runner.RUNNER._running[reference].capture.append(
+            json.dumps(
+                {
+                    "structured_output": {
+                        "outcome": "complete",
+                        "expected_effect": "change_required",
+                        "delivery": "changed the project beside",
+                        "oracle": "its tests passed",
+                        "unresolved": "none",
+                    }
+                }
+            )
+        )
+        self.processes[-1].code = 0
+        lifecycle.reap_launches(self.conn)
+        attempt = self.attempt(reference)
+        final = attempt["final_artifact"]
+        assert final is not None
+        self.assertEqual(
+            ("complete", "complete", 0, [("beside", 1)]),
+            (
+                attempt["status"],
+                attempt["outcome"],
+                final["changed_files"],
+                [(entry["project_id"], entry["changed_files"]) for entry in final["added"]],
+            ),
+        )
+
+    def test_claude_gets_them_on_a_resume_too_and_its_attempt_reads_them(self) -> None:
+        reference = self.named("claude resume")
+        lifecycle.launch_work_item(self.conn, self.packet(reference))
+        self.processes[-1].code = 0
+        lifecycle.reap_launches(self.conn)
+        lifecycle.launch_work_item(self.conn, self.packet(reference, resume=True))
+        self.assertIn("--resume", self.spawned[-1][0])
+        self.assertEqual([str(self.beside)], self.directories())
+        resumed = self.attempt(reference)["base_artifact"]
+        assert resumed is not None
+        self.assertEqual(["beside"], [entry["project_id"] for entry in resumed["added"]])
+
+    def test_codex_gets_them_on_a_fresh_run_and_its_resume_reads_only_its_own_root(self) -> None:
+        reference = self.named("codex")
+        lifecycle.launch_work_item(self.conn, self.packet(reference, client="codex"))
+        self.assertEqual([str(self.beside)], self.directories())
+        fresh = self.attempt(reference)["base_artifact"]
+        assert fresh is not None
+        self.assertEqual(["beside"], [entry["project_id"] for entry in fresh["added"]])
+        self.processes[-1].code = 0
+        lifecycle.reap_launches(self.conn)
+
+        lifecycle.launch_work_item(self.conn, self.packet(reference, client="codex", resume=True))
+        self.assertEqual(["exec", "resume"], self.spawned[-1][0][1:3])
+        self.assertEqual([], self.directories())
+        self.assertFalse(any("writable_roots" in part for part in self.spawned[-1][0]))
+        resumed = self.attempt(reference)["base_artifact"]
+        assert resumed is not None
+        self.assertEqual([], resumed["added"])
+        # Reaped, so its result directory goes with it.
+        self.processes[-1].code = 0
+        lifecycle.reap_launches(self.conn)
 
 
 if __name__ == "__main__":
