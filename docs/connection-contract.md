@@ -1191,7 +1191,7 @@ MCP tool reads it, for the same reason as above.
 | `utc_offset` | the caller's offset from UTC in minutes, from `-840` to `840`; `0` by default. A day, an hour or a minute of the series starts at the caller's midnight, full hour or full minute. The server has no time-zone database: a period across a change of daylight saving time is cut at one offset, so a caller that minds asks for it in two |
 | `group_by` | none, one or two dimensions, separated by a comma: `account`, `project`, `work_item`, `executor`, `role`, `launch_class`, `model`, `effort`, `environment`, `seat` |
 | a dimension's name | a filter: the values admitted, separated by a comma, up to 100 of 1 to 512 characters; `role` takes only `main`, `subagent` and `advisor`. A work item is named by its `work_item_id`, an executor by its session id, a project by its `project_id`, a seat by its `id` |
-| `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, a session's own run for `launch_class`, an unknown value for the rest. `none=launch_class` does not admit a subagent's run whose launch class is unknown, and `none=role` admits nothing, since every stretch has a role. Alone it keeps only the work with no value there |
+| `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, a session's own run for `launch_class`, work on an item that names no project for `project`, an unknown value for the rest. `none=launch_class` does not admit a subagent's run whose launch class is unknown, `none=project` does not admit work whose project is unknown, and `none=role` admits nothing, since every stretch has a role. Alone it keeps only the work with no value there |
 | `compare` | `true` adds the preceding period of the same length; `false` by default |
 
 A filter admits a stretch of work when its value is among those named, and every filter
@@ -1273,13 +1273,14 @@ millionth of a dollar per stretch, and the rounding of each read's own sum.
 
 A value in `group` carries `id` and `unknown`, which is `true` when the store does not
 hold the value; such a value is its own group and no string stands in for it. Work on no
-item, and for `launch_class` a session's own run, are groups of their own too, with an
-`id` of `null` and `unknown` `false`: there is nothing to know.
+item, for `launch_class` a session's own run, and for `project` work on an item that names
+no project or several, are groups of their own too, with an `id` of `null` and `unknown`
+`false`: there is nothing to know.
 
 | Dimension | Value | Beside `id` |
 | --- | --- | --- |
 | `account` | the organization the work was billed to, as the usage rows hold it; unknown until the reader fills it | — |
-| `project` | the project whose planning space holds the item; for work on no item, the project whose registered root holds the session's folder, the folder that places it in the live-work frame (see [The live-work frame](#the-live-work-frame)). Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null` |
+| `project` | the project the item names (see [The projects an item changes](#the-projects-an-item-changes)), in whichever space the item lies; a goal or stage names the projects of the tasks under it. An item that names several is one group of its own, `id` `null` and `unknown` `false`, rather than a share in each, so the groups still add up to the total; an item that names none is its own group too, with `combinations` `null`. A filter admits an item by any project it names, so a project's row in a breakdown is smaller than the filter on it by the work on items naming several, and `none=project` admits the items that name none. For work on no item, the project whose registered root holds the session's folder, the folder that places it in the live-work frame (see [The live-work frame](#the-live-work-frame)). Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null`; `combinations`, on the group of several, every set of projects the work in that group names, each a list of `{"id", "name"}` by id, the sets ordered by their ids; `null` on every other value |
 | `work_item` | the item the work is counted to | `reference` and `title`, `null` for an item since deleted |
 | `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in` and `opened_host`, as a card's executor gives them, and `title`, the name its client gave the session, as the live work beside the board names it, or `null` when there is none to read. Not its live `state`, which changes while the period's figures do not |
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |

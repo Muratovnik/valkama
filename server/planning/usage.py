@@ -201,25 +201,32 @@ def whole_units(value: float) -> int:
     return math.floor(value + 0.5)
 
 
-class _Unknown:
-    """A value the store does not hold, where `None` is a value of its own."""
+class _Mark:
+    """A value that is no string: one the store does not hold, or several at once."""
 
-    __slots__ = ()
+    __slots__ = ("_name",)
+
+    def __init__(self, name: str) -> None:
+        self._name = name
 
     def __repr__(self) -> str:
-        return "UNKNOWN"
+        return self._name
 
 
-UNKNOWN = _Unknown()
-#: A dimension's value as the reads hold it: a string, `None` for none, and `UNKNOWN` for
-#: one the store does not hold where none is a value of its own.
-Value = str | _Unknown | None
+#: A value the store does not hold, where `None` is a value of its own.
+UNKNOWN = _Mark("UNKNOWN")
+#: More than one value at once, counted as one group of its own rather than to each:
+#: the projects of an item that names several.
+SEVERAL = _Mark("SEVERAL")
+#: A dimension's value as the reads hold it: a string, `None` for none, `UNKNOWN` for
+#: one the store does not hold where none is a value of its own, and `SEVERAL`.
+Value = str | _Mark | None
 
 
 def value(held: Value, *, unknown: bool = True) -> dict:
     """A dimension's value as the reads give it: `id`, and `unknown` when the store does not
     hold it. Where none is a value of its own, such as work on no item, `unknown=False` says
-    so, and only `UNKNOWN` is unknown."""
+    so, and only `UNKNOWN` is unknown. `SEVERAL` has no `id` and is known."""
 
     return {
         "id": held if isinstance(held, str) else None,
@@ -229,13 +236,18 @@ def value(held: Value, *, unknown: bool = True) -> dict:
 
 def ranking(seconds: float, cost: float | None, values: Iterable[Value]) -> tuple:
     """Where a group stands in a breakdown: the most time first, then the most cost, then by
-    value with none and then unknown last."""
+    value with several, then none and then unknown last."""
 
     return (
         -seconds,
         -(cost or 0),
         tuple(
-            (not isinstance(held, str), held is UNKNOWN, held if isinstance(held, str) else "")
+            (
+                not isinstance(held, str),
+                held is None or held is UNKNOWN,
+                held is UNKNOWN,
+                held if isinstance(held, str) else "",
+            )
             for held in values
         ),
     )

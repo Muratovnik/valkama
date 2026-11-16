@@ -207,6 +207,37 @@ def naming_like(conn: sqlite3.Connection, like: str) -> list[str]:
         return []
 
 
+def _walk(conn: sqlite3.Connection, identities: Sequence[str]) -> dict[str, dict[str, str]]:
+    """Each item's projects with their strongest source, by work item id, in one walk.
+
+    An item the store does not hold names none here. An attached store an earlier
+    build wrote has no such table, and its items name none either.
+    """
+
+    found: dict[str, dict[str, str]] = {identity: {} for identity in identities}
+    # Asked for directly rather than probed first: a probe is one more statement on
+    # every read, and the read's statement count is bounded.
+    try:
+        held_rows = conn.execute(_UNDER, (json.dumps(list(found)),)).fetchall()
+    except sqlite3.OperationalError as error:
+        if not str(error).startswith("no such table: work_item_projects"):
+            raise
+        return found
+    for root, project, source in held_rows:
+        held = found[str(root)]
+        held[str(project)] = strongest(str(source), held.get(str(project), str(source)))
+    return found
+
+
+def ids_of_items(conn: sqlite3.Connection, identities: Iterable[str]) -> dict[str, frozenset[str]]:
+    """The project ids of each of these items, by work item id, read as `of_items` reads
+    them: a goal's or stage's are those of every task under it. No registry is read."""
+
+    return {
+        identity: frozenset(held) for identity, held in _walk(conn, sorted(set(identities))).items()
+    }
+
+
 def of_items(conn: sqlite3.Connection, rows: Iterable[sqlite3.Row]) -> dict[str, list[dict]]:
     """The projects of each item read, by work item id, in one walk of the store.
 
@@ -217,19 +248,7 @@ def of_items(conn: sqlite3.Connection, rows: Iterable[sqlite3.Row]) -> dict[str,
     as it is: it has no such table, and its items name no projects.
     """
 
-    identities = [str(row["work_item_id"]) for row in rows]
-    found: dict[str, dict[str, str]] = {identity: {} for identity in identities}
-    # Asked for directly rather than probed first: a probe is one more statement on
-    # every read, and the read's statement count is bounded.
-    try:
-        held_rows = conn.execute(_UNDER, (json.dumps(identities),)).fetchall()
-    except sqlite3.OperationalError as error:
-        if not str(error).startswith("no such table: work_item_projects"):
-            raise
-        return {identity: [] for identity in identities}
-    for root, project, source in held_rows:
-        held = found[str(root)]
-        held[str(project)] = strongest(str(source), held.get(str(project), str(source)))
+    found = _walk(conn, [str(row["work_item_id"]) for row in rows])
     names: dict[str, str] = {}
     if any(found.values()):
         listing = project_registry.read_registry()

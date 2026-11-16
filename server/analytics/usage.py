@@ -26,7 +26,7 @@ one offset; a caller that minds asks for it in two.
 | Dimension | Value | Read from |
 | --- | --- | --- |
 | `account` | the organization a stretch was billed to | the segment, as stored |
-| `project` | the project of the item's planning space; with no item, the project of the place the session stands (`sessions.session_place`) | the space, the session and the projects registry |
+| `project` | the project the item names, `SEVERAL` when it names more than one and none when it names none; a goal's or stage's are those of the tasks under it. A filter admits an item that names any project it names. With no item, the project of the place the session stands (`sessions.session_place`) | the item's projects (`planning.item_projects`), the session and the projects registry |
 | `work_item` | the item a stretch is counted to, `null` for work on no item | the segment |
 | `executor` | the session a card's holder opens: a subagent's work is its session's | `planning.executors` |
 | `role` | who spent it: `main`, a session's own run; `subagent`; `advisor`, a segment an adviser spent, in either | the run and the segment |
@@ -34,9 +34,11 @@ one offset; a caller that minds asks for it in two.
 | `model`, `effort`, `environment` | as the segment holds them | the segment |
 | `seat` | the quota account of its organization the stretch was spent on, else the seat's key for the week, `unknown` where no sample says | the quota samples (`quota.seats`) |
 
-A value the store does not hold is its own group, `unknown`. Work on no item and a
-session's own run, which is launched by no one, are groups of their own too, and are not
-unknown: there is nothing to know. Nothing is collected here.
+A value the store does not hold is its own group, `unknown`. Work on no item, a
+session's own run, which is launched by no one, and work on an item that names no project
+are groups of their own too, and are not unknown: there is nothing to know. So is work on
+an item that names several projects: counted to one group rather than to each, so the
+groups still add up to the total. Nothing is collected here.
 """
 
 from __future__ import annotations
@@ -51,7 +53,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from .. import sessions
-from ..planning import executors, live_sessions
+from ..planning import executors, item_projects, live_sessions
 from ..planning import usage as item_usage
 from ..planning.usage import Value
 from ..projects import project_registry
@@ -113,22 +115,22 @@ _PRICED = tuple(
 _STARTED, _ENDED, _SECONDS, _QUALITY, _COST, _MODEL = range(6)
 _FIRST_TOKEN = 6
 _ORGANIZATION = _FIRST_TOKEN + _TOKENS
-_ITEM, _SESSION, _LAUNCH, _EFFORT, _ENVIRONMENT, _ITEM_PROJECT, _AGENT, _ADVISOR = range(
+_ITEM, _SESSION, _LAUNCH, _EFFORT, _ENVIRONMENT, _ITEM_HELD, _AGENT, _ADVISOR = range(
     _ORGANIZATION + 1, _ORGANIZATION + 9
 )
 #: Where a row carries its seat's value, added to the read's rows when a seat is needed.
 _SEAT = _ADVISOR + 1
-#: The token columns stand in `TOKEN_KINDS` order.
+#: The token columns stand in `TOKEN_KINDS` order. `i.work_item_id` says whether the store
+#: still holds the item; its projects are read for the items the period holds, in one walk.
 SEGMENTS = (
     "SELECT s.started_at, s.ended_at, s.seconds, s.quality, s.estimated_api_cost_usd, s.model,"
     " s.input_tokens, s.cached_read_tokens, s.cache_write_5m_tokens, s.cache_write_1h_tokens,"
     " s.output_tokens, s.reasoning_tokens,"
     " s.organization, s.work_item_id, s.session_id, r.launch_class, s.effort, s.environment,"
-    " p.project_id, s.agent_id, s.advisor"
+    " i.work_item_id, s.agent_id, s.advisor"
     " FROM usage_segments s"
     " LEFT JOIN usage_runs r ON r.id = s.run_id"
     " LEFT JOIN work_items i ON i.work_item_id = s.work_item_id"
-    " LEFT JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
     " WHERE s.started_at < ? AND s.ended_at >= ?"
 )
 _COLUMN_OF = {
@@ -149,9 +151,10 @@ _COLUMN_OF = {
 #: them. In turn, the first is answered in its own time.
 _ONE_AT_A_TIME = threading.Lock()
 
-#: Where `None` is a group of its own and not unknown: work on no item, a session's own run.
-#: Outside these `None` is a value the store does not hold; inside them that is `UNKNOWN`.
-_NONE_IS_A_VALUE = frozenset({WORK_ITEM, LAUNCH_CLASS})
+#: Where `None` is a group of its own and not unknown: work on no item, a session's own run,
+#: an item that names no project. Outside these `None` is a value the store does not hold;
+#: inside them that is `UNKNOWN`.
+_NONE_IS_A_VALUE = frozenset({WORK_ITEM, LAUNCH_CLASS, PROJECT})
 
 
 class UsageQueryError(ValueError):
@@ -479,11 +482,62 @@ def _with_seats(
     return seated, named
 
 
+class _ProjectReads:
+    """The project dimension of the period's rows.
+
+    An item's projects are the ones it names (`planning.item_projects`), read for every
+    item of the period in one walk; a goal's or stage's are those of the tasks under it.
+    Work on no item is the project of the place its session stands, as every reader of a
+    session's place has it.
+    """
+
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        rows: Sequence[Sequence],
+        listing: project_registry.RegistryResult,
+    ) -> None:
+        self._items = item_projects.ids_of_items(
+            conn, (str(row[_ITEM]) for row in rows if row[_ITEM_HELD] is not None)
+        )
+        self._places = {
+            session: None if place is None else str(place["project_id"])
+            for session, place in sessions.session_places(
+                conn, (row[_SESSION] for row in rows if row[_ITEM] is None), listing
+            ).items()
+        }
+
+    def of(self, row: Sequence) -> frozenset[str] | None:
+        """The projects a stretch's work is counted to, `None` when that is unknown: its
+        item is gone, or work on no item stands under no root or the registry is unread."""
+
+        if row[_ITEM] is not None:
+            return None if row[_ITEM_HELD] is None else self._items[str(row[_ITEM])]
+        place = self._places.get(row[_SESSION])
+        return None if place is None else frozenset((place,))
+
+    def value(self, row: Sequence) -> Value:
+        """The group a stretch stands in: its one project, `SEVERAL`, none, or unknown."""
+
+        held = self.of(row)
+        if held is None:
+            return item_usage.UNKNOWN
+        if len(held) > 1:
+            return item_usage.SEVERAL
+        return next(iter(held), None)
+
+    def admits(self, row: Sequence, admitted: frozenset[Value]) -> bool:
+        """Whether a filter admits the stretch: it names one of the projects admitted, or,
+        with `none`, it names none. Work whose project is unknown is never admitted."""
+
+        held = self.of(row)
+        if held is None:
+            return False
+        return not held.isdisjoint(admitted) if held else None in admitted
+
+
 def _readers(
-    conn: sqlite3.Connection,
-    rows: Sequence[Sequence],
-    needed: set[str],
-    listing: project_registry.RegistryResult | None,
+    project_reads: _ProjectReads | None, needed: set[str]
 ) -> dict[str, Callable[[Sequence], Value]]:
     """How each needed dimension's value is read off a row."""
 
@@ -495,23 +549,26 @@ def _readers(
         readers[LAUNCH_CLASS] = _launch_class
     if ROLE in needed:
         readers[ROLE] = _role
-    if PROJECT in needed and listing is not None:
-        # Work on no item is the project of the place its session stands, as every
-        # reader of a session's place has it.
-        held = {
-            session: None if place is None else place["project_id"]
-            for session, place in sessions.session_places(
-                conn, (row[_SESSION] for row in rows if row[_ITEM] is None), listing
-            ).items()
-        }
-
-        def project(row: Sequence) -> Value:
-            if row[_ITEM] is not None:
-                return row[_ITEM_PROJECT]
-            return held.get(row[_SESSION])
-
-        readers[PROJECT] = project
+    if project_reads is not None:
+        readers[PROJECT] = project_reads.value
     return readers
+
+
+def _filters(
+    readers: Mapping[str, Callable[[Sequence], Value]],
+    project_reads: _ProjectReads | None,
+    filters: Mapping[str, frozenset[Value]],
+) -> list[Callable[[Sequence], bool]]:
+    """One test per filtered dimension. A project filter admits an item by any project
+    it names, not by its group: an item naming two is admitted by either."""
+
+    def held_in(dimension: str, admitted: frozenset[Value]) -> Callable[[Sequence], bool]:
+        if dimension == PROJECT and project_reads is not None:
+            return lambda row: project_reads.admits(row, admitted)
+        reader = readers[dimension]
+        return lambda row: reader(row) in admitted
+
+    return [held_in(dimension, admitted) for dimension, admitted in filters.items()]
 
 
 def _launch_class(row: Sequence) -> Value:
@@ -531,7 +588,7 @@ def _role(row: Sequence) -> Value:
 #: What a value of each labelled dimension carries beside its id when nothing names it.
 _UNNAMED: dict[str, dict] = {
     WORK_ITEM: {"reference": None, "title": None},
-    PROJECT: {"name": None},
+    PROJECT: {"name": None, "combinations": None},
     EXECUTOR: {"family": "", "opened_in": "", "opened_host": "", "title": None},
     SEAT: {"organization": None, "account_uuid": None, "seat_key": None},
 }
@@ -576,6 +633,10 @@ def _labels(
     return {}
 
 
+#: The sets of projects the work of each group of several projects names, by group.
+Combinations = Mapping[tuple[Value, ...], set[frozenset[str]]]
+
+
 class _Namer:
     """Turns a group's raw values into the objects the answer carries."""
 
@@ -586,30 +647,50 @@ class _Namer:
         keys: Iterable[tuple[Value, ...]],
         projects: Sequence[Mapping],
         seat_names: Mapping[str, dict],
+        combinations: Combinations,
     ) -> None:
         self.group_by = group_by
+        self.combinations = combinations
         found: list[set[str]] = [set() for _ in group_by]
         for key in keys:
             for index, value in enumerate(key):
                 if isinstance(value, str):
                     found[index].add(value)
+        if PROJECT in group_by:
+            for sets in combinations.values():
+                found[group_by.index(PROJECT)].update(*sets)
         self.labels = [
             _labels(conn, dimension, ids, projects, seat_names) if ids else {}
             for dimension, ids in zip(group_by, found, strict=True)
         ]
 
-    def value(self, index: int, value: Value) -> dict:
+    def value(self, index: int, value: Value, key: tuple[Value, ...]) -> dict:
         dimension = self.group_by[index]
         named = value if isinstance(value, str) else None
         return {
-            # Work on no item, or a session's own launch class, is a group of its own.
+            # Work on no item, a session's own launch class, an item naming no project
+            # and one naming several are groups of their own.
             **item_usage.value(value, unknown=dimension not in _NONE_IS_A_VALUE),
             **_UNNAMED.get(dimension, {}),
             **(self.labels[index].get(named, {}) if named is not None else {}),
+            **(self._combinations(index, key) if value is item_usage.SEVERAL else {}),
+        }
+
+    def _combinations(self, index: int, key: tuple[Value, ...]) -> dict:
+        """The sets of projects the group's work names, each by id with its name, in order."""
+
+        labels = self.labels[index]
+        return {
+            "combinations": [
+                [{"id": project, "name": labels.get(project, {}).get("name")} for project in ids]
+                for ids in sorted(sorted(held) for held in self.combinations.get(key, ()))
+            ]
         }
 
     def group(self, key: tuple[Value, ...]) -> dict:
-        return {self.group_by[index]: self.value(index, value) for index, value in enumerate(key)}
+        return {
+            self.group_by[index]: self.value(index, value, key) for index, value in enumerate(key)
+        }
 
 
 def _order(entry: tuple[tuple[Value, ...], _Tally]) -> tuple:
@@ -652,19 +733,28 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
         rows, seat_names = _with_seats(conn, rows)
     listing = project_registry.read_registry() if PROJECT in needed else None
     projects = [] if listing is None else listing["projects"]
-    readers = _readers(conn, rows, needed, listing)
+    project_reads = None if listing is None else _ProjectReads(conn, rows, listing)
+    readers = _readers(project_reads, needed)
     grouping = [readers[dimension] for dimension in request.group_by]
-    filters = [(readers[dimension], admitted) for dimension, admitted in request.filters.items()]
+    filters = _filters(readers, project_reads, request.filters)
+    several = (
+        request.group_by.index(PROJECT)
+        if project_reads is not None and PROJECT in request.group_by
+        else None
+    )
+    combinations: dict[tuple[Value, ...], set[frozenset[str]]] = {}
     main, earlier = _Window(), _Window()
     steps = [_Tally() for _ in range(len(bounds) - 1 - first)]
     by_step: list[dict[tuple[Value, ...], _Tally]] = [{} for _ in steps]
     for row in rows:
-        if not all(reader(row) in admitted for reader, admitted in filters):
+        if not all(admits(row) for admits in filters):
             continue
         parts = _parts(row, bounds)
         if not parts:
             continue
         key = tuple(reader(row) for reader in grouping)
+        if several is not None and project_reads is not None and key[several] is item_usage.SEVERAL:
+            combinations.setdefault(key, set()).add(project_reads.of(row) or frozenset())
         unpriced_model = (
             row[_MODEL]
             if row[_COST] is None
@@ -682,7 +772,14 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
                 steps[interval - first].add(part)
                 if key:
                     by_step[interval - first].setdefault(key, _Tally()).add(part)
-    namer = _Namer(conn, request.group_by, [*main.groups, *earlier.groups], projects, seat_names)
+    namer = _Namer(
+        conn,
+        request.group_by,
+        [*main.groups, *earlier.groups],
+        projects,
+        seat_names,
+        combinations,
+    )
     zone = dt.timezone(dt.timedelta(minutes=request.utc_offset))
 
     def at(moment: int) -> str:
