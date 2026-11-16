@@ -297,9 +297,11 @@ CHAIN_PAGE = 200
 #: How many of a chain's newest series entries get_work_item_chain carries.
 CHAIN_SERIES_ENTRIES = 30
 #: How much history get_work_item carries unless the caller asks for all of it.
-RECENT_COMMENTS = 5
-RECENT_EVENTS = 10
+RECENT_COMMENTS = read_model.PART_THREADS
+RECENT_EVENTS = read_model.PART_EVENTS
 RECENT_MENTIONS = 5
+#: One part of a work item by name, the form `parts` takes for each.
+_PART = {"type": "string", "enum": list(read_model.PARTS)}
 #: What every list and search says about paging, so an agent knows to keep going.
 _PAGING = (
     " An answer holds one page: truncated is true when more items match, and"
@@ -433,33 +435,35 @@ TOOLS = [
     _tool(
         "get_work_item",
         "Read a work item",
-        "One item: its fields, checklist, links, refs and summary, the"
-        f" {RECENT_COMMENTS} discussion threads with the newest activity, each root with"
-        " replies (how many) and last_reply, the newest"
-        f" {RECENT_EVENTS} history events with comments_total, threads_total,"
-        " events_total and history_truncated, and sessions: the agent sessions whose"
-        " confirmed calls wrote to it. thread returns one thread whole; full=true every"
-        " comment and event; comments_after only the comments that came after one you"
-        " have read, roots and replies alike; unresolved the roots without the resolved"
-        f" mark, oldest first, at most {read_model.UNRESOLVED_PAGE}, with truncated, the"
-        " next page being comments_after the last root read; unresolved_total counts them."
-        " Each comment names its parent in reply_to or reply_to_request (null on a root),"
-        " by_person, resolution, a root's mark, and mentions, the items it told."
-        f" mentions holds the {RECENT_MENTIONS} newest comments elsewhere that told this item,"
-        " with mentions_total."
-        " questions gives its questions in compact form: total, open, at most"
-        f" {requests.ITEM_QUESTIONS} items with the open ones first and then the newest closed,"
-        " and truncated when there are more. images lists the pictures pasted into its"
-        " text, each with sha256, media_type, size, created_at and the path its Markdown"
-        " names; read_work_item_image shows one. open says whether its work is still open."
-        " An accepted open goal or stage shows state null and container_state:"
-        " not_started, in_progress or awaiting_confirmation. acceptance is the basis it was"
-        " accepted on and when, null in triage or deferred; started_at is when work on it"
-        " began, waits_for the open items blocking it, and workable whether a task may be"
-        " taken now.",
+        "One item. By default its card: reference, title, kind, priority, state, open,"
+        " container_state, acceptance, started_at, waits_for, workable, claim_ref,"
+        " claim_state, last_claim_ref, labels, revision, parent, url, description,"
+        " checklist (each condition with its id) and summary, and parts: every other part"
+        " it has, with count and size. parts names what to read: "
+        + ", ".join(read_model.PARTS[:-1])
+        + " and, on a goal or stage, participants; each comes as the field of that name"
+        f" beside reference and revision. comments: the {RECENT_COMMENTS} threads with the"
+        " newest activity, each root with replies (how many) and last_reply; with parts"
+        " naming comments, thread reads one thread whole, unresolved the roots without the"
+        f" resolved mark, oldest first, at most {read_model.UNRESOLVED_PAGE}, with"
+        " truncated, the next page being comments_after the last root read, and"
+        " comments_after alone every comment after that id, roots and replies alike."
+        f" events: the newest {RECENT_EVENTS} history events. questions: its"
+        " questions in compact form: total, open, at most"
+        f" {requests.ITEM_QUESTIONS} items with the open ones first. claim: the lease, with"
+        " expires_at. Each comment names its parent in reply_to or reply_to_request (null"
+        " on a root), by_person, resolution, a root's mark, and mentions, the items it"
+        " told. Without parts, full=true or a comment mode answers with the whole record"
+        " as before. An accepted open goal or stage shows state null and container_state:"
+        " not_started, in_progress or awaiting_confirmation.",
         READ_ONLY,
         {
             "id": WORK_ITEM_REFERENCE,
+            "parts": {
+                "anyOf": [_PART, {"type": "array", "items": _PART}],
+                "description": "What to read: card, the default, or any other part by"
+                " name; one name reads as a list of it.",
+            },
             "full": {
                 "type": "boolean",
                 "description": "Answer with every comment and history event instead of"
@@ -1318,7 +1322,54 @@ def _get(
 
 
 def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    """One item with its newest history unless the caller wants all of it.
+    """One item by parts: its card unless the caller names others.
+
+    The boundary reads the parts, so a read over HTTP that names them answers the
+    same. Without `parts`, `full` or a comment mode still reads the whole record.
+    """
+
+    names = arguments.get("parts")
+    modes = {
+        "comments_after": arguments.get("comments_after"),
+        "thread": arguments.get("thread"),
+        "unresolved": _is_verbose(arguments, "unresolved") or None,
+    }
+    full = _is_verbose(arguments, "full")
+    if names is None and (full or any(value is not None for value in modes.values())):
+        return _whole_item(conn, arguments)
+    if full:
+        raise model.PlanningError("full and parts exclude each other")
+    # Each name is held to the parts before the list is joined, so a comma inside
+    # one cannot make two of it.
+    parameters = {
+        "id": [str(arguments["id"])],
+        "parts": [",".join(read_model.part_names(_part_names(names)))],
+    }
+    for mode, value in modes.items():
+        if value is True:
+            parameters[mode] = ["true"]
+        elif value is not None:
+            parameters[mode] = [str(model.count_field(value, mode))]
+    answer = api.handle_get(conn, "/api/planning/work-item", parameters)
+    if answer is None:  # pragma: no cover - the path table above is closed
+        raise ValueError("no planning work item read")
+    return answer[1]["work_item"]
+
+
+def _part_names(names: object) -> list[str]:
+    """`parts` as a list of names: the default card, one name, or a list of them."""
+
+    if names is None:
+        return ["card"]
+    if isinstance(names, str):
+        return [names]
+    if isinstance(names, list) and names and all(isinstance(name, str) for name in names):
+        return names
+    raise model.PlanningError("parts must be a part name or a list of them")
+
+
+def _whole_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+    """The whole record with its newest history, unless the caller wants all of it.
 
     The cut is made by the boundary's opt-in parameters, so the HTTP read a
     screen makes without them is the complete record it always was. Either way

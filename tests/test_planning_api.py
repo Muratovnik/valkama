@@ -156,6 +156,32 @@ class PlanningApiTests(unittest.TestCase):
         by_id = self.get("/api/planning/work-item", id=created["work_item_id"])["work_item"]
         self.assertEqual(by_reference["work_item_id"], by_id["work_item_id"])
 
+    def test_an_exact_read_without_parts_is_the_full_record_it_always_was(self) -> None:
+        """What a screen reads: the record before reads by part, field for field."""
+
+        created = self.post("/api/planning/work-items", space="QA", title="Whole")
+        answer = self.get("/api/planning/work-item", id=created["reference"])
+        self.assertEqual({"interface_version", "work_item"}, set(answer))
+        record = answer["work_item"]
+        self.assertEqual(
+            {
+                "acceptance", "checklist", "claim", "claim_ref", "claim_state", "closed_at",
+                "comments", "container_state", "created_at", "description", "events", "kind",
+                "labels", "last_claim_ref", "links", "mentions", "mentions_total", "number",
+                "open", "parent_id", "planning_space_id", "priority", "reference", "refs",
+                "revision", "source", "started_at", "state", "subscribers", "summary",
+                "summary_comment_id", "title", "updated_at", "waits_for", "work_item_id",
+                "workable",
+            },
+            set(record),
+        )  # fmt: skip
+        self.assertEqual(
+            {"category", "is_terminal", "key", "name", "state_id"}, set(record["state"])
+        )
+        self.assertEqual(service.get_work_item(self.conn, created["reference"]), record)
+        card = self.get("/api/planning/work-item", id=created["reference"], parts="card")
+        self.assertNotIn("work_item_id", card["work_item"])
+
     def test_search_activity_and_graph_answer_from_the_same_store(self) -> None:
         created = self.post("/api/planning/work-items", space="QA", title="Findable")
         self.assertEqual(

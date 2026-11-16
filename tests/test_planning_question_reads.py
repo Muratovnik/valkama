@@ -389,7 +389,7 @@ class CompactBoundTests(QuestionCase):
         for _ in range(5):
             request = self.ask(fields, prompt="p" * 8000)
             self.answer(request, {f"f{n:02}": "w" * 8000 for n in range(12)}, note="n" * 8000)
-        questions = self.tool("get_work_item", id=self.reference)["questions"]
+        questions = self.tool("get_work_item", id=self.reference, parts="questions")["questions"]
         self.assertEqual(5, len(questions["items"]))
         self.assertLessEqual(size(questions), 5 * 2000 + 100)
 

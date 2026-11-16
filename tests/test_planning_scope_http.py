@@ -425,7 +425,9 @@ class PlanningScopeHttpTests(unittest.TestCase):
             True,
             tools.OPS["get_work_item_request"](conn, {"id": created["request_id"]})["by_person"],
         )
-        [row] = tools.OPS["get_work_item"](conn, {"id": "SAME-1"})["questions"]["items"]
+        [row] = tools.OPS["get_work_item"](conn, {"id": "SAME-1", "parts": "questions"})[
+            "questions"
+        ]["items"]
         self.assertEqual(
             (True, [{"field": "path", "value": "keep", "label": "Keep it"}], "In my own words"),
             (row["by_person"], row["answer"], row["note"]),

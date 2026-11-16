@@ -233,7 +233,7 @@ class ReplyWriteTests(ThreadTestCase):
         wanted = {root: mark, reply: None, open_root: None}
         for name, arguments in (
             ("full", {"full": True}),
-            ("default", {}),
+            ("comments", {"parts": ["comments"]}),
             ("thread", {"thread": reply}),
             ("comments_after", {"comments_after": 0}),
         ):
@@ -268,8 +268,8 @@ class ThreadReadTests(ThreadTestCase):
         # The oldest thread gets the newest activity.
         self.reply = self.comment("late reply", reply_to=self.roots[0])["comment_id"]
 
-    def test_the_default_read_is_the_threads_with_the_newest_activity(self) -> None:
-        answer = self.call("get_work_item", id=self.ref)
+    def test_the_comments_part_is_the_threads_with_the_newest_activity(self) -> None:
+        answer = self.call("get_work_item", id=self.ref, parts=["comments"])
         self.assertEqual(
             [self.roots[3], self.roots[4], self.roots[5], self.roots[6], self.roots[0]],
             [comment["id"] for comment in answer["comments"]],
@@ -285,18 +285,18 @@ class ThreadReadTests(ThreadTestCase):
         )
         self.assertEqual(
             (9, 7, True),
-            (answer["comments_total"], answer["threads_total"], answer["history_truncated"]),
+            (answer["comments_total"], answer["threads_total"], answer["truncated"]),
         )
 
-    def test_a_short_discussion_is_whole_in_the_default_read(self) -> None:
+    def test_a_short_discussion_is_whole_in_the_comments_part(self) -> None:
         reference = self.item("Short")
         root = self.comment("only", reference=reference)["comment_id"]
         self.comment("and its reply", reference=reference, reply_to=root)
-        answer = self.call("get_work_item", id=reference)
+        answer = self.call("get_work_item", id=reference, parts="comments")
         self.assertEqual([root], [comment["id"] for comment in answer["comments"]])
         self.assertEqual(
             (2, 1, False),
-            (answer["comments_total"], answer["threads_total"], answer["history_truncated"]),
+            (answer["comments_total"], answer["threads_total"], answer["truncated"]),
         )
 
     def test_thread_reads_a_root_and_its_replies_from_either_end(self) -> None:

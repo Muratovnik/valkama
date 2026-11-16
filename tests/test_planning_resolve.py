@@ -471,11 +471,15 @@ class UnresolvedReadTests(ResolveCase):
         root = self.comment("Marked")["comment_id"]
         self.comment("Open")
         self.mark(root)
-        for arguments in ({}, {"thread": root}, {"comments_after": 0}):
+        for arguments in ({"parts": "comments"}, {"thread": root}, {"comments_after": 0}):
             with self.subTest(read=arguments):
                 answer = self.call("get_work_item", id=self.ref, **arguments)
                 self.assertEqual(1, answer["unresolved_total"])
-                self.assertNotIn("truncated", answer)
+                # The comments part says whether it left threads out; a whole read has no page.
+                if "parts" in arguments:
+                    self.assertIs(False, answer["truncated"])
+                else:
+                    self.assertNotIn("truncated", answer)
         self.assertNotIn("unresolved_total", self.call("get_work_item", id=self.ref, full=True))
 
     def test_the_reads_it_excludes_are_refused(self) -> None:

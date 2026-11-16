@@ -335,7 +335,11 @@ class StdioTests(unittest.TestCase):
                     "jsonrpc": "2.0",
                     "id": 4,
                     "method": "tools/call",
-                    "params": {**STDIO_META, "name": "get_work_item", "arguments": {"id": "SPC-1"}},
+                    "params": {
+                        **STDIO_META,
+                        "name": "get_work_item",
+                        "arguments": {"id": "SPC-1", "parts": ["card", "comments"]},
+                    },
                 },
             ]
             proc = subprocess.run(

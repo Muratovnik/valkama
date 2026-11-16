@@ -267,8 +267,27 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
 
 
 def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    """One item. Every cut of its history is opt-in; without them, the full record."""
+    """One item. With `parts`, the parts it names; without, the full record.
 
+    The full record is what a screen and every write answer with, and each cut of
+    its history is opt-in. `parts` is a comma-separated list of `read_model.PARTS`,
+    and a comment mode beside it cuts the comments part.
+    """
+
+    names = _part_names(parameters)
+    if names is not None:
+        after = _count(parameters, "comments_after")
+        return {
+            "interface_version": PLANNING_API_INTERFACE,
+            "work_item": _parts_of(
+                conn,
+                _required(parameters, "id"),
+                names,
+                comments_after=after,
+                thread=_count(parameters, "thread"),
+                unresolved=_switch(parameters, "unresolved"),
+            ),
+        }
     return {
         "interface_version": PLANNING_API_INTERFACE,
         "work_item": service.get_work_item(
@@ -283,6 +302,90 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
             sessions=_switch(parameters, "sessions"),
         ),
     }
+
+
+def _part_names(parameters: Mapping[str, list[str]]) -> list[str] | None:
+    """The parts a read names, each once in the order named, or None when it names none."""
+
+    value = _first(parameters, "parts")
+    if value is None:
+        return None
+    return read_model.part_names(name.strip() for name in value.split(","))
+
+
+#: How each part but the card and the comments is read, as the field of its name.
+_PART_READERS: dict[str, Callable[[sqlite3.Connection, sqlite3.Row], dict]] = {
+    "events": read_model.events_part,
+    "links": lambda conn, row: {"links": read_model.links(conn, str(row["work_item_id"]))},
+    "refs": lambda conn, row: {"refs": read_model.refs(conn, str(row["work_item_id"]))},
+    "questions": lambda conn, row: {
+        "questions": requests.item_questions(conn, str(row["work_item_id"]))
+    },
+    "mentions": lambda conn, row: dict(
+        zip(
+            ("mentions", "mentions_total"),
+            read_model.mentions_of(conn, str(row["work_item_id"]), read_model.HTTP_MENTIONS),
+            strict=True,
+        )
+    ),
+    "sessions": lambda conn, row: {"sessions": read_model.sessions(conn, str(row["work_item_id"]))},
+    "images": lambda conn, row: {"images": images.of_item(conn, str(row["work_item_id"]))},
+    "subscribers": lambda conn, row: {
+        "subscribers": subscriptions.subscribers(conn, str(row["work_item_id"]))
+    },
+    "claim": lambda conn, row: {"claim": read_model.claim(conn, row)},
+}
+
+
+@read_model.whole_store_read()
+def _parts_of(
+    conn: sqlite3.Connection,
+    reference: str,
+    names: list[str],
+    *,
+    comments_after: int | None,
+    thread: int | None,
+    unresolved: bool,
+) -> dict:
+    """The parts named of one item, beside its reference and the revision they were read at.
+
+    A part no reader here names is the field of its name in the full record when the
+    record has it, so a field a later build adds to the record is read as a part
+    without a reader of its own; a part the record does not hold answers with nothing.
+    The comments and the events parts each say `truncated`; read together, it is true
+    when either leaves something out.
+    """
+
+    row = read_model.item_row(conn, reference)
+    identity = str(row["work_item_id"])
+    modes = {"thread": thread, "unresolved": unresolved or None, "comments_after": comments_after}
+    for mode, value in modes.items():
+        if value is not None and "comments" not in names:
+            raise model.PlanningError(
+                f"{mode} reads the comments part: add comments to parts or leave parts out"
+            )
+    answer: dict[str, object] = {
+        "reference": read_model.reference(conn, row),
+        "revision": int(row["revision"]),
+    }
+    for name in names:
+        if name == "card":
+            part = read_model.card(
+                conn, row, counted={"questions": requests.question_counts(conn, identity)}
+            )
+        elif name == "comments":
+            part = read_model.comments_part(
+                conn, row, comments_after=comments_after, thread=thread, unresolved=unresolved
+            )
+        elif name in _PART_READERS:
+            part = _PART_READERS[name](conn, row)
+        else:
+            record = service.get_work_item(conn, identity, comments=0, events=0)
+            part = {name: record[name]} if name in record else {}
+        if "truncated" in part:
+            part["truncated"] = bool(part["truncated"] or answer.get("truncated"))
+        answer.update(part)
+    return answer
 
 
 def _chain(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:

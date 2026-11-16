@@ -41,6 +41,7 @@ from server.planning import api as planning_api
 from server.planning import calls as planning_calls
 from server.planning import chain as planning_chain
 from server.planning import model as planning_model
+from server.planning import read_model as planning_read_model
 from server.planning import service as planning_service
 from server.planning import tools as planning_tools
 from tests.planning_fixtures import basis_for, bulk_items
@@ -925,13 +926,17 @@ class ToolArgumentTests(McpSurfaceTestCase):
             "apply_work_item_changes", ref=self.first, comment={"body": "a note"}
         )
         self.assertEqual(self.first, commented["reference"])
-        self.assertEqual(1, len(self.call_tool("get_work_item", id=self.first)["comments"]))
+        self.assertEqual(
+            1, self.call_tool("get_work_item", id=self.first)["parts"]["comments"]["count"]
+        )
         self.call_tool(
             "apply_work_item_changes",
             reference=self.second,
             refs=[{"kind": "commit", "value": "d5678"}],
         )
-        self.assertEqual(1, len(self.call_tool("get_work_item", id=self.second)["refs"]))
+        self.assertEqual(
+            1, self.call_tool("get_work_item", id=self.second)["parts"]["refs"]["count"]
+        )
 
     def test_a_space_is_read_from_planning_space_id(self) -> None:
         created = self.call_tool("create_work_item", planning_space_id=SPACE_KEY, title="Third")
@@ -1045,7 +1050,7 @@ class ToolArgumentTests(McpSurfaceTestCase):
     def test_an_item_is_read_by_work_item_id_where_id_is_a_work_item(self) -> None:
         expected = self.call_tool("get_work_item", id=self.first)
         self.assertEqual(expected, self.call_tool("get_work_item", work_item_id=self.first))
-        uuid = expected["work_item_id"]
+        uuid = planning_service.get_work_item(self.conn, self.first)["work_item_id"]
         self.assertEqual(
             self.first, self.call_tool("get_work_item", work_item_id=uuid)["reference"]
         )
@@ -1063,7 +1068,7 @@ class ToolArgumentTests(McpSurfaceTestCase):
                     "apply_work_item_changes", id=item, author="one", changes=wrapped
                 )
                 self.assertEqual({"claim", "comment"}, set(applied["applied"]))
-                read = self.call_tool("get_work_item", id=item)
+                read = self.call_tool("get_work_item", id=item, parts=["card", "comments"])
                 self.assertEqual("one", read["claim_ref"])
                 self.assertEqual(["wrapped"], [comment["body"] for comment in read["comments"]])
 
@@ -1087,7 +1092,7 @@ class ToolArgumentTests(McpSurfaceTestCase):
             changes={"comment": {"body": "inside"}},
         )
         self.assertIn("argument 'comment' given both inside 'changes' and beside it", message)
-        self.assertEqual([], self.call_tool("get_work_item", id=self.first)["comments"])
+        self.assertNotIn("comments", self.call_tool("get_work_item", id=self.first)["parts"])
 
     def test_a_wrapped_group_is_held_to_the_names_the_tool_takes(self) -> None:
         message = self.refusal(
@@ -2346,8 +2351,10 @@ class CompactWorkItemReadTests(WireCallTestCase):
         self.conn.commit()
         self.complete = planning_service.get_work_item(self.conn, self.reference)
 
-    def test_the_default_answer_carries_the_newest_history_and_its_totals(self) -> None:
-        answer = self.answer("get_work_item", {"id": self.reference})
+    def test_the_history_parts_carry_the_newest_history_and_its_totals(self) -> None:
+        answer = self.answer(
+            "get_work_item", {"id": self.reference, "parts": ["comments", "events"]}
+        )
         # Seven threads with no replies: the newest five roots, each saying so.
         self.assertEqual(
             [
@@ -2363,12 +2370,13 @@ class CompactWorkItemReadTests(WireCallTestCase):
                 answer["comments_total"],
                 answer["threads_total"],
                 answer["events_total"],
-                answer["history_truncated"],
+                answer["truncated"],
             ),
         )
-        for key, value in self.complete.items():
-            if key not in ("comments", "events"):
-                self.assertEqual(value, answer[key], key)
+        self.assertEqual(
+            (self.complete["reference"], self.complete["revision"]),
+            (answer["reference"], answer["revision"]),
+        )
 
     def test_full_answers_with_the_complete_record(self) -> None:
         answer = self.answer("get_work_item", {"id": self.reference, "full": True})
@@ -2443,13 +2451,13 @@ class CompactWorkItemReadTests(WireCallTestCase):
             "reference"
         ]
         self.conn.commit()
-        answer = self.answer("get_work_item", {"id": reference})
+        answer = self.answer("get_work_item", {"id": reference, "parts": ["comments", "events"]})
         self.assertEqual(
             (0, 1, False, 1),
             (
                 answer["comments_total"],
                 answer["events_total"],
-                answer["history_truncated"],
+                answer["truncated"],
                 len(answer["events"]),
             ),
         )
@@ -2464,7 +2472,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
             self.conn, blocker["reference"], "done", acceptance="assignment"
         )
         self.conn.commit()
-        (link,) = self.answer("get_work_item", {"id": self.reference})["links"]
+        (link,) = self.answer("get_work_item", {"id": self.reference, "parts": "links"})["links"]
         self.assertEqual(
             {
                 "kind": "blocks",
@@ -2493,6 +2501,20 @@ class CompactWorkItemReadTests(WireCallTestCase):
                         "type": "string",
                         "description": "A work item, by its reference (MAIN-142) or its"
                         " work_item_id.",
+                    },
+                    "parts": {
+                        "anyOf": [
+                            {"type": "string", "enum": list(planning_read_model.PARTS)},
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": list(planning_read_model.PARTS),
+                                },
+                            },
+                        ],
+                        "description": "What to read: card, the default, or any other part by"
+                        " name; one name reads as a list of it.",
                     },
                     "full": {
                         "type": "boolean",
@@ -2545,11 +2567,9 @@ class CompactWorkItemReadTests(WireCallTestCase):
         self.conn.commit()
         self.assertEqual(5, len(self.calls()))
 
-        for full in (False, True):
-            with self.subTest(full=full):
-                [session] = self.answer("get_work_item", {"id": self.reference, "full": full})[
-                    "sessions"
-                ]
+        for read in ({"parts": ["sessions"]}, {"full": True}):
+            with self.subTest(read=read):
+                [session] = self.answer("get_work_item", {"id": self.reference, **read})["sessions"]
                 self.assertEqual(
                     (self.SESSION, "codex", "codex-meta", 2),
                     (

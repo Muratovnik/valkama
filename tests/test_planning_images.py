@@ -637,7 +637,7 @@ class AgentTests(StoreCase):
     def test_an_agent_reads_the_item_s_pictures_and_sees_one(self) -> None:
         data = png(40)
         images.store(self.conn, self.first, data)
-        read = self.converse("get_work_item", {"id": self.first})
+        read = self.converse("get_work_item", {"id": self.first, "parts": "images"})
         item = json.loads(read["content"][0]["text"])
         self.assertEqual(
             [{"sha256": sha(data), "media_type": "image/png", "size": len(data)}],

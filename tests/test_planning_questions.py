@@ -382,7 +382,7 @@ class ResolutionTests(QuestionCase):
         self.conn.commit()
         kept = requests.get(self.conn, request["request_id"])
         self.assertEqual(("pending", None, 0), (kept["status"], kept["answers"], kept["revision"]))
-        read = self.tool("get_work_item", id=self.reference)
+        read = self.tool("get_work_item", id=self.reference, parts="questions")
         self.assertEqual(1, read["questions"]["open"])
 
     def test_a_question_writes_no_comment_and_moves_no_stamp(self) -> None:
@@ -521,7 +521,7 @@ class ThreeReadsTests(QuestionCase):
             self.answer(self.ask(prompt=f"Closed {index}"), {"path": "keep"})
         for index in range(2):
             self.ask(prompt=f"Open {index}")
-        questions = self.tool("get_work_item", id=self.reference)["questions"]
+        questions = self.tool("get_work_item", id=self.reference, parts="questions")["questions"]
         self.assertEqual(
             (6, 2, True), (questions["total"], questions["open"], questions["truncated"])
         )
@@ -534,11 +534,11 @@ class ThreeReadsTests(QuestionCase):
     def test_nothing_is_cut_at_five_and_no_questions_read_as_none(self) -> None:
         self.assertEqual(
             {"total": 0, "open": 0, "items": [], "truncated": False},
-            self.tool("get_work_item", id=self.reference)["questions"],
+            self.tool("get_work_item", id=self.reference, parts="questions")["questions"],
         )
         for index in range(5):
             self.ask(prompt=f"Open {index}")
-        questions = self.tool("get_work_item", id=self.reference)["questions"]
+        questions = self.tool("get_work_item", id=self.reference, parts="questions")["questions"]
         self.assertEqual(
             (5, 5, False), (questions["total"], len(questions["items"]), questions["truncated"])
         )
@@ -716,9 +716,11 @@ class KeptTests(QuestionCase):
             self.assertEqual(survivor, requests.get(self.conn, request["request_id"])["reference"])
         # Still open on an open item: closing the merged one did not end it.
         self.assertEqual("pending", requests.get(self.conn, pending["request_id"])["status"])
-        questions = self.tool("get_work_item", id=survivor)["questions"]
+        questions = self.tool("get_work_item", id=survivor, parts="questions")["questions"]
         self.assertEqual((2, 1), (questions["total"], questions["open"]))
-        self.assertEqual(0, self.tool("get_work_item", id=merged)["questions"]["total"])
+        self.assertEqual(
+            0, self.tool("get_work_item", id=merged, parts="questions")["questions"]["total"]
+        )
         self.assertEqual("Kept", requests.get(self.conn, answered["request_id"])["note"])
         # And it can still be answered where it now lives.
         self.assertEqual("answered", self.answer(pending, {"why": "Moved"})["status"])
@@ -728,7 +730,7 @@ class KeptTests(QuestionCase):
         service.set_summary(self.conn, self.reference, {"done": "Closed", "next": "Nothing"})
         service.transition_work_item(self.conn, self.reference, "cancelled")
         self.conn.commit()
-        questions = self.tool("get_work_item", id=self.reference)["questions"]
+        questions = self.tool("get_work_item", id=self.reference, parts="questions")["questions"]
         self.assertEqual((1, 0), (questions["total"], questions["open"]))
         self.assertEqual("expired", questions["items"][0]["status"])
         self.assertEqual(

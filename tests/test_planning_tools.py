@@ -135,7 +135,7 @@ class PlanningToolCallTests(unittest.TestCase):
         created = self.call("create_work_item", space="QA", title="Through the tools", author="one")
         self.assertEqual("QA-2", created["reference"])
         self.assertEqual(
-            created["work_item_id"], self.call("get_work_item", id="QA-2")["work_item_id"]
+            "QA-2", self.call("get_work_item", id=created["work_item_id"])["reference"]
         )
         self.assertEqual(2, len(self.call("list_work_items", space="QA")["work_items"]))
         self.assertEqual(
@@ -396,7 +396,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         for tool in ACKNOWLEDGED:
             with self.subTest(tool):
                 answer = self.call(tool, **self.arguments_for(tool))
-                stored = self.call("get_work_item", id=answer["reference"])
+                stored = self.full(answer["reference"])
                 for key in ("reference", "work_item_id", "revision", "state", "claim_ref"):
                     self.assertIn(key, answer)
                 self.assertEqual(stored["revision"], answer["revision"])
@@ -501,7 +501,8 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         [first] = [
             s for s in self.call("get_work_item", id=self.ref)["checklist"] if s["id"] == step
         ]
-        self.assertEqual(("", "two"), (first["claimed_by"], first["done_by"]))
+        # The card names only the holder a step has: its claim ended with the tick.
+        self.assertEqual((None, "two"), (first.get("claimed_by"), first["done_by"]))
         reopened = self.call(
             "apply_work_item_changes",
             id=self.ref,
@@ -513,7 +514,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         summarized = self.call(
             "apply_work_item_changes", id=self.ref, summary={"done": "d", "next": "n"}
         )
-        stored_item = self.call("get_work_item", id=self.ref)
+        stored_item = service.get_work_item(self.conn, self.ref)
         self.assertEqual(
             stored_item["summary_comment_id"],
             summarized["applied"]["summary"]["summary_comment_id"],
@@ -580,10 +581,15 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         # A new root names no parent.
         self.assertEqual((None, None), (written["reply_to"], written["reply_to_request"]))
 
-    def test_the_reads_and_the_take_next_queue_still_answer_in_full(self) -> None:
-        full = self.call("get_work_item", id=self.ref)
+    def test_the_parts_and_the_take_next_queue_still_answer_in_full(self) -> None:
+        read = self.call(
+            "get_work_item", id=self.ref, parts=["card", "comments", "events", "links", "refs"]
+        )
+        # The card carries a summary only once the item has one.
+        self.assertNotIn("summary", read)
         for key in FULL_ONLY:
-            self.assertIn(key, full)
+            if key != "summary":
+                self.assertIn(key, read)
         listed = self.call("list_work_items", space="QA", verbose=True)["work_items"]
         self.assertTrue(all("comment_count" in item and "events" not in item for item in listed))
         taken = self.call("claim_ready_work_item", space="QA", author="one")["work_item"]
