@@ -487,12 +487,19 @@ Three things make a card honest about its own progress:
 - **Typed refs** — commit hashes, memory entry ids, urls — attached in the
   `refs` of `apply_work_item_changes`, so the next agent reads pointers instead of doing
   archaeology. An agent's own session needs no ref: Valkama records the
-  confirmed session behind every write, and `get_work_item` lists those
-  sessions.
+  confirmed session behind every write, and the `sessions` part of
+  `get_work_item` lists those sessions.
 - **An activity trace.** Creations, moves, claims, takeovers, releases,
-  completions and link changes are all recorded with an author. `get_work_item`
-  returns the newest of it, and all of it with `full: true`, so nobody has to
-  guess who did what. Reordering within a lane is deliberately *not* history.
+  completions and link changes are all recorded with an author. The `events`
+  part of `get_work_item` returns the newest of it, up to a thousand events at a
+  time, with how many there are, so nobody has to guess who did what. Reordering
+  within a lane is deliberately *not* history.
+- **Reading by parts.** `get_work_item` answers with the item's card: its
+  fields, its description, its checklist and its summary, and a table of the
+  other parts it has with their sizes. An agent reads the discussion, the
+  history, the lease or a section of a long description by name when the work
+  needs it, so opening an item with a long discussion does not read the
+  discussion ([details](docs/connection-contract.md#reading-one-work-item)).
 
 An agent that finishes a step usually makes several writes to one card: tick it,
 attach the commit, comment, record the summary, move the card.
@@ -525,7 +532,7 @@ target a checklist step, and a reply stands under the comment, report or questio
 it answers, one level deep. A thread can be marked resolved with a one-line
 decision, by a person in the card or by an agent in the `resolutions` of
 `apply_work_item_changes`, and `get_work_item` with `unresolved: true` reads the
-threads still open
+threads still open, twenty roots a page, as its `comments` part
 ([details](docs/connection-contract.md#threads-and-the-resolved-mark)). Work
 reports show in the discussion with “What was done / Why / What comes next”: an
 agent's closing summary is one, and in the card any of them can be selected as

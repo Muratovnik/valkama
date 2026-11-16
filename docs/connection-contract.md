@@ -136,9 +136,10 @@ A `verbose` answer carries it too. `delete_work_item` and `create_planning_space
 never do.
 
 Each of these tools takes an optional boolean `verbose`, false by default. With
-`verbose: true` the answer is the full item with its whole history, as
-`get_work_item` returns it with `full: true` but without `sessions`. The
-reads, `claim_ready_work_item` (the agent needs the item it just took),
+`verbose: true` the answer is the item's card, as `get_work_item` returns it
+without `parts` (see [The card](#the-card)), with what the write reports beside
+it. `claim_ready_work_item` always answers with the item it took, since the agent
+needs it, and its `work_item` is the card too. The reads,
 `create_planning_space`, `delete_work_item` and the question tools are
 unchanged, and so is every refusal. The HTTP API is unchanged: it always
 answers with the full item.
@@ -194,9 +195,9 @@ batch, which keeps its `step`. A reference that does not read as one -- not
 malformed, not about an item that is missing, and a caller tells a person
 something different about each.
 
-With `verbose: true` they answer with the full items, at the limits they had
-before (200 for a list, 50 for a search), and with the same `truncated` and
-`next_offset`. The HTTP reads `GET /api/planning/work-items` and
+With `verbose: true` they answer with each item's list record, the brief record
+the HTTP list carries, at the limits they had before (200 for a list, 50 for a
+search), and with the same `truncated` and `next_offset`. The HTTP reads `GET /api/planning/work-items` and
 `GET /api/planning/search` take the same `offset` parameter and carry the same
 two fields.
 
@@ -264,9 +265,10 @@ refused. An edit changes a kind only among `task`, `bug` and `improvement`.
 | `blocked` | waiting on something else |
 | `cancelled` | not to be done |
 
-The whole record of an item -- the answer of `get_work_item` and of
-`GET /api/planning/work-item`, an item of `GET /api/planning/work-items`, and the
-HTTP answer of a write to an item -- carries these fields of the model:
+The whole record of an item -- the answer of `GET /api/planning/work-item`, an
+item of `GET /api/planning/work-items`, and the HTTP answer of a write to an
+item -- and the card `get_work_item` answers with carry these fields of the
+model; the card's `state` has no `is_terminal`:
 
 | Field | What it holds |
 | --- | --- |
@@ -473,37 +475,127 @@ makes it next; an urgent item nobody placed waits its turn.
 
 ### Reading one work item
 
-`get_work_item` answers with every current field of the item -- state,
-checklist, links, refs, summary, the lease -- but only the newest part of its
-history: the 5 most recent comments and the 10 most recent history events,
-oldest first. Beside them it carries `comments_total`, `events_total` and
-`history_truncated`, which is true when either list left something out. With
-the optional boolean `full: true` it answers with every comment and every
-event, and without the three counting fields.
+**Since 3.0.** `get_work_item` reads an item by parts: by default its card, and
+any other part by name. Why this broke the earlier read, which answered with the
+whole record and took `full`, is in
+[ADR 0014](decisions/0014-work-model-breaks-the-planning-schemas.md).
 
-With the optional integer `comments_after` it answers with every comment whose
-id is greater than that one, oldest first, however many there are, and the
-events and the three counting fields as usual; `history_truncated` stays true
-when older comments were left out. This is how a reader that keeps the id of the
-last comment it read takes only what came since. Comment ids run across items,
-so the id need not belong to this item. With `full: true` it is refused.
+| Argument | Type | What it reads |
+| --- | --- | --- |
+| `id` | a work item | required: the item |
+| `parts` | a part name, or a list of them | those parts, each once in the order named |
+| `unresolved` | boolean | a page of the roots without the resolved mark |
+| `thread` | integer, at least 1 | one thread |
+| `comments_after` | integer, at least 0 | a flat page of comments after that id; beside `unresolved`, where the next page of roots starts |
+| `events` | integer, 1 to 1000 | that many of the newest history events |
+| `section` | a section key, or a list of them | those sections of the description, with their text |
 
-**Since 2.5.** Comments form threads (see
-[Threads and the resolved mark](#threads-and-the-resolved-mark)), and the read
-takes one of five modes:
+The parts are `card`, `comments`, `events`, `links`, `refs`, `questions`,
+`mentions`, `sessions`, `images`, `subscribers`, `claim`, `sections` and
+`participants`. Without `parts` and without a mode the read is `["card"]`. A
+mode without `parts` reads only the part it cuts: `unresolved`, `thread` and
+`comments_after` the comments, `events` the events, `section` the sections, and
+several modes read each of their parts. Each of these is refused with
+`invalid_request`:
+
+| Call | Refusal |
+| --- | --- |
+| a part no item has | `unknown part 'history'; parts are card, comments, events, links, refs, questions, mentions, sessions, images, subscribers, claim, sections, participants` |
+| a mode beside a `parts` without its part | `thread reads the comments part: add comments to parts or leave parts out`, and the same for `unresolved` and `comments_after`; `events reads the events part: …`; `section reads the sections part: …` |
+| `events` outside its bounds | `events must be between 1 and 1000` |
+| `thread` with `comments_after` or `unresolved` | `thread and comments_after exclude each other`, or `thread and unresolved …` |
+| `parts` that is neither a name nor a list of names | `parts must be a part name or a list of them` |
+| `section` that is neither a key nor a list of keys | `section must be a section key or a list of them` |
+| a key the description does not have | see [Sections of the description](#sections-of-the-description) |
+| `full`, the argument 3.0 removed | `get_work_item: unknown argument 'full'; expected 'id' (required), 'parts', …` |
+
+The answer carries `reference` and `revision`, the revision every part was read
+at, and beside them the fields of each part named:
+
+| Part | Fields |
+| --- | --- |
+| `card` | the card's fields below, with `parts` |
+| `comments` | `comments`, `comments_total` (every row), `threads_total` (the roots), `unresolved_total` (the roots without the resolved mark) and `truncated` |
+| `events` | `events`, the newest 10 or the newest `events`, oldest first; `events_total` and `events_truncated`, true when some are left out. The flag has its own name because both parts may come in one answer |
+| `mentions` | `mentions`, the newest 50, oldest first, and `mentions_total`; see [Mentions](#mentions) |
+| `sections` | `sections`, as [Sections of the description](#sections-of-the-description) says |
+| `claim` | `claim`, the lease as [Claims are leases](#claims-are-leases) shows it, `null` while nobody holds the item |
+| `links`, `refs`, `questions`, `sessions`, `images`, `subscribers` | the field of that name, as described below and in [Reading a question](#reading-a-question) |
+| `participants` | the field of that name where the item's record has one, and nothing where it has none |
+
+#### The card
+
+The card is how an agent meets an item: `get_work_item` without `parts`, a write
+with `verbose: true` and the `work_item` of `claim_ready_work_item` answer with
+it. It carries, in this order:
+
+| Field | What it holds |
+| --- | --- |
+| `reference`, `title`, `kind`, `priority` | as [The work model](#the-work-model) names them |
+| `state` | `key`, `name` and `category`; `null` for an accepted open goal or stage. `open` says whether the work is over |
+| `open`, `container_state`, `acceptance`, `started_at`, `waits_for`, `workable` | as [The work model](#the-work-model) says |
+| `claim_ref`, `claim_state`, `last_claim_ref`, `closed_at` | who holds it and how the lease stands; who held it last and when it closed, `null` while it is open |
+| `labels`, `source`, `revision`, `created_at`, `updated_at` | as in the full record |
+| `url` | the item's [address](#the-address-of-a-work-item) |
+| `parent` | the parent's reference, or `null` |
+| `description` | the whole text |
+| `checklist` | each step as `id`, `text` and `done`, plus `claimed_by` and `done_by` only when they are set |
+| `summary` | the closing summary, only when there is one |
+| `parts` | every other part the item has, with its size |
+
+The card leaves out what its reference and parts stand for: `work_item_id`,
+`planning_space_id`, `number`, `parent_id`, `summary_comment_id`,
+`comment_count`, the `state_id` and `is_terminal` of the state, the lease (the
+`claim` part) and every list of the history. A write's answer keeps, beside the
+card, what the write itself reports, such as `applied`, `started`, `requeued`,
+`released`, `merged`, `similar`, `warnings`, `overridden` and `from_person`.
+
+`parts` names each other part with what it holds, and leaves out a part with
+nothing in it:
+
+| Part | Its entry |
+| --- | --- |
+| `comments` | `count`, `threads` (the roots), `unresolved` (the roots without the mark) and `chars`, the length of every body and report |
+| `events` | `count` and `chars`, the length of every `detail` |
+| `questions` | `count` and `open`, the questions to the owner |
+| `sections` | `count`, and only for a description longer than 2,000 characters; a shorter one is cheaper to read whole |
+| `claim` | `count`, 1 while somebody holds the item |
+| `links`, `refs`, `mentions`, `sessions`, `images`, `subscribers` | `count` |
+
+```json
+{"reference": "MAIN-12", "revision": 14, "title": "Widen the check", "kind": "task",
+ "priority": "medium", "state": {"key": "dev", "name": "Dev", "category": "active"},
+ "open": true, "container_state": null,
+ "acceptance": {"basis": "assignment", "at": "2026-11-06T10:00:00Z"},
+ "started_at": "2026-11-06T10:00:00Z", "waits_for": [], "workable": false,
+ "claim_ref": "claude (session 019a…)", "claim_state": "live", "last_claim_ref": null,
+ "closed_at": null, "labels": ["hooks"], "source": "",
+ "created_at": "2026-11-06T09:58:00Z", "updated_at": "2026-11-06T11:20:00Z",
+ "url": "http://127.0.0.1:8642/open/MAIN-12", "parent": "MAIN-3", "description": "…",
+ "checklist": [{"id": "…", "text": "Inventory", "done": true, "done_by": "claude (session 019a…)"},
+               {"id": "…", "text": "Tests", "done": false}],
+ "parts": {"comments": {"count": 9, "threads": 4, "unresolved": 4, "chars": 5210},
+           "events": {"count": 22, "chars": 1830}, "refs": {"count": 3},
+           "sessions": {"count": 2}, "claim": {"count": 1}}}
+```
+
+#### The comments part
+
+Comments form threads (see
+[Threads and the resolved mark](#threads-and-the-resolved-mark)), and the
+comments part takes one of four modes:
 
 | Mode | `comments` holds |
 | --- | --- |
-| default | the 5 threads with the latest activity -- a thread's activity is the greatest id in it -- oldest first; each root carries `replies` and `last_reply` |
+| none | the 5 threads with the latest activity -- a thread's activity is the greatest id in it -- oldest first; each root carries `replies` and `last_reply`. `truncated` says older threads are left out |
 | `thread: <id>` | that thread: its root and every reply, oldest first. The id of a reply reads the thread of its root. The replies under a question are read with `get_work_item_request` |
 | `unresolved: true` | the unresolved roots, oldest first, at most 20, each with `replies` and `last_reply`; `truncated` says more remain, and the next page is read with `comments_after` set to the id of the last root read |
-| `comments_after: <id>` | every row with a greater id, roots and replies alike, including replies under questions, flat and oldest first |
-| `full: true` | every row, flat and oldest first |
+| `comments_after: <id>` | at most 50 rows with a greater id, roots and replies alike, including replies under questions, flat and oldest first; `truncated` says more follow, and the next page starts after the last id read. `0` reads from the first |
 
-`full`, `comments_after` and `thread` exclude one another, and `unresolved`
-combines only with `comments_after`; any other pair is refused with
-`invalid_request`. A reply to an old thread moves that thread up in the default
-read, so news is not lost behind five newer roots.
+A reply to an old thread moves that thread up in the read without a mode, so
+news is not lost behind five newer roots. Comment ids run across items, so the
+id `comments_after` names need not belong to this item: a reader that keeps the
+id of the last comment it read takes only what came since.
 
 `replies` counts the thread's replies. `last_reply` is the newest of them, or
 `null` with none:
@@ -515,14 +607,10 @@ read, so news is not lost behind five newer roots.
 
 Its `body` is cut at 500 characters, and a cut one carries `clipped: true`.
 
-Every mode carries `comments_total` (every row, as before), `threads_total`
-(the roots), `unresolved_total` (the roots without the resolved mark) and
-`events_total`, except `full: true`, which carries none of them.
-`history_truncated` is true when fewer threads, rows or events are shown than
-exist.
+#### The sessions part
 
-Both forms carry `sessions`: the agent sessions whose confirmed calls wrote to
-the item, in the order each first wrote there.
+`sessions` lists the agent sessions whose confirmed calls wrote to the item, in
+the order each first wrote there.
 
 ```json
 {"session_id": "019a…", "client": "codex", "identity_source": "codex-meta",
@@ -536,14 +624,98 @@ counts its calls. A call is counted on the item it acted on first: a link counts
 for its source item, not its target. Because Valkama records this itself, a
 caller does not attach its own session id as a ref.
 
-The read also carries `mentions`, the texts on other items that named this
-one; see [Mentions](#mentions).
+#### Sections of the description
+
+**Since 3.0.** A card carries its description whole; an agent that wants to
+refresh one piece of a long one reads that piece by its key.
+
+- A line that starts in its first column with one to six `#` and a space, and
+  carries text, outside a fenced code block (```` ``` ```` or `~~~`), is a
+  heading. Its section is the exact span of the description from that line to
+  the next heading of the same or a higher level, blank lines included, so it
+  holds its subsections. The text before the first heading is the section
+  `(start)`, of level 0, and exists only when that text is not empty.
+- A description without a heading is divided into paragraphs: the text between
+  blank lines outside a fenced block, without its last line break.
+- A heading's key is its text without the opening `#` marks and any closing run
+  of `#`, with its spaces run together. A paragraph's key is `p` and the first 8 hex
+  digits of the SHA-256 of its text with the spaces run together. A key repeated
+  in one description takes ` (2)`, ` (3)` in order, and so does a heading that
+  reads `(start)`. Keys compare without case.
+- Nothing is stored: each read derives the keys from the text. A heading's key
+  changes only when that heading is renamed or headings of the same text are
+  reordered; a paragraph's only with its own text. The answer carries
+  `revision`, so a reader sees whether the item changed.
+
+`parts: ["sections"]` lists them: `[{key, level, chars}]` for a description
+with headings, `[{key, chars, starts}]` for one of paragraphs, `starts` being the
+paragraph with its spaces run together, cut at 60 characters with no ellipsis.
+`section` with a key or a list of keys answers with those sections and their
+text, `[{key, level, chars, text}]` (no `level` for a paragraph), in the
+description's order; a key named twice is read once.
+
+```json
+{"reference": "MAIN-12", "revision": 14,
+ "sections": [{"key": "Steps", "level": 2, "chars": 1012, "text": "## Steps\n\n…\n\n"}]}
+```
+
+A key the description does not have, a stale one included, is refused with
+`invalid_request` rather than answered with another text:
+`unknown section 'Nope'; sections are Goal, Steps, Notes`. The refusal names at
+most 20 keys in order and counts the rest as `and N more`; a description with
+no section says `sections are none`.
+
+#### The full record over HTTP
+
+The HTTP read `GET /api/planning/work-item` takes the same parts: `parts` as a
+comma-separated list of part names, and `section`, which may repeat because a
+heading may hold a comma. With either it answers with what the tool answers,
+inside `work_item`, and reads `unresolved`, `thread`, `comments_after` and
+`events` as the tool's modes. Without either it answers with the item's full
+record, as before 3.0, and the parameters below are the cuts of that record.
+
+The full record carries every current field of the item -- state, checklist,
+links, refs, summary, the lease as `claim`, its followers as `subscribers` --
+with every comment and every history event, oldest first, and `mentions` with
+`mentions_total`, the texts on other items that named this one (see
+[Mentions](#mentions)). A cut adds `comments_total`, `threads_total`,
+`unresolved_total`, `events_total` and `history_truncated`, true when fewer
+threads, rows or events are shown than exist.
+
+The full record carries no `sessions` and no `images`. It takes these cuts as
+opt-in parameters:
+`comments` and `events` (non-negative integers, each keeping that many of the
+newest entries), `comments_after` and `sessions=true`. With both `comments` and
+`comments_after` it keeps that many of the newest comments after the id. A count
+that is not a non-negative integer
+and a `sessions` other than `true` or `false` are refused with
+`invalid_request`; an unknown item is `not_found` (404).
+
+**Since 2.5.** The HTTP read stays flat: comments are rows in id order, each
+with its `reply_to` and `reply_to_request`, and a reader groups them into
+threads itself. Neither it nor the card's read through the exact project scope
+(`GET /api/modules/planning/work-item`) caps how many comments or events it
+returns: the web interface draws an item from the whole record, however long its
+discussion and history are, and a client must not refuse a record for its length.
+Without `parts` the same read takes the comment modes as cuts of the full record:
+`unresolved=true` with
+`comments_after`, `thread=<id>`, and `threads=<count>` for that many threads with
+the latest activity. `unresolved` other than `true` or `false` is `invalid_request`.
+
+**Since 2.5.** The card's read through the exact project scope also takes
+`brief=true`, which answers in the same envelope with the brief record a space's
+list carries instead of the full one: state, title, holder, steps and dates,
+with `comment_count` in place of the comments and no history, links, refs or
+agents. Its size does not grow with the item's history, and it is what a
+preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
+refused with 400; an unknown item is 404 and a binding that no longer resolves
+is 409, as for the full read.
 
 ### Pictures on an item
 
 A picture pasted into an item's text in the web
 interface is kept for that item, and the text names it as
-`![name](</api/images/<sha256>>)`. The MCP read of an item carries `images`, every
+`![name](</api/images/<sha256>>)`. The `images` part of `get_work_item` lists every
 picture the item keeps, oldest first:
 
 ```json
@@ -556,45 +728,17 @@ with two content blocks: `{"type": "image", "data": <base64>, "mimeType": <type>
 and a text block with `sha256`, `media_type` and `size`. A hash the item does not
 keep is `not_found`, even when another item keeps it. `media_type` is one of
 `image/png`, `image/jpeg`, `image/webp` and `image/gif`, decided by the file's first
-bytes, and a picture is at most 10 MB. The HTTP read of the item does not carry
-`images`.
+bytes, and a picture is at most 10 MB. The full record of the HTTP read does not
+carry `images`; an HTTP read that names the part does.
 
 Reading a picture hands its bytes to the agent's client, which passes them to its
 model provider with the rest of the conversation: a screenshot leaves the machine
-the moment an agent reads it. `get_work_item` lists only what each picture is, so
+the moment an agent reads it. The `images` part lists only what each picture is, so
 an agent calls `read_work_item_image` only when its task needs what the picture
 shows.
 
 Deleting an item deletes every picture no other item keeps; a merge carries the
 pictures of the merged item to the survivor.
-
-The HTTP read `GET /api/planning/work-item` answers with the complete record and
-no `sessions`, as before. It takes the same cut as opt-in parameters:
-`comments` and `events` (non-negative integers, each keeping that many of the
-newest entries), `comments_after` and `sessions=true`. With both `comments` and
-`comments_after` it keeps that many of the newest comments after the id. A count
-that is not a non-negative integer
-and a `sessions` other than `true` or `false` are refused with
-`invalid_request`; an unknown item is `not_found` (404).
-
-**Since 2.5.** The HTTP read stays flat: comments are rows in id order, each
-with its `reply_to` and `reply_to_request`, and a reader groups them into
-threads itself. Neither it nor the card's read through the exact project scope
-(`GET /api/modules/planning/work-item`) caps how many comments or events it
-returns: a card is drawn from the whole record, however long its discussion and
-history are, and a client must not refuse a record for its length. The same read
-takes the agent's reads as opt-in parameters: `unresolved=true` with
-`comments_after`, `thread=<id>`, and `threads=<count>` for that many threads with
-the latest activity. `unresolved` other than `true` or `false` is `invalid_request`.
-
-**Since 2.5.** The card's read through the exact project scope also takes
-`brief=true`, which answers in the same envelope with the brief record a space's
-list carries instead of the full one: state, title, holder, steps and dates,
-with `comment_count` in place of the comments and no history, links, refs or
-agents. Its size does not grow with the item's history, and it is what a
-preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
-refused with 400; an unknown item is 404 and a binding that no longer resolves
-is 409, as for the full read.
 
 ### Threads and the resolved mark
 
@@ -787,7 +931,7 @@ If the app cannot be started the answer is the `302`. A child that starts and th
 fails is not seen, and a Desktop build older than the listener opens without moving to
 the card.
 
-A work item's full record in an MCP answer (`get_work_item`, a `verbose` write,
+A work item's card in an MCP answer (`get_work_item`, a `verbose` write,
 `claim_ready_work_item`) and every write acknowledgement carry the address as
 `url`:
 
@@ -914,8 +1058,8 @@ while its blocker is unfinished, and that blocker may live in another space,
 under another workflow. So a link names that end's state itself, and nobody has
 to read the other item to know.
 
-- In a work item's full record (`get_work_item`, `GET /api/planning/work-item`),
-  each link, in either direction, names its other end: `state_name`,
+- In a work item's full record (`GET /api/planning/work-item`) and its `links`
+  part, each link, in either direction, names its other end: `state_name`,
   `state_category`, `is_terminal` and `state_unavailable`.
 - In a space's view (`links` in `GET /api/planning` and
   `/api/events?view=planning`, `edges` in `GET /api/planning/graph`), the links
@@ -1831,8 +1975,9 @@ gives the survivor the subscriptions of the items merged into it, keeping the
 survivor's own where both have one, and a carried one hears the survivor from the
 merge on; a deleted item takes them with it.
 
-Every full record of an item, `get_work_item` and the card's read alike, lists the
-sessions that follow it now, oldest first; a mute and a lapsed one are not listed:
+Every full record of an item, the HTTP item read and the web card's read alike,
+and the `subscribers` part of `get_work_item` list the sessions that follow it
+now, oldest first; a mute and a lapsed one are not listed:
 
 ```json
 "subscribers": [{"session": "019a…", "client": "codex", "agent": null,
@@ -2104,7 +2249,7 @@ nothing below the MCP surface reads them.
 A Planning tool refuses an argument its schema does not have, and a required
 argument that is missing, naming the tool, the argument and the arguments the
 tool takes, for example
-`get_work_item: unknown argument 'item'; expected 'id' (required), 'full'`.
+`get_work_item: unknown argument 'item'; expected 'id' (required), 'parts', 'unresolved', 'thread', 'comments_after', 'events', 'section'`.
 
 Prompts and resources are deliberately not offered. Planning tools manage work;
 project context belongs elsewhere.
@@ -2162,8 +2307,8 @@ When the client opened with `initialize`, the `clientInfo` name and version it
 sent are recorded with each call; otherwise the client is named after the
 identity channel (`codex`, `claude`). Nothing else from `_meta` is stored.
 
-Every history event that `get_work_item` or a write with `verbose: true`
-answers with carries its call's identity:
+Every history event that the `events` part of `get_work_item` or the HTTP item
+read answers with carries its call's identity:
 
 ```json
 {"action": "claimed", "detail": "", "author": "codex", "at": "2026-10-31T09:00:00Z",
@@ -2235,8 +2380,9 @@ confirmed call from that session within the grace makes the lease `live` again,
 with no write to the item. A session with no `ended_at` has no grace, and neither
 has a `failed` one, which only a session start reopens.
 
-`get_work_item`, a `verbose` write and the HTTP item read carry the lease as
-`claim`:
+The `claim` part of `get_work_item` and the full record of the HTTP item read
+carry the lease as `claim`; the card carries only `claim_ref` and `claim_state`,
+and its `parts` counts the lease:
 
 ```json
 {"holder": "codex (session 019a…)", "state": "live", "session_id": "019a…", "agent_id": null,
@@ -2251,7 +2397,7 @@ otherwise. It answers how long a session that shows no sign of life keeps a live
 lease, and promises nothing about a session that ends: from that moment the lease
 is `stale`, `expires_at` is `null`, and the grace above applies. `claim` is
 `null` when nobody holds the item. `claim_state` stands beside `claim_ref` in the
-full record, an item of an HTTP list, a compact row of `list_work_items` and
+card, the full record, an item of an HTTP list, a compact row of `list_work_items` and
 `search_work_items`, an HTTP chain member, a row of `open_members`, a row of
 `stale_claims` in `GET /api/planning` and a write acknowledgement; `claim_ref`
 means what it meant. Three projections carry
@@ -2438,7 +2584,7 @@ closing it, and still does.
 The history records the release beside the transition, with the same author
 and call: `transitioned` (`done`), then `released` with the holder's
 `claim_ref` as its detail. The answer names that holder as `released`, in the
-acknowledgement, the `verbose` record and the HTTP answer, and in
+acknowledgement, the `verbose` card and the HTTP answer, and in
 `applied.transition` of a batch: `{"state": "done", "released": "codex (session 019a…)"}`.
 A close of an item nobody holds releases nothing and carries no `released`. A
 move to `ready`, `triage` or `review` releases the same way; a move among the
@@ -2454,8 +2600,8 @@ worked by their former holders.
 Reopening a closed item -- a transition back to an open state -- restores no
 claim. Whoever takes the work again claims it.
 
-Who held the item is still on the record. The full record (`get_work_item`, a
-`verbose` answer, `GET /api/planning/work-item`) and the briefs of the HTTP
+Who held the item is still on the record. The card (`get_work_item`, a
+`verbose` answer), the full record (`GET /api/planning/work-item`) and the briefs of the HTTP
 reads (`GET /api/planning`, `GET /api/planning/work-items`) and the nodes of
 `GET /api/planning/graph` carry two fields
 that are `null` for open work; the compact rows of `list_work_items` and
@@ -2659,11 +2805,11 @@ item's own `mentions` are the records described below. A batch's
 the same `mentions`; an `update`'s stand beside `applied`.
 
 **Reading.** Every comment, in every read, carries `mentions`, the references it
-named, `[]` when it named none. `get_work_item` carries `mentions`, the 5 newest
-texts that named this item, oldest first, and `mentions_total`; with
-`full: true` it carries all of them and no total. The HTTP item read carries the
-newest 50 and the total, and so does every answer that is the whole item: the
-HTTP writes and a tool's `verbose` answer.
+named, `[]` when it named none. The `mentions` part of `get_work_item` is the 50
+newest texts that named this item, oldest first, with `mentions_total`; the card
+only counts them in its `parts`, and so a tool's `verbose` answer carries none.
+The HTTP item read carries the newest 50 and the total, and so does every HTTP
+answer that is the whole item, the HTTP writes among them.
 
 ```json
 {"in": "comment", "comment_id": 61, "from": "MAIN-12",
@@ -2945,10 +3091,11 @@ changed: p10-steps +lock −glob; p12 later→accept; p15 comment: Frozen until 
 
 An agent reads a question three ways:
 
-- `get_work_item`, the tool, answers with `questions`:
+- The `questions` part of `get_work_item`, which the card counts in its `parts`
+  as `count` and `open`:
   `{"total": 6, "open": 2, "items": […], "truncated": true}`. At most 5 items, the
-  open ones first and then the newest closed. The HTTP read of a card has no such
-  key.
+  open ones first and then the newest closed. The full record of the HTTP read
+  has no such key; an HTTP read that names the part does.
 - `list_work_item_requests` takes `space`, `id` (one item), `status`,
   `answered_after`, `limit` and `offset`, and answers in the compact form below, or
   whole with `full: true`. Its page says `truncated` and `next_offset` as every list
