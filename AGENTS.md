@@ -327,8 +327,9 @@ replies.
 - This repository's documentation: `docs/` here. Every document under `docs/`
   declares its lifecycle in frontmatter — `status: draft | adopted | superseded`
   and the `card:` ids of the work it belongs to.
-  `tests/test_docs_lifecycle.py` refuses an orphan; `README.md` files describe a
-  directory rather than one piece of work and are exempt.
+  `tests/test_docs_lifecycle.py` refuses an orphan. `README.md` files describe a
+  directory, and the guides in `docs/guides/` the product as it is now, rather
+  than one piece of work, so both are exempt.
 - The deep halves of `AGENTS.md`: `.agents/rules/`, one topic per file, each
   reached by a pointer in this file. They are instructions, not lifecycle
   documents, so they carry no frontmatter; a topic file nothing points to is

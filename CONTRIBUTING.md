@@ -167,10 +167,11 @@ readable years later.
 | the desktop window | `desktop/` |
 | anything that exists only because the host is Windows | `windows/` |
 | a product contract | `docs/`, with `status:` and `card:` frontmatter |
+| a guide to using the product | `docs/guides/`, without frontmatter |
 
 A new file at the top level needs an argument for why it belongs to none of
-those. `tests/test_docs_lifecycle.py` refuses a document under `docs/` without
-its frontmatter.
+those. `tests/test_docs_lifecycle.py` refuses a document under `docs/`, outside
+`docs/guides/`, without its frontmatter.
 
 ## Releasing
 
