@@ -156,12 +156,15 @@ def list_work_items(
     kind: str | None = None,
     owner: str | None = None,
     parent: str | None = None,
+    project: str | None = None,
     limit: int | None = 200,
     offset: int = 0,
 ) -> list[dict]:
     """Exactly `limit` items from `offset` on, or every one of them when limit is None.
 
     `parent` keeps only the children of that item, named as any item is named.
+    `project` keeps the items that name that project (`item_projects.NAMES_PROJECT`),
+    in every space unless `space` is given; a project no item names lists none.
     `kind` is named as a caller names it: `goal` keeps the containers under no
     parent and `stage` those under one. The service state is no state and no
     category a caller names: `container` is refused for either with the word that
@@ -206,6 +209,9 @@ def list_work_items(
     if parent is not None:
         clauses.append("i.parent_id = ?")
         parameters.append(str(read_model.item_row(conn, parent)["work_item_id"]))
+    if project is not None:
+        clauses.append(item_projects.NAMES_PROJECT)
+        parameters.append(item_projects.project_id(project, "project"))
     query = with_clauses(
         "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
@@ -240,6 +246,7 @@ def list_work_items_page(
     kind: str | None = None,
     owner: str | None = None,
     parent: str | None = None,
+    project: str | None = None,
     limit: int = 200,
     offset: int = 0,
 ) -> dict:
@@ -254,6 +261,7 @@ def list_work_items_page(
         kind=kind,
         owner=owner,
         parent=parent,
+        project=project,
         limit=size + 1,
         offset=offset,
     )
@@ -326,7 +334,7 @@ def search_work_items(
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict]:
-    """Items whose text, labels, source, summary, comments or questions carry the query.
+    """Items whose text, labels, source, projects, summary, comments or questions carry the query.
 
     A comment counts: an item is often findable only by what somebody wrote
     under it, and a hit there is reported as the matching line rather than as a
@@ -395,6 +403,7 @@ def _phrase_search(
     like = f"%{text}%"
     questions = _question_hits(conn, like)
     decisions = _decision_hits(conn, like)
+    projects_found = item_projects.naming_like(conn, like)
     parameters: list[object] = [like, like]
     clauses = [
         "(i.title LIKE ? OR i.description LIKE ? OR i.labels LIKE ? OR i.source LIKE ?"
@@ -405,7 +414,7 @@ def _phrase_search(
         " OR i.work_item_id IN (SELECT value FROM json_each(?)))"
     ]
     parameters.extend([like] * 8)
-    parameters.append(json.dumps([*questions, *decisions]))
+    parameters.append(json.dumps([*questions, *decisions, *projects_found]))
     if space_id is not None:
         clauses.append("i.planning_space_id = ?")
         parameters.append(space_id)

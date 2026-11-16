@@ -35,8 +35,8 @@ splitting one, or handing items to other agents.
    every word, in any field, each by its first five letters (`searching` finds
    `search`), best match first. A query that is exactly a reference
    (`MAIN-12`), or a number alone (`12`) with `space`, answers that item
-   first. `list_work_items` filters by `state`, `category`, `kind`, `parent`
-   and `owner`. Claim the item that already covers the work.
+   first. `list_work_items` filters by `state`, `category`, `kind`, `parent`,
+   `owner` and `project`. Claim the item that already covers the work.
 3. **File it only when none does.** `create_work_item` with `space`, `title`
    and a `description` that is the brief: goal, context, constraints, the
    "done when" and its verify command. A plan in the repository is referenced

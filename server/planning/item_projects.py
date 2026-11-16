@@ -57,6 +57,12 @@ def strongest(first: str, second: str) -> str:
     return first if _RANK[first] <= _RANK[second] else second
 
 
+def project_id(value: object, field: str) -> str:
+    """One project id as a caller names it, held to the length an id may have."""
+
+    return model.text_field(value, field, limit=_PROJECT_ID_LIMIT)
+
+
 def named(value: object, field: str = "projects") -> list[str] | None:
     """The project ids a write names, as a set in the order given; None when it names none."""
 
@@ -66,7 +72,7 @@ def named(value: object, field: str = "projects") -> list[str] | None:
         raise model.PlanningError(f"{field} must be a list of project ids")
     seen: list[str] = []
     for index, entry in enumerate(value):
-        project = model.text_field(entry, f"{field}[{index}]", limit=_PROJECT_ID_LIMIT)
+        project = project_id(entry, f"{field}[{index}]")
         if project not in seen:
             seen.append(project)
     if len(seen) > MAX_PROJECTS:
@@ -163,6 +169,34 @@ def carry(conn: sqlite3.Connection, source_id: str, target_id: str) -> int:
         _put(conn, target_id, project, source)
     conn.execute("DELETE FROM work_item_projects WHERE work_item_id = ?", (source_id,))
     return len(moving)
+
+
+#: A list's clause on `work_items i`: the item names the project bound to it. A goal or
+#: stage names none, so it is not kept for the projects of the tasks under it.
+NAMES_PROJECT = (
+    "i.work_item_id IN (SELECT work_item_id FROM work_item_projects WHERE project_id = ?)"
+)
+
+
+def naming_like(conn: sqlite3.Connection, like: str) -> list[str]:
+    """The items that name a project whose id matches a `LIKE` pattern, by work item id.
+
+    An attached store an earlier build wrote is read as it is: it has no such
+    table, and none of its items names a project.
+    """
+
+    try:
+        return [
+            str(row[0])
+            for row in conn.execute(
+                "SELECT DISTINCT work_item_id FROM work_item_projects WHERE project_id LIKE ?",
+                (like,),
+            )
+        ]
+    except sqlite3.OperationalError as error:
+        if not str(error).startswith("no such table: work_item_projects"):
+            raise
+        return []
 
 
 def of_items(conn: sqlite3.Connection, rows: Iterable[sqlite3.Row]) -> dict[str, list[dict]]:

@@ -364,7 +364,8 @@ def build(path: str) -> dict[str, str]:
     conn = sqlite3.connect(path)
     try:
         ids = populate(conn)
-        words.bring_current(conn)
+        with schema17.words_as_2_9():
+            words.bring_current(conn)
         conn.commit()
     finally:
         conn.close()
@@ -686,6 +687,14 @@ class MigratedStoreTests(StoreCase):
             "INSERT INTO work_item_projects(work_item_id, project_id, source) VALUES(?,?,?)",
             (self.ids["WM-9"], "valkama", "named"),
         )
+        # A project gained marks the item for the word index, as in a fresh store.
+        self.assertEqual(
+            (1,),
+            conn.execute(
+                "SELECT stale FROM work_item_search_rows WHERE work_item_id = ?",
+                (self.ids["WM-9"],),
+            ).fetchone()[:],
+        )
         with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK"):
             conn.execute(
                 "INSERT INTO work_item_projects(work_item_id, project_id, source) VALUES(?,?,?)",
@@ -897,7 +906,8 @@ class KeptStepClaimTests(StoreCase):
                         self.ids[reference],
                     ),
                 )
-            words.bring_current(conn)
+            with schema17.words_as_2_9():
+                words.bring_current(conn)
             conn.commit()
         finally:
             conn.close()
@@ -1220,13 +1230,11 @@ CLAUSE_FAULTS: tuple[
     (
         "row-counts",
         "work_item_projects holds 1 rows, not 0",
-        lambda ids: [
-            (
-                "INSERT INTO work_item_projects(work_item_id, project_id, source)"
-                " VALUES(?, 'stray', 'named')",
-                (ids["WM-9"],),
-            )
-        ],
+        lambda ids: _quiet(
+            "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+            " VALUES(?, 'stray', 'named')",
+            (ids["WM-9"],),
+        ),
         ["row-counts"],
     ),
     (

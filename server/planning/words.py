@@ -1,10 +1,10 @@
 """The words a work item is found by: an SQLite FTS5 index of what it says.
 
 One row per item holds three columns: its title, its description, and `notes` --
-its labels, source and summary, and the text of its comments, their decisions and
-its questions with their current answers. `search_work_items` matches every word
-of a query anywhere in that row and ranks the hits with the title weighing three
-times the rest; `similar` names the open items of a space whose title or
+its labels, source, the ids of its projects and its summary, and the text of its
+comments, their decisions and its questions with their current answers.
+`search_work_items` matches every word of a query anywhere in that row and ranks
+the hits with the title weighing three times the rest; `similar` names the open items of a space whose title or
 description share the words of a new item's title.
 
 A word is cut to its first five letters and matched as a prefix, a crude stand-in
@@ -19,8 +19,8 @@ so a lost index is rebuilt, never restored. It keeps no copy of that text (FTS5'
 about a quarter of the size a copy would add to the store.
 
 What keeps it current is two things that never fail a write. Triggers on the item,
-its comments and its questions mark the item stale in `work_item_search_rows`, a
-plain table, so every writer marks it -- an older build, a hook, a cascade, a merge
+its comments, its questions and its projects mark the item stale in
+`work_item_search_rows`, a plain table, so every writer marks it -- an older build, a hook, a cascade, a merge
 -- whichever SQLite it runs on. `bring_current` then reads every stale item into the
 index; every verb that writes an item's text calls it before it returns, and so does
 the store's bring-up. A SQLite without FTS5, or one older than 3.43, cannot reach
@@ -98,6 +98,23 @@ AFTER DELETE ON work_item_requests BEGIN
 END;
 """
 
+#: A project an item gains or loses (`planning.item_projects`) is a word of its notes,
+#: so a row of `work_item_projects` inserted or deleted marks its item. A changed
+#: source changes no word. The work-model migration creates these two as well, in the
+#: step that creates the table they stand on.
+PROJECT_TRIGGERS = {
+    "work_item_projects_search_insert": ("INSERT", "NEW"),
+    "work_item_projects_search_delete": ("DELETE", "OLD"),
+}
+PROJECT_TRIGGER_STATEMENTS = tuple(
+    f"""CREATE TRIGGER IF NOT EXISTS {name}
+AFTER {event} ON work_item_projects BEGIN
+    UPDATE work_item_search_rows SET stale = 1 WHERE work_item_id = {row}.work_item_id;
+END"""  # noqa: S608 - trigger DDL from this module's own constants, no value
+    for name, (event, row) in PROJECT_TRIGGERS.items()
+)
+SCHEMA += "".join(f"{statement};\n" for statement in PROJECT_TRIGGER_STATEMENTS)
+
 #: The FTS5 half, which only a SQLite built with FTS5 can create or read.
 _INDEX_DDL = (
     "CREATE VIRTUAL TABLE work_item_search USING fts5("
@@ -105,17 +122,23 @@ _INDEX_DDL = (
 )
 
 #: An item's text as the index holds it. Its reference is a word of its notes, so a
-#: query for a space's key still finds the space's items. A summary and a report are
-#: read as the text of their fields, not their names; a question as its prompt, the labels,
-#: descriptions and reasons of its fields, and its current answer's text. The
-#: letter yo becomes ie in every column.
+#: query for a space's key still finds the space's items, and so is the id of each
+#: project it names: a project's name is the registry's, which the index never reads,
+#: and a goal or stage, which names none, is not found by its tasks' projects. A
+#: summary and a report are read as the text of their fields, not their names; a
+#: question as its prompt, the labels, descriptions and reasons of its fields, and its
+#: current answer's text. The letter yo becomes ie in every column.
 _REFILL = """
 INSERT INTO work_item_search(rowid, title, description, notes)
 SELECT d.id,
     replace(replace(i.title, char(1105), char(1077)), char(1025), char(1045)),
     replace(replace(i.description, char(1105), char(1077)), char(1025), char(1045)),
     replace(replace(
-        p.key || '-' || i.number || ' ' || i.labels || ' ' || i.source || ' '
+        p.key || '-' || i.number || ' ' || i.labels || ' ' || i.source
+        || ' ' || coalesce((
+            SELECT group_concat(j.project_id, ' ') FROM work_item_projects j
+            WHERE j.work_item_id = i.work_item_id
+        ), '') || ' '
         || CASE WHEN json_valid(i.summary) THEN coalesce((
             SELECT group_concat(s.atom, ' ') FROM json_tree(i.summary) s WHERE s.type = 'text'
         ), '') ELSE i.summary END
@@ -209,8 +232,8 @@ def migration_needed(conn: sqlite3.Connection) -> bool:
 def migrate(conn: sqlite3.Connection) -> None:
     """Give the store the index and bring it current. Idempotent; the caller commits.
 
-    Run inside the bring-up's transaction, after every step that adds a column the
-    triggers name. A store opened by a SQLite without FTS5 still gets the marks and
+    Run inside the bring-up's transaction, after every step that adds a column or a
+    table the triggers name: `work_item_projects` is one. A store opened by a SQLite without FTS5 still gets the marks and
     the triggers, with every item marked, and the first open by one with FTS5
     creates the index and reads them all.
     """
@@ -502,6 +525,8 @@ def similar(
 
 __all__ = [
     "INDEX",
+    "PROJECT_TRIGGERS",
+    "PROJECT_TRIGGER_STATEMENTS",
     "ROWS",
     "SCHEMA",
     "bring_current",

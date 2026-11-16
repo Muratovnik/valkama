@@ -260,6 +260,7 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             kind=_first(parameters, "kind"),
             owner=_first(parameters, "owner"),
             parent=_first(parameters, "parent"),
+            project=_first(parameters, "project"),
             limit=_int(_first(parameters, "limit"), "limit", 200),
             offset=_offset(parameters),
         ),

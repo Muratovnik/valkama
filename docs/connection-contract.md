@@ -150,9 +150,14 @@ reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
 stage has `state` `null` and adds its `container_state` (see
 [The work model](#the-work-model)). Without a `limit` they return at most 50 rows.
 A search reads its query as words: an item matches when its title, description,
-labels, source, summary, comments, decisions or questions hold every word, in
-any order and across fields, each word matched by its first five letters as a
-prefix. Words such as `the` or `and` are left out of a query that has others.
+labels, source, the ids of its projects (see
+[The projects an item changes](#the-projects-an-item-changes)), summary,
+comments, decisions or questions hold every word, in any order and across
+fields, each word matched by its first five letters as a prefix. A project id
+is split into words as any text is, so `relay` and `service` each find an item
+that names `event-relay-service`; a project's display name is not searched, and
+a goal or stage, which names no projects, is not found by those of its tasks.
+Words such as `the` or `and` are left out of a query that has others.
 The best match comes first, the title weighing three times the rest, and a tie
 goes to the most recently changed item. `comment_hit`, `question_hit` and
 `summary_hit` then name the newest comment, decision or question holding every
@@ -163,11 +168,16 @@ every other match keeps its order, most recently changed first. A query that is
 a number alone -- `12` -- does the same for the item numbered 12: in a search
 scoped to a space that is one item, and without a space it is each space's item
 12. A store whose word index cannot be read -- a SQLite without FTS5, or an
-attached store an earlier build wrote -- reads every query as one phrase.
+attached store an earlier build wrote -- reads every query as one phrase, and a
+phrase finds an item when it stands in the id of one of its projects as well.
 `list_work_items` also takes `parent`, a work item by reference or id, and then
 lists only that item's children; the HTTP read `GET /api/planning/work-items`
 takes the same `parent` parameter. An unknown `parent` is refused with
-`not_found`.
+`not_found`. `list_work_items` and `GET /api/planning/work-items` take
+`project` too, a project id: the list keeps the items that name that project,
+in every space unless `space` is given, and with `space` only that space's. A
+goal or stage names no projects and is not kept for those of its tasks; a
+project no item names lists nothing.
 
 Each answer is one page. `truncated` is true when more items match than the page
 holds, and `next_offset` is then the offset of the next page; on the last page

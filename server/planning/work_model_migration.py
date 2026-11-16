@@ -27,7 +27,8 @@ otherwise cascade into them:
   and gives an active task nobody holds back to ready; **children-left** takes each open child
   out of a closed container into triage.
 - **checks** creates the trigger that keeps every kind where it may stand.
-- **item-projects** creates the table of the projects each item changes.
+- **item-projects** creates the table of the projects each item changes, and the two triggers
+  through which a project gained or lost marks its item for the word index.
 - **last-route** drops the last route the shell remembered when its scope is a project:
   a space is the scope now, and the address it names no longer opens.
 
@@ -1190,29 +1191,32 @@ def _check_trigger(conn: sqlite3.Connection, context: Context) -> None:
 
 def _item_projects_needed(conn: sqlite3.Connection, context: Context) -> bool:
     del context
-    return (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'work_item_projects'"
-        ).fetchone()
-        is None
-    )
+    present = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE (type = 'table' AND name = 'work_item_projects')"
+            " OR (type = 'trigger' AND tbl_name = 'work_item_projects')"
+        )
+    }
+    return not {"work_item_projects", *words.PROJECT_TRIGGERS} <= present
 
 
 def _create_item_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
-    """`item-projects`: the table of the projects each item changes, as a fresh store holds it."""
+    """`item-projects`: the table of the projects each item changes, as a fresh store holds it, with
+    the two triggers that mark an item for the word index when it gains or loses one."""
 
     del context
-    for statement in planning_store.ITEM_PROJECTS:
+    for statement in (*planning_store.ITEM_PROJECTS, *words.PROJECT_TRIGGER_STATEMENTS):
         conn.execute(statement)
     return {"rows": int(conn.execute("SELECT COUNT(*) FROM work_item_projects").fetchone()[0])}
 
 
 def _check_item_projects(conn: sqlite3.Connection, context: Context) -> None:
     if _item_projects_needed(conn, context):
-        raise UnmetError("the table of the items' projects is missing")
+        raise UnmetError("the table of the items' projects or its search triggers are missing")
 
 
-# -- the last route ------------------------------------------------------------
+# -- `last-route`: the last route -------------------------------------------------------
 
 _LAST_ROUTE = "last-route"
 #: The remembered route whose scope is a project, read in SQL for `last-route`.
@@ -1377,7 +1381,7 @@ def _p4(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     return {"containers": int(containers or 0)}
 
 
-def _holds_parents(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _p5(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     del context
     references = _references(conn)
     found = [

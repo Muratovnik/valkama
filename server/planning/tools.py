@@ -520,7 +520,8 @@ TOOLS = [
         " category, kind, holder or parent. One compact row per item: reference, title,"
         " kind, state, priority, parent and holder; an accepted open goal or stage has"
         " state null and adds its container_state. kind=goal lists the goals, kind=stage"
-        " the stages."
+        " the stages. project keeps the items that name that project, in every space"
+        " unless space is given."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -538,6 +539,11 @@ TOOLS = [
                 "type": "string",
                 "description": "Only the children of this item, by its reference (MAIN-142)"
                 " or its work_item_id.",
+            },
+            "project": {
+                "type": "string",
+                "description": "Only the items that name this project, by its id in the"
+                " project registry.",
             },
             "limit": _INT,
             "offset": _OFFSET,
@@ -577,8 +583,8 @@ TOOLS = [
         "search_work_items",
         "Search work items",
         "Find the items holding every word of the query, in any order and in any of their"
-        " title, description, labels, summary, comments and questions (a question's prompt,"
-        " field and option text and its answer and note), best match first, the title"
+        " title, description, labels, projects, summary, comments and questions (a question's"
+        " prompt, field and option text and its answer and note), best match first, the title"
         " weighing most. Each word matches by its first five letters, so searching finds"
         " search; two or three telling words find more than a sentence. A query that is"
         " exactly a reference, such as MAIN-12 in any case, is read as one phrase and"
@@ -1572,6 +1578,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
             "kind",
             "owner",
             "parent",
+            "project",
             "limit",
             "offset",
         )

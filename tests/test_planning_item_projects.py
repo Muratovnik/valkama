@@ -3,7 +3,8 @@
 A project is named only while the registry reads and records it, and a goal or
 stage names none: it reads the projects of the tasks under it. A project an item
 gets by two ways keeps the strongest source, named before commits before migrated,
-which the card, a goal's read and a merge all apply.
+which the card, a goal's read and a merge all apply. A search finds an item by
+the words of its projects' ids, and a list keeps the items naming one project.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface, store
-from server.planning import api, calls, model, service
+from server.planning import api, calls, model, service, words
 from tests.registry_fixtures import project_entry, registry_bytes
 
 SESSION = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
@@ -376,6 +377,100 @@ class MergeTests(ItemProjectsCase):
         self.give(duplicate, "valkama", "commits")
         self.tool("merge_work_items", id=survivor, items=[duplicate])
         self.assertEqual(named("valkama"), self.card(survivor)["projects"])
+
+
+class SearchTests(ItemProjectsCase):
+    """A project's id is a word of the item that names it, by the index and by a phrase."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write_registry({**REGISTERED, "event-relay-service": "Relay Service"})
+
+    def found(self, query: str) -> list[str]:
+        return [item["reference"] for item in service.search_work_items(self.conn, query)]
+
+    def stale(self) -> list[str]:
+        return [
+            str(row[0])
+            for row in self.conn.execute(
+                "SELECT work_item_id FROM work_item_search_rows WHERE stale = 1"
+            )
+        ]
+
+    def test_a_word_of_a_project_id_finds_the_task_while_it_names_the_project(self) -> None:
+        wanted = self.task("Bring up the listener", projects=["event-relay-service"])
+        self.task("Unrelated work")
+        # Each word of the id finds it, as a part of a former label would.
+        for query in ("relay", "service", "event relay"):
+            with self.subTest(query=query):
+                self.assertEqual([wanted], self.found(query))
+        self.tool("apply_work_item_changes", id=wanted, update={"projects": ["rover"]})
+        self.assertEqual([], self.found("service"))
+        self.assertEqual([wanted], self.found("rover"))
+        self.assertEqual([], self.stale())
+
+    def test_a_project_row_gained_or_lost_marks_only_its_item_stale(self) -> None:
+        """Any writer: the rows here are written outside the service, as a migration does."""
+
+        marked = self.task("Marked")
+        self.task("Left alone")
+        identity = str(self.card(marked)["work_item_id"])
+        self.assertEqual([], self.stale())
+        self.conn.execute(
+            "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+            " VALUES(?, 'atlas', 'commits')",
+            (identity,),
+        )
+        self.assertEqual([identity], self.stale())
+        words.bring_current(self.conn)
+        self.assertEqual([marked], self.found("atlas"))
+        self.conn.execute("DELETE FROM work_item_projects WHERE work_item_id = ?", (identity,))
+        self.assertEqual([identity], self.stale())
+        words.bring_current(self.conn)
+        self.assertEqual([], self.found("atlas"))
+
+    def test_without_the_index_a_phrase_finds_the_task_by_its_project(self) -> None:
+        wanted = self.task("Bring up the listener", projects=["event-relay-service"])
+        self.task("Unrelated work")
+        self.conn.execute("DROP TABLE work_item_search")
+        self.assertEqual([wanted], self.found("relay-service"))
+        # A phrase, not words: the id holds no "service relay".
+        self.assertEqual([], self.found("service relay"))
+        # An attached store an earlier build wrote has no table of projects to read.
+        self.conn.execute("DROP TABLE work_item_projects")
+        self.assertEqual([wanted], self.found("listener"))
+        self.assertEqual([], self.found("relay-service"))
+
+
+class ProjectFilterTests(ItemProjectsCase):
+    def listed(self, **arguments: object) -> list[str]:
+        answer = self.tool("list_work_items", **arguments)
+        return sorted(str(item["reference"]) for item in answer["work_items"])
+
+    def test_the_project_filter_reads_every_space_and_narrows_to_a_space_given(self) -> None:
+        service.create_planning_space(self.conn, project_id="rover", name="Other", key="OTH")
+        here = self.task("Here", projects=["rover"])
+        goal = self.task("Umbrella", kind="goal")
+        under = self.task("Under the goal", parent=goal, projects=["rover"])
+        self.task("Another project", projects=["valkama"])
+        self.task("No project")
+        there = str(
+            service.create_work_item(
+                self.conn, space="OTH", title="There", projects=["rover", "atlas"]
+            )["reference"]
+        )
+        self.conn.commit()
+        # The goal names none itself, so its task's project does not keep it.
+        self.assertEqual(sorted([here, under, there]), self.listed(project="rover"))
+        self.assertEqual(sorted([here, under]), self.listed(project="rover", space=SPACE))
+        self.assertEqual([there], self.listed(project="atlas"))
+        self.assertEqual([], self.listed(project="atlas", space=SPACE))
+        self.assertEqual([], self.listed(project="unnamed"))
+        read = api.handle_get(
+            self.conn, "/api/planning/work-items", {"project": ["atlas"], "space": ["OTH"]}
+        )
+        assert read is not None
+        self.assertEqual([there], [item["reference"] for item in read[1]["work_items"]])
 
 
 if __name__ == "__main__":
