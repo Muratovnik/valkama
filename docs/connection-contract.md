@@ -1846,6 +1846,40 @@ after the channel that proved the session, not after `client`, and with an id to
 long for a label replaced by its digest, as a claim's is. So a reader that compares
 it with `claim_ref` tells which subscriber holds the item.
 
+A goal an agent creates is followed from the start by the conversation of the
+agent's session, `agent` null, even when a subagent created it: the goal outlives
+the subagent, and its news is for the conversation leading the work. A stage
+subscribes nobody, and a goal the interface creates nobody either. This
+subscription, too, writes no event.
+
+### Participants
+
+A goal or a stage also says who works on it: the sessions that are live and that,
+themselves or through a subagent, hold the claim or an open step of a task anywhere
+under it, or follow it or an item over it. A participant is always a session's own
+conversation. Live is one rule for all three: the session has a row, has neither
+ended nor failed, and was seen within the 14 days of a claim's lease. An ended
+session is no participant from the moment it ended, though its claim stands through
+its 12 hours of grace; resumed, it is one again while its claim or subscription
+stands. Nothing is stored: every read derives them from the holders and the
+subscriptions.
+
+The card's read (`/api/modules/planning/work-item`) and the HTTP read of one item
+(`/api/planning/work-item`) carry them on a goal or a stage; `get_work_item`, every
+answer of a write and the brief records of a list do not, and a task has none:
+
+```json
+"participants": [{"session": "019a…", "client": "claude-code",
+                  "label": "claude (session 019a…)", "holds": ["MAIN-12", "MAIN-15"],
+                  "follows": false, "last_seen": "2026-11-16T09:12:03Z"}]
+```
+
+`client` is the client the session's row names, and `label` the holder its own
+conversation records, as in `subscribers`. `holds` names up to 20 tasks under the
+item that the session or its subagents hold, by reference; `follows` says whether
+it follows the item or an item over it. They stand in the order of `label`, at
+most 50.
+
 ### Several changes in one call
 
 `apply_work_item_changes` applies several writes to one item in one call, all or

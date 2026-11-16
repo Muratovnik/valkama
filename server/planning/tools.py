@@ -366,6 +366,8 @@ TOOLS = [
         " is accepted as part of them; another an agent files starts in triage unless"
         " acceptance accepts it. Accepted, a task starts in ready and a goal or stage"
         " stands accepted at once. A named state meets the refusals a move there does."
+        " A goal you create is followed for your session from the start, as subscribe"
+        " true would, so its news reaches you; a stage subscribes nobody."
         " claim, checklist and links act on the new item in the same call, all or"
         " nothing: it is created, then claimed, then given its steps, then linked,"
         " each as the same group of apply_work_item_changes does. A refused step"
@@ -1355,6 +1357,9 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
     if answer is None:  # pragma: no cover - the path table above is closed
         raise ValueError("no planning work item read")
     item = answer[1]["work_item"]
+    # Who works on a goal or stage costs a walk of its tree, which the card asks
+    # for and an agent's default read leaves out.
+    item.pop("participants", None)
     # The newest few of the comments that named it, or all of them and no count.
     named, total = read_model.mentions_of(
         conn, item["work_item_id"], None if full else RECENT_MENTIONS

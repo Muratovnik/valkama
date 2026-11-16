@@ -23,13 +23,13 @@ import {
 import { executorSchema } from '@/shared/api/executorModel.ts'
 import { TIMELESS_LIVE_STATES } from '@/shared/api/liveWorkModel.ts'
 import {
-  blankable,
   CONTAINER_STATES,
   SPACE_KEY,
   TITLE,
   WORK_ITEM_KINDS,
   WORK_ITEM_REFERENCE,
 } from '@/shared/api/planningModel.ts'
+import { blankable } from '@/shared/api/planningText.ts'
 import { enumField, invalid, ISO, PROJECT_ID } from '@/shared/api/platformApiGuards.ts'
 
 const rowShape = {

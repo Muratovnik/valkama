@@ -170,7 +170,8 @@ When your work depends on an item you do not hold, one another agent is changing
 under you, subscribe to it with the batch's `subscribe: true` and hear its news as
 a holder would, a person's acts there at your next tool call; send `subscribe: false` once you no longer need it. `false` on an
 item you hold mutes other agents there while you hold it; a person, and the replies
-to your own `awaits_reply` comment, still reach you.
+to your own `awaits_reply` comment, still reach you. A goal you create is followed
+for your session from the start, even when a subagent of yours created it.
 
 **Comments.** The batch's `comment` is for what the fields have no place for: a
 decision and its reason, evidence, a handoff. `checklist_item_id` ties a

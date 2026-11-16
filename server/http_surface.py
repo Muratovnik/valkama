@@ -527,9 +527,12 @@ def _analytics_write(call: _Call) -> _Answer | None:
 
 
 def _card_record(conn: sqlite3.Connection, reference: str) -> dict:
-    """What the card draws: the item and the agents on it, which no tool answer carries."""
+    """What the card draws: the item, the agents on it and who works on a goal or stage.
 
-    return planning_service.get_work_item(conn, reference, agents=True)
+    No tool answer carries the agents, and `get_work_item` none of the participants.
+    """
+
+    return planning_service.get_work_item(conn, reference, agents=True, participants=True)
 
 
 def _planning_exact_read(call: _Call) -> _Answer | None:

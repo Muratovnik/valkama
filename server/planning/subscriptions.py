@@ -13,7 +13,10 @@ A subscription belongs to the confirmed session and agent of the call that wrote
 it, never to the `author` it signed, so a subagent's subscription tells that
 subagent and its orchestrator, and the interface, which proves no session, cannot
 write one. It is not a change to the item: no event, no revision, nothing anybody
-is told; the call has its row, naming the item, as every write's does.
+is told; the call has its row, naming the item, as every write's does. The server
+subscribes a session itself (`follow`) only to what that session's work is for: a
+goal an agent creates is followed by the conversation of its session, even when a
+subagent created it, since the goal outlives the subagent.
 
 It lapses with its session, by the rule a claim lapses by (`leases`): a session
 gone without a row, failed, ended longer ago than `leases.ENDED_GRACE`, or silent
@@ -49,23 +52,18 @@ def subscribe(conn: sqlite3.Connection, row: sqlite3.Row, follows: object) -> st
     if not isinstance(follows, bool):
         raise model.PlanningError("subscribe must be a boolean")
     identity = calls.current()
-    if (
-        identity is None
-        or identity.state != calls.CONFIRMED
-        or identity.source in (calls.BROWSER, calls.VALKAMA)
-        or not identity.session_id
-    ):
+    session = agent_session(identity)
+    if identity is None or session is None:
         raise model.PlanningError(
             "a subscription belongs to an agent session, and this call proved none"
         )
     item = str(row["work_item_id"])
-    session, agent = identity.session_id, identity.agent_id or ""
+    agent = identity.agent_id or ""
     call = calls.call_id(conn, item)
     if follows:
         wanted: int | None = 1
     else:
         wanted = 0 if holds(row, session, identity.agent_id) else None
-    found = conn.execute(_ROW, (item, session, agent)).fetchone()
     if wanted is None:
         conn.execute(
             "DELETE FROM work_item_subscriptions"
@@ -73,15 +71,67 @@ def subscribe(conn: sqlite3.Connection, row: sqlite3.Row, follows: object) -> st
             (item, session, agent),
         )
         return NOT_FOLLOWING
-    if found is None or int(found[0]) != wanted:
-        conn.execute(
-            "INSERT INTO work_item_subscriptions(work_item_id,session_id,agent_id,follows,"
-            "call_id,heard_after) VALUES(?,?,?,?,?,?) ON CONFLICT(work_item_id,session_id,"
-            "agent_id) DO UPDATE SET follows = excluded.follows, call_id = excluded.call_id,"
-            " heard_after = excluded.heard_after, created_at = excluded.created_at",
-            (item, session, agent, wanted, call, call),
-        )
+    _stand(conn, item, session, agent, wanted, call, call)
     return FOLLOWING if wanted else MUTED
+
+
+def agent_session(identity: calls.Identity | None) -> str | None:
+    """The session an agent's call proved, which is what may follow an item; None for any other."""
+
+    if (
+        identity is None
+        or identity.state != calls.CONFIRMED
+        or identity.source in (calls.BROWSER, calls.VALKAMA)
+        or not identity.session_id
+    ):
+        return None
+    return identity.session_id
+
+
+def follow(conn: sqlite3.Connection, work_item_id: str, session_id: str) -> bool:
+    """Subscribe a session's own conversation to an item on the server's behalf; whether it does.
+
+    What a session is given without asking: a goal it created, say. The row hears
+    the item from the call in progress on, and it lapses with the session's newest
+    confirmed call, so a session no call proved cannot follow. A mute of its
+    conversation there becomes a subscription; a subscription stands as it was.
+    """
+
+    proof = conn.execute(
+        "SELECT MAX(id) FROM execution_events WHERE session_id = ? AND identity_state = ?",
+        (session_id, calls.CONFIRMED),
+    ).fetchone()[0]
+    if proof is None:
+        return False
+    call = calls.call_id(conn, work_item_id)
+    _stand(conn, work_item_id, session_id, "", 1, int(proof), int(proof) if call is None else call)
+    return True
+
+
+def _stand(
+    conn: sqlite3.Connection,
+    item: str,
+    session: str,
+    agent: str,
+    follows: int,
+    call: int | None,
+    heard_after: int | None,
+) -> None:
+    """Make the row of this session and agent say `follows`; one that already does stays as it is.
+
+    A change of mind keeps one row per session and agent, dated by the call that made it.
+    """
+
+    found = conn.execute(_ROW, (item, session, agent)).fetchone()
+    if found is not None and int(found[0]) == follows:
+        return
+    conn.execute(
+        "INSERT INTO work_item_subscriptions(work_item_id,session_id,agent_id,follows,"
+        "call_id,heard_after) VALUES(?,?,?,?,?,?) ON CONFLICT(work_item_id,session_id,"
+        "agent_id) DO UPDATE SET follows = excluded.follows, call_id = excluded.call_id,"
+        " heard_after = excluded.heard_after, created_at = excluded.created_at",
+        (item, session, agent, follows, call, heard_after),
+    )
 
 
 def holds(row: sqlite3.Row, session_id: str, agent_id: str | None) -> bool:

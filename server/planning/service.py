@@ -37,6 +37,7 @@ from . import (
     transitions,
     words,
 )
+from . import participants as working
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
 
@@ -104,6 +105,7 @@ def get_work_item(
     events: int | None = None,
     sessions: bool = False,
     agents: bool = False,
+    participants: bool = False,
 ) -> dict:
     """One item in full; `comments` and `events` keep only the newest of each.
 
@@ -112,15 +114,18 @@ def get_work_item(
     a page of the roots without the resolved mark, as `read_model.present` says.
     `sessions` adds the agent sessions whose confirmed calls wrote to it, and
     `agents` the agents standing on it and an `executor` at the claim, each step
-    and each agent, which only the card asks for. Without any of these the answer
-    is the complete record a screen draws from. Every form carries `mentions`, the
-    newest `read_model.HTTP_MENTIONS` comments on other items that named this one, oldest
-    first, and `mentions_total`.
+    and each agent, which only the card asks for. `participants` adds, to a goal
+    or a stage, the sessions working on it (`planning.participants`), which costs a
+    walk of the tree under it and so no write's answer carries. Without any of these
+    the answer is the complete record a screen draws from. Every form carries
+    `mentions`, the newest `read_model.HTTP_MENTIONS` comments on other items that
+    named this one, oldest first, and `mentions_total`.
     """
 
+    row = read_model.item_row(conn, reference)
     record = read_model.present(
         conn,
-        read_model.item_row(conn, reference),
+        row,
         full=True,
         comments=comments,
         comments_after=comments_after,
@@ -133,6 +138,8 @@ def get_work_item(
         record["sessions"] = read_model.sessions(conn, str(record["work_item_id"]))
     if agents:
         planning_agents.on_card(conn, record)
+    if participants and row["kind"] == model.CONTAINER_KIND:
+        record["participants"] = working.of_container(conn, row)
     return record
 
 
@@ -605,6 +612,11 @@ def create_work_item(
         _log(conn, item_id, "accepted", basis, author)
     if opened:
         _log(conn, item_id, "opened", "", author)
+    creator = subscriptions.agent_session(calls.current())
+    if stored_kind == model.CONTAINER_KIND and parent_id is None and creator is not None:
+        # A goal outlives the subagent that filed it, and its news is for the
+        # conversation that leads the work; a stage's come through the goal.
+        subscriptions.follow(conn, item_id, creator)
     words.bring_current(conn)
     return read_model.present(conn, read_model.item_by_id(conn, item_id), full=True)
 

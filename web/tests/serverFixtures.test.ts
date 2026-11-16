@@ -70,6 +70,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'card.json': (value) => validatePlanningWorkItemPayload(value),
   'card-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-goal.json': (value) => validatePlanningWorkItemPayload(value),
   'comment-reply.json': validateCommentWritten,
   'comment-resolved.json': validateCommentResolved,
   'description-told.json': (value) => validateWorkItemRecord(value),
@@ -160,6 +161,16 @@ describe('the server fixtures', () => {
     expect(item.claim?.executor?.state).toBe('live')
     expect(item.checklist.map((step) => step.executor?.state)).toEqual(['live', 'none', 'none'])
     expect(item.agents?.map((agent) => agent.executor?.state).toSorted()).toEqual(['ended', 'live'])
+  })
+
+  it('name who works on a goal: its creator following it, and a holder under it', () => {
+    const card = validatePlanningWorkItemPayload(read('card-goal.json'))
+    if (card.state.status !== 'ready') throw new Error('the card read is not ready')
+    const people = card.state.payload.work_item.participants ?? []
+    expect(people.map(({ holds, follows }) => ({ holds: holds.length, follows }))).toEqual([
+      { holds: 0, follows: true },
+      { holds: 1, follows: false },
+    ])
   })
 
   it('carry what a path in a text can come to', () => {

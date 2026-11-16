@@ -128,7 +128,28 @@ def _stale_reason(call: sqlite3.Row, seen: datetime | None) -> str:
         return SESSION_MISSING
     if call["status"] in _ENDED:
         return SESSION_ENDED
-    return LEASE_EXPIRED if seen is None or seen < utc_now() - LEASE_PERIOD else ""
+    return LEASE_EXPIRED if _quiet(seen) else ""
+
+
+def _quiet(seen: datetime | None) -> bool:
+    """Whether a session last seen then has gone without a sign of life for the lease period."""
+
+    return seen is None or seen < utc_now() - LEASE_PERIOD
+
+
+def session_live(session: sqlite3.Row | None) -> bool:
+    """Whether a session row stands behind its work now: neither ended nor failed, and not quiet.
+
+    The session half of a live lease, read from the `sessions` row alone, with no
+    grace: what a participant is held to, whatever made it one (`participants`).
+    """
+
+    return (
+        session is not None
+        and session["status"] not in _ENDED
+        and not session["ended_at"]
+        and not _quiet(moment(session["last_seen"]))
+    )
 
 
 def _in_grace(call: sqlite3.Row) -> bool:

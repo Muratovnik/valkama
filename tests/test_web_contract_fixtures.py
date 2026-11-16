@@ -240,6 +240,40 @@ class _Scenario:
         finally:
             conn.close()
 
+    def goal_card(self) -> dict:
+        """A goal's card naming who works on it: its creator, and a holder under a stage."""
+
+        def who(identity: str, agent: str | None = None) -> calls.Identity:
+            return calls.Identity(
+                state=calls.CONFIRMED,
+                source=calls.CLAUDE_HOOK,
+                session_id=identity,
+                agent_id=agent,
+                tool_use_id="t",
+                client="claude-code",
+            )
+
+        creator = "6f1c2a8e-0000-4000-8000-0000000000e1"
+        holder = "6f1c2a8e-0000-4000-8000-0000000000e2"
+        conn = store.connect()
+        try:
+            with calls.bind(who(creator, "a7c3e9f1d2b4a608"), "create_work_item"):
+                goal = str(
+                    service.create_work_item(
+                        conn, space=SPACE, title="Goal with participants", kind="goal"
+                    )["reference"]
+                )
+            stage = service.create_work_item(
+                conn, space=SPACE, title="Its stage", kind="stage", parent=goal
+            )["reference"]
+            task = service.create_work_item(conn, space=SPACE, title="Its task", parent=stage)
+            with calls.bind(who(holder), "claim_work_item"):
+                service.claim_work_item(conn, str(task["reference"]))
+            conn.commit()
+        finally:
+            conn.close()
+        return self.http(f"/api/modules/planning/work-item?{self.scope(reference=goal)}")
+
     def executor_card(self) -> dict:
         """A card whose claim, steps and agents each name an executor."""
 
@@ -805,6 +839,7 @@ class _Scenario:
             "description-told": described,
             "card": self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}"),
             "card-executors": executors,
+            "card-goal": self.goal_card(),
             "card-brief": self.http(
                 f"/api/modules/planning/work-item?{self.scope(reference=ref, brief='true')}"
             ),

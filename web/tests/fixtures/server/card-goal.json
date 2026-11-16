@@ -1,0 +1,137 @@
+{
+  "interface_version": "valkama-planning-work-item",
+  "scope": {
+    "kind": "project",
+    "project_ref": {
+      "project_id": "example-project"
+    }
+  },
+  "work_item_ref": {
+    "space_ref": {
+      "data_scope_id": "00000000-0000-4000-8000-000000000004",
+      "space_key": "MAIN"
+    },
+    "reference": "MAIN-4"
+  },
+  "state": {
+    "interface_version": "valkama-ui-state",
+    "status": "ready",
+    "payload": {
+      "work_item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000017",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-4",
+        "number": 4,
+        "title": "Goal with participants",
+        "kind": "goal",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000003",
+          "key": "triage",
+          "name": "Triage",
+          "category": "triage",
+          "is_terminal": false
+        },
+        "open": true,
+        "container_state": null,
+        "acceptance": null,
+        "started_at": "2026-01-02T03:04:05Z",
+        "waits_for": [],
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [],
+        "source": "",
+        "checklist": [],
+        "revision": 0,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "last_claim_ref": null,
+        "workable": false,
+        "claim": null,
+        "description": "",
+        "summary": null,
+        "summary_comment_id": null,
+        "links": [],
+        "refs": [],
+        "comments": [],
+        "events": [
+          {
+            "action": "created",
+            "detail": "triage",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "claude-hook",
+              "session_id": "00000000-0000-4000-8000-000000000018",
+              "agent_id": "a7c3e9f1d2b4a608"
+            }
+          }
+        ],
+        "mentions": [],
+        "mentions_total": 0,
+        "subscribers": [
+          {
+            "session": "00000000-0000-4000-8000-000000000018",
+            "client": "claude-code",
+            "agent": null,
+            "label": "claude (session 00000000-0000-4000-8000-000000000018)",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        ],
+        "agents": [
+          {
+            "agent_id": "a7c3e9f1d2b4a608",
+            "session_id": "00000000-0000-4000-8000-000000000018",
+            "agent_type": "",
+            "label": "",
+            "started_at": "2026-01-02T03:04:05Z",
+            "last_activity_at": "2026-01-02T03:04:05Z",
+            "ended_at": null,
+            "steps": [],
+            "link": "exact",
+            "coordinator_items": null,
+            "executor": {
+              "session": "00000000-0000-4000-8000-000000000018",
+              "agent": "a7c3e9f1d2b4a608",
+              "opened_in": "",
+              "opened_host": "",
+              "family": "claude",
+              "state": "live"
+            }
+          }
+        ],
+        "last_claim_executor": {
+          "session": null,
+          "agent": null,
+          "opened_in": "",
+          "opened_host": "",
+          "family": "",
+          "state": "none"
+        },
+        "participants": [
+          {
+            "session": "00000000-0000-4000-8000-000000000018",
+            "client": "claude-code",
+            "label": "claude (session 00000000-0000-4000-8000-000000000018)",
+            "holds": [],
+            "follows": true,
+            "last_seen": "2026-01-02T03:04:05Z"
+          },
+          {
+            "session": "00000000-0000-4000-8000-000000000019",
+            "client": "claude-code",
+            "label": "claude (session 00000000-0000-4000-8000-000000000019)",
+            "holds": [
+              "MAIN-6"
+            ],
+            "follows": false,
+            "last_seen": "2026-01-02T03:04:05Z"
+          }
+        ]
+      }
+    }
+  }
+}

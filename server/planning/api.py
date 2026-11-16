@@ -267,7 +267,10 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
 
 
 def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    """One item. Every cut of its history is opt-in; without them, the full record."""
+    """One item. Every cut of its history is opt-in; without them, the full record.
+
+    A goal or a stage carries who works on it, as every HTTP read of one item does.
+    """
 
     return {
         "interface_version": PLANNING_API_INTERFACE,
@@ -281,6 +284,7 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
             unresolved=_switch(parameters, "unresolved"),
             events=_count(parameters, "events"),
             sessions=_switch(parameters, "sessions"),
+            participants=True,
         ),
     }
 
