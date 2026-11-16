@@ -11,7 +11,7 @@
  * shows the hint at once, focus a press brings shows none, and a finger shows none.
  */
 import { expect } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { record } from './analyticsPage.ts'
 import { openCard } from './cardHeadPage.ts'
@@ -24,93 +24,8 @@ import {
   pastTheDelay,
   settledHint,
 } from './dayHintPage.ts'
+import { boxOf, hint, pass, quietPoint, watched, watchHints } from './hintFramesPage.ts'
 import { test } from './test.ts'
-
-interface Frame {
-  at: number
-  count: number
-  text: string
-}
-
-interface Arrival {
-  at: number
-  on: string
-}
-
-interface Watched {
-  arrivals: Arrival[]
-  changes: Frame[]
-  hintLog: Frame[]
-}
-
-/**
- * Teaches the page to note, all on one clock: every frame from now on, how many hints it shows
- * and the words of the first; every change of that count, even one undone before the next frame;
- * and when the pointer arrived on an element or a key went down.
- */
-const watchHints = (page: Page) =>
-  page.evaluate(() => {
-    const host = window as unknown as Watched
-    host.arrivals = []
-    host.changes = []
-    host.hintLog = []
-    const note = (on: string) => host.arrivals.push({ at: performance.now(), on })
-    document.addEventListener(
-      'pointerover',
-      (event) => note(event.target instanceof Element ? event.target.className : ''),
-      true,
-    )
-    document.addEventListener('keydown', (event) => note(`key ${event.key}`), true)
-    const now = (at: number): Frame => {
-      const hints = [...document.querySelectorAll('.tooltip-hint')]
-      const shown = hints[0]?.cloneNode(true) as Element | undefined
-      for (const copy of shown?.querySelectorAll('[role="tooltip"]') ?? []) copy.remove()
-      return { at, count: hints.length, text: shown?.textContent ?? '' }
-    }
-    let last = now(performance.now()).count
-    new MutationObserver(() => {
-      const change = now(performance.now())
-      if (change.count !== last) host.changes.push(change)
-      last = change.count
-    }).observe(document.body, { childList: true, subtree: true })
-    const frame = (at: number) => {
-      host.hintLog.push(now(at))
-      requestAnimationFrame(frame)
-    }
-    requestAnimationFrame(frame)
-  })
-
-/** What the page noted since the last call (`watchHints`). */
-const watched = (page: Page) =>
-  page.evaluate(() => {
-    const host = window as unknown as Watched
-    return {
-      arrivals: host.arrivals.splice(0),
-      changes: host.changes.splice(0),
-      frames: host.hintLog.splice(0),
-    }
-  })
-
-/** A point inside `within` where the pointer is on nothing that shows a hint or acts. */
-const quietPoint = (within: Locator) =>
-  within.evaluate((box) => {
-    const { left, top, right, bottom } = box.getBoundingClientRect()
-    for (let y = top + 24; y < bottom - 24; y += 12)
-      for (let x = left + 24; x < right - 24; x += 12) {
-        const under = document.elementFromPoint(x, y)
-        const busy = under?.closest('[data-tooltip], [data-reference-preview], button, a, input')
-        if (under && box.contains(under) && !busy) return { x, y }
-      }
-    throw new Error('no quiet point')
-  })
-
-const boxOf = (locator: Locator) =>
-  locator.evaluate((node) => {
-    const { left, top, right, bottom } = node.getBoundingClientRect()
-    return { left, top, right, bottom }
-  })
-
-const hint = (page: Page) => page.locator('.tooltip-hint')
 
 /** The copy-number button of an open item drawer, with the pointer resting away from it. */
 async function drawerAt(page: Page) {
@@ -122,10 +37,6 @@ async function drawerAt(page: Page) {
   await watchHints(page)
   return { drawer, number, quiet }
 }
-
-/** Real time passing in the page, `ms` long, while its frames are noted. */
-const pass = (page: Page, ms: number) =>
-  page.evaluate((wait) => new Promise((done) => setTimeout(done, wait)), ms)
 
 test('a hint shows half a second after the pointer comes to rest, and at once by a key', async ({
   page,
