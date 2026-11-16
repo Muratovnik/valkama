@@ -23,6 +23,7 @@ from server.memory import api as memory_api
 from server.memory import contracts, service
 from server.memory.markdown import MarkdownKnowledgeProvider
 from server.planning import service as planning_service
+from server.projects import project_registry
 from tests.registry_fixtures import project_entry, registry_bytes
 
 
@@ -248,19 +249,84 @@ class MemoryLinkTests(unittest.TestCase):
         patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.path})
         patch.start()
         self.addCleanup(patch.stop)
+        registry = mock.patch.object(
+            project_registry,
+            "_read_registry_bytes",
+            lambda: registry_bytes(
+                [
+                    project_entry(project, os.path.join(self._dir.name, project))
+                    for project in ("sample", "valkama", "example-project")
+                ]
+            ),
+        )
+        registry.start()
+        self.addCleanup(registry.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
         planning_service.create_planning_space(
             self.conn, project_id="sample", name="Sample", key="SMP"
         )
         self.item = planning_service.create_work_item(
-            self.conn, space="Sample", title="One work item"
+            self.conn, space="Sample", title="One work item", projects=["sample"]
         )
 
-    def attach(self, value: str, label: str) -> None:
+    def attach(self, value: str, label: str, item: dict | None = None) -> None:
         planning_service.attach_ref(
-            self.conn, self.item["work_item_id"], "memory", value, label=label
+            self.conn, (item or self.item)["work_item_id"], "memory", value, label=label
         )
+
+    def linked_over_http(self, project: str) -> list[str]:
+        found = memory_api.handle_get(self.conn, "/api/memory/linked", {"project": [project]})
+        assert found is not None
+        status, body = found
+        self.assertEqual(200, status, body)
+        return [link["value"] for link in body["links"]]
+
+    def test_the_work_is_every_item_that_names_the_project_in_any_space(self) -> None:
+        """An item in a space whose project is another names its own projects."""
+
+        planning_service.create_planning_space(
+            self.conn, project_id="example-project", name="Example project", key="MAIN"
+        )
+        named = planning_service.create_work_item(
+            self.conn, space="MAIN", title="Change the service", projects=["valkama"]
+        )
+        bare = planning_service.create_work_item(self.conn, space="MAIN", title="Change nothing")
+        self.attach("memory://record/named", "Named", named)
+        self.attach("memory://record/bare", "Bare", bare)
+
+        self.assertEqual(["memory://record/named"], self.linked_over_http("valkama"))
+        # The space's own project is not the item's: neither item names it.
+        self.assertEqual([], self.linked_over_http("example-project"))
+        (link,) = service.linked(self.conn, "valkama")["links"]
+        self.assertEqual(("MAIN", "MAIN-1"), (link["space_key"], link["work_item_key"]))
+
+    def test_a_goal_or_stage_is_work_of_the_projects_its_tasks_name(self) -> None:
+        goal = planning_service.create_work_item(
+            self.conn, space="SMP", title="The goal", kind="goal"
+        )
+        stage = planning_service.create_work_item(
+            self.conn, space="SMP", title="The stage", kind="stage", parent=goal["work_item_id"]
+        )
+        planning_service.create_work_item(
+            self.conn,
+            space="SMP",
+            title="The task",
+            parent=stage["work_item_id"],
+            projects=["valkama"],
+        )
+        other = planning_service.create_work_item(
+            self.conn, space="SMP", title="Another goal", kind="goal"
+        )
+        self.attach("memory://record/goal", "Goal", goal)
+        self.attach("memory://record/stage", "Stage", stage)
+        self.attach("memory://record/other", "Other", other)
+
+        self.assertEqual(
+            ["memory://record/goal", "memory://record/stage"],
+            sorted(self.linked_over_http("valkama")),
+        )
+        self.assertEqual([], self.linked_over_http("example-project"))
 
     def test_a_pointer_reads_by_its_stored_label_and_names_its_work_item(self) -> None:
         """The label is stored, not resolved, which is why this still reads.
