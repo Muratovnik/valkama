@@ -3,12 +3,15 @@ from __future__ import annotations
 import inspect
 import json
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from server import sessions, store
 from server.projects import project_registry
+from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_entry, registry_bytes, registry_reader
 
@@ -439,26 +442,258 @@ class ProjectRegistryTests(unittest.TestCase):
                     self.assertNotIn(marker, text)
 
 
-class ProjectHoldingTests(unittest.TestCase):
-    def test_the_deepest_root_holding_a_folder_names_its_project(self) -> None:
-        base = Path(tempfile.gettempdir()) / "made-up"
-        projects = [
-            project_entry("outer", base / "work"),
-            project_entry("inner", base / "work" / "inner"),
-            project_entry("sibling", base / "work-two"),
-        ]
-        for folder, expected in (
-            (base / "work" / "inner" / "src", "inner"),
-            (base / "work" / "inner", "inner"),
-            (base / "work" / "other", "outer"),
-            # A root is a folder, not a prefix of a name.
-            (base / "work-two-and-more", None),
-            (base / "work-two" / "a", "sibling"),
-            (base / "elsewhere", None),
-            ("", None),
+#: The projects of one space, each by its root's place in the workspace.
+SPACE_PROJECTS = {
+    "example-project": (),
+    "atlas": ("libs", "atlas"),
+    "games": ("libs", "games"),
+    "event-relay-service": ("libs", "event-relay-service"),
+    "publisher": ("libs", "tools", "publisher"),
+    "valkama": ("libs", "services", "valkama"),
+}
+OTHER_SCOPE = "9b1c3f0e-6d2a-4e8b-8f57-2c4a1d0e7b93"
+
+
+class PlaceCase(unittest.TestCase):
+    """A workspace of nested projects: six projects in one space, one in another.
+
+    `example-project` is the space's default project and holds the other five; an
+    unbound project lies inside it, and one is bound to a space of another store.
+    """
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.base = Path(directory.name)
+        self.scope = self.store_scope()
+        self.workspace = self.base / "example-project"
+        self.roots = {
+            project: self.workspace.joinpath(*parts) for project, parts in SPACE_PROJECTS.items()
+        }
+        self.roots["rover"] = self.base / "rover"
+        self.roots["scratch"] = self.workspace / "projects" / "scratch"
+        self.roots["foreign"] = self.workspace / "libs" / "foreign"
+        projects = []
+        for project, root in self.roots.items():
+            entry = project_entry(project, root)
+            if project in SPACE_PROJECTS:
+                entry["planning_binding"] = self.binding("MAIN", project == "example-project")
+            elif project == "rover":
+                entry["planning_binding"] = self.binding("ROVER", True)
+            elif project == "foreign":
+                entry["planning_binding"] = self.binding("FX", True, scope=OTHER_SCOPE)
+            projects.append(entry)
+        self.listing = project_registry.parse_registry(registry_bytes(projects))
+        self.assertEqual("available", self.listing["status"], self.listing["reason"])
+
+    def store_scope(self) -> str:
+        """The store the places are asked about."""
+
+        return "22222222-2222-4222-8222-222222222222"
+
+    def binding(self, key: str, default: bool, *, scope: str | None = None) -> dict:
+        space = planning_space_entity({"data_scope_id": scope or self.scope, "space_key": key})
+        return {**space, "default": default}
+
+    def place(self, folder: str | Path) -> dict | None:
+        found = project_registry.place_of_folder(str(folder), self.listing, self.scope)
+        return None if found is None else dict(found)
+
+    def expected(self, project: str, key: str | None) -> dict:
+        return {
+            "project_id": project,
+            "canonical_root": str(self.roots[project]),
+            "space_key": key,
+        }
+
+
+class PlaceOfFolderTests(PlaceCase):
+    def test_the_root_of_each_project_of_the_space_finds_it_in_the_space(self) -> None:
+        for project in SPACE_PROJECTS:
+            with self.subTest(project=project):
+                self.assertEqual(self.expected(project, "MAIN"), self.place(self.roots[project]))
+
+    def test_a_folder_inside_a_nested_root_is_that_project_not_the_one_around_it(self) -> None:
+        self.assertEqual(
+            self.expected("valkama", "MAIN"), self.place(self.roots["valkama"] / "server")
+        )
+        self.assertEqual(
+            self.expected("example-project", "MAIN"), self.place(self.workspace / "docs")
+        )
+
+    def test_the_root_of_a_project_of_another_space_finds_that_space(self) -> None:
+        self.assertEqual(self.expected("rover", "ROVER"), self.place(self.roots["rover"]))
+
+    def test_an_unbound_root_inside_a_bound_one_is_in_no_space(self) -> None:
+        # The project around it is bound to MAIN; the place does not fall back to it.
+        self.assertEqual(self.expected("scratch", None), self.place(self.roots["scratch"] / "src"))
+
+    def test_a_project_bound_in_another_store_is_in_no_space_of_this_one(self) -> None:
+        self.assertEqual(self.expected("foreign", None), self.place(self.roots["foreign"]))
+        self.assertEqual(
+            self.expected("foreign", "FX"),
+            dict(
+                project_registry.place_of_folder(
+                    str(self.roots["foreign"]), self.listing, OTHER_SCOPE
+                )
+                or {}
+            ),
+        )
+
+    def test_a_folder_under_no_root_has_no_place(self) -> None:
+        for folder in (
+            self.base / "elsewhere",
+            # A root is a folder, not the prefix of a name.
+            self.base / "rover-two",
+            "",
         ):
             with self.subTest(folder=str(folder)):
-                self.assertEqual(expected, project_registry.project_holding(str(folder), projects))
+                self.assertIsNone(self.place(folder))
+
+    @unittest.skipUnless(os.path.normcase("A") == "a", "the platform compares paths with case")
+    def test_case_does_not_tell_one_folder_from_another(self) -> None:
+        self.assertEqual(
+            self.expected("valkama", "MAIN"),
+            self.place(str(self.roots["valkama"] / "server").upper()),
+        )
+
+    def test_a_link_is_not_followed(self) -> None:
+        link = self.base / "link-to-valkama"
+        self.roots["valkama"].mkdir(parents=True)
+        try:
+            os.symlink(self.roots["valkama"], link, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"this account cannot make a link: {error}")
+        self.assertIsNone(self.place(link / "server"))
+
+    def test_a_registry_that_was_not_read_places_nothing(self) -> None:
+        for listing in (
+            project_registry.parse_registry(None),
+            project_registry.parse_registry(b"not json"),
+        ):
+            with self.subTest(status=listing["status"]):
+                self.assertIsNone(
+                    project_registry.place_of_folder(
+                        str(self.roots["valkama"]), listing, self.scope
+                    )
+                )
+
+
+class SessionPlaceTests(PlaceCase):
+    """`sessions.session_place`: a session's first folder that is not empty, placed."""
+
+    def store_scope(self) -> str:
+        """A throwaway store at the current schema: the spaces are bound in it."""
+
+        patch = mock.patch.dict(
+            os.environ,
+            {
+                "VALKAMA_DB": str(self.base / "store" / "valkama.sqlite3"),
+                "HOME": str(self.base),
+                "USERPROFILE": str(self.base),
+            },
+        )
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        return str(read_store_metadata(self.conn)["data_scope_id"])
+
+    def session(
+        self,
+        session: str,
+        client: str,
+        *,
+        transcript_names: Path | None = None,
+        opened_folder: Path | None = None,
+        cwd: Path | None = None,
+    ) -> None:
+        """A session row; a Claude Code transcript lies in the directory its client names
+        after the folder the session started in."""
+
+        directory = (
+            "unnamed"
+            if transcript_names is None
+            else re.sub(r"[^0-9A-Za-z]", "-", str(transcript_names))
+        )
+        self.conn.execute(
+            "INSERT INTO sessions(id, client, cwd, opened_folder, transcript_path)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (
+                session,
+                client,
+                "" if cwd is None else str(cwd),
+                "" if opened_folder is None else str(opened_folder),
+                str(self.base / "transcripts" / directory / f"{session}.jsonl"),
+            ),
+        )
+
+    def place_of(self, session: str) -> dict | None:
+        found = sessions.session_place(self.conn, session, self.listing)
+        return None if found is None else dict(found)
+
+    def test_a_claude_session_stands_where_its_transcript_names(self) -> None:
+        # Started in the workspace, it was opened in Valkama's server and its shell is
+        # in Rover now: the transcript's folder decides.
+        self.session(
+            "claude-1",
+            "claude-code",
+            transcript_names=self.workspace,
+            opened_folder=self.roots["valkama"] / "server",
+            cwd=self.roots["rover"] / "web",
+        )
+        self.assertEqual(self.expected("example-project", "MAIN"), self.place_of("claude-1"))
+
+    def test_a_codex_session_stands_in_its_opened_folder(self) -> None:
+        self.session(
+            "codex-1",
+            "codex",
+            opened_folder=self.roots["publisher"],
+            cwd=self.roots["rover"],
+        )
+        self.assertEqual(self.expected("publisher", "MAIN"), self.place_of("codex-1"))
+
+    def test_each_client_takes_its_folders_in_its_own_order(self) -> None:
+        valkama, atlas, rover = (self.roots[name] for name in ("valkama", "atlas", "rover"))
+        cases = (
+            # Claude Code: the transcript's folder, then opened_folder, then cwd.
+            (
+                "claude",
+                {"transcript_names": valkama, "opened_folder": atlas, "cwd": valkama},
+                "valkama",
+            ),
+            ("claude", {"opened_folder": atlas, "cwd": rover}, "atlas"),
+            ("claude", {"cwd": rover}, "rover"),
+            # Codex keeps no folder in its journal: a transcript that would name one is not read.
+            (
+                "codex",
+                {"transcript_names": valkama, "opened_folder": atlas, "cwd": valkama},
+                "atlas",
+            ),
+            ("codex", {"cwd": rover}, "rover"),
+        )
+        for number, (client, folders, project) in enumerate(cases):
+            with self.subTest(client=client, folders=sorted(folders), project=project):
+                session = f"{client}-{number}"
+                self.session(session, client, **folders)
+                key = "ROVER" if project == "rover" else "MAIN"
+                self.assertEqual(self.expected(project, key), self.place_of(session))
+
+    def test_a_session_with_no_row_or_no_folder_has_no_place(self) -> None:
+        self.session("empty", "claude")
+        self.assertIsNone(self.place_of("empty"))
+        self.assertIsNone(self.place_of("never-seen"))
+
+    def test_places_of_many_sessions_are_one_read(self) -> None:
+        self.session("a", "codex", opened_folder=self.roots["valkama"])
+        self.session("b", "codex", cwd=self.base / "elsewhere")
+        statements: list[str] = []
+        self.conn.set_trace_callback(statements.append)
+        self.addCleanup(self.conn.set_trace_callback, None)
+        places = sessions.session_places(self.conn, ["a", "b", "a", "never-seen"], self.listing)
+        self.conn.set_trace_callback(None)
+        self.assertEqual({"a": self.expected("valkama", "MAIN"), "b": None}, places)
+        self.assertEqual(1, sum("FROM sessions" in statement for statement in statements))
 
 
 if __name__ == "__main__":

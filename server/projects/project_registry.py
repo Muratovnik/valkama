@@ -210,10 +210,7 @@ def foreign_bindings(
         binding = project.get("planning_binding")
         if binding is None:
             continue
-        try:
-            space: dict[str, Any] | None = planning_space_ref(binding_entity(binding))
-        except ContractError:
-            space = None
+        space = _binding_space(binding)
         data_scope_id = space["data_scope_id"] if space is not None else None
         if data_scope_id in known:
             continue
@@ -227,23 +224,56 @@ def foreign_bindings(
     return foreign
 
 
-def project_holding(folder: str, projects: Iterable[Mapping[str, Any]]) -> str | None:
-    """The id of the project whose root holds this folder, the deepest root first.
+def _binding_space(binding: Mapping[str, Any]) -> dict[str, Any] | None:
+    """The store and key of the space a binding names; None when its identity does not decode."""
 
-    Compared as the platform compares paths, and as written: a link is not followed,
-    so a folder reached through one is held by the root it names.
+    try:
+        return planning_space_ref(binding_entity(binding))
+    except ContractError:
+        return None
+
+
+class FolderPlace(TypedDict):
+    project_id: str
+    canonical_root: str
+    #: The key of the space the project is bound to in the store asked about, or None.
+    space_key: str | None
+
+
+def place_of_folder(folder: str, listing: RegistryResult, data_scope_id: str) -> FolderPlace | None:
+    """The project whose root holds this folder, and the space of `data_scope_id` it is bound to.
+
+    The longest registered root that contains the folder decides, compared as the platform
+    compares paths (on Windows without regard to case) and as written: a link is not
+    followed, so a folder reached through one is held by the root it names. The space is
+    the one that project is bound to in this store, or None when it binds none here; the
+    place never falls back to a shorter root, so an unbound project inside a bound one
+    stays in no space. None when no root holds the folder or the registry was not read.
     """
 
     if not folder:
         return None
     place = os.path.normcase(os.path.normpath(folder))
-    found: tuple[int, str] | None = None
-    for project in projects:
-        root = os.path.normcase(os.path.normpath(str(project["canonical_root"])))
+    found: tuple[int, Mapping[str, Any]] | None = None
+    for candidate in listing["projects"]:
+        root = os.path.normcase(os.path.normpath(str(candidate["canonical_root"])))
         if place == root or place.startswith(root.rstrip(os.sep) + os.sep):
             if found is None or len(root) > found[0]:
-                found = (len(root), str(project["project_id"]))
-    return None if found is None else found[1]
+                found = (len(root), candidate)
+    if found is None:
+        return None
+    holder = found[1]
+    binding = holder["planning_binding"]
+    space = None if binding is None else _binding_space(binding)
+    return {
+        "project_id": str(holder["project_id"]),
+        "canonical_root": str(holder["canonical_root"]),
+        "space_key": (
+            str(space["space_key"])
+            if space is not None and space["data_scope_id"] == data_scope_id
+            else None
+        ),
+    }
 
 
 def _space_result(

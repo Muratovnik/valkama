@@ -1266,7 +1266,7 @@ item, and for `launch_class` a session's own run, are groups of their own too, w
 | Dimension | Value | Beside `id` |
 | --- | --- | --- |
 | `account` | the organization the work was billed to, as the usage rows hold it; unknown until the reader fills it | — |
-| `project` | the project whose planning space holds the item; for work on no item, the project whose registered root holds the session's working directory. Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null` |
+| `project` | the project whose planning space holds the item; for work on no item, the project whose registered root holds the session's folder, the folder that places it in the live-work frame (see [The live-work frame](#the-live-work-frame)). Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null` |
 | `work_item` | the item the work is counted to | `reference` and `title`, `null` for an item since deleted |
 | `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in` and `opened_host`, as a card's executor gives them, and `title`, the name its client gave the session, as the live work beside the board names it, or `null` when there is none to read. Not its live `state`, which changes while the period's figures do not |
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |
@@ -1728,7 +1728,7 @@ A session of `sessions` or `elsewhere`:
 | --- | --- |
 | `session` | the session's id, which a click opens (see [What a click opens](#what-a-click-opens)) |
 | `title` | the name its client shows for it, or `null` when there is none to read |
-| `folder` | the last part of the folder it was opened in, or empty |
+| `folder` | the last part of the folder that places it (see below), or empty |
 | `state` | `working` while a turn of its own runs or it has a live subagent, else `waiting` |
 | `long` | for a `waiting` session, whether it has been silent for more than 4 hours |
 | `asks` | for a `waiting` session, whether it stopped in the middle of a turn to ask a person |
@@ -1767,12 +1767,19 @@ is already in order, and a client that lists it as it came does not sort it. The
 interface's side panel draws its own order from it: the rows at work, freshest
 `updated_at` first; the rest folded or apart (see `DESIGN.md`).
 
-**`sessions` and `elsewhere`.** A session's space is the space bound to the
-project whose root is the longest one that contains the session's
-`opened_folder`, or else its `cwd`. A session whose folder lies under no root, or
-under a project that binds no space, is listed in `elsewhere`. This places a row
-and nothing more: nothing is written, nothing is routed, and no binding is ever
-inferred from a folder.
+**`sessions` and `elsewhere`.** A session is placed by its first folder that is
+not empty: for Claude Code the folder its transcript names, then its
+`opened_folder`, then its `cwd`; for Codex its `opened_folder`, then its `cwd`. The
+project whose root is the longest one that contains that folder holds it, compared
+as the platform compares paths (on Windows without regard to case) and without
+following links, and the session's space is the space that project is bound to in
+this store. A shorter root does not stand in: a session under a project that binds
+no space here is in no space, even inside the root of one that does. Such a
+session, and one whose folder lies under no root, is listed in `elsewhere`.
+Analytics counts a session's work on no item to the project of the same place (see
+[What agent work spent in a period](#what-agent-work-spent-in-a-period)). This
+places a row and nothing more: nothing is written, nothing is routed, and no
+binding is ever inferred from a folder.
 
 **How it arrives.** There is no route to poll. A stream opened with
 `GET /api/events?view=planning`, with or without an exact scope, carries the frame

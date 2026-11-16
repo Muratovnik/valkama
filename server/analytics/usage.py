@@ -26,7 +26,7 @@ one offset; a caller that minds asks for it in two.
 | Dimension | Value | Read from |
 | --- | --- | --- |
 | `account` | the organization a stretch was billed to | the segment, as stored |
-| `project` | the project of the item's planning space; with no item, the project whose root holds the session's working directory | the space, the session and the projects registry |
+| `project` | the project of the item's planning space; with no item, the project of the place the session stands (`sessions.session_place`) | the space, the session and the projects registry |
 | `work_item` | the item a stretch is counted to, `null` for work on no item | the segment |
 | `executor` | the session a card's holder opens: a subagent's work is its session's | `planning.executors` |
 | `role` | who spent it: `main`, a session's own run; `subagent`; `advisor`, a segment an adviser spent, in either | the run and the segment |
@@ -43,7 +43,6 @@ from __future__ import annotations
 
 import bisect
 import datetime as dt
-import json
 import operator
 import re
 import sqlite3
@@ -51,6 +50,7 @@ import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
+from .. import sessions
 from ..planning import executors, live_sessions
 from ..planning import usage as item_usage
 from ..planning.usage import Value
@@ -441,22 +441,6 @@ class _Window:
     unpriced_models: set[str] = field(default_factory=set)
 
 
-def _session_projects(
-    conn: sqlite3.Connection, sessions: Iterable[str], projects: Sequence[Mapping]
-) -> dict[str, str | None]:
-    """The project whose root holds each session's working directory, by session id."""
-
-    return {
-        str(row["id"]): project_registry.project_holding(
-            str(row["cwd"] or row["opened_folder"] or ""), projects
-        )
-        for row in conn.execute(
-            "SELECT id, cwd, opened_folder FROM sessions WHERE id IN (SELECT value FROM json_each(?))",
-            (json.dumps(sorted(set(sessions))),),
-        )
-    }
-
-
 def _with_seats(
     conn: sqlite3.Connection, rows: Sequence[Sequence]
 ) -> tuple[list[Sequence], dict[str, dict]]:
@@ -496,7 +480,10 @@ def _with_seats(
 
 
 def _readers(
-    conn: sqlite3.Connection, rows: Sequence[Sequence], needed: set[str], projects: Sequence
+    conn: sqlite3.Connection,
+    rows: Sequence[Sequence],
+    needed: set[str],
+    listing: project_registry.RegistryResult | None,
 ) -> dict[str, Callable[[Sequence], Value]]:
     """How each needed dimension's value is read off a row."""
 
@@ -508,10 +495,15 @@ def _readers(
         readers[LAUNCH_CLASS] = _launch_class
     if ROLE in needed:
         readers[ROLE] = _role
-    if PROJECT in needed:
-        held = _session_projects(
-            conn, (row[_SESSION] for row in rows if row[_ITEM] is None), projects
-        )
+    if PROJECT in needed and listing is not None:
+        # Work on no item is the project of the place its session stands, as every
+        # reader of a session's place has it.
+        held = {
+            session: None if place is None else place["project_id"]
+            for session, place in sessions.session_places(
+                conn, (row[_SESSION] for row in rows if row[_ITEM] is None), listing
+            ).items()
+        }
 
         def project(row: Sequence) -> Value:
             if row[_ITEM] is not None:
@@ -658,8 +650,9 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     seat_names: dict[str, dict] = {}
     if SEAT in needed:
         rows, seat_names = _with_seats(conn, rows)
-    projects = project_registry.read_registry()["projects"] if PROJECT in needed else []
-    readers = _readers(conn, rows, needed, projects)
+    listing = project_registry.read_registry() if PROJECT in needed else None
+    projects = [] if listing is None else listing["projects"]
+    readers = _readers(conn, rows, needed, listing)
     grouping = [readers[dimension] for dimension in request.group_by]
     filters = [(readers[dimension], admitted) for dimension, admitted in request.filters.items()]
     main, earlier = _Window(), _Window()
