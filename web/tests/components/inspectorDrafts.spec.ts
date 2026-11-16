@@ -49,6 +49,7 @@ const OPEN_STEP = {
   done: false,
   claimed_by: '',
   done_by: '',
+  by_previous_holder: false,
 }
 
 const comment = (wrapper: VueWrapper) =>

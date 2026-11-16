@@ -33,6 +33,7 @@
     "not_ready"
   ],
   "workable": false,
+  "lapsed_claim": null,
   "claim": null,
   "description": "Waits on MAIN-1 first.",
   "summary": null,

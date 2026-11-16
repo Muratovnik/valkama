@@ -489,7 +489,14 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         step = replaced[0]["item_id"]
         held = self.call("claim_work_item_checklist_item", id=self.ref, item_id=step, author="two")
         self.assertEqual(
-            {"item_id": step, "done": False, "claimed_by": "two", "done_by": ""}, held["step"]
+            {
+                "item_id": step,
+                "done": False,
+                "claimed_by": "two",
+                "done_by": "",
+                "by_previous_holder": False,
+            },
+            held["step"],
         )
         ticked = self.call(
             "apply_work_item_changes",

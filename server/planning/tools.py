@@ -218,8 +218,10 @@ _TRANSITION_FORM = (
     'An object, never a bare state name: {"state": "done"}, with reason, force or rank'
     " when they apply. The one path a state changes by. The workflow's guards apply:"
     " an active state needs a holder after the write (executor), a terminal state needs"
-    " every checklist step ticked and a closing summary, a blocked state needs a blocker"
-    " or a stated reason. An item with no basis, in triage, deferred or cancelled out"
+    " every checklist step ticked and a closing summary, entering review or a completed"
+    " state is refused while a step stands ticked by a holder whose claim lapsed"
+    " (previous_holder): tick it again, a blocked state needs a blocker or a stated"
+    " reason. An item with no basis, in triage, deferred or cancelled out"
     " of triage, moved to ready, active, review, blocked or completed needs one"
     " (acceptance): inherited under goals and stages that are all accepted and open,"
     " else the acceptance you send. A move to triage takes the basis away. A goal or"
@@ -460,7 +462,11 @@ TOOLS = [
         " question, no_start, ancestor_triage, ancestor_deferred, ancestor_waits or"
         " ancestor_closed. claim.expires_at is when the claim lapses if its session stays"
         " silent, or, for a claim no session proved, the owner's own included, if the item"
-        " stays quiet; null while an open question to the owner stops that count.",
+        " stays quiet; null while an open question to the owner stops that count. A"
+        " checklist step with by_previous_holder was ticked by a holder whose claim"
+        " lapsed: tick it again to confirm it before review or closing. lapsed_claim"
+        " names the holder whose claim the sweep released, why and when, until the next"
+        " claim.",
         READ_ONLY,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -771,7 +777,8 @@ TOOLS = [
                 ' the list alone, ["first step", {"text": "…", "done": true}], or'
                 ' {"items": [...], "force": true} when force must carry a refusal'
                 " through. A step sent with the text of one the item has keeps that"
-                " step's item_id, claim and tick, so appending is sending the old steps"
+                " step's item_id, claim, tick and by_previous_holder, so appending is"
+                " sending the old steps"
                 " and then the new ones; a new step gets a new item_id, which"
                 " checklist_ticks in the same call cannot name: send it done=true"
                 " instead. Leaving out a claimed or completed step is refused, naming"
@@ -786,7 +793,9 @@ TOOLS = [
                 "description": "Steps to complete, or to reopen with done=false."
                 " Completion records who and clears the live claim; when that was the"
                 " last hold on an active task nobody holds, the batch's end puts the task"
-                " back in the first ready state, and with none to reach it is refused.",
+                " back in the first ready state, and with none to reach it is refused."
+                " Ticking a step again confirms a tick its lapsed holder made and clears"
+                " by_previous_holder.",
                 "items": {
                     "type": "object",
                     "properties": {"item_id": _STR, "done": _BOOL, "force": _FORCE},

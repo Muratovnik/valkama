@@ -221,6 +221,8 @@ MAX_CHECKLIST = 100
 # A step is a sentence, not a title. The store this migrates from holds one
 # of 213 characters, so borrowing the title's limit refused real work.
 MAX_CHECKLIST_TEXT = 1000
+#: The step field that marks a tick made by a holder whose lease lapsed.
+PREVIOUS_HOLDER = "by_previous_holder"
 
 
 class PlanningError(ValueError):
@@ -552,7 +554,12 @@ def names_exactly(query: str, reference: str) -> bool:
 
 
 def checklist(value: object) -> list[dict]:
-    """The steps of one item, each with the id that lets two agents split it."""
+    """The steps of one item, each with the id that lets two agents split it.
+
+    `by_previous_holder` says the step's tick was made by a holder whose lease
+    lapsed, and waits for a tick that confirms it; a step stored without it reads
+    false.
+    """
 
     if value is None:
         return []
@@ -575,7 +582,7 @@ def checklist(value: object) -> list[dict]:
             continue
         if not isinstance(raw, dict):
             raise PlanningError(f"{where} must be a string or an object")
-        unknown = set(raw) - {"id", "text", "done", "claimed_by", "done_by"}
+        unknown = set(raw) - {"id", "text", "done", "claimed_by", "done_by", PREVIOUS_HOLDER}
         if unknown:
             raise PlanningError(f"{where} has unknown field(s): {', '.join(sorted(unknown))}")
         item_id = identifier(raw.get("id") or new_id(), f"{where}.id")
@@ -585,6 +592,9 @@ def checklist(value: object) -> list[dict]:
         done = raw.get("done", False)
         if not isinstance(done, bool):
             raise PlanningError(f"{where}.done must be a boolean")
+        flagged = raw.get(PREVIOUS_HOLDER, False)
+        if not isinstance(flagged, bool):
+            raise PlanningError(f"{where}.{PREVIOUS_HOLDER} must be a boolean")
         items.append(
             {
                 "id": item_id,
@@ -596,6 +606,7 @@ def checklist(value: object) -> list[dict]:
                 "done_by": actor(raw.get("done_by") or "", f"{where}.done_by")
                 if raw.get("done_by")
                 else "",
+                PREVIOUS_HOLDER: flagged,
             }
         )
     return items
@@ -608,6 +619,7 @@ def new_checklist_item(text: object) -> dict:
         "done": False,
         "claimed_by": "",
         "done_by": "",
+        PREVIOUS_HOLDER: False,
     }
 
 

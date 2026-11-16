@@ -74,6 +74,7 @@ function crowdedGoal() {
         done: false,
         claimed_by: '',
         done_by: '',
+        by_previous_holder: false,
       })),
       claim_ref: 'a holder with a long name',
       priority: 'urgent',

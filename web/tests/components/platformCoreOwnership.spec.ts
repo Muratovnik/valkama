@@ -95,6 +95,7 @@ function readModel(space: PlanningSpaceRef) {
         waits_for: [],
         workable: true,
         withheld: [],
+        lapsed_claim: null,
         labels: [],
         source: '',
         checklist: [],

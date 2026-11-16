@@ -141,8 +141,22 @@ describe('the list rows', () => {
           boardItem(7, 'backlog', {
             updated_at: `${year}-03-04T10:00:00Z`,
             checklist: [
-              { id: 'a', text: 'one', done: true, claimed_by: '', done_by: '' },
-              { id: 'b', text: 'two', done: false, claimed_by: '', done_by: '' },
+              {
+                id: 'a',
+                text: 'one',
+                done: true,
+                claimed_by: '',
+                done_by: '',
+                by_previous_holder: false,
+              },
+              {
+                id: 'b',
+                text: 'two',
+                done: false,
+                claimed_by: '',
+                done_by: '',
+                by_previous_holder: false,
+              },
             ],
           }),
           boardItem(8, 'backlog', { updated_at: `${year - 1}-03-04T10:00:00Z` }),

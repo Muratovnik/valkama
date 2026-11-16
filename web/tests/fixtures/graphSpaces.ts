@@ -147,6 +147,7 @@ function maker(plan: ShapePlan) {
       waits_for: [],
       workable: false,
       withheld: ['not_ready'],
+      lapsed_claim: null,
       labels: [],
       source: '',
       checklist: [],

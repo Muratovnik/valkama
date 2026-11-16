@@ -31,6 +31,7 @@ function itemFixture() {
     done: false,
     claimed_by: '',
     done_by: '',
+    by_previous_holder: false,
   }))
   return item
 }

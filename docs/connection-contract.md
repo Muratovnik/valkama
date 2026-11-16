@@ -115,7 +115,7 @@ changed. `url` is described in [The address of a work item](#the-address-of-a-wo
 | --- | --- |
 | `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
-| `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
+| `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`, `by_previous_holder`; `overridden` when `force` carried another holder's claim through |
 | `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
@@ -1890,7 +1890,8 @@ groups wrote does not count as the agent having read what a person did, so a
 
 `checklist` sets the steps. A step sent
 with the text of a step the item has is that step: it keeps its `item_id`, its
-claim, its tick and who made them, and duplicate texts match in order. So steps
+claim, its tick and who made them, and its `by_previous_holder`, and duplicate
+texts match in order. So steps
 are appended by sending the item's steps and then the new ones, and a step is
 renamed by sending `{"id": "…", "text": "…"}`, a shape the published schema
 does not advertise but every write takes. Leaving out a claimed or completed step is refused, naming it, and
@@ -1903,7 +1904,10 @@ the `checklist_completed` event a tick writes, so a call that sets done steps,
 a summary and a closing transition closes the item. A repeated step sent done
 is ticked the same way, and refused as a tick is when someone else holds it,
 unless `force`; one sent without `done` keeps its tick, and a step is reopened
-only by a tick with `done: false`. A step that names an `id` the item
+only by a tick with `done: false`. A tick through `checklist_ticks` or
+`/api/planning/work-item/checklist/tick` of a step already done ticks it again:
+ticking a step again confirms a tick its lapsed holder made and clears
+`by_previous_holder`. A step that names an `id` the item
 does not have is one carried over and keeps the state it carries. A list holds
 at most 100 entries. At least one
 group must name a change, and an entry with a field its group does not take is
@@ -2240,6 +2244,28 @@ A lease is the session's, not the record's. A claimed step records no call of it
 own: it stands on the session its holder names, read from that session's newest
 confirmed call, and lapses with it. When a session's lease lapses, its claim and
 its claimed steps on the item are released together.
+
+Nobody stands behind a tick that holder made any more, so the same write marks
+every step the lapsed holder ticked `by_previous_holder: true`, whether the item
+was at work or blocked; a tick someone else made stays as it is, and taking a
+live lease over with `force` marks nothing. Entering a `review` or `completed`
+state while a step stands marked is refused with the `previous_holder` guard:
+`MAIN-12 has 2 step(s) ticked by a holder whose lease lapsed: tick them again to
+confirm them, or reopen them`. A tick of the step, even of one already done,
+confirms it and clears the mark, and so does reopening it; `force` carries the
+move past the guard and records `overridden`. A cancelled close is not asked. A
+step stored without the field reads `false`.
+
+The record says whose claim the sweep released until somebody claims the item
+again: `lapsed_claim` is `{"holder": …, "reason": "session-ended", "at": …}`,
+read from the newest `released` event the lease expiry wrote -- `holder` as that
+event names it, `reason` its cause (`session-ended`, `session-missing` or
+`lease-expired`) and `at` its time. It is `null` once a claim followed that
+release, while somebody holds the item, on a closed item, and on an item only
+steps held, whose release names a step rather than its holder. It is derived
+from the history, never stored, and stands in the full record and in every
+brief record; the compact rows of `list_work_items` and `search_work_items` do
+not carry it.
 
 `stale` says nobody is working the item now, not that the claim is gone. A
 session that ended may come back: a client restart ends the session and resumes

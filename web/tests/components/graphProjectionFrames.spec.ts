@@ -58,6 +58,7 @@ function item(id: string, number: number, parent: string | null = null): WorkIte
     waits_for: [],
     workable: true,
     withheld: [],
+    lapsed_claim: null,
     labels: [],
     source: '',
     checklist: [],

@@ -4,8 +4,8 @@
  */
 
 import type { z } from '@/shared/api/contract.ts'
-import { strictObject, uniqueList } from '@/shared/api/contract.ts'
-import { enumField } from '@/shared/api/platformApiGuards.ts'
+import { boundedText, strictObject, uniqueList } from '@/shared/api/contract.ts'
+import { enumField, ISO } from '@/shared/api/platformApiGuards.ts'
 
 /**
  * Why the take-next queue does not give an item, in the order a record names them:
@@ -28,6 +28,20 @@ const WITHHELD_CODES = [
 
 /** Why the queue does not give it, each reason once, in the server's one order. */
 export const withheldField = () => uniqueList(enumField(WITHHELD_CODES), WITHHELD_CODES.length)
+
+/** Why a lease lapsed: its session ended, has no row, or went quiet. */
+const LAPSE_REASONS = ['session-ended', 'session-missing', 'lease-expired'] as const
+
+/**
+ * Whose claim the lease sweep released, why and when; null while nothing lapsed, from
+ * the next claim on, while somebody holds the item and once it is closed.
+ */
+export const lapsedClaimField = () =>
+  strictObject({
+    holder: boundedText(/^[^\u{0}]{1,128}$/u, 128),
+    reason: enumField(LAPSE_REASONS),
+    at: boundedText(ISO, 96),
+  }).nullable()
 
 /**
  * A work item record, strict: it stands in a state or derives one as an accepted open

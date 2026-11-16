@@ -232,6 +232,7 @@ taken.
 | a triage state, for an accepted open goal or stage | refused: an accepted goal or stage is completed or cancelled |
 | a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
 | a completed state | every step done and a summary |
+| a review or completed state | no step marked `by_previous_holder`: tick it again to confirm it, or reopen it (`previous_holder`) |
 | a cancelled state | a summary; open steps stay open |
 | a blocked state | an unfinished item linked `blocks` to it, or a `reason` |
 | any state | a transition the workflow allows from where the item stands |
@@ -258,7 +259,10 @@ session alone for 12 hours after its end, so a resumed session reads `live` agai
 with its claims in place: until then `claim_ready_work_item` does not hand the
 item out and a server start does not release it. The history names why a claim
 was released: `session-ended`, `session-missing` or `lease-expired`, the last for
-3 quiet days. `release: true` requeues an item that was
+3 quiet days. The release marks every step the lapsed holder ticked
+`by_previous_holder`, at work or blocked, until a tick confirms it, and the
+item's `lapsed_claim` (`holder`, `reason`, `at`) names that release until the
+next claim. `release: true` requeues an item that was
 in its active state unless one of its steps is still claimed. A task at work stands
 held: with no ready state to requeue it in, a release, the tick or release of its
 last held step and a takeover of its stale claim are refused, and its lapsed lease
@@ -372,6 +376,19 @@ interface.
 first, each with `version`, its parts, `answered_by`, `answered_at` and
 `by_person`), `by_person` and the rest of the record. `get_work_item_request` also
 gives `replies`, the question's whole thread, oldest first.
+
+## Claude Code's auto mode
+
+Valkama calls may share a response with any other tool. Valkama's hook records
+which session makes each call and leaves the call as you wrote it, so auto mode
+reviews every call in the response. An older Valkama release added your session
+to the input of each Valkama call instead, and a call beside it that needed the
+review then got no verdict: it failed with "another call in this response was
+changed by a hook", which says nothing about the failed call. If you see that
+failure, the older release is still installed: issue the failed call again
+exactly as it was, and for the rest of the session send Valkama calls in a
+response of their own, with the other tools in the next one. Another client or
+permission mode needs no such care.
 
 ## Merging
 

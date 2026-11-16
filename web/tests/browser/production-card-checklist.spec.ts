@@ -30,6 +30,7 @@ const steps = [
     done: false,
     claimed_by: '',
     done_by: '',
+    by_previous_holder: false,
   },
   {
     id: '123e4567-e89b-42d3-a456-426614174102',
@@ -37,6 +38,7 @@ const steps = [
     done: true,
     claimed_by: '',
     done_by: 'own-a (auto/val564-a)',
+    by_previous_holder: false,
   },
   {
     id: '123e4567-e89b-42d3-a456-426614174103',
@@ -44,6 +46,7 @@ const steps = [
     done: false,
     claimed_by: 'own-b',
     done_by: '',
+    by_previous_holder: false,
   },
 ]
 

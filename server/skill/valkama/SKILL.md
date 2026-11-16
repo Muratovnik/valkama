@@ -72,6 +72,7 @@ days without an event on the item. An open question to the owner there stops
 the count; your steps lapse with your claim. Take a stale claim over without
 `force`, a live one only on an instruction that says so. An ended session keeps
 its claims 12 hours: resuming makes them `live`, and the queue leaves them.
+An item's `lapsed_claim` names whose claim lapsed, why and when, until the next claim.
 `release: true` gives an item back and returns it from the active state to a
 ready one, unless a checklist step of it is still claimed; a blocked one stays.
 With no ready state to return to, the release is refused: move the item first.
@@ -111,15 +112,9 @@ that existed before the call; `applied` lists the ids of the comments and
 questions the call wrote.
 
 **Claude Code's auto mode.** Valkama calls may share a response with any other
-tool. Valkama's hook records which session makes each call and leaves the call as
-you wrote it, so auto mode reviews every call in the response. An older Valkama
-release added your session to the input of each Valkama call instead, and a call
-beside it that needed the review then got no verdict: it failed with "another call
-in this response was changed by a hook", which says nothing about the failed call.
-If you see that failure, the older release is still installed: issue the failed
-call again exactly as it was, and for the rest of the session send Valkama calls in
-a response of their own, with the other tools in the next one. Another client or
-permission mode needs no such care.
+tool. A failure "another call in this response was changed by a hook" means an
+older release is installed: [the tool reference](references/tools.md#claude-codes-auto-mode)
+says what to do.
 
 **Refs.** The `refs` group records a `commit`, a `memory` record id materially
 used, or a `url`. Your own session needs no ref: Valkama records every write's.
@@ -425,7 +420,10 @@ anyone.
 
 1. Tick the steps that were done. A step still open keeps the item from
    completing: do it, or file it as an item of its own linked
-   `discovered-from` this one and leave it off this checklist.
+   `discovered-from` this one and leave it off this checklist. A step marked
+   `by_previous_holder` was ticked by a holder whose claim lapsed: check the work
+   and tick it again, or reopen it; until then review and a completed state are
+   refused (`previous_holder`).
 2. Record the summary: `done` (what was done), `next` (what comes next) and
    `why` only when the choice is not obvious. When your instructions ask a
    closing summary for flow friction, give it in `friction` (`none`, or a line

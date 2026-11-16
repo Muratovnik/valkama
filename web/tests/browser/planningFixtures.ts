@@ -93,6 +93,7 @@ export const blockedWorkItem: BriefFields = {
   waits_for: [],
   workable: false,
   withheld: ['not_ready'],
+  lapsed_claim: null,
   checklist: [],
   revision: 1,
   created_at: now,
@@ -125,6 +126,7 @@ const briefFields: BriefFields = {
   waits_for: [],
   workable: false,
   withheld: ['not_ready'],
+  lapsed_claim: null,
   checklist: [
     {
       id: identity(300),
@@ -132,6 +134,7 @@ const briefFields: BriefFields = {
       done: false,
       claimed_by: 'codex',
       done_by: '',
+      by_previous_holder: false,
     },
   ],
   revision: 3,

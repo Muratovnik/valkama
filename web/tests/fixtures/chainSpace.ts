@@ -59,6 +59,7 @@ function brief(
     waits_for: [],
     workable: !closed,
     withheld: closed ? ['not_ready'] : [],
+    lapsed_claim: null,
     labels: [],
     source: '',
     checklist: [],

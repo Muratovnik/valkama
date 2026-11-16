@@ -218,8 +218,9 @@ def list_work_items(
     )
     rows = conn.execute(query, parameters).fetchall()
     closed = read_model.closings(conn, rows)
+    lapsed = read_model.lapsed_claims(conn, rows)
     tree = _page_tree(conn, rows)
-    return [read_model.present(conn, row, closed=closed, tree=tree) for row in rows]
+    return [read_model.present(conn, row, closed=closed, lapsed=lapsed, tree=tree) for row in rows]
 
 
 def _page_tree(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> item_tree.Tree:
@@ -1548,6 +1549,11 @@ def _expire(
     the expiry to whichever caller happened to meet it: `released` with the
     claim's reason and holder, `checklist_released` with each step's text. The
     why of the move back to the queue is the claim's reason, else a step's.
+
+    Every step a lapsed holder ticked is marked `by_previous_holder` in the same
+    write, whatever state the item stands in: nobody is left to stand behind
+    that tick, so a later holder confirms it before review or a close. A tick
+    someone else made is theirs and stays as it is.
     """
 
     identity = str(row["work_item_id"])
@@ -1555,8 +1561,17 @@ def _expire(
     released = [step for step in checklist if step["id"] in steps]
     for step in released:
         step["claimed_by"] = ""
-    updates: list[str] = ["checklist = ?"] if released else []
-    parameters: list[object] = [model.dumps(checklist)] if released else []
+    gone = [lease for lease in (claim, *steps.values()) if lease is not None]
+    flagged = [
+        step
+        for step in checklist
+        if not step[model.PREVIOUS_HOLDER] and any(_ticked_by(step, lease) for lease in gone)
+    ]
+    for step in flagged:
+        step[model.PREVIOUS_HOLDER] = True
+    changed = bool(released or flagged)
+    updates: list[str] = ["checklist = ?"] if changed else []
+    parameters: list[object] = [model.dumps(checklist)] if changed else []
     reason = claim.reason if claim is not None else next(iter(steps.values())).reason
     with calls.bind(calls.valkama(), leases.EXPIRY_TOOL):
         if claim is not None:
@@ -1568,6 +1583,18 @@ def _expire(
             _log(conn, identity, "checklist_released", step["text"][:120], leases.EXPIRY_AUTHOR)
         _hand_back(conn, identity, leases.EXPIRY_AUTHOR, reason)
     return read_model.item_by_id(conn, identity)
+
+
+def _ticked_by(step: Mapping[str, object], lease: leases.Lease) -> bool:
+    """Whether this step's tick is the lease's holder's: its session, or its unproved name."""
+
+    by = str(step["done_by"] or "")
+    if not step["done"] or not by:
+        return False
+    if lease.session_id is None:
+        return by == lease.holder
+    ids = calls.holder_ids(by)
+    return ids is not None and ids[0] == calls.label_id(lease.session_id)
 
 
 def claim_ready_work_item(
@@ -1659,7 +1686,8 @@ def set_checklist(
 
     A step is text, or `{text, done}`. One that repeats a step the item has —
     the same text, or that step's own `id` — is that step: it keeps its id and
-    its claim, tick and author, so appending to a checklist is sending it with
+    its claim, tick, author and `by_previous_holder`, as stored, so appending
+    to a checklist is sending it with
     the new steps after the old. Only a claimed or completed step the new list
     leaves out needs `force`, because only dropping one discards its state.
 
@@ -1730,6 +1758,7 @@ def set_checklist(
         guards.append("checklist_discard")
     for step in completed:
         step["done_by"] = label
+        step[model.PREVIOUS_HOLDER] = False
     _keep_held(conn, row, str(row["claim_ref"]), replacement)
     identity = str(row["work_item_id"])
     _write_checklist(conn, row, replacement, completed, author)
@@ -1866,6 +1895,9 @@ def tick_checklist_item(
     step["done"] = bool(done)
     step["done_by"] = label if done else ""
     step["claimed_by"] = "" if done else step["claimed_by"]
+    # A tick, even of a step already ticked, is the caller standing behind it;
+    # reopening leaves nothing to confirm.
+    step[model.PREVIOUS_HOLDER] = False
     _keep_held(conn, row, str(row["claim_ref"]), steps)
     _write(conn, row, ["checklist = ?"], [model.dumps(steps)])
     identity = str(row["work_item_id"])

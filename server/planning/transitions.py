@@ -181,6 +181,10 @@ def findings(
         )
         if evidence is None:
             warnings.append(f"{reference} enters {target['name']} with no session or commit ref")
+    if target["category"] in ("review", "completed") and entering:
+        unconfirmed = previous_holder(reference, checklist)
+        if unconfirmed:
+            refusals.append(("previous_holder", unconfirmed))
     if target["is_terminal"] and entering:
         # Cancelled work closes with the steps it never did still open: ticking
         # them would claim work that did not happen. The summary still has to
@@ -222,6 +226,23 @@ def findings(
                 )
             )
     return refusals, warnings
+
+
+def previous_holder(reference: str, checklist: list[dict]) -> str:
+    """What stops review or a close while a lapsed holder's ticks wait for confirmation.
+
+    Nobody stands behind a tick whose holder's lease lapsed, so a fresh tick
+    confirms the work it claims before that work is offered as done. A cancelled
+    close claims nothing, so it is not asked.
+    """
+
+    flagged = sum(1 for step in checklist if step["done"] and step[model.PREVIOUS_HOLDER])
+    if not flagged:
+        return ""
+    return (
+        f"{reference} has {flagged} step(s) ticked by a holder whose lease lapsed:"
+        " tick them again to confirm them, or reopen them"
+    )
 
 
 def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:

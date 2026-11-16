@@ -107,6 +107,37 @@ describe('a record of the work model', () => {
     delete without.withheld
     expect(() => validateWorkItemBrief(without)).toThrow()
   })
+
+  it('reads whose claim lapsed and a step a lapsed holder ticked', () => {
+    const lapsed = {
+      holder: 'codex (session s1)',
+      reason: 'session-ended',
+      at: '2026-01-02T03:04:05Z',
+    }
+    const step = {
+      id: '00000000-0000-4000-8000-000000000011',
+      text: 'One',
+      done: true,
+      claimed_by: '',
+      done_by: 'codex (session s1)',
+      by_previous_holder: true,
+    }
+    const read = validateWorkItemBrief({ ...brief(), lapsed_claim: lapsed, checklist: [step] })
+    expect([read.lapsed_claim, read.checklist[0].by_previous_holder]).toEqual([lapsed, true])
+    // A cause this build does not know, a field the server never sends, and records without them.
+    expect(() =>
+      validateWorkItemBrief({ ...brief(), lapsed_claim: { ...lapsed, reason: 'gone' } }),
+    ).toThrow()
+    expect(() =>
+      validateWorkItemBrief({ ...brief(), lapsed_claim: { ...lapsed, session: 's1' } }),
+    ).toThrow()
+    const without = brief()
+    delete without.lapsed_claim
+    expect(() => validateWorkItemBrief(without)).toThrow()
+    const unflagged: Record<string, unknown> = { ...step }
+    delete unflagged.by_previous_holder
+    expect(() => validateWorkItemBrief({ ...brief(), checklist: [unflagged] })).toThrow()
+  })
 })
 
 describe('the tree of work', () => {

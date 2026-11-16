@@ -289,6 +289,49 @@ def closings(
     }
 
 
+#: The newest release an expiry wrote on each item since its last claim. The event's
+#: call is Valkama's own, under the expiry's tool, so a caller's release never reads
+#: as one; the ids travel as one JSON array, as in `closings`.
+_LAPSED = (
+    "SELECT e.work_item_id, e.detail, e.created_at FROM work_item_events e"
+    " JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.work_item_id IN (SELECT value FROM json_each(?))"
+    " AND e.action = 'released' AND c.tool = ?"
+    " AND NOT EXISTS (SELECT 1 FROM work_item_events n WHERE n.work_item_id = e.work_item_id"
+    "  AND n.action IN ('claimed', 'taken_over') AND n.id > e.id)"
+    " ORDER BY e.id"
+)
+
+
+def lapsed_claims(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> dict[str, dict]:
+    """Whose claim the sweep released on each of `rows`, why and when, by item id.
+
+    Derived from the history, never stored: the newest `released` an expiry wrote,
+    read as `{holder, reason, at}`. Only an open item nobody holds can have one,
+    and a claim since that release ends it; `present` reads an absent item as
+    null. A task only steps held has none, since a step's release names its text,
+    not its holder. One statement for any number of rows.
+    """
+
+    open_states = {
+        str(state[0])
+        for state in conn.execute("SELECT state_id FROM workflow_states WHERE is_terminal = 0")
+    }
+    unheld = [
+        str(row["work_item_id"])
+        for row in rows
+        if not row["claim_ref"] and str(row["state_id"]) in open_states
+    ]
+    found: dict[str, dict] = {}
+    if not unheld:
+        return found
+    for identity, detail, at in conn.execute(_LAPSED, (json.dumps(unheld), leases.EXPIRY_TOOL)):
+        expiry = leases.expiry_of(str(detail))
+        if expiry is not None:
+            found[str(identity)] = {"holder": expiry[1], "reason": expiry[0], "at": at}
+    return found
+
+
 def _closed(row: sqlite3.Row, found: _Closed) -> tuple[str, str | None]:
     """A finished item's closing time and last holder, from what its history says."""
 
@@ -701,6 +744,7 @@ def present(
     unresolved: bool = False,
     events: int | None = None,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
+    lapsed: Mapping[str, dict] | None = None,
     tree: item_tree.Tree | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
@@ -716,7 +760,8 @@ def present(
     mark, carrying the same and `truncated`, the next page after `comments_after`.
     None given is the whole history, which is what every write answers with and
     what a screen draws from. `closed` is what `closings` loaded for a read of
-    many items; absent, the item asks `closing` itself. `tree` is what such a read
+    many items, and `lapsed` what `lapsed_claims` did; absent, the item asks
+    itself. `tree` is what such a read
     loaded of its spaces (`item_tree.of_spaces`); absent, the item loads what is
     under it.
 
@@ -781,6 +826,9 @@ def present(
     # what reads workable, and the codes say why anything else is not given.
     record["withheld"] = queue.withheld(conn, row, facts)
     record["workable"] = not record["withheld"]
+    record["lapsed_claim"] = (lapsed if lapsed is not None else lapsed_claims(conn, [row])).get(
+        identity
+    )
     if not full:
         # A count, under its own name. Calling it `comments` in the brief and
         # `comments` in the full record made one key mean two shapes, which a

@@ -45,6 +45,7 @@ const STEP = (done: boolean, index: number) => ({
   done,
   claimed_by: '',
   done_by: '',
+  by_previous_holder: false,
 })
 
 /** What the open space holds besides the fixture's own two, one fact to each. */

@@ -1034,6 +1034,28 @@ class SweepTestCase(LeaseTestCase):
         )
         self.assertNotIn("error", answer)
 
+    def write(self, meta: dict | None, reference: str | None = None, **groups: object) -> dict:
+        """One `apply_work_item_changes` through a running loop; its payload or its error."""
+
+        return self.mcp(
+            "apply_work_item_changes",
+            {"id": reference or self.reference, "author": "old", **groups},
+            meta,
+            started=True,
+        )
+
+    def tick(
+        self, meta: dict | None, index: int, reference: str | None = None, *, done: bool = True
+    ) -> None:
+        step = service.get_work_item(self.conn, reference or self.reference)["checklist"][index]
+        answer = self.write(
+            meta, reference, checklist_ticks=[{"item_id": step["id"], "done": done}]
+        )
+        self.assertNotIn("error", answer)
+
+    def flags(self, reference: str | None = None) -> list[bool]:
+        return [step["by_previous_holder"] for step in self.read(reference)["checklist"]]
+
     def silent(self, session: str, quiet: timedelta) -> None:
         self.set_session(session, last_seen=(self.now - quiet).strftime(SECOND))
 
@@ -1237,6 +1259,10 @@ class UnprovedHoldTests(SweepTestCase):
             [("lease-expired: user", "valkama", "valkama")],
             [(e["detail"], e["author"], e["identity"]["source"]) for e in released],
         )
+        lapsed = self.read(owner)["lapsed_claim"]
+        self.assertEqual(("user", "lease-expired"), (lapsed["holder"], lapsed["reason"]))
+        # A release of a step names its text, not its holder: nothing to name here.
+        self.assertIsNone(self.read(steps)["lapsed_claim"])
         self.assertEqual(("checklist_released", "only"), self.by_valkama(steps)[0])
         kept = self.read(recent)["claim"]
         self.assertEqual(("user", "unconfirmed"), (kept["holder"], kept["state"]))
@@ -1258,6 +1284,156 @@ class UnprovedHoldTests(SweepTestCase):
             taken = self.claim(codex(TWO), author="codex", started=True)
         self.assertEqual(held(TWO), taken["claim_ref"])
         self.assertEqual(("released", "lease-expired: old"), self.by_valkama()[0])
+
+
+#: What the guard says of an item with one tick a lapsed holder made.
+ONE_UNCONFIRMED = (
+    "[previous_holder] LSE-1 has 1 step(s) ticked by a holder whose lease lapsed:"
+    " tick them again to confirm them, or reopen them"
+)
+SUMMARY = {"done": "All three steps.", "next": "Nothing."}
+
+
+class PreviousHolderTests(SweepTestCase):
+    """A lapsed holder's ticks wait for a confirmation."""
+
+    def refusal(self, answer: dict) -> str:
+        """The guard refusal a batch's transition met, as the error names it."""
+
+        error = json.loads(answer["error"])["error"]
+        self.assertEqual(("workflow_guard", "transition"), (error["code"], error["step"]["group"]))
+        return str(error["message"]).removeprefix("transition: ")
+
+    def lapse_after_ticks(self) -> None:
+        """The item: B ticked step 2 earlier, A holds the item and ticked step 1, then ended."""
+
+        self.tick(codex(TWO), 1)
+        self.take(codex(ONE))
+        self.tick(codex(ONE), 0)
+        self.ended(ONE, timedelta(hours=12, minutes=1))
+
+    def test_the_sweep_marks_the_lapsed_holders_ticks_and_a_close_needs_them_again(
+        self,
+    ) -> None:
+        self.lapse_after_ticks()
+        self.assertEqual(1, self.sweep())
+        item = self.read()
+        self.assertEqual(("", "ready"), (item["claim_ref"], item["state"]["key"]))
+        self.assertIsNotNone(item["started_at"])
+        [release] = [e for e in item["events"] if e["action"] == "released"]
+        self.assertEqual(
+            (f"session-ended: {held(ONE)}", "valkama", "valkama"),
+            (release["detail"], release["author"], release["identity"]["source"]),
+        )
+        self.assertEqual([True, False, False], self.flags())
+        self.assertEqual([held(ONE), held(TWO), ""], [s["done_by"] for s in item["checklist"]])
+
+        self.take(codex(THREE))
+        self.tick(codex(THREE), 2)
+        close = {"summary": SUMMARY, "transition": {"state": "completed"}}
+        self.assertEqual(ONE_UNCONFIRMED, self.refusal(self.write(codex(THREE), **close)))
+        self.assertEqual("dev", self.read()["state"]["key"])  # the refused batch wrote nothing
+
+        self.tick(codex(THREE), 0)
+        step = self.read()["checklist"][0]
+        self.assertEqual((False, held(THREE)), (step["by_previous_holder"], step["done_by"]))
+        self.assertNotIn("error", self.write(codex(THREE), **close))
+        self.assertEqual("completed", self.read()["state"]["category"])
+
+    def test_a_claim_by_number_in_the_grace_marks_the_same_ticks(self) -> None:
+        self.lapse_after_ticks()
+        self.ended(ONE, timedelta(hours=11, minutes=59))
+        self.assertEqual(0, self.sweep())
+        self.assertEqual([False, False, False], self.flags())
+        with self.at_now():
+            self.assertEqual(held(THREE), self.claim(codex(THREE), started=True)["claim_ref"])
+        self.assertEqual([True, False, False], self.flags())
+
+    def test_a_blocked_task_keeps_its_state_and_its_holders_ticks_are_marked(self) -> None:
+        self.take(codex(ONE))
+        self.tick(codex(ONE), 0)
+        blocked = self.write(codex(ONE), transition={"state": "blocked", "reason": "Waiting."})
+        self.assertNotIn("error", blocked)
+        self.silent(ONE, QUIET + MINUTE)
+        self.assertEqual(1, self.sweep())
+        self.assertEqual(("", ["", "", ""], "blocked"), self.holders())
+        self.assertEqual([True, False, False], self.flags())
+
+    def test_a_live_step_holder_stays_and_the_lapsed_claims_ticks_are_marked(self) -> None:
+        self.take(codex(ONE))
+        self.tick(codex(ONE), 0)
+        self.take_step(codex(TWO), 1)
+        self.silent(ONE, timedelta(days=4))
+        self.assertEqual(1, self.sweep())
+        self.assertEqual(("", ["", held(TWO), ""], "dev"), self.holders())
+        self.assertEqual([True, False, False], self.flags())
+
+    def test_force_carries_review_past_the_guard_and_records_it(self) -> None:
+        self.lapse_after_ticks()
+        self.sweep()
+        self.take(codex(THREE))
+        review = {"transition": {"state": "review"}}
+        self.assertEqual(ONE_UNCONFIRMED, self.refusal(self.write(codex(THREE), **review)))
+        forced = self.write(codex(THREE), transition={"state": "review", "force": True})
+        self.assertEqual(["previous_holder"], forced["overridden"])
+        item = self.read()
+        self.assertEqual("review", item["state"]["category"])
+        self.assertIn(
+            ("overridden", "previous_holder"),
+            [(event["action"], event["detail"]) for event in item["events"]],
+        )
+        self.assertEqual([True, False, False], self.flags())
+
+    def test_a_cancelled_close_is_not_asked_to_confirm(self) -> None:
+        self.lapse_after_ticks()
+        self.sweep()
+        cancel = {"summary": SUMMARY, "transition": {"state": "cancelled"}}
+        self.assertNotIn("error", self.write(codex(THREE), **cancel))
+
+    def test_setting_the_steps_again_keeps_the_mark_and_a_reopen_clears_it(self) -> None:
+        self.lapse_after_ticks()
+        self.sweep()
+        before = self.read()["checklist"]
+        kept = service.set_checklist(self.conn, self.reference, ["one", "two", "three", "four"])
+        self.conn.commit()
+        self.assertEqual(
+            [(s["id"], s["by_previous_holder"]) for s in before],
+            [(s["id"], s["by_previous_holder"]) for s in kept["checklist"][:3]],
+        )
+        self.assertFalse(kept["checklist"][3]["by_previous_holder"])
+        self.tick(codex(THREE), 0, done=False)
+        self.assertEqual([False, False, False, False], self.flags())
+
+    def test_the_record_says_whose_claim_lapsed_until_the_next_claim(self) -> None:
+        released = self.new_item("Released by its holder")
+        self.take(codex(TWO), released)
+        self.assertNotIn("error", self.claim(codex(TWO), id=released, release=True, started=True))
+        self.lapse_after_ticks()
+        self.sweep()
+        item = self.read()
+        [release] = [e for e in item["events"] if e["action"] == "released"]
+        lapsed = {"holder": held(ONE), "reason": "session-ended", "at": release["at"]}
+        self.assertEqual(lapsed, item["lapsed_claim"])
+        with self.at_now():
+            rows = {
+                row["reference"]: row for row in service.list_work_items(self.conn, space="LSE")
+            }
+        self.assertEqual(lapsed, rows[self.reference]["lapsed_claim"])
+        self.assertIsNone(rows[released]["lapsed_claim"])
+        self.assertIsNone(self.read(released)["lapsed_claim"])
+
+        self.take(codex(THREE))
+        self.assertIsNone(self.read()["lapsed_claim"])
+        self.assertNotIn("error", self.claim(codex(THREE), release=True, started=True))
+        self.assertIsNone(self.read()["lapsed_claim"])
+
+    def test_a_closed_item_names_no_lapsed_claim(self) -> None:
+        self.lapse_after_ticks()
+        self.sweep()
+        self.assertIsNotNone(self.read()["lapsed_claim"])
+        cancel = {"summary": SUMMARY, "transition": {"state": "cancelled"}}
+        self.assertNotIn("error", self.write(codex(THREE), **cancel))
+        self.assertIsNone(self.read()["lapsed_claim"])
 
 
 if __name__ == "__main__":

@@ -356,6 +356,7 @@
         "question"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 7
     },
     {
@@ -393,6 +394,7 @@
         "not_ready"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 0
     },
     {
@@ -430,6 +432,7 @@
         "goal_or_stage"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 0
     },
     {
@@ -467,6 +470,7 @@
         "goal_or_stage"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 0
     },
     {
@@ -504,6 +508,7 @@
         "goal_or_stage"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 0
     },
     {
@@ -542,6 +547,7 @@
         "ancestor_triage"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 0
     },
     {
@@ -580,6 +586,7 @@
       "last_claim_ref": null,
       "withheld": [],
       "workable": true,
+      "lapsed_claim": null,
       "comment_count": 0
     },
     {
@@ -618,6 +625,7 @@
       "last_claim_ref": null,
       "withheld": [],
       "workable": true,
+      "lapsed_claim": null,
       "comment_count": 0
     },
     {
@@ -654,21 +662,24 @@
           "text": "An agent's",
           "done": false,
           "claimed_by": "claude agent a4d2c8f1e0b3a297 (session 00000000-0000-4000-8000-000000000012)",
-          "done_by": ""
+          "done_by": "",
+          "by_previous_holder": false
         },
         {
           "id": "00000000-0000-4000-8000-000000000014",
           "text": "A person's",
           "done": false,
           "claimed_by": "the owner",
-          "done_by": ""
+          "done_by": "",
+          "by_previous_holder": false
         },
         {
           "id": "00000000-0000-4000-8000-000000000015",
           "text": "A digest's",
           "done": false,
           "claimed_by": "claude (session 388ed4aac64b107a)",
-          "done_by": ""
+          "done_by": "",
+          "by_previous_holder": false
         }
       ],
       "revision": 5,
@@ -681,6 +692,7 @@
         "held"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 2
     },
     {
@@ -723,6 +735,7 @@
         "ancestor_triage"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 0
     },
     {
@@ -763,6 +776,7 @@
         "not_ready"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 1
     },
     {
@@ -797,6 +811,7 @@
         "goal_or_stage"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 0
     },
     {
@@ -831,6 +846,7 @@
         "goal_or_stage"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 0
     },
     {
@@ -865,6 +881,7 @@
         "goal_or_stage"
       ],
       "workable": false,
+      "lapsed_claim": null,
       "comment_count": 0
     }
   ],

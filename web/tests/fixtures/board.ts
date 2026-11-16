@@ -73,6 +73,7 @@ export function boardItem(
     waits_for: [],
     workable: state === 'backlog' || state === 'todo',
     withheld: state === 'backlog' || state === 'todo' ? [] : ['not_ready'],
+    lapsed_claim: null,
     comment_count: 0,
     ...overrides,
   }
@@ -88,6 +89,7 @@ export function boardGoal(
     kind: 'goal',
     workable: false,
     withheld: ['goal_or_stage'],
+    lapsed_claim: null,
     ...overrides,
   })
 }

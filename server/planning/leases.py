@@ -362,8 +362,15 @@ def released_holder(detail: str) -> str:
     no session proved is free text.
     """
 
+    found = expiry_of(detail)
+    return found[1] if found is not None else detail
+
+
+def expiry_of(detail: str) -> tuple[str, str] | None:
+    """The reason and the holder an expiry's `released` detail names; None for a caller's."""
+
     for reason in _EXPIRY_REASONS:
         prefix = f"{reason}: "
         if detail.startswith(prefix):
-            return detail[len(prefix) :]
-    return detail
+            return reason, detail[len(prefix) :]
+    return None

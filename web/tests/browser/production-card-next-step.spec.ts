@@ -27,6 +27,7 @@ const step = (index: number, done: boolean) => ({
   done,
   claimed_by: '',
   done_by: '',
+  by_previous_holder: false,
 })
 
 /** A list of `count` steps, the ones at the `done` places finished. */

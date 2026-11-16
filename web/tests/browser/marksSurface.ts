@@ -37,6 +37,7 @@ const steps = [true, true, false].map((done, index) => ({
   done,
   claimed_by: '',
   done_by: '',
+  by_previous_holder: false,
 }))
 
 /** Items that between them carry every facet value a surface marks. */

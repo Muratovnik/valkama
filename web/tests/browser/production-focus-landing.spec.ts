@@ -177,6 +177,7 @@ for (const input of INPUTS) {
       done: index < 2,
       claimed_by: '',
       done_by: '',
+      by_previous_holder: false,
     }))
     await installBackend(page, { longRead: true, card: (read) => ({ ...read, checklist }) })
     await page.goto(

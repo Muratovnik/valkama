@@ -125,6 +125,7 @@ def step_changed(item: dict, arguments: Mapping[str, object]) -> dict:
             "done": step["done"],
             "claimed_by": step["claimed_by"],
             "done_by": step["done_by"],
+            "by_previous_holder": step["by_previous_holder"],
         },
         **_forced(item),
     }

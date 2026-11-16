@@ -53,6 +53,7 @@
           "question"
         ],
         "workable": false,
+        "lapsed_claim": null,
         "claim": null,
         "description": "",
         "summary": null,

@@ -24,6 +24,7 @@ const step = (done: boolean, index: number) => ({
   done,
   claimed_by: '',
   done_by: '',
+  by_previous_holder: false,
 })
 
 const values = (facet: Parameters<typeof facetMarks>[0], subject: WorkItemBrief, context = {}) =>

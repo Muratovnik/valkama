@@ -53,6 +53,7 @@
           "question"
         ],
         "workable": false,
+        "lapsed_claim": null,
         "comment_count": 7
       }
     }

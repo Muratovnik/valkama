@@ -52,6 +52,7 @@ const item: WorkItemBrief = {
   waits_for: [],
   workable: true,
   withheld: [],
+  lapsed_claim: null,
   labels: [],
   source: '',
   checklist: [],

@@ -23,7 +23,7 @@ import {
   EVENT_DETAIL_MAX,
   LABELS_DETAIL_MAX,
 } from '@/shared/api/planningEventActions.ts'
-import { recordObject, withheldField } from '@/shared/api/planningRecordRules.ts'
+import { lapsedClaimField, recordObject, withheldField } from '@/shared/api/planningRecordRules.ts'
 import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 
 export const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
@@ -111,6 +111,8 @@ const checklistStepSchema = strictObject({
   done: z.boolean(),
   claimed_by: actor(),
   done_by: actor(),
+  /** Ticked by a holder whose lease lapsed: a fresh tick confirms it before review or a close. */
+  by_previous_holder: z.boolean(),
   executor: executorSchema.optional(),
 })
 
@@ -149,6 +151,8 @@ const workItemBriefShape = {
   workable: z.boolean(),
   /** Why the queue does not give it, each reason once, in the server's one order. */
   withheld: withheldField(),
+  /** Whose claim the lease sweep released, until the next claim. */
+  lapsed_claim: lapsedClaimField(),
   /**
    * When a finished item closed: its latest transition. Null for open work, and
    * absent from a server that predates it.
