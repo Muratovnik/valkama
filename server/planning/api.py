@@ -433,6 +433,7 @@ def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         parent=_optional_text(payload, "parent"),
         author=_author(payload),
         acceptance=payload.get("acceptance"),
+        projects=payload.get("projects"),
     )
 
 
@@ -471,6 +472,7 @@ def _edited(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         kind=_optional_text(payload, "kind"),
         parent=_optional_text(payload, "parent"),
         rank=_optional_text(payload, "rank"),
+        projects=payload.get("projects"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
     )

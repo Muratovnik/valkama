@@ -22,6 +22,7 @@ from . import (
     api,
     calls,
     images,
+    item_projects,
     mention_records,
     model,
     person_events,
@@ -57,6 +58,12 @@ _EDITED_LABELS = {
         "description": "Labels to take off the item; one it does not have is"
         " ignored. Not with labels.",
     },
+}
+#: The projects an item changes, by their ids in the registry: the whole set.
+_PROJECTS = {
+    "type": "array",
+    "items": {"type": "string"},
+    "maxItems": item_projects.MAX_PROJECTS,
 }
 WORK_ITEM_REFERENCE = {
     "type": "string",
@@ -375,7 +382,8 @@ TOOLS = [
         " space whose title or description share the new title's words, best first,"
         " each by reference and title: read them, and merge the new item into one that"
         " is the same change. A hint, not a check: nothing is refused on it, and an"
-        " empty list does not prove there is no duplicate.",
+        " empty list does not prove there is no duplicate. projects names the projects"
+        " the item changes. A goal or stage names no projects.",
         WRITES,
         {
             "space": _SPACE,
@@ -389,6 +397,7 @@ TOOLS = [
             },
             "description": _STR,
             "labels": _LABELS,
+            "projects": _PROJECTS,
             "source": {
                 "type": "string",
                 "description": "Anchor into the owning document, e.g."
@@ -660,9 +669,10 @@ TOOLS = [
         "Fold items that are one change — one cause, one fix — into the item that"
         " survives (id), all or nothing. Their checklist steps, keeping ids, ticks"
         " and step claims, their discussion threads whole, questions with their"
-        " replies, refs and links move to it; each merged item is linked duplicates"
-        " to it, gets a summary naming it, is released and closes in its cancelled"
-        " state. Their history, reports with their threads, description and parent"
+        " replies, refs, links and projects move to it; each merged item is linked"
+        " duplicates to it, gets a summary naming it, is released and closes in its"
+        " cancelled state. A project more than one of them names keeps the strongest"
+        " source: named, then commits, then migrated. Their history, reports with their threads, description and parent"
         " stay on them. Refused before anything is written:"
         " an item in another space, a closed item, a merged item with children, a goal"
         " or stage with a task (goals and stages merge only with each other),"
@@ -757,6 +767,11 @@ TOOLS = [
                     },
                     "parent": _PARENT,
                     "rank": _RANK,
+                    "projects": _PROJECTS
+                    | {
+                        "description": "projects replaces the projects the item names;"
+                        " the item stays in its space.",
+                    },
                     "mentions": _TEXT_MENTIONS,
                 },
             },

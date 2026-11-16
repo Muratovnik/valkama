@@ -25,6 +25,7 @@ from . import agents as planning_agents
 from . import (
     calls,
     images,
+    item_projects,
     item_tree,
     leases,
     model,
@@ -218,7 +219,10 @@ def list_work_items(
     rows = conn.execute(query, parameters).fetchall()
     closed = read_model.closings(conn, rows)
     tree = _page_tree(conn, rows)
-    return [read_model.present(conn, row, closed=closed, tree=tree) for row in rows]
+    projects = item_projects.of_items(conn, rows)
+    return [
+        read_model.present(conn, row, closed=closed, tree=tree, projects=projects) for row in rows
+    ]
 
 
 def _page_tree(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> item_tree.Tree:
@@ -358,16 +362,24 @@ def search_work_items(
         )
         if rows is not None:
             tree = _page_tree(conn, rows)
-            return [_word_hit(conn, row, found, tree) for row in rows]
+            projects = item_projects.of_items(conn, rows)
+            return [_word_hit(conn, row, found, tree, projects) for row in rows]
     return _phrase_search(conn, text, space_id=space_id, limit=limit, offset=offset)
 
 
 def _word_hit(
-    conn: sqlite3.Connection, row: sqlite3.Row, found: list[str], tree: item_tree.Tree
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    found: list[str],
+    tree: item_tree.Tree,
+    projects: Mapping[str, list[dict]],
 ) -> dict:
     """One item a word search found, with the lines that say why (`words.hits`)."""
 
-    return {**read_model.present(conn, row, tree=tree), **words.hits(conn, row, found)}
+    return {
+        **read_model.present(conn, row, tree=tree, projects=projects),
+        **words.hits(conn, row, found),
+    }
 
 
 def _phrase_search(
@@ -424,8 +436,9 @@ def _phrase_search(
     ).fetchall()
     found = []
     tree = _page_tree(conn, rows)
+    projects = item_projects.of_items(conn, rows)
     for row in rows:
-        item = read_model.present(conn, row, tree=tree)
+        item = read_model.present(conn, row, tree=tree, projects=projects)
         comment_hit = row["comment_hit"] or decisions.get(str(row["work_item_id"]))
         if comment_hit:
             item["comment_hit"] = str(comment_hit)[:240]
@@ -529,6 +542,7 @@ def create_work_item(
     parent: str | None = None,
     author: str | None = None,
     acceptance: object = None,
+    projects: object = None,
 ) -> dict:
     """A new item, placed where the work model puts it, accepted when it is accepted work.
 
@@ -538,6 +552,8 @@ def create_work_item(
     in ready, and a goal or stage accepted at once stands in the service state:
     `created` names no state for it, and `accepted` and `opened` follow. A named
     state is held to the refusals a move there meets (`transitions.placement`).
+    `projects` names the projects a task changes, each `named`
+    (`item_projects`); a goal or stage names none.
     """
 
     space_row = _space_row(conn, space)
@@ -548,6 +564,8 @@ def create_work_item(
     stored_kind = model.work_item_kind(named_kind)
     if named_kind == "stage" and not parent:
         raise model.PlanningError("a stage is a container under a parent; without one it is a goal")
+    changes = item_projects.named(projects) or []
+    item_projects.require_nameable(changes, container=stored_kind == model.CONTAINER_KIND)
     named = model.named_basis(acceptance)
     parent_row = _parent_row(conn, space_id, parent)
     parent_id = None if parent_row is None else str(parent_row["work_item_id"])
@@ -598,6 +616,7 @@ def create_work_item(
             starts,
         ),
     )
+    item_projects.replace(conn, item_id, changes)
     opened = target["category"] == model.SERVICE_CATEGORY
     # A goal or stage accepted at once names no state: its opening says where it stands.
     _log(conn, item_id, "created", "" if opened else str(target["key"]), author)
@@ -623,6 +642,7 @@ def update_work_item(
     kind: str | None = None,
     parent: str | None = None,
     rank: str | None = None,
+    projects: object = None,
     expected_revision: int | None = None,
     author: str | None = None,
 ) -> dict:
@@ -634,9 +654,15 @@ def update_work_item(
     item has, read under the write lock (`model.edited_labels`). An edit that
     changes the set is the one edit the history records: a `labels_changed` event
     with the set before and after (`model.labels_change`), under `author`.
+    `projects` replaces the projects the item names, each then `named`
+    (`item_projects.replace`); the item stays in its space. Like `rank`, it is an
+    edit with no history event.
     """
 
     row = _row_for_write(conn, reference, expected_revision)
+    changes = item_projects.named(projects)
+    if changes is not None:
+        item_projects.require_nameable(changes, container=row["kind"] == model.CONTAINER_KIND)
     current = model.labels(json.loads(str(row["labels"])))
     labels = model.edited_labels(current, labels, labels_add, labels_remove)
     change = model.labels_change(current, labels)
@@ -675,8 +701,15 @@ def update_work_item(
         parameters.append(moved_to)
         if row["parent_id"] is not None and str(row["parent_id"]) != moved_to:
             left = str(row["parent_id"])
-    edited = _edited(row, updates, parameters)
-    if edited is not None:
+    reprojected = changes is not None and item_projects.differs(
+        conn, str(row["work_item_id"]), changes
+    )
+    edited = ",".join(
+        name
+        for name in (_edited(row, updates, parameters), "projects" if reprojected else None)
+        if name
+    )
+    if edited:
         # Before the placement, which may write first: the row is inserted once.
         calls.call_id(conn, str(row["work_item_id"]), edited=edited)
     if placement is not None:
@@ -688,9 +721,11 @@ def update_work_item(
         if placed is not None:
             updates.append("position = ?")
             parameters.append(placed)
-    if not updates:
+    if not updates and not reprojected:
         return read_model.present(conn, row, full=True)
     _write(conn, row, updates, parameters)
+    if reprojected and changes is not None:
+        item_projects.replace(conn, str(row["work_item_id"]), changes)
     if left is not None:
         # The container keeps that it had this child: what it derives counts the child.
         _log(conn, left, "child_left", read_model.reference(conn, row), author)
@@ -1885,8 +1920,9 @@ def merge_work_items(
     the steps someone ticked, the discussion, the commits, the links that made
     other work wait. Here the survivor takes all of that — the steps with their
     ids, ticks and step claims, the discussion threads whole, the questions with
-    their replies, a list with the comment it stands under, the refs, and the
-    links in their own direction — and each
+    their replies, a list with the comment it stands under, the refs, the
+    links in their own direction, and the projects, a project more than one of
+    them names keeping its strongest source — and each
     merged item is linked `duplicates` to it, given a summary naming it,
     released and closed in its cancelled state. What describes the merged item
     itself stays with it: its history, its reports with their threads, its
@@ -2105,6 +2141,8 @@ def _fold(
                 (survivor_id, identity),
             ).rowcount,
             "links": _repoint_links(conn, identity, survivor_id, involved, author),
+            # A project both name keeps the stronger source (`item_projects.carry`).
+            "projects": item_projects.carry(conn, identity, survivor_id),
         }
         # The person's pin follows the work. A survivor pinned already keeps its own
         # pin, from when it was pinned, and the merged item is left with none.

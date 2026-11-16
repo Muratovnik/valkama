@@ -20,7 +20,7 @@ import json
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping, Sequence
 
-from . import calls, item_tree, leases, mentions, model, states, subscriptions
+from . import calls, item_projects, item_tree, leases, mentions, model, states, subscriptions
 
 
 @contextlib.contextmanager
@@ -757,6 +757,7 @@ def present(
     events: int | None = None,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
     tree: item_tree.Tree | None = None,
+    projects: Mapping[str, list[dict]] | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
 
@@ -773,7 +774,8 @@ def present(
     what a screen draws from. `closed` is what `closings` loaded for a read of
     many items; absent, the item asks `closing` itself. `tree` is what such a read
     loaded of its spaces (`item_tree.of_spaces`); absent, the item loads what is
-    under it.
+    under it. `projects` is what `item_projects.of_items` read for such a read in
+    one walk; absent, the item reads its own.
 
     `state` is what `states.public_state` makes of the item's state: null for an
     accepted open container, which says what it derives as `container_state`
@@ -800,6 +802,11 @@ def present(
         "claim_state": None,
         "parent_id": row["parent_id"],
         "labels": model.labels(loads(row["labels"])),
+        "projects": (
+            item_projects.of_item(conn, row)
+            if projects is None
+            else projects.get(str(row["work_item_id"]), [])
+        ),
         "source": row["source"],
         "checklist": model.checklist(row["checklist"]),
         "revision": int(row["revision"]),

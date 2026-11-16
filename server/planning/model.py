@@ -142,6 +142,7 @@ UPDATABLE_FIELDS = (
     "kind",
     "parent",
     "rank",
+    "projects",
 )
 
 

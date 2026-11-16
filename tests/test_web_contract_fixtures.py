@@ -601,7 +601,8 @@ class _Scenario:
             goal = item("Tree goal", kind="goal", acceptance="assignment")
             stage = item("Tree stage", kind="stage", parent=goal)
             nested = item("Tree nested stage", kind="stage", parent=stage)
-            item("Tree work in the nested stage", parent=nested)
+            # The goal and both stages above it read this project from it.
+            item("Tree work in the nested stage", parent=nested, projects=[PROJECT])
             item("Tree work under the stage", parent=stage)
             finished = item("Tree work finished under the goal", parent=goal)
             service.set_summary(conn, finished, {"done": "Finished.", "next": "Nothing."})

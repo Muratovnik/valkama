@@ -277,6 +277,7 @@ HTTP answer of a write to an item -- carries these fields of the model:
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
 | `workable` | whether it may be taken now: a task, held by nobody, in `triage` or `ready` in a workflow that leads from there to an active state, with nothing unfinished blocking it. It is the rule `claim_ready_work_item` takes work by |
+| `projects` | the projects it changes, by `project_id`: each with the registry's `display_name` (`null` while the registry does not record it) and its `source`, `named`, `commits` or `migrated` (see [The projects an item changes](#the-projects-an-item-changes)). A goal's or stage's are those of every task under it |
 
 Four other answers carry only some of these fields:
 
@@ -349,6 +350,33 @@ replaces the word; none is read as its replacement.
 | `category` of a list, and `state` wherever it is named | `backlog`, `queued` | `backlog is now triage` or `queued is now ready`, then what the input takes: the categories, or the workflow's states as an unknown name lists them |
 | `state` wherever it is named | `todo` | what an unknown state name gets, listing the workflow's states |
 | `category` of a list, and `state` wherever it is named | `container` | `container is not a category: an accepted goal or stage shows container_state; accept one with ready` |
+
+### The projects an item changes
+
+A task names the projects it changes, at most 20 and each once, by their ids in
+the [project registry](../README.md#project-registry); the space it lies in does
+not change with them. `create_work_item` takes them as `projects`, and the
+`update` group of `apply_work_item_changes` (and `POST
+/api/planning/work-item/update`) replaces the whole set with `projects`, each
+project it names then `named`. That edit is guarded by `expected_revision` and
+bumps the revision once, records no history event, and writes nothing when the
+set and its sources are what the item has. Each project has one `source`: `named`
+by whoever filed or edited the item, `commits` derived from the repositories of
+its commits, or `migrated`, its space's former project when the migration found
+nothing else. A project that comes by two ways keeps the strongest, in that
+order.
+
+A goal or stage names no projects. Its `projects` are those of every task under
+it at any depth, each project once with the strongest source any of them gives
+it. Refused with `invalid_request` and the code `[project]`, before anything is
+written:
+
+- a project the registry does not record: `project X is not registered:
+  registered projects are …`;
+- any project while the registry cannot be read: `the project registry cannot be
+  read, so projects cannot be named now`. A write that names no projects passes;
+- projects on a goal or stage: `a goal or stage names no projects: the tasks
+  under it do`.
 
 ### Naming a state
 
@@ -2047,12 +2075,15 @@ What moves to the survivor:
   same merge stays on the merged item, because moved it would tie the survivor
   to itself. A `blocks` link that arrives can make the survivor block work it
   did not block before, and one into it can make it wait.
+- the [projects](#the-projects-an-item-changes), a project more than one of them
+  names keeping the strongest source: `named`, then `commits`, then `migrated`.
+  `moved.projects` counts the merged item's projects.
 
 Each merged item is then linked `duplicates` to the survivor, gets a summary
-naming it ("Merged into MAIN-12, which now holds its 2 steps, 1 comment, 0 refs
-and 1 link.", `next` "Continue in MAIN-12.", `why` the reason), loses its claim
-and closes in the first `cancelled` state its workflow reaches from where it
-stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
+naming it ("Merged into MAIN-12, which now holds its 2 steps, 1 comment, 0 refs,
+1 link and 0 projects.", `next` "Continue in MAIN-12.", `why` the reason), loses
+its claim and closes in the first `cancelled` state its workflow reaches from
+where it stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
 saying what came in. What describes the merged item itself stays with it: its
 history, the [mentions](#mentions) of it, its reports, its description, labels and
 parent. The

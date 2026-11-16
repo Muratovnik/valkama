@@ -212,7 +212,7 @@ class MergeMovesTests(MergeTestCase):
         self.assertEqual("triage", survivor["state"]["key"])
         self.assertEqual(
             f"Merged {self.first}, {self.second} into this item: 3 steps, 2 comments,"
-            " 1 ref and 2 links moved here. one parser bug",
+            " 1 ref, 2 links and 0 projects moved here. one parser bug",
             survivor["comments"][-1]["body"],
         )
 
@@ -224,13 +224,13 @@ class MergeMovesTests(MergeTestCase):
                     "reference": self.first,
                     "work_item_id": self.before[self.first]["work_item_id"],
                     "state": "cancelled",
-                    "moved": {"steps": 2, "comments": 2, "refs": 1, "links": 2},
+                    "moved": {"steps": 2, "comments": 2, "refs": 1, "links": 2, "projects": 0},
                 },
                 {
                     "reference": self.second,
                     "work_item_id": self.before[self.second]["work_item_id"],
                     "state": "cancelled",
-                    "moved": {"steps": 1, "comments": 0, "refs": 0, "links": 0},
+                    "moved": {"steps": 1, "comments": 0, "refs": 0, "links": 0, "projects": 0},
                 },
             ],
             self.answer["merged"],
@@ -477,7 +477,8 @@ class MergeSurfaceTests(MergeTestCase):
             set(answer),
         )
         self.assertEqual(
-            {"steps": 1, "comments": 0, "refs": 0, "links": 0}, answer["merged"][0]["moved"]
+            {"steps": 1, "comments": 0, "refs": 0, "links": 0, "projects": 0},
+            answer["merged"][0]["moved"],
         )
         verbose = mcp_surface.call_tool(
             self.conn,

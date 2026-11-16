@@ -412,9 +412,10 @@ When two items turn out to be one change — the same finding filed twice, one
 cause found from two places — `merge_work_items` folds them into the item that
 survives (`id`), with `items` the ones that fold in and a `reason`. The
 survivor takes their steps (ids, ticks and step claims kept), discussion
-threads whole, questions with their replies, refs and links; a report's thread
-stays on the merged item with the report. A list goes with the comment it stands
-under, so a report's list stays with the report. Each merged item is linked
+threads whole, questions with their replies, refs, links and projects (a project
+more than one of them names keeps the strongest source: named, then commits, then
+migrated); a report's thread stays on the merged item with the report. A list goes
+with the comment it stands under, so a report's list stays with the report. Each merged item is linked
 `duplicates` to it, gets a summary naming it and closes in its cancelled state. It is refused, writing nothing,
 for an item another session holds (unless `force`), a closed item, an item in
 another space, a goal or stage with a task, or a merged item with children. Merge before handing the work to

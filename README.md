@@ -534,8 +534,8 @@ exact shapes are in
 
 Two items filed for one change — the same finding twice, or one cause found in
 two places — are folded together with `merge_work_items`. The surviving item
-takes their steps, discussion, refs and links, and each merged item closes as
-its duplicate with its own history intact
+takes their steps, discussion, refs, links and projects, and each merged item
+closes as its duplicate with its own history intact
 ([details](docs/connection-contract.md#merging-items-that-are-one-change)).
 
 A claim also says whether anyone is still behind it. When the client proves its
