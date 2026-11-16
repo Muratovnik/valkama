@@ -956,7 +956,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   its column
   at the plot's top — on the left where the right has no room, on the roomier side drawn
   narrower down to 12rem where neither holds it, and above its element where neither has even
-  that. A hint keeps 8px from the window's edge. `check:ui-system` refuses a side written at a
+  that. Every period of a chart asks the chart's frame (`data-hint-frame`) for the room of
+  the widest hint, not of its own: the right inside the frame for every period that has it,
+  the left past them, so along the chart the side changes once and never jumps between
+  neighbours; a frame with that room on neither side gives the roomier side of the window.
+  A hint keeps 8px from the window's edge. `check:ui-system` refuses a side written at a
   call site, save an exception its register names with the reason. Every hint states its kind, and the kind says when it shows: `name` is
   the words of an element that shows only a glyph, shown whenever it is pointed at;
   `clipped` is the whole of words its element shows cut, shown only while they are cut;

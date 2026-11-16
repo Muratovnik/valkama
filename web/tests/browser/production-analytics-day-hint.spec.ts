@@ -12,13 +12,16 @@
  * The hint stands beside the day's column — to its right, or to its left where the window has no
  * room there — at the same height for every day, so moving to the next day moves it sideways only,
  * and it covers nothing of the day it speaks for: at 1440 and 1280 pixels and at the narrowest
- * window that opens the days as a plot. The keyboard shows the same hint on the day and on its
+ * window that opens the days as a plot. Along four weeks of days it stays inside the chart's frame
+ * and on the right up to the days past which the right has no room, then on the left: its side
+ * changes once, at 1440 pixels, where the chart fits its frame, and at 1024, where it scrolls.
+ * Each day once chose by its own hint's width, so the side jumped from one day to the next. The keyboard shows the same hint on the day and on its
  * segments, and it stays put as focus climbs into them and back.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { openReport, record } from './analyticsPage.ts'
+import { openReport, pageAt, record } from './analyticsPage.ts'
 import type { Parts, Shown } from './dayHintPage.ts'
 import {
   dayParts,
@@ -209,6 +212,70 @@ for (const width of WIDTHS)
     expect(Math.abs(next.box.top - first.box.top), 'the same height').toBeLessThanOrEqual(0.5)
     expect(Math.abs(opening.box.top - first.box.top), 'the same height').toBeLessThanOrEqual(0.5)
     expect(place.first.side, 'the first day: to the right, where there is room').toBe('right')
+  })
+
+/** Four weeks of the task section: twenty-eight days. */
+const WEEKS = pageAt({ period: 'weeks4', by: 'work_item' })
+
+for (const [width, scrolls] of [
+  [1440, false],
+  [1024, true],
+] as const)
+  test(`passing along four weeks of days, the hint changes its side once, inside the chart, at ${width}px`, async ({
+    page,
+  }, info) => {
+    const days = await openDays(page, width, undefined, WEEKS)
+    await expect(days.locator('.period-slot'), 'four weeks of days').toHaveCount(28)
+    const frame = await days.locator('.period-frame').evaluate((node) => {
+      const { left, right } = node.getBoundingClientRect()
+      return { left, right, scrolls: node.scrollWidth > node.clientWidth }
+    })
+    // The days inside the frame: one the chart has scrolled out of it is not passed.
+    const inside = await days.locator('.period-column').evaluateAll(
+      (columns, { left, right }) =>
+        columns.flatMap((column, index) => {
+          const box = column.getBoundingClientRect()
+          return box.left >= left && box.right <= right ? [index] : []
+        }),
+      frame,
+    )
+    const texts = async () => {
+      const shown = await hintsNow(page)
+      return shown.map((one) => one.text)
+    }
+    await page.mouse.move(0, 0)
+    const passed: { box: Shown['box']; index: number; side: string }[] = []
+    let before: string[] = []
+    for (const index of inside) {
+      const parts = await dayParts(page, index)
+      await page.mouse.move(middleOf(parts.column).x, parts.field.top + 2, { steps: 4 })
+      await expect.poll(texts, `day ${index}: its own hint`).not.toEqual(before)
+      const shown = await settledHint(page)
+      before = [shown.text]
+      passed.push({ index, box: shown.box, side: placeOf(shown.box, parts).side })
+    }
+    await record(info, `day-hint-sides-${width}`, { frame, passed })
+
+    expect(frame.scrolls, 'the chart scrolls in its frame').toBe(scrolls)
+    expect(passed.length, 'days passed').toBeGreaterThan(20)
+    const sides = passed.map((one) => one.side)
+    expect(sides[0], 'the first day: to the right').toBe('right')
+    expect(
+      sides.filter((side) => side === 'neither'),
+      'beside its day',
+    ).toEqual([])
+    expect(
+      sides.filter((side, at) => at > 0 && side !== sides[at - 1]),
+      `one change of side along ${sides.join(' ')}`,
+    ).toEqual(['left'])
+    for (const { box, index } of passed) {
+      expect(box.left, `day ${index}: inside the chart's frame`).toBeGreaterThanOrEqual(
+        frame.left - 0.5,
+      )
+      expect(box.right, `day ${index}: inside the chart's frame`).toBeLessThanOrEqual(
+        frame.right + 0.5,
+      )
+    }
   })
 
 test(`the narrowest window that draws the days as a plot is ${NARROWEST}px`, async ({ page }) => {

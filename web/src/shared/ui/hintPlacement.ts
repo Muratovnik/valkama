@@ -23,6 +23,15 @@
  * side has that much: left to the library, a side with no room squeezed the hint into what room
  * it had, a word a line. Everywhere the hint keeps `EDGE` from the window's edge, and the library
  * flips a hint below its element to above it where the window has no room below.
+ *
+ * Along a list of columns every column asks the same: whether a hint as wide as `WIDEST` fits
+ * beside it inside the chart's frame (`data-hint-frame`, else the window). So every period of a
+ * chart puts its hint on the right, and only the periods past where the right has no room put it
+ * on the left: the side changes once along the chart. Asked by each hint's own width, the side
+ * jumped from one period to the next wherever a wider hint stood beside a narrower one. A frame
+ * with that room on neither side of a period, as a chart of a few wide days has, gives it the
+ * roomier side of the window, as a hint outside a chart has: narrowed to the frame, a hint of
+ * long names was drawn a word a line, taller than the window.
  */
 import type { TooltipKind } from '@/shared/ui/tooltipAnchors.ts'
 
@@ -64,6 +73,8 @@ export interface HintSetting {
   window: number
   /** The side a registered exception writes (`SIDED_TOOLTIPS`), placed against its element. */
   asked?: { align: HintAlign; side: HintSide } | null
+  /** The box a list of columns keeps its hints inside across, where it declares one. */
+  frame?: Pick<Box, 'left' | 'right'> | null
 }
 
 export interface HintPlace {
@@ -119,27 +130,46 @@ export function placeWhole({ inset, letter, scale, window }: WholeSetting): Whol
   }
 }
 
-/** A hint beside `aside`, on the side asked where its lines fit, else where there is room. */
+/**
+ * A hint beside `aside`, on the side asked where its lines fit, else where there is room: inside
+ * the frame of a list of columns, where every column asks for `WIDEST`, and inside the window.
+ */
 function beside(
-  { aside, rem, width, window }: HintSetting,
+  { aside, frame, list, rem, width, window }: HintSetting,
   side: 'left' | 'right',
   align: HintAlign,
 ): HintPlace {
-  const room = {
-    left: aside.left - OFFSET - EDGE,
-    right: window - aside.right - OFFSET - EDGE,
-  }
+  const roomWithin = (bounds: Pick<Box, 'left' | 'right'>) => ({
+    left: aside.left - OFFSET - bounds.left,
+    right: bounds.right - aside.right - OFFSET,
+  })
+  const shown = { left: EDGE, right: window - EDGE }
+  const room = roomWithin(
+    frame
+      ? { left: Math.max(shown.left, frame.left), right: Math.min(shown.right, frame.right) }
+      : shown,
+  )
   const other = side === 'left' ? 'right' : 'left'
-  const need = Math.min(WIDEST * rem, width)
+  const need = list === 'columns' ? WIDEST * rem : Math.min(WIDEST * rem, width)
   if (room[side] >= need) return { align, aside: true, side }
   if (room[other] >= need) return { align, aside: true, side: other }
-  const roomier = room[other] > room[side] ? other : side
-  return room[roomier] >= NARROWEST_BESIDE * rem
-    ? { align, aside: true, side: roomier, widest: room[roomier] }
+  const open = roomWithin(shown)
+  const roomier = open[other] > open[side] ? other : side
+  if (open[roomier] >= need) return { align, aside: true, side: roomier }
+  return open[roomier] >= NARROWEST_BESIDE * rem
+    ? { align, aside: true, side: roomier, widest: open[roomier] }
     : ABOVE
 }
 
 const LISTS: readonly HintList[] = ['rows', 'columns']
+
+/** The frame a list of columns keeps its hints inside, as the nearest `data-hint-frame` says. */
+function frameOf(container: HTMLElement, list: HintList): Pick<Box, 'left' | 'right'> | null {
+  const frame = list === 'columns' ? container.closest('[data-hint-frame]') : null
+  if (!frame) return null
+  const { left, right } = frame.getBoundingClientRect()
+  return { left, right }
+}
 
 /** The list `element` stands in, as the nearest container that declares one says. */
 export function hintListOf(element: Element): { container: HTMLElement; list: HintList } | null {
@@ -214,6 +244,7 @@ export function hintPlaceOf(
   const place = placeHint({
     aside,
     asked,
+    frame: declared ? frameOf(declared.container, declared.list) : null,
     kind,
     list: declared?.list ?? null,
     rem,

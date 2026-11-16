@@ -108,6 +108,48 @@ test('a list with no room on the right puts the hint on the left', () => {
   })
 })
 
+test('along a chart every period puts its hint on one side, inside the frame, whatever its width', () => {
+  // Twenty-eight periods 28px wide, 2px apart, in a frame from 532 to 1416; their hints alternate
+  // between 180px and the widest, 320px.
+  const frame = { left: 532, right: 1416 }
+  const placed = Array.from({ length: 28 }, (_, index) => {
+    const aside = box(568 + index * 30, 596 + index * 30)
+    const place = placeHint(
+      setting({ aside, frame, list: 'columns', width: index % 2 ? 320 : 180 }),
+    )
+    return { aside, place }
+  })
+  const sides = placed.map(({ place }) => place.side)
+  const changes = sides.filter((side, index) => index > 0 && side !== sides[index - 1])
+  assert.deepEqual(changes, ['left'], sides.join(' '))
+  assert.equal(sides[0], 'right')
+  for (const { aside, place } of placed) {
+    // Drawn at most 320px, or as wide as its place allows.
+    const drawn = place.widest ?? 320
+    const [from, to] =
+      place.side === 'right'
+        ? [aside.right + 6, aside.right + 6 + drawn]
+        : [aside.left - 6 - drawn, aside.left - 6]
+    assert.ok(from >= frame.left && to <= frame.right, `${place.side} at ${aside.left}`)
+  }
+})
+
+test('a chart’s frame narrower than the window leaves less room beside a period', () => {
+  // 1440 - 1000 - 14 = 426 in the window; 1200 - 1000 - 6 = 194 inside the frame.
+  const aside = box(970, 1000)
+  assert.equal(placeHint(setting({ aside, list: 'columns' })).side, 'right')
+  assert.equal(
+    placeHint(setting({ aside, frame: { left: 300, right: 1200 }, list: 'columns' })).side,
+    'left',
+  )
+  // A frame from 700 to 1200 holds 320px on neither side of it (264 and 194): the roomier side
+  // of the window, 956px on the left, at the hint's whole width rather than narrowed.
+  assert.deepEqual(
+    placeHint(setting({ aside, frame: { left: 700, right: 1200 }, list: 'columns' })),
+    { align: 'start', aside: true, side: 'left' },
+  )
+})
+
 test('a hint wider than either side is drawn narrower on the roomier one, down to 12rem', () => {
   // Drawn at most 320px: beside a row ending at 1200 the right holds 226 and the left 1086.
   const wide = { list: 'columns', width: 400 } as const

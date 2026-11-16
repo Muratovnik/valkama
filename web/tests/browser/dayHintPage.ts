@@ -5,7 +5,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { openReport, serve } from './analyticsPage.ts'
+import { openReport, serve, TASK_REPORT } from './analyticsPage.ts'
 import type { Answer } from './analyticsPage.ts'
 
 export interface Box {
@@ -173,10 +173,10 @@ export const dayWithIdleSegment = (page: Page) =>
 export const pastTheDelay = (page: Page) =>
   page.evaluate(() => new Promise((done) => setTimeout(done, 800)))
 
-/** The days of the task section, drawn as a plot at `width`. */
-export async function openDays(page: Page, width: number, answer?: Answer) {
+/** The days of the task section, drawn as a plot at `width`: of this week, unless `address` says. */
+export async function openDays(page: Page, width: number, answer?: Answer, address = TASK_REPORT) {
   await serve(page, answer)
-  const analytics = await openReport(page, width)
+  const analytics = await openReport(page, width, address)
   const days = analytics.locator('.spending-days')
   await expect(days).toHaveAttribute('data-shown', 'chart')
   // The plot in the middle of the window, so a hint has room over and under it.

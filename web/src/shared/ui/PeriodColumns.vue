@@ -291,12 +291,14 @@ function focus(event: FocusEvent, index: number, at: number | null) {
         @follow="(key, event) => emit('follow', key, event)"
         @select="(key) => emit('series', key)"
       />
+      <!-- The chart's frame: a period's hint stands beside its column inside it. -->
       <div
         ref="frame"
         class="period-frame"
         :class="{ 'period-acting': acting }"
         :style="{ '--period-gutter': gutter }"
         v-bind="hiddenEdges"
+        data-hint-frame
       >
         <div
           ref="plot"
