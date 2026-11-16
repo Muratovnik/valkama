@@ -51,7 +51,7 @@ describe('the live-work frame', () => {
 
   it('reads a space no project binds, a session under no space, and an empty frame', () => {
     const unbound = {
-      spaces: [{ ...space, project_id: null, rows: [] }],
+      spaces: [{ ...space, projects: [], default_project: null, rows: [] }],
       elsewhere: [{ ...session, title: null, folder: '', state: 'waiting', long: true }],
     }
     expect(validateLiveFrame(unbound)).toEqual(unbound)

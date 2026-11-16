@@ -26,7 +26,8 @@ function tallFrame() {
   frame.spaces.push({
     key: 'ZED',
     name: 'Long list',
-    project_id: 'example-project',
+    projects: [{ project_id: 'example-project', display_name: 'Example project' }],
+    default_project: 'example-project',
     rows: Array.from({ length: 20 }, (_, index) =>
       frameRow(`ZED-${index + 1}`, { state: index % 2 ? 'waiting' : 'working', agents: index % 3 }),
     ),

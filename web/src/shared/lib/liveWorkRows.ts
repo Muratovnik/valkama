@@ -25,7 +25,7 @@ export interface DepartedRow {
   /** The rows that stood before it in its space, nearest first. */
   before: readonly string[]
   row: LiveRow
-  space: Pick<LiveSpace, 'key' | 'name' | 'project_id'>
+  space: Pick<LiveSpace, 'key' | 'name' | 'projects' | 'default_project'>
 }
 
 /** Every row shown in `spaces`, in order, with its space, as a departure would record it. */
@@ -42,7 +42,12 @@ export function departures(
       left.push({
         reference: row.reference,
         departed: {
-          space: { key: space.key, name: space.name, project_id: space.project_id },
+          space: {
+            key: space.key,
+            name: space.name,
+            projects: space.projects,
+            default_project: space.default_project,
+          },
           row,
           before: order.slice(0, index).reverse(),
         },

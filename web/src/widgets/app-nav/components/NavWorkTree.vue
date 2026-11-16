@@ -125,7 +125,7 @@ function foldsOf(list: LiveList, key: string, at: string): Fold[] {
 
 function spaceTree(space: ShownSpace): SpaceTree {
   const node: NavNode = `space:${space.key}`
-  const route = props.target({ key: space.key, project_id: space.project_id, reference: null })
+  const route = props.target({ key: space.key, project_id: space.default_project, reference: null })
   const list = liveList(space.rows, space.sessions)
   return {
     branch: `${props.prefix}-space-${space.key}`,
@@ -140,7 +140,7 @@ function spaceTree(space: ShownSpace): SpaceTree {
     pinnedHeading: `${props.prefix}-pinned-${space.key}`,
     route,
     rowRoute: (reference: string) =>
-      props.target({ key: space.key, project_id: space.project_id, reference }),
+      props.target({ key: space.key, project_id: space.default_project, reference }),
     space,
   }
 }
