@@ -41,7 +41,9 @@ and no compatibility layer.
    - `create_work_item` and the `transition` group take `acceptance`;
    - the handshake text describes this model.
 
-   Every other tool, argument and answer field stays as it was.
+   Every other tool, argument and answer field stays as it was, apart from
+   what [Reading a work item by parts](#reading-a-work-item-by-parts) changes
+   in the same release.
 
 2. **A retired word is refused, never translated.** `kind: epic`,
    `scope: epic`, the categories and state names `backlog` and `queued`, the key
@@ -78,8 +80,9 @@ and no compatibility layer.
 - A client written against 2.9 reads a 3.0 answer wrongly or is refused; a 3.0
   answer has no field that means what `ready` or `container` meant. The web app
   and the server therefore ship together.
-- The exception is closed. A later change to the handshake or the schemas meets
-  the usual rule again, and the retired words stay refused, not reused.
+- The exception closes with the 3.0 release. A later change to the handshake or
+  the schemas meets the usual rule again, and the retired words stay refused,
+  not reused.
 - Rollback is the whole set: the store from the `pre3.0` recovery point and the
   previous release together.
 - Rejected: aliases from the old words to the new ones (two spellings of one
@@ -87,3 +90,52 @@ and no compatibility layer.
   `container` beside the new fields (a field that contradicts the category it
   stands next to); and a second, versioned set of tools (two catalogues an agent
   must choose between, each with its own skill).
+
+## Reading a work item by parts
+
+### Context
+
+A full record carries every comment, event, link, reference and session an
+item has gathered. An agent that only needs the item itself pays for all of it
+on every read, and the longest-lived items cost the most: the longest
+discussion alone runs to hundreds of thousands of characters, which no single
+answer holds. A switch between the full record and a short one does not help, because
+the agent cannot tell what the short one leaves out until it reads the full one.
+
+### Decision
+
+1. **`get_work_item` answers with the card.** The card holds the record's own
+   fields, the description, the checklist with each step's `id`, the summary,
+   and `parts`: every other part of the item by name, with its count and size.
+   The text the author wrote comes whole; what the server adds is bounded.
+2. **A caller asks for parts by name.** `parts` names what the answer holds,
+   beside the item's `reference` and `revision`: `card`, `comments`, `events`, `links`, `refs`, `questions`,
+   `mentions`, `sessions`, `images`, `subscribers`, `claim` and `sections`.
+   Each part carries the name of the full record's field it comes from:
+   `comments` and `events` are read in slices, the other parts whole, as the
+   full record held them. `sections` lists the sections of the description,
+   and `section` reads one or more of them by key. The argument `full` is gone.
+3. **Every MCP answer that gave the full record gives the card.** The
+   `verbose` answer of a write and the `work_item` that
+   `claim_ready_work_item` returns are the same card. Lists keep their rows,
+   and the handshake text describes reading by parts.
+
+### What a client does instead
+
+| Before 3.0 | From 3.0 |
+| --- | --- |
+| `full: true` | `parts` naming what the work needs |
+| the whole record by default | the card, and its `parts` to see what else there is |
+| the whole description to refresh one passage | `section` with the passage's key |
+| the full record in a `verbose` answer or from `claim_ready_work_item` | the card, and `get_work_item` with `parts` for the rest |
+
+### Consequences
+
+- An answer is as long as the work needs, and the card says what it left out,
+  so an agent never reads blind.
+- A client that sends `full` is refused like any unknown argument: there is no
+  alias that reads it as every part, for the same reason the work model keeps
+  none.
+- Over HTTP, a read without `parts` and every write answer still give the full
+  record, so the web app reads as before. The skill, the connection contract
+  and the handshake change in the same release.
