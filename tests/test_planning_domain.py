@@ -44,6 +44,18 @@ class PlanningDomainTests(unittest.TestCase):
         keys = sorted(row[0] for row in self.conn.execute("SELECT key FROM planning_spaces"))
         self.assertEqual(["QA", "QA2"], keys)
 
+    def test_a_one_letter_name_derives_a_key_its_references_can_name(self) -> None:
+        # A key has two to eight characters, so a reference built from one letter
+        # could never be read back.
+        space = service.create_planning_space(self.conn, name="S")
+        self.assertEqual("S2", space["key"])
+        self.assertEqual("S2", model.space_key(space["key"]))
+        created = service.create_work_item(self.conn, space="S2", title="Short", author="tester")
+        self.assertEqual(
+            created["work_item_id"],
+            service.get_work_item(self.conn, created["reference"])["work_item_id"],
+        )
+
     def test_a_human_reference_round_trips(self) -> None:
         created = self.item("Land the planning domain")
         self.assertEqual("QA-1", created["reference"])

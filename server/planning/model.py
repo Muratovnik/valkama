@@ -351,11 +351,13 @@ def space_key(value: object) -> str:
 
 
 def derive_space_key(name: str, taken: frozenset[str]) -> str:
-    """A key from a space's name, and a number only when the name collides.
+    """A key from a space's name, and a number only when the letters cannot be the key.
 
     `Beta Garden` becomes `BG`, `Valkama` becomes `VAL`. A second space whose
     name derives to the same letters gets `BG2`, because the key is what every
-    human identifier in that space is built from and it cannot be shared.
+    human identifier in that space is built from and it cannot be shared. A name
+    of one letter gets a number too: `S` becomes `S2`, because a key has at least
+    two characters and a reference built from one could never be read back.
     """
 
     words = [word for word in re.split(r"[^A-Za-z0-9]+", name) if word]
@@ -368,7 +370,7 @@ def derive_space_key(name: str, taken: frozenset[str]) -> str:
     base = re.sub(r"[^A-Z0-9]", "", base) or "SPC"
     if not base[0].isalpha():
         base = f"S{base}"[:8]
-    if base not in taken:
+    if len(base) > 1 and base not in taken:
         return base
     for suffix in range(2, 1000):
         candidate = f"{base[: 8 - len(str(suffix))]}{suffix}"
