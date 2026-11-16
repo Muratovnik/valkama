@@ -260,14 +260,10 @@ can be read back.
 **Reading.** `get_work_item` returns the item with the 5 threads that saw the
 newest activity, its newest events and the sessions that wrote to it. Each root
 carries `replies`, how many it has, and `last_reply`, the newest one, so a reply
-in an old thread lifts it into that read. `thread: <comment id>` returns one
-thread whole, root first; a reply's id reads its root's thread. `comments_after:
-<id>` returns every comment after one you have read, roots and replies flat,
-each naming its parent in `reply_to` or `reply_to_request`: the way through an
-item too long to read whole. `unresolved: true` returns the roots without the
-resolved mark, oldest first, 20 at a time: while `truncated` is true, read on with
-`comments_after` set to the last root's id. `full: true` returns all of its history. Every
-comment carries `by_person`, true when it came through Valkama's interface. A
+in an old thread lifts it into that read. One thread whole, the comments after
+one you have read (the way through an item too long to read whole), the roots
+without the resolved mark and the whole history are the other reads, in
+[the tool reference](references/tools.md#reading-an-item). A
 reply to a question belongs to the question's thread, which
 `get_work_item_request` reads. A screenshot the owner pasted is named in the text
 by its address, `/api/images/<sha256>`, and listed in the item's `images`;
