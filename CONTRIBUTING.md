@@ -216,4 +216,5 @@ rather than a public issue.
 ## License
 
 By contributing you agree that your contribution is licensed under the
-[MIT License](LICENSE), the same as the rest of the project.
+[Apache License 2.0 with the Commons Clause License Condition v1.0](LICENSE), the
+same as the rest of the project.
