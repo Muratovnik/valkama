@@ -40,8 +40,13 @@ T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
 #: The steps a run takes and the postconditions it checks, in their order.
-STEP_NAMES = [*(f"M{number}" for number in range(8)), "addressee"]
-POSTCONDITION_NAMES = [*(f"P{number}" for number in range(1, 16)), "requests-asked", "second-run", "recovery-point"]
+STEP_NAMES = [*(f"M{number}" for number in range(8)), "addressee", "waiting-words"]
+POSTCONDITION_NAMES = [
+    *(f"P{number}" for number in range(1, 16)),
+    *(f"P{number}" for number in range(23, 27)),
+    "second-run",
+    "recovery-point",
+]
 
 #: The work items of the space `WM`, by number: kind, state key, parent number,
 #: holder, the step its holder claimed, labels, and the history, as (action,
@@ -696,6 +701,41 @@ class MigratedStoreTests(StoreCase):
         ]
         self.assertEqual({"requests": 1}, entry["detail"])
 
+    def test_waiting_words_creates_the_waiting_words_empty_and_shaped_as_a_fresh_store(
+        self,
+    ) -> None:
+        names = {
+            str(row[0])
+            for row in self.read(
+                "SELECT name FROM sqlite_master WHERE tbl_name = 'work_item_waiting_notices'"
+            )
+        }
+        self.assertLessEqual(
+            {
+                "work_item_waiting_notices",
+                "work_item_waiting_notices_open",
+                "work_item_waiting_notices_delivered",
+            },
+            names,
+        )
+        [(rows,)] = self.read("SELECT COUNT(*) FROM work_item_waiting_notices")
+        self.assertEqual(0, rows, "nothing waits from before 3.0")
+        [step] = [step for step in self.report["steps"] if step["name"] == "waiting-words"]
+        self.assertEqual((True, {"table_created": True}), (step["needed"], step["result"]))
+        details = {
+            entry["name"]: entry["detail"]
+            for entry in self.report["postconditions"]
+            if entry["name"] in ("no-old-waiting", "request-shapes", "fresh-tables")
+        }
+        self.assertEqual(
+            {
+                "no-old-waiting": {"rows": 0},
+                "request-shapes": {"refused": ["scope 'other'", "delivered_call without delivered_at"]},
+                "fresh-tables": {"added": ["work_item_waiting_notices"]},
+            },
+            details,
+        )
+
     def test_the_derived_states_are_reported(self) -> None:
         derived = self.report["postconditions"][11]["detail"]["derived"]
         # WM-1 waits on a ready task nobody started; WM-6, WM-15 and WM-16 have work
@@ -870,7 +910,7 @@ class KeptStepClaimTests(StoreCase):
                 self.assertEqual("active", row["category"])
                 self.assertEqual([], self.events(reference, "checklist_released"))
 
-    def test_p14_refuses_a_migration_that_clears_a_kept_claim(self) -> None:
+    def test_identities_refuses_a_migration_that_clears_a_kept_claim(self) -> None:
         identity_before, digest = identity(self.path), file_digest(self.path)
         clear = writing(
             "UPDATE work_items SET checklist = json_set(checklist, '$[0].claimed_by', '')"
@@ -882,8 +922,10 @@ class KeptStepClaimTests(StoreCase):
             self.migrate()
         report = raised.exception.report
         self.assertIn("identities", report["failed"])
-        p14 = next(entry for entry in report["postconditions"] if entry["name"] == "identities")
-        self.assertIn(f"{self.ids['WM-7']} changed its checklist", p14["error"])
+        post_identities = next(
+            entry for entry in report["postconditions"] if entry["name"] == "identities"
+        )
+        self.assertIn(f"{self.ids['WM-7']} changed its checklist", post_identities["error"])
         self.assertEqual((identity_before, digest), (identity(self.path), file_digest(self.path)))
 
 
@@ -1032,7 +1074,20 @@ FAULTS = (
         "requests-asked",
         "UPDATE work_item_requests SET addressee = 'kept-session' WHERE request_id = 'kept-request'",
     ),
+    fault(
+        "no-old-waiting",
+        "INSERT INTO work_item_waiting_notices(work_item_id,scope,from_call,created_call)"
+        " VALUES(?,'tree',0,0)",
+        lambda ids: (ids["WM-1"],),
+    ),
+    fault("request-shapes", "DROP INDEX work_item_waiting_notices_delivered"),
+    fault("fresh-tables", "CREATE TABLE stray_rows(id INTEGER PRIMARY KEY)"),
 )
+
+#: `work_item_waiting_notices` as a fresh store declares it, but with neither CHECK.
+_UNCHECKED_WAITING = planning_store.WAITING_NOTICES.replace(
+    " CHECK(scope IN ('tree','space'))", ""
+).replace(",\n    CHECK((delivered_call IS NULL) = (delivered_at IS NULL))", "")
 
 
 def once(
@@ -1166,6 +1221,35 @@ def _quiet(sql: str, parameters: tuple) -> list[tuple[str, tuple]]:
 CLAUSE_FAULTS: tuple[
     tuple[str, str, Callable[[dict[str, str]], list[tuple[str, tuple]]], list[str]], ...
 ] = (
+    (
+        "request-shapes",
+        "work_item_waiting_notices takes a row with scope 'other'",
+        lambda _ids: [
+            ("DROP TABLE work_item_waiting_notices", ()),
+            (_UNCHECKED_WAITING, ()),
+            (planning_store.WAITING_OPEN_INDEX, ()),
+            (planning_store.WAITING_DELIVERED_INDEX, ()),
+        ],
+        ["fresh-shape", "request-shapes"],
+    ),
+    (
+        "fresh-tables",
+        "table stray_rows is not one a fresh store declares",
+        lambda _ids: [("CREATE TABLE stray_rows(id INTEGER PRIMARY KEY)", ())],
+        ["fresh-shape", "fresh-tables"],
+    ),
+    (
+        "fresh-tables",
+        "table work_item_waiting_notices holds 1 rows, not 0",
+        lambda ids: [
+            (
+                "INSERT INTO work_item_waiting_notices(work_item_id,scope,from_call,created_call)"
+                " VALUES(?,'tree',0,0)",
+                (ids["WM-1"],),
+            )
+        ],
+        ["integrity", "no-old-waiting", "fresh-tables"],
+    ),
     (
         "requests-asked",
         "the request kept-request asks the session kept-session",

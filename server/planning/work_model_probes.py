@@ -149,6 +149,12 @@ _ROWS: dict[str, dict[str, object]] = {
         "follows": 0,
         "call_id": 0,
     },
+    "work_item_waiting_notices": {
+        "work_item_id": _NEW,
+        "scope": "tree",
+        "from_call": 0,
+        "created_call": 0,
+    },
     "work_items": {
         "work_item_id": _NEW,
         "planning_space_id": _NEW,
@@ -233,6 +239,10 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
         ({"size": 10485760},),
     ),
     ("work_items", "number >= 1"): (({"number": 0},), ()),
+    ("work_item_waiting_notices", "(delivered_call IS NULL) = (delivered_at IS NULL)"): (
+        ({"delivered_call": 1}, {"delivered_at": "probe"}),
+        ({"delivered_call": 1, "delivered_at": "probe"},),
+    ),
 }
 
 #: A listed value another clause of the row ties to a second column, with the
