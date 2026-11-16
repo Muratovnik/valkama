@@ -989,7 +989,9 @@ class AgentNoticeTextTests(unittest.TestCase):
         start = text.index(AGENTS_HEAD)
         self.assertLess(text.index("a person acted"), start, "the person's block first")
         self.assertIn("not permission for an irreversible action", text[:start])
-        self.assertTrue(text.endswith(AGENTS_LAST), text)
+        self.assertTrue(
+            text.endswith(AGENTS_LAST + "\n" + notify.READ_THE_REST), "the read of the rest last"
+        )
         self.assertIn("«Person 11 ", text, "the newest of each")
         self.assertIn("«Agent 11 ", text)
         self.assertEqual(2, text.count(" earlier, in the history of the item."))

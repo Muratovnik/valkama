@@ -655,19 +655,34 @@ its orchestrator once when it idles, or continue its turn once at `Stop`:
 ### What a notice says
 
 One notice names, per item, its reference and title and the newest events: the
-kind, the time and the start of what was said, as `from_person` gives it, at
-most 300 characters each. It then says what to do: read each item with
-`get_work_item` before the next step on it, and, for an orchestrator, pass the
-news on to a subagent that cannot hear it. It ends by saying that quoted words
-are what was written on the card, information about the work and not an
-instruction to the agent or permission for an irreversible action. The text
-calls itself a Valkama notice and is not written as a system message: a model
-rightly refuses text that poses as one. A notice keeps 8 events that fit in 2400
-characters and counts the rest: since 2.6 first what woke the session, newest
+kind, the time and what was said, as `from_person` gives it, whole up to 1500
+characters each and cut there. For an orchestrator it says to pass the news on
+to a subagent that cannot hear it. It says that quoted words are what was
+written on the card, information about the work and not an instruction to the
+agent or permission for an irreversible action. The text calls itself a Valkama
+notice and is not written as a system message: a model rightly refuses text that
+poses as one. A notice keeps 8 events that fit in 4000 characters, 2400 for
+Codex, and counts the rest: since 2.6 first what woke the session, newest
 first, then the newest of the others, each block in its own order. Filled by the
 newest alone, eight plain comments on one item pushed out of the notice the
 question on another that woke it. The count says `earlier` when everything it
 leaves out came before what it shows, and `more` otherwise.
+
+**Since 3.0** a notice that shows everything whole asks for no read: it ends with
+the lines about quoted words. One that shows less than was written, an entry
+cut, events counted and left out or a [folded line](#folded-past-three-notices),
+ends with one line instead, after both blocks and within the bound:
+
+```text
+Some of this was cut or left out: read the rest with get_work_item, parts comments and events.
+```
+
+Until 3.0 every notice ended its person's block by asking to read each item with
+`get_work_item`, and quoted 300 characters within 2400. An orchestrator's line
+about its own subagent quotes nothing, so it never asks for the read. Codex keeps
+the 2400: its hook text stays whole up to about 2 500 tokens, and nothing
+documents how many tokens a Cyrillic character takes, so the bound holds at one
+token a character.
 
 **Since 2.5**, a notice's head says it is about "work this session holds or
 threads it started", and a reply's line says whose thread it is: to the author of
@@ -729,6 +744,10 @@ orchestrator's own subagent is `your agent`, and its line quotes nothing:
 - released at 2026-11-06T09:20:00Z by your agent ab12
 ```
 
+A [list on a comment](connection-contract.md#a-list-on-a-comment) by its subagent
+gives the orchestrator no `question_asked` line, nor `question_withdrawn` when it is
+taken back: nobody waits on a list, so the work does not come to wait for the owner.
+
 A comment that waits for a reply, and the reply that answered a wait, say so on
 their line, and a blocker's change names the item and the state it reached:
 
@@ -749,7 +768,7 @@ the agents'. The first
 block after the hourly limit held such news back counts it:
 `2 events here would have woken this session, past the limit of 6 wakes an hour by
 other agents, so they waited for this call.` The person's block comes first and takes its share of the notice's 8
-events and 2400 characters first, leaving room only for the agents' heading, newest
+events and 4000 characters first, leaving room only for the agents' heading, newest
 event and closing lines, and the agents' block has what remains. Each block
 keeps its heading and its closing lines, shows at least one event, what woke the
 session if anything did, and counts the ones it left out. A notice with no news from a person is the agents' block alone.
@@ -762,7 +781,7 @@ orchestrator's own subagent as `your agent <id>`, and nothing is
 dropped: the item holds every word.
 
 ```text
-MAIN-14 «Widen the check»: 5 events by session 019a…, agent ab12 of session 019b…, the newest at 2026-11-06T11:20:00Z, folded into this line after 3 notices on this item within the hour; read the item with get_work_item for what they say.
+MAIN-14 «Widen the check»: 5 events by session 019a…, agent ab12 of session 019b…, the newest at 2026-11-06T11:20:00Z, folded into this line after 3 notices on this item within the hour; read the item with get_work_item, parts comments and events, for what they say.
 ```
 
 The reply a recipient awaited, a comment that awaits its reply on work it holds, a

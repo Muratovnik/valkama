@@ -156,16 +156,28 @@ class WhatCountsTests(Harness):
         self.assertNotIn("author", event)
 
     def test_a_long_text_is_cut_at_its_limit_and_read_whole_from_the_item(self) -> None:
-        whole = "x" * 301
+        whole = "x" * 1501
         self.says(whole)
-        text = self.window()[0]["text"]
-        self.assertEqual(300, len(text))
-        self.assertTrue(text.endswith("…"))
+        [event] = self.window()
+        self.assertEqual("x" * 1499 + "…", event["text"])
+        self.assertIs(True, event["cut"])
         self.assertEqual(whole, service.get_work_item(self.conn, self.ref)["comments"][-1]["body"])
 
     def test_text_of_exactly_the_limit_is_left_whole(self) -> None:
-        self.says("y" * 300)
-        self.assertEqual("y" * 300, self.window()[0]["text"])
+        self.says("y" * 1500)
+        [event] = self.window()
+        self.assertEqual("y" * 1500, event["text"])
+        self.assertNotIn("cut", event)
+
+    def test_a_writes_answer_cuts_at_the_same_limit_and_says_so(self) -> None:
+        self.agent("claim_work_item", id=self.ref)
+        self.says("z" * 2000)
+        self.says("Short")
+        told = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Read"})
+        cut, whole = told["from_person"]
+        self.assertEqual(("z" * 1499 + "…", True), (cut["text"], cut["cut"]))
+        self.assertEqual("Short", whole["text"])
+        self.assertNotIn("cut", whole)
 
     def test_an_answer_quotes_the_choice_and_the_note(self) -> None:
         asked = self.ask()
@@ -287,7 +299,7 @@ class WhatCountsTests(Harness):
     def test_a_change_of_many_rows_stays_within_the_limit_and_counts_the_rest(self) -> None:
         fields = [
             {"id": f"p{n:02}" + "x" * 40, "label": "P", "type": "verdict", "required": False}
-            for n in range(12)
+            for n in range(30)
         ]
         for field in fields:
             field["options"] = []

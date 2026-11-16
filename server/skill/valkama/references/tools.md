@@ -74,8 +74,9 @@ in Valkama's interface since an agent last wrote there, and has no such key
 otherwise. Each entry has `kind` (`comment`, `report`, `status`, `edited`,
 `question_answered`, `mentioned` and the rest), `via: "interface"`, `at`,
 `comment_id`, `request_id` or `fields` when it has one, `from` for `mentioned` (the
-item whose comment told this one), and `text`, cut at 300 characters;
-`get_work_item` has the whole text. It lists the newest 20, and
+item whose comment told this one), and `text`, whole up to 1500 characters. A
+longer one is cut there and says `cut: true`, and `get_work_item` has the rest.
+It lists the newest 20, and
 `from_person_omitted` counts the earlier ones. Each event is told once, to
 whichever agent writes to the item next.
 

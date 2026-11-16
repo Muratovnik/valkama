@@ -609,7 +609,8 @@ TOOLS = [
         " but an active or blocked one releases the item already: no release follows it."
         " The answer carries from_person when"
         " a person acted on the item in the interface since an agent last wrote to it:"
-        " their words about this work, to read before the next step.",
+        " their words about this work, to read before the next step, each text whole up to"
+        " 1500 characters and marked cut past them.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -713,7 +714,8 @@ TOOLS = [
         " writes nothing and names the step and the refusal's code. Name at least"
         " one group. Answers with the acknowledgement and applied, what each group"
         " changed, and from_person when a person acted on the item since an agent"
-        " last wrote. The call is one write: its comment does not lift a closing"
+        " last wrote, each text whole up to 1500 characters and marked cut past them."
+        " The call is one write: its comment does not lift a closing"
         " transition's person_spoke refusal.",
         WRITES,
         {

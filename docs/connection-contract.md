@@ -2549,7 +2549,8 @@ window. Order is the call rows' ids.
 | `comment_id` | for `comment` and `report` |
 | `request_id` | for the question kinds |
 | `fields` | for `edited`: the fields it changed |
-| `text` | what it said, at most 300 characters, the last one `…` when cut: a comment's body, a report's `done`, an answer as `label: choice` pairs and its note, or a review's summary (see [Reading a question](#reading-a-question)), the prompt of a question asked, declined or withdrawn, an edit's fields as they read now, a step's or a link's detail; absent when there is nothing to quote |
+| `text` | what it said, at most 1500 characters, the last one `…` when cut: a comment's body, a report's `done`, an answer as `label: choice` pairs and its note, or a review's summary (see [Reading a question](#reading-a-question)), the prompt of a question asked, declined or withdrawn, an edit's fields as they read now, a step's or a link's detail; absent when there is nothing to quote |
+| `cut` | `true` when `text` was cut at the 1500 characters, the rest being in `get_work_item`; absent when it is whole |
 
 **Since 2.5**, four more kinds:
 
@@ -2558,7 +2559,7 @@ window. Order is the call rows' ids.
 | `reply` | a person replied in a thread; a new root is still told as `comment` | `comment_id`; `reply_to` or `reply_to_request`, the root; `text`, the reply |
 | `thread_resolved` | a person marked a root resolved | `comment_id`; `text`, the decision |
 | `thread_reopened` | a person removed the mark | `comment_id` |
-| `question_changed` | a person changed a given answer | `request_id`; `text`, [what changed](#the-difference-between-two-answers), within the 300 characters |
+| `question_changed` | a person changed a given answer | `request_id`; `text`, [what changed](#the-difference-between-two-answers), within the 1500 characters |
 
 ```json
 {"kind": "reply", "via": "interface", "at": "2026-11-03T10:12:00.000000Z",
@@ -2586,7 +2587,9 @@ It counts in the window and in the `person_spoke` guard as the other kinds do. A
 agent's mention is never one of these events: it is an agent's words, and it reaches
 the holders through the hook and the item's `mentions`, never through `from_person`.
 
-The whole text is in `get_work_item` and `get_work_item_request`. Filing an item,
+**Since 3.0** a text is whole up to 1500 characters, where it was cut at 300, and a
+cut one says `cut: true`; the one bound holds for `from_person` and for the hook's
+notices alike. The whole text is in `get_work_item` and `get_work_item_request`. Filing an item,
 attaching a session and a recorded override are never told. A drag within a
 state, or an edit that changed nothing, says nothing.
 
@@ -2954,7 +2957,7 @@ is one row, its value first, then its own variant, then its comment:
 
 A quoted own variant, comment or note is cut at 60 characters, the last one `…`.
 The text of `question_changed` is `changed: ` and the rows joined by `; `, within
-300 characters: rows that do not fit are left out from the end and counted, as
+1500 characters: rows that do not fit are left out from the end and counted, as
 `; and 4 more`. The card draws the same rows in the same order in the person's
 words, with labels in place of ids, for a question it draws as a review (one with a
 `group`, or with more than 8 verdict fields); it shows any other question's versions

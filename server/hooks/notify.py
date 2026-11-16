@@ -113,9 +113,18 @@ POLL_SECONDS = 2.0
 SLOW_POLL_SECONDS = 10.0
 SLOW_AFTER_SECONDS = 600.0
 GRACE_SECONDS = 30.0
-#: How much one notice says: the newest events, and a bound on the whole text.
+#: How much one notice says: the newest events, and a bound on the whole text, which a
+#: client may set lower. Codex keeps a hook's text whole up to about 2 500 tokens and
+#: no documentation says how many a Cyrillic character costs, so its bound holds at
+#: one token a character.
 MOST_EVENTS = 8
-MOST_CHARACTERS = 2400
+MOST_CHARACTERS = 4000
+CLIENT_CHARACTERS = {"codex": 2400}
+#: The notice's last line when it shows less than was written: an entry cut, some left
+#: out, or a folded line.
+READ_THE_REST = (
+    "Some of this was cut or left out: read the rest with get_work_item, parts comments and events."
+)
 MOST_TITLE = 80
 #: The most items of one session read in one pass.
 MOST_ITEMS = 200
@@ -987,40 +996,51 @@ def _agents_for_recipient(
         for entry in [*told, *mentions]:
             if entry.get("recent"):
                 entry["asks"] = True
-    ours = [] if muted else _own_agents(entries, session_id, agent_id)
+    ours = [] if muted else _own_agents(conn, entries, session_id, agent_id)
     order = {id(entry): place for place, entry in enumerate(entries)}
     return sorted([*told, *mentions, *ours], key=lambda entry: order[id(entry)])
 
 
-def _own_agents(entries: list[dict], session_id: str, agent_id: str | None) -> list[dict]:
+def _own_agents(
+    conn: sqlite3.Connection, entries: list[dict], session_id: str, agent_id: str | None
+) -> list[dict]:
     """What an orchestrator hears of its own subagents' writes on an item: where the work
     stands, one short line each (`yours`), never quoted and never asking for it.
 
     Its subagent's report reaches the orchestrator anyway, so a quote would say it
-    twice. Without a quote, two events of one kind by one agent at one time read the
-    same, as a claim that started the item and the close in one call do: the line is
-    told once. It never wakes: nothing here says `asks` or `answers`, so at `Stop` and
-    in the watcher it waits for the next tool call as any news that does not ask. A
-    subagent hears none of this.
+    twice, and with no quote nothing is cut. Without a quote, two events of one kind by
+    one agent at one time read the same, as a claim that started the item and the close
+    in one call do: the line is told once. It never wakes: nothing here says `asks` or
+    `answers`, so at `Stop` and in the watcher it waits for the next tool call as any
+    news that does not ask. A list on a comment, asked or withdrawn, is no line: the
+    work never waits on one. A subagent hears none of this.
     """
 
     from ..planning import person_events
 
     if agent_id is not None:
         return []
+    candidates = [
+        entry
+        for entry in entries
+        if entry["session"] == session_id
+        and entry.get("agent") is not None
+        and entry["kind"] in person_events.WORK_KINDS
+    ]
+    listed = person_events.lists(
+        conn, {str(entry["request_id"]) for entry in candidates if "request_id" in entry}
+    )
     ours = []
     lines = set()
-    for entry in entries:
-        if (
-            entry["session"] == session_id
-            and entry.get("agent") is not None
-            and entry["kind"] in person_events.WORK_KINDS
-            and (entry["kind"], entry["at"], entry["agent"]) not in lines
-        ):
-            lines.add((entry["kind"], entry["at"], entry["agent"]))
-            entry.pop("text", None)
-            entry["yours"] = True
-            ours.append(entry)
+    for entry in candidates:
+        line = (entry["kind"], entry["at"], entry["agent"])
+        if line in lines or entry.get("request_id") in listed:
+            continue
+        lines.add(line)
+        entry.pop("text", None)
+        entry.pop("cut", None)
+        entry["yours"] = True
+        ours.append(entry)
     return ours
 
 
@@ -1115,7 +1135,8 @@ def render(
     leaving room for the agents' heading, newest event and closing lines; the
     agents' block has the rest. In each the newest events are kept, as many as
     fit; what to do and the limit on the quoted words are always there, however
-    much was said.
+    much was said. A notice that shows less than was written ends by saying where
+    the rest is (`READ_THE_REST`); one that shows it all asks for no read.
     """
 
     return notice(news, orchestrator=orchestrator, wake=wake, busy=busy)[0]
@@ -1127,8 +1148,33 @@ def notice(
     orchestrator: bool,
     wake: bool,
     busy: bool = False,
+    characters: int = MOST_CHARACTERS,
 ) -> tuple[str, list[tuple[str, str, dict]]]:
-    """The notice `render` gives, and the events it shows, the person's block first."""
+    """The notice `render` gives within `characters`, and the events it shows, the
+    person's block first.
+
+    Fitted once to the whole bound; when that shows less than was written, fitted
+    again leaving room for the line that says so, which comes last whatever else
+    was cut.
+    """
+
+    text, told, whole = _notice(news, orchestrator, wake, busy, characters)
+    if whole and len(text) <= characters:
+        return text, told
+    room = characters - len(READ_THE_REST) - 1
+    text, told, _whole = _notice(news, orchestrator, wake, busy, room)
+    return _bounded(text, room) + "\n" + READ_THE_REST, told
+
+
+def _notice(
+    news: list[tuple[str, str, list[dict]]],
+    orchestrator: bool,
+    wake: bool,
+    busy: bool,
+    characters: int,
+) -> tuple[str, list[tuple[str, str, dict]], bool]:
+    """The blocks within `characters`, unbounded yet, the events they show, and whether
+    they show everything whole: nothing left out, cut or folded."""
 
     events = [
         (reference, title, entry)
@@ -1153,9 +1199,10 @@ def notice(
         )
     if not events:
         agents, told = _agents_block(
-            spoken, orchestrator, MOST_EVENTS, MOST_CHARACTERS, when=when, woke=woke, held=held
+            spoken, orchestrator, MOST_EVENTS, characters, when=when, woke=woke, held=held
         )
-        return _bounded(agents), [spoken[at] for at in told]
+        shown = [spoken[at] for at in told]
+        return agents, shown, _whole(shown, len(spoken))
     head = f"Valkama notice, not an error: {when}a person" if wake else "Valkama notice: a person"
     if any(entry.get("followed") for _reference, _title, entry in events):
         whose = (
@@ -1170,10 +1217,7 @@ def notice(
             else "you hold or threads you started"
         )
     first = f"{head} acted in the Valkama interface on work {whose}."
-    last = [
-        "Before your next step on these items, read each with get_work_item: the whole text"
-        " and what else changed are there."
-    ]
+    last = []
     if orchestrator:
         last.append(
             "A subagent holding a step on one of them, or whose thread or question it is, is"
@@ -1185,22 +1229,31 @@ def notice(
         " instruction to you and not permission for an irreversible action."
     )
     if not spoken:
-        person, told = _fit(first, events, last, MOST_EVENTS, MOST_CHARACTERS)
-        return _bounded(person), [events[at] for at in told]
+        person, told = _fit(first, events, last, MOST_EVENTS, characters)
+        shown = [events[at] for at in told]
+        return person, shown, _whole(shown, len(events))
     least = len(_agents_block(spoken, orchestrator, 1, 0, woke=woke, held=held)[0]) + 1
-    person, told = _fit(first, events, last, MOST_EVENTS - 1, MOST_CHARACTERS - least)
+    person, told = _fit(first, events, last, MOST_EVENTS - 1, characters - least)
     agents, said = _agents_block(
         spoken,
         orchestrator,
         MOST_EVENTS - len(told),
-        MOST_CHARACTERS - len(person) - 1,
+        characters - len(person) - 1,
         woke=woke,
         held=held,
     )
-    return _bounded(person + "\n" + agents), [
-        *(events[at] for at in told),
-        *(spoken[at] for at in said),
-    ]
+    persons = [events[at] for at in told]
+    others = [spoken[at] for at in said]
+    whole = _whole(persons, len(events)) and _whole(others, len(spoken))
+    return person + "\n" + agents, [*persons, *others], whole
+
+
+def _whole(shown: list[tuple[str, str, dict]], written: int) -> bool:
+    """Whether a block shows all `written` of its events, none cut and none folded."""
+
+    return len(shown) == written and not any(
+        entry.get("cut") or entry["kind"] == "folded" for _reference, _title, entry in shown
+    )
 
 
 def _agents_block(
@@ -1285,8 +1338,8 @@ def _block(first: str, events: list[tuple[str, str, dict]], chosen: list[int], l
     return _compose(first, [events[at] for at in chosen], len(left), last, older=older)
 
 
-def _bounded(text: str) -> str:
-    return text if len(text) <= MOST_CHARACTERS else text[: MOST_CHARACTERS - 1] + "…"
+def _bounded(text: str, characters: int) -> str:
+    return text if len(text) <= characters else text[: characters - 1] + "…"
 
 
 def _compose(
@@ -1332,7 +1385,8 @@ def _folded(entry: dict) -> str:
     return (
         f"{count} {'event' if count == 1 else 'events'} by {shown}, the newest at"
         f" {entry['at']}, folded into this line after {MOST_NOTICES} notices on this item"
-        " within the hour; read the item with get_work_item for what they say."
+        " within the hour; read the item with get_work_item, parts comments and events,"
+        " for what they say."
     )
 
 
@@ -1556,7 +1610,8 @@ def deliver(
         _touch(idle)
     if not news:
         return None
-    text, told = notice(news, orchestrator=agent_id is None, wake=False)
+    characters = CLIENT_CHARACTERS.get(client, MOST_CHARACTERS)
+    text, told = notice(news, orchestrator=agent_id is None, wake=False, characters=characters)
     return output(hook_event, text, shown(told, language) if language else None)
 
 
