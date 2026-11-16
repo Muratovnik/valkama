@@ -28,6 +28,7 @@ from . import (
     item_tree,
     leases,
     model,
+    questions,
     ranking,
     read_model,
     request_model,
@@ -40,6 +41,11 @@ from . import (
 from . import participants as working
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
+#: How many questions to the owner are still pending on one item.
+_OWNER_QUESTIONS_ON = (
+    "SELECT COUNT(*) FROM work_item_requests r WHERE r.work_item_id = ? AND "  # noqa: S608 - constant text
+    + questions.OWNER_QUESTION
+)
 
 #: How many candidates the take-next queue will try before reporting the race it
 #: keeps losing. Bounded rather than open-ended because a caller inside its own
@@ -2094,15 +2100,16 @@ def _fold(
     for row, found, target in merging:
         identity = str(row["work_item_id"])
         reference = read_model.reference(conn, row)
-        # A list waits for nobody, so only a question is said to wait on the survivor.
+        # Only a question to the owner is said to wait on the survivor: a list waits for
+        # nobody, and a request asked of an agent session waits for that session.
         pending = conn.execute(
-            "SELECT COUNT(*) FROM work_item_requests WHERE work_item_id = ? AND status = 'pending'"
-            " AND comment_id IS NULL",
+            _OWNER_QUESTIONS_ON,
             (identity,),
         ).fetchone()[0]
         roots = _moving_roots(conn, identity)
         # The question was about the work, and the work moves. Left here a pending
         # one would end with this item, and its answer would stay on a closed one.
+        # A request asked of an agent session is about the work too, and moves with it.
         # A list goes with the comment it stands under, so a report's stays here.
         conn.execute(
             "UPDATE work_item_requests SET work_item_id = ? WHERE work_item_id = ?"

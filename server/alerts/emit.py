@@ -50,7 +50,7 @@ from urllib.parse import urlencode
 
 from ..executions import results as execution_results
 from ..ops import configuration, toast
-from ..planning import calls, model, read_model, requests
+from ..planning import calls, model, questions, read_model, requests
 from . import messages
 from . import settings as alert_settings
 
@@ -202,22 +202,27 @@ def _item_dues(
     return dues
 
 
+#: What a call wrote that can be news for the owner's alert: its moves, and what it did
+#: to the requests that ask the owner.
+_OWNER_NEWS = (
+    "SELECT e.id,e.work_item_id,e.action,e.detail FROM work_item_events e WHERE e.call_id=?"  # noqa: S608 - constant text
+    " AND e.action IN"
+    " ('request_created','request_answered','request_declined','request_expired','transitioned')"
+    " AND NOT EXISTS (SELECT 1 FROM work_item_requests r"
+    " WHERE r.request_id = e.detail AND NOT (" + questions.OWNER_ASKED + "))"
+    " ORDER BY e.id"
+)
+
+
 def _write_dues(conn: sqlite3.Connection) -> list[Due]:
     written = calls.written(conn)
     if written is None:
         return []
-    # A list on a comment waits for nobody, so neither writing one nor ticking it is
-    # news for the owner's alert: left in, a list beside a real question would raise
-    # or take back that question's toast.
-    events = conn.execute(
-        "SELECT e.id,e.work_item_id,e.action,e.detail FROM work_item_events e WHERE e.call_id=?"
-        " AND e.action IN"
-        " ('request_created','request_answered','request_declined','request_expired','transitioned')"
-        " AND NOT EXISTS (SELECT 1 FROM work_item_requests r"
-        " WHERE r.request_id = e.detail AND r.comment_id IS NOT NULL)"
-        " ORDER BY e.id",
-        (written[0],),
-    ).fetchall()
+    # Only a request that asks the owner is news for the owner's alert: a list on a
+    # comment waits for nobody and a request asked of an agent session waits for that
+    # session. Left in, either beside a real question would raise or take back that
+    # question's toast.
+    events = conn.execute(_OWNER_NEWS, (written[0],)).fetchall()
     if not events:
         return []
     by_item: dict[str, list[sqlite3.Row]] = {}

@@ -19,8 +19,10 @@ from server import http_surface, mcp_surface, sessions, store
 from server.planning import (
     api,
     calls,
+    model,
     participants,
     read_model,
+    requests,
     service,
     subscriptions,
     views,
@@ -30,6 +32,7 @@ A = "a0000000-0000-4000-8000-00000000000a"
 B = "b0000000-0000-4000-8000-00000000000b"
 E = "e0000000-0000-4000-8000-00000000000e"
 A1, A2 = "a1", "a2"
+ANSWER = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
 
 
 class Harness(unittest.TestCase):
@@ -276,19 +279,41 @@ class LivenessTests(Harness):
         self.claim(self.task, B)
 
     def test_an_ended_session_works_on_nothing_and_answers_nothing(self) -> None:
-        """O17, its participants half: gone at its end, back when it resumes."""
+        """O17: gone at its end, back when it resumes, as a participant and as the one asked."""
 
         self.assertEqual([B], self.who(self.goal))
+        with self.acting(A, A1):
+            [asked] = requests.ask_sessions(
+                self.conn, self.goal, sessions=[B], prompt="Agree?", fields=[ANSWER]
+            )
         sessions.op_ingest_session_event(
             self.conn, {"event": "session_end", "session_id": B, "client": "claude-code"}
         )
         self.assertEqual([], self.who(self.goal), "no grace for an ended session")
         held = service.get_work_item(self.conn, self.task)
         self.assertEqual(f"claude (session {B})", held["claim_ref"], "its claim still stands")
+        gone = requests.get(self.conn, asked["request_id"])
+        self.assertEqual(("expired", "session_gone"), (gone["status"], gone["expired_reason"]))
+        with self.acting(B), self.assertRaises(model.WorkflowGuardError):
+            requests.resolve(
+                self.conn,
+                asked["request_id"],
+                status="answered",
+                expected_revision=asked["revision"],
+                answers={"answer": "yes"},
+            )
+        self.conn.rollback()
+        with self.acting(A, A1), self.assertRaisesRegex(model.PlanningError, f"session {B} has"):
+            requests.ask_sessions(
+                self.conn, self.goal, sessions=[B], prompt="Again?", fields=[ANSWER]
+            )
+        self.conn.rollback()
         sessions.op_ingest_session_event(
             self.conn, {"event": "session_start", "session_id": B, "client": "claude-code"}
         )
         self.assertEqual([B], self.who(self.goal), "resumed, it works on the goal again")
+        waiting = requests.get(self.conn, asked["request_id"])
+        self.assertEqual(("pending", None), (waiting["status"], waiting["expired_reason"]))
 
     def test_the_lease_term_decides_for_a_claim_a_step_and_a_subscription_alike(self) -> None:
         with self.acting(None):

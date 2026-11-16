@@ -323,11 +323,17 @@ when its item closes or its deadline (`expires_at`) passes. A comment over an
 open question changes nothing about it.
 
 `get_work_item` answers with `questions`:
-`{"total": 6, "open": 2, "items": […], "truncated": true}`, at most 5 items, the
-open ones first and then the newest closed. `list_work_item_requests` takes
-`space`, `id` (one item), `status`, `answered_after` (an ISO timestamp with a
-timezone), `limit`, `offset` and `full`, and its page says `truncated` and
-`next_offset`. With `answered_after` the oldest answer comes first, and a page runs
+`{"total": 6, "open": 2, "items": […], "truncated": true, "addressed_open": 0}`, at
+most 5 items, the open ones first and then the newest closed; a request asked of an
+agent session stays out of them, and `addressed_open` counts the open ones.
+`list_work_item_requests` takes `space`, `id` (one item), `status`,
+`answered_after` (an ISO timestamp with a timezone), `limit`, `offset`, `full` and
+`addressed`, and its page says `truncated` and `next_offset`. `addressed: true`
+lists the open requests asked of your own session; answer each with
+`answer_work_item_request`, from your conversation or a subagent. A request asked of
+a session is answered only by that session (`not_addressed` refuses anyone else)
+and withdrawn only by the session that asked (`not_asker`); while the session asked
+has ended or gone quiet, it reads expired with `session_gone`. With `answered_after` the oldest answer comes first, and a page runs
 past `limit` rather than part two answers of one time. Both give a compact form
 unless `full` is true:
 

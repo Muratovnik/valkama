@@ -2744,7 +2744,9 @@ item. `get_work_item_request` and `list_work_item_requests` are read-only tools.
 The answer, decline and expire tools take the request's own `expected_revision`;
 it is independent of the work item revision. Only one concurrent resolution can
 succeed. A closed task, ended bound execution or elapsed deadline prevents a
-late answer. Reading effective expiry does not write to an attached store.
+late answer, and so does the end of the session a request was
+[asked of](#a-question-asked-of-an-agent-session). Reading effective expiry does
+not write to an attached store.
 
 Fields have stable IDs and one of five types: `text`, `choice`, `multi_choice`,
 `boolean` or `verdict`. A required boolean can be answered `false`; omission is
@@ -2983,18 +2985,21 @@ changed: p10-steps +lock −glob; p12 later→accept; p15 comment: Frozen until 
 An agent reads a question three ways:
 
 - `get_work_item`, the tool, answers with `questions`:
-  `{"total": 6, "open": 2, "items": […], "truncated": true}`. At most 5 items, the
-  open ones first and then the newest closed. The HTTP read of a card has no such
-  key.
+  `{"total": 6, "open": 2, "items": […], "truncated": true, "addressed_open": 0}`.
+  At most 5 items, the open ones first and then the newest closed. A request asked
+  of an agent session is none of them and counts in none of the numbers but
+  `addressed_open`, the open ones. The HTTP read of a card has no such key.
 - `list_work_item_requests` takes `space`, `id` (one item), `status`,
-  `answered_after`, `limit` and `offset`, and answers in the compact form below, or
-  whole with `full: true`. Its page says `truncated` and `next_offset` as every list
-  does. `answered_after` keeps only answers given after that timestamp, oldest first
-  by `answered_at` and then by id, so a reader takes what came since by passing the
-  last `answered_at` it read and asking again while `truncated` is true. A page never
-  ends between two answers of one time: it runs past `limit` by the tie, because the
-  next page starts after that time. Without `answered_after` the newest question
-  comes first.
+  `answered_after`, `limit`, `offset` and `addressed`, and answers in the compact
+  form below, or whole with `full: true`. It leaves out every request asked of an
+  agent session, unless `addressed: true`: then it lists only the open requests
+  asked of the session of the call, and refuses a call that proved none. Its page
+  says `truncated` and `next_offset` as every list does. `answered_after` keeps only
+  answers given after that timestamp, oldest first by `answered_at` and then by id,
+  so a reader takes what came since by passing the last `answered_at` it read and
+  asking again while `truncated` is true. A page never ends between two answers of
+  one time: it runs past `limit` by the tie, because the next page starts after that
+  time. Without `answered_after` the newest question comes first.
 - `get_work_item_request` answers with one question whole.
 
 The compact form carries no options and no descriptions:
@@ -3266,6 +3271,41 @@ that wants the ticks keeps the item open, in review for instance.
 **Merging.** A list goes with its comment: a comment root's list moves to the
 survivor with it, and a report's list stays with the report on the merged item. A
 comment is deleted only with its item, and its list with it.
+
+### A question asked of an agent session
+
+A request can ask one top-level agent session instead of the owner: its record
+names that session in `addressee`, which is `null` on a question to the owner.
+Several sessions asked one question get one request each, written in one call, with
+the fields of any question. A session asked must be known, live, a top-level one rather than a subagent's, and
+not the caller's own; one that is not is refused with `invalid_request`, naming
+the session, and nothing is written.
+
+**Who answers.** Only a call whose session a client proved and that is the
+`addressee` answers it, changes the answer or declines it, from that session's
+conversation or any of its subagents. Only the session that asked, from any of its
+agents, or Valkama withdraws it with `expire_work_item_request`:
+
+| Case | Refusal |
+| --- | --- |
+| an answer, a change or a decline from any other caller, the interface included | `not_addressed` (403) |
+| a withdrawal by anyone but the session that asked or Valkama | `not_asker` (403) |
+
+**When the session is gone.** While the `addressee` has ended, or has been quiet
+longer than a lease lasts, the request reads `expired` with
+`expired_reason: session_gone`, from the moment the session ends and with no grace,
+and an answer is refused as on any expired request. Nothing is written: when the
+session resumes, the request waits for its answer again. A deadline (`expires_at`)
+is what gives one a stored end.
+
+**What it does not do.** It is no question to the owner: it raises no Windows
+notification and takes none back, it is not in
+[the panel of open questions](#the-panel-of-open-questions) or any count of what
+waits for the owner, it holds nothing up, and a merge moves it with the work but
+does not say it waits on the survivor. `GET /api/modules/planning/requests`,
+`list_work_item_requests` without `addressed` and `get_work_item`'s `questions`
+leave it out; `get_work_item_request`, a read by its id, and an export read it as
+any request.
 
 ### Steps from a comment
 

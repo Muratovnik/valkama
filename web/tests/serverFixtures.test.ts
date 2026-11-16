@@ -96,6 +96,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'planning-search.json': validateGlobalPlanningSearch,
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,
+  'request-session-gone.json': validateInputRequestDetail,
   'requests.json': validateInputRequestList,
   'usage-item.json': validateItemUsageAnswer,
   'usage-session.json': validateSessionUsageAnswer,
@@ -274,5 +275,11 @@ describe('the server fixtures', () => {
     const { request } = validateInputRequestDetail(read('request-answered.json'))
     expect([request.answer_version, request.history.length]).toEqual([2, 1])
     expect(validateInputRequestDetail(read('request-pending.json')).request.status).toBe('pending')
+    const asked = validateInputRequestDetail(read('request-session-gone.json')).request
+    expect([asked.addressee === null, asked.status, asked.expired_reason]).toEqual([
+      false,
+      'expired',
+      'session_gone',
+    ])
   })
 })

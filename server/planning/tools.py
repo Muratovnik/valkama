@@ -451,7 +451,8 @@ TOOLS = [
         " with mentions_total."
         " questions gives its questions in compact form: total, open, at most"
         f" {requests.ITEM_QUESTIONS} items with the open ones first and then the newest closed,"
-        " and truncated when there are more. images lists the pictures pasted into its"
+        " and truncated when there are more; requests asked of agent sessions stay out of"
+        " them, and addressed_open counts the open ones. images lists the pictures pasted into its"
         " text, each with sha256, media_type, size, created_at and the path its Markdown"
         " names; read_work_item_image shows one. open says whether its work is still open."
         " An accepted open goal or stage shows state null and container_state:"
@@ -1073,7 +1074,8 @@ TOOLS.extend(
             " cut. full=true gives each"
             " whole. With answered_after the oldest answer comes first, a changed answer comes"
             " again, and a page runs past limit rather than part two answers of one time."
-            + _PAGING,
+            " addressed=true lists the open requests asked of your own session; answer each with"
+            " answer_work_item_request." + _PAGING,
             READ_ONLY,
             {
                 "space": _SPACE,
@@ -1094,6 +1096,12 @@ TOOLS.extend(
                     "type": "boolean",
                     "description": "Answer with each whole question instead of the compact form.",
                 },
+                "addressed": {
+                    "type": "boolean",
+                    "description": "Only the open requests another session or Valkama asked of"
+                    " the session of this call. Without it a request asked of a session is left"
+                    " out.",
+                },
             },
         ),
         _tool(
@@ -1103,7 +1111,10 @@ TOOLS.extend(
             " answered by a value or by its own variant; a note no longer stands in for it."
             " change=true replaces the answer of an answered question instead, while its item is"
             " open: the replaced answer is kept as a version. Change one only when the owner asks."
-            " Does not resume an execution.",
+            " Does not resume an execution. A request asked of a session (its addressee) is"
+            " answered only by that session, its conversation or any of its subagents; any other"
+            " caller, the interface included, is refused with not_addressed. A request whose"
+            " addressee ended or went quiet reads expired with session_gone.",
             WRITES,
             {
                 "id": _STR,
@@ -1142,7 +1153,9 @@ TOOLS.extend(
         _tool(
             "expire_work_item_request",
             "Withdraw a human request",
-            "Explicitly withdraw a pending request, retaining its record.",
+            "Explicitly withdraw a pending request, retaining its record. A request asked of a"
+            " session is withdrawn only by the session that asked, from any of its agents; others"
+            " are refused with not_asker.",
             WRITES,
             {"id": _STR, "expected_revision": _EXPECTED_REVISION, "author": _AUTHOR},
             ["id", "expected_revision"],
@@ -1524,6 +1537,8 @@ def _request_list(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> 
         for name in ("space", "id", "status", "answered_after", "limit", "offset")
         if arguments.get(name) is not None
     }
+    if arguments.get("addressed") is not None:
+        parameters["addressed"] = ["true" if arguments["addressed"] is True else "false"]
     read = api.handle_get(conn, "/api/planning/requests", parameters)
     if read is None:  # pragma: no cover - the path table above is closed
         raise ValueError("no planning requests read")

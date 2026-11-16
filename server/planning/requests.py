@@ -1,4 +1,12 @@
-"""Durable human requests with independent revisions and read-only expiry."""
+"""Durable requests with independent revisions and read-only expiry.
+
+A request asks the owner, or, with an `addressee`, one top-level agent session
+(`ask_sessions`). Only that session answers or declines one asked of it, from its
+conversation or any of its subagents, and only the session that asked it, or Valkama,
+withdraws it. A session that ended or went quiet past its lease answers nothing: its
+requests read expired with `session_gone` while it stays so, and wait again when it
+resumes. That reason is read, never stored, as `deadline` and `task_closed` are.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +15,7 @@ import json
 import sqlite3
 from collections.abc import Iterator
 
-from . import calls, model, read_model, request_model, service, words
+from . import calls, leases, model, questions, read_model, request_model, service, words
 
 #: How many questions a read of one item carries; `questions.total` says the rest.
 ITEM_QUESTIONS = 5
@@ -55,7 +63,22 @@ def _expired(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> str | None:
             or execution["status"] not in {"starting", "running"}
         ):
             return "execution_closed"
+    addressee = _addressee(row)
+    if addressee is not None and not leases.session_live(
+        conn.execute(
+            "SELECT status, ended_at, last_seen FROM sessions WHERE id=?", (addressee,)
+        ).fetchone()
+    ):
+        return "session_gone"
     return None
+
+
+def _addressee(row: sqlite3.Row) -> str | None:
+    """The agent session a request row asks; None for the owner, as on a store from before."""
+
+    # `in` on a row reads its values, so its column names are asked for by name.
+    columns = row.keys()
+    return row["addressee"] if "addressee" in columns else None
 
 
 def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
@@ -88,6 +111,9 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
         "answered_by": row["answered_by"],
         "execution_id": row["execution_id"],
         "session_id": row["session_id"],
+        # The agent session asked instead of the owner; an attached store from before
+        # such requests has none.
+        "addressee": _addressee(row),
         "expires_at": row["expires_at"],
         "created_at": row["created_at"],
         "resolved_at": row["resolved_at"],
@@ -126,15 +152,6 @@ def _has_table(conn: sqlite3.Connection, name: str) -> bool:
         conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
         ).fetchone()
-        is not None
-    )
-
-
-def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
-    """Whether a table has a column, for the same reason as `_has_table`."""
-
-    return (
-        conn.execute("SELECT 1 FROM pragma_table_info(?) WHERE name=?", (table, column)).fetchone()
         is not None
     )
 
@@ -263,10 +280,16 @@ def item_questions(conn: sqlite3.Connection, work_item_id: str) -> dict:
     """What an agent reading an item learns of its questions without another call.
 
     Open ones first, because they are what is waiting, then the newest closed;
-    how many there are in all and whether this is all of them.
+    how many there are in all and whether this is all of them. A request asked of
+    an agent session is left out, and `addressed_open` counts the open ones: that
+    session reads them, and they would take the places of the owner's questions.
     """
 
-    found = of_item(conn, work_item_id)
+    every = of_item(conn, work_item_id)
+    found = [record for record in every if record["addressee"] is None]
+    addressed_open = sum(
+        1 for record in every if record["addressee"] is not None and record["status"] == "pending"
+    )
     waiting = [record for record in found if record["status"] == "pending"]
     closed = sorted(
         (record for record in found if record["status"] != "pending"),
@@ -279,6 +302,7 @@ def item_questions(conn: sqlite3.Connection, work_item_id: str) -> dict:
         "open": len(waiting),
         "items": compact_all(conn, shown),
         "truncated": len(shown) < len(found),
+        "addressed_open": addressed_open,
     }
 
 
@@ -308,6 +332,7 @@ def list_page(
     reference: str | None = None,
     answered_after: object = None,
     lists: bool = True,
+    addressed: bool = False,
 ) -> dict:
     """One page of requests, and whether more follow.
 
@@ -317,20 +342,28 @@ def list_page(
     one time: it runs past `limit` by the tie, because the next page starts after
     that time and would otherwise skip the other one.
 
-    `lists=False` leaves out every list on a comment: a reader of what waits for a
-    person, which nobody waits on a list for.
+    A request asked of an agent session is left out. `lists=False` leaves out every
+    list on a comment as well: a reader of what waits for a person, which nobody waits
+    on a list for. `addressed=True` reads instead the open requests asked of the
+    session the call in progress proved, and refuses a call that proved none.
     """
 
     if status is not None:
         model.enum_field(status, request_model.STATUSES, "status")
     clauses: list[str] = []
     parameters: list[object] = []
+    if addressed:
+        if status not in (None, "pending"):
+            raise model.PlanningError("addressed lists the open requests; leave status out")
+        status = "pending"
+        clauses.append("r.addressee=?")
+        parameters.append(_own_session())
     if space is not None:
         clauses.append("i.planning_space_id=?")
         parameters.append(service.get_planning_space(conn, space)["planning_space_id"])
     if reference is not None:
         item = read_model.item_row(conn, reference)
-        if space is not None and item["planning_space_id"] != parameters[0]:
+        if space is not None and item["planning_space_id"] != parameters[-1]:
             raise model.PlanningError("work item is outside the exact planning space")
         clauses.append("r.work_item_id=?")
         parameters.append(item["work_item_id"])
@@ -341,12 +374,13 @@ def list_page(
         # format `now` writes.
         clauses.append("r.status='answered' AND r.resolved_at>?")
         parameters.append(after)
-    if not lists and _has_column(conn, "work_item_requests", "comment_id"):
-        clauses.append("r.comment_id IS NULL")
+    if not addressed:
+        clauses.append(questions.OWNER_ASKED if not lists else "r.addressee IS NULL")
     # Effective expiry depends on item/execution state. Filter after projection,
     # fetching in pages so terminal history cannot hide a pending request.
     query = service.with_clauses(
-        "SELECT r.* FROM work_item_requests r JOIN work_items i ON i.work_item_id=r.work_item_id",
+        f"SELECT r.* FROM {_requests_table(conn)} r"  # noqa: S608 - column names, no value
+        " JOIN work_items i ON i.work_item_id=r.work_item_id",
         clauses,
     )
     query += (
@@ -384,6 +418,44 @@ def list_page(
         "truncated": more,
         "next_offset": start + len(result) if more else None,
     }
+
+
+#: The columns a reader of requests names that a store an earlier build wrote may lack.
+_LATER_COLUMNS = ("comment_id", "addressee")
+
+
+def _requests_table(conn: sqlite3.Connection) -> str:
+    """The requests table, or for a store an earlier build wrote one that reads null in
+    each column it lacks: that build wrote nothing such a column would hold.
+
+    One statement asks which columns there are.
+    """
+
+    have = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM pragma_table_info('work_item_requests')"
+            " WHERE name IN (SELECT value FROM json_each(?))",
+            (json.dumps(_LATER_COLUMNS),),
+        )
+    }
+    missing = [name for name in _LATER_COLUMNS if name not in have]
+    if not missing:
+        return "work_item_requests"
+    standing = ", ".join(f"NULL AS {name}" for name in missing)
+    return f"(SELECT *, {standing} FROM work_item_requests)"  # noqa: S608 - column names
+
+
+def _own_session() -> str:
+    """The session the call in progress proved, or a refusal saying why one is needed."""
+
+    identity = calls.current()
+    if identity is None or identity.state != calls.CONFIRMED or identity.session_id is None:
+        raise model.PlanningError(
+            "addressed lists the requests asked of your own session, and this call proved"
+            " no agent session"
+        )
+    return identity.session_id
 
 
 def _bindings(
@@ -474,6 +546,140 @@ def create(
         _event(conn, item["work_item_id"], "request_created", identity, author)
     words.bring_current(conn)
     return get(conn, identity)
+
+
+def ask_sessions(
+    conn: sqlite3.Connection,
+    reference: str,
+    *,
+    sessions: object,
+    prompt: object,
+    fields: object,
+    expires_at: object = None,
+    author: str | None = None,
+) -> list[dict]:
+    """Ask agent sessions instead of the owner: one request on the item for each, in one write.
+
+    Each is a question with these fields, asked of one top-level session, written by
+    the call in progress, which is who asked. Refused, naming the session, when one
+    is unknown, has ended or gone quiet past its lease, is the caller's own, is a
+    subagent's rather than a top-level one, or is named twice; and when none is
+    named. A refusal writes nothing.
+    """
+
+    parsed_prompt = model.multiline_field(prompt, "prompt", limit=8000)
+    if not parsed_prompt:
+        raise model.PlanningError("prompt is required")
+    parsed_fields = request_model.fields(fields)
+    deadline = request_model.timestamp(expires_at)
+    identities: list[str] = []
+    with _transaction(conn):
+        asked = _addressees(conn, sessions)
+        item = read_model.item_row(conn, reference)
+        at = request_model.now()
+        for session in asked:
+            identity = model.new_id()
+            conn.execute(
+                "INSERT INTO work_item_requests(request_id,work_item_id,kind,prompt,fields_json,"
+                "author,expires_at,created_at,addressee) VALUES(?,?,?,?,?,?,?,?,?)",
+                (
+                    identity,
+                    item["work_item_id"],
+                    "question",
+                    parsed_prompt,
+                    model.dumps(parsed_fields),
+                    model.actor(author),
+                    deadline,
+                    at,
+                    session,
+                ),
+            )
+            if _expired(conn, _row(conn, identity), at):
+                raise model.PlanningError("a request requires a live work item and future deadline")
+            _event(conn, item["work_item_id"], "request_created", identity, author)
+            identities.append(identity)
+    words.bring_current(conn)
+    return [get(conn, identity) for identity in identities]
+
+
+def _addressees(conn: sqlite3.Connection, sessions: object) -> list[str]:
+    """The sessions a request may be asked of, as named, or the refusal of the first that may not."""
+
+    if not isinstance(sessions, list) or not sessions:
+        raise model.PlanningError("sessions names at least one agent session to ask")
+    identity = calls.current()
+    own = (
+        identity.session_id if identity is not None and identity.state == calls.CONFIRMED else None
+    )
+    asked: list[str] = []
+    for value in sessions:
+        session = model.text_field(value, "sessions", limit=128)
+        if session in asked:
+            raise model.PlanningError(f"session {session} is named twice; ask it once")
+        if session == own:
+            raise model.PlanningError(
+                f"session {session} is your own; ask another session, or the owner"
+            )
+        row = conn.execute(
+            "SELECT status, ended_at, last_seen, parent_session_id FROM sessions WHERE id=?",
+            (session,),
+        ).fetchone()
+        if row is None:
+            raise model.PlanningError(f"no session {session} is known to Valkama")
+        if row["parent_session_id"]:
+            raise model.PlanningError(
+                f"session {session} is a subagent's; ask the session it works for,"
+                f" {row['parent_session_id']}"
+            )
+        if not leases.session_live(row):
+            raise model.PlanningError(
+                f"session {session} has ended or gone quiet past its lease, and would not answer"
+            )
+        asked.append(session)
+    return asked
+
+
+def _check_closer(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> None:
+    """Refuse a caller who may not close or change a request asked of an agent session.
+
+    That session answers, changes and declines it, from its conversation or any of
+    its subagents; the session that asked, from any of its agents, or Valkama
+    withdraws it. Code of the server outside any call counts as Valkama. A
+    question to the owner is closed by whoever closes it today.
+    """
+
+    addressee = _addressee(row)
+    if addressee is None:
+        return
+    identity = calls.current()
+    proved = (
+        identity.session_id if identity is not None and identity.state == calls.CONFIRMED else None
+    )
+    if status != "expired":
+        if proved != addressee:
+            raise model.NotAddressedError(
+                f"this request was asked of session {addressee}; only that session or one of"
+                " its subagents answers it"
+            )
+        return
+    if identity is None or identity.source == calls.VALKAMA:
+        return
+    if proved is None or proved != _asker(conn, str(row["request_id"])):
+        raise model.NotAskerError(
+            "only the session that asked this request, or Valkama, withdraws it"
+        )
+
+
+def _asker(conn: sqlite3.Connection, request_id: str) -> str | None:
+    """The session whose proved call asked this request; None when Valkama or nobody proved asked it."""
+
+    found = conn.execute(
+        "SELECT c.session_id FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
+        " WHERE e.action = 'request_created' AND e.detail = ? AND c.identity_state = ?"
+        " ORDER BY e.id LIMIT 1",
+        (request_id, calls.CONFIRMED),
+    ).fetchone()
+    return None if found is None or found[0] is None else str(found[0])
 
 
 #: The most options a list on a comment offers: as many as a question's field.
@@ -574,6 +780,7 @@ def resolve(
         row = _row(conn, identity)
         if row["revision"] != expected_revision:
             raise model.RevisionConflictError(expected_revision, row["revision"])
+        _check_closer(conn, row, status)
         at = request_model.now()
         if row["status"] != "pending" or _expired(conn, row, at):
             raise model.WorkflowGuardError("request is no longer pending")
@@ -625,6 +832,7 @@ def change(
         row = _row(conn, identity)
         if row["revision"] != expected_revision:
             raise model.RevisionConflictError(expected_revision, row["revision"])
+        _check_closer(conn, row, "answered")
         if row["status"] != "answered":
             raise model.WorkflowGuardError("only an answered question's answer can be changed")
         item = read_model.item_by_id(conn, row["work_item_id"])
@@ -705,19 +913,23 @@ def _stored(row: sqlite3.Row, answers: object, own: object, field_notes: object,
     )
 
 
+_OWNER_QUESTIONS = "SELECT r.* FROM work_item_requests r WHERE " + questions.OWNER_QUESTION  # noqa: S608
+
+
 def open_rows(conn: sqlite3.Connection, work_item_id: str | None = None) -> list[sqlite3.Row]:
     """The questions still open for a person to answer, on one item or everywhere in this store.
 
     Open as a reader sees it: a pending row past its deadline, on a closed item or
-    on a finished execution has lapsed although nothing wrote that down. A list on
-    a comment is never one: nobody waits for it, so it raises no alert and holds
-    none up.
+    on a finished execution has lapsed although nothing wrote that down. Only a
+    question to the owner is one (`questions.OWNER_QUESTION`): nobody waits for a
+    list on a comment, and a request asked of an agent session waits for that
+    session, so neither raises an alert or holds anything up.
     """
 
-    query = "SELECT * FROM work_item_requests WHERE status='pending' AND comment_id IS NULL"
+    query = _OWNER_QUESTIONS
     parameters: tuple[str, ...] = ()
     if work_item_id is not None:
-        query += " AND work_item_id=?"
+        query += " AND r.work_item_id=?"
         parameters = (work_item_id,)
     at = request_model.now()
     return [

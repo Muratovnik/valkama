@@ -140,6 +140,10 @@ def error_response(error: BaseException) -> tuple[int, dict]:
         return 409, {"error": {"code": "workflow_guard", "message": str(error)}}
     if isinstance(error, model.MentionLimitError):
         return 429, {"error": {"code": "mention_limit", "message": str(error)}}
+    if isinstance(error, model.NotAddressedError):
+        return 403, {"error": {"code": "not_addressed", "message": str(error)}}
+    if isinstance(error, model.NotAskerError):
+        return 403, {"error": {"code": "not_asker", "message": str(error)}}
     if isinstance(error, model.StoreSchemaError):
         return 409, {"error": {"code": model.STORE_SCHEMA_MISMATCH, "message": str(error)}}
     if isinstance(error, model.PlanningError):
@@ -343,6 +347,7 @@ def _requests(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> 
             answered_after=_first(parameters, "answered_after"),
             limit=_int(_first(parameters, "limit"), "limit", 100),
             offset=_offset(parameters),
+            addressed=_switch(parameters, "addressed"),
         ),
     }
 

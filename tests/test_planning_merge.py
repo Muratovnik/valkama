@@ -514,6 +514,23 @@ class MergeSurfaceTests(MergeTestCase):
             answer["warnings"],
         )
 
+    def test_a_request_asked_of_a_session_moves_and_is_not_said_to_wait(self) -> None:
+        session = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
+        self.conn.execute("INSERT INTO sessions(id, client) VALUES(?, 'codex')", (session,))
+        [asked] = requests.ask_sessions(
+            self.conn,
+            self.first,
+            sessions=[session],
+            prompt="Agree?",
+            fields=[
+                {"id": "reply", "label": "Reply", "type": "text", "required": True, "options": []}
+            ],
+        )
+        answer = self.merge(self.first)
+        self.assertNotIn("warnings", answer, "it waits for the session, not the owner")
+        moved = requests.get(self.conn, asked["request_id"])
+        self.assertEqual((self.survivor, "pending"), (moved["reference"], moved["status"]))
+
 
 if __name__ == "__main__":
     unittest.main()

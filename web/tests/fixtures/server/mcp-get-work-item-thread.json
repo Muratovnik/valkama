@@ -335,7 +335,8 @@
         }
       }
     ],
-    "truncated": false
+    "truncated": false,
+    "addressed_open": 0
   },
   "images": [],
   "url": "http://127.0.0.1:8642/open/MAIN-1"
