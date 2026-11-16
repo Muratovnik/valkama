@@ -296,10 +296,6 @@ _AWAITS_REPLY = {
 CHAIN_PAGE = 200
 #: How many of a chain's newest series entries get_work_item_chain carries.
 CHAIN_SERIES_ENTRIES = 30
-#: How much history get_work_item carries unless the caller asks for all of it.
-RECENT_COMMENTS = read_model.PART_THREADS
-RECENT_EVENTS = read_model.PART_EVENTS
-RECENT_MENTIONS = 5
 #: One part of a work item by name, the form `parts` takes for each.
 _PART = {"type": "string", "enum": list(read_model.PARTS)}
 #: What every list and search says about paging, so an agent knows to keep going.
@@ -442,20 +438,21 @@ TOOLS = [
         " it has, with count and size. parts names what to read: "
         + ", ".join(read_model.PARTS[:-1])
         + " and, on a goal or stage, participants; each comes as the field of that name"
-        f" beside reference and revision. comments: the {RECENT_COMMENTS} threads with the"
-        " newest activity, each root with replies (how many) and last_reply; with parts"
-        " naming comments, thread reads one thread whole, unresolved the roots without the"
-        f" resolved mark, oldest first, at most {read_model.UNRESOLVED_PAGE}, with"
-        " truncated, the next page being comments_after the last root read, and"
-        " comments_after alone every comment after that id, roots and replies alike."
-        f" events: the newest {RECENT_EVENTS} history events. questions: its"
+        f" beside reference and revision. comments: the {read_model.PART_THREADS} threads"
+        " with the newest activity, each root with replies (how many) and last_reply;"
+        " thread one thread whole; unresolved the roots without the resolved mark, oldest"
+        f" first, at most {read_model.UNRESOLVED_PAGE}, with truncated, the next page being"
+        " comments_after the last root read; comments_after alone every comment after that"
+        f" id, roots and replies alike, at most {read_model.COMMENTS_PAGE} with truncated, 0"
+        f" starting from the first. events: the newest {read_model.PART_EVENTS} history"
+        " events, or the newest n, with events_total and events_truncated. questions: its"
         " questions in compact form: total, open, at most"
         f" {requests.ITEM_QUESTIONS} items with the open ones first. claim: the lease, with"
         " expires_at. Each comment names its parent in reply_to or reply_to_request (null"
         " on a root), by_person, resolution, a root's mark, and mentions, the items it"
-        " told. Without parts, full=true or a comment mode answers with the whole record"
-        " as before. An accepted open goal or stage shows state null and container_state:"
-        " not_started, in_progress or awaiting_confirmation.",
+        " told. A comment mode or events without parts reads that part alone. An accepted"
+        " open goal or stage shows state null and container_state: not_started,"
+        " in_progress or awaiting_confirmation.",
         READ_ONLY,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -464,29 +461,31 @@ TOOLS = [
                 "description": "What to read: card, the default, or any other part by"
                 " name; one name reads as a list of it.",
             },
-            "full": {
+            "unresolved": {
                 "type": "boolean",
-                "description": "Answer with every comment and history event instead of"
-                " the newest ones.",
-            },
-            "comments_after": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "A comment id: answer with every comment after it, oldest"
-                " first, instead of the newest ones. Not together with full.",
+                "description": "Read one page of the roots without the resolved mark, each"
+                " with replies and last_reply; comments_after is where the next page starts."
+                " Not together with thread.",
             },
             "thread": {
                 "type": "integer",
                 "minimum": 1,
-                "description": "A comment id: answer with its thread, the root and every"
-                " reply oldest first; a reply's id reads its root's thread. Not together"
-                " with full or comments_after.",
+                "description": "A comment id: read its thread, the root and every reply"
+                " oldest first; a reply's id reads its root's thread. Not together with"
+                " comments_after.",
             },
-            "unresolved": {
-                "type": "boolean",
-                "description": "Answer with the roots without the resolved mark, each with"
-                " replies and last_reply. Not together with full or thread; comments_after"
-                " is where the next page starts.",
+            "comments_after": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "A comment id: read one flat page of the comments after it,"
+                " oldest first, 0 starting from the first; beside unresolved, where the next"
+                " page of roots starts.",
+            },
+            "events": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": read_model.PART_EVENTS_MOST,
+                "description": "How many of the newest history events to read.",
             },
         },
         ["id"],
@@ -1321,33 +1320,40 @@ def _get(
     return run
 
 
+#: The part each mode of get_work_item cuts, which a read naming no parts reads alone.
+_MODE_PARTS = {
+    "comments_after": "comments",
+    "thread": "comments",
+    "unresolved": "comments",
+    "events": "events",
+}
+
+
 def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    """One item by parts: its card unless the caller names others.
+    """One item by parts: its card unless the caller names others or a mode.
 
     The boundary reads the parts, so a read over HTTP that names them answers the
-    same. Without `parts`, `full` or a comment mode still reads the whole record.
+    same. A mode without `parts` reads the part it cuts and nothing else.
     """
 
-    names = arguments.get("parts")
     modes = {
         "comments_after": arguments.get("comments_after"),
         "thread": arguments.get("thread"),
         "unresolved": _is_verbose(arguments, "unresolved") or None,
+        "events": arguments.get("events"),
     }
-    full = _is_verbose(arguments, "full")
-    if names is None and (full or any(value is not None for value in modes.values())):
-        return _whole_item(conn, arguments)
-    if full:
-        raise model.PlanningError("full and parts exclude each other")
+    named = [_MODE_PARTS[mode] for mode, value in modes.items() if value is not None]
     # Each name is held to the parts before the list is joined, so a comma inside
     # one cannot make two of it.
     parameters = {
         "id": [str(arguments["id"])],
-        "parts": [",".join(read_model.part_names(_part_names(names)))],
+        "parts": [",".join(read_model.part_names(_part_names(arguments.get("parts"), named)))],
     }
     for mode, value in modes.items():
         if value is True:
             parameters[mode] = ["true"]
+        elif mode == "events" and value is not None:
+            parameters[mode] = [str(read_model.events_count(value))]
         elif value is not None:
             parameters[mode] = [str(model.count_field(value, mode))]
     answer = api.handle_get(conn, "/api/planning/work-item", parameters)
@@ -1356,70 +1362,19 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
     return answer[1]["work_item"]
 
 
-def _part_names(names: object) -> list[str]:
-    """`parts` as a list of names: the default card, one name, or a list of them."""
+def _part_names(names: object, by_modes: list[str]) -> list[str]:
+    """`parts` as a list of names: one name, a list of them, or what the modes read.
+
+    Without `parts`, the parts the modes cut, or the card when no mode is named.
+    """
 
     if names is None:
-        return ["card"]
+        return by_modes or ["card"]
     if isinstance(names, str):
         return [names]
     if isinstance(names, list) and names and all(isinstance(name, str) for name in names):
         return names
     raise model.PlanningError("parts must be a part name or a list of them")
-
-
-def _whole_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    """The whole record with its newest history, unless the caller wants all of it.
-
-    The cut is made by the boundary's opt-in parameters, so the HTTP read a
-    screen makes without them is the complete record it always was. Either way
-    the answer names the sessions that wrote to the item.
-    """
-
-    parameters = {"id": [str(arguments["id"])], "sessions": ["true"]}
-    full = _is_verbose(arguments, "full")
-    after = arguments.get("comments_after")
-    thread = arguments.get("thread")
-    unresolved = _is_verbose(arguments, "unresolved")
-    if unresolved:
-        if full:
-            raise model.PlanningError("full and unresolved exclude each other")
-        if thread is not None:
-            raise model.PlanningError("thread and unresolved exclude each other")
-        parameters["unresolved"] = ["true"]
-    if after is not None:
-        if full:
-            raise model.PlanningError("full and comments_after exclude each other")
-        parameters["comments_after"] = [str(model.count_field(after, "comments_after"))]
-    if thread is not None:
-        if full:
-            raise model.PlanningError("full and thread exclude each other")
-        if after is not None:
-            # Here as well as at the boundary, which reads comments_after=0 as absent.
-            raise model.PlanningError("thread and comments_after exclude each other")
-        parameters["thread"] = [str(model.count_field(thread, "thread"))]
-    if after is None and thread is None and not full and not unresolved:
-        parameters["threads"] = [str(RECENT_COMMENTS)]
-    if not full:
-        parameters["events"] = [str(RECENT_EVENTS)]
-    answer = api.handle_get(conn, "/api/planning/work-item", parameters)
-    if answer is None:  # pragma: no cover - the path table above is closed
-        raise ValueError("no planning work item read")
-    item = answer[1]["work_item"]
-    # The newest few of the comments that named it, or all of them and no count.
-    named, total = read_model.mentions_of(
-        conn, item["work_item_id"], None if full else RECENT_MENTIONS
-    )
-    item = {**item, "mentions": named, "mentions_total": total}
-    if full:
-        del item["mentions_total"]
-    return _with_url(
-        {
-            **item,
-            "questions": requests.item_questions(conn, item["work_item_id"]),
-            "images": images.of_item(conn, item["work_item_id"]),
-        }
-    )
 
 
 def _image(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:

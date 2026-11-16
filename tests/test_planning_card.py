@@ -237,7 +237,7 @@ class PartTests(FullItemCase):
         }
         own = {
             "comments": {"comments_total", "threads_total", "unresolved_total", "truncated"},
-            "events": {"events_total", "truncated"},
+            "events": {"events_total", "events_truncated"},
             "mentions": {"mentions_total"},
         }
         for name in read_model.PARTS[1:]:
@@ -263,6 +263,13 @@ class PartTests(FullItemCase):
 
     def test_http_reads_parts_as_the_tool_does(self) -> None:
         self.assertEqual(self.read(parts=["card", "refs"]), self.http(parts="card,refs"))
+        newest = self.http(parts="events", events="2")
+        self.assertEqual(self.read(events=2), newest)
+        self.assertEqual(self.full()["events"][-2:], newest["events"])
+        for value in ("0", "1001", "two"):
+            with self.subTest(events=value), self.assertRaises(model.PlanningError) as caught:
+                self.http(parts="events", events=value)
+            self.assertEqual("events must be between 1 and 1000", str(caught.exception))
 
     def test_a_part_the_item_lacks_is_refused_with_the_parts(self) -> None:
         for parts in ("history", ["card", "full"], ["card,links"]):

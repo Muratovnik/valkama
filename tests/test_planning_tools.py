@@ -9,8 +9,8 @@ from unittest import mock
 
 from server import mcp_surface, store
 from server.ops import configuration
+from server.planning import acknowledgements, model, service
 from server.planning import api as planning_api
-from server.planning import model, service
 from server.planning import tools as planning_tools
 
 
@@ -341,20 +341,14 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         return answer
 
     def full(self, reference: str) -> dict:
-        """The complete item, as every write's full answer carries it.
+        """The complete item as every write's full answer carries it, with its address.
 
-        `full=true` is the read that keeps every comment and event; `sessions`
-        is what the read adds about the item, not part of the record a write
-        returns. The one key the two forms keep differently is `mentions`: a
-        write answers with the item's own record, the newest `HTTP_MENTIONS` and
-        their total, where the agent's full read lists all of them without one.
+        The record is the one the HTTP read gives without parts; `url` is what the
+        tools add to it for an agent.
         """
 
-        answer = self.call("get_work_item", id=reference, full=True)
         record = service.get_work_item(self.conn, reference)
-        answer["mentions"] = record["mentions"]
-        answer["mentions_total"] = record["mentions_total"]
-        return {k: v for k, v in answer.items() if k != "sessions"}
+        return {**record, "url": acknowledgements.work_item_url(str(record["reference"]))}
 
     @property
     def step(self) -> str:
@@ -418,13 +412,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         for tool in ACKNOWLEDGED:
             with self.subTest(tool):
                 answer = self.call(tool, verbose=True, **self.arguments_for(tool))
-                # `questions` and `images` are what the read tool adds; a write's answer
-                # has neither.
-                stored = {
-                    k: v
-                    for k, v in self.full(answer["reference"]).items()
-                    if k not in ("questions", "images")
-                }
+                stored = self.full(answer["reference"])
                 # A transition also reports what the guards said about it, a
                 # claim the state it started the item in, a batch what each
                 # of its groups changed, and a creation the items reading like it.
@@ -614,11 +602,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 # the boundary has none of them.
                 for added in ("url", "questions", "images"):
                     self.assertNotIn(added, body)
-                stored = {
-                    k: v
-                    for k, v in self.full(self.ref).items()
-                    if k not in ("url", "questions", "images")
-                }
+                stored = {k: v for k, v in self.full(self.ref).items() if k != "url"}
                 self.assertEqual(
                     stored,
                     # `released` names who the write let go: no field of the item.

@@ -393,7 +393,7 @@ class WhoHearsTests(Harness):
 
 
 class ReadingTests(Harness):
-    def test_the_part_and_http_read_the_newest_fifty_and_a_whole_read_all(self) -> None:
+    def test_the_part_and_http_read_the_newest_fifty(self) -> None:
         written = [self.tells(body=f"Mention {index}")["comment_id"] for index in range(7)]
         read = self.agent("get_work_item", id=self.target, parts="mentions")
         self.assertEqual(written, [entry["comment_id"] for entry in read["mentions"]])
@@ -401,9 +401,6 @@ class ReadingTests(Harness):
         self.assertEqual(
             7, self.agent("get_work_item", id=self.target)["parts"]["mentions"]["count"]
         )
-        whole = self.agent("get_work_item", id=self.target, full=True)
-        self.assertEqual(written, [entry["comment_id"] for entry in whole["mentions"]])
-        self.assertNotIn("mentions_total", whole)
         answer = api.handle_get(self.conn, "/api/planning/work-item", {"id": [self.target]})
         assert answer is not None
         http = answer[1]["work_item"]
@@ -459,7 +456,7 @@ class TextMentionTests(Harness):
     """
 
     def records(self, reference: str) -> list[dict]:
-        return list(self.agent("get_work_item", id=reference, full=True)["mentions"])
+        return list(self.agent("get_work_item", id=reference, parts="mentions")["mentions"])
 
     def describe(self, text: str, mentions: list[str], **extra: object) -> dict:
         """The person saves the source's description, naming `mentions`."""

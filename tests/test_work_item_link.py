@@ -750,7 +750,6 @@ class WorkItemUrlTests(unittest.TestCase):
     def test_the_full_record_carries_the_address(self) -> None:
         expected = "http://127.0.0.1:8642/open/MAIN-1"
         self.assertEqual(expected, self.call("get_work_item", id="MAIN-1")["url"])
-        self.assertEqual(expected, self.call("get_work_item", id="MAIN-1", full=True)["url"])
         verbose = self.call(
             "apply_work_item_changes", id="MAIN-1", update={"title": "Two"}, verbose=True
         )

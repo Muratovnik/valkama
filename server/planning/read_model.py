@@ -972,6 +972,12 @@ OFF_CARD = (
 #: How many threads and events the comments and events parts carry when no cut is named.
 PART_THREADS = 5
 PART_EVENTS = 10
+#: The most newest events the events part reads when the caller names how many.
+PART_EVENTS_MOST = 1000
+#: How many comments one page of the comments part after a comment id carries. The
+#: next page starts after the last one read, as an unresolved page does, because the
+#: longest discussions do not fit one answer.
+COMMENTS_PAGE = 50
 
 
 def part_names(names: Iterable[str]) -> list[str]:
@@ -1139,11 +1145,19 @@ def comments_part(
     """The comments part: the newest threads, or the cut a comment mode names.
 
     Without a mode it is the `PART_THREADS` threads with the newest activity.
-    `truncated` says the cut leaves out what it would have shown with more room:
-    older threads, or the next page of unresolved roots.
+    `comments_after` alone is one flat page of `COMMENTS_PAGE` comments after that
+    id, roots and replies in the order written, 0 starting from the first; beside
+    `unresolved` it is where that page of roots starts. `truncated` says the cut
+    leaves out what it would have shown with more room: older threads, or a next
+    page.
     """
 
     identity = str(row["work_item_id"])
+    # Any `comments_after`, 0 too, is a page start a thread read cannot take.
+    _exclusive(thread=thread, comments_after=comments_after)
+    if comments_after is not None and not unresolved:
+        page, more = _comments_page(conn, identity, comments_after)
+        return {"comments": page, **_thread_counts(conn, identity), "truncated": more}
     newest = thread is None and comments_after is None and not unresolved
     found, shown, more = _cut_comments(
         conn,
@@ -1160,6 +1174,20 @@ def comments_part(
     return {"comments": found, **counts, "truncated": more}
 
 
+def _comments_page(conn: sqlite3.Connection, identity: str, after: int) -> tuple[list[dict], bool]:
+    """The first `COMMENTS_PAGE` comments after `after`, oldest first, and whether more follow.
+
+    Read one past its size, so whether more remain is known rather than guessed.
+    """
+
+    rows = conn.execute(
+        _COMMENT_ROWS + " WHERE m.work_item_id = ? AND m.id > ? ORDER BY m.id LIMIT ?",
+        (identity, after, COMMENTS_PAGE + 1),
+    ).fetchall()
+    page = with_mentions(conn, [comment_record(item) for item in rows[:COMMENTS_PAGE]])
+    return page, len(rows) > COMMENTS_PAGE
+
+
 def claim(conn: sqlite3.Connection, row: sqlite3.Row) -> dict | None:
     """The lease on the item as the full record carries it, or None while nobody holds it."""
 
@@ -1167,13 +1195,30 @@ def claim(conn: sqlite3.Connection, row: sqlite3.Row) -> dict | None:
     return None if lease is None else lease.as_dict()
 
 
-def events_part(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
-    """The events part: the `PART_EVENTS` newest events, oldest first, and how many there are."""
+def events_part(conn: sqlite3.Connection, row: sqlite3.Row, newest: int | None = None) -> dict:
+    """The events part: the `newest` events, `PART_EVENTS` unless named, oldest first.
+
+    Beside them how many there are, and `events_truncated` when some are left out:
+    a flag of its own, so that read beside the comments part it says which of the
+    two was cut.
+    """
 
     identity = str(row["work_item_id"])
-    found = _events(conn, identity, PART_EVENTS)
+    found = _events(conn, identity, PART_EVENTS if newest is None else events_count(newest))
     total = _events_total(conn, identity)
-    return {"events": found, "events_total": total, "truncated": len(found) < total}
+    return {"events": found, "events_total": total, "events_truncated": len(found) < total}
+
+
+def events_count(value: object) -> int:
+    """How many newest events a read of the events part names: 1 to `PART_EVENTS_MOST`.
+
+    An integer, never a boolean or text: the HTTP boundary reads its parameter as a
+    number first, so both surfaces are held to the one range with the one refusal.
+    """
+
+    if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= PART_EVENTS_MOST:
+        raise model.PlanningError(f"events must be between 1 and {PART_EVENTS_MOST}")
+    return value
 
 
 def refs(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
