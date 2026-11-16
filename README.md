@@ -635,14 +635,39 @@ exactly as it was, with no snapshot and no write. Open it with Valkama 2.9 once,
 which carries a store of any earlier schema forward under its own snapshots as that
 release describes, and then come back.
 
-To carry a 2.9 store to the work model, stop every process that holds the store --
-the listener and every agent client, since each one runs its own server -- and run:
+To carry a 2.9 store to the work model, first upgrade the project registry
+(`projects upgrade`), register and bind the projects its spaces hold (`projects add`,
+`projects bind`), and write the file that gives each work item its projects:
 
 ```powershell
-valkama migrate work-model
+valkama projects map-items --output item-projects.json
 ```
 
-It migrates the configured store (`store` or `VALKAMA_DB`). Before its first write
+`map-items` reads a copy of the store, the registry and the registered repositories,
+and writes nothing else. For each task its commits decide first: a value
+`project@hash` names a registered project, and a bare hash belongs to the one
+registered repository holding it. Without such a commit, a label equal to the id of
+a project bound to the task's space names that project, and `--label LABEL=PROJECT`
+carries another label in any space, provided its words are words of the project's
+id. A task with neither keeps its space's project. A carried label leaves the task,
+and the project's id still finds it in a search. The command prints the tasks it
+counted by space and by source, each task whose label names another project than
+its commits, and each task holding the label of a project of another space: read
+the file before migrating, and add a project where it is right. It refuses a file
+that already exists.
+
+Then stop every process that holds the store -- the listener and every agent
+client, since each one runs its own server -- and run:
+
+```powershell
+valkama migrate work-model --item-projects item-projects.json
+```
+
+It migrates the configured store (`store` or `VALKAMA_DB`). First it checks, only
+reading, that the registry is format 4 and binds each space's project to it, that no
+two spaces share a name, and that the file belongs to this store as it is now and
+names registered projects only; a store holding work items needs the file. A
+refusal names what to run, and nothing is written. Before its first write
 it takes a verified snapshot labelled `pre3.0` in `backups/` beside the store, with
 the pictures in a `.images` folder beside it, and then runs every step and checks
 every postcondition in one transaction: a step that fails or a postcondition that

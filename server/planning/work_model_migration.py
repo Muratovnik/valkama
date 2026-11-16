@@ -28,7 +28,14 @@ otherwise cascade into them:
   out of a closed container into triage.
 - **checks** creates the trigger that keeps every kind where it may stand.
 - **item-projects** creates the table of the projects each item changes, and the two triggers
-  through which a project gained or lost marks its item for the word index.
+  through which a project gained or lost marks its item for the word index, and
+  fills it: a task the file `valkama projects map-items` wrote holds projects for
+  gets them, every other task its space's former project, `migrated`; a container
+  none. The file is the one `store` checked before the first write and left in
+  `Context.memo`, beside the registry it read.
+- **labels** takes off each item the labels its entry in that file drops, the others in
+  their order, and brings the word index current inside the transaction: `item-projects` and the
+  labels marked items stale, and `indexes` reads the index.
 - **last-route** drops the last route the shell remembered when its scope is a project:
   a space is the scope now, and the address it names no longer opens.
 
@@ -38,8 +45,8 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
-The postconditions `fresh-shape` to `second-run` and `routes` are checked after the steps, inside the same
-transaction; `store` adds `recovery-point`, the recovery point.
+The postconditions `fresh-shape` to `second-run` and `task-projects` to `routes` are checked after the steps, inside the
+same transaction; `store` adds `recovery-point`, the recovery point.
 """
 
 from __future__ import annotations
@@ -98,6 +105,9 @@ def _sql_set(values: Iterable[str]) -> str:
 
 
 # -- the records the history holds ---------------------------------------------
+
+#: The source of a project a task took from its space because nothing else named one.
+_MIGRATED = "migrated"
 
 _KEY = r"[a-z][a-z0-9-]{0,31}"
 #: The three forms a `created` or `transitioned` record has: `<key>`,
@@ -246,8 +256,16 @@ class Oracle:
     numbers: set[tuple[str, int]] = field(default_factory=set)
     containers: int = 0
     started_from_created: int = 0
-    #: The rows `item-projects` leaves in `work_item_projects`, a table the store `oracle` reads lacks.
+    #: The rows `item-projects` leaves in `work_item_projects`, a table the store `oracle`
+    #: reads lacks, and each task's set of them; a container has none.
     item_projects: int = 0
+    projects: dict[str, set[tuple[str, str]]] = field(default_factory=dict)
+    #: Each item's labels after `items` and `labels`, and the items whose labels `labels` changes.
+    labels_after: dict[str, list[str]] = field(default_factory=dict)
+    labels_dropped: set[str] = field(default_factory=set)
+    #: For each stem searched, the tasks a word of one of their projects' ids starts
+    #: with it: what the search finds after the migration besides what it found before.
+    search_added: dict[str, list[str]] = field(default_factory=dict)
     #: Every remembered preference, record by key, and the keys `last-route` drops.
     ui_prefs: dict[str, str] = field(default_factory=dict)
     dropped_prefs: list[str] = field(default_factory=list)
@@ -260,15 +278,23 @@ def _oracle(context: Context) -> Oracle:
     return found
 
 
+#: The tables FTS5 keeps the word index in, which the word index's own name begins.
+#: Its stale marks are a plain table of the store's and are not among them.
+_INDEX_SHADOWS = f"{words.INDEX}_"
+
+
 def _tables(conn: sqlite3.Connection) -> list[str]:
-    """Every table whose rows count: the virtual index is counted by its own tables."""
+    """Every table whose rows count. The word index is derived from the rows of the
+    others and is held to them by `indexes`, so neither it nor the tables FTS5 keeps it in
+    are counted: bringing it current in `labels` changes how many rows those hold."""
 
     return [
         str(row[0])
         for row in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'"
             " AND substr(name, 1, 7) != 'sqlite_' AND sql NOT LIKE 'CREATE VIRTUAL%'"
-            " ORDER BY name"
+            " AND (substr(name, 1, ?) != ? OR name = ?) ORDER BY name",
+            (len(_INDEX_SHADOWS), _INDEX_SHADOWS, words.ROWS),
         )
     ]
 
@@ -290,16 +316,29 @@ def _objects(conn: sqlite3.Connection) -> dict[str, list[str]]:
     return names
 
 
-def _search_sample(conn: sqlite3.Connection) -> dict[str, list[str] | None]:
-    """A few words from the items' titles and what a search for each finds."""
+def _search_queries(conn: sqlite3.Connection, projects: Iterable[str]) -> list[str]:
+    """A few words from the items' titles, and the stem of every word of the ids of
+    the projects `item-projects` gives: the words a search finds an item by when `labels` has taken
+    the labels that held them."""
 
     queries: list[str] = []
     for (title,) in conn.execute("SELECT title FROM work_items ORDER BY work_item_id LIMIT 40"):
         for stem in words.stems(str(title), shortest=3)[:1]:
             if stem not in queries:
                 queries.append(stem)
+    queries = queries[:12]
+    for project in sorted(projects):
+        for term in words.terms(project):
+            if term[: words.STEM] not in queries:
+                queries.append(term[: words.STEM])
+    return queries
+
+
+def _search(conn: sqlite3.Connection, queries: Iterable[str]) -> dict[str, list[str] | None]:
+    """What a search for each stem finds, by item id; None where the index cannot be read."""
+
     found: dict[str, list[str] | None] = {}
-    for stem in queries[:12]:
+    for stem in queries:
         rows = words.search_rows(conn, [stem], space_id=None, limit=100_000, offset=0)
         found[stem] = None if rows is None else sorted(str(row["work_item_id"]) for row in rows)
     return found
@@ -603,7 +642,7 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         _DERIVED_BEFORE,
         [identity for identity, found in expect.items() if found["category"] == _SERVICE],
     )
-    oracle.search = _search_sample(conn)
+    _read_item_projects(conn, context, oracle)
     oracle.ui_prefs = {
         str(key): str(record)
         for key, record in conn.execute("SELECT key, record_json FROM platform_ui_prefs")
@@ -627,7 +666,63 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         "children_to_take_out": len(oracle.moved),
         "accepted_open_containers": len(oracle.derived),
         "remembered_routes_to_drop": len(oracle.dropped_prefs),
+        "item_projects": oracle.item_projects,
+        "items_losing_labels": len(oracle.labels_dropped),
     }
+
+
+def _item_projects_file(context: Context) -> Mapping[str, Any]:
+    found = context.memo.get("item_projects")
+    if not isinstance(found, Mapping):
+        raise UnmetError("the item projects file was not read before the steps")
+    return found
+
+
+def _read_item_projects(conn: sqlite3.Connection, context: Context, oracle: Oracle) -> None:
+    """The oracle's reading of the projects `item-projects` gives and the labels `labels`
+    takes, in Python.
+
+    A task with a nonempty entry in the file gets that entry's projects, any other
+    task its space's former project as `migrated`; a container gets none and keeps
+    its labels. The searches are read before any write, with what each will find
+    besides: the tasks a word of one of their projects' ids starts the stem.
+    """
+
+    entries = _item_projects_file(context)["items"]
+    former = {
+        str(identity): str(project)
+        for identity, project in conn.execute(
+            "SELECT planning_space_id, project_id FROM planning_spaces"
+        )
+    }
+    spaces = {
+        str(identity): str(space)
+        for identity, space in conn.execute(
+            "SELECT work_item_id, planning_space_id FROM work_items"
+        )
+    }
+    for identity, found in oracle.expect.items():
+        entry = entries.get(identity) or {"projects": [], "drop_labels": []}
+        oracle.labels_after[identity] = list(found["labels"])
+        if found["container"]:
+            continue
+        given = {(str(p["project_id"]), str(p["source"])) for p in entry["projects"]}
+        oracle.projects[identity] = given or {(former[spaces[identity]], _MIGRATED)}
+        kept = [label for label in found["labels"] if label not in entry["drop_labels"]]
+        if kept != found["labels"]:
+            oracle.labels_after[identity] = kept
+            oracle.labels_dropped.add(identity)
+    oracle.item_projects = sum(len(given) for given in oracle.projects.values())
+    queries = _search_queries(
+        conn, {project for given in oracle.projects.values() for project, _ in given}
+    )
+    oracle.search = _search(conn, queries)
+    for stem in queries:
+        oracle.search_added[stem] = sorted(
+            identity
+            for identity, given in oracle.projects.items()
+            if any(term.startswith(stem) for project, _ in given for term in words.terms(project))
+        )
 
 
 def _project_scoped(record: str) -> bool:
@@ -1203,17 +1298,90 @@ def _item_projects_needed(conn: sqlite3.Connection, context: Context) -> bool:
 
 def _create_item_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     """`item-projects`: the table of the projects each item changes, as a fresh store holds it, with
-    the two triggers that mark an item for the word index when it gains or loses one."""
+    the two triggers that mark an item for the word index when it gains or loses one,
+    filled in SQL from the file and the spaces' former projects."""
 
-    del context
     for statement in (*planning_store.ITEM_PROJECTS, *words.PROJECT_TRIGGER_STATEMENTS):
         conn.execute(statement)
-    return {"rows": int(conn.execute("SELECT COUNT(*) FROM work_item_projects").fetchone()[0])}
+    entries = _item_projects_file(context)["items"]
+    given = sorted(
+        (identity, str(project["project_id"]), str(project["source"]))
+        for identity, entry in entries.items()
+        for project in entry["projects"]
+    )
+    conn.executemany(
+        "INSERT INTO work_item_projects(work_item_id, project_id, source) SELECT ?1, ?2, ?3"
+        " WHERE EXISTS (SELECT 1 FROM work_items WHERE work_item_id = ?1 AND kind != ?4)",
+        [(*row, _CONTAINER) for row in given],
+    )
+    migrated = conn.execute(
+        "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+        " SELECT w.work_item_id, p.project_id, ? FROM work_items w"
+        " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+        " WHERE w.kind != ? AND w.work_item_id NOT IN (SELECT value FROM json_each(?))",
+        (_MIGRATED, _CONTAINER, json.dumps(sorted({row[0] for row in given}))),
+    ).rowcount
+    return {
+        "rows": int(conn.execute("SELECT COUNT(*) FROM work_item_projects").fetchone()[0]),
+        "migrated": migrated,
+    }
 
 
 def _check_item_projects(conn: sqlite3.Connection, context: Context) -> None:
     if _item_projects_needed(conn, context):
         raise UnmetError("the table of the items' projects or its search triggers are missing")
+
+
+# -- the labels a project now carries ------------------------------------------
+
+
+def _labels_to_drop(conn: sqlite3.Connection, context: Context) -> list[tuple[str, str]]:
+    """Each item whose labels still hold one its entry drops, with the labels it keeps."""
+
+    changed: list[tuple[str, str]] = []
+    for identity, entry in sorted(_item_projects_file(context)["items"].items()):
+        if not entry["drop_labels"]:
+            continue
+        row = conn.execute(
+            "SELECT labels FROM work_items WHERE work_item_id = ? AND kind != ?",
+            (identity, _CONTAINER),
+        ).fetchone()
+        if row is None:
+            continue
+        labels = json.loads(row[0] or "[]")
+        kept = [label for label in labels if label not in entry["drop_labels"]]
+        if kept != labels:
+            changed.append((model.dumps(kept), identity))
+    return changed
+
+
+def _index_stale(conn: sqlite3.Connection) -> bool:
+    stale = f"SELECT 1 FROM {words.ROWS} WHERE stale = 1 LIMIT 1"  # noqa: S608
+    return conn.execute(stale).fetchone() is not None
+
+
+def _labels_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    return bool(_labels_to_drop(conn, context)) or _index_stale(conn)
+
+
+def _drop_labels(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`labels`: a label whose project the item now names leaves it, and the index catches up.
+
+    The labels go through the store's own spelling; the trigger on them, and the one
+    on each project `item-projects` gave, marked the items stale, and the index reads them here,
+    inside the transaction, as every verb that writes an item's text does.
+    """
+
+    changed = _labels_to_drop(conn, context)
+    conn.executemany("UPDATE work_items SET labels = ? WHERE work_item_id = ?", changed)
+    stale = int(conn.execute(f"SELECT COUNT(*) FROM {words.ROWS} WHERE stale = 1").fetchone()[0])  # noqa: S608
+    words.bring_current(conn)
+    return {"items": len(changed), "index_rows_read": stale}
+
+
+def _check_labels(conn: sqlite3.Connection, context: Context) -> None:
+    if _labels_to_drop(conn, context):
+        raise UnmetError("an item still holds a label its entry drops")
 
 
 # -- `last-route`: the last route -------------------------------------------------------
@@ -1260,6 +1428,7 @@ STEPS = (
     ),
     Step("checks", "checks", _create_trigger, _trigger_needed, _check_trigger),
     Step("item-projects", "item projects", _create_item_projects, _item_projects_needed, _check_item_projects),
+    Step("labels", "labels", _drop_labels, _labels_needed, _check_labels),
     Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
 )
 
@@ -1661,9 +1830,10 @@ def _holds_indexes(conn: sqlite3.Connection, context: Context) -> Mapping[str, A
         found.append(f"the index marks {rows} rows for {total} items")
     if stale:
         found.append(f"{stale} index rows are stale")
-    searched = _search_sample(conn)
+    searched = _search(conn, oracle.search)
     for stem, before in oracle.search.items():
-        if searched.get(stem) != before:
+        expected = before if before is None else sorted({*before, *oracle.search_added[stem]})
+        if searched.get(stem) != expected:
             found.append(f"a search for {stem!r} finds other items")
     _unmet(found, "indexes, triggers and search")
     return {"index_rows": rows, "searches_compared": len(oracle.search)}
@@ -1685,8 +1855,9 @@ def _holds_identities(conn: sqlite3.Connection, context: Context) -> Mapping[str
         # A value no step writes is compared as stored, character for character, so a
         # step that rewrote it to the same meaning is still seen. Only what a step
         # writes anew is compared parsed: the checklist whose step claims `containers` to `children-left`
-        # release goes through `model.dumps`, and the labels `items` adds a kind label to
-        # through `json_insert`, each in a spelling of its own.
+        # release goes through `model.dumps`, the labels `items` adds a kind label to
+        # through `json_insert`, and those `labels` takes some from through `model.dumps`,
+        # each in a spelling of its own.
         for column in ("title", "description", "position", "summary"):
             if row[column] != before[column]:
                 found.append(f"{identity} changed its {column}")
@@ -1699,8 +1870,8 @@ def _holds_identities(conn: sqlite3.Connection, context: Context) -> Mapping[str
                 found.append(f"{identity} changed its checklist beyond the claims released")
         elif row["checklist"] != before["checklist"]:
             found.append(f"{identity} changed its checklist")
-        if before["kind_label"]:
-            labels = oracle.expect[identity]["labels"]
+        if before["kind_label"] or identity in oracle.labels_dropped:
+            labels = oracle.labels_after[identity]
             if json.loads(row["labels"]) != labels:
                 found.append(f"{identity} has the labels {row['labels']}, not {labels}")
         elif row["labels"] != before["labels"]:
@@ -1729,6 +1900,42 @@ def _holds_known_exceptions(conn: sqlite3.Connection, context: Context) -> Mappi
         found.append(f"in review {review}, the oracle expected {oracle.review}")
     _unmet(found, "known exceptions")
     return {"taken_out_of_closed_containers": moved, "tasks_left_in_review": review}
+
+
+def _holds_task_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Each task names the projects `oracle` read for it, each by its source; a container none."""
+
+    oracle = _oracle(context)
+    held: dict[str, set[tuple[str, str]]] = {}
+    for identity, project, source in conn.execute(
+        "SELECT work_item_id, project_id, source FROM work_item_projects"
+    ):
+        held.setdefault(str(identity), set()).add((str(project), str(source)))
+    references = _references(conn)
+    found = [
+        f"{references.get(identity, identity)} names {sorted(held.get(identity, set()))},"
+        f" not {sorted(oracle.projects.get(identity, set()))}"
+        for identity in sorted(set(held) | set(oracle.projects))
+        if held.get(identity, set()) != oracle.projects.get(identity, set())
+    ]
+    _unmet(found, "the items' projects")
+    sources = Counter(source for given in held.values() for _, source in given)
+    return {"tasks": len(held), "by_source": dict(sorted(sources.items()))}
+
+
+def _holds_labels_kept(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Each item's labels are those before, less the ones its entry drops, in order."""
+
+    oracle = _oracle(context)
+    references = _references(conn)
+    found = [
+        f"{references.get(str(identity), identity)} has the labels {labels},"
+        f" not {oracle.labels_after.get(str(identity))}"
+        for identity, labels in conn.execute("SELECT work_item_id, labels FROM work_items")
+        if json.loads(labels or "[]") != oracle.labels_after.get(str(identity))
+    ]
+    _unmet(found, "labels")
+    return {"items_losing_labels": len(oracle.labels_dropped)}
 
 
 def _holds_routes(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
@@ -1775,6 +1982,8 @@ POSTCONDITIONS = (
     Postcondition("indexes", "indexes, triggers and the word index", _p13),
     Postcondition("identities", "identities and content", _p14),
     Postcondition("known-exceptions", "known exceptions", _p15),
+    Postcondition("task-projects", "each task names the projects the file and its space give", _p20),
+    Postcondition("labels-kept", "each item keeps its labels but the ones its entry drops", _p21),
     Postcondition("routes", "no remembered route has a project as its scope", _p22),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )

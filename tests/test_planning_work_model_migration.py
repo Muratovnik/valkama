@@ -2,7 +2,9 @@
 
 Every store here is built as 2.9 left one -- the captured schema-17 catalog with
 its word index, rows written as plain SQL in the shapes that build wrote them --
-in a temporary directory. The expectations are written out by hand from the rules
+in a temporary directory, beside a registry of format 4 binding each space's
+project to it and a file of item projects that names none, so every task takes its
+space's project. The expectations are written out by hand from the rules
 of the migration, item by item, rather than read back from the oracle the
 migration computes, so a rule both readings got wrong still fails here.
 """
@@ -30,7 +32,8 @@ from server.planning import images as planning_images
 from server.planning import store as planning_store
 from server.planning import words
 from server.planning import work_model_migration as migration
-from tests import schema9, schema17
+from server.store_identity.refs import planning_space_entity
+from tests import registry_fixtures, schema9, schema17
 
 T0 = "2026-07-26T00:00:00Z"
 T1 = "2026-08-01T10:00:00Z"
@@ -376,6 +379,90 @@ def build(path: str) -> dict[str, str]:
     return ids
 
 
+#: The store identity `schema17.build_2_9` writes, and the project of each space it holds.
+DATA_SCOPE = "00000000-0000-4000-8000-000000000029"
+SPACE_PROJECTS = {"KEEP": "kept", "WM": "work-model", "ALT": "other"}
+
+
+def registry(
+    case: unittest.TestCase,
+    directory: str,
+    bound: dict[str, str] | None = None,
+    unbound: tuple[str, ...] = (),
+    raw: bytes | None = None,
+) -> str:
+    """A registry of format 4 in a directory of its own, which `LOCALAPPDATA` names for
+    the rest of the test: each project in `bound` bound to its space, by key, those in
+    `unbound` to none. `raw` writes those bytes instead."""
+
+    folder = os.path.join(directory, "localappdata")
+    os.makedirs(os.path.join(folder, "Valkama"), exist_ok=True)
+    entries = [
+        {
+            "project_id": project,
+            "display_name": project.title(),
+            "canonical_root": os.path.join(directory, "roots", project),
+            "planning_binding": planning_space_entity(
+                {"data_scope_id": DATA_SCOPE, "space_key": key}
+            ),
+        }
+        for key, project in sorted((SPACE_PROJECTS if bound is None else bound).items())
+    ] + [
+        {
+            "project_id": project,
+            "display_name": project.title(),
+            "canonical_root": os.path.join(directory, "roots", project),
+            "planning_binding": None,
+        }
+        for project in unbound
+    ]
+    with open(os.path.join(folder, "Valkama", "projects.json"), "wb") as handle:
+        handle.write(registry_fixtures.registry_bytes(entries) if raw is None else raw)
+    patcher = mock.patch.dict(os.environ, {"LOCALAPPDATA": folder})
+    patcher.start()
+    case.addCleanup(patcher.stop)
+    return folder
+
+
+def items_digest(path: str) -> str:
+    """The contract's fingerprint of a store's items, read here from its rows: SHA-256
+    of every item id, sorted, one a line."""
+
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        identities = sorted(
+            str(row[0]) for row in conn.execute("SELECT work_item_id FROM work_items")
+        )
+    finally:
+        conn.close()
+    return hashlib.sha256("".join(f"{value}\n" for value in identities).encode()).hexdigest()
+
+
+def item_projects_file(
+    store_path: str,
+    directory: str,
+    items: dict | None = None,
+    labels: dict | None = None,
+    **overrides: object,
+) -> str:
+    """The file `projects map-items` writes, written out here: by default it names no
+    project, so every task takes its space's."""
+
+    document = {
+        "data_scope_id": DATA_SCOPE,
+        "format": "valkama-item-projects",
+        "items": items or {},
+        "items_digest": items_digest(store_path),
+        "labels": labels or {},
+        "version": 1,
+        **overrides,
+    }
+    path = os.path.join(directory, "item-projects.json")
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        json.dump(document, handle, sort_keys=True)
+    return path
+
+
 def identity(path: str) -> tuple[int, str]:
     """The store's schema number and what it logically holds."""
 
@@ -401,9 +488,16 @@ def file_digest(path: str) -> str:
 
 
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [*(f"M{number}" for number in range(9)), "last-route"]
+STEP_NAMES = [*(f"M{number}" for number in range(10)), "last-route"]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
-POSTCONDITION_NAMES = [*(f"P{number}" for number in range(1, 16)), "routes", "second-run", "recovery-point"]
+POSTCONDITION_NAMES = [
+    *(f"P{number}" for number in range(1, 16)),
+    "task-projects",
+    "labels-kept",
+    "routes",
+    "second-run",
+    "recovery-point",
+]
 
 
 class StoreCase(unittest.TestCase):
@@ -414,6 +508,8 @@ class StoreCase(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.path = os.path.join(self.directory.name, "valkama.sqlite3")
         self.ids = build(self.path)
+        registry(self, self.directory.name)
+        self.file = item_projects_file(self.path, self.directory.name)
 
     def read(self, sql: str, parameters: tuple = ()) -> list[sqlite3.Row]:
         conn = sqlite3.connect(self.path)
@@ -441,7 +537,7 @@ class StoreCase(unittest.TestCase):
         ]
 
     def migrate(self) -> dict:
-        return store.migrate_work_model(self.path)
+        return store.migrate_work_model(self.path, item_projects=self.file)
 
 
 class MigratedStoreTests(StoreCase):
@@ -677,12 +773,26 @@ class MigratedStoreTests(StoreCase):
             )
         conn.rollback()
 
-    def test_m8_adds_the_items_projects_table_empty_and_shaped_as_a_fresh_one(self) -> None:
+    def test_m8_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
+        self,
+    ) -> None:
+        tasks = [number for number, expected in EXPECTED.items() if expected[0] == "task"]
         step = next(entry for entry in self.report["steps"] if entry["name"] == "item-projects")
-        self.assertEqual({"rows": 0}, step["result"])
         conn = store.connect(self.path)
         self.addCleanup(conn.close)
-        self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM work_item_projects").fetchone()[0])
+        held = {
+            (str(row[0]), str(row[1]), str(row[2]))
+            for row in conn.execute(
+                "SELECT work_item_id, project_id, source FROM work_item_projects"
+            )
+        }
+        # Nothing in the file names a project, so each task takes its space's former
+        # one; a container none.
+        expected = {(self.ids[f"WM-{number}"], "work-model", "migrated") for number in tasks}
+        expected |= {(self.ids[f"ALT-{number}"], "other", "migrated") for number in (1, 2)}
+        self.assertEqual(expected, {row for row in held if row[1] != "kept"})
+        self.assertEqual({"migrated"}, {row[2] for row in held})
+        self.assertEqual({"rows": len(held), "migrated": len(held)}, step["result"])
         conn.execute(
             "INSERT INTO work_item_projects(work_item_id, project_id, source) VALUES(?,?,?)",
             (self.ids["WM-9"], "valkama", "named"),
@@ -913,7 +1023,7 @@ class KeptStepClaimTests(StoreCase):
             conn.close()
         self.checklists = {reference: self.item(reference)["checklist"] for reference in KEPT_STEPS}
 
-    def test_a_claimed_step_on_a_task_at_work_is_kept_and_p14_holds(self) -> None:
+    def test_a_claimed_step_on_a_task_at_work_is_kept_and_identities_holds(self) -> None:
         report = self.migrate()
         self.assertEqual("migrated", report["status"])
         self.assertEqual(
@@ -1088,6 +1198,16 @@ FAULTS = (
         lambda ids: (ids["WM-21"],),
     ),
     fault(
+        "task-projects",
+        "DELETE FROM work_item_projects WHERE work_item_id = ?",
+        lambda ids: (ids["WM-9"],),
+    ),
+    fault(
+        "labels-kept",
+        """UPDATE work_items SET labels = '["stray"]' WHERE work_item_id = ?""",
+        lambda ids: (ids["WM-9"],),
+    ),
+    fault(
         "routes",
         "INSERT INTO platform_ui_prefs(key, record_json, updated_at)"
         " VALUES ('last-route', ?, '2026-01-02T03:04:05Z')",
@@ -1229,13 +1349,13 @@ CLAUSE_FAULTS: tuple[
 ] = (
     (
         "row-counts",
-        "work_item_projects holds 1 rows, not 0",
+        "work_item_projects holds",
         lambda ids: _quiet(
             "INSERT INTO work_item_projects(work_item_id, project_id, source)"
             " VALUES(?, 'stray', 'named')",
             (ids["WM-9"],),
         ),
-        ["row-counts"],
+        ["row-counts", "task-projects"],
     ),
     (
         "history-keys",
@@ -1305,7 +1425,8 @@ CLAUSE_FAULTS: tuple[
                 (ids["WM-9"],),
             )
         ],
-        ["row-counts", "indexes"],
+        # The tables FTS5 keeps the index in are not counted: `indexes` holds the index.
+        ["indexes"],
     ),
     (
         "indexes",
@@ -1353,7 +1474,8 @@ CLAUSE_FAULTS: tuple[
         lambda ids: _quiet(
             """UPDATE work_items SET labels = '["ui"]' WHERE work_item_id = ?""", (ids["WM-6"],)
         ),
-        ["identities"],
+        # The kind label `items` adds is gone, which the labels' own postcondition sees too.
+        ["identities", "labels-kept"],
     ),
 )
 
@@ -1375,6 +1497,7 @@ class RollbackTests(StoreCase):
         self.addCleanup(directory.cleanup)
         self.path = os.path.join(directory.name, "valkama.sqlite3")
         self.ids = build(self.path)
+        self.file = item_projects_file(self.path, directory.name)
 
     def refused(self, step: store_steps.Step) -> dict:
         before, digest = identity(self.path), file_digest(self.path)
@@ -1448,7 +1571,7 @@ class CommandTests(StoreCase):
             contextlib.redirect_stdout(output),
         ):
             try:
-                cli.main(["migrate", "work-model", *arguments])
+                cli.main(["migrate", "work-model", "--item-projects", self.file, *arguments])
                 code = 0
             except SystemExit as exit_:
                 code = exit_.code if isinstance(exit_.code, int) else 1

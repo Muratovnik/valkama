@@ -10,34 +10,18 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sqlite3
 import subprocess
 import time
 
 from . import processes
 from .documents import REF_RESOLVE_TIMEOUT, doc_roots
+from .planning.item_projects import split_commit_value
 from .projects import project_registry
 from .sessions import session_context
 from .store import REF_KINDS, connect
 from .store_identity.primitives import ContractError
 from .store_identity.refs import planning_space_ref
-
-# A recorded commit value may name its repository before the revision, as
-# `repo@abc1234` or `repo abc1234`: a name that starts with a letter or digit,
-# then `@` or spaces, then one word that is not git's own `@{...}` syntax.
-# Anything else is the revision as written. The web's `sameCommit` reads a
-# value by this same rule, and both test suites hold the same examples.
-_NAMED_COMMIT = re.compile(r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?:@(?!\{)| +)(?P<rev>\S+)")
-
-
-def split_commit_value(value: str) -> tuple[str | None, str]:
-    """The repository name a commit value carries, if any, and its revision."""
-
-    named = _NAMED_COMMIT.fullmatch(value)
-    if named is None:
-        return None, value
-    return named["name"], named["rev"]
 
 
 def _commit_roots(space: str | None, name: str | None) -> list[str]:

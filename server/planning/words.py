@@ -335,6 +335,13 @@ def stems(text: str, *, shortest: int = 1) -> list[str]:
     return list(dict.fromkeys(word[:STEM] for word in meaningful))[:MAX_WORDS]
 
 
+def terms(text: str) -> list[str]:
+    """The whole words the index splits `text` into, folded as a query is folded:
+    `event-relay-service` is `event`, `relay` and `service`."""
+
+    return _WORD.findall(_fold(text))
+
+
 def _expression(found: list[str], joiner: str) -> str:
     """An FTS5 query matching each stem as a prefix. A stem is letters and digits
     only, so quoting it is all the escaping it needs."""
@@ -537,4 +544,5 @@ __all__ = [
     "search_rows",
     "similar",
     "stems",
+    "terms",
 ]

@@ -14,7 +14,8 @@
                            open work items whose commits a release range took in
   scopes | attach | detach attachable database files, federated at read time
   migrate work-model       carry a store Valkama 2.9 left to the work model, once
-                           (--dry-run migrates a copy, --into keeps it)
+                           (--item-projects names the file `projects map-items`
+                           wrote; --dry-run migrates a copy, --into keeps it)
 
 This is the one module allowed to import more than one surface: choosing
 between them is exactly what it is for.
@@ -50,11 +51,12 @@ from .hooks.statusline import INTERFACE as STATUSLINE_INTERFACE
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
 from .ops import adapter_check, configuration, doctor, export, setup, skills
+from .planning import item_projects_map
 from .planning import model as planning_model
 from .planning import views as planning_views
 from .planning.display_links import HOOK_PATH
 from .platform import installed
-from .projects import registry_owner, scopes
+from .projects import project_registry, registry_owner, scopes
 from .quota import history as quota_history
 from .static_assets import DIST_DIR, SOURCE_ROOT
 from .store import connect, data_root, db_path
@@ -107,7 +109,13 @@ def _shown_state(item: dict) -> str:
     return str(state["name"]) if state is not None else str(item["container_state"])
 
 
-def migrate_main(target: str, *, dry_run: bool = False, into: str | None = None) -> None:
+def migrate_main(
+    target: str,
+    *,
+    dry_run: bool = False,
+    into: str | None = None,
+    item_projects: str | None = None,
+) -> None:
     """Run the one named migration and print its report as JSON.
 
     The permission is this command and nothing else: `connect()` refuses a store
@@ -115,15 +123,18 @@ def migrate_main(target: str, *, dry_run: bool = False, into: str | None = None)
     inherit lets it through. A dry run copies the store with `VACUUM INTO` and
     migrates the copy, in `into` when it is named and kept there, or in a directory
     that goes when the run ends; the store itself is only read. A run that fails
-    prints its report too, naming the step or the postconditions, and exits 1.
+    prints its report too, naming the step or the postconditions, and exits 1; one
+    refused before it starts prints its report and exits with the refusal.
     """
 
     if target != "work-model":
         raise SystemExit(f"unknown migration target {target!r}")
     source = db_path()
+    if item_projects is not None:
+        item_projects = os.path.abspath(os.path.expanduser(item_projects))
     try:
         if not dry_run:
-            _print_report(store.migrate_work_model(source))
+            _print_report(store.migrate_work_model(source, item_projects=item_projects))
             return
         if store.store_generation(source) == "current":
             _print_report(store.migrate_work_model(source))
@@ -135,13 +146,16 @@ def migrate_main(target: str, *, dry_run: bool = False, into: str | None = None)
             started = time.perf_counter()
             copy = store.copy_store(source, directory)
             copied = round(time.perf_counter() - started, 6)
-            report = store.migrate_work_model(copy)
+            report = store.migrate_work_model(copy, item_projects=item_projects)
             report["phases"].insert(0, {"name": "copy", "seconds": copied})
             report.update(dry_run=True, source=os.path.abspath(source), kept=into is not None)
             _print_report(report)
     except store_steps.RunFailedError as failed:
         _print_report(failed.report)
         raise SystemExit(1) from failed
+    except store.WorkModelPreconditionError as refused:
+        _print_report(refused.report)
+        raise SystemExit(str(refused)) from refused
     except (OSError, RuntimeError) as error:
         raise SystemExit(str(error)) from error
 
@@ -454,6 +468,42 @@ def _export_main(options: argparse.Namespace) -> None:
     print(export.summary(payload, written))
 
 
+def _map_items(options: argparse.Namespace) -> dict[str, Any]:
+    """`projects map-items`: the file the work-model migration carries labels by.
+
+    The store is read through a copy `VACUUM INTO` takes from a read-only
+    connection, the registry and Git only read; the one file written is the
+    output, created and never replaced.
+    """
+
+    output = os.path.abspath(os.path.expanduser(options.output))
+    if os.path.exists(output):
+        raise item_projects_map.RefusedError(f"{output} already exists: name a new file")
+    chosen: dict[str, str] = {}
+    for pair in options.label:
+        label, separator, project_id = pair.partition("=")
+        if not separator or not label or not project_id:
+            raise item_projects_map.RefusedError(f"--label {pair} must read <label>=<project>")
+        chosen[label] = project_id
+    source = db_path()
+    if store.store_generation(source) != "2.9":
+        raise item_projects_map.RefusedError(
+            "the store is already at the work model: it needs no item projects file"
+        )
+    listing = project_registry.read_registry()
+    with tempfile.TemporaryDirectory(prefix="valkama-map-", ignore_cleanup_errors=True) as tmp:
+        copy = store.copy_store(source, tmp)
+        with contextlib.closing(
+            sqlite3.connect(Path(copy).as_uri() + "?mode=ro", uri=True)
+        ) as conn:
+            started = time.perf_counter()
+            document, summary = item_projects_map.build(conn, listing, chosen)
+            seconds = round(time.perf_counter() - started, 6)
+    with open(output, "x", encoding="utf-8", newline="\n") as handle:
+        handle.write(item_projects_map.dumps(document))
+    return {"output": output, "store": source, "seconds": seconds, **summary}
+
+
 def _projects_main(options: argparse.Namespace) -> None:
     inventory = registry_owner.inventory_path()
     target = registry_owner.projection_path()
@@ -471,6 +521,8 @@ def _projects_main(options: argparse.Namespace) -> None:
             payload = {"changed": registry_owner.upgrade(inventory, target)}
         elif command == "downgrade":
             payload = {"changed": registry_owner.downgrade(inventory, target)}
+        elif command == "map-items":
+            payload = _map_items(options)
         elif command == "import":
             payload = {
                 "changed": registry_owner.import_inventory(
@@ -680,6 +732,18 @@ def main(argv: list[str] | None = None) -> None:
         "import", help="import a former inventory of format 1 once"
     )
     import_cmd.add_argument("--source", required=True)
+    map_cmd = projects_sub.add_parser(
+        "map-items",
+        help="write the file the work-model migration gives work items their projects by",
+    )
+    map_cmd.add_argument("--output", required=True, metavar="PATH")
+    map_cmd.add_argument(
+        "--label",
+        action="append",
+        default=[],
+        metavar="LABEL=PROJECT",
+        help="carry a label that is not a project id into that project, in any space",
+    )
     summary = commands.add_parser("summary")
     summary.add_argument("--space", default=None)
     released_cmd = commands.add_parser(
@@ -806,6 +870,11 @@ def main(argv: list[str] | None = None) -> None:
         help="migrate a copy and report what would change; the store is only read",
     )
     migrate_cmd.add_argument(
+        "--item-projects",
+        metavar="PATH",
+        help="the file `projects map-items` wrote; required when the store holds work items",
+    )
+    migrate_cmd.add_argument(
         "--into",
         metavar="DIRECTORY",
         help="with --dry-run, make the copy in this directory and keep it there",
@@ -916,7 +985,12 @@ def main(argv: list[str] | None = None) -> None:
     elif options.command == "migrate":
         if options.into and not options.dry_run:
             parser.error("--into names where a dry run makes its copy; add --dry-run")
-        migrate_main(options.target, dry_run=options.dry_run, into=options.into)
+        migrate_main(
+            options.target,
+            dry_run=options.dry_run,
+            into=options.into,
+            item_projects=options.item_projects,
+        )
     elif options.command == "summary":
         summary_main(options.space)
     elif options.command == "released":

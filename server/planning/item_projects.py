@@ -15,14 +15,22 @@ stays, in the order of `SOURCES`.
 A goal or stage stores none: its projects are those of every task under it, at
 any depth, each with the strongest source any of them gives it. The name a reader
 sees is the registry's, read when the item is, since the store holds only the id.
+
+Which project a commit belongs to is `commit_projects`: the one answer to it, asked
+of Git in the registered roots.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import re
 import sqlite3
-from collections.abc import Iterable, Sequence
+import subprocess
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
 
+from .. import processes
 from ..projects import project_registry
 from . import model
 
@@ -243,3 +251,90 @@ def of_item(conn: sqlite3.Connection, row: sqlite3.Row) -> list[dict]:
     """One item's projects, as `of_items` reads them."""
 
     return of_items(conn, [row])[str(row["work_item_id"])]
+
+
+# -- the project of a commit ---------------------------------------------------
+
+# A recorded commit value may name its repository before the revision, as
+# `repo@abc1234` or `repo abc1234`: a name that starts with a letter or digit,
+# then `@` or spaces, then one word that is not git's own `@{...}` syntax.
+# Anything else is the revision as written. The web's `sameCommit` reads a
+# value by this same rule, and both test suites hold the same examples.
+_NAMED_COMMIT = re.compile(r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?:@(?!\{)| +)(?P<rev>\S+)")
+#: A revision that is a commit hash, full or abbreviated, and nothing else. Shorter
+#: than seven, a hex word such as `facade` would be asked about as one.
+_COMMIT_HASH = re.compile(r"[0-9a-fA-F]{7,64}")
+#: How long one repository may take to answer for every hash at once.
+_GIT_TIMEOUT = 120
+
+
+def split_commit_value(value: str) -> tuple[str | None, str]:
+    """The repository name a commit value carries, if any, and its revision."""
+
+    named = _NAMED_COMMIT.fullmatch(value)
+    if named is None:
+        return None, value
+    return named["name"], named["rev"]
+
+
+def _held_commits(root: str, hashes: Sequence[str]) -> set[str]:
+    """The hashes whose commit the repository at `root` holds.
+
+    One `git cat-file --batch-check` for all of them; its answer has one line per
+    question, in order. A root that is no repository of its own holds none: Git
+    would answer from the repository around it, which is another project's.
+    """
+
+    # A linked worktree's `.git` is a file, and it is a repository too.
+    if not os.path.exists(os.path.join(root, ".git")):
+        return set()
+    question = "".join(f"{value}^{{commit}}\n" for value in hashes).encode("ascii")
+    try:
+        answered = processes.run_text(
+            ["git", "-C", root, "cat-file", "--batch-check"], timeout=_GIT_TIMEOUT, stdin=question
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError(f"git cannot be asked in {root}: {error}") from error
+    if answered.returncode != 0:
+        raise RuntimeError(f"git cat-file failed in {root}: {answered.stderr.strip()}")
+    held: set[str] = set()
+    for value, line in zip(hashes, answered.stdout.split("\n"), strict=False):
+        fields = line.split()
+        if len(fields) == 3 and fields[1] == "commit":
+            held.add(value)
+    return held
+
+
+def commit_projects(values: Iterable[str], projects: Sequence[Mapping[str, Any]]) -> dict[str, str]:
+    """The registered project each commit value belongs to, by value.
+
+    A value that names a registered project's id before its revision
+    (`valkama@1a2b3c4`, `valkama 1a2b3c4`) belongs to that project. A bare hash
+    belongs to the one registered project whose repository holds that commit. A
+    value that resolves to no project or to more than one -- a name nobody
+    registered, a hash two repositories hold, a range, a url -- is left out.
+    """
+
+    roots = {str(project["project_id"]): str(project["canonical_root"]) for project in projects}
+    found: dict[str, str] = {}
+    bare: dict[str, list[str]] = {}
+    for value in values:
+        name, revision = split_commit_value(value.strip())
+        if name is not None:
+            if name.lower() in roots:
+                found[value] = name.lower()
+        elif _COMMIT_HASH.fullmatch(revision):
+            bare.setdefault(revision.lower(), []).append(value)
+    if not bare:
+        return found
+    asked = sorted(bare)
+    holders: dict[str, set[str]] = {}
+    for project, root in sorted(roots.items()):
+        for commit in _held_commits(root, asked):
+            holders.setdefault(commit, set()).add(project)
+    for commit, written in bare.items():
+        owners = holders.get(commit, set())
+        if len(owners) == 1:
+            for value in written:
+                found[value] = next(iter(owners))
+    return found
