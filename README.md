@@ -230,8 +230,10 @@ Worth knowing before you adopt it:
 - **No hosted anything.** No sync between machines, no shared installation, no backup
   other than the snapshots it takes locally.
 - **The MCP server is spawned by your client**, so it lives as long as the
-  session and does not update itself. See
-  [`docs/connection-contract.md`](docs/connection-contract.md) for how version
+  session; nothing runs in the background between sessions. A running session
+  moves to the release `launcher install` pins
+  ([Pinned releases](SERVICE.md#pinned-releases)), and
+  [`docs/connection-contract.md`](docs/connection-contract.md) says how version
   skew is made visible instead of silent.
 
 ## Documentation
