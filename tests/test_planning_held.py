@@ -15,7 +15,7 @@ import unittest
 from unittest import mock
 
 from server import mcp_surface, store
-from server.planning import api, model, requests, service
+from server.planning import api, held, model, requests, service
 
 SESSION = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
 OTHER = "019a3c2e-6c8e-7c11-9e0f-2f4b6d8a1c3e"
@@ -244,6 +244,88 @@ class HeldTests(unittest.TestCase):
         ):
             self.sql("UPDATE work_items SET updated_at = ? WHERE title = ?", at, title)
         self.assertEqual([newer, middle, older], self.references(SESSION))
+
+    def test_the_answer_on_a_built_tree_holds_still(self) -> None:
+        """The whole answer, function and route alike, on every way of holding at once.
+
+        A characterization of the answer as it stands, so a reader built beside it
+        on the same candidates and rules is seen to leave it as it was.
+        """
+
+        whole = self.item("Claimed whole", ("one", "two"))
+        self.claim(SESSION, whole)
+        self.agent(
+            "apply_work_item_changes",
+            SESSION,
+            whole,
+            checklist_ticks=[{"item_id": self.step_ids(whole)[0]}],
+        )
+        by_child = self.item("Claimed by the subagent")
+        self.claim(SESSION, by_child, thread=CHILD)
+        stepped = self.item("Held by a step", ("first", "second", "third"))
+        self.claim(OTHER, stepped)
+        self.claim_step(SESSION, stepped, 2)
+        asked = self.item("Asked twice")
+        self.claim(SESSION, asked)
+        self.agent(
+            "apply_work_item_changes",
+            SESSION,
+            asked,
+            transition={"state": "blocked", "reason": "waits"},
+        )
+        answered = requests.create(self.conn, asked, kind="question", prompt="One?", fields=[FIELD])
+        requests.create(self.conn, asked, kind="question", prompt="Two?", fields=[FIELD])
+        requests.resolve(
+            self.conn,
+            answered["request_id"],
+            status="answered",
+            expected_revision=answered["revision"],
+            answers={"answer": "yes"},
+        )
+        theirs = self.item("Theirs")
+        self.claim(OTHER, theirs)
+        named = self.item("Named in a step", (f"tell codex (session {OTHER})",))
+        self.claim(PREFIX, named)
+        for title, at in (
+            ("Claimed whole", "2026-04-01T00:00:00Z"),
+            ("Claimed by the subagent", "2026-01-01T00:00:00Z"),
+            ("Held by a step", "2026-03-01T00:00:00Z"),
+            ("Asked twice", "2026-02-01T00:00:00Z"),
+        ):
+            self.sql("UPDATE work_items SET updated_at = ? WHERE title = ?", at, title)
+
+        def entry(
+            reference: str,
+            title: str,
+            state: tuple[str, str, str],
+            held_as: str,
+            steps: tuple[int, int],
+            pending: int,
+        ) -> dict:
+            return {
+                "reference": reference,
+                "title": title,
+                "state": dict(zip(("key", "name", "category"), state, strict=True)),
+                "held_as": held_as,
+                "steps": {"done": steps[0], "total": steps[1]},
+                "pending_questions": pending,
+                "url": f"http://127.0.0.1:8642/open/{reference}",
+            }
+
+        dev = ("dev", "Dev", "active")
+        expected = {
+            "session": SESSION,
+            "items": [
+                entry(whole, "Claimed whole", dev, "claim", (1, 2), 0),
+                entry(stepped, "Held by a step", dev, "step", (0, 3), 0),
+                entry(asked, "Asked twice", ("blocked", "Blocked", "blocked"), "claim", (0, 0), 1),
+                entry(by_child, "Claimed by the subagent", dev, "claim", (0, 0), 0),
+            ],
+        }
+        self.assertEqual(expected, held.held_by_session(self.conn, SESSION))
+        self.assertEqual(expected, self.held(SESSION))
+        # A suffix written into a step's text is no hold of the session it names.
+        self.assertEqual({stepped, theirs}, set(self.references(OTHER)))
 
     # -- what the request must say -------------------------------------------
 
