@@ -211,6 +211,50 @@ server, which needs only the standard library. The web build that `check` runs
 in the copy replaces `web/dist` in the checkout; commit it only when `web/src`
 changed.
 
+### The changelog entry
+
+The release publishes the entry `CHANGELOG.md` holds for its version, as it was
+committed, and refuses a version that has none. The changelog keeps Release Kit's
+`conventional-changelog` profile, which `[changelog]` in `relkit.toml` declares.
+Write and commit the entry before `release prepare`, starting from a draft of the
+commits since the previous release:
+
+```powershell
+python .github/relkit.pyz notes v<next> --draft --from-tag v<prev>
+```
+
+The draft is printed, not written into the changelog. Under its version heading
+it lists every `feat`, `fix`, `perf` and `revert` commit and every breaking
+change, one line per commit subject, each linked to its commit. A draft downloads
+Release Kit's pinned git-cliff when its cache lacks it, so the first one on a
+machine needs the network. Make the entry from it for the people who use the
+release:
+
+- Keep only what a user of `v<prev>` sees changed. Drop a fix of something that
+  first appeared in the same release, and merge the steps of one feature into one
+  line that keeps their commit links.
+- Write each line for that user rather than for the reviewer of the commit, and
+  keep every removal, migration, breaking change, security or data-safety fix and
+  changed default.
+- Open the entry with a few lines under `### Highlights`. Put what breaks for a
+  user under `### Breaking Changes` with what to do about it: a store schema that
+  older builds refuse, its recovery point and the way back belong there or in the
+  highlights.
+- Set the heading's date to the release's own. An entry runs to tens of lines,
+  not hundreds.
+
+Then read the entry back as the release will:
+
+```powershell
+python .github/relkit.pyz notes v<next>
+```
+
+It prints the entry, or refuses it naming the line and the rule it breaks: the
+heading compares `v<prev>` with `v<next>`, and every line under Features, Bug
+Fixes and Performance Improvements carries a commit link on its first line, its
+label the start of the hash. `release prepare` then refuses a link to a commit
+outside the release.
+
 ## Reporting a bug
 
 Include what you ran, what happened, and what you expected. For anything
