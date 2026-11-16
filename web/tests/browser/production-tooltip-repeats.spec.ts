@@ -20,6 +20,7 @@ import { ASKING_HEAD, openHead, PICTURE } from './cardHeadPage.ts'
 import { serve as serveChain, smallChain } from './chainFixtures.ts'
 import { drawnColours } from './contrast.ts'
 import { openMentionList } from './editorPage.ts'
+import { hintsFadedIn } from './hintFramesPage.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
 import { heldCard, openPlanFor } from './openSessionFixtures.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
@@ -349,6 +350,7 @@ for (const width of [1280, 390] as const)
         hint(page).evaluate((node) => getComputedStyle(node).color),
       ])
       expect(quiet).not.toBe(main)
+      await hintsFadedIn(page)
       const drawn = await note.evaluate(drawnColours, 'own' as const)
       expect(drawn.contrast).toBeGreaterThanOrEqual(4.5)
 

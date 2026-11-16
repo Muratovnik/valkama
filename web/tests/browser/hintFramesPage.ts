@@ -123,6 +123,16 @@ export const wholeTextOnTop = (page: Page) =>
     return seen !== null && whole.contains(seen)
   })
 
+/**
+ * Once every hint up has faded in: a hint shown after the pointer's rest fades in on the page's
+ * own timeline, which a test's clock does not run, and its ink read before then is paler.
+ */
+export const hintsFadedIn = (page: Page) =>
+  page.evaluate(async () => {
+    const hints = [...document.querySelectorAll('.tooltip-hint, .whole-text')]
+    await Promise.all(hints.flatMap((hint) => hint.getAnimations().map((one) => one.finished)))
+  })
+
 /** Real time passing in the page, `ms` long, while its frames are noted. */
 export const pass = (page: Page, ms: number) =>
   page.evaluate((wait) => new Promise((done) => setTimeout(done, wait)), ms)
