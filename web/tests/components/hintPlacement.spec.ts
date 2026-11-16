@@ -77,15 +77,34 @@ describe('a hint aside of a list', () => {
     expect(hintListOf(one('b'))).toBeNull()
   })
 
-  it('takes for the row the first box with a neighbour over or under it', () => {
+  it('takes for the row the list’s item, on a row of one line or of two', () => {
     rail()
     const container = one<HTMLElement>('.rail')
     // On a one-line row the title, the number and the pin stand side by side, so the row is the
-    // list's item; on a row of two lines the words have the second line under them.
+    // list's item. On a row of two lines the words have the second line under them, but they
+    // stand inside the link that stands beside the pin: a line of the row, not a row.
     expect(hintRowOf(one('.first .title'), container, 'rows')).toBe(one('.first'))
     expect(hintRowOf(one('.first .pin'), container, 'rows')).toBe(one('.first'))
     expect(hintRowOf(one('.second .pin'), container, 'rows')).toBe(one('.second'))
-    expect(hintRowOf(one('.second .title'), container, 'rows')).toBe(one('.second .words'))
+    expect(hintRowOf(one('.second .title'), container, 'rows')).toBe(one('.second'))
+    expect(hintRowOf(one('.second .line'), container, 'rows')).toBe(one('.second'))
+  })
+
+  it('stands level with the top of a row of two lines for each of its lines', () => {
+    rail()
+    for (const selector of ['.second .title', '.second .line', '.second .pin']) {
+      const reference = hintPlaceOf(one(selector), { kind: 'clipped' }, 120).reference as {
+        getBoundingClientRect: () => DOMRect
+      }
+      expect(reference.getBoundingClientRect().top).toBe(128)
+    }
+  })
+
+  it('takes no word kept for a screen reader alone for a neighbour', () => {
+    rail()
+    one('.first').insertAdjacentHTML('afterend', '<li class="unseen">hidden</li>')
+    at(one('.unseen'), [8, 110, 1, 1])
+    expect(hintRowOf(one('.first .title'), one('.rail'), 'rows')).toBe(one('.first'))
   })
 
   it('stands past the list’s edge, level with the row’s top, for a title and a pin alike', () => {

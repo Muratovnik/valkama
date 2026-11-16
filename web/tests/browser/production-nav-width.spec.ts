@@ -171,17 +171,15 @@ test('a title the rail cuts hints beside it, clear of its text, and says it with
   await expect(words).toHaveText(LONG_TITLE)
   await expect(words).not.toContainText('LONG-1')
   // The title's own hint stands past the rail's edge, clear of its text and of every row, its
-  // top level with its row's: no lower than the title's line, no higher than the row.
+  // top level with its row's, not with the title's line.
   const row = page.locator('.nav-row', { has: page.locator('[aria-label^="LONG-1 "]') })
-  const [rail, line, name, shown] = await Promise.all([
+  const [rail, line, shown] = await Promise.all([
     boxOf(page.locator('.app-nav-shell')),
     boxOf(row),
-    boxOf(title),
     boxOf(page.locator('.tooltip-hint')),
   ])
   expect(shown.x).toBeGreaterThanOrEqual(rail.right)
-  expect(shown.y).toBeGreaterThanOrEqual(line.y - 1)
-  expect(shown.y).toBeLessThanOrEqual(name.y + 1)
+  expect(Math.abs(shown.y - line.y)).toBeLessThanOrEqual(1)
   expect(shown.right).toBeLessThanOrEqual(1280)
 })
 

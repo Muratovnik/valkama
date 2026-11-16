@@ -111,7 +111,8 @@ export function hintListOf(element: Element): { container: HTMLElement; list: Hi
   return container && list ? { container, list } : null
 }
 
-const shows = (box: DOMRect) => box.width > 0 && box.height > 0
+// Wider and taller than a pixel: a word kept for a screen reader alone stands nowhere.
+const shows = (box: DOMRect) => box.width > 1 && box.height > 1
 
 /** Whether `other` stands wholly before or after `one` along the way a list's rows run. */
 function apart(one: DOMRect, other: DOMRect, list: HintList): boolean {
@@ -121,29 +122,29 @@ function apart(one: DOMRect, other: DOMRect, list: HintList): boolean {
 }
 
 /**
- * The row of a list `element` stands in: the nearest box holding it that has a neighbour before
- * or after it along the list, or the container's own child that holds it. A row's controls and
- * words stand beside each other, so the box that first has one over or under it is the row.
+ * The row of a list `element` stands in, or the container's own child that holds it. A row's
+ * controls and words stand beside each other, and a row of two lines stacks its lines inside the
+ * box that stands beside its number: so the row is the nearest box with a neighbour before or
+ * after it that holds every box standing beside another on its way up.
  */
 export function hintRowOf(
   element: HTMLElement,
   container: HTMLElement,
   list: HintList,
 ): HTMLElement {
-  let row = element
-  while (row.parentElement && row.parentElement !== container && container.contains(row)) {
-    const box = row.getBoundingClientRect()
-    const siblings = [...row.parentElement.children].filter((each) => each !== row)
-    if (
-      siblings.some((each) => {
-        const other = each.getBoundingClientRect()
-        return shows(other) && apart(box, other, list)
-      })
-    )
-      return row
-    row = row.parentElement
+  let row: HTMLElement | null = null
+  let box = element
+  while (box.parentElement && box.parentElement !== container && container.contains(box)) {
+    const own = box.getBoundingClientRect()
+    const others = [...box.parentElement.children]
+      .filter((each) => each !== box)
+      .map((each) => each.getBoundingClientRect())
+      .filter((other) => shows(other))
+    if (others.some((other) => !apart(own, other, list))) row = null
+    else if (!row && others.length > 0) row = box
+    box = box.parentElement
   }
-  return row
+  return row ?? box
 }
 
 /** What a hint stands against: an element, or the box aside of its list, read again as it moves. */
