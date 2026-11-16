@@ -204,10 +204,12 @@ useEventListener(window, 'resize', relay, { passive: true })
 <style scoped>
 /* Laid in the window over the cut text: as wide as its words up to the room the place leaves,
    then wrapped by words. A word longer than that room breaks rather than run out of the window.
-   Its box is its line high, with a pixel over and under for the rim, so it covers no other line. */
+   Its box is its line high, with a pixel over and under for the rim, so it covers no other line.
+   It stands over the menus and sheets (120) whose rows it speaks for: level with them, the menu
+   opened after it was drawn over it, and a cut state in the card's state menu never read whole. */
 .whole-text {
   position: fixed;
-  z-index: 120;
+  z-index: 130;
   inline-size: max-content;
   padding: var(--space-hair) var(--space-1);
   overflow-wrap: break-word;

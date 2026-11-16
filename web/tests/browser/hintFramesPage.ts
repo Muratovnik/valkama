@@ -105,6 +105,24 @@ export const boxOf = (locator: Locator) =>
 /** The hint up, in either of its surfaces: a box of words, or a cut text's words laid whole. */
 export const hint = (page: Page) => page.locator('.tooltip-hint, .whole-text')
 
+/** A cut text's whole words, laid over it (`WholeText`). */
+export const wholeText = (page: Page) => page.locator('.whole-text')
+
+/**
+ * Whether the whole text laid over a cut one is what the window shows at the start of its first
+ * line, over every menu or sheet the cut text stands in. It lets the pointer through, so no hit
+ * test finds it: for this one reading it is made a target, and is let through again at once.
+ */
+export const wholeTextOnTop = (page: Page) =>
+  wholeText(page).evaluate((whole: HTMLElement) => {
+    const { left, top } = whole.getBoundingClientRect()
+    const through = whole.style.pointerEvents
+    whole.style.pointerEvents = 'auto'
+    const seen = document.elementFromPoint(left + 4, top + 4)
+    whole.style.pointerEvents = through
+    return seen !== null && whole.contains(seen)
+  })
+
 /** Real time passing in the page, `ms` long, while its frames are noted. */
 export const pass = (page: Page, ms: number) =>
   page.evaluate((wait) => new Promise((done) => setTimeout(done, wait)), ms)

@@ -196,7 +196,8 @@ watch(shown, (element) => {
      the host's less. */
   --tooltip-widest: 20rem;
 
-  z-index: 120;
+  /* Over the menus and sheets (120) whose rows it speaks for, as a cut text's whole words are. */
+  z-index: 130;
   max-inline-size: min(var(--tooltip-widest), var(--reka-hover-card-content-available-width));
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-tooltip-border);
