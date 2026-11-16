@@ -183,7 +183,12 @@ test('a drag with no selection that ends outside leaves as the pointer did', asy
   // On the card's edge, where nothing is under the press to select.
   await page.mouse.move(box.x + box.width - 2, box.y + 2, { steps: 6 })
   await page.mouse.down()
-  await page.mouse.move(box.x + box.width + 300, box.y + box.height + 300, { steps: 8 })
+  // Off the card and inside the window, on the page beside and under it: a drag that leaves the
+  // window is one more way to end outside, not the one this holds.
+  const end = { x: box.x - 200, y: box.y + box.height + 20 }
+  const view = page.viewportSize() ?? { width: 0, height: 0 }
+  expect(end.x > 0 && end.y < view.height, 'the drag ends inside the window').toBe(true)
+  await page.mouse.move(end.x, end.y, { steps: 8 })
   await page.mouse.up()
   // The press on no text started no selection from the nearest letter, as the state's in the
   // card's corner once did, and nothing held the card up.
