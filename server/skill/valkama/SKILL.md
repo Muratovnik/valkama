@@ -183,16 +183,9 @@ the root of its own thread, posts what follows as replies there, and hands the
 root's `comment_id` back to the agent that delegated.
 
 **A list under a comment.** When a report or a comment offers several findings
-for the owner to choose from, put them under it as `list`: `{"label": "What to
-take on", "options": [{"id": "a", "label": "Widen the check", "recommended":
-true, "why": "Two of the five misses are its."}, …]}`, up to 20 options written as
-a question's options are.
-The batch's `comment`, `comments` and `summary` take it, on a root only, and the
-comment and its list are one write; the answer adds `list_request_id`. It is a question of one
-`multi_choice` field, `items`, which the owner ticks with one button: its answer is
-`{"items": ["a"]}`, told to you and the holders as `question_answered`. Nobody
-waits for it: it raises no alert and is not among the questions waiting for the
-owner. Read it with the item's questions, where it carries `comment_id`.
+for the owner to choose from, put them under it as `list`, on a root only; the
+owner ticks the ones to take on ([its form and answer](references/tools.md#comments-and-threads)).
+Nobody waits for it: it raises no alert and is not among the questions waiting for the owner.
 
 **Telling another item.** A number in a text is a link and tells nobody. To tell
 the work on another item, name it in `mentions`: the batch's `comment`,

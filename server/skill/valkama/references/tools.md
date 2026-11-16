@@ -231,6 +231,17 @@ no mark writes nothing. A mark writes the history event `comment_resolved` or
 comment on another item or none at all (`not_found`), a decision of two lines, and
 `resolution` with `reopen`.
 
+A list under a comment offers the owner findings to choose from: `list` is
+`{"label": "What to take on", "options": [{"id": "a", "label": "Widen the check",
+"recommended": true, "why": "Two of the five misses are its."}, …]}`, up to 20
+options written as a question's options are. The batch's `comment`, `comments`
+and `summary` take it, on a root only, and the comment and its list are one
+write; the answer adds `list_request_id`. It is a question of one `multi_choice`
+field, `items`, which the owner ticks with one button: its answer is
+`{"items": ["a"]}`, told to you and the holders as `question_answered`. Nobody
+waits for it: it raises no alert and is not among the questions waiting for the
+owner. Read it with the item's questions, where it carries `comment_id`.
+
 ## Reading an item
 
 `get_work_item` takes `id` and reads an item by parts. `parts` names them, one
