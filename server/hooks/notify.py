@@ -53,6 +53,12 @@ changes wait. Each wakes once, at most `MOST_WAKES` an hour; the rest waits for 
 next tool call. Past `MOST_NOTICES` notices in an hour quoting other sessions on one
 item, that item's news is one line that counts it.
 
+What Valkama records in a call of its own, a lease that ran out, is told in the same
+block as Valkama's, `by Valkama`, to whoever hears the item whole and through the
+tree; a write the server makes inside an agent's call is that agent's. It wakes only
+when its kind asks for a session (`person_events.SERVER_ASKS`), and then as a
+person's act does, outside the hourly limit.
+
 Where the place is kept. Not in the store: a hook that wrote there would be a
 writer on every tool call. Each recipient has a small file beside the spool,
 `notify/<session>[--<agent>].marks`, holding for every item it wrote to the last
@@ -422,6 +428,10 @@ _ENDS_COLUMNS = (
 ALL = "all"
 ADDRESSED_ONLY = "addressed"
 MUTED = "muted"
+#: `via` of a record Valkama made in a call of its own, as `person_events` writes it.
+VALKAMA = "valkama"
+#: Whose entries make the notice's other block: other agents' and Valkama's, never a person's.
+OTHERS = frozenset({"agent", VALKAMA})
 
 
 def _in_scope(
@@ -762,7 +772,7 @@ def _feed(
         entry["call"] = call
         if names[item][2] is not None:
             entry["under"] = names[item][2]
-        person = whole[item] and entry.get("via") != "agent"
+        person = whole[item] and entry.get("via") not in OTHERS
         (said if person else rest).setdefault(item, []).append(entry)
     listed = person_events.lists(conn, asked)
     if listed:
@@ -1041,20 +1051,31 @@ def collect(
             tell, woke = agents, False
             waking = [
                 entry
-                for _s, _m, read in reads
-                if read
-                for entry in read[1]
+                for entry in [
+                    *(entry for _s, _m, read in reads if read for entry in read[1]),
+                    *(entry for entries in (feed[1] if feed else {}).values() for entry in entries),
+                ]
                 if _wakes(entry) and entry["call"] > through
             ]
             # A person's news wakes the session anyway; only without it is this a wake.
             # A person's blocker close is read with other sessions' news, and is the
             # person's news all the same: it continues a subagent's turn too, and what
             # waits with it is told with it, as with any wake.
-            closed = any(entry.get("via") != "agent" for entry in waking)
+            closed = any(entry.get("via") not in OTHERS for entry in waking)
+            # Valkama's record that asks wakes as a person's act does: never held back, and
+            # not counted among the wakes other sessions make.
+            server = any(entry.get("via") == VALKAMA for entry in waking)
             person = (
                 closed or any(read[0] for _s, _m, read in reads if read) or bool(feed and feed[0])
             )
-            if wake and not agents and waking and not person and len(wakes) >= MOST_WAKES:
+            if (
+                wake
+                and not agents
+                and waking
+                and not person
+                and not server
+                and len(wakes) >= MOST_WAKES
+            ):
                 held, through = held + len(waking), newest
             elif not agents and waking and (wake or closed):
                 tell, woke = True, not person
@@ -1072,7 +1093,7 @@ def collect(
             conn.execute("COMMIT")
         news = News()
         news.woke = woke
-        if woke and take:
+        if woke and take and not server:
             wakes = (*wakes, now)
         # The tree's news has one place for all of it, so it is told whole or waits whole:
         # a person's act on a goal or stage tells the rest with it, as a wake does.
@@ -1106,7 +1127,7 @@ def collect(
             agents
             and take
             and held
-            and any(entry.get("via") == "agent" for _r, _t, entries in news for entry in entries)
+            and any(entry.get("via") in OTHERS for _r, _t, entries in news for entry in entries)
         ):
             news.held, held = held, 0
         if take or not news:
@@ -1202,6 +1223,14 @@ def _read(
     )
     if listens == ALL and not (holds or works_on or (mark is not None and mark[2])):
         spoken += _followed(conn, item, heard, newest, session_id, agent_id)
+    if listens != ADDRESSED_ONLY or (mark is not None and mark[2]):
+        # Valkama's own records reach whoever hears the item whole, and one that held it
+        # at its last read once more; a mute keeps other sessions out, not Valkama.
+        spoken += [
+            _at_call(entry, call)
+            for call, entry in person_events.valkama_since(conn, item, heard)
+            if call <= newest
+        ]
     if holds and signature[3]:
         # A blocker's state, a person's or another session's, is read from the one place
         # other sessions' news is: a close reads as a change once a later transition
@@ -1298,7 +1327,8 @@ def _at_call(entry: dict, call: int) -> dict:
 
 def _wakes(entry: dict) -> bool:
     """Whether another session's news asks for this session: the answer it awaited, a
-    comment that awaits its reply on work it holds, or a blocker of that work closed."""
+    comment that awaits its reply on work it holds, a blocker of that work closed, or a
+    record of Valkama's whose kind asks (`person_events.SERVER_ASKS`)."""
 
     return bool(entry.get("answers") or entry.get("asks") or entry["kind"] == "blocker_closed")
 
@@ -1538,13 +1568,13 @@ def _notice(
         (reference, title, entry)
         for reference, title, entries in news
         for entry in entries
-        if entry.get("via") != "agent"
+        if entry.get("via") not in OTHERS
     ]
     spoken = [
         (reference, title, entry)
         for reference, title, entries in news
         for entry in entries
-        if entry.get("via") == "agent"
+        if entry.get("via") in OTHERS
     ]
     woke = bool(getattr(news, "woke", False))
     held = int(getattr(news, "held", 0))
@@ -1624,11 +1654,17 @@ def _agents_block(
         " from other agents and from Valkama."
     )
     last = []
-    if woke:
+    asking = {entry.get("via") for _reference, _title, entry in spoken if _wakes(entry)}
+    if woke and (asking != {VALKAMA}):
         last.append(
             "This is not an error: it came now because another agent's news asks for this"
             " session (a reply it awaited, a comment that awaits its reply, or a blocker of"
             " its work closed)."
+        )
+    if woke and VALKAMA in asking:
+        last.append(
+            "This is not an error: it came now because a record of Valkama's here asks for"
+            " this session."
         )
     if held:
         waited = "event" if held == 1 else "events"
@@ -1748,6 +1784,8 @@ def _where(entry: dict) -> str:
     """Which thread a line is about, and whose; for another agent's, who wrote it."""
 
     where = _thread(entry)
+    if entry.get("via") == VALKAMA:
+        return " by Valkama" + (f",{where}" if where else "")
     if entry.get("via") != "agent":
         return where
     # Who spoke, as a holder label writes the ids: a client chose them.
@@ -1814,6 +1852,7 @@ _SHOWN = {
         "person": "ваши действия",
         "agent": "запись другого агента",
         "subagent": "запись субагента этой сессии",
+        "valkama": "запись Valkama",
         "and": " и ",
         "rest": "Valkama передала агенту новости ещё по {count} {items}",
         "one": "задаче",
@@ -1824,6 +1863,7 @@ _SHOWN = {
         "person": "what you did",
         "agent": "what another agent wrote",
         "subagent": "what a subagent of this session wrote",
+        "valkama": "what Valkama recorded",
         "and": " and ",
         "rest": "Valkama told the agent about {count} more {items}",
         "one": "item",
@@ -1831,7 +1871,7 @@ _SHOWN = {
     },
 }
 #: Whose news an item's line names, in the order it names them.
-_WHOSE = ("person", "agent", "subagent")
+_WHOSE = ("person", "agent", "subagent", "valkama")
 
 
 def shown(told: list[tuple[str, str, dict]], language: str) -> str:
@@ -1847,9 +1887,12 @@ def shown(told: list[tuple[str, str, dict]], language: str) -> str:
     words = _SHOWN.get(language, _SHOWN["en"])
     items: dict[str, tuple[str, set[str]]] = {}
     for reference, title, entry in told:
+        via = entry.get("via")
         whose = (
-            "person"
-            if entry.get("via") != "agent"
+            "valkama"
+            if via == VALKAMA
+            else "person"
+            if via != "agent"
             else "subagent"
             if entry.get("yours")
             else "agent"

@@ -591,6 +591,10 @@ class WhoListensTests(Harness):
         self.conn.commit()
         housekeeping.expire_leases(self.conn)
         self.comment(AS_A, self.followed, "After the session lapsed")
+        told = self.hook()
+        assert told is not None, "B held the item its lapsed lease released: it hears so once"
+        self.assertRegex(told, r"\n- released at \S+ by Valkama: «session-ended: ")
+        self.assertNotIn("After the session lapsed", told, "the subscription lapsed with B")
         self.assertIsNone(self.hook())
 
 

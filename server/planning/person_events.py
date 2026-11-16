@@ -31,7 +31,8 @@ would end it before the session's orchestrator was told. The hook remembers the
 last call it has read for each item and asks for what came after that. The same
 hook reads what other agents wrote apart (`agents_since`), from the same rows and
 into the same entries: it is told to the holders and followers, and never as a
-person's. What is written under a goal an orchestrator works on reaches it from
+person's; so is what Valkama recorded in a call of its own, a lease that ran out
+(`valkama_since`). What is written under a goal an orchestrator works on reaches it from
 items it never wrote to, so for those the hook reads every item's new rows at once,
 from three places of its own (`tree_since`), and keeps the items of its tree.
 
@@ -107,6 +108,12 @@ WORK_KINDS = frozenset(
 NOT_TOLD = frozenset(
     {"created", "execution_attached", "overridden", "labels_changed", "accepted", "child_left"}
 )
+#: The kinds of Valkama's own records that ask for a session: one wakes it, as a person's
+#: act does, and waits on a goal or stage nobody works on for the next session that takes
+#: work there (`waiting`). Empty: a lease that ran out, the one record Valkama makes on
+#: its own today, is told at the next tool call. A stage that adds a record which must
+#: wake names its kind here.
+SERVER_ASKS: frozenset[str] = frozenset()
 
 #: The call that edits an item's fields, and those fields' columns by the name
 #: `calls.call_id` records. The one place a name read back from a row meets SQL.
@@ -273,6 +280,40 @@ def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> lis
     return [(order[0], entry) for order, entry in sorted(found, key=lambda pair: pair[0])]
 
 
+#: What Valkama recorded on an item in a call of its own (`calls.valkama()`): a write the
+#: server makes inside another caller's call is that caller's, and read as theirs.
+_VALKAMA_EVENTS = (
+    "SELECT e.id, e.action, e.detail, e.created_at, e.call_id"
+    " FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.work_item_id = ? AND e.call_id > ? AND c.identity_source = ? ORDER BY e.id"
+)
+
+
+def valkama_since(
+    conn: sqlite3.Connection, work_item_id: str, after: int
+) -> list[tuple[int, dict]]:
+    """What Valkama recorded on one item through calls of its own after `after`, with the call.
+
+    The events `KINDS` names, in the entries a person's act is told by, with
+    `via: "valkama"`: neither a person's words nor another agent's, so they are in
+    neither `from_person` nor `agents_since`. One of a kind in `SERVER_ASKS` says
+    `asks: true`. Who is told is the hook's to decide.
+    """
+
+    found = []
+    for row in conn.execute(_VALKAMA_EVENTS, (work_item_id, after, VALKAMA)).fetchall():
+        if str(row[1]) in KINDS:
+            found.append((int(row[4]), _by_valkama(_event_entry(conn, row, work_item_id))))
+    return found
+
+
+def _by_valkama(entry: dict) -> dict:
+    entry["via"] = VALKAMA
+    if entry["kind"] in SERVER_ASKS:
+        entry["asks"] = True
+    return entry
+
+
 #: How many rows of each source one read of the tree's news takes: the rest is read the
 #: next time, from where this one stopped, so nothing is lost and no read grows unbounded.
 MOST_FEED_ROWS = 2000
@@ -322,8 +363,9 @@ def tree_since(
 
     Each entry is the one `since_call` or `agents_since` gives for that item: a
     person's act with `via: "interface"`, an edit with what it edited as it reads
-    now, another agent's write with its `session` and `agent`. A row whose call
-    proved nobody, and Valkama's own, is nobody's words and is left out. They come
+    now, another agent's write with its `session` and `agent`, an event Valkama
+    recorded in a call of its own as `valkama_since` gives it. A row whose call proved
+    nobody is nobody's words and is left out, and so is a comment of Valkama's. They come
     as `(work_item_id, call, entry)` in the order the calls were made, with the
     places the next read starts from: the last row read of each source.
     """
@@ -352,7 +394,7 @@ def tree_since(
         if not kept.get(item):
             continue  # not kept, or a task, where no comment says where the work stands
         speaker = _feed_speaker(row[8], row[9], row[10], row[11])
-        if speaker is None:
+        if speaker is None or speaker == VALKAMA:
             continue
         if row[2]:
             reports.add(int(row[4]))
@@ -378,7 +420,9 @@ def tree_since(
         if action == "summarized" and int(row[4]) in reports:
             continue
         entry = _event_entry(conn, row, item)
-        if speaker != BROWSER:
+        if speaker == VALKAMA:
+            entry = _by_valkama(entry)
+        elif speaker != BROWSER:
             entry = _spoken(entry, row[9], row[10])
         found.append(((int(row[4]), 2, int(row[0])), item, entry))
     by_item: dict[str, list[tuple]] = {}
@@ -392,15 +436,19 @@ def tree_since(
 
 
 def _feed_speaker(source: object, state: object, tool: object, session: object) -> str | None:
-    """Whose a row of the tree's news is: `browser` for a person, the session for an agent.
+    """Whose a row of the tree's news is: `browser` for a person, `valkama` for Valkama's
+    own call, the session for an agent.
 
-    The rules of `_PERSON_EVENTS` and `_AGENT_EVENTS`, read off the call row: a person
-    through Planning's own paths, an agent through a call that proved its session.
+    The rules of `_PERSON_EVENTS`, `_VALKAMA_EVENTS` and `_AGENT_EVENTS`, read off the
+    call row: a person through Planning's own paths, an agent through a call that proved
+    its session.
     """
 
     if source == BROWSER:
         return BROWSER if isinstance(tool, str) and tool.startswith(_PERSON_TOOLS) else None
-    if source == VALKAMA or state != "confirmed" or session is None:
+    if source == VALKAMA:
+        return VALKAMA
+    if state != "confirmed" or session is None:
         return None
     return str(session)
 

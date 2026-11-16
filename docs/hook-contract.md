@@ -533,7 +533,8 @@ the same rules as a person's act and beside the mentions above:
   session's news is added by it.
 - **Who wrote it** is the confirmed call's session and agent, never `author`. A
   call that proved no session, the interface and Valkama's own writes are not
-  another session's news.
+  another session's news; Valkama's are told as
+  [its own](#valkamas-own-records).
 - **A wait for a reply.** A session that wrote a comment with
   [`awaits_reply`](connection-contract.md#a-comment-that-waits-for-a-reply) hears
   every later reply in that thread, a person's too, even on an item where it holds
@@ -570,8 +571,8 @@ hears no tree: the orchestrator keeps the whole and passes it on.
 
 | Item in the tree | What reaches the orchestrator |
 | --- | --- |
-| a task | where the work stands: a status change, a summary selected, a release, a take-over, a question to the owner asked or withdrawn, by another session or a person; a list on a comment is not one |
-| a goal or stage | everything its holder would hear if it had one: a person's acts, edits included, and other sessions' writes |
+| a task | where the work stands: a status change, a summary selected, a release, a take-over, a question to the owner asked or withdrawn, by another session, a person or [Valkama](#valkamas-own-records); a list on a comment is not one |
+| a goal or stage | everything its holder would hear if it had one: a person's acts, edits included, other sessions' writes and Valkama's records |
 
 - **A wake.** A person's act on the goal or on any stage under it wakes the
   session, or continues its turn at `Stop`, as one on a held item does. A task's
@@ -603,6 +604,34 @@ A session's first read, and a place file from before the tree, start at the end
 of the tables: what was written under a goal before is not retold, and the item
 itself holds it. See [where each agent's place is kept](#where-each-agents-place-is-kept).
 
+### Valkama's own records
+
+**Since 3.0**, what Valkama records on its own account is told too: an event
+written in a call of Valkama's own, such as the release of a claim whose lease ran
+out and the move of its task back to the queue. It is neither a person's act nor
+another session's words, and it comes in the second block as one line,
+`- released at <time> by Valkama: «<why>: <holder>»`.
+
+- **The recipients** hear it as they hear other sessions' news: the holders of the
+  item and of its steps and their orchestrator, a session subscribed to it, and one
+  that held the item at its last read, once more, so the session whose claim
+  lapsed hears that it did. A mute keeps other sessions out, not Valkama. Through
+  [the tree](#under-a-goal), an orchestrator working under the goal hears it on a
+  task when it says where the work stands, a release or a state change, and every
+  one on a goal or stage. Valkama's comments, should it write any, are not told.
+- **A wake.** A record wakes nobody unless its kind is one that asks for a session;
+  no kind does yet, so a release waits for the next tool call or prompt. One that
+  asks wakes the orchestrator or continues its turn as a person's act does: not
+  counted among the six wakes an hour other sessions make, and never held back by
+  them. On a goal or stage nobody works on, it waits for the next session that takes
+  work there, as a person's words do (see
+  [words that wait for a session](connection-contract.md#words-that-wait-for-a-session)).
+- **Whose it is.** Only Valkama's own call makes a record Valkama's. What the server
+  writes inside an agent's call, such as moving a released task back to the queue,
+  is that agent's, told by the session and agent of the call. A claim that meets a
+  lapsed lease releases it in a call of Valkama's own first, so the release is
+  Valkama's and the claim the caller's.
+
 ### When it is told
 
 | Hook | Notice |
@@ -633,6 +662,7 @@ Valkama told the agent what you did on MAIN-12 «Pick the route»
 Valkama told the agent what another agent wrote on MAIN-14 «Drop the old route»
 Valkama told the agent what you did and what another agent wrote on MAIN-15 «Ship it»
 Valkama told the agent what a subagent of this session wrote on MAIN-16 «Split the parser»
+Valkama told the agent what Valkama recorded on MAIN-17 «Widen the check»
 ```
 
 The language is the one owner alerts are written in: `locale` in the alert
@@ -640,7 +670,8 @@ settings, which falls back to the system language, as it does on a store too old
 to hold alert settings. In Russian a line reads `Valkama передала
 агенту ваши действия по задаче MAIN-12 «Pick the route»`, `… запись другого
 агента …` for another agent's news, `… запись субагента этой сессии …` for a
-subagent's of this session, and `… ваши действия и запись другого агента
+subagent's of this session, `… запись Valkama …` for
+[Valkama's own record](#valkamas-own-records), and `… ваши действия и запись другого агента
 …` for two of them; three read `…, … и …`. An item the notice leaves out for its bound (see
 [what a notice says](#what-a-notice-says)) gets no line, because the agent was
 not told it. Control characters in a title are dropped, since the client prints
@@ -673,6 +704,7 @@ its orchestrator once when it idles, or continue its turn once at `Stop`:
 | the first reply in a thread after a comment the session wrote with [`awaits_reply`](connection-contract.md#a-comment-that-waits-for-a-reply), by another session or a person | the session that asked, its subagent's question included | while the thread is not resolved: the wait follows the thread's resolved mark, so a reopened thread waits again; the first reply ends the wait, and one written under the mark wakes nobody; later replies are told at the next tool call |
 | a comment with `awaits_reply`, on an item or naming it in `mentions` | the holders of that item, the claim's and the steps' | for 24 hours after it was written; older, it is told at the next tool call |
 | a [blocker closed](#another-agent-sessions-news) by another session or a person | the holders of the item it blocked | once per close |
+| since 3.0, a [record of Valkama's](#valkamas-own-records) of a kind that asks for a session; no kind does yet | whoever hears the item, through the tree too | once; not counted among the six an hour |
 
 - **Once.** What woke a session, or continued its turn, is told then and moves the
   place past it, so it never wakes again; all the other sessions' news waiting for
@@ -794,6 +826,15 @@ orchestrator's own subagent is `your agent`, and its line quotes nothing:
 - released at 2026-11-06T09:20:00Z by your agent ab12
 ```
 
+A [record of Valkama's](#valkamas-own-records) names Valkama, and quotes what it
+recorded: the lease's reason and the holder it released, the state a task went
+back to.
+
+```text
+- released at 2026-11-06T09:25:00Z by Valkama: «lease-expired: claude (session 019a…)»
+- status at 2026-11-06T09:25:00Z by Valkama: «ready: lease-expired»
+```
+
 A [list on a comment](connection-contract.md#a-list-on-a-comment) by its subagent
 gives the orchestrator no `question_asked` line, nor `question_withdrawn` when it is
 taken back: nobody waits on a list, so the work does not come to wait for the owner.
@@ -811,7 +852,9 @@ their line, and a blocker's change names the item and the state it reached:
 A block told because it asks for the session, at `Stop` or by the watcher, says
 so: `This is not an error: it came now because another agent's news asks for this
 session (a reply it awaited, a comment that awaits its reply, or a blocker of its
-work closed).` The watcher's heading adds "while this session was idle", or, when
+work closed).`, and one woken by a record of Valkama's that asks says `This is not an
+error: it came now because a record of Valkama's here asks for this session.` The
+watcher's heading adds "while this session was idle", or, when
 it woke a session at work that made no tool call within the 30 seconds, "while this
 session was busy and made no tool call for 30 seconds", for a person's block as for
 the agents'. The first
