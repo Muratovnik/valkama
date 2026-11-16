@@ -45,7 +45,7 @@ AS_A = {"sessionId": A}
 #: A session that neither holds nor follows anything here, as a merge's author.
 THIRD = "019a3c2e-4444-7c11-9e0f-2f4b6d8a1c3e"
 AS_THIRD = {"sessionId": THIRD}
-FROM_AGENTS = "Valkama notice from agents, not from a person:"
+FROM_AGENTS = "Valkama notice, not from the person:"
 COMMENT = "/api/planning/work-item/comment"
 TRANSITION = "/api/planning/work-item/transition"
 UPDATE = "/api/planning/work-item/update"
@@ -505,7 +505,7 @@ class WhoListensTests(Harness):
         self.comment(AS_A, self.followed, "For the subagent's item")
         child = self.hook(CHILD)
         assert child is not None
-        self.assertIn("you hold, follow or started threads on.", child)
+        self.assertIn("on work you hold or follow,", child)
         self.assertIn("For the subagent's item", self.hook() or "")
 
     def test_a_subscription_a_third_session_merged_away_is_heard_on_the_survivor(self) -> None:

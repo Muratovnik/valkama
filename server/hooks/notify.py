@@ -760,7 +760,6 @@ def _feed(
         if not whole[item] and "request_id" in entry:
             asked.add(str(entry["request_id"]))
         entry["call"] = call
-        entry["tree"] = True
         if names[item][2] is not None:
             entry["under"] = names[item][2]
         person = whole[item] and entry.get("via") != "agent"
@@ -1098,8 +1097,6 @@ def collect(
                 told = [*told, *spoken]
             if not waiting:
                 heard = max(heard, newest)
-            for entry in told if scoped[9] else ():
-                entry["tree"] = True
             if told:
                 news.append((reference, title, told))
             # Working on a goal or stage counts as holding it.
@@ -1139,9 +1136,8 @@ def _tell_tree(
         under = next((entry["under"] for entry in written if "under" in entry), None)
         spoken, quoted[item] = _fold(rest.get(item, []), quoted.get(item, ()), now)
         entries = sorted([*said.get(item, []), *spoken], key=lambda entry: entry["call"])
-        for entry in entries:
-            entry["tree"] = True
-            if under is not None:
+        if under is not None:
+            for entry in entries:
                 entry["under"] = under
         reference, title, _under = names[item]
         if reference in told:
@@ -1250,10 +1246,7 @@ def _followed(
         id(entry)
         for entry in _for_recipient(conn, item, list(found), session_id, agent_id, whole=False)
     }
-    rest = [entry for entry in found if id(entry) not in addressed]
-    for entry in rest:
-        entry["followed"] = True
-    return rest
+    return [entry for entry in found if id(entry) not in addressed]
 
 
 def _fold(
@@ -1476,9 +1469,10 @@ def _write_quietly(path: str, marks: dict, budget: Budget) -> None:
 
 #: `thread_of` of a reply in the recipient's own thread; any other value labels an agent.
 YOU = ""
-#: Whose work a notice is about when some of it came under a goal: only an orchestrator
-#: works on a tree.
-_WORKS_ON = "this session holds, follows, works on or started threads on"
+#: Whose work a notice is about, one wording for both blocks: an orchestrator's session
+#: holds, follows or works on a tree; a subagent holds or follows, and works on no tree. A
+#: reply in a thread the recipient started says so on its own line.
+_WHOSE_WORK = {True: "this session holds, follows or works on", False: "you hold or follow"}
 
 
 def render(
@@ -1568,21 +1562,7 @@ def _notice(
         shown = [spoken[at] for at in told]
         return agents, shown, _whole(shown, len(spoken))
     head = f"Valkama notice, not an error: {when}a person" if wake else "Valkama notice: a person"
-    if any(entry.get("tree") for _reference, _title, entry in events):
-        whose = _WORKS_ON
-    elif any(entry.get("followed") for _reference, _title, entry in events):
-        whose = (
-            "this session holds, follows or started threads on"
-            if orchestrator
-            else "you hold, follow or started threads on"
-        )
-    else:
-        whose = (
-            "this session holds or threads it started"
-            if orchestrator
-            else "you hold or threads you started"
-        )
-    first = f"{head} acted in the Valkama interface on work {whose}."
+    first = f"{head} acted in the Valkama interface on work {_WHOSE_WORK[orchestrator]}."
     last = []
     if orchestrator:
         last.append(
@@ -1634,27 +1614,14 @@ def _agents_block(
 ) -> tuple[str, list[int]]:
     """Other sessions' news under a heading that never says a person acted.
 
-    News that is all mentions keeps the heading it always had; anything else says
-    the work is held, followed or a thread on it started here. Told because it asks
-    for the session, it says what woke the session, and with `when` what the session
-    was doing then; after the hourly limit held such news back, how much of it waited.
+    Told because it asks for the session, it says what woke the session, and with
+    `when` what the session was doing then; after the hourly limit held such news
+    back, how much of it waited.
     """
 
-    if any(entry.get("tree") for _reference, _title, entry in spoken):
-        whose = _WORKS_ON
-        did = "wrote on"
-    elif all(entry["kind"] == "mentioned" for _reference, _title, entry in spoken):
-        whose = "this session holds" if orchestrator else "you hold"
-        did = "mentioned"
-    else:
-        whose = (
-            "this session holds, follows or started threads on"
-            if orchestrator
-            else "you hold, follow or started threads on"
-        )
-        did = "wrote on"
     first = (
-        f"Valkama notice from agents, not from a person: {when}another agent {did} work {whose}."
+        f"Valkama notice, not from the person: {when}news on work {_WHOSE_WORK[orchestrator]},"
+        " from other agents and from Valkama."
     )
     last = []
     if woke:

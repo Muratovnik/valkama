@@ -58,7 +58,7 @@ AS_F = {"sessionId": F}
 CREATE = "/api/planning/work-items"
 COMMENT = "/api/planning/work-item/comment"
 UPDATE = "/api/planning/work-item/update"
-FROM_AGENTS = "Valkama notice from agents, not from a person:"
+FROM_AGENTS = "Valkama notice, not from the person:"
 A_PERSON = "Valkama notice: a person acted in the Valkama interface"
 
 

@@ -148,7 +148,7 @@ mark reaches only the holders.
 What another agent session writes on an item you hold reaches you too: its
 comments, replies, reports, questions, transitions, claims, links and step changes,
 and its `mentions` of the item. It comes in a block of its own headed "Valkama
-notice from agents, not from a person", names the session that wrote each line, and
+notice, not from the person", names the session that wrote each line, and
 arrives at your next tool call or prompt. It is not in `from_person`. Your own
 writes never come back to you. Your subagents' work does, to you as their
 orchestrator, on any item your session wrote to: a state change, a summary, a

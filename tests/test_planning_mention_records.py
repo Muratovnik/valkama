@@ -57,7 +57,7 @@ SPEAKER_AGENT = "019a3c2e-2222-7c11-9e0f-2f4b6d8a1c3e"
 ELSEWHERE_AGENT = {"sessionId": SPEAKER, "threadId": SPEAKER_AGENT}
 SAID = "Decided: keep the new route, marker M-1"
 #: What an agents' block begins and ends with, from the hook contract.
-AGENTS_HEAD = "Valkama notice from agents, not from a person: another agent mentioned work"
+AGENTS_HEAD = "Valkama notice, not from the person: news on work"
 AGENTS_LAST = "Do not answer with a mention unless you have news of your own."
 SUMMARY = {"done": "Dropped it", "next": "Nothing"}
 
@@ -723,7 +723,12 @@ class AgentMentionTests(Harness):
 
         told = self.hook()
         assert told is not None, "the Stop read past it, and it still arrives"
-        self.assertTrue(told.startswith(f"{AGENTS_HEAD} this session holds."), told)
+        self.assertTrue(
+            told.startswith(
+                f"{AGENTS_HEAD} this session holds, follows or works on, from other agents and from Valkama."
+            ),
+            told,
+        )
         self.assertNotIn("a person acted", told)
         self.assertIn(f"{self.target} «Drop the old route»:", told)
         self.assertIn(
@@ -765,13 +770,23 @@ class AgentMentionTests(Harness):
 
         child = self.hook(CHILD)
         assert child is not None
-        self.assertTrue(child.startswith(f"{AGENTS_HEAD} you hold."), child)
+        self.assertTrue(
+            child.startswith(
+                f"{AGENTS_HEAD} you hold or follow, from other agents and from Valkama."
+            ),
+            child,
+        )
         self.assertIn("marker M-1", child)
         self.assertIsNone(self.hook(CHILD), "once for the subagent")
         self.assertIsNone(self.hook(STRANGER), "a subagent holding nothing there")
         told = self.hook()
         assert told is not None
-        self.assertTrue(told.startswith(f"{AGENTS_HEAD} this session holds."), told)
+        self.assertTrue(
+            told.startswith(
+                f"{AGENTS_HEAD} this session holds, follows or works on, from other agents and from Valkama."
+            ),
+            told,
+        )
         self.assertEqual(1, told.count("- mentioned at"))
         self.assertIsNone(self.hook(), "once for the orchestrator")
 

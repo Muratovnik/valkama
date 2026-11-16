@@ -679,7 +679,41 @@ class TextTests(Harness):
             self.assertLessEqual(len(text), bound)
             self.assertTrue(text.endswith(READ_THE_REST), text[-200:])
         text = notify.notice(news, orchestrator=True, wake=False)[0]
-        self.assertIn("\nValkama notice from agents", text, "4 000 hold both blocks")
+        self.assertIn("\nValkama notice, not from the person", text, "4 000 hold both blocks")
+
+    def test_each_block_has_one_heading_for_whatever_brought_its_news(self) -> None:
+        """The hook contract's two headings, whole: a person's news, and everything else."""
+
+        person = {"kind": "comment", "via": "interface", "at": "t", "text": "From the person"}
+        agent = {"kind": "comment", "via": "agent", "at": "t", "session": STRANGER, "agent": None}
+        followed = {**person, "followed": True}
+        under = {**agent, "under": ("QC-0", "Goal")}
+        mention = {**agent, "kind": "mentioned", "comment_id": 7, "from": "QC-9"}
+        heads = {
+            True: (
+                "Valkama notice: a person acted in the Valkama interface on work this session"
+                " holds, follows or works on.",
+                "Valkama notice, not from the person: news on work this session holds, follows"
+                " or works on, from other agents and from Valkama.",
+            ),
+            False: (
+                "Valkama notice: a person acted in the Valkama interface on work you hold or"
+                " follow.",
+                "Valkama notice, not from the person: news on work you hold or follow, from other"
+                " agents and from Valkama.",
+            ),
+        }
+        for orchestrator, (person_head, others_head) in heads.items():
+            for entries in ([person, agent], [followed, under], [person, mention]):
+                with self.subTest(orchestrator=orchestrator, entries=entries):
+                    text = notify.render(
+                        [("QC-1", "T", [dict(entry) for entry in entries])],
+                        orchestrator=orchestrator,
+                        wake=False,
+                    )
+                    self.assertTrue(text.startswith(person_head + "\n"), text)
+                    self.assertIn("\n" + others_head + "\n", text)
+                    self.assertEqual(2, text.count("Valkama notice"), "one heading a block")
 
     def test_it_says_what_it_is_and_that_card_words_are_not_permission(self) -> None:
         self.claim_with_a_step_for_the_subagent()

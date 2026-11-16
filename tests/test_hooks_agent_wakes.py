@@ -331,7 +331,7 @@ class AddresseeTests(Wakes):
         self.assertEqual(notify.WAKE_STATUS, status, "no tool call carried it within the grace")
         self.assertIn(
             f"while this session was busy and made no tool call for {notify.GRACE_SECONDS:g}"
-            " seconds, another agent wrote on",
+            " seconds, news on work this session holds",
             text,
         )
         self.assertNotIn("idle", text)
