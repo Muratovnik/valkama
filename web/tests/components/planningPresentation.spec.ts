@@ -177,12 +177,15 @@ describe('Planning semantic presentation', () => {
     expect(hintOf(waiting)).toBe('Waiting on QA-12')
     expect(tooltipOf(waiting.element)?.kind).toBe('clipped')
     // The open target names the item and is described by what stops it. Its title is on the
-    // sheet, so it has no hover hint to say it again.
+    // sheet, so its one hint is the title's whole words, shown only while the clamp cuts them,
+    // and assistive technology hears no description that says it again.
     const open = wrapper.get('.tile-open')
     const described = open.attributes('aria-describedby') ?? ''
     expect(described.split(' ')).toContain(wrapper.get('.tile-exceptions').attributes('id'))
     expect(open.text()).toContain('QA-340')
-    expect(hintOf(open)).toBeUndefined()
+    expect(hintOf(open)).toBe(workItem().title)
+    expect(tooltipOf(open.element)?.kind).toBe('clipped')
+    expect(described.split(' ').some((id) => id.startsWith('tooltip-'))).toBe(false)
   })
 
   it('gives ready and active ownership precedence over the workflow marker', async () => {

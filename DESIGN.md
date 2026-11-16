@@ -945,7 +945,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   on the cut text's first letter in the same type and ink and on the ground under it, running
   on to the right up to 8px short of the window's edge and wrapping by words only where the
   whole text does not fit there, so on one line it covers no other row; over a text a clamp
-  cuts to its lines, as a graph card's title, it is at least as high and wide as the lines the
+  cuts to its lines, as a graph card's title, a board tile's, an outcome's preview and a title in
+  the task finder, it is at least as high and wide as the lines the
   clamp shows, so neither a line nor its ellipsis reads again beside it. A label a narrow place
   hides whole, as the icon rail's and the board's sign-only action's, is hidden rather than cut:
   no letter of it is on screen to lay its words from, and a glyph beside it hidden from assistive
@@ -983,7 +984,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   `detail` says what the element does not show, and stands in `check:ui-system`'s
   register with the reason the place needs it. No hint says again the words its element
   shows: a board tile, a label chip and the usage line have none, since everything they
-  would say is on screen. A hint may carry a note, a second line in the quiet ink, for a
+  would say is on screen, save the whole words of a tile's title its clamp cuts, laid over it
+  as above. A hint may carry a note, a second line in the quiet ink, for a
   state that qualifies the action: a session button hints what a press does — «Open in
   VS Code» — over the session's state, and never the holder's name it shows. A detail on
   an element whose own words can be cut (a one-line name, a path, a value) is given those
@@ -1502,6 +1504,8 @@ priority is not medium, and at its end only what stops the work — the open
 blocker it waits on, drawn as its glyph and its reference («⛔ MAIN-12», named
 «Ждёт MAIN-12»); the line never wraps, and an exception short of room keeps
 its glyph and says its words on hover. The title follows, at most three lines,
+its whole words laid over them while they cut it (Hints), on the sheet's hover
+and on the focus a key brings it,
 then the labels on one line — as many whole ones as it holds, up to three, then
 «+N», which opens the card like the rest of the sheet — then the holder and the
 steps when there are any, the steps only while the item is open. The holder is
