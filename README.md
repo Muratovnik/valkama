@@ -434,7 +434,11 @@ store that has not been migrated yet.
 its root to an existing directory, even if the old root is gone.
 `projects remove ID` removes only the registration and its binding, leaving the
 Planning store untouched. `projects check` compares the inventory and
-projection; `projects doctor` reports the same health result. `projects apply`
+projection; `projects doctor` reports the same health result. Both also list
+in `foreign_bindings` each planning binding whose space lives in neither the
+main store nor an attached one, and `unreadable_stores` counts the stores, main
+or attached, that could not be read. A foreign binding leaves `ok` unchanged,
+since the inventory and projection still agree. `projects apply`
 republishes the current inventory, and `projects rollback` restores the exact
 inventory and projection bytes saved before the preceding change. It never
 crosses a change of format.
