@@ -16,8 +16,9 @@ A goal or stage stores none: its projects are those of every task under it, at
 any depth, each with the strongest source any of them gives it. The name a reader
 sees is the registry's, read when the item is, since the store holds only the id.
 
-Where a launch from an item runs is `launch_root`, and the roots a claim names
-`project_roots`: each is the one answer to its question.
+Where a launch from an item runs is `launch_root`, the roots a claim names
+`project_roots`, and the roots a launch gets beside its own `added_roots`: each is
+the one answer to its question.
 
 Which project a commit belongs to is `commit_projects`: the one answer to it, asked
 of Git in the registered roots.
@@ -176,8 +177,9 @@ class LaunchRoot(TypedDict):
     project_id: str | None
     #: The project's registered root; None when the registry names none.
     root: str | None
-    #: `mapped`, `missing` (nothing bound or registered), `unavailable` (the
-    #: registry or the directory is not there) or `malformed` (the registry is).
+    #: `mapped`, `missing` (the space binds no project), `unregistered` (the
+    #: item's project is no longer in the registry), `unavailable` (the registry
+    #: or the directory is not there) or `malformed` (the registry is).
     status: str
     #: The item's space's `launch_place`.
     launch_place: str
@@ -210,14 +212,20 @@ def _bound(
     )
 
 
-def launch_root(conn: sqlite3.Connection, work_item_id: str) -> LaunchRoot:
+def launch_root(
+    conn: sqlite3.Connection,
+    work_item_id: str,
+    *,
+    listing: project_registry.RegistryResult | None = None,
+) -> LaunchRoot:
     """The root a launch from this item runs in, by its space's launch place.
 
     `space` takes the space's root, the root of its default project. `item_project`
     takes the root of the item's one project, in whatever space that project
     lives; with no project or with several it takes the space's root too, since a
     set has no first project and the space's root is always registered. A goal or
-    stage is never launched from, so its root is always the space's.
+    stage is never launched from, so its root is always the space's. `listing` is
+    the registry as a caller already read it; without one it is read here.
     """
 
     place = _item_place(conn, work_item_id)
@@ -226,7 +234,8 @@ def launch_root(conn: sqlite3.Connection, work_item_id: str) -> LaunchRoot:
     if launch_place == model.LAUNCH_PLACES[1] and place["kind"] != model.CONTAINER_KIND:
         own = sorted(ids_of_items(conn, [work_item_id])[work_item_id])
     chosen = own[0] if len(own) == 1 else None
-    listing = project_registry.read_registry()
+    if listing is None:
+        listing = project_registry.read_registry()
     if listing["status"] != "available":
         status = "malformed" if listing["status"] == "malformed" else "unavailable"
         return {"project_id": chosen, "root": None, "status": status, "launch_place": launch_place}
@@ -238,10 +247,12 @@ def launch_root(conn: sqlite3.Connection, work_item_id: str) -> LaunchRoot:
             (found for found in listing["projects"] if found["project_id"] == chosen), None
         )
     if entry is None:
+        # The item's own project left the registry, the word `project_roots` gives
+        # it; without one chosen, the space binds none.
         return {
             "project_id": chosen,
             "root": None,
-            "status": "missing",
+            "status": "missing" if chosen is None else "unregistered",
             "launch_place": launch_place,
         }
     root = str(entry["canonical_root"])
@@ -253,7 +264,12 @@ def launch_root(conn: sqlite3.Connection, work_item_id: str) -> LaunchRoot:
     }
 
 
-def project_roots(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
+def project_roots(
+    conn: sqlite3.Connection,
+    work_item_id: str,
+    *,
+    listing: project_registry.RegistryResult | None = None,
+) -> list[dict]:
     """The root of each project the item changes, the one a claim answers with.
 
     An item that names none holds its space's default project. The list puts the
@@ -262,12 +278,14 @@ def project_roots(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
     once the order is total. So the project of the launch root comes first whenever
     the item names it. A registry that was not read knows neither roots nor spaces:
     the item's projects then come by id, each `unavailable`, and an item that names
-    none has an empty list, its default project being unknown too.
+    none has an empty list, its default project being unknown too. `listing` is
+    the registry as a caller already read it; without one it is read here.
     """
 
     place = _item_place(conn, work_item_id)
     named_ids = sorted(ids_of_items(conn, [work_item_id])[work_item_id])
-    listing = project_registry.read_registry()
+    if listing is None:
+        listing = project_registry.read_registry()
     if listing["status"] != "available":
         return [
             {"project_id": project, "display_name": None, "root": None, "status": "unavailable"}
@@ -301,6 +319,47 @@ def project_roots(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
             }
         )
     return roots
+
+
+class AddedRoot(TypedDict):
+    """One root a launch gets beside its launch root."""
+
+    project_id: str
+    root: str
+
+
+def added_roots(conn: sqlite3.Connection, work_item_id: str) -> list[AddedRoot]:
+    """The roots a launch from this item gets beside the one it runs in.
+
+    The root of every project of the item's space and of every other project the
+    item names, whose directory is there (`mapped`), except the launch root and
+    the roots inside it, which the client reaches already. First the item's own
+    in the order of `project_roots`, then the space's projects it does not name,
+    by id. A registry that was not read gives none: no root is known then.
+    """
+
+    listing = project_registry.read_registry()
+    if listing["status"] != "available":
+        return []
+    launch = launch_root(conn, work_item_id, listing=listing)["root"]
+    named = project_roots(conn, work_item_id, listing=listing)
+    candidates = [
+        (str(root["project_id"]), str(root["root"])) for root in named if root["status"] == "mapped"
+    ]
+    taken = {str(root["project_id"]) for root in named}
+    space = _bound(conn, listing, str(_item_place(conn, work_item_id)["key"]))
+    candidates += [
+        (str(project["project_id"]), str(project["canonical_root"]))
+        for project in sorted(space, key=lambda project: str(project["project_id"]))
+        if str(project["project_id"]) not in taken and os.path.isdir(str(project["canonical_root"]))
+    ]
+    # Each root comes once: a project is a candidate once, and the registry refuses
+    # two projects with one root.
+    return [
+        {"project_id": project, "root": root}
+        for project, root in candidates
+        if launch is None or not project_registry.holds(launch, root)
+    ]
 
 
 def _stored(conn: sqlite3.Connection, work_item_id: str) -> dict[str, str]:

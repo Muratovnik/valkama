@@ -261,6 +261,15 @@ def _binding_space(binding: Mapping[str, Any]) -> dict[str, Any] | None:
         return None
 
 
+def holds(root: str, folder: str) -> bool:
+    """Whether `folder` is `root` or lies inside it, compared as the platform compares
+    paths (on Windows without regard to case) and as written, following no link."""
+
+    root_key = os.path.normcase(os.path.normpath(root))
+    place = os.path.normcase(os.path.normpath(folder))
+    return place == root_key or place.startswith(root_key.rstrip(os.sep) + os.sep)
+
+
 class FolderPlace(TypedDict):
     project_id: str
     canonical_root: str
@@ -281,13 +290,11 @@ def place_of_folder(folder: str, listing: RegistryResult, data_scope_id: str) ->
 
     if not folder:
         return None
-    place = os.path.normcase(os.path.normpath(folder))
     found: tuple[int, Mapping[str, Any]] | None = None
     for candidate in listing["projects"]:
-        root = os.path.normcase(os.path.normpath(str(candidate["canonical_root"])))
-        if place == root or place.startswith(root.rstrip(os.sep) + os.sep):
-            if found is None or len(root) > found[0]:
-                found = (len(root), candidate)
+        root = os.path.normpath(str(candidate["canonical_root"]))
+        if holds(root, folder) and (found is None or len(root) > found[0]):
+            found = (len(root), candidate)
     if found is None:
         return None
     holder = found[1]

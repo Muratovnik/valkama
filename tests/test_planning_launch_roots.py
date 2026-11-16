@@ -299,10 +299,17 @@ class LaunchRootTests(RootsCase):
         self.write_registry(without="gone")
         found = item_projects.launch_root(self.conn, str(ghost["work_item_id"]))
         self.assertEqual(("ghost", "unavailable"), (found["project_id"], found["status"]))
+        # The word the claim's roots give the same project, not `missing`, which a
+        # space that binds nothing gives below.
         found = item_projects.launch_root(self.conn, str(gone["work_item_id"]))
         self.assertEqual(
-            ("gone", None, "missing"), (found["project_id"], found["root"], found["status"])
+            ("gone", None, "unregistered"), (found["project_id"], found["root"], found["status"])
         )
+        self.assertEqual(
+            "unregistered",
+            item_projects.project_roots(self.conn, str(gone["work_item_id"]))[0]["status"],
+        )
+        self.assertEqual("unregistered", self.capabilities(gone)["repository_status"])
         bare_space = self.tool("create_planning_space", name="Bare", key="BARE")
         bare = self.item("bare", space=bare_space["key"])
         found = item_projects.launch_root(self.conn, str(bare["work_item_id"]))
@@ -380,6 +387,44 @@ class LaunchRootTests(RootsCase):
         self.registry.write_bytes(b"{ not json")
         bare = self.item("bare")
         self.assertEqual("", lifecycle._project_id(self.conn, str(bare["work_item_id"])))
+
+
+class AddedRootsTests(RootsCase):
+    """The roots a launch gets beside the one it runs in."""
+
+    def added(self, item: dict) -> list[str]:
+        roots = item_projects.added_roots(self.conn, str(item["work_item_id"]))
+        for root in roots:
+            self.assertEqual(str(self.dirs[root["project_id"]]), root["root"])
+        return [root["project_id"] for root in roots]
+
+    def test_a_root_inside_the_launch_root_is_left_out_and_one_outside_comes_in(self) -> None:
+        self.place("item_project")
+        d = self.item("D", ["inner", "rover"])
+        # Two projects: the launch runs in the space's root `umbrella`. `inner` lies
+        # inside it; `rover` is the item's and outside; `side` is the space's, not
+        # named, and outside.
+        self.assertEqual(("umbrella", str(self.dirs["umbrella"])), self.launch_root(d))
+        self.assertEqual(["rover", "side"], self.added(d))
+
+    def test_the_item_s_roots_come_in_claim_order_then_the_space_s_by_id(self) -> None:
+        item = self.item("every", ["rover", "loose", "gone", "ghost", "side"])
+        self.write_registry(without="gone")
+        # `ghost` has no directory and `gone` left the registry: neither is mapped.
+        self.assertEqual(["side", "loose", "rover"], self.added(item))
+
+    def test_a_launch_in_another_space_s_root_gets_every_root_of_the_item_s_space(self) -> None:
+        self.place("item_project")
+        rover = self.item("rover", ["rover"])
+        self.assertEqual(("rover", str(self.dirs["rover"])), self.launch_root(rover))
+        # Outside `rover` each of them, `inner` too though `umbrella` holds it.
+        self.assertEqual(["inner", "side", "umbrella"], self.added(rover))
+        self.assertEqual([], self.added(self.item("plain", space="ROVER")))
+
+    def test_an_unread_registry_adds_no_root(self) -> None:
+        d = self.item("D", ["inner", "rover"])
+        self.registry.write_bytes(b"{ not json")
+        self.assertEqual([], self.added(d))
 
 
 class LaunchPlaceSettingTests(RootsCase):
