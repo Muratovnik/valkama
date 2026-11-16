@@ -1,7 +1,8 @@
 /**
- * The graph's field with every title too long for its card and its frame, and what the specs of
- * the whole words laid over a cut text read off it: which cut text the pointer rests on, and where
- * the whole words stand against it.
+ * The graph's field with every title too long for its card and its frame, any other view of the
+ * planning space with the titles a spec gives it, and what the specs of the whole words laid over
+ * a cut text read off them: which cut text the pointer rests on, and where the whole words stand
+ * against it.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -14,28 +15,38 @@ import { planningReadFor } from './planningReadFixture.ts'
 /** Run on after every title of the broad space, so the field's cards cut their titles. */
 const LONGER = ': a title that runs on past the two lines a card on the field gives it'
 
-/** The broad space with every title too long for its card, its field open at this window. */
-export async function openCutField(page: Page, width: number, longer = LONGER) {
+/** The planning space's read as `reshape` leaves it, and the page opened at `url` in this window. */
+export async function openRead(
+  page: Page,
+  width: number,
+  url: string,
+  reshape: (read: Record<string, unknown>) => void,
+) {
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page)
   await page.route('**/api/planning?*', async (route) => {
     const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = broadModel.workflow
-      body.work_items = broadModel.work_items.map((item) => ({
-        ...item,
-        title: `${item.title}${longer}`,
-      }))
-      body.links = broadModel.links
-    }
+    if (response.status === 200 && 'work_items' in response.body)
+      reshape(response.body as unknown as Record<string, unknown>)
     await route.fulfill({
       status: response.status,
       contentType: 'application/json',
       body: JSON.stringify(response.body),
     })
   })
-  await page.goto(graphRoute({}))
+  await page.goto(url)
+}
+
+/** The broad space with every title too long for its card, its field open at this window. */
+export async function openCutField(page: Page, width: number, longer = LONGER) {
+  await openRead(page, width, graphRoute({}), (body) => {
+    body.workflow = broadModel.workflow
+    body.work_items = broadModel.work_items.map((item) => ({
+      ...item,
+      title: `${item.title}${longer}`,
+    }))
+    body.links = broadModel.links
+  })
   // The layout runs in a worker, which a busy machine slows past the default wait.
   await expect(page.locator('.graph-canvas.settled')).toBeVisible({ timeout: 20_000 })
 }
