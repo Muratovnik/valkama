@@ -48,6 +48,7 @@ import { offerDownload } from '@/shared/lib/fileDownload.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
 import FieldError from '@/shared/ui/FieldError.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -114,7 +115,6 @@ const headings = computed(() => [
     text: words.dimension(props.by),
     chosen: false,
     numeric: false,
-    detail: undefined,
   },
   ...model.value.columns.map((column) => ({ ...column, numeric: true })),
 ])
@@ -240,7 +240,7 @@ defineExpose({ reveal })
             :aria-sort="marks[column.key]?.aria"
           >
             <button
-              v-tooltip.detail="{ text: column.detail, words: column.text }"
+              v-tooltip.clipped="column.text"
               type="button"
               class="table-sort"
               :aria-description="t('analytics.panel.table.sortBy', { column: column.text })"
