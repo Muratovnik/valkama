@@ -6,7 +6,9 @@
  * When it shows and goes is the hint manager's (`hintManager.ts`), by the rules of every hint.
  *
  * - It shows only while its text is cut, measured as it would show, and goes when a window or a
- *   panel that widens the text leaves it whole; one that narrows it lays it again.
+ *   panel that widens the text leaves it whole; one that narrows it lays it again. A transform
+ *   that moves or scales the text, as the graph's camera does, lays it again on the text, or takes
+ *   it down where the text no longer stands in sight.
  * - Its first letter stands on the cut text's first letter, in that letter's type and ink, and it
  *   runs on to the right up to 8px short of the window's edge, wrapping by words only where the
  *   whole text does not fit there (`placeWhole`). On one line it covers its own line alone.
@@ -23,7 +25,7 @@
  */
 import { computed, nextTick, shallowRef, watch } from 'vue'
 
-import { useEventListener, useResizeObserver } from '@vueuse/core'
+import { useEventListener, useRafFn, useResizeObserver } from '@vueuse/core'
 
 import { closeHint, shownHint, useHintKind } from '@/shared/ui/hintManager.ts'
 import { placeWhole } from '@/shared/ui/hintPlacement.ts'
@@ -86,6 +88,8 @@ const look = shallowRef<{
   type: Record<string, string>
 }>()
 const place = shallowRef<WholePlace | null>(null)
+/** The cut text's first letter as it stood when the whole text was last laid from it. */
+let laidFrom: DOMRect | null = null
 
 const boxStyle = computed(() => {
   const [at, seen] = [place.value, look.value]
@@ -144,6 +148,7 @@ async function lay(element: HTMLElement) {
     closeHint()
     return
   }
+  laidFrom = letter.box
   const style = getComputedStyle(letter.inked)
   const drawn = element.getBoundingClientRect().width
   const scale = element.offsetWidth > 0 ? drawn / element.offsetWidth : 1
@@ -169,9 +174,50 @@ async function lay(element: HTMLElement) {
   })
 }
 
+/** Further than this, in px, the cut text's first letter has moved or changed its size. */
+const MOVED = 0.25
+
+/**
+ * A transform moves and scales the cut text with no resize and no scroll, as the graph's camera
+ * does under the wheel, a pinch or a key it follows, and no event says so: while the whole text is
+ * laid, its first letter is read each frame. Moved or scaled, the whole text is laid on it again
+ * where the letter is still what the window shows there, and goes where it is not: carried out of
+ * its view or under something else. Laid once, it stayed at the place and scale it opened at.
+ */
+function follow() {
+  const element = anchor.value
+  const before = laidFrom
+  if (!element || !before) return
+  const letter = firstLetterOf(element)?.box
+  if (!letter) {
+    closeHint()
+    return
+  }
+  const moved = [
+    letter.left - before.left,
+    letter.top - before.top,
+    letter.height - before.height,
+  ].some((change) => Math.abs(change) > MOVED)
+  if (!moved) return
+  const there = document.elementFromPoint(
+    letter.left + letter.width / 2,
+    letter.top + letter.height / 2,
+  )
+  if (there && element.contains(there)) void lay(element)
+  else closeHint()
+}
+
+const following = useRafFn(follow, { immediate: false })
+
 watch(anchor, (element) => {
   place.value = null
-  if (element) void lay(element)
+  laidFrom = null
+  if (!element) {
+    following.pause()
+    return
+  }
+  void lay(element)
+  following.resume()
 })
 
 /** A width change lays the shown text again while it is still cut, and closes it once whole. */

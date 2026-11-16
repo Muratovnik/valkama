@@ -943,7 +943,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   The whole words let the pointer and a press through to the element under it, which keeps its
   hover and does what it does,
   and the pointer anywhere on it holds it up. A width that leaves the text whole takes it down
-  without a hover, and one that cuts it again lays it again. A list declares itself once on
+  without a hover, and one that cuts it again lays it again; a zoom or a move of the graph's
+  camera lays it again on the text, or takes it down where the text went out of sight. A list
+  declares itself once on
   its container (`data-hint-list`), and its rows say nothing: in it every other hint stands
   aside of the list, level with its row's
   top, over no other row — the rail's past the rail's edge, a ranked bar's past the
