@@ -929,10 +929,17 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   hint the pointer raised can be entered and stays while the pointer is on it, going a
   moment after the pointer leaves both. Escape closes the hint and nothing else, never the
   drawer or menu under it; with no hint up it reaches them as before. A hint focus holds,
-  and a chart period's, lets the pointer and a press through to what it covers. It stands above its element unless the place asks for a side —
-  the rail's hints stand to its right, clear of the rows, and a chart's period's to the
-  right of its column, level with the plot's top — and flips where the window has no
-  room; where neither side has room for it, it stands above. Every hint states its kind, and the kind says when it shows: `name` is
+  and a chart period's, lets the pointer and a press through to what it covers. Where a hint
+  stands follows what it is to its element, never a side its place writes: a detail stands
+  below its element from the element's start, 6px off and at most 20rem wide, and above it only
+  where the window has no room below; a name stands below its icon, centred; a clipped text
+  above its words, centred. A list declares itself once on its container (`data-hint-list`),
+  and its rows say nothing: in it every hint stands aside of the list, level with its row's
+  top, over no other row — the rail's past the rail's edge, a chart period's beside its column
+  at the plot's top — on the left where the right has no room, on the roomier side drawn
+  narrower down to 12rem where neither holds it, and above its element where neither has even
+  that. A hint keeps 8px from the window's edge. `check:ui-system` refuses a side written at a
+  call site, save an exception its register names with the reason. Every hint states its kind, and the kind says when it shows: `name` is
   the words of an element that shows only a glyph, shown whenever it is pointed at;
   `clipped` is the whole of words its element shows cut, shown only while they are cut;
   `detail` says what the element does not show, and stands in `check:ui-system`'s

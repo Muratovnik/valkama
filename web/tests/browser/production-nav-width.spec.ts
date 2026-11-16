@@ -5,8 +5,8 @@
  * going on now were cut by an ellipsis whose only rescue was the browser's `title`. Its
  * right edge is now a window splitter, dragged or stepped by the arrow keys between 200px
  * and what the window leaves, and kept across a reload; a phone's icon rail has no edge.
- * A name the rail cuts shows a hint beside the rail, anchored to the name and inside the
- * window, and a name it does not cut shows none.
+ * A name the rail cuts shows a hint past the rail's edge, level with the name's row and inside
+ * the window, and a name it does not cut shows none.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -136,10 +136,16 @@ test('a name the rail cuts shows a hint beside it, and one it does not cut shows
   await long.hover()
   await page.clock.runFor(1000)
   await expect(words).toHaveText(LONG_LABEL)
-  const [name, shown] = await Promise.all([boxOf(long), boxOf(hint)])
-  // At the rail's right, past the name's end, level with it, and inside the window.
-  expect(shown.x).toBeGreaterThanOrEqual(name.right)
-  expect(Math.abs(shown.y + shown.height / 2 - (name.y + name.height / 2))).toBeLessThanOrEqual(1)
+  const head = page.locator('.nav-tree-head', { has: long })
+  const [rail, row, shown] = await Promise.all([
+    boxOf(page.locator('.app-nav-shell')),
+    boxOf(head),
+    boxOf(hint),
+  ])
+  // Past the rail's edge, over none of its rows, level with the top of the name's row, and
+  // inside the window. It stood centred at the name's end, over the rows around it.
+  expect(shown.x).toBeGreaterThanOrEqual(rail.right)
+  expect(Math.abs(shown.y - row.y)).toBeLessThanOrEqual(1)
   expect(shown.right).toBeLessThanOrEqual(1280)
   expect(shown.y).toBeGreaterThanOrEqual(0)
   expect(shown.bottom).toBeLessThanOrEqual(800)
@@ -164,10 +170,18 @@ test('a title the rail cuts hints beside it, clear of its text, and says it with
   // The row draws its number, so the hint says the title alone: the words the rail cuts.
   await expect(words).toHaveText(LONG_TITLE)
   await expect(words).not.toContainText('LONG-1')
-  // The title's own hint stands at its end, level with it and inside the window.
-  const [name, shown] = await Promise.all([boxOf(title), boxOf(page.locator('.tooltip-hint'))])
-  expect(shown.x).toBeGreaterThanOrEqual(name.right)
-  expect(Math.abs(shown.y + shown.height / 2 - (name.y + name.height / 2))).toBeLessThanOrEqual(1)
+  // The title's own hint stands past the rail's edge, clear of its text and of every row, its
+  // top level with its row's: no lower than the title's line, no higher than the row.
+  const row = page.locator('.nav-row', { has: page.locator('[aria-label^="LONG-1 "]') })
+  const [rail, line, name, shown] = await Promise.all([
+    boxOf(page.locator('.app-nav-shell')),
+    boxOf(row),
+    boxOf(title),
+    boxOf(page.locator('.tooltip-hint')),
+  ])
+  expect(shown.x).toBeGreaterThanOrEqual(rail.right)
+  expect(shown.y).toBeGreaterThanOrEqual(line.y - 1)
+  expect(shown.y).toBeLessThanOrEqual(name.y + 1)
   expect(shown.right).toBeLessThanOrEqual(1280)
 })
 

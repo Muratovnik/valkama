@@ -328,7 +328,11 @@ function focus(event: FocusEvent, index: number, at: number | null) {
               :class="gridClass(tick)"
               :style="levelOf(tick)"
             />
-            <div class="period-bars">
+            <!-- The periods are a list of rows across: a period's hint stands beside its column. -->
+            <div
+              class="period-bars"
+              data-hint-list="columns"
+            >
               <div
                 v-for="(one, index) in chart.columns"
                 :key="one.column.key"
@@ -343,7 +347,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                 />
                 <component
                   :is="periodTag(one)"
-                  v-tooltip:right-start.detail="periodHint(one, $props)"
+                  v-tooltip.detail="periodHint(one, $props)"
                   class="period-column"
                   v-bind="columnAttrs(one, index)"
                   @click="pressPeriod(one)"

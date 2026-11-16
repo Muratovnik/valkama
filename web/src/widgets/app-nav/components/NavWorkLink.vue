@@ -66,7 +66,7 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
     <span class="nav-row-words">
       <template v-if="epic">
         <span
-          v-tooltip:right.clipped="epic"
+          v-tooltip.clipped="epic"
           class="nav-row-epic trimmed-word one-line"
           :style="epicStyle"
           >{{ epic }}</span
@@ -78,7 +78,7 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
         >
       </template>
       <span
-        v-tooltip:right.clipped="title"
+        v-tooltip.clipped="title"
         class="nav-row-title trimmed-word one-line"
         >{{ title }}</span
       >
@@ -92,7 +92,7 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
           name="agent"
           :size="12"
         /><span
-          v-tooltip:right.clipped="meta.word"
+          v-tooltip.clipped="meta.word"
           class="trimmed-word"
           >{{ meta.word }}</span
         >
@@ -100,7 +100,7 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
     </span>
     <span
       v-if="detail"
-      v-tooltip:right.clipped="detail"
+      v-tooltip.clipped="detail"
       class="nav-row-detail one-line"
       aria-hidden="true"
       >{{ detail }}</span

@@ -15,10 +15,9 @@
  * library's internal context.
  *
  * What the manager does not decide is decided here:
- * - A hint asked for on a side stands there where its lines fit beside its element, else on the
- *   other side, else on the roomier one drawn narrower, down to `NARROWEST_BESIDE`, and above
- *   the element where neither side has that much. Left to the library, a side with no room
- *   squeezed the hint into what room it had, a word a line.
+ * - Where a hint stands is its kind's and its list's (`hintPlacement.ts`), asked as it opens; the
+ *   library keeps it inside the window from there, a hint aside of a list read against a box
+ *   that follows its row as the page moves.
  * - A hint of the `clipped` kind shows only while its text is cut, measured as it would show;
  *   a name and a detail always show. A detail on an element whose own words are cut says
  *   them whole first, on a line of their own, measured the same way; uncut, it is the detail.
@@ -31,13 +30,13 @@
  *   its widest cells before it opens, and the main row of the part of its area that the pointer or
  *   the keyboard stands on (`data-tooltip-row`) is marked, without opening the hint again.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 
 import { HoverCardContent, HoverCardPortal, HoverCardRoot, VisuallyHidden } from 'reka-ui'
 
 import { focusedPart, pointedPart, shownHint, useHintKind } from '@/shared/ui/hintManager.ts'
+import { EDGE, hintPlaceOf, OFFSET } from '@/shared/ui/hintPlacement.ts'
 import { previewAnchorOf } from '@/shared/ui/referencePreviewAnchors.ts'
-import type { TooltipAlign, TooltipSide } from '@/shared/ui/tooltipAnchors.ts'
 import {
   focusAnchorOf,
   inTooltipArea,
@@ -67,8 +66,6 @@ const mine = computed(() => (shownHint.value?.kind === 'tooltip' ? shownHint.val
 const shown = computed(() => mine.value?.anchor ?? null)
 const hint = computed(() => (shown.value ? tooltipOf(shown.value) : undefined))
 const open = computed(() => hint.value !== undefined)
-/** What the hint is placed against. */
-const reference = computed(() => shown.value ?? undefined)
 /**
  * The pointer and a press go through the hint rather than onto it: a hint focus a key brought
  * stands over every control the keyboard reaches, and a chart period's follows the pointer along
@@ -113,49 +110,15 @@ const current = computed(() => {
     : tooltipRowOf(element, focusedPart.value)
 })
 
-/**
- * The widest a hint is drawn, as `--tooltip-widest` says in `.tooltip-hint`, and the narrowest it
- * is drawn beside its element, in rem.
- */
-const WIDEST = 20
-const NARROWEST_BESIDE = 12
-/** The room between a hint and its element, and between a hint and the window's edge, in px. */
-const OFFSET = 6
-const EDGE = 8
+/** Where the shown hint stands and what it stands against, decided as it opens. */
+const place = shallowRef<ReturnType<typeof hintPlaceOf> | null>(null)
 
-interface Place {
-  align: TooltipAlign
-  side: TooltipSide
-  /** How wide the hint is drawn at most where it stands, in px, where narrower than `WIDEST`. */
-  widest?: number
-}
-
-/** Where the shown hint stands, decided as it opens. */
-const place = ref<Place>({ align: 'center', side: 'top' })
-
-/** Where the hint of `element` stands, `width` wide: on the side it asks for, or where it has room. */
-function placeOf(element: HTMLElement, width: number): Place {
-  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
-  const { align = 'center', side = 'top' } = tooltipOf(element) ?? {}
-  if (side !== 'left' && side !== 'right') return { align, side }
-  const box = element.getBoundingClientRect()
-  const room = {
-    left: box.left - OFFSET - EDGE,
-    right: document.documentElement.clientWidth - box.right - OFFSET - EDGE,
-  }
-  const other = side === 'left' ? 'right' : 'left'
-  const need = Math.min(WIDEST * rem, width)
-  if (room[side] >= need) return { align, side }
-  if (room[other] >= need) return { align, side: other }
-  const roomier = room[other] > room[side] ? other : side
-  return room[roomier] >= NARROWEST_BESIDE * rem
-    ? { align, side: roomier, widest: room[roomier] }
-    : { align: 'center', side: 'top' }
-}
+/** What the hint is placed against: its element, or the box aside of the list it stands in. */
+const reference = computed(() => (shown.value ? place.value?.reference : undefined))
 
 /** The hint's widest where its place draws it narrower than `WIDEST`. */
 const widestStyle = computed(() =>
-  place.value.widest ? { '--tooltip-widest': `${place.value.widest}px` } : undefined,
+  place.value?.widest ? { '--tooltip-widest': `${place.value.widest}px` } : undefined,
 )
 
 // As a hint opens on an element, measured then: whether its words are cut, and where it stands.
@@ -165,7 +128,8 @@ watch(shown, (element) => {
   whole.value = Boolean(tooltip.words) && textIsClipped(element)
   const words = whole.value ? [tooltip.words] : []
   const lines = [...words, ...tooltip.text.split('\n'), tooltip.note]
-  place.value = placeOf(element, tooltip.body ? bodyWidth(tooltip.body) : hintWidth(lines))
+  const width = tooltip.body ? bodyWidth(tooltip.body) : hintWidth(lines)
+  place.value = hintPlaceOf(element, tooltip, width)
 })
 </script>
 
@@ -177,8 +141,8 @@ watch(shown, (element) => {
         class="tooltip-hint"
         :class="{ 'tooltip-hint-body': hint.body, 'tooltip-hint-through': passedThrough }"
         :reference="reference"
-        :align="place.align"
-        :side="place.side"
+        :align="place?.align"
+        :side="place?.side"
         :side-offset="OFFSET"
         :collision-padding="EDGE"
         :style="widestStyle"
@@ -224,7 +188,8 @@ watch(shown, (element) => {
 }
 
 .tooltip-hint {
-  /* The widest a hint is drawn (`WIDEST`); beside an element with less room, the host's less. */
+  /* The widest a hint is drawn (`WIDEST` in `hintPlacement.ts`); beside a list with less room,
+     the host's less. */
   --tooltip-widest: 20rem;
 
   z-index: 120;

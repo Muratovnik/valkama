@@ -52,7 +52,7 @@ const touch = computed(() => props.size === 'touch')
   >
     <button
       :id="foldId"
-      v-tooltip:right.clipped="words"
+      v-tooltip.clipped="words"
       class="nav-fold-toggle"
       type="button"
       :aria-expanded="open"

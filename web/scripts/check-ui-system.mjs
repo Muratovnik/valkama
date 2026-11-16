@@ -23,6 +23,8 @@ import {
   NATIVE_TITLES,
   scanNativeTitles,
   scanTooltipKinds,
+  scanTooltipSides,
+  SIDED_TOOLTIPS,
 } from './ui-system/native-titles.mjs'
 import { ONE_LINE_COPIES, scanOneLineCopies } from './ui-system/one-line.mjs'
 import { scanRevealCopies } from './ui-system/reveal.mjs'
@@ -52,6 +54,7 @@ export function scanUiTree(root = defaultSourceRoot) {
   const titles = product ? UNBROKEN_TITLES : new Map()
   const hints = product ? NATIVE_TITLES : new Map()
   const details = product ? DETAIL_TOOLTIPS : new Map()
+  const sided = product ? SIDED_TOOLTIPS : new Map()
   const stateReads = product ? STATE_NAME_READS : new Map()
   const oneLines = product ? ONE_LINE_COPIES : new Map()
   return [
@@ -68,6 +71,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanTitleBreaks(sources, titles),
     ...scanNativeTitles(sources, hints),
     ...scanTooltipKinds(sources, details),
+    ...scanTooltipSides(sources, sided),
     ...scanStateNames(sources, stateReads),
     ...scanControlSizes(sources, sizes),
     ...scanFocusRingWidths(sources),

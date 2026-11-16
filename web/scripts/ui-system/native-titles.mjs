@@ -152,8 +152,8 @@ export function scanNativeTitles(sources, register = NATIVE_TITLES) {
  * stood over the board at every pass of the pointer: a tile's title over the tile, a label's
  * «Filter: label x» over the label, five lines over a holder's name. The kind is what makes
  * the next one a choice: a template writes `v-tooltip.name`, `v-tooltip.clipped` or
- * `v-tooltip.detail` (with a side, `v-tooltip:right.clipped`), and a render function gives the
- * kind as the directive's modifiers, `[vTooltip, text, side, { name: true }]`.
+ * `v-tooltip.detail`, and a render function gives the kind as the directive's modifiers,
+ * `[vTooltip, text, undefined, { name: true }]`.
  *
  * A detail is what a hint may misuse: words the element shows, said again. So a detail is
  * registered below by file, tag and directive as written, with the reason its words are not
@@ -251,7 +251,7 @@ export const DETAIL_TOOLTIPS = new Map([
     'the entry names the mark of the period compared with; that period’s sum is on no mark',
   ],
   [
-    'shared/ui/PeriodColumns.vue <component> v-tooltip:right-start.detail="periodHint(one, $props)"',
+    'shared/ui/PeriodColumns.vue <component> v-tooltip.detail="periodHint(one, $props)"',
     'a period prints nothing of itself, and its segments are blocks of hue that speak through it: its sum against the period before, what changed and its series with their shares are its hint',
   ],
   [
@@ -279,19 +279,19 @@ export const DETAIL_TOOLTIPS = new Map([
     'the whole session id, of which the line prints the start',
   ],
   [
-    `widgets/app-nav/components/AppNav.vue <button> v-tooltip:right.detail="t('navigation.home')"`,
+    `widgets/app-nav/components/AppNav.vue <button> v-tooltip.detail="t('navigation.home')"`,
     'where a press goes; the mark and the product’s name only say what it is',
   ],
   [
-    'widgets/app-nav/components/NavConnectionButton.vue <button> v-tooltip:right.detail="{ text: hint, words: status }"',
+    'widgets/app-nav/components/NavConnectionButton.vue <button> v-tooltip.detail="{ text: hint, words: status }"',
     'that a press refreshes now, and while the connection is lost what was lost; while its own words are cut, they come first, whole',
   ],
   [
-    'widgets/app-nav/components/NavWorkRow.vue <div> v-tooltip:right.detail="rowHint"',
+    'widgets/app-nav/components/NavWorkRow.vue <div> v-tooltip.detail="rowHint"',
     'the state with how long on a one-line row, which the row does not draw, and a session’s folder its one line leaves out; a two-line row draws both, so it has none, and a cut title has its own hint',
   ],
   [
-    `widgets/app-nav/components/NavWorkTree.vue <span> v-tooltip:right.detail="{ text: t('liveWork.noProject'), words: entry.label }"`,
+    `widgets/app-nav/components/NavWorkTree.vue <span> v-tooltip.detail="{ text: t('liveWork.noProject'), words: entry.label }"`,
     'why the space’s name is no link: no project holds it; while its own words are cut, they come first, whole',
   ],
   [
@@ -354,14 +354,48 @@ export const DETAIL_TOOLTIPS = new Map([
 ])
 
 const TOOLTIP_KINDS = new Set(['name', 'clipped', 'detail'])
-/** A render function's directive: `[vTooltip, text, side, modifiers]`, nothing nested in it. */
+/** A render function's directive: `[vTooltip, text, argument, modifiers]`, nothing nested in it. */
 const SCRIPT_TOOLTIP = /\[\s*vTooltip\s*,[^[\]]*\]/g
 /** Its last element, the modifiers, naming one kind; a formatter may end either with a comma. */
 const SCRIPT_KIND = /\{\s*(name|clipped|detail)\s*:\s*true\s*,?\s*\}\s*,?\s*\]$/
 
 const modifierNames = (prop) => prop.modifiers.map((each) => each.content ?? each)
 
-/** The hints one file gives, each with where it stands, how it is written and its kinds. */
+/** A key of a hint's value that would say where it stands, written out or shorthand. */
+const VALUE_SIDE = /[{,]\s*(side|align|placement)\s*[:,}]/
+
+/** The elements of a render function's directive, split at its own commas only. */
+function tupleParts(tuple) {
+  const parts = ['']
+  let depth = 0
+  let quote = ''
+  for (const char of tuple.slice(1, -1)) {
+    if (quote) quote = char === quote ? '' : quote
+    else if (`'"\``.includes(char)) quote = char
+    else if ('({'.includes(char)) depth += 1
+    else if (')}'.includes(char)) depth -= 1
+    else if (char === ',' && depth === 0) {
+      parts.push('')
+      continue
+    }
+    parts[parts.length - 1] += char
+  }
+  return parts.map((part) => part.trim())
+}
+
+/** The side a render function's directive states, its third element, unless it is left out. */
+function scriptSide(tuple) {
+  const side = tupleParts(tuple)[2] ?? ''
+  return side && side !== 'undefined' ? side : null
+}
+
+/** The side a template's directive states: its argument, or a key of its value. */
+function templateSide(prop) {
+  if (prop.arg) return prop.arg.isStatic === false ? `[${prop.arg.content}]` : prop.arg.content
+  return VALUE_SIDE.exec(prop.exp?.content ?? '')?.[1] ?? null
+}
+
+/** The hints one file gives, each with where it stands, how it is written, its kinds and side. */
 function* hintsOf({ file, source }, descriptor) {
   const scripts = descriptor
     ? [descriptor.script, descriptor.scriptSetup].filter(Boolean)
@@ -372,6 +406,7 @@ function* hintsOf({ file, source }, descriptor) {
       yield {
         kinds: kind ? [kind] : [],
         line: script.loc.start.line + lineOf(script.content, match.index) - 1,
+        side: scriptSide(match[0]),
         what: `${file} script ${match[0].replaceAll(/\s+/g, ' ')}`,
       }
     }
@@ -382,8 +417,24 @@ function* hintsOf({ file, source }, descriptor) {
         yield {
           kinds: modifierNames(prop).filter((name) => TOOLTIP_KINDS.has(name)),
           line: prop.loc.start.line,
+          side: templateSide(prop),
           what: `${file} <${element.tag}> ${prop.loc.source}`,
         }
+}
+
+/** The hints of a tree, each with the place it is reported at. */
+function* treeHints(sources) {
+  for (const entry of sources) {
+    if (!/\.(?:ts|vue)$/.test(entry.file)) continue
+    const descriptor = entry.file.endsWith('.vue')
+      ? parse(entry.source, { filename: entry.file, sourceMap: false }).descriptor
+      : null
+    for (const hint of hintsOf(entry, descriptor))
+      yield {
+        ...hint,
+        where: `${entry.file}:${hint.line}: ${hint.what.slice(entry.file.length + 1)}`,
+      }
+  }
 }
 
 /** What is wrong with one hint, if anything: its kinds, or a detail nobody registered. */
@@ -397,19 +448,44 @@ function hintFault({ kinds, what }, where, register) {
 export function scanTooltipKinds(sources, register = DETAIL_TOOLTIPS) {
   const violations = []
   const seen = new Set()
-  for (const entry of sources) {
-    if (!/\.(?:ts|vue)$/.test(entry.file)) continue
-    const descriptor = entry.file.endsWith('.vue')
-      ? parse(entry.source, { filename: entry.file, sourceMap: false }).descriptor
-      : null
-    for (const hint of hintsOf(entry, descriptor)) {
-      const where = `${entry.file}:${hint.line}: ${hint.what.slice(entry.file.length + 1)}`
-      const fault = hintFault(hint, where, register)
-      if (fault) violations.push(fault)
-      else seen.add(hint.what)
-    }
+  for (const hint of treeHints(sources)) {
+    const fault = hintFault(hint, hint.where, register)
+    if (fault) violations.push(fault)
+    else seen.add(hint.what)
   }
   for (const what of register.keys())
     if (!seen.has(what)) violations.push(`${what}: registered as a detail, and gone`)
+  return violations
+}
+
+/*
+ * No hint states where it stands.
+ *
+ * A hint stands where its kind and the list its element stands in put it
+ * (`shared/ui/hintPlacement.ts`), and a list declares itself once on its container, as
+ * `data-hint-list`. A side written at each call site drifted: the rail's hints asked for the right
+ * one by one, and a name added there without it stood above its icon, over the row before. So a
+ * template's `v-tooltip` takes no argument, written or bound, and no key of its value says a side,
+ * an alignment or a placement; a render function's directive leaves its third element out or
+ * `undefined`. A real exception is registered below by file, tag and directive as written, with
+ * its reason, and keeps its side; a registered one that is gone is refused too.
+ */
+
+/** `file <tag> v-tooltip:side.kind="…"` or `file script [vTooltip, …]` → why its kind cannot place it. */
+export const SIDED_TOOLTIPS = new Map()
+
+export function scanTooltipSides(sources, register = SIDED_TOOLTIPS) {
+  const violations = []
+  const seen = new Set()
+  for (const hint of treeHints(sources)) {
+    if (!hint.side) continue
+    if (register.has(hint.what)) seen.add(hint.what)
+    else
+      violations.push(
+        `${hint.where} states where it stands (${hint.side}); a hint stands where its kind and its list put it (shared/ui/hintPlacement.ts): drop it, declare the list on its container (data-hint-list), or register a real exception in SIDED_TOOLTIPS with its reason`,
+      )
+  }
+  for (const what of register.keys())
+    if (!seen.has(what)) violations.push(`${what}: registered as a sided hint, and gone`)
   return violations
 }

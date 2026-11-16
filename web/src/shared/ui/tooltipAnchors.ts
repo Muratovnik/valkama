@@ -8,9 +8,9 @@
  * manager (`hintManager.ts`) hears the pointer and the focus for every hint, and finds the marked
  * element through the rules below (`pointerAnchorOf`, `focusAnchorOf`).
  *
- *     <button v-tooltip.name="t('refresh.title')">            an icon's name, always, above
- *     <a v-tooltip:right.clipped="name">{{ name }}</a>      only while its text is cut, at the right
- *     <time v-tooltip.detail="full">{{ short }}</time>      what the screen does not say, always
+ *     <button v-tooltip.name="t('refresh.title')">       an icon's name, always
+ *     <a v-tooltip.clipped="name">{{ name }}</a>          only while its text is cut
+ *     <time v-tooltip.detail="full">{{ short }}</time>    what the screen does not say, always
  *
  * Every hint states its kind, because the kind is what decides whether it may show at all:
  * - `name` names a control that shows no words, an icon or a glyph, and always shows;
@@ -19,12 +19,11 @@
  *   shows is noise over the thing it covers, so `check:ui-system` allows a detail only from
  *   its register, each with its reason, and refuses a hint that states no kind.
  *
- * The argument is the side it stands on (`top` unless said: `right`, `bottom`, `left`), and
- * the hint moves to the other side where the window has no room, and above the element where
- * neither side has. A side may end in `-start` (`right-start`): the hint then stands level with
- * the element's start, its top on a side, rather than its middle. `clipped` shows it only
- * while the element or something in it has more text than its box shows: an ellipsis, a
- * clamp, or a label hidden for want of room. An empty or absent text shows nothing.
+ * Where the hint stands is not the call site's to say: its kind and the list its element stands
+ * in decide it (`hintPlacement.ts`). An argument, a side (`right`, `left-start`), is read only for
+ * an exception `check:ui-system` registers with its reason. `clipped` shows the hint only while
+ * the element or something in it has more text than its box shows: an ellipsis, a clamp, or a
+ * label hidden for want of room. An empty or absent text shows nothing.
  *
  * The value is the text, or `{ text, note }`: the note is a second line in the quiet ink,
  * a state under an action. The text may run over several lines: a line break in it is kept,
@@ -58,14 +57,10 @@ import type { Directive, DirectiveBinding } from 'vue'
 
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import { hintAnchorGone } from '@/shared/ui/hintManager.ts'
+import type { HintAlign, HintSide } from '@/shared/ui/hintPlacement.ts'
 
-export type TooltipSide = 'top' | 'right' | 'bottom' | 'left'
-
-/** Where along its side a hint stands: at the element's middle, or level with its start. */
-export type TooltipAlign = 'center' | 'start'
-
-/** The directive's argument: a side, and `-start` to stand level with the element's start. */
-type TooltipPlace = TooltipSide | `${TooltipSide}-start`
+/** A registered exception's argument: a side, and `-start` to stand level with the element's start. */
+type TooltipPlace = HintSide | `${HintSide}-start`
 
 /** What a hint is to its element, which decides when it shows (see above). */
 export type TooltipKind = 'name' | 'clipped' | 'detail'
@@ -109,7 +104,8 @@ export type TooltipValue =
   | undefined
 
 interface Tooltip {
-  align: TooltipAlign
+  /** The side a registered exception writes, or null: the hint stands where its kind puts it. */
+  asked: { align: HintAlign; side: HintSide } | null
   /** The text drawn as a grid, or null for the text as it reads. */
   body: TooltipBody | null
   clipped: boolean
@@ -120,13 +116,12 @@ interface Tooltip {
   names: boolean
   /** A second line in the quiet ink, or empty. */
   note: string
-  side: TooltipSide
   text: string
   /** The element's own words, said whole before the text while they are cut, or empty. */
   words: string
 }
 
-const SIDES: readonly TooltipSide[] = ['top', 'right', 'bottom', 'left']
+const SIDES: readonly HintSide[] = ['top', 'right', 'bottom', 'left']
 const KINDS: readonly TooltipKind[] = ['name', 'clipped', 'detail']
 /** What the elements show, read by the host as it shows and reshown when it changes. */
 const tooltips = shallowReactive(new WeakMap<Element, Tooltip>())
@@ -195,6 +190,13 @@ function forget(element: HTMLElement) {
   hintAnchorGone(element)
 }
 
+/** The side a registered exception writes as the argument, or null where none is written. */
+function askedOf(arg = ''): Tooltip['asked'] {
+  const [written = '', along] = arg.split('-')
+  const side = SIDES.find((each) => each === written)
+  return side ? { align: along === 'start' ? 'start' : 'center', side } : null
+}
+
 function file(
   element: HTMLElement,
   binding: DirectiveBinding<TooltipValue, TooltipKind, TooltipPlace>,
@@ -218,9 +220,7 @@ function file(
   const said = note ? `${main}\n${note}` : main
   const before = tooltips.get(element)
   const clipped = kind === 'clipped' || parts.clipped === true || !detail
-  const [asked = '', along] = (binding.arg ?? '').split('-')
-  const side = SIDES.find((each) => each === asked) ?? 'top'
-  const align: TooltipAlign = along === 'start' ? 'start' : 'center'
+  const asked = askedOf(binding.arg)
   const names = before?.names === true || !nameOf(element, before)
   let describes: string | null = null
   if (names) element.setAttribute('aria-label', said)
@@ -244,14 +244,13 @@ function file(
   element.dataset.tooltipKind = kind
   const body = detail ? (parts.body ?? null) : null
   tooltips.set(element, {
-    align,
+    asked,
     body,
     clipped,
     describes,
     kind,
     names,
     note,
-    side,
     text: main,
     words,
   })

@@ -68,19 +68,22 @@ test('a hint the keyboard holds up lets a press through to what it covers', asyn
   await page.keyboard.press('Tab')
   const hint = page.locator('.tooltip-hint')
   await expect(hint).toBeVisible()
-  // What a press at the middle of the hint lands on, and whether the hint stands over the
-  // control above its own there, which is the case this asks about.
+  // What a press lands on where the hint stands over the control below its own, which is the
+  // case this asks about: a detail stands below its element, over the next control. It stood
+  // above, over the control before it, while a hint took its side from its call site.
   const landed = await page.evaluate(() => {
     const card = document.querySelector('.tooltip-hint')?.getBoundingClientRect()
-    const below = document.querySelector('.hints-under')?.getBoundingClientRect()
+    const below = document.querySelector('.hints-inner')?.getBoundingClientRect()
     if (!card || !below) return { over: false, on: null }
-    const [x, y] = [card.left + card.width / 2, card.top + card.height / 2]
+    const [left, right] = [Math.max(card.left, below.left), Math.min(card.right, below.right)]
+    const [top, bottom] = [Math.max(card.top, below.top), Math.min(card.bottom, below.bottom)]
+    const [x, y] = [(left + right) / 2, (top + bottom) / 2]
     return {
-      over: below.top < y && y < below.bottom,
+      over: right - left > 1 && bottom - top > 1,
       on: document.elementFromPoint(x, y)?.className,
     }
   })
-  expect(landed).toEqual({ over: true, on: 'hints-under' })
+  expect(landed).toEqual({ over: true, on: 'hints-inner' })
 })
 
 /** The hint's lines: its element's whole words when it says them, and the detail under them. */
