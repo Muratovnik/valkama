@@ -16,8 +16,10 @@ stood in one of seven categories with `backlog` and `queued` among them. In 3.0
 an item is a task, a bug, an improvement, a goal or a stage; goals and stages
 hold other work at any depth and are never claimed; there are eight categories;
 work is accepted on a recorded basis; and an accepted open goal or stage shows
-what it derives from the work under it instead of a state. The store moves to
-schema 18 through `valkama migrate work-model`.
+what it derives from the work under it instead of a state. The order work is
+taken in was set by hand, a `rank` stored as the item's `position`; in 3.0 it is
+computed from the work model. The store moves to schema 18 through
+`valkama migrate work-model`.
 
 Several of the old names would mean something else under the new model. A
 `ready` field beside a `ready` category reads as a contradiction (`category:
@@ -39,16 +41,25 @@ and no compatibility layer.
      and has `state: null` exactly when it is an accepted open goal or stage;
    - the chain and usage scope `epic` becomes `tree`;
    - `create_work_item` and the `transition` group take `acceptance`;
+   - the order of work is computed: the `update` and `transition` groups and
+     their HTTP writes lose `rank`, the store loses `position`, a chain member
+     loses `rank` and the members come in the order of work;
+   - a row of a list read and a chain member carry `queue_order`, their place
+     in the space's queue; an item record carries `withheld`, why the queue does
+     not give it, and `lapsed_claim`, the holder whose claim the sweep released;
+     a checklist step carries `by_previous_holder`;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was.
 
 2. **A retired word is refused, never translated.** `kind: epic`,
    `scope: epic`, the categories and state names `backlog` and `queued`, the key
-   `todo`, and the store's own `container` are refused with `invalid_request`
-   on every input that took them, before anything is written. The refusal names
-   what replaces the word: `kind epic is retired: a container is kind goal, or
-   stage under a parent`, `backlog is now triage`. One list in the planning
+   `todo`, the store's own `container` and the field `rank` are refused with
+   `invalid_request` on every input that took them, before anything is written.
+   The refusal names what replaces the word: `kind epic is retired: a container
+   is kind goal, or stage under a parent`, `backlog is now triage`, `rank is
+   retired: the order of work is computed — urgent, started, a goal or stage
+   under way, priority, age`. One list in the planning
    model holds the words, and every refusal, from MCP or HTTP, reads it.
 
 3. **The break ships with what reads it.** The skill Valkama installs, the web
@@ -70,6 +81,8 @@ and no compatibility layer.
 | state key `todo` | `ready` |
 | `scope: "epic"` | `scope: "tree"` |
 | creating work an agent was asked for | `acceptance: "assignment"` |
+| `rank` to place an item | nothing: the order of work is computed |
+| a chain member's `rank` | the members' order, and `queue_order` |
 
 ## Consequences
 

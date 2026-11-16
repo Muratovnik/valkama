@@ -1525,16 +1525,16 @@ finger's reach apart. The keyboard moving along a row held at the top leaves the
 board where it is: the room the board keeps there for that row does not push its own
 buttons out of view. Their rings stand whole wherever the row does: it keeps the
 ring's reach above its arrow, and the board keeps it at its edges. A tile the board brings into
-view under the row's heading, by the keyboard, by opening it or by moving the
-tile below into its place, stands below
+view under the row's heading, by the keyboard or by opening it, stands below
 the heading at the gap the lane keeps under it, however many lines the heading
 takes.
 The Done column, and a lane's Done cell, stand newest closed first, by the time
-of the item's latest transition; nothing there is planned, so the manual order
-of the other columns does not apply. A tile does not move within Done, by drag
-or by Alt+↑/↓, and its tiles do not advertise the reorder keys. A tile dropped
-on Done from another column still closes, wherever the drop lands, and stands
-on top.
+of the item's latest transition; nothing there is planned, so the order of work
+the other columns stand in does not apply. No tile is placed by hand in any
+column: a drop within its own column changes nothing, and a tile dropped in
+another column moves to that state, standing last until the board reads the
+space again. A tile dropped on Done from another column closes, wherever the
+drop lands, and stands on top.
 Graph nodes allocate separate rows for status, title, and relationship
 metadata so labels cannot collide.
 A list of fewer than 300 rows paints what fills its height first and draws every

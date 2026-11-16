@@ -438,7 +438,7 @@ Codex proves its session in every call.
   nothing. A subagent that holds nothing and started nothing is told nothing:
   give the work you hand out a step it claims.
 - **A session subscribed to the item**, since 2.6, hears a person's acts there
-  too, the kinds another session's news is told by: no field edit and no rank.
+  too, the kinds another session's news is told by: no field edit.
   They come in the person's block at its next tool call or prompt, and never wake
   it or continue its turn, since a person's words are the holder's to act on. What
   is addressed to it, a reply in its thread or the answer it awaited, is told and
@@ -495,7 +495,7 @@ the same rules as a person's act and beside the mentions above:
 
 | Told | Never told |
 | --- | --- |
-| a comment, a reply, a report; a question asked, answered, declined, changed or withdrawn; a status change; a claim, a release, a take-over; a link made or removed; a step claimed, taken over, released, completed or reopened, and the steps replaced; a summary selected; a thread resolved or reopened | an edit of the item's fields, its rank, `created`, `execution_attached`, `overridden` |
+| a comment, a reply, a report; a question asked, answered, declined, changed or withdrawn; a status change; a claim, a release, a take-over; a link made or removed; a step claimed, taken over, released, completed or reopened, and the steps replaced; a summary selected; a thread resolved or reopened | an edit of the item's fields, `created`, `execution_attached`, `overridden` |
 
 - **The recipients** are the person rules' own: the holders of the claim and of
   the steps and their orchestrator, the author of a thread for the replies in it,

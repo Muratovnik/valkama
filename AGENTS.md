@@ -23,8 +23,10 @@ is complete on its own.
   `tests/test_planning_retired_words.py` that it names no retired word.
 - Preserve supported external MCP handshake and tool schemas. One exception
   stands: Valkama 3.0 breaks them for the work model alone — its kinds,
-  categories and item record fields, the scope `tree`, `acceptance`, and the
-  retired words refused on input — as
+  categories and item record fields, the scope `tree`, `acceptance`, the
+  computed order of work (`rank` retired, `queue_order`, `withheld`,
+  `lapsed_claim`, `by_previous_holder`), and the retired words refused on
+  input — as
   `docs/decisions/0014-work-model-breaks-the-planning-schemas.md` records. It
   covers nothing else and no later change. Preserve existing
   local data through a verified backup, one forward-only migration, and a

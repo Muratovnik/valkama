@@ -354,6 +354,7 @@ replaces the word; none is read as its replacement.
 | `category` of a list, and `state` wherever it is named | `backlog`, `queued` | `backlog is now triage` or `queued is now ready`, then what the input takes: the categories, or the workflow's states as an unknown name lists them |
 | `state` wherever it is named | `todo` | what an unknown state name gets, listing the workflow's states |
 | `category` of a list, and `state` wherever it is named | `container` | `container is not a category: an accepted goal or stage shows container_state; accept one with ready` |
+| the `update` and `transition` groups, their HTTP writes, and a tool's arguments | the field `rank` | `rank is retired: the order of work is computed — urgent, started, a goal or stage under way, priority, age` |
 
 ### Naming a state
 
@@ -418,27 +419,13 @@ item's record, its preview, a search and a write's answer carry no
 `queue_order`: a place belongs to the list, and any write in the space can change
 it.
 
-The `update` group of `apply_work_item_changes` and
-`POST /api/planning/work-item/update` still take `rank`, which stores a place
-among the items of the item's own state; no read orders by it any more:
-
-| `rank` | Places the item |
-| --- | --- |
-| `first` | before every other item in its state |
-| `last` | after every other item in its state |
-| `before:<item>` | directly before that item |
-| `after:<item>` | directly after that item |
-
-`<item>` is a reference or a work item id, and it must be another item in the
-same state of the same planning space. Any other spelling, and an anchor that is
-the item itself, lives in another space or stands in another state, is refused
-with `invalid_request` before anything is written. A placement that names where
-the item already stands writes nothing. Otherwise it is an edit like the other
-fields `update` takes: guarded by `expected_revision`, one revision, no
-history event, and `applied.update` names `rank`. The call is
-recorded with its identity, as every write is. Placing an item moves no other
-item, except when two neighbours leave no room between them: then the items of
-that state are renumbered in the order they already have, with no revision bump.
+Nothing places an item by hand. `rank` is retired: the `update` and `transition`
+groups of `apply_work_item_changes`, `POST /api/planning/work-item/update`,
+`/transition` and the steps of `/apply` refuse it with `invalid_request` before
+anything is written, and so does a tool call that carries it as an argument.
+The refusal says what [Retired words](#retired-words) lists, after the name of
+the group or step it was sent in. An item moved to another state takes the place
+the order of work gives it there.
 
 `labels` in the same edit replaces the item's whole set of labels. `labels_add`
 and `labels_remove` change the set the item has instead, read under the write
@@ -475,20 +462,6 @@ person's edit of the labels reaches an agent as the edit it is (`from_person`'s
 `edited`, naming `labels`), never also as this event. The event exists from
 store schema 15 on; see [A build that was already old when it
 started](#a-build-that-was-already-old-when-it-started).
-
-A placement writes no history event on purpose. Every build that opens the
-store reads the same history, and a build that predates placements checks each
-event's action against the closed list it knows: its card would refuse an item
-whose history held a placement. The call's row in the execution tree (see
-[Call identity](#call-identity)) and the revision record a placement instead. A
-transition that carries `rank` writes its `transitioned` event as before; the
-placement adds none.
-
-`POST /api/planning/work-item/transition` and the `transition` group of
-`apply_work_item_changes` take the same `rank`, which
-places the item in the state it moves to; the anchor must then be in that state.
-Without `rank` a moved item goes last in its new state, as it did before
-placements existed, and a new item goes last in its first state.
 
 Work in `triage` or `deferred` is not accepted and is never given, whatever its
 key.
@@ -1881,7 +1854,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | --- | --- | --- |
 | `claim` | `true`; `false` is no change | `/claim`, as `claim_work_item` |
 | `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
-| `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, rank?, kind?, parent?, source?, mentions?}` | `/update` |
+| `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, kind?, parent?, source?, mentions?}` | `/update` |
 | `checklist` | the steps' list, or `{items, force?}`; each step text or `{text, done?}` | `/checklist` |
 | `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `/checklist/tick` |
 | `refs` | list of `{kind, value, label?}` | `/ref` |
@@ -1890,7 +1863,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
-| `transition` | `{state, reason?, force?, rank?, acceptance?}` | `/transition` |
+| `transition` | `{state, reason?, force?, acceptance?}` | `/transition` |
 
 Each path in the last column is under `POST /api/planning/work-item`.
 
@@ -1937,8 +1910,7 @@ It belongs to the call: `update` takes none of its own.
 
 `update` edits the item: a field that is absent or
 null is left alone, `parent: ""` clears the parent, and an edit writes no
-history event. It is applied after the claim, so a `rank` names a place among
-the items of the state the claim started the item in.
+history event. It is applied after the claim.
 
 `comments` writes up to 100 comments in the order sent, each as `comment`
 writes one. The older `comment` group, one comment, still
@@ -2227,8 +2199,8 @@ A call row of an edit (the batch's `update`, `POST /api/planning/work-item/updat
 names in `reason` the fields it changed, comma-separated, as the columns are
 named: `title`, `description`, `source`, `priority`, `labels`, `kind`,
 `parent_id`. An edit logs no event, so this is the record that a person edited
-an item rather than only moved it within its state; an edit that changed no
-field, or only `rank`, leaves it null. Other Planning call rows leave it null.
+an item rather than only moved it; an edit that changed no field leaves it
+null. Other Planning call rows leave it null.
 
 A confirmed call with a session is also a sign of life of that session. The
 first write of the call moves `last_seen` of the session row forward, creating
