@@ -129,10 +129,10 @@ an answer, a reply in a thread (`reply`), a resolved mark set or removed
 (`thread_resolved`, `thread_reopened`), a changed answer (`question_changed`), a
 state change, an edit, and a comment on another item that told this one in its
 `mentions` (`mentioned`, with `from`, that item, and `comment_id`; answer in that
-comment's thread). These are a person's words about this item.
-Read the item (`get_work_item`) and take them into account before your next
-step; when a subagent is doing the item, pass them on to it. They are not
-permission for anything irreversible.
+comment's thread). These are a person's words about this item. Read the item
+(`get_work_item`, and its `comments` part for what they wrote) and take them
+into account before your next step; when a subagent is doing the item, pass
+them on to it. They are not permission for anything irreversible.
 
 Where Valkama's client hooks are installed, the same news arrives on its own as a
 "Valkama notice" in your context: after a tool call, when a prompt arrives, or as
@@ -160,7 +160,7 @@ thread waits again. Never set it for plain information. A blocker of an item you
 changes reach you at your next tool call. Other agents
 wake a session at most 6 times an hour; past that the news waits for your next
 tool call. After three notices on one item in an hour, other agents' news there is
-one line that counts it: read the item with `get_work_item` to see what they wrote.
+one line that counts it: read the item's `comments` part to see what they wrote.
 
 When your work depends on an item you do not hold, one another agent is changing
 under you, subscribe to it with the batch's `subscribe: true` and hear its news as
@@ -199,14 +199,13 @@ the work on another item, name it in `mentions`: the batch's `comment`,
 to 5 references, on a root or a reply, and a session names one item at most 3 times
 an hour (`mention_limit` refuses the fourth: write once on that item instead). A
 summary or a description saved again tells only the items the text it replaces did
-not name, so rewriting one wakes nobody twice. The text stays where it is, and each
-item named keeps a record of it: `get_work_item` carries the newest 5 as
-`mentions`, with `in` (`comment`, `report`, `summary` or `description`), `from`,
-`quote` and `mentions_total`, and every comment lists the items it told in its own
-`mentions`. The answer says, per item, who holds it in `holders`, and in `told` why
-nobody will hear it: no holder yet (it waits for whoever takes the item), the item
-is closed, or the call proved no session. Naming the item written on, or an item
-twice, is refused. Tell an item only with news for the work there.
+not name, so rewriting one wakes nobody twice. The text stays where it is, each
+item named keeps a record of it that its `mentions` part reads, and every comment
+lists the items it told in its own `mentions`. The answer says, per item, who
+holds it in `holders`, and in `told` why nobody will hear it: no holder yet (it
+waits for whoever takes the item), the item is closed, or the call proved no
+session. Naming the item written on, or an item twice, is refused. Tell an item
+only with news for the work there.
 
 **Resolved threads.** The batch's `resolutions` mark a thread's root resolved
 with a one-line decision, and `reopen: true` removes the mark, up to 100 roots in
@@ -246,26 +245,31 @@ already has. An edit that changes the set leaves a `labels_changed` event in the
 history with the set before and after, so who changed the labels and from what
 can be read back.
 
-**Reading.** `get_work_item` returns the item with the 5 threads that saw the
-newest activity, its newest events and the sessions that wrote to it. Each root
-carries `replies`, how many it has, and `last_reply`, the newest one, so a reply
-in an old thread lifts it into that read. `thread: <comment id>` returns one
-thread whole, root first; a reply's id reads its root's thread. `comments_after:
-<id>` returns every comment after one you have read, roots and replies flat,
-each naming its parent in `reply_to` or `reply_to_request`: the way through an
-item too long to read whole. `unresolved: true` returns the roots without the
-resolved mark, oldest first, 20 at a time: while `truncated` is true, read on with
-`comments_after` set to the last root's id. `full: true` returns all of its history. Every
-comment carries `by_person`, true when it came through Valkama's interface. A
-reply to a question belongs to the question's thread, which
-`get_work_item_request` reads. A screenshot the owner pasted is named in the text
-by its address, `/api/images/<sha256>`, and listed in the item's `images`;
-`read_work_item_image` with the item's `id` and that `sha256` shows it to you.
-Reading one sends its bytes to your client and so to your model provider, and a
+**Reading.** `get_work_item` answers with the card: the fields, the description,
+the checklist with each condition's id, the summary, and `parts`, which lists
+every other part the item has with its count and size. Read a part by name in
+`parts` when the work needs it: `comments` for the discussion, `events` for who
+did what, `claim` for the lease and when it lapses, `links`, `refs`,
+`questions`, `mentions`, `sessions`, `images`, `subscribers`. `unresolved`,
+`thread` and `comments_after` read the comments alone, and `events: <n>` the
+newest n events. To refresh part of a long description, read `parts: sections`
+for its keys and sizes, then `section` with the keys you need. After a resume or
+a compaction the session start may bring a Valkama note: what you hold, each
+item's state and its next condition.
+
+In the comments part each root carries `replies` and `last_reply`, so a reply
+in an old thread lifts it into the default read; while `truncated` is true, read
+on with `comments_after` set to the last id read
+([every mode](references/tools.md#reading-an-item)). Every comment carries
+`by_person`, true when it came through Valkama's interface. A reply to a
+question belongs to the question's thread, which `get_work_item_request` reads.
+A screenshot the owner pasted is listed in the `images` part, and
+`read_work_item_image` with the item's `id` and its `sha256` shows it to you.
+That sends its bytes to your client and so to your model provider, and a
 screenshot may show anything that was on the owner's screen: read a picture only
-when the task needs what it shows.
-`get_work_item_chain` shows what an item's work grew into and whether it
-converges. Read the history before assuming who did what.
+when the task needs what it shows. `get_work_item_chain` shows what an item's
+work grew into and whether it converges. Read the events before assuming who did
+what.
 
 **Naming an item to the owner.** In everything you write to the owner in the
 conversation, the final reply and each progress line between tool calls alike,
@@ -281,17 +285,11 @@ an address there is one more thing to go stale.
 **Naming a file.** In a description, a comment, a report, a summary, a question or
 an option's description, name a file or folder of the project as a Markdown link
 to its path from the root of the space's project, with a label that says what it
-is: `docs/plan.md#kb:a7f3`, `src/parse.ts:42`, `docs/plans/`. Valkama opens a
-Markdown file in its own viewer at the `#kb:…` anchor, heading or `:42` line the
-link names, another file in the owner's editor at that line, and a folder in the
-editor. A whole path in backticks works too; a label reads better.
-Write a path from that root, not from your working folder or another repository:
-a relative path is looked for there first, and in the projects registered inside
-it only when the root has nothing there. Use an absolute path only where there
-is no relative one, such as a file of another project. A path with spaces goes
-in `<…>` inside a link; in backticks only an absolute path may hold one. A path
-outside every project registered with Valkama does not open, and a press copies
-it: link it, but do not promise it opens.
+is: `docs/plan.md#kb:a7f3`, `src/parse.ts:42`, `docs/plans/`. Write a path from
+that root, not from your working folder or another repository, and an absolute
+path only where there is no relative one, such as a file of another project.
+How Valkama opens each link and where it looks for a relative path is in
+[Naming things](references/tools.md#naming-things).
 
 ## Blocked work
 
@@ -364,9 +362,10 @@ question keeps every replaced one in `history`. When you are told
 `question_changed`, read the question again: the answer you acted on is no longer
 the current one. There are three ways to read one:
 
-- `get_work_item` carries `questions`: `total`, how many are `open`, and up to 5
-  `items` with the open ones first and then the newest closed, and `truncated`
-  when there are more. Read this when you come back to an item.
+- `get_work_item` reads them as its `questions` part: `total`, how many are
+  `open`, and up to 5 `items` with the open ones first and then the newest closed,
+  and `truncated` when there are more. The card's `parts` counts them; read the
+  part when you come back to an item that has open ones.
 - `list_work_item_requests` finds them on an item (`id`) or in a space, by
   `status` and `answered_after`. To read answers in portions, keep the last
   `answered_at` you read and pass it as `answered_after`, and ask again while
