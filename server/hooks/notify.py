@@ -546,7 +546,10 @@ def read_state(path: str) -> tuple[dict[str, Mark], Budget]:
 
     try:
         with open(path, "rb") as handle:
-            lines = handle.read(1 << 20).decode("ascii").splitlines()
+            # A read of a bound allocates the whole bound, 0.2 ms on every tool call;
+            # the file's own size is the read, a damaged giant cut at the bound as before.
+            size = os.fstat(handle.fileno()).st_size
+            lines = handle.read(min(size, 1 << 20)).decode("ascii").splitlines()
     except (OSError, UnicodeDecodeError):
         return {}, NO_BUDGET
     fields = {"v1": 5, "v2": 6, "v3": 8, "v4": 9}.get(lines[0]) if lines else None
