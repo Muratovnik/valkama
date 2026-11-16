@@ -22,7 +22,7 @@ Finding = tuple[str, str]
 #: The guards `force` does not carry: past them the store would hold what the work
 #: model has no place for — a container at work, accepted work with no basis, a
 #: task at work with nobody holding it, or a deferral with no condition to end it.
-UNFORCED = frozenset({"container", "container_state", "deferred", "acceptance", "executor"})
+UNFORCED = frozenset({"goal_or_stage", "container_state", "deferred", "acceptance", "executor"})
 
 
 def refuse(refusals: list[Finding], force: bool) -> None:
@@ -56,7 +56,7 @@ def placement(
     if container and category in model.TASK_ONLY_CATEGORIES:
         found.append(
             (
-                "container",
+                "goal_or_stage",
                 f"{reference} is a goal or stage: nobody works one, so it never stands in"
                 f" {target['name']}; accept it with ready, and work the tasks under it",
             )

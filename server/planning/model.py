@@ -269,7 +269,7 @@ class RevisionConflictError(PlanningError):
 def container_unheld() -> WorkflowGuardError:
     """The one refusal of a claim on a goal or stage, by whatever way in it came."""
 
-    return WorkflowGuardError(f"[container] {CONTAINER_UNHELD}")
+    return WorkflowGuardError(f"[goal_or_stage] {CONTAINER_UNHELD}")
 
 
 def new_id() -> str:

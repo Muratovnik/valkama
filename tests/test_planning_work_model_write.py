@@ -256,7 +256,7 @@ class ThroughMcpTests(WriteCase):
                 self.assertEqual(("", []), self.holders(name))
 
     def test_a_goal_created_with_a_claim_is_refused_and_nothing_is_created(self) -> None:
-        self.refused(lambda: self.create(title="Goal", kind="goal", claim=True), "[container]")
+        self.refused(lambda: self.create(title="Goal", kind="goal", claim=True), "[goal_or_stage]")
 
     def test_a_task_in_review_or_done_is_refused_a_claim(self) -> None:
         self.tree.add("a", state="review", started=True)
@@ -370,7 +370,7 @@ class ThroughMcpTests(WriteCase):
             with self.subTest(state=state):
                 self.refused(
                     lambda state=state: self.transition("G", state, force=True, reason="r"),
-                    "[container]",
+                    "[goal_or_stage]",
                 )
 
     def test_a_move_to_deferred_is_refused_even_with_force(self) -> None:
@@ -850,7 +850,7 @@ class CreationTests(WriteCase):
             ({"state": "deferred"}, "[deferred]"),
             ({"state": "review"}, "[acceptance]"),
             ({"kind": "goal", "state": "done"}, "[container_state]"),
-            ({"kind": "goal", "state": "review"}, "[container]"),
+            ({"kind": "goal", "state": "review"}, "[goal_or_stage]"),
         ):
             with self.subTest(fields=fields):
                 self.refused(lambda fields=fields: self.create(title="Placed", **fields), said)
