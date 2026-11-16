@@ -54,7 +54,7 @@ export function useReadWorkItemPreview(
       return {
         reference,
         item: record?.item ?? null,
-        project: record ? spaceTitle(record.candidate.space_ref) : null,
+        space: record ? spaceTitle(record.candidate.space_ref) : null,
         since,
       }
     }

@@ -13,7 +13,7 @@ export const workItemPreviewMessages = {
       steps: 'Steps: {done} of {total}',
       updated: 'Updated {date}',
       closed: 'Closed {date}',
-      project: 'Project {project}',
+      space: 'Space {space}',
     },
   },
   ru: {
@@ -24,7 +24,7 @@ export const workItemPreviewMessages = {
       steps: 'Шаги: {done} из {total}',
       updated: 'Обновлена {date}',
       closed: 'Закрыта {date}',
-      project: 'Проект {project}',
+      space: 'Пространство {space}',
     },
   },
 } as const

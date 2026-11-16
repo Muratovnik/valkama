@@ -76,7 +76,7 @@ test('outside the open space one brief request draws it, with its space', async 
   await rest(page, reference(dialog, 'MAIN-12'))
   const shown = card(page)
   await expect(shown).toContainText('Keep the reader in place when a card closes')
-  await expect(shown.locator('.preview-project')).toHaveText('Main')
+  await expect(shown.locator('.preview-space')).toHaveText('Main')
   expect(reads.asked).toEqual([{ reference: 'MAIN-12', scope: dataScopeId }])
   expect(seen.filter((path) => path.includes('/work-item'))).toHaveLength(1)
   expect(seen.find((path) => path.includes('/work-item'))).toContain('brief=true')
