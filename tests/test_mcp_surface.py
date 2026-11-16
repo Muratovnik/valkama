@@ -2267,9 +2267,17 @@ class RankToolTests(WireCallTestCase):
         self.conn.commit()
 
     def order(self, state: str = "triage") -> list[str]:
+        """The order the placements stored in the state; no read sorts by it any more."""
+
         return [
-            item["reference"]
-            for item in planning_service.list_work_items(self.conn, space=SPACE_KEY, state=state)
+            f"{SPACE_KEY}-{row[0]}"
+            for row in self.conn.execute(
+                "SELECT i.number FROM work_items i JOIN workflow_states s"
+                " ON s.state_id = i.state_id JOIN planning_spaces p"
+                " ON p.planning_space_id = i.planning_space_id WHERE p.key = ? AND s.key = ?"
+                " ORDER BY i.position, i.number",
+                (SPACE_KEY, state),
+            )
         ]
 
     def test_the_writes_that_place_an_item_publish_rank_and_no_new_tool_does(self) -> None:
@@ -2757,8 +2765,6 @@ class ChainToolTests(WireCallTestCase):
         )
         self.assertEqual((False, None), (answer["truncated"], answer["next_offset"]))
         claimed = answer["open_members"][-2]
-        # A row's rank is the one the whole chain gives that member.
-        ranks = {member["reference"]: member["rank"] for member in self.whole()["members"]}
         self.assertEqual(
             {
                 "reference": self.children["claimed"],
@@ -2769,7 +2775,8 @@ class ChainToolTests(WireCallTestCase):
                 "claim_state": "unconfirmed",
                 "workable": False,
                 "parent_reference": self.root,
-                "rank": ranks[self.children["claimed"]],
+                # The queue does not give a held task: it has no place in it.
+                "queue_order": None,
             },
             claimed,
         )
@@ -2778,10 +2785,20 @@ class ChainToolTests(WireCallTestCase):
         for row in answer["open_members"]:
             self.assertEqual(states[row["reference"]], row["claim_state"], row["reference"])
         self.assertIsNone(answer["open_members"][3]["parent_reference"])
-        # Inside a group the rows follow the rank: the two ready ones, the rest.
+        # Inside a group the rows follow the members' order: the two ready ones, the rest.
+        members = self.whole()["members"]
+        place = {member["reference"]: index for index, member in enumerate(members)}
         rows = answer["open_members"]
         for group in (rows[2:4], rows[4:]):
-            self.assertLess(group[0]["rank"], group[1]["rank"])
+            self.assertLess(place[group[0]["reference"]], place[group[1]["reference"]])
+        # A row's queue_order is the one the whole chain gives that member: the ready
+        # task under the goal at work comes before the one found outside it.
+        orders = {member["reference"]: member["queue_order"] for member in members}
+        self.assertEqual(
+            [orders[row["reference"]] for row in rows], [row["queue_order"] for row in rows]
+        )
+        self.assertEqual([None, None, 1, 2, None, None], [row["queue_order"] for row in rows])
+        self.assertNotIn("rank", rows[0])
 
     def test_open_members_page_until_next_offset_is_null(self) -> None:
         seen: list[str] = []

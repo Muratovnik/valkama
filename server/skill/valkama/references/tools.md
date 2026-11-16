@@ -216,10 +216,10 @@ events are shown than there are.
 `rank` in the batch's `update` (in the item's own state) and `transition` (in
 the state it moves to): `first`, `last`,
 `before:MAIN-12`, `after:MAIN-12`, the anchor in that same state. Without
-`rank`, a moved item goes last. `claim_ready_work_item` takes the first
-workable task: a ready state before a triage one, then the order inside the
-state; priority only breaks a tie. A goal, a stage and deferred work are never
-taken.
+`rank`, a moved item goes last. No read orders by it: `claim_ready_work_item`
+takes the first workable task in the order of work — urgent, started, a goal or
+stage under way, priority, age — and a list row says that place as
+`queue_order`. A goal, a stage and work in triage or deferred are never taken.
 
 ## Guards
 

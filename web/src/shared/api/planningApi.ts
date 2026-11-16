@@ -11,13 +11,9 @@ import { validateCommentResolved, validateCommentWritten } from '@/shared/api/co
 import type { CommentResolved, CommentWritten } from '@/shared/api/commentWriteModel.ts'
 import { validateLiveFrame } from '@/shared/api/liveFrameModel.ts'
 import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
-import {
-  readPending,
-  readRefusal,
-  validateReadModel,
-  validateWorkItemRecord,
-} from '@/shared/api/planningModel.ts'
+import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import type { PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
+import { readPending, readRefusal } from '@/shared/api/planningRefusal.ts'
 import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'

@@ -103,6 +103,7 @@ function readModel(space: PlanningSpaceRef) {
         created_at: now,
         updated_at: now,
         comment_count: 0,
+        queue_order: 1,
       },
     ],
     links: [],

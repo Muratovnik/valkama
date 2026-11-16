@@ -19,41 +19,16 @@ The renumbering changes no item's order or anything a reader is shown, so it
 bumps no revision: a revision guards a decision taken from what was read, and
 nothing read is different.
 
-The order across states is not stored, because it follows from the states.
-`WORK_ORDER` says it: work under way first, then work in review, then what is
-ready, then what awaits triage, then what is deferred, then what is blocked,
-then what is finished. `ranks`
-numbers a space's items in that order, which is what a reader of one chain
-needs to list its open work the way the queue will take it.
+No read sorts by this position any more: the order of work is computed
+(`queue.work_key`), and what is placed here is only stored.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable
 from typing import NamedTuple
 
 from . import model, read_model
-
-#: Workflow categories in the order work is listed when it spans states. The
-#: take-next queue reads it too, so ready work is taken before work awaiting triage.
-WORK_ORDER = (
-    "active",
-    "review",
-    "ready",
-    "triage",
-    "deferred",
-    "blocked",
-    "completed",
-    "cancelled",
-)
-
-#: `WORK_ORDER` as a sort key over `s.category`, for a query joined to its state.
-WORK_ORDER_SQL = (
-    "CASE s.category"
-    + "".join(f" WHEN '{category}' THEN {index}" for index, category in enumerate(WORK_ORDER))
-    + f" ELSE {len(WORK_ORDER)} END"
-)
 
 _WHERE = ("first", "last", "before", "after")
 _REFUSAL = "rank must be first, last, before:<work item> or after:<work item>"
@@ -111,26 +86,6 @@ def position(
     if value is None:  # pragma: no cover - 1..n always leaves a gap of one
         raise model.PlanningError("the order of this state could not be renumbered")
     return value
-
-
-def ranks(rows: Iterable[sqlite3.Row]) -> dict[str, int]:
-    """Each item's 1-based place in the order of work among `rows`.
-
-    A row carries `work_item_id`, `number`, `position`, its state's `category`
-    as `state_category` and the state's own `state_position`.
-    """
-
-    def key(row: sqlite3.Row) -> tuple:
-        category = str(row["state_category"])
-        return (
-            WORK_ORDER.index(category) if category in WORK_ORDER else len(WORK_ORDER),
-            row["state_position"],
-            row["position"],
-            row["number"],
-            str(row["work_item_id"]),
-        )
-
-    return {str(row["work_item_id"]): index for index, row in enumerate(sorted(rows, key=key), 1)}
 
 
 def _ordered(

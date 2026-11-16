@@ -143,6 +143,9 @@ class PlanningExactApiTests(unittest.TestCase):
         self.assertEqual(self.item_ref, brief["work_item_ref"])
         self.assertEqual("project", brief["scope"]["kind"])
         (listed,) = planning_service.list_work_items(self.conn, space="EXA")
+        # A place in the queue is the list's, not the item's: the preview has none.
+        self.assertNotIn("queue_order", brief["state"]["payload"]["work_item"])
+        listed.pop("queue_order")
         self.assertEqual({"work_item": listed}, brief["state"]["payload"])
         self.assertEqual(1, listed["comment_count"])
         # What a preview draws is all there; the history is not.

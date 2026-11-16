@@ -321,6 +321,45 @@
   },
   "work_items": [
     {
+      "work_item_id": "00000000-0000-4000-8000-000000000031",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-4",
+      "number": 4,
+      "title": "Live goal",
+      "kind": "goal",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000003",
+        "key": "triage",
+        "name": "Triage",
+        "category": "triage",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": null,
+      "started_at": "2026-01-02T03:04:05Z",
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": null,
+      "labels": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "withheld": [
+        "goal_or_stage"
+      ],
+      "workable": false,
+      "lapsed_claim": null,
+      "comment_count": 0,
+      "queue_order": null
+    },
+    {
       "work_item_id": "00000000-0000-4000-8000-000000000005",
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
       "reference": "MAIN-1",
@@ -357,7 +396,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 7
+      "comment_count": 7,
+      "queue_order": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000001",
@@ -395,45 +435,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 0
-    },
-    {
-      "work_item_id": "00000000-0000-4000-8000-000000000031",
-      "planning_space_id": "00000000-0000-4000-8000-000000000002",
-      "reference": "MAIN-4",
-      "number": 4,
-      "title": "Live goal",
-      "kind": "goal",
-      "priority": "medium",
-      "state": {
-        "state_id": "00000000-0000-4000-8000-000000000003",
-        "key": "triage",
-        "name": "Triage",
-        "category": "triage",
-        "is_terminal": false
-      },
-      "open": true,
-      "container_state": null,
-      "acceptance": null,
-      "started_at": "2026-01-02T03:04:05Z",
-      "waits_for": [],
-      "claim_ref": "",
-      "claim_state": null,
-      "parent_id": null,
-      "labels": [],
-      "source": "",
-      "checklist": [],
-      "revision": 0,
-      "created_at": "2026-01-02T03:04:05Z",
-      "updated_at": "2026-01-02T03:04:05Z",
-      "closed_at": null,
-      "last_claim_ref": null,
-      "withheld": [
-        "goal_or_stage"
-      ],
-      "workable": false,
-      "lapsed_claim": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "queue_order": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000032",
@@ -471,7 +474,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "queue_order": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000033",
@@ -509,7 +513,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "queue_order": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000034",
@@ -548,7 +553,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "queue_order": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000035",
@@ -587,7 +593,8 @@
       "withheld": [],
       "workable": true,
       "lapsed_claim": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "queue_order": 1
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000037",
@@ -626,7 +633,8 @@
       "withheld": [],
       "workable": true,
       "lapsed_claim": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "queue_order": 2
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000010",
@@ -693,7 +701,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 2
+      "comment_count": 2,
+      "queue_order": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000039",
@@ -736,7 +745,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "queue_order": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000040",
@@ -777,7 +787,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 1
+      "comment_count": 1,
+      "queue_order": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000041",
@@ -812,7 +823,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "queue_order": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000038",
@@ -847,7 +859,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "queue_order": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000036",
@@ -882,7 +895,8 @@
       ],
       "workable": false,
       "lapsed_claim": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "queue_order": null
     }
   ],
   "links": [],

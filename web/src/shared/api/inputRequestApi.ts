@@ -7,7 +7,7 @@ import type {
   InputRequestEntry,
   InputRequestList,
 } from '@/shared/api/inputRequestModel.ts'
-import { readRefusal } from '@/shared/api/planningModel.ts'
+import { readRefusal } from '@/shared/api/planningRefusal.ts'
 import { serializePlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'

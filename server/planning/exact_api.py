@@ -18,7 +18,7 @@ from collections.abc import Callable, Mapping
 from ..projects import project_registry
 from ..store_identity.refs import planning_space_ref, validate_work_item_ref
 from ..ui_state import PlatformHttpError, envelope
-from . import interactions, item_tree, model, service, states
+from . import interactions, item_tree, model, queue, service, states
 from .routing import PlanningRouting, one, scope_parameters, space_ref_parameters
 
 PLANNING_INTERFACE = "valkama-planning"
@@ -136,13 +136,16 @@ def _space_view(routing: PlanningRouting, space_ref: dict) -> dict:
             )
         rows = store.execute(
             "SELECT w.work_item_id, w.number, w.title, w.priority, w.labels, w.claim_ref,"
-            " w.revision, w.updated_at, s.key, s.name, s.category, s.is_terminal"
+            " w.revision, w.updated_at, w.parent_id, w.created_at, s.key, s.name, s.category,"
+            " s.is_terminal, s.position AS state_position, ? AS space_key"
             " FROM work_items w JOIN workflow_states s ON s.state_id = w.state_id"
-            " WHERE w.planning_space_id = ? ORDER BY s.position, w.position, w.number",
-            (str(space["planning_space_id"]),),
+            " WHERE w.planning_space_id = ?",
+            (space_ref["space_key"], str(space["planning_space_id"])),
         ).fetchall()
-        # What every accepted open goal and stage derives, in one read of the space.
+        # What every accepted open goal and stage derives, in one read of the space,
+        # and the order every read of many items stands on.
         tree = item_tree.of_spaces(store, [str(space["planning_space_id"])])
+        rows.sort(key=lambda row: queue.list_key(row, tree))
         shown = [states.public_state(row) for row in rows]
         work_items = [
             {

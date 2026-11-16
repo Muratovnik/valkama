@@ -176,8 +176,11 @@ it is `null`. A page holds at most 1000 items for `list_work_items` and 200 for
 `truncated` still says whether more items match. Both tools take an optional
 `offset`, a non-negative integer, 0 by default. Calling again with the same
 filters and each `next_offset` until it is `null` returns every matching item
-exactly once, as long as nothing writes to the store in between; a write between
-two pages can move an item across the boundary. An `offset` that is negative or
+exactly once, as long as nothing writes to the store in between: a list orders
+every item its filters keep before it cuts the page. A write between two pages
+that changes an item's place -- a transition, a priority, a start, a goal or
+stage coming under way -- can move it across the boundary; time passing, a lease
+lapsing or a question's deadline passing moves no row, only its `queue_order`. An `offset` that is negative or
 not an integer is refused with `invalid_request`.
 
 A refused MCP tool call answers with `isError: true` and the same body the HTTP
@@ -282,15 +285,16 @@ HTTP answer of a write to an item -- carries these fields of the model:
 Four other answers carry only some of these fields:
 
 - an MCP list row (`list_work_items`, unless `verbose`) carries `state`, as its
-  key (`null` for an accepted open goal or stage), and `container_state` where the
-  item has one; none of `open`, `acceptance`, `started_at`, `waits_for` or `workable`;
+  key (`null` for an accepted open goal or stage), `container_state` where the
+  item has one, `queue_order` where the queue gives it and `withheld` where it
+  does not; none of `open`, `acceptance`, `started_at`, `waits_for` or `workable`;
 - an HTTP chain member of `GET /api/planning/work-item/chain` carries `state`,
   `open`, `container_state` and `workable`; none of `acceptance`, `started_at` or
   `waits_for`;
 - an MCP `get_work_item_chain` answers no members: its `open_members` are rows of
   `reference`, `title`, `state` (its key), `container_state` where the item has
-  one, `claim_ref`, `claim_state`, `workable`, `parent_reference` and `rank`;
-  none of `open`, `acceptance`, `started_at` or `waits_for`;
+  one, `claim_ref`, `claim_state`, `workable`, `parent_reference` and
+  `queue_order`; none of `open`, `acceptance`, `started_at` or `waits_for`;
 - an MCP write acknowledgement carries `state` (`null` for an accepted open goal
   or stage), `open` and `container_state` where the item has one; none of
   `acceptance`, `started_at`, `waits_for` or `workable`.
@@ -386,16 +390,37 @@ retired name is refused as [Retired words](#retired-words) says.
 
 ### The order of work
 
-Every work item has a place among the items in its state, and that place is the
-order work is taken in. `list_work_items`, `GET /api/planning/work-items` and
-`GET /api/planning` list the items of each state in that order, the states in
-the workflow's order. The place is the item's `position`, which every store
-already holds, so placing an item changes no store format and a build that
-predates placements reads the same order.
+The order work is taken in is computed, never set. The key of work puts first
+the item that is `urgent`; then one already started (`started_at` set), which
+includes work the lease sweep handed back; then one whose goal or stage, its
+parent, is `in_progress`; then by priority, `high`, `medium`, `low`; then the
+older by `created_at`. `claim_ready_work_item` gives the `workable` tasks in
+that order, the smaller number first on a tie.
+
+Every read of many items stands on one total order: the state's place in its
+workflow, the key of work, the space's key, the number. `list_work_items` and its
+pages, `GET /api/planning/work-items`, the board's `GET /api/planning`, the
+graph built from it, the exact read of a space and the members of a chain all
+take it, given and not given rows alike; a goal or stage takes the parts of the
+key from its own priority, the earliest start under it and its parent. Without a
+space the rows of different spaces interleave, a tie going to the smaller space
+key. The key reads stored fields and the tree of items, never the clock or a
+lease.
+
+A row of a list read -- `list_work_items`, its pages, `work_items` of
+`GET /api/planning` -- and a chain member carry `queue_order`: the row's 1-based
+place in the queue of its own space, 1 for the task `claim_ready_work_item` gives
+next unless a lease lapses before the call (the queue releases lapsed leases
+first, a read does not), and `null` for every item the queue does not give, whose
+`withheld` says why. It is the place at the time of the read, so a row keeps its
+place in the list when time passes and only its `queue_order` changes. A single
+item's record, its preview, a search and a write's answer carry no
+`queue_order`: a place belongs to the list, and any write in the space can change
+it.
 
 The `update` group of `apply_work_item_changes` and
-`POST /api/planning/work-item/update` take `rank`, which places the item among
-the items of its own state:
+`POST /api/planning/work-item/update` still take `rank`, which stores a place
+among the items of the item's own state; no read orders by it any more:
 
 | `rank` | Places the item |
 | --- | --- |
@@ -465,12 +490,8 @@ places the item in the state it moves to; the anchor must then be in that state.
 Without `rank` a moved item goes last in its new state, as it did before
 placements existed, and a new item goes last in its first state.
 
-`claim_ready_work_item` takes the first `workable` task in that order: the
-`ready` states in the workflow's order, then the place inside the state. Work in
-`triage` or `deferred` is not accepted and is never given. Priority only breaks a tie
-between two items at the same place, which a store written before placements
-can hold, and the item number breaks what is left. Placing an item first is what
-makes it next; an urgent item nobody placed waits its turn.
+Work in `triage` or `deferred` is not accepted and is never given, whatever its
+key.
 
 ### Reading one work item
 
@@ -969,7 +990,7 @@ answers with `interface_version` and `chain`:
 | `origins` | members grouped by their parent: `parent_reference` and `parent_title` (`null` for members without a parent), `count` and `open`. The root's own children come first, then the larger groups |
 | `series` | one entry per UTC day on which a member was created or closed, oldest first: `day` (`YYYY-MM-DD`), `created`, `closed`, and the running totals `total` and `closed_total` |
 | `recent` | the last 7 UTC days, today included: `days` (7), `created`, `closed`, and `trend`, which is `growing` when more were created than closed, `converging` when fewer, and `steady` otherwise |
-| `members` | every member, by number: `work_item_id`, `reference`, `title`, `kind`, `state` (`key`, `name`, `category`, `is_terminal`, or `null`), `open`, `container_state`, `claim_ref`, `claim_state`, `parent_reference`, `created_at`, `closed_at`, `workable` and `rank` |
+| `members` | every member, in the order of work: `work_item_id`, `reference`, `title`, `kind`, `state` (`key`, `name`, `category`, `is_terminal`, or `null`), `open`, `container_state`, `claim_ref`, `claim_state`, `parent_reference`, `created_at`, `closed_at`, `workable` and `queue_order` |
 | `edges` | the `discovered-from` links whose two ends are the root or members, and every `blocks` link into the root or a member, wherever its source lives: `from`, `to` (work item ids), `kind`, and the source's `reference`, `state_name`, `state_category`, `is_terminal`, `state_unavailable` and `container_state` |
 
 A member's `closed_at` is when it last changed state, if its state is terminal:
@@ -983,13 +1004,11 @@ member. When the store cannot resolve the source's state, `state_name`,
 `state_category` and `is_terminal` are `null` and `state_unavailable` is
 `state_missing`; such a source is unknown, not open, and blocks nothing.
 
-A member's `rank` is its 1-based place in the order of work across its whole
-planning space: the states by category (`active`, `review`, `ready`, `triage`,
-`deferred`, `blocked`, `completed`, `cancelled`), then the workflow's order of
-states, then the place inside a state, as described in
-[The order of work](#the-order-of-work). It is counted over the space, not over
-the chain, so two members' ranks are compared and never counted between: a gap
-means work outside the chain stands between them.
+The members come in the total order of every read of many items, as described in
+[The order of work](#the-order-of-work), not by number. A member's `queue_order`
+is its place in its space's queue, as a list row's is, and `null` when the queue
+does not give it. It is counted over the space, not over the chain: a gap means
+work outside the chain is given between them.
 
 A `scope` other than `chain` or `tree` is refused with `invalid_request`, and
 `epic` names `tree` in its refusal; an unknown item is `not_found` (404), as on
@@ -1000,9 +1019,9 @@ answers with the same fields except `members` and `edges`, with only the newest
 30 entries of `series`. In their place it carries `open_members`, one compact
 row per open member: `reference`, `title`, `state` (the key, or `null`),
 `container_state` when it has one, `claim_ref`, `workable`, `parent_reference` and
-`rank`. They come in the order a reader acts on them: active members, then
+`queue_order`. They come in the order a reader acts on them: active members, then
 members in review, then workable ones, then the rest,
-each group in the order of work. The rows are paged like a list: at most `limit` per answer, 50
+each group in the order of `members`. The rows are paged like a list: at most `limit` per answer, 50
 by default and at most 200, with `truncated` and `next_offset`.
 
 ### How much work an item took
@@ -1732,9 +1751,10 @@ or a diagnostic. Nothing else of a transcript's content is read for the frame, a
 another client's transcript is not read at all, so its sessions have `title: null`.
 
 **Order.** Spaces by key. In a space, a row that is another row's parent is a
-group: the groups come first, in the [order of work](#the-order-of-work), each
-followed by its own rows, and then the rows with neither a parent nor rows of
-their own. Rows that are not groups stand by number, so a change of state does
+group: the groups come first, by the place of their state in its workflow and
+then by number, each followed by its own rows, and then the rows with neither a
+parent nor rows of their own. A group has no urgency or start of its own in the
+queue's sense, and its number is its age. Rows that are not groups stand by number, so a change of state does
 not move a row, and a pinned row stands at its number among the others. The frame
 is already in order, and a client that lists it as it came does not sort it. The
 interface's side panel draws its own order from it: the rows at work, freshest

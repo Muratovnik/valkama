@@ -224,16 +224,16 @@ that names it. A reply and a question's thread take no mark.
 
 Steps of the same change stay on the checklist; a link is for separate work.
 
-**Order.** Inside a state, items keep the order the board shows and
-`claim_ready_work_item` takes work in. The batch's `update` and
-`transition` take `rank`: `first`, `last`, `before:MAIN-12` or
-`after:MAIN-12`, naming an item in the same state. Placing an item first is
-what makes it next; priority only breaks a tie.
+**Order.** The order of work is computed, and nothing sets it: urgent first,
+then work already started, then tasks of a goal or stage already under way,
+then priority, then age. A list row the queue gives says its `queue_order`, 1
+being what `claim_ready_work_item` gives next; any other row says `withheld`.
+`rank` stores a place that no read orders by.
 
 **Priority.** `urgent`: blocks work or loses data. `high`: serious; could block
 work. `medium`: noticeably affects work, with a workaround. `low`: minor. A label
-is not a scale. How much an item matters goes in priority and what comes next
-goes in rank. Asked to rate work along something an item has no field for, ask
+is not a scale. How much an item matters goes in priority; what comes next
+follows from it. Asked to rate work along something an item has no field for, ask
 the owner how it maps before writing it to many items.
 
 **Labels.** `labels` in an edit replaces the whole set. To add one, send

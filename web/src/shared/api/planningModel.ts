@@ -27,7 +27,6 @@ import { lapsedClaimField, recordObject, withheldField } from '@/shared/api/plan
 import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 
 export const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
-const PLANNING_API = 'valkama-planning-api' as const
 
 export const STATE_CATEGORIES = [
   'triage',
@@ -75,7 +74,7 @@ export function blankable(max: number) {
  * Text the server composes itself (a warning, a refusal joining its guards),
  * which no write bounds: present and free of NUL, at whatever length it runs.
  */
-const serverText = () =>
+export const serverText = () =>
   z
     .string()
     .min(1)
@@ -168,6 +167,16 @@ const workItemBriefShape = {
 const workItemBriefSchema = recordObject({
   ...workItemBriefShape,
   comment_count: positiveInt(true),
+})
+/**
+ * A row of a list read, the board's among them: the brief record and its place in its
+ * space's queue, 1 given next, or null when the queue does not give it. The place is
+ * the list's, so one item's preview and its full record do not carry it.
+ */
+const workItemRowSchema = recordObject({
+  ...workItemBriefShape,
+  comment_count: positiveInt(true),
+  queue_order: positiveInt().nullable(),
 })
 
 const summarySchema = strictObject({
@@ -501,7 +510,7 @@ const readModelSchema = strictObject({
   planning_spaces: z.array(spaceBriefSchema),
   planning_space: spaceIdentitySchema.nullable(),
   workflow: workflowSchema.nullable(),
-  work_items: z.array(workItemBriefSchema),
+  work_items: z.array(workItemRowSchema),
   links: z.array(edgeSchema),
   stale_claims: z.array(staleClaimSchema),
   // Only the items with live work, by id; optional, as a server older than it sends none.
@@ -520,37 +529,15 @@ const readModelSchema = strictObject({
     { message: 'every item names a state its workflow declares' },
   )
 
-const apiVersion = z.literal(PLANNING_API, { message: `expected ${PLANNING_API}` })
-/** The refusal shape every neutral write answers with when it says no. */
-const refusalSchema = strictObject({
-  error: strictObject({
-    code: boundedText(/^[a-z_]{1,64}$/u, 64),
-    message: serverText(),
-    expected: positiveInt(true).optional(),
-    actual: positiveInt(true).optional(),
-  }),
-})
-
-/** The typed unavailable a read answers with while the cutover is pending. */
-const pendingSchema = strictObject({
-  interface_version: apiVersion,
-  state: strictObject({
-    interface_version: z.literal('valkama-ui-state', { message: 'expected valkama-ui-state' }),
-    status: z.literal('unavailable', { message: 'expected unavailable' }),
-    reason: boundedText(/^[^\u{0}]{1,512}$/u, 512),
-  }),
-})
-
 export type WorkflowState = z.infer<typeof workflowStateSchema>
 export type ContainerState = (typeof CONTAINER_STATES)[number]
 export type WorkItemBrief = z.infer<typeof workItemBriefSchema>
+export type WorkItemRow = z.infer<typeof workItemRowSchema>
 export type WorkItem = z.infer<typeof workItemSchema>
 export type WorkItemAgent = z.infer<typeof workItemAgentSchema>
 export type PlanningWorkflow = z.infer<typeof workflowSchema>
 export type PlanningReadModel = z.infer<typeof readModelSchema>
 export type PlanningEdge = z.infer<typeof edgeSchema>
-export type PlanningRefusal = z.infer<typeof refusalSchema>
-export type PlanningPending = z.infer<typeof pendingSchema>
 
 export function validateReadModel(value: unknown, path = 'planning'): PlanningReadModel {
   return parseContract(readModelSchema, value, path, invalid)
@@ -563,16 +550,6 @@ export function validateWorkItemRecord(value: unknown, path = 'planning.workItem
 /** The brief record a space's list carries, as one item's preview reads it alone. */
 export function validateWorkItemBrief(value: unknown, path = 'planning.workItem'): WorkItemBrief {
   return parseContract(workItemBriefSchema, value, path, invalid)
-}
-
-export function readRefusal(value: unknown): PlanningRefusal | null {
-  const parsed = refusalSchema.safeParse(value)
-  return parsed.success ? parsed.data : null
-}
-
-export function readPending(value: unknown): PlanningPending | null {
-  const parsed = pendingSchema.safeParse(value)
-  return parsed.success ? parsed.data : null
 }
 
 /**

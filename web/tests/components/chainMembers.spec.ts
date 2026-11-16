@@ -1,9 +1,10 @@
 /**
- * A chain's member rows print readiness only as the exception.
+ * A chain's member rows print readiness only as the exception, in the order the server sent.
  *
  * Workable is the norm of an open group, so a row that is ready says nothing
  * about it; a member that waits on an open blocker names what it waits on. The
- * rule is the registry's: this test reads the rows the component draws.
+ * rule is the registry's: this test reads the rows the component draws. An open
+ * group keeps the members' order of work from the answer, whatever their numbers.
  */
 import { createI18n } from 'vue-i18n'
 
@@ -41,7 +42,7 @@ function member(
     created_at: '2026-10-20T10:00:00Z',
     closed_at: terminal ? '2026-10-29T10:00:00Z' : null,
     workable: false,
-    rank: number,
+    queue_order: null,
     ...overrides,
   }
 }
@@ -85,6 +86,17 @@ describe('chain member rows', () => {
     expect(
       wrapper.find(`[data-reference="${waiting.reference}"]`).find('.chain-row-waiting').exists(),
     ).toBe(true)
+  })
+
+  it('lists an open group in the order of work the answer gives, not by number', () => {
+    const next = member(9, 'triage', { workable: true, queue_order: 1 })
+    const after = member(5, 'triage', { workable: true, queue_order: 2 })
+    const wrapper = mountMembers([next, after, finished], new Map())
+    const rows = wrapper
+      .findAll('[data-reference]')
+      .map((row) => row.attributes('data-reference'))
+      .filter((reference) => reference !== finished.reference)
+    expect(rows).toEqual([next.reference, after.reference])
   })
 
   it('prints no readiness word anywhere when no member waits on an open blocker', () => {

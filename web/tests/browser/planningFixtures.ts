@@ -142,8 +142,9 @@ const briefFields: BriefFields = {
   updated_at: now,
 }
 
-const workItemBrief = { ...briefFields, comment_count: 0 }
-const blockedBrief = { ...blockedWorkItem, comment_count: 0 }
+// Rows of the read model: the brief record and the place in the queue, none for work at work.
+const workItemBrief = { ...briefFields, comment_count: 0, queue_order: null }
+const blockedBrief = { ...blockedWorkItem, comment_count: 0, queue_order: null }
 
 /** The full record the inspector reads, links included. */
 export const workItem: WorkItem = {

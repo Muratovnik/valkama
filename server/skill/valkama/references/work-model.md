@@ -59,8 +59,8 @@ one item and not two [Claude Code teams].
 
 ## Flow
 
-Take work from the ranked queue (`claim_ready_work_item`, or the first
-workable task in the order `rank` sets) rather than by preference. Keep the work in
+Take work from the queue (`claim_ready_work_item`, or the list row whose
+`queue_order` is 1) rather than by preference. Keep the work in
 progress within what can be verified and merged: a change counts once it is
 integrated, and every further open item adds coordination and delays the
 feedback on the others [DORA, Claude Code teams].

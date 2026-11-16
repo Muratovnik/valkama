@@ -180,6 +180,8 @@ export interface BriefReads {
 
 /** The envelope of a brief read that found the item. */
 export function briefAnswer(item: Brief, space = spaceRef) {
+  // A place in the queue is the list's: one item's own answer carries none.
+  const record = Object.fromEntries(Object.entries(item).filter(([key]) => key !== 'queue_order'))
   return {
     json: {
       interface_version: 'valkama-planning-work-item',
@@ -188,7 +190,7 @@ export function briefAnswer(item: Brief, space = spaceRef) {
       state: {
         interface_version: 'valkama-ui-state',
         status: 'ready',
-        payload: { work_item: item },
+        payload: { work_item: record },
       },
     },
   }

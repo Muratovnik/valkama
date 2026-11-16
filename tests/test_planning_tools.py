@@ -686,9 +686,12 @@ class PlanningCompactReadTests(unittest.TestCase):
                 "claim_ref": "one",
                 # The call carried no identity, so nothing confirms the holder.
                 "claim_state": "unconfirmed",
+                # Why the queue does not give it; a row it gives says its place instead.
+                "withheld": ["not_ready", "held", "ancestor_triage"],
             },
             rows[self.child["reference"]],
         )
+        self.assertNotIn("queue_order", rows[self.child["reference"]])
         self.assertIsNone(rows[self.epic["reference"]]["parent"])
         self.assertEqual("", rows[self.epic["reference"]]["claim_ref"])
         self.assertIsNone(rows[self.epic["reference"]]["claim_state"])

@@ -119,7 +119,8 @@ _RANK = {
 _PRIORITY_MEANING = (
     "How much the item matters, not when to do it: urgent blocks work or loses data;"
     " high is serious and could block work; medium noticeably affects work, with a"
-    " workaround; low is minor. Order is rank."
+    " workaround; low is minor. The queue takes urgent work first; otherwise priority"
+    " comes after work already started (see claim_ready_work_item)."
 )
 _VERBOSE = {
     "type": "boolean",
@@ -517,11 +518,13 @@ TOOLS = [
     _tool(
         "list_work_items",
         "List work items",
-        "Items in state order, and inside a state in the planned order, filtered by state,"
-        " category, kind, holder or parent. One compact row per item: reference, title,"
-        " kind, state, priority, parent and holder; an accepted open goal or stage has"
-        " state null and adds its container_state. kind=goal lists the goals, kind=stage"
-        " the stages."
+        "Items in state order, and inside a state in the order of work (see"
+        " claim_ready_work_item), filtered by state, category, kind, holder or parent. One"
+        " compact row per item: reference, title, kind, state, priority, parent and holder;"
+        " an accepted open goal or stage has state null and adds its container_state. A row"
+        " the queue gives adds queue_order, its place in its space's queue; any other row"
+        " adds withheld, why the queue does not give it. kind=goal lists the goals,"
+        " kind=stage the stages."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -558,8 +561,8 @@ TOOLS = [
         " change) and recent: the last 7 UTC"
         " days' created and closed and a trend of growing, converging or steady."
         " open_members lists the open members, active first, then review, then"
-        " workable, then the rest, each in the order of work; a row's rank is its"
-        " place in that order across the space, to compare, not to count; at most"
+        " workable, then the rest, each in the order of work; a row's queue_order is its"
+        " place in its space's queue, null when the queue does not give it; at most"
         f" {CHAIN_PAGE} per page." + _PAGING,
         READ_ONLY,
         {
@@ -635,8 +638,8 @@ TOOLS = [
         "Choose and claim in one step the next task the queue gives: a task in a ready"
         " state, unheld, with nothing unfinished blocking it and no open question to the"
         " owner, under no goal or stage that is in triage, deferred, closed or blocked."
-        " Order: inside a state the planned order (see rank in apply_work_item_changes's"
-        " update); priority only breaks a tie. The claim starts the task as"
+        " Order: urgent first, then work already started, then tasks of a goal or stage"
+        " already under way, then by priority, oldest first. The claim starts the task as"
         " claim_work_item does, so it answers in its active state with started."
         " Answers with nothing when no task is workable; a record's withheld says why an"
         " item is not given.",
@@ -1423,6 +1426,12 @@ def _compact_row(conn: sqlite3.Connection, item: dict) -> dict:
     # What an accepted open goal or stage derives, where it stands in no state.
     if item["container_state"] is not None:
         row["container_state"] = item["container_state"]
+    # Its place in its space's queue, or why the queue does not give it; a search
+    # row carries no place, since a place is the list's and not the item's.
+    if item.get("queue_order") is not None:
+        row["queue_order"] = item["queue_order"]
+    if item["withheld"]:
+        row["withheld"] = item["withheld"]
     # Why a search returned the item; a row without it cannot be told from noise.
     hits = ("comment_hit", "question_hit", "summary_hit")
     return row | {name: item[name] for name in hits if name in item}
@@ -1495,10 +1504,8 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     members = found.pop("members")
     found.pop("edges")
     found["series"] = found["series"][-CHAIN_SERIES_ENTRIES:]
-    open_members = sorted(
-        (member for member in members if member["open"]),
-        key=lambda member: (_open_rank(member), member["rank"]),
-    )
+    # The members come in the order of work; a stable sort keeps it inside each group.
+    open_members = sorted((member for member in members if member["open"]), key=_open_rank)
     found["open_members"] = [
         {
             "reference": member["reference"],
@@ -1513,7 +1520,7 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
             "claim_state": member["claim_state"],
             "workable": member["workable"],
             "parent_reference": member["parent_reference"],
-            "rank": member["rank"],
+            "queue_order": member["queue_order"],
         }
         for member in open_members[offset : offset + size]
     ]

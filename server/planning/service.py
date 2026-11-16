@@ -169,6 +169,11 @@ def list_work_items(
     `state` name no workflow of the spaces read gives (by key, state id or a category
     one state has) is refused with their states.
 
+    The items come in the one total order (`queue.list_key`), and each says its
+    `queue_order`, its place in its own space's queue, or null when the queue
+    does not give it. Every row the filters keep is loaded, ordered and then cut,
+    so on a store nothing writes to the pages of one walk neither repeat nor skip.
+
     Nothing here caps the count: a caller that wants a bounded page with an
     honest account of what it left out asks `list_work_items_page`.
     """
@@ -206,21 +211,31 @@ def list_work_items(
     if parent is not None:
         clauses.append("i.parent_id = ?")
         parameters.append(str(read_model.item_row(conn, parent)["work_item_id"]))
+    start = model.count_field(offset, "offset")
     query = with_clauses(
-        "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
+        "SELECT i.*, s.position AS state_position, p.key AS space_key FROM work_items i"
+        " JOIN workflow_states s ON s.state_id = i.state_id"
+        " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id",
+        clauses,
     )
-    # The work item id closes the order: two spaces can tie on every other key,
-    # and an order with ties lets one page repeat an item the next page skips.
-    query += " ORDER BY s.position, i.position, i.number, i.work_item_id"
-    query += " LIMIT ? OFFSET ?"
-    parameters.extend(
-        [-1 if limit is None else max(1, int(limit)), model.count_field(offset, "offset")]
-    )
+    # Every row the filters keep, ordered and cut here rather than in SQL: the order
+    # of work reads the tree, which the read loads anyway, once for the spaces read.
     rows = conn.execute(query, parameters).fetchall()
+    spaces = {str(row["planning_space_id"]) for row in rows}
+    tree = item_tree.of_spaces(conn, spaces)
+    rows.sort(key=lambda row: queue.list_key(row, tree))
+    rows = rows[start:] if limit is None else rows[start : start + max(1, int(limit))]
+    # A row's place in its space's queue: one count of the queue of each space read.
+    places = queue.places(
+        queue.of_spaces(conn, {str(row["planning_space_id"]) for row in rows}, tree)
+    )
     closed = read_model.closings(conn, rows)
     lapsed = read_model.lapsed_claims(conn, rows)
-    tree = _page_tree(conn, rows)
-    return [read_model.present(conn, row, closed=closed, lapsed=lapsed, tree=tree) for row in rows]
+    return [
+        read_model.present(conn, row, closed=closed, lapsed=lapsed, tree=tree)
+        | {"queue_order": places.get(str(row["work_item_id"]))}
+        for row in rows
+    ]
 
 
 def _page_tree(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> item_tree.Tree:
@@ -1606,9 +1621,9 @@ def claim_ready_work_item(
     """Pick the next task the queue gives and take it.
 
     The queue gives a task `queue.withheld` names nothing for, read over the
-    whole of its space. The next one is the first in the order of work: inside a
-    state the order the board shows, top first, and priority only breaks a tie
-    in that order, so placing an item first is what puts it next.
+    whole of its space. The next one is the first by the key of work
+    (`queue.work_key`) — urgent, started, under way above, priority, age — the
+    smaller number first on a tie: the item whose `queue_order` reads 1.
 
     Choosing and writing are two statements, so the item chosen can be taken by
     somebody else before this claim lands. The guarded write is what catches
@@ -1619,21 +1634,12 @@ def claim_ready_work_item(
     the last refusal is reported rather than looped on forever.
     """
 
-    clauses: list[str] = []
-    parameters: list[object] = []
     space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
-    if space_id is not None:
-        clauses.append("i.planning_space_id = ?")
-        parameters.append(space_id)
-    query = with_clauses(
-        "SELECT i.work_item_id, i.planning_space_id, i.workflow_id, i.state_id, i.kind,"
-        " i.claim_ref, i.checklist FROM work_items i"
-        " JOIN workflow_states s ON s.state_id = i.state_id",
-        clauses,
+    spaces = (
+        [space_id]
+        if space_id is not None
+        else [str(row[0]) for row in conn.execute("SELECT planning_space_id FROM planning_spaces")]
     )
-    query += " ORDER BY " + ranking.WORK_ORDER_SQL + ", s.position, i.position,"
-    query += " CASE i.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1"
-    query += " WHEN 'medium' THEN 2 ELSE 3 END, i.number"
     label = calls.holder(author)
     # An expired lease is not a holder, so the queue sees through it: released
     # first, the item then reads unheld to the rule below. A lease in its grace
@@ -1641,7 +1647,7 @@ def claim_ready_work_item(
     expire_leases(conn, space_id=space_id)
     lost: model.RevisionConflictError | None = None
     for _ in range(_READY_CLAIM_ATTEMPTS):
-        chosen = _next_given(conn, conn.execute(query, tuple(parameters)).fetchall())
+        chosen = _next_given(conn, spaces)
         if chosen is None:
             return None
         row = read_model.item_by_id(conn, chosen)
@@ -1661,16 +1667,11 @@ def claim_ready_work_item(
     raise model.PlanningError("no work item could be claimed")
 
 
-def _next_given(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> str | None:
-    """The first of these items, in their order, that the queue gives: nothing withheld.
+def _next_given(conn: sqlite3.Connection, spaces: Sequence[str]) -> str | None:
+    """The first item the queue of these spaces gives, if any: one read of their tree."""
 
-    One read of the tree of every space they stand in decides every one of them.
-    """
-
-    tree = item_tree.of_spaces(conn, {str(row["planning_space_id"]) for row in rows})
-    return next(
-        (str(row["work_item_id"]) for row in rows if not queue.withheld(conn, row, tree)), None
-    )
+    given = queue.of_spaces(conn, spaces, item_tree.of_spaces(conn, spaces))
+    return str(given[0]["work_item_id"]) if given else None
 
 
 def set_checklist(

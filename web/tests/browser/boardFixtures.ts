@@ -143,7 +143,7 @@ export function chainOf(space: Brief[]) {
     ],
     series: [{ day: '2026-10-20', created: 5, closed: 1, total: 5, closed_total: 1 }],
     recent: { days: 7, created: 5, closed: 1, trend: 'steady' as const },
-    members: members.map((item, index) => ({
+    members: members.map((item) => ({
       work_item_id: item.work_item_id,
       reference: item.reference,
       title: item.title,
@@ -162,7 +162,7 @@ export function chainOf(space: Brief[]) {
       created_at: '2026-10-20T10:00:00Z',
       closed_at: item.state.is_terminal ? '2026-10-21T10:00:00Z' : null,
       workable: item.workable,
-      rank: index + 1,
+      queue_order: null,
     })),
     edges: [],
   }

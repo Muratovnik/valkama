@@ -2,7 +2,7 @@
  * A small space for the board's own tests: a four-state workflow and items built
  * by number, so a test names the item it means by the number it reads as.
  */
-import type { PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type { PlanningWorkflow, WorkItemBrief, WorkItemRow } from '@/shared/api/planningModel.ts'
 
 export const boardId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
@@ -43,11 +43,12 @@ export function boardState(key: BoardStateKey): NonNullable<WorkItemBrief['state
   }
 }
 
+/** A row of the board's read: the brief record and its place in the queue, none here. */
 export function boardItem(
   n: number,
   state: BoardStateKey = 'backlog',
-  overrides: Partial<WorkItemBrief> = {},
-): WorkItemBrief {
+  overrides: Partial<WorkItemRow> = {},
+): WorkItemRow {
   return {
     work_item_id: boardId(n),
     planning_space_id: boardId(800),
@@ -75,6 +76,7 @@ export function boardItem(
     withheld: state === 'backlog' || state === 'todo' ? [] : ['not_ready'],
     lapsed_claim: null,
     comment_count: 0,
+    queue_order: null,
     ...overrides,
   }
 }
@@ -83,7 +85,7 @@ export function boardItem(
 export function boardGoal(
   n: number,
   state: BoardStateKey = 'dev',
-  overrides: Partial<WorkItemBrief> = {},
+  overrides: Partial<WorkItemRow> = {},
 ) {
   return boardItem(n, state, {
     kind: 'goal',

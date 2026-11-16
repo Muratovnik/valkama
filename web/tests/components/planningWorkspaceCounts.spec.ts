@@ -18,7 +18,7 @@ import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vu
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
-import type { PlanningReadModel, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type { PlanningReadModel, WorkItemRow } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import { boardGoal, boardItem, boardWorkflow } from '../fixtures/board.ts'
@@ -38,7 +38,7 @@ vi.mock('@/pages/planning/utils/graphView.ts', () => {
 
 const goal = boardGoal(1)
 const closedGoal = boardGoal(2, 'done')
-const space: WorkItemBrief[] = [
+const space: WorkItemRow[] = [
   boardItem(10, 'backlog', { parent_id: goal.work_item_id }),
   boardItem(11, 'backlog', { parent_id: goal.work_item_id }),
   boardItem(12, 'backlog'),
@@ -57,7 +57,7 @@ function chain(): WorkItemChain {
     root: { ...base.root, work_item_id: goal.work_item_id, reference: 'MAIN-1' },
     total: members.length,
     open: members.length,
-    members: members.map((member, index) => ({
+    members: members.map((member) => ({
       work_item_id: member.work_item_id,
       reference: member.reference,
       title: member.title,
@@ -71,7 +71,7 @@ function chain(): WorkItemChain {
       created_at: member.created_at,
       closed_at: null,
       workable: member.workable,
-      rank: index + 1,
+      queue_order: member.queue_order,
     })),
   }
 }

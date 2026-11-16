@@ -1,8 +1,9 @@
 """The order of work: placing an item in its state, and who reads that order.
 
-Three things are proved here. A placement puts exactly one item exactly where it
-was asked and moves nothing else a reader can see. The queue, the list and the
-chain read that one order. And the order lives in a column every earlier build
+Two things are proved here. A placement puts exactly one item exactly where it
+was asked and moves nothing else a reader can see; no read sorts by it any more,
+since the order of work is computed (`tests/test_planning_queue.py`). And the
+placement lives in a column every earlier build
 already reads and writes the same way, so placing items changes nothing about
 the store such a build opens: no schema object, no stamp, no recovery point, and
 its own reads and writes keep agreeing with this build's.
@@ -19,7 +20,7 @@ from unittest import mock
 
 from server import store
 from server.planning import api as planning_api
-from server.planning import calls, chain, model, ranking, service
+from server.planning import calls, model, service
 from tests.planning_fixtures import basis_for
 
 #: How an earlier build listed a state and put an item last in it, copied from
@@ -55,9 +56,16 @@ class RankingTestCase(unittest.TestCase):
         return str(created["reference"])
 
     def order(self, state: str = "triage") -> list[str]:
+        """The order the placements stored in the state; no read sorts by it any more."""
+
         return [
-            item["reference"]
-            for item in service.list_work_items(self.conn, space=self.space["key"], state=state)
+            f"{self.space['key']}-{row[0]}"
+            for row in self.conn.execute(
+                "SELECT i.number FROM work_items i JOIN workflow_states s"
+                " ON s.state_id = i.state_id WHERE i.planning_space_id = ? AND s.key = ?"
+                " ORDER BY i.position, i.number",
+                (self.space["planning_space_id"], state),
+            )
         ]
 
     def revisions(self) -> dict[str, int]:
@@ -227,60 +235,6 @@ class TransitionPlacementTests(RankingTestCase):
                 self.conn, self.moving, "dev", rank="first", acceptance="assignment"
             )
         self.assertEqual([self.moving], self.order("triage"))
-
-
-class OrderReaderTests(RankingTestCase):
-    """The queue, the list and the chain all read the one order."""
-
-    def take(self) -> str | None:
-        taken = service.claim_ready_work_item(self.conn, space=self.space["key"], author="agent")
-        return None if taken is None else str(taken["reference"])
-
-    def test_the_queue_takes_ready_work_in_its_order_and_never_triage(self) -> None:
-        backlog = [self.item(f"Triage {index}") for index in range(2)]
-        todo = [self.item(f"Ready {index}", state="ready") for index in range(2)]
-        service.update_work_item(self.conn, todo[1], rank="first")
-        service.update_work_item(self.conn, backlog[1], rank="first")
-        # Work in triage is not accepted: placed first or not, nobody is given it.
-        self.assertEqual([todo[1], todo[0], None], [self.take() for _ in range(3)])
-
-    def test_priority_only_breaks_a_tie_in_the_order(self) -> None:
-        first = self.item("Placed first", state="ready")
-        urgent = self.item("Urgent but last", state="ready", priority="urgent")
-        self.assertEqual(first, self.take())
-        # The release puts the started item back in the ready state, beside the
-        # urgent one, so the two share a state.
-        service.claim_work_item(self.conn, first, release=True, author="agent")
-        # Two rows an earlier build left at one position: the urgent one goes first.
-        self.conn.execute("UPDATE work_items SET position = 7.0")
-        self.assertEqual(urgent, self.take())
-
-    def test_the_list_reads_each_state_in_its_order(self) -> None:
-        a, b = self.item("A"), self.item("B")
-        t = self.item("T", state="ready")
-        service.update_work_item(self.conn, b, rank="first")
-        listed = [
-            item["reference"]
-            for item in service.list_work_items(self.conn, space=self.space["key"], limit=None)
-        ]
-        self.assertEqual([b, a, t], listed)
-
-    def test_a_chain_member_carries_its_place_in_the_order_of_work(self) -> None:
-        epic = self.item("Epic", kind="goal")
-        later = self.item("Triage later", parent=epic)
-        sooner = self.item("Triage sooner", parent=epic)
-        queued = self.item("Queued", parent=epic, state="ready")
-        review = self.item("Reviewed", parent=epic, state="review")
-        service.update_work_item(self.conn, sooner, rank="first")
-        members = chain.chain(self.conn, epic)["members"]
-        by_rank = [member["reference"] for member in sorted(members, key=lambda m: m["rank"])]
-        # Review before the queue, the queue before the backlog, and the backlog
-        # in the order it was placed in -- the order the take-next queue reads.
-        self.assertEqual([review, queued, sooner, later], by_rank)
-        self.assertEqual(len(members), len({member["rank"] for member in members}))
-
-    def test_the_work_order_names_every_category_once(self) -> None:
-        self.assertEqual(sorted(model.PUBLIC_CATEGORIES), sorted(ranking.WORK_ORDER))
 
 
 class BoundaryTests(RankingTestCase):

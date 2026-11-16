@@ -45,9 +45,8 @@ function member(state: StateName, parent: string | null, workable = false, claim
     created_at: '2026-10-20T10:00:00Z',
     closed_at: terminal ? '2026-10-29T10:00:00Z' : null,
     workable,
-    // The order of work follows the numbers here, so a group read by rank reads
-    // the way it did by reference.
-    rank: number,
+    // A workable member's place in the queue follows its number here.
+    queue_order: workable ? number : null,
   }
 }
 

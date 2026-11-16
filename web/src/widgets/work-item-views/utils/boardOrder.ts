@@ -46,11 +46,11 @@ function landing(items: readonly WorkItemBrief[], rank: string | undefined): num
  * An item or state the model does not know leaves the items as they were, so a
  * move that raced a deletion draws nothing rather than something invented.
  */
-export function placeLocally(
-  items: readonly WorkItemBrief[],
+export function placeLocally<Item extends WorkItemBrief>(
+  items: readonly Item[],
   workflow: PlanningWorkflow,
   move: BoardMove,
-): WorkItemBrief[] {
+): Item[] {
   const item = items.find((candidate) => candidate.reference === move.reference)
   const target = workflow.states.find((state) => state.key === move.state)
   if (item === undefined || target === undefined) return [...items]

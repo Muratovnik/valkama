@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
-import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type { PlanningEdge, WorkItemRow } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 import type { MenuEntry } from '@/shared/ui/menuEntries.ts'
 import VMenu from '@/shared/ui/VMenu.vue'
@@ -372,14 +372,14 @@ describe('walking the board from the keyboard', () => {
   })
 })
 
-function chainOf(members: WorkItemBrief[]): WorkItemChain {
+function chainOf(members: WorkItemRow[]): WorkItemChain {
   const chain = emptyChain()
   return {
     ...chain,
     root: { ...chain.root, work_item_id: goal.work_item_id, reference: 'MAIN-1' },
     total: members.length,
     open: members.length,
-    members: members.map((member, index) => ({
+    members: members.map((member) => ({
       work_item_id: member.work_item_id,
       reference: member.reference,
       title: member.title,
@@ -393,7 +393,7 @@ function chainOf(members: WorkItemBrief[]): WorkItemChain {
       created_at: member.created_at,
       closed_at: null,
       workable: member.workable,
-      rank: index + 1,
+      queue_order: member.queue_order,
     })),
   }
 }
