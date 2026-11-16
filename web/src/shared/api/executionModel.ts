@@ -51,17 +51,20 @@ const QUALITIES = ['observed', 'unknown'] as const
 /** On which runs a client takes the directories beside the one it runs in. */
 const ADDED_DIRS = ['fresh_and_resume', 'fresh_only', 'none'] as const
 /**
- * How the suggested launch root stands: `missing` when the space binds no
- * project, `unregistered` when the item's project left the registry,
- * `unavailable` when the registry or the directory is not there, `malformed`
- * when the registry cannot be read as one.
+ * How the suggested launch root stands, in the words a claim's roots use:
+ * `missing` when its directory is not there, `unregistered` when the item's
+ * project left the registry, `unavailable` when the registry could not be read,
+ * one that does not parse included. Two are the launch root's own: `unbound`
+ * when the item's space binds no project, `no_item` when the read names no item
+ * or one that does not exist.
  */
 const LAUNCH_ROOT_STATUSES = [
   'mapped',
   'missing',
   'unregistered',
   'unavailable',
-  'malformed',
+  'unbound',
+  'no_item',
 ] as const
 /** Roots beside the working one: a space's projects and an item's, at most. */
 const MAX_ADDED_ROOTS = 100

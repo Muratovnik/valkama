@@ -121,15 +121,17 @@ def _suggested_repository(conn: sqlite3.Connection, reference: str | None) -> di
     than one that prefills none: the operator reads the field as an answer.
 
     The status travels with it so an interface can say why the field is empty
-    instead of looking like it forgot, and `repository_project` names the
-    project whose root it is. `added_roots` are the roots the launch gets beside
-    it (`item_projects.added_roots`); each driver's `added_dirs` says on which
-    runs its client takes them.
+    instead of looking like it forgot, in the words of
+    `item_projects.LAUNCH_ROOT_STATUSES`: `no_item` when the read names no item
+    or one there is not. `repository_project` names the project whose root it
+    is. `added_roots` are the roots the launch gets beside it
+    (`item_projects.added_roots`); each driver's `added_dirs` says on which runs
+    its client takes them.
     """
 
     nothing: dict[str, object] = {
         "repository": "",
-        "repository_status": "missing",
+        "repository_status": item_projects.NO_ITEM,
         "repository_project": None,
         "launch_place": None,
         "added_roots": [],

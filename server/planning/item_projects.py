@@ -288,17 +288,23 @@ class LaunchRoot(TypedDict):
     project_id: str | None
     #: The project's registered root; None when the registry names none.
     root: str | None
-    #: `mapped`, `missing` (the space binds no project), `unregistered` (the
-    #: item's project is no longer in the registry), `unavailable` (the registry
-    #: or the directory is not there) or `malformed` (the registry is).
+    #: A word of `LAUNCH_ROOT_STATUSES`.
     status: str
     #: The item's space's `launch_place`.
     launch_place: str
 
 
 #: How a root a claim names stands: its directory is there, is not, the project is
-#: no longer registered, or the registry was not read.
+#: no longer registered, or the registry was not read, a registry that does not
+#: parse included.
 ROOT_STATUSES = ("mapped", "missing", "unregistered", "unavailable")
+#: The launch root's own case where the item's space binds no project.
+UNBOUND = "unbound"
+#: The launch root's own case where the read names no item, or one there is not.
+NO_ITEM = "no_item"
+#: How the launch root stands: each word of `ROOT_STATUSES` meaning what it means
+#: for a claim's root, and the two cases only a launch root has.
+LAUNCH_ROOT_STATUSES = (*ROOT_STATUSES, UNBOUND, NO_ITEM)
 
 
 def _item_place(conn: sqlite3.Connection, work_item_id: str) -> sqlite3.Row:
@@ -348,8 +354,12 @@ def launch_root(
     if listing is None:
         listing = project_registry.read_registry()
     if listing["status"] != "available":
-        status = "malformed" if listing["status"] == "malformed" else "unavailable"
-        return {"project_id": chosen, "root": None, "status": status, "launch_place": launch_place}
+        return {
+            "project_id": chosen,
+            "root": None,
+            "status": "unavailable",
+            "launch_place": launch_place,
+        }
     if chosen is None:
         bound = _bound(conn, listing, str(place["key"]))
         entry = bound[0] if bound else None
@@ -363,14 +373,14 @@ def launch_root(
         return {
             "project_id": chosen,
             "root": None,
-            "status": "missing" if chosen is None else "unregistered",
+            "status": UNBOUND if chosen is None else "unregistered",
             "launch_place": launch_place,
         }
     root = str(entry["canonical_root"])
     return {
         "project_id": str(entry["project_id"]),
         "root": root,
-        "status": "mapped" if os.path.isdir(root) else "unavailable",
+        "status": "mapped" if os.path.isdir(root) else "missing",
         "launch_place": launch_place,
     }
 

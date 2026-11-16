@@ -778,8 +778,16 @@ written through `POST /api/planning/space/settings` with `{space, launch_place}`
 no planning tool writes it. The attempt records the project of that root as its
 `project_id`. Each claim answers with the root of every project the card changes
 (`project_roots`), so the agent reads each one's instructions before editing there.
-When the card's project is no longer in the registry, the suggested directory is
-empty and its status is `unregistered`, the word `project_roots` uses for it.
+The capabilities read names it as `repository`, with `repository_project` and
+`repository_status`, which uses the words of `project_roots` with the same
+meaning: `mapped` (the root is registered and its directory is there),
+`missing` (its directory is not there), `unregistered` (the card's project is
+no longer in the registry) and `unavailable` (the registry could not be read,
+one that does not parse included). Two cases only the launch root has:
+`unbound`, the card's space binds no project, and `no_item`, the read names no
+card or one that does not exist. With `missing` the suggested directory is the
+registered root that is not there; with every other word but `mapped` it is
+empty.
 
 A launch also gets the roots of the other projects it may touch, as directories
 beside the one it runs in: the root of every project of the card's space and of

@@ -899,7 +899,7 @@ class ExecutionApiTests(LaunchHarness):
                 {"work_item": [reference]},
             )
         self.assertEqual("", refused["repository"])
-        self.assertEqual("missing", refused["repository_status"])
+        self.assertEqual("unbound", refused["repository_status"])
 
     def test_history_answers_with_the_attempts_of_one_item(self) -> None:
         reference = self.item("history")

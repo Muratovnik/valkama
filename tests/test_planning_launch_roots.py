@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -309,10 +310,14 @@ class LaunchRootTests(RootsCase):
         ghost = self.item("ghost", ["ghost"])
         gone = self.item("gone", ["gone"])
         self.write_registry(without="gone")
+        # Each word means what it means among the claim's roots: no directory is `missing`.
         found = item_projects.launch_root(self.conn, str(ghost["work_item_id"]))
-        self.assertEqual(("ghost", "unavailable"), (found["project_id"], found["status"]))
-        # The word the claim's roots give the same project, not `missing`, which a
-        # space that binds nothing gives below.
+        self.assertEqual(("ghost", "missing"), (found["project_id"], found["status"]))
+        self.assertEqual(
+            "missing",
+            item_projects.project_roots(self.conn, str(ghost["work_item_id"]))[0]["status"],
+        )
+        self.assertEqual("missing", self.capabilities(ghost)["repository_status"])
         found = item_projects.launch_root(self.conn, str(gone["work_item_id"]))
         self.assertEqual(
             ("gone", None, "unregistered"), (found["project_id"], found["root"], found["status"])
@@ -324,14 +329,17 @@ class LaunchRootTests(RootsCase):
         self.assertEqual("unregistered", self.capabilities(gone)["repository_status"])
         bare_space = self.tool("create_planning_space", name="Bare", key="BARE")
         bare = self.item("bare", space=bare_space["key"])
+        # A space that binds no project is the launch root's own case.
         found = item_projects.launch_root(self.conn, str(bare["work_item_id"]))
         self.assertEqual(
-            (None, None, "missing"), (found["project_id"], found["root"], found["status"])
+            (None, None, "unbound"), (found["project_id"], found["root"], found["status"])
         )
+        self.assertEqual("unbound", self.capabilities(bare)["repository_status"])
+        # A registry not read is `unavailable`, whether it does not parse or is not there.
         self.registry.write_bytes(b"{ not json")
-        self.assertEqual(
-            "malformed", item_projects.launch_root(self.conn, str(ghost["work_item_id"]))["status"]
-        )
+        found = item_projects.launch_root(self.conn, str(ghost["work_item_id"]))
+        self.assertEqual(("ghost", "unavailable"), (found["project_id"], found["status"]))
+        self.assertEqual("unavailable", self.capabilities(ghost)["repository_status"])
         self.registry.unlink()
         found = item_projects.launch_root(self.conn, str(ghost["work_item_id"]))
         self.assertEqual(("ghost", "unavailable"), (found["project_id"], found["status"]))
@@ -369,22 +377,35 @@ class LaunchRootTests(RootsCase):
         self.assertEqual(str(self.dirs["umbrella"]), self.capabilities(d)["repository"])
 
     def test_a_read_that_names_no_item_names_no_root(self) -> None:
-        _status, body = execution_api.handle_get(self.conn, "/api/execution/capabilities", {}) or (
-            0,
-            {},
+        unnamed = execution_api.handle_get(self.conn, "/api/execution/capabilities", {})
+        unknown = execution_api.handle_get(
+            self.conn, "/api/execution/capabilities", {"work_item": ["HOME-999"]}
         )
+        for read in (unnamed, unknown):
+            _status, body = read or (0, {})
+            self.assertEqual(
+                ("", "no_item", None, None, []),
+                tuple(
+                    body[name]
+                    for name in (
+                        "repository",
+                        "repository_status",
+                        "repository_project",
+                        "launch_place",
+                        "added_roots",
+                    )
+                ),
+            )
+
+    def test_the_interface_takes_every_word_the_launch_root_gives_and_no_other(self) -> None:
+        # The web's strict reader refuses a word it does not list, so the two lists are one.
+        source = (
+            Path(__file__).parents[1] / "web" / "src" / "shared" / "api" / "executionModel.ts"
+        ).read_text(encoding="utf-8")
+        listed = re.search(r"const LAUNCH_ROOT_STATUSES = \[(.*?)\] as const", source, re.S)
+        assert listed is not None
         self.assertEqual(
-            ("", "missing", None, None, []),
-            tuple(
-                body[name]
-                for name in (
-                    "repository",
-                    "repository_status",
-                    "repository_project",
-                    "launch_place",
-                    "added_roots",
-                )
-            ),
+            list(item_projects.LAUNCH_ROOT_STATUSES), re.findall(r"'([a-z_]+)'", listed[1])
         )
 
     def test_a_launch_records_the_project_of_its_root(self) -> None:
