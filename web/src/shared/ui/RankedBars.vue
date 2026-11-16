@@ -119,9 +119,12 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
       :description="words.emptyDescription"
       compact
     />
+    <!-- The ranking is a list of rows: a row's hint stands past its edge, level with its row,
+         rather than under the row and over the rows after it. -->
     <div
       v-else
       class="ranked-grid"
+      data-hint-list="rows"
     >
       <component
         :is="group.tag"

@@ -1,13 +1,14 @@
 /**
  * Where a hint stands in the built app: never over its own element, and in a list never over
  * another of its rows. Every element with a hint is pointed at on the rail, a board, the list,
- * the Analytics day chart and an opened card, at 1440px and 1024px.
+ * the Analytics day chart and its ranked bars and an opened card, at 1440px and 1024px.
  *
  * Where a hint stands follows its kind and the list its element stands in, and no call site
  * names a side (`hintPlacement.ts`). Before that, a name in the rail written without the side
  * stood above its icon over the row before, and a title the rail cut stood at the title's end,
  * over the rows above and under it. A list of rows down (the rail) puts every hint past its edge,
- * so a hint there stands over no part of the list; the chart's periods are a list of rows across,
+ * so a hint there stands over no part of the list, and so do a ranking's bars, whose hint stood
+ * under its row and over the rows after it; the chart's periods are a list of rows across,
  * whose hint stands beside its own column, over the periods after it by the place they chose.
  */
 import { expect } from '@playwright/test'
@@ -43,6 +44,7 @@ interface List {
 
 const RAIL: List = { across: false, holder: '.app-nav-shell' }
 const PERIODS: List = { across: true, holder: '.period-slot' }
+const RANKING: List = { across: false, holder: '.ranked-grid' }
 
 /**
  * Where the hint that shows under the pointer at `x, y` stands against the element there. A
@@ -148,6 +150,23 @@ for (const width of [1440, 1024]) {
       const chart = await sweep(page, days.locator('.period-bars'), PERIODS)
       expect(chart.placed.length).toBeGreaterThan(2)
       expect(chart.covered).toEqual([])
+    })
+
+    test('no hint of the Analytics bars covers its element, nor a row of the ranking', async ({
+      page,
+    }) => {
+      await openDays(page, width)
+      // Each section drawn as its chart, whichever the width of the panel opened it as.
+      for (const section of await page.locator('.chart-section').all())
+        await section.getByRole('radio', { name: 'Chart' }).click()
+      const ranking = page.locator('.spending-bars .ranked-grid')
+      await expect(ranking.locator('.ranked-line')).not.toHaveCount(0)
+      await ranking.evaluate((list) => list.scrollIntoView({ block: 'center', inline: 'nearest' }))
+      // Each row's hint stands past the ranking's edge: under its row, it stood over the rows
+      // after it and took the pointer on its way to the next one.
+      const placed = await sweep(page, ranking, RANKING)
+      expect(placed.placed.length).toBeGreaterThan(2)
+      expect(placed.covered).toEqual([])
     })
 
     test('no hint in an opened card covers its element', async ({ page }) => {

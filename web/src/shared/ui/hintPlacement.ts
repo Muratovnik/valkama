@@ -12,8 +12,9 @@
  *   by words only where they do not fit there (`placeWhole`, drawn by `WholeText`). On one line
  *   it covers its own line and nothing over or under it, in a list as anywhere.
  * - In a list, every other hint stands aside of it, its top level with its row's: a list of rows down
- *   (`data-hint-list="rows"`, the rail) puts it past the list's own edge, clear of every row; a
- *   list of rows across (`data-hint-list="columns"`, a chart's periods) puts it beside its row.
+ *   (`data-hint-list="rows"`, the rail and a ranking's bars) puts it past the list's own edge, clear
+ *   of every row; a list of rows across (`data-hint-list="columns"`, a chart's periods) puts it
+ *   beside its row.
  *   A list declares itself once on its container, and its rows say nothing.
  *
  * A hint stands on the right of a list where its lines fit there, else on the left, else on the
