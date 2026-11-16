@@ -23,15 +23,19 @@ from ..store_identity.primitives import (
 )
 
 MODULES_INTERFACE = "valkama-modules"
+#: Where a module works: everywhere, or in one planning space.
+OPERATING_LEVELS = ("global", "space")
 
 
-def validate_module_manifest(value, *, entity_kinds=ENTITY_KINDS):
+def validate_module_manifest(value, *, entity_kinds=ENTITY_KINDS, levels=OPERATING_LEVELS):
     """Validate the backend half of the frozen ``valkama-modules`` wire.
 
-    `entity_kinds` is the vocabulary the manifest's kinds are read in: the
-    current one by default, and a wider one only for a migration reading a
-    manifest an earlier build persisted.
+    `entity_kinds` is the vocabulary the manifest's kinds are read in, and `levels`
+    the operating levels it declares: the current ones by default, and the earlier
+    ones only for a migration reading a manifest an earlier build persisted.
     """
+
+    levels = tuple(levels)
 
     kinds = frozenset(entity_kinds) | {"adapter-resource"}
     obj = _object(
@@ -67,10 +71,8 @@ def validate_module_manifest(value, *, entity_kinds=ENTITY_KINDS):
     module_id = _validate_module_id(obj["module_id"], "module_manifest.module_id")
     if obj["route_namespace"] != module_id:
         raise ContractError("module_manifest.route_namespace must equal module_id")
-    if obj["operating_levels"] != ["global", "project"]:
-        raise ContractError(
-            "module_manifest.operating_levels must be exactly ['global', 'project']"
-        )
+    if obj["operating_levels"] != list(levels):
+        raise ContractError(f"module_manifest.operating_levels must be exactly {list(levels)}")
     state_schema = _object(
         obj["state_schema"],
         ("schema_id", "allowed_keys", "max_bytes"),
@@ -79,13 +81,11 @@ def validate_module_manifest(value, *, entity_kinds=ENTITY_KINDS):
     max_bytes = state_schema["max_bytes"]
     if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or not 64 <= max_bytes <= 8192:
         raise ContractError("module_manifest.state_schema.max_bytes must be bounded")
-    semantics_obj = _object(
-        obj["semantics"], ("global", "project"), where="module_manifest.semantics"
-    )
+    semantics_obj = _object(obj["semantics"], levels, where="module_manifest.semantics")
     secondary_obj = _object(
-        obj["secondary_context"], ("global", "project"), where="module_manifest.secondary_context"
+        obj["secondary_context"], levels, where="module_manifest.secondary_context"
     )
-    states_obj = _object(obj["states"], ("global", "project"), where="module_manifest.states")
+    states_obj = _object(obj["states"], levels, where="module_manifest.states")
     return {
         "interface_version": MODULES_INTERFACE,
         "module_id": module_id,
@@ -109,18 +109,18 @@ def validate_module_manifest(value, *, entity_kinds=ENTITY_KINDS):
             ),
             "max_bytes": max_bytes,
         },
-        "operating_levels": ["global", "project"],
+        "operating_levels": list(levels),
         "semantics": {
             level: _validate_module_level(
                 semantics_obj[level], f"module_manifest.semantics.{level}"
             )
-            for level in ("global", "project")
+            for level in levels
         },
         "secondary_context": {
             level: _validate_secondary_context(
                 secondary_obj[level], f"module_manifest.secondary_context.{level}", kinds
             )
-            for level in ("global", "project")
+            for level in levels
         },
         "required_read_models": _list(
             obj["required_read_models"],
@@ -157,7 +157,7 @@ def validate_module_manifest(value, *, entity_kinds=ENTITY_KINDS):
             level: _validate_module_state_support(
                 states_obj[level], f"module_manifest.states.{level}"
             )
-            for level in ("global", "project")
+            for level in levels
         },
     }
 

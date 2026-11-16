@@ -33,20 +33,20 @@ class ModuleManifestTests(unittest.TestCase):
                 "allowed_keys": ["query"],
                 "max_bytes": 2048,
             },
-            "operating_levels": ["global", "project"],
+            "operating_levels": ["global", "space"],
             "semantics": {
                 "global": {
                     "read_models": ["planning.work-items"],
                     "action_semantics": ["module.planning.open-work-item"],
                 },
-                "project": {
+                "space": {
                     "read_models": ["planning.work-items"],
                     "action_semantics": ["module.planning.open-work-item"],
                 },
             },
             "secondary_context": {
                 "global": {"kinds": ["project", "planning-space"], "behavior": "all"},
-                "project": {"kinds": ["planning-space", "work-item"], "behavior": "all"},
+                "space": {"kinds": ["planning-space", "work-item"], "behavior": "all"},
             },
             "required_read_models": ["work-items"],
             "sse_subscriptions": ["planning.changed"],
@@ -57,7 +57,7 @@ class ModuleManifestTests(unittest.TestCase):
             "feature_capabilities": [],
             "states": {
                 "global": {"supported": ["loading", "ready", "empty"]},
-                "project": {"supported": ["loading", "ready", "empty"]},
+                "space": {"supported": ["loading", "ready", "empty"]},
             },
         }
         self.assertEqual("planning", validate_module_manifest(module)["module_id"])
@@ -96,6 +96,45 @@ class ModuleManifestTests(unittest.TestCase):
             validate_module_manifest({**module, "version": "2"})
         with self.assertRaises(UnknownFieldError):
             validate_module_manifest({**module, "legacy": True})
+
+    def test_a_module_works_globally_or_in_a_space_and_a_former_manifest_reads_as_written(self):
+        """The levels are `global` and `space`; a migration still reads a `project` one."""
+
+        def at(level: str) -> dict:
+            return {
+                "interface_version": "valkama-modules",
+                "module_id": "planning",
+                "version": "2.0.0",
+                "title_key": "platform.modules.planning",
+                "icon_key": "layout-dashboard",
+                "navigation_group": "work",
+                "route_namespace": "planning",
+                "state_schema": {"schema_id": "s", "allowed_keys": [], "max_bytes": 2048},
+                "operating_levels": ["global", level],
+                "semantics": {
+                    name: {"read_models": [], "action_semantics": []} for name in ("global", level)
+                },
+                "secondary_context": {
+                    name: {"kinds": [], "behavior": "all"} for name in ("global", level)
+                },
+                "required_read_models": [],
+                "sse_subscriptions": [],
+                "supported_entity_kinds": [],
+                "primary_actions": [],
+                "secondary_actions": [],
+                "inspector_owner": "module.planning",
+                "feature_capabilities": [],
+                "states": {name: {"supported": ["ready"]} for name in ("global", level)},
+            }
+
+        self.assertEqual(
+            ["global", "space"], validate_module_manifest(at("space"))["operating_levels"]
+        )
+        with self.assertRaises(ContractError):
+            validate_module_manifest(at("project"))
+        former = validate_module_manifest(at("project"), levels=("global", "project"))
+        self.assertEqual(["global", "project"], former["operating_levels"])
+        self.assertEqual({"global", "project"}, set(former["semantics"]))
 
 
 if __name__ == "__main__":
