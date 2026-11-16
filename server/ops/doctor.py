@@ -1172,7 +1172,7 @@ def _mod_source_check() -> dict:
             "warn",
             f"off: Valkama's Claude Code mod `{MOD_NAME}` is {how}, so no quota is read"
             f" from it.{scope}",
-            "Install and enable it as the README's section on the mod says; the mod reads"
+            "Install and enable it as docs/guides/client-hooks.md says; the mod reads"
             " the quota in every session, the VS Code extension's too.",
             presentation_code="quota-mod-off",
             parameters=parameters,

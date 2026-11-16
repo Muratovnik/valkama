@@ -105,7 +105,7 @@ class Located(NamedTuple):
 
 
 class DocumentRefused(NamedTuple):
-    """Why a path opens nothing: one code from the closed list in `README.md`."""
+    """Why a path opens nothing: one code from the closed list of the project documents guide."""
 
     code: str
 
@@ -258,7 +258,7 @@ def locate(
 
 
 class DocumentError(Exception):
-    """A refused request: one code from the closed list in `README.md`, never an OS error."""
+    """A refused request: one code from the closed list of the project documents guide, never an OS error."""
 
     def __init__(self, code: str, **details: int) -> None:
         super().__init__(code)
