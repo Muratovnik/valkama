@@ -64,12 +64,12 @@ class ModuleRegistryTests(unittest.TestCase):
             for field in (
                 "allowed_keys",
                 "readGlobal",
-                "readProject",
+                "readSpace",
                 "actionGlobal",
-                "actionProject",
+                "actionSpace",
                 "required_read_models",
                 "secondaryGlobal",
-                "secondaryProject",
+                "secondarySpace",
                 "sse_subscriptions",
                 "supported_entity_kinds",
                 "feature_capabilities",
@@ -90,21 +90,21 @@ class ModuleRegistryTests(unittest.TestCase):
             self.assertEqual(values["icon_key"], manifest["icon_key"])
             self.assertEqual(values["allowed_keys"], manifest["state_schema"]["allowed_keys"])
             self.assertEqual(values["readGlobal"], manifest["semantics"]["global"]["read_models"])
-            self.assertEqual(values["readProject"], manifest["semantics"]["space"]["read_models"])
+            self.assertEqual(values["readSpace"], manifest["semantics"]["space"]["read_models"])
             self.assertEqual(
                 values["actionGlobal"], manifest["semantics"]["global"]["action_semantics"]
             )
             self.assertEqual(
-                values["actionProject"], manifest["semantics"]["space"]["action_semantics"]
+                values["actionSpace"], manifest["semantics"]["space"]["action_semantics"]
             )
-            self.assertEqual(values["actionProject"], manifest["primary_actions"])
+            self.assertEqual(values["actionSpace"], manifest["primary_actions"])
             self.assertEqual(values["actionGlobal"], manifest["secondary_actions"])
             self.assertEqual(values["required_read_models"], manifest["required_read_models"])
             self.assertEqual(
                 values["secondaryGlobal"], manifest["secondary_context"]["global"]["kinds"]
             )
             self.assertEqual(
-                values["secondaryProject"], manifest["secondary_context"]["space"]["kinds"]
+                values["secondarySpace"], manifest["secondary_context"]["space"]["kinds"]
             )
             self.assertEqual(values["sse_subscriptions"], manifest["sse_subscriptions"])
             self.assertEqual(values["supported_entity_kinds"], manifest["supported_entity_kinds"])
