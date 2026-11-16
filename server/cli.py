@@ -726,7 +726,9 @@ def main(argv: list[str] | None = None) -> None:
         "upgrade", help="carry the registry to inventory format 2 and projection format 4"
     )
     projects_sub.add_parser(
-        "downgrade", help="restore the exact registry bytes the upgrade replaced"
+        "downgrade",
+        help="restore the exact inventory, projection and rollback bytes the upgrade or the"
+        " first import replaced",
     )
     import_cmd = projects_sub.add_parser(
         "import", help="import a former inventory of format 1 once"

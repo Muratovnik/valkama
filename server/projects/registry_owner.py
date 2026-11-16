@@ -9,8 +9,10 @@ every binding `default: true`, which holds because a space had one project
 then.
 
 Each write keeps the bytes it replaced for `rollback`, which undoes that one
-write. A change of format keeps the former bytes once more, with their SHA-256,
-for `downgrade`, and `rollback` never crosses a change of format.
+write. A change of format, and an import into a machine with no registry, keep
+once more, with their SHA-256, the bytes or absence of the inventory, the
+projection and that one-write snapshot as they were before, for `downgrade`;
+`rollback` never crosses a change of format.
 """
 
 from __future__ import annotations
@@ -428,37 +430,35 @@ def _digest(value: bytes | None) -> str | None:
     return None if value is None else hashlib.sha256(value).hexdigest()
 
 
-def _upgrade_snapshot(inventory: bytes | None, target: bytes | None) -> bytes:
-    return (
-        json.dumps(
-            {
-                "inventory": _encoded(inventory),
-                "inventory_sha256": _digest(inventory),
-                "projection": _encoded(target),
-                "projection_sha256": _digest(target),
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n"
-    ).encode("ascii")
+#: The field holding each file an upgrade snapshot keeps: inventory, projection, one-write snapshot.
+_UPGRADE_FIELDS = ("inventory", "projection", "rollback")
 
 
-def _decode_upgrade_snapshot(raw: bytes) -> tuple[bytes | None, bytes | None]:
-    keys = {"inventory", "inventory_sha256", "projection", "projection_sha256"}
+def _upgrade_snapshot(inventory: bytes | None, target: bytes | None, backup: bytes | None) -> bytes:
+    document: dict[str, str | None] = {}
+    for field, value in zip(_UPGRADE_FIELDS, (inventory, target, backup), strict=True):
+        document[field] = _encoded(value)
+        document[f"{field}_sha256"] = _digest(value)
+    return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode("ascii")
+
+
+def _decode_upgrade_snapshot(raw: bytes) -> tuple[bytes | None, bytes | None, bytes | None]:
+    """The inventory, projection and one-write snapshot, each checked against its SHA-256."""
+
+    keys = {key for field in _UPGRADE_FIELDS for key in (field, f"{field}_sha256")}
     try:
         document = json.loads(raw.decode("ascii"))
         if not isinstance(document, dict) or set(document) != keys:
             raise ValueError("unknown or missing fields")
-        inventory = _decoded(document["inventory"])
-        target = _decoded(document["projection"])
+        inventory, target, backup = (_decoded(document[field]) for field in _UPGRADE_FIELDS)
     except (ValueError, TypeError, UnicodeDecodeError, binascii.Error) as error:
         raise RegistryOwnerError(f"invalid upgrade snapshot: {error}") from error
-    if _digest(inventory) != document["inventory_sha256"] or (
-        _digest(target) != document["projection_sha256"]
+    if any(
+        _digest(value) != document[f"{field}_sha256"]
+        for field, value in zip(_UPGRADE_FIELDS, (inventory, target, backup), strict=True)
     ):
         raise RegistryOwnerError("upgrade snapshot bytes do not match their SHA-256; not restored")
-    return inventory, target
+    return inventory, target, backup
 
 
 def _publish(
@@ -468,13 +468,30 @@ def _publish(
     before_target: bytes | None,
     desired_inventory: bytes,
     desired_target: bytes,
+    *,
+    first: bool = False,
 ) -> bool:
+    """One write, keeping the bytes it replaces for `rollback`.
+
+    `first` marks the write that brings a registry to a machine with none: it also
+    keeps that state for `downgrade`, unless an upgrade snapshot already holds an
+    earlier one.
+    """
+
     if before_inventory == desired_inventory and before_target == desired_target:
         return False
     backup = rollback_path(target)
+    before_backup = _read(backup)
+    snapshot = upgrade_path(target)
+    kept: list[tuple[Path, bytes | None, bytes | None]] = []
+    if first and _read(snapshot) is None:
+        kept.append(
+            (snapshot, None, _upgrade_snapshot(before_inventory, before_target, before_backup))
+        )
     _replace_all(
         [
-            (backup, _read(backup), _snapshot(before_inventory, before_target)),
+            *kept,
+            (backup, before_backup, _snapshot(before_inventory, before_target)),
             (inventory, before_inventory, desired_inventory),
             (target, before_target, desired_target),
         ]
@@ -499,7 +516,11 @@ def _carry_across(
         )
     _replace_all(
         [
-            (snapshot, None, _upgrade_snapshot(before_inventory, before_target)),
+            (
+                snapshot,
+                None,
+                _upgrade_snapshot(before_inventory, before_target, _read(rollback_path(target))),
+            ),
             (inventory, before_inventory, render_inventory(projects)),
             (target, before_target, render_projection(projects)),
         ]
@@ -591,11 +612,12 @@ def import_inventory(inventory: Path, target: Path, source: Path) -> bool:
             before_target,
             render_inventory(projects) if before_inventory is None else before_inventory,
             render_projection(projects) if before_target is None else before_target,
+            first=before_inventory is None and before_target is None,
         )
 
 
 def downgrade(inventory: Path, target: Path) -> bool:
-    """Return both files to the exact bytes `upgrade` kept, and remove that snapshot."""
+    """Put back exactly the three files the upgrade snapshot keeps, and remove it."""
 
     _safe_state(inventory, target)
     with _lock(target):
@@ -603,11 +625,13 @@ def downgrade(inventory: Path, target: Path) -> bool:
         raw = _read(snapshot)
         if raw is None:
             raise RegistryOwnerError(f"upgrade snapshot is missing: {snapshot}")
-        restored_inventory, restored_target = _decode_upgrade_snapshot(raw)
+        restored_inventory, restored_target, restored_backup = _decode_upgrade_snapshot(raw)
+        backup = rollback_path(target)
         _replace_all(
             [
                 (inventory, _read(inventory), restored_inventory),
                 (target, _read(target), restored_target),
+                (backup, _read(backup), restored_backup),
                 (snapshot, raw, None),
             ]
         )

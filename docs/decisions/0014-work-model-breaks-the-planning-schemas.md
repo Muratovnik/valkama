@@ -79,7 +79,10 @@ and no compatibility layer.
    Only `valkama projects upgrade`, which carries a registry across and keeps its
    former bytes once for `valkama projects downgrade`, and `valkama projects
    import`, which takes a former writer's inventory of format 1, read the former
-   format, through one reader and one translation.
+   format, through one reader and one translation. What is kept is three files —
+   the inventory, the projection and the one-write snapshot `rollback` restores
+   from — each with its SHA-256 or recorded as absent; an import onto a machine
+   with no registry keeps that absence the same way.
 
 ## What a client does instead
 
@@ -113,7 +116,9 @@ and no compatibility layer.
 - Rollback is the whole set: the store from the `pre3.0` recovery point, the
   registry from `valkama projects downgrade` and the previous release together.
   The registry is returned before the previous release is installed, because a
-  2.9 build has no `downgrade` and its `rollback` refuses a format-4 snapshot.
+  2.9 build has no `downgrade` and its `rollback` refuses a format-4 snapshot;
+  `downgrade` puts back the one-write snapshot the upgrade found, so that
+  `rollback` of the previous release undoes its own last write again.
 - Rejected: aliases from the old words to the new ones (two spellings of one
   contract, and a dual reading the store rule forbids); keeping `ready` and
   `container` beside the new fields (a field that contradicts the category it

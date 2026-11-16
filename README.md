@@ -445,17 +445,24 @@ inventory and projection bytes saved before the preceding change. It never
 crosses a change of format.
 
 A registry an earlier release wrote (inventory format 1, projection schema v3)
-is carried across once with `projects upgrade`, which keeps the exact former
-bytes and their SHA-256 in `projects.json.valkama.upgrade`; on a registry that is
-already format 4 it answers `{"changed": false}` and touches nothing.
-`projects downgrade` restores those bytes exactly and removes the snapshot;
-changes made after the upgrade are lost with it. Downgrade before installing the
-earlier release, which cannot read format 4. For a one-time transfer from a
-former writer's format-1 TOML inventory, use
+is carried across once with `projects upgrade`. It keeps, in
+`projects.json.valkama.upgrade`, the exact former bytes of three files with
+their SHA-256: the inventory, the projection and the one-write snapshot
+`projects.json.valkama.rollback`, each recorded as absent when it was. On a
+registry that is already format 4 it answers `{"changed": false}` and touches
+nothing. `projects downgrade` returns all three files to those bytes exactly,
+removing a file that was absent, and removes the upgrade snapshot; changes made
+after the upgrade are lost with it, and the earlier release's `rollback` again
+undoes its own last write. Downgrade before installing the earlier release,
+which cannot read format 4. For a one-time transfer from a former writer's
+format-1 TOML inventory, use
 `projects import --source <absolute-path-to-inventory>`: it writes inventory
 format 2 and projection schema v4, and importing the same inventory again writes
-nothing. Import refuses to overwrite an inventory or projection with different
-project data. There is no project-registry path override.
+nothing. An import onto a machine with no inventory and no projection keeps
+that state in the upgrade snapshot too, so `projects downgrade` later returns
+the machine to no registry. Import refuses to overwrite an inventory or
+projection with different project data. There is no project-registry path
+override.
 
 The rest are environment-only, because each is either a one-shot switch or
 belongs to a process rather than to an installation:
