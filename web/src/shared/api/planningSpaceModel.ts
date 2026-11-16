@@ -14,7 +14,7 @@ export const SPACE_KEY = /^[A-Z][A-Z0-9]{1,7}$/u
 export const TITLE = /^[^\u{0}]{1,200}$/u
 
 /** Where an agent launched from one of the space's cards works. */
-const LAUNCH_PLACES = ['space', 'item_project'] as const
+export const LAUNCH_PLACES = ['space', 'item_project'] as const
 
 const spaceProjectSchema = strictObject({
   project_id: boundedText(PROJECT_ID, 160),

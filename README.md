@@ -768,6 +768,17 @@ Turn it on under Settings → General → Interface, on each device you use; it 
 effect at once. With the tab off, a card does not offer launching and does not read
 attempts, and launching itself keeps working as described here.
 
+The dialog suggests the directory a launch runs in by the space's launch place,
+`space` by default. With `space` it is the space's root, the root of its default
+project. With `item_project` it is the root of the card's project when the card
+names exactly one, even a project of another space; with none or several it is
+the space's root, since a set of projects has no first one. A goal or stage
+always takes the space's root. The launch place is the owner's setting,
+written through `POST /api/planning/space/settings` with `{space, launch_place}`;
+no planning tool writes it. The attempt records the project of that root as its
+`project_id`. Each claim answers with the root of every project the card changes
+(`project_roots`), so the agent reads each one's instructions before editing there.
+
 The launch dialog records a delivery contract, not just a command: an
 `expected_effect` (`change_required`, `no_change_acceptable` or
 `read_only_finding`), an optional review mode, and an interface version.

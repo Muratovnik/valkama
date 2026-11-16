@@ -79,6 +79,29 @@ item whose comment told this one), and `text`, cut at 300 characters;
 `from_person_omitted` counts the earlier ones. Each event is told once, to
 whichever agent writes to the item next.
 
+An answer where a claim began or held the item -- `claim_work_item`,
+`claim_ready_work_item`, and `create_work_item` or `apply_work_item_changes` with
+`claim: true` -- carries `project_roots`: for each project the task changes, or
+its space's default project when it names none, `project_id`, `display_name`,
+`root` and `status`: `mapped`, `missing` (no directory at the root),
+`unregistered` (the registry no longer records it) or `unavailable` (the registry
+was not read, so `root` and `display_name` are null). The projects of the item's
+space come first, its default one before the others, then the rest, each part by
+id. The claim does not depend on them.
+
+## Claude Code's auto mode
+
+Valkama calls may share a response with any other
+tool. Valkama's hook records which session makes each call and leaves the call as
+you wrote it, so auto mode reviews every call in the response. An older Valkama
+release added your session to the input of each Valkama call instead, and a call
+beside it that needed the review then got no verdict: it failed with "another call
+in this response was changed by a hook", which says nothing about the failed call.
+If you see that failure, the older release is still installed: issue the failed
+call again exactly as it was, and for the rest of the session send Valkama calls in
+a response of their own, with the other tools in the next one. Another client or
+permission mode needs no such care.
+
 ## Creating an item
 
 `create_work_item` takes `space`, `title`, and optionally `description`,

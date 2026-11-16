@@ -4,7 +4,7 @@ The store keeps a space's name, key and launch place; which projects it holds, a
 which of them is its default, are the registry's. Every reader that shows a space
 adds them: the tools, the HTTP reads, the read model and the spaces stream. A
 registry that was not read knows no projects, which is not the same as none, so
-both fields are then null. A launch reads the space's default project the same way.
+both fields are then null. Where a launch from an item runs is tested beside the claim roots.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface, store
-from server.executions import lifecycle
 from server.planning import api, service, views
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -175,17 +174,6 @@ class RecordTests(SpaceProjectsCase):
             api.handle_get(self.conn, "/api/planning", {"project": ["zeta"]})
         status, model = api.handle_get(self.conn, "/api/planning", {"space": ["HOME"]})
         self.assertEqual((200, "HOME"), (status, model["planning_space"]["key"]))
-
-
-class LaunchProjectTests(SpaceProjectsCase):
-    def test_a_launch_names_the_default_project_of_its_space(self) -> None:
-        spaces = self.listed()
-        self.assertEqual(
-            "zeta", lifecycle._project_id(self.conn, spaces["HOME"]["planning_space_id"])
-        )
-        self.assertEqual("", lifecycle._project_id(self.conn, spaces["BARE"]["planning_space_id"]))
-        self.unreadable()
-        self.assertEqual("", lifecycle._project_id(self.conn, spaces["HOME"]["planning_space_id"]))
 
 
 class ServiceRecordTests(SpaceProjectsCase):

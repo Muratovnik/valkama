@@ -100,7 +100,7 @@ def _launch_reserved(
             conn,
             execution_id=execution_id,
             work_item_id=str(record["work_item_id"]),
-            project_id=_project_id(conn, str(record["planning_space_id"])),
+            project_id=_project_id(conn, str(record["work_item_id"])),
             packet=packet.as_dict(),
             adapter_lineage_id=capabilities_for(packet.client).adapter_lineage_id,
         )
@@ -199,11 +199,11 @@ def _launch_reserved(
     return started
 
 
-def _project_id(conn: sqlite3.Connection, planning_space_id: str) -> str:
-    """The default project the registry binds to this space, or an empty string when
-    it binds none or cannot be read."""
+def _project_id(conn: sqlite3.Connection, work_item_id: str) -> str:
+    """The project of the root a launch from this item runs in, or an empty string
+    when no project is chosen or known (`item_projects.launch_root`)."""
 
-    return item_projects.space_default_project(conn, planning_space_id) or ""
+    return item_projects.launch_root(conn, work_item_id)["project_id"] or ""
 
 
 def _correlation(conn: sqlite3.Connection, execution_id: str, record: dict) -> dict[str, str]:
@@ -217,7 +217,7 @@ def _correlation(conn: sqlite3.Connection, execution_id: str, record: dict) -> d
 
     return {
         "valkama.execution.id": execution_id,
-        "valkama.project.id": _project_id(conn, str(record["planning_space_id"])),
+        "valkama.project.id": _project_id(conn, str(record["work_item_id"])),
         "valkama.planning_space.id": str(record["planning_space_id"]),
         "valkama.work_item.id": str(record["work_item_id"]),
         "valkama.work_item.reference": str(record["reference"]),

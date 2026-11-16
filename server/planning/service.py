@@ -513,6 +513,26 @@ def create_planning_space(conn: sqlite3.Connection, *, name: str, key: str | Non
     return get_planning_space(conn, space["planning_space_id"])
 
 
+def set_launch_place(conn: sqlite3.Connection, space: str, launch_place: object) -> dict:
+    """Choose where a launch from this space's items runs (`item_projects.launch_root`).
+
+    The owner's setting, not an agent's: no planning tool writes it.
+    """
+
+    if launch_place not in model.LAUNCH_PLACES:
+        raise model.PlanningError("launch_place must be " + " or ".join(model.LAUNCH_PLACES))
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    identity = space_identity(conn, space)
+    conn.execute(
+        "UPDATE planning_spaces SET launch_place = ?,"
+        " updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')"
+        " WHERE planning_space_id = ? AND launch_place != ?",
+        (launch_place, identity, launch_place),
+    )
+    return get_planning_space(conn, identity)
+
+
 def _parent_row(
     conn: sqlite3.Connection, space_id: str, parent: str | None, item_id: str | None = None
 ) -> sqlite3.Row | None:

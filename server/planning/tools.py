@@ -623,6 +623,8 @@ TOOLS = [
         " nothing at work stands unheld, and so is taking over a stale claim there. A"
         " released blocked task stays blocked, held by nobody. A transition to any state"
         " but an active or blocked one releases the item already: no release follows it."
+        " The answer names the root of each project the task changes in project_roots:"
+        " read each one's instructions before editing it."
         " The answer carries from_person when"
         " a person acted on the item in the interface since an agent last wrote to it:"
         " their words about this work, to read before the next step.",
@@ -646,6 +648,8 @@ TOOLS = [
         " in apply_work_item_changes's update); priority only breaks a tie. A goal, a stage"
         " and deferred work are never taken. The claim starts the item"
         " as claim_work_item does, so it answers in its active state with started."
+        " The answer names the root of each project the task changes in project_roots:"
+        " read each one's instructions before editing it."
         " Answers with nothing when no task is workable.",
         WRITES,
         {"space": _SPACE, "author": _AUTHOR},
@@ -1308,6 +1312,35 @@ def _told(
     return run
 
 
+def _rooted(
+    write: Callable[[sqlite3.Connection, Mapping[str, object]], object],
+    claims: Callable[[Mapping[str, object]], bool],
+) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
+    """A write whose claim began or held the item answers with its `project_roots`.
+
+    The roots are what the agent reads each project's instructions from before it
+    edits there, and they are named where the claim is, short answer or verbose.
+    The HTTP boundary answers without them: a browser does not edit a checkout.
+    """
+
+    def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+        answer = write(conn, arguments)
+        if not claims(arguments) or not isinstance(answer, dict):
+            return answer
+        item = answer.get("work_item", answer)
+        if not isinstance(item, dict) or not isinstance(item.get("work_item_id"), str):
+            return answer
+        return {**answer, "project_roots": item_projects.project_roots(conn, item["work_item_id"])}
+
+    return run
+
+
+def _claim_asked(arguments: Mapping[str, object]) -> bool:
+    """Whether a creation or a batch names `claim: true`, its one claim group."""
+
+    return arguments.get("claim") is True
+
+
 def _claim_ready(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     """The item the queue handed over, whole: the agent needs the item it just took."""
 
@@ -1570,8 +1603,9 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     "list_planning_spaces": _get("/api/planning/spaces"),
     "get_planning_space": _space,
     "create_planning_space": _post("/api/planning/spaces"),
-    "create_work_item": _with_similar(
-        _acknowledged("/api/planning/work-items", acknowledgements.created)
+    "create_work_item": _rooted(
+        _with_similar(_acknowledged("/api/planning/work-items", acknowledgements.created)),
+        _claim_asked,
     ),
     "get_work_item": _work_item,
     "read_work_item_image": _image,
@@ -1591,14 +1625,17 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     ),
     "get_work_item_chain": _chain,
     "search_work_items": _listing(_search),
-    "claim_work_item": _acknowledged("/api/planning/work-item/claim", acknowledgements.claimed),
-    "claim_ready_work_item": _claim_ready,
+    "claim_work_item": _rooted(
+        _acknowledged("/api/planning/work-item/claim", acknowledgements.claimed),
+        lambda arguments: arguments.get("release") is not True,
+    ),
+    "claim_ready_work_item": _rooted(_claim_ready, lambda _arguments: True),
     "claim_work_item_checklist_item": _acknowledged(
         "/api/planning/work-item/checklist/claim", acknowledgements.step_changed
     ),
     "merge_work_items": _acknowledged("/api/planning/work-item/merge", acknowledgements.merged),
-    "apply_work_item_changes": _acknowledged(
-        "/api/planning/work-item/apply", acknowledgements.applied
+    "apply_work_item_changes": _rooted(
+        _acknowledged("/api/planning/work-item/apply", acknowledgements.applied), _claim_asked
     ),
     "delete_work_item": _post("/api/planning/work-item/delete"),
     "create_work_item_request": _post("/api/planning/work-item/request"),

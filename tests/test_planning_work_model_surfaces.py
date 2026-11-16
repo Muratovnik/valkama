@@ -241,6 +241,7 @@ HTTP_READS: dict[str, list[Args]] = {
 }
 HTTP_WRITES: dict[str, list[Args]] = {
     "/api/planning/spaces": [lambda _case: {"name": "Other", "key": "OX"}],
+    "/api/planning/space/settings": [lambda _case: {"space": KEY, "launch_place": "item_project"}],
     "/api/planning/work-items": [
         lambda case: {"space": KEY, "title": "Under the goal", "parent": case.refs["G"]},
         _Accepting(

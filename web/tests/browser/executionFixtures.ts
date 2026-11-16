@@ -72,6 +72,8 @@ export const executionCapabilities = {
   max_prompt_chars: 8000,
   repository: 'C:/work/valkama',
   repository_status: 'mapped',
+  repository_project: 'valkama',
+  launch_place: 'space',
 }
 
 /** One finished attempt, with the evidence half a reported delivery is checked against. */

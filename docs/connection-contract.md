@@ -113,11 +113,21 @@ changed. `url` is described in [The address of a work item](#the-address-of-a-wo
 
 | Tool | Also carries |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
-| `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
+| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
+| `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)); `project_roots` unless it released |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items |
+| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim` |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
+
+`project_roots` is the root of each project the claimed task changes, or of its
+space's default project when it names none: a list of `{project_id, display_name,
+root, status}`, `status` one of `mapped`, `missing` (no directory at the root),
+`unregistered` (the registry no longer records the project) and `unavailable` (the
+registry was not read; `root` and `display_name` are then null, and a task that
+names no project has an empty list). The projects of the task's space come first,
+its default project before the others, then every other project, each part by
+`project_id`; with an unread registry all come by `project_id`. The claim does not
+check them. `claim_ready_work_item` carries it beside the `work_item` it took.
 
 A comment the batch wrote is named in `applied` by its `comment_id`, and the
 `reply_to` and `reply_to_request` of the root a reply landed under; a resolved

@@ -825,6 +825,14 @@ def _space(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return shown
 
 
+def _space_settings(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """The owner's settings of one space, answered with the space record."""
+
+    changed = service.set_launch_place(conn, _text(payload, "space"), payload.get("launch_place"))
+    (shown,) = item_projects.spaces_shown(conn, [changed])
+    return shown
+
+
 def _author(payload: Mapping[str, object]) -> str | None:
     """The author the payload names, or the one its call implies.
 
@@ -1177,6 +1185,7 @@ def _run_steps(
 
 _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] = {
     "/api/planning/spaces": _space,
+    "/api/planning/space/settings": _space_settings,
     "/api/planning/work-items": _create,
     "/api/planning/work-item/update": _update,
     "/api/planning/work-item/delete": _delete,

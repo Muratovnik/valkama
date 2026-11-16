@@ -23,7 +23,8 @@ import {
   z,
 } from '@/shared/api/contract.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
-import { enumField, invalid, ISO } from '@/shared/api/platformApiGuards.ts'
+import { LAUNCH_PLACES } from '@/shared/api/planningSpaceModel.ts'
+import { enumField, invalid, ISO, PROJECT_ID } from '@/shared/api/platformApiGuards.ts'
 
 const EXECUTION_API = 'valkama-execution-api' as const
 
@@ -92,10 +93,13 @@ const capabilitiesSchema = strictObject({
   review_modes: boundedList(blank(40), 10),
   review_verdicts: z.record(z.string(), boundedList(boundedText(NAME, 40), 10)),
   max_prompt_chars: positiveInt(),
-  // Where a launch for the named item would run, according to the registry that
-  // maps its space. The status travels with it so a blank field can say why.
+  // Where a launch for the named item would run: the root its space's launch
+  // place chooses, as the registry maps it. The status travels with it so a blank
+  // field can say why; the project and the launch place are null with no item.
   repository: blank(512),
   repository_status: boundedText(NAME, 32),
+  repository_project: boundedText(PROJECT_ID, 160).nullable(),
+  launch_place: enumField(LAUNCH_PLACES).nullable(),
 })
 
 const dispositionSchema = strictObject({

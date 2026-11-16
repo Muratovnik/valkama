@@ -58,6 +58,8 @@ splitting one, or handing items to other agents.
    the holder when someone else has the item. It also starts the work: a task
    in a triage, deferred or ready state moves to the first active state, and the
    acknowledgement's `started` says so. Send no separate transition to start.
+   The answer's `project_roots` names the root of each project the task changes:
+   read each one's instructions before you edit it.
    A goal or stage is never claimed: claim a task under it.
 
 The holder is the session your client proved, written as
@@ -110,15 +112,8 @@ that existed before the call; `applied` lists the ids of the comments and
 questions the call wrote.
 
 **Claude Code's auto mode.** Valkama calls may share a response with any other
-tool. Valkama's hook records which session makes each call and leaves the call as
-you wrote it, so auto mode reviews every call in the response. An older Valkama
-release added your session to the input of each Valkama call instead, and a call
-beside it that needed the review then got no verdict: it failed with "another call
-in this response was changed by a hook", which says nothing about the failed call.
-If you see that failure, the older release is still installed: issue the failed
-call again exactly as it was, and for the rest of the session send Valkama calls in
-a response of their own, with the other tools in the next one. Another client or
-permission mode needs no such care.
+tool. A call that failed with "another call in this response was changed by a
+hook": see [the tool reference](references/tools.md#claude-codes-auto-mode).
 
 **Refs.** The `refs` group records a `commit`, a `memory` record id materially
 used, or a `url`. Your own session needs no ref: Valkama records every write's.
@@ -280,11 +275,12 @@ an address there is one more thing to go stale.
 
 **Naming a file.** In a description, a comment, a report, a summary, a question or
 an option's description, name a file or folder of the project as a Markdown link
-to its path from the root of the space's project, with a label that says what it
-is: `docs/plan.md#kb:a7f3`, `src/parse.ts:42`, `docs/plans/`. Valkama opens a
-Markdown file in its own viewer at the `#kb:…` anchor, heading or `:42` line the
-link names, another file in the owner's editor at that line, and a folder in the
-editor. A whole path in backticks works too; a label reads better.
+to its path from the root of the item's space (its default project's root), with
+a label that says what it is: `docs/plan.md#kb:a7f3`, `src/parse.ts:42`,
+`docs/plans/`. Valkama opens a Markdown file in its own viewer at the `#kb:…`
+anchor, heading or `:42` line the link names, another file in the owner's editor
+at that line, and a folder in the editor. A whole path in backticks works too; a
+label reads better.
 Write a path from that root, not from your working folder or another repository:
 a relative path is looked for there first, and in the projects registered inside
 it only when the root has nothing there. Use an absolute path only where there
