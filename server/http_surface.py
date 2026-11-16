@@ -348,11 +348,13 @@ class _Boundary(NamedTuple):
     after_commit: Callable[[_Call], None] | None = None
 
 
-#: Only an extensionless canonical Platform route shape receives `index.html`.
-#: Which shapes those are is the Kernel's word; whether a path that matches one
-#: gets the shell is this surface's, which is why the decision lives here and
-#: the pattern reads like the routes above it.
-_SPA_ROUTE = re.compile(r"^/modules/[a-z][a-z0-9-]{0,63}/(?:global|project/[a-z][a-z0-9-]{0,159})$")
+#: Any extensionless path under one module receives `index.html`. Which paths
+#: name a place is the web app's word, read where it parses the address, so an
+#: address the app no longer accepts still opens the shell and the shell says why:
+#: a 404 from here would come before the app could. What stays this surface's is
+#: the bound: a module id, then a few segments of letters, digits and hyphens, so
+#: no dot, no file name and no climb out of the path reach the shell.
+_SPA_ROUTE = re.compile(r"^/modules/[a-z][a-z0-9-]{0,63}(?:/[A-Za-z0-9-]{1,160}){1,6}$")
 
 
 def _is_spa_route(path: str) -> bool:
@@ -370,11 +372,13 @@ _WORK_ITEM_LINK = "/open"
 #: page takes the parameter out of the address as it opens the panel, so a reload after
 #: the panel was closed does not bring it back.
 _QUESTIONS_ROUTE = "/modules/planning/global?panel=questions"
-#: All a work item link may redirect to: one card, which may also ask for its waiting
-#: question, or the panel of questions, on this origin. Spelled whole rather than parsed,
-#: because a URL parser quietly drops the line breaks a response header must never carry.
+#: All a work item link may redirect to: one card in its space, named by the store and
+#: the key, which may also ask for its waiting question, or the panel of questions, on
+#: this origin. Spelled whole rather than parsed, because a URL parser quietly drops the
+#: line breaks a response header must never carry.
 _CARD_ROUTE = re.compile(
-    r"(?:/modules/planning/project/[a-z][a-z0-9-]{0,159}\?entity=[A-Za-z0-9_-]+"
+    r"(?:/modules/planning/space/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    r"/[A-Z][A-Z0-9]{1,7}\?entity=[A-Za-z0-9_-]+"
     r"(?:&reveal=question)?"
     r"|/modules/planning/global\?panel=questions)"
 )
@@ -1573,8 +1577,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if view == "planning":
                     if exact_parameters is not None:
-                        # A fresh routing on every push: a binding moved while the
-                        # stream is open refuses here and closes the stream.
+                        # A fresh routing on every push: a space that went away while
+                        # the stream is open refuses here and closes the stream.
                         model = PlanningRouting(conn, db_path()).planning_read_model(
                             exact_parameters,
                             lambda selected, key: planning_views.planning_payload(

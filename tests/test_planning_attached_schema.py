@@ -78,8 +78,13 @@ class AttachedSchemaCase(unittest.TestCase):
         self.stores = 0
 
     def attach(self, path: Path) -> dict:
-        """Attach this file and bind the project to its KEEP space."""
+        """Attach this file alone and bind the project to its KEEP space.
 
+        Every space of every attached store is read, so a store an earlier subtest
+        attached is detached first rather than answering for KEEP as well.
+        """
+
+        scopes.save(str(self.primary), [])
         scopes.attach(str(self.primary), path.stem, str(path))
         with contextlib.closing(sqlite3.connect(path)) as conn:
             conn.row_factory = sqlite3.Row
@@ -128,9 +133,7 @@ class AttachedSchemaCase(unittest.TestCase):
         return response.status, response.read().decode("utf-8")
 
     def card(self, space_ref: dict, reference: str = "KEEP-1") -> tuple[int, str]:
-        query = urlencode(
-            {"scope_kind": "project", "project_id": "kept", "reference": reference, **space_ref}
-        )
+        query = urlencode({"scope_kind": "space", "reference": reference, **space_ref})
         return self.read(f"/api/modules/planning/work-item?{query}")
 
     def board(self, space_ref: dict) -> tuple[int, str]:
@@ -171,13 +174,13 @@ class HttpTests(AttachedSchemaCase):
 
         for name, fixture in FIXTURES.items():
             with self.subTest(store=name):
-                self.attached_older(fixture)
+                _path, space_ref = self.attached_older(fixture)
                 response = self.raw("/open/KEEP-1?in=browser")
                 response.read()
                 self.assertEqual(302, response.status)
                 self.assertTrue(
                     (response.getheader("Location") or "").startswith(
-                        "/modules/planning/project/kept?entity="
+                        f"/modules/planning/space/{space_ref['data_scope_id']}/KEEP?entity="
                     )
                 )
                 missing = self.raw("/open/KEEP-99?in=browser")
@@ -199,7 +202,7 @@ class HttpTests(AttachedSchemaCase):
         for name, fixture in FIXTURES.items():
             with self.subTest(store=name):
                 _path, space_ref = self.attached_older(fixture)
-                query = urlencode({"scope_kind": "project", "project_id": "kept", **space_ref})
+                query = urlencode({"scope_kind": "space", **space_ref})
                 status, body = self.read(f"/api/platform/planning?{query}")
                 self.assertEqual(200, status, body)
                 [space] = json.loads(body)["state"]["payload"]["planning_spaces"]
@@ -209,12 +212,20 @@ class HttpTests(AttachedSchemaCase):
                 self.assertEqual(200, status, body)
                 found = json.loads(body)
                 self.assertEqual(["KEEP-1"], [hit["item"]["reference"] for hit in found["items"]])
-                self.assertEqual(["searched"], [source["status"] for source in found["coverage"]])
+                # The primary store's own space is searched too, and holds no match.
+                self.assertEqual(
+                    [("OWN", "searched"), ("KEEP", "searched")],
+                    [
+                        (source["space_ref"]["space_key"], source["status"])
+                        for source in found["coverage"]
+                    ],
+                )
 
                 status, body = self.read("/api/modules/planning/requests?scope_kind=global")
                 self.assertEqual(200, status, body)
                 self.assertEqual(
-                    ["searched"], [source["status"] for source in json.loads(body)["coverage"]]
+                    ["searched", "searched"],
+                    [source["status"] for source in json.loads(body)["coverage"]],
                 )
 
     def test_the_last_public_release_s_store_keeps_its_board(self) -> None:

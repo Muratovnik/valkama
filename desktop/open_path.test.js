@@ -13,11 +13,11 @@ const {
   saysItListens,
 } = require('./open_path')
 
-// A route worked out by hand from the grammar; tests/test_work_item_link.py holds
-// the same literal and web/tests/platformRoute.test.ts reads it with the browser's
-// parser, so all three languages agree on one spelling without sharing code.
+// A route worked out by hand from the grammar: card MAIN-12 in the space MAIN of the
+// store 01234567-89ab-4def-8123-456789abcdef. tests/test_work_item_link.py holds the
+// same literal, so the two languages agree on one spelling without sharing code.
 const ROUTE =
-  '/modules/planning/project/example-project?entity=' +
+  '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?entity=' +
   'eyJraW5kIjoid29yay1pdGVtIiwicmVzb3VyY2VfaWQiOiJleUp5WldabGNtVnVZMlVpT2lKTlFVbE9MVEV5SWl3aWMz' +
   'QmhZMlZmY21WbUlqcDdJbVJoZEdGZmMyTnZjR1ZmYVdRaU9pSXdNVEl6TkRVMk55MDRPV0ZpTFRSa1pXWXRPREV5TXkw' +
   'ME5UWTNPRGxoWW1Oa1pXWWlMQ0p6Y0dGalpWOXJaWGtpT2lKTlFVbE9JbjE5In0'
@@ -47,18 +47,23 @@ test('anything but one card route on this origin is ignored', () => {
     '/',
     '/open/MAIN-12',
     '/modules/planning/global',
-    '/modules/planning/project/example-project',
-    '/modules/planning/project/example-project?entity=',
+    '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN',
+    '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?entity=',
     '/modules/settings/global?entity=abc',
-    '//evil.example/modules/planning/project/example-project?entity=abc',
-    'https://evil.example/modules/planning/project/example-project?entity=abc',
+    // The address a card had before a space became the scope.
+    '/modules/planning/project/example-project?entity=abc',
+    '//evil.example/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?entity=abc',
+    'https://evil.example/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?entity=abc',
     'javascript:alert(1)',
-    '/modules/planning/project/../../api/doctor?entity=abc',
-    '/modules/planning/project/Example?entity=abc',
-    '/modules/planning/project/example-project?entity=abc&other=1',
-    '/modules/planning/project/example-project?entity=abc#//evil.example',
-    '/modules/planning/project/example-project?entity=abc\r\nHost: evil.example',
-    '/modules/planning/project/example-project?entity=abc\n',
+    '/modules/planning/space/../../api/doctor?entity=abc',
+    '/modules/planning/space/01234567-89AB-4DEF-8123-456789ABCDEF/MAIN?entity=abc',
+    '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/main?entity=abc',
+    '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef?entity=abc',
+    '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN/project/example-project?entity=abc',
+    '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?entity=abc&other=1',
+    '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?entity=abc#//evil.example',
+    '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?entity=abc\r\nHost: evil.example',
+    '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?entity=abc\n',
     ` ${ROUTE}`,
     `${ROUTE} `,
   ]) {
@@ -146,7 +151,7 @@ test('the listener may ask for the question on the route it hands to the app', (
     `${ROUTE}&reveal=question&reveal=question`,
     `${ROUTE}&reveal=question\n`,
     '/modules/planning/global?panel=questions&reveal=question',
-    '/modules/planning/project/example-project?reveal=question',
+    '/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN?reveal=question',
   ]) {
     assert.equal(openPathFromArgv(['Valkama.exe', `--open-path=${refused}`]), null, refused)
   }

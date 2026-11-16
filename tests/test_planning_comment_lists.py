@@ -284,8 +284,7 @@ class WaitsForNobodyTests(Harness):
 
     def scoped(self, **extra: str) -> dict[str, str]:
         return {
-            "scope_kind": "project",
-            "project_id": "p",
+            "scope_kind": "space",
             "data_scope_id": self.space_ref["data_scope_id"],
             "space_key": "MAIN",
             **extra,

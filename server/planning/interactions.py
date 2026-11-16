@@ -1,7 +1,10 @@
 """Mapped Planning search and human-request transport contracts.
 
 Each operation reaches a store only through `PlanningRouting`, so a search or a
-request names an exact project binding and never a key-only space.
+request names an exact space, by its store and its key, and never a key alone. A
+source is one space: every space of the primary store and of each attached store,
+and each space the registry binds a project to in a store that cannot be read,
+which a search names as skipped rather than leaves out.
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ import sqlite3
 from collections.abc import Collection, Mapping
 
 from ..projects import project_registry, scopes
-from ..store_identity.metadata import ScopeError, read_store_metadata
+from ..store_identity.metadata import ScopeError
 from ..store_identity.primitives import ContractError
 from ..store_identity.refs import (
     planning_space_ref,
@@ -46,31 +49,36 @@ def _limit(parameters: Mapping[str, list[str]], default: int) -> int:
     return int(raw[0])
 
 
-def _target(routing: PlanningRouting, project_id: str, space_ref: dict, reference: str) -> dict:
+def _target(routing: PlanningRouting, space_ref: dict, reference: str) -> dict:
     return {
-        "project_id": project_id,
         "space_ref": space_ref,
         "reference": reference,
         "writable": space_ref["data_scope_id"] == routing.metadata["data_scope_id"],
     }
 
 
-def _resources(routing: PlanningRouting) -> list[tuple[str, dict]]:
-    if routing.projects_result["status"] != "available":
+def _resources(routing: PlanningRouting) -> list[dict]:
+    """Every source, once: the readable spaces, then the bound spaces no store here holds.
+
+    The primary store's spaces come first, so its item leads a search before an
+    attached store's item of the same reference.
+    """
+
+    if not routing.registry_available:
         raise api.PlanningHttpError(409, "unavailable", "project_registry_unavailable")
-    result = []
+    result = routing.present_spaces()
+    absent = []
     for project in routing.projects:
         binding = project.get("planning_binding")
         if binding is None:
             continue
         try:
-            entity = project_registry.binding_entity(binding)
-            result.append((project["project_id"], planning_space_ref(entity)))
+            space_ref = planning_space_ref(project_registry.binding_entity(binding))
         except (ContractError, KeyError, TypeError) as error:
             raise api.PlanningHttpError(409, "unavailable", "planning_binding_invalid") from error
-    return sorted(
-        result, key=lambda pair: (pair[0], pair[1]["data_scope_id"], pair[1]["space_key"])
-    )
+        if routing.unavailable_reason(space_ref) is not None and space_ref not in absent:
+            absent.append(space_ref)
+    return result + sorted(absent, key=lambda ref: (ref["data_scope_id"], ref["space_key"]))
 
 
 def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
@@ -82,12 +90,11 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
     coverage: list[dict] = []
     seen: set[tuple[str, str, str]] = set()
     more = False
-    for project_id, space_ref in _resources(routing):
+    for space_ref in _resources(routing):
         entry: dict = {
-            "project_id": project_id,
             "space_ref": space_ref,
             "status": "unavailable",
-            "reason": routing.unavailable_reason(project_id, space_ref),
+            "reason": routing.unavailable_reason(space_ref),
         }
         if entry["reason"] is not None:
             coverage.append(entry)
@@ -96,7 +103,7 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
         # between the two reads, or it answers a search this build cannot ask.
         entry["reason"] = "store_unreadable"
         try:
-            with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+            with routing.planning_store(_store_parameters(space_ref)) as (conn, _key):
                 entry["reason"] = "search_failed"
                 found = service.search_work_items(
                     conn, query, space=space_ref["space_key"], limit=limit + 1
@@ -113,7 +120,7 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
                     seen.add(identity)
                     items.append(
                         {
-                            "target": _target(routing, project_id, space_ref, item["reference"]),
+                            "target": _target(routing, space_ref, item["reference"]),
                             "item": {
                                 "work_item_id": item["work_item_id"],
                                 "planning_space_id": item["planning_space_id"],
@@ -154,8 +161,8 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
 def _exact_first(query: str, items: list[dict]) -> list[dict]:
     """The item a query names exactly ahead of the rest, before the page is cut.
 
-    Sources are read project by project, so without this the item `MAIN-12`
-    came after every item of an earlier project that merely mentions it. The
+    Sources are read space by space, so without this the item `MAIN-12`
+    came after every item of an earlier space that merely mentions it. The
     primary store's item leads, an attached store's item of the same reference
     follows it, and every other match keeps the order it was read in. A number
     alone names each source's item of that number: each source puts its own
@@ -177,12 +184,12 @@ def _exact_first(query: str, items: list[dict]) -> list[dict]:
 def work_item_location(routing: PlanningRouting, text: str) -> str | None:
     """The card route of the item a text names, or None when it names no such item.
 
-    The space is the reference's own prefix, read through the project that binds
-    it, and the primary store answers before an attached store with the same key,
-    as a search ranks them. Nothing the text says reaches the route but a
-    reference the grammar accepted and a store confirmed; the route's other parts
-    come from the registry. Why a text led nowhere is the page's to say: it asks
-    the mapped search, which names every source it read and every one it could not.
+    The space is the reference's own prefix, and the primary store answers before
+    an attached store with the same key, as a search ranks them. Nothing the text
+    says reaches the route but a reference the grammar accepted and a store
+    confirmed; the route's other parts are the store's identity and the key. Why a
+    text led nowhere is the page's to say: it asks the mapped search, which names
+    every source it read and every one it could not.
     """
 
     reference = model.exact_reference(text)
@@ -190,20 +197,21 @@ def work_item_location(routing: PlanningRouting, text: str) -> str | None:
         return None
     key = reference.rsplit("-", 1)[0]
     primary = routing.metadata["data_scope_id"]
-    sources = [source for source in _resources(routing) if source[1]["space_key"] == key]
-    for project_id, space_ref in sorted(
-        sources, key=lambda source: source[1]["data_scope_id"] != primary
-    ):
-        if routing.unavailable_reason(project_id, space_ref) is not None:
+    sources = [source for source in _resources(routing) if source["space_key"] == key]
+    for space_ref in sorted(sources, key=lambda source: source["data_scope_id"] != primary):
+        if routing.unavailable_reason(space_ref) is not None:
             continue
-        with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+        with routing.planning_store(_store_parameters(space_ref)) as (conn, _key):
             # Only whether it is there: the card's own read says if it cannot be read.
             try:
                 read_model.item_row(conn, reference)
             except (ValueError, KeyError):
                 continue
         entity = planning_work_item_entity({"space_ref": space_ref, "reference": reference})
-        return f"/modules/planning/project/{project_id}?entity={route_entity_parameter(entity)}"
+        return (
+            f"/modules/planning/space/{space_ref['data_scope_id']}/{space_ref['space_key']}"
+            f"?entity={route_entity_parameter(entity)}"
+        )
     return None
 
 
@@ -228,10 +236,8 @@ def _present_in(conn: sqlite3.Connection, pairs: list[tuple[str, int]]) -> set[s
     return {f"{row[0]}-{row[1]}" for row in rows}
 
 
-def _attached_present(
-    primary_db: str, pairs: list[tuple[str, int]], scopes_of_key: Mapping[str, set[str]]
-) -> set[str]:
-    """What the attached stores bound to these keys hold; one unreadable holds nothing."""
+def _attached_present(primary_db: str, pairs: list[tuple[str, int]]) -> set[str]:
+    """What the attached stores hold of these pairs; one unreadable holds nothing."""
 
     try:
         attached = [item for item in scopes.load(primary_db) if not item.get("primary")]
@@ -242,10 +248,7 @@ def _attached_present(
         try:
             store = scopes.open_readonly(item)
             try:
-                scope = read_store_metadata(store)["data_scope_id"]
-                found |= _present_in(
-                    store, [pair for pair in pairs if scope in scopes_of_key[pair[0]]]
-                )
+                found |= _present_in(store, pairs)
             finally:
                 store.close()
         except (sqlite3.Error, scopes.ScopeError, ScopeError):
@@ -259,53 +262,38 @@ def existing_references(
     """Which of these references `work_item_location` leads to a card, read together.
 
     The same rule without its per-reference cost, for a caller holding many candidates
-    and a client waiting: the registry binds the space, and the store it names holds
-    the item. The primary store answers in one statement. An attached store is opened
-    only when a candidate's key is bound to one, so a key nobody binds costs no file.
+    and a client waiting: the registry is readable, and a store here holds the item.
+    The primary store answers in one statement. An attached store is opened only for
+    a candidate the primary store does not hold, so with every candidate at home no
+    other file is touched.
     """
 
-    registry = project_registry.read_registry()
-    if registry["status"] != "available":
+    if project_registry.read_registry()["status"] != "available":
         return set()
-    scopes_of_key: dict[str, set[str]] = {}
-    for project in registry["projects"]:
-        binding = project_registry.binding_entity(project.get("planning_binding"))
-        if binding is not None:
-            space_ref = planning_space_ref(binding)
-            scopes_of_key.setdefault(space_ref["space_key"], set()).add(space_ref["data_scope_id"])
     pairs = [
-        (key, int(number))
-        for key, number in (reference.rsplit("-", 1) for reference in references)
-        if key in scopes_of_key
+        (key, int(number)) for key, number in (reference.rsplit("-", 1) for reference in references)
     ]
     if not pairs:
         return set()
-    primary_scope = read_store_metadata(primary)["data_scope_id"]
-    found = _present_in(
-        primary, [pair for pair in pairs if primary_scope in scopes_of_key[pair[0]]]
-    )
-    outstanding = [
-        pair
-        for pair in pairs
-        if scopes_of_key[pair[0]] - {primary_scope} and f"{pair[0]}-{pair[1]}" not in found
-    ]
+    found = _present_in(primary, pairs)
+    outstanding = [pair for pair in pairs if f"{pair[0]}-{pair[1]}" not in found]
     if outstanding:
-        found |= _attached_present(primary_db, outstanding, scopes_of_key)
+        found |= _attached_present(primary_db, outstanding)
     return found
 
 
-def _exact_parameters(parameters: Mapping[str, list[str]], extras: set[str]) -> tuple[str, dict]:
-    required = {"scope_kind", "project_id", "data_scope_id", "space_key", *extras}
-    if set(parameters) != required or _one(parameters, "scope_kind") != "project":
-        raise api.PlanningHttpError(400, "invalid_request", "exact_project_fields_required")
-    project_id = _one(parameters, "project_id")
-    space_ref = validate_planning_space_ref(
+def _exact_parameters(parameters: Mapping[str, list[str]], extras: set[str]) -> dict:
+    """The space an exact request names: `scope_kind=space`, its store and its key."""
+
+    required = {"scope_kind", "data_scope_id", "space_key", *extras}
+    if set(parameters) != required or _one(parameters, "scope_kind") != "space":
+        raise api.PlanningHttpError(400, "invalid_request", "exact_space_fields_required")
+    return validate_planning_space_ref(
         {
             "data_scope_id": _one(parameters, "data_scope_id"),
             "space_key": _one(parameters, "space_key"),
         }
     )
-    return project_id, space_ref
 
 
 def _request_item(conn: sqlite3.Connection, record: dict, key: str) -> None:
@@ -326,14 +314,14 @@ def _capability(conn: sqlite3.Connection) -> None:
 
 
 def request_detail(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
-    project_id, space_ref = _exact_parameters(parameters, {"id"})
-    with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+    space_ref = _exact_parameters(parameters, {"id"})
+    with routing.planning_store(_store_parameters(space_ref)) as (conn, _key):
         _capability(conn)
         record = requests.get(conn, _one(parameters, "id"))
         _request_item(conn, record, space_ref["space_key"])
     return {
         "interface_version": "valkama-planning-requests",
-        "target": _target(routing, project_id, space_ref, record["reference"]),
+        "target": _target(routing, space_ref, record["reference"]),
         "request": record,
     }
 
@@ -354,22 +342,17 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
         resources = _resources(routing)
     else:
         reference = _one(scoped, "reference") if "reference" in scoped else None
-        project_id, space_ref = _exact_parameters(
-            scoped, {"reference"} if reference is not None else set()
-        )
-        resources = [(project_id, space_ref)]
+        space_ref = _exact_parameters(scoped, {"reference"} if reference is not None else set())
+        resources = [space_ref]
     items: list[dict] = []
     coverage: list[dict] = []
     seen: set[tuple[str, str]] = set()
     more = False
-    for project_id, space_ref in resources:
+    for space_ref in resources:
         # A global read names why a source was skipped; an exact one refuses
         # below with the routing's own answer instead.
-        skipped = (
-            routing.unavailable_reason(project_id, space_ref) if scope_kind == "global" else None
-        )
+        skipped = routing.unavailable_reason(space_ref) if scope_kind == "global" else None
         entry: dict = {
-            "project_id": project_id,
             "space_ref": space_ref,
             "status": "unavailable",
             "reason": skipped or "requests_unavailable",
@@ -378,7 +361,7 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
             coverage.append(entry)
             continue
         try:
-            with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+            with routing.planning_store(_store_parameters(space_ref)) as (conn, _key):
                 _capability(conn)
                 # Without an item this is what waits for the person, and a list on a
                 # comment waits for nobody: it is read with its item, under its comment.
@@ -397,9 +380,7 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
                         seen.add(identity)
                         items.append(
                             {
-                                "target": _target(
-                                    routing, project_id, space_ref, record["reference"]
-                                ),
+                                "target": _target(routing, space_ref, record["reference"]),
                                 "request": record,
                             }
                         )
@@ -422,7 +403,7 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
 
 
 def request_command(routing: PlanningRouting, path: str, payload: dict) -> dict:
-    scope_fields = {"project_id", "data_scope_id", "space_key"}
+    scope_fields = {"data_scope_id", "space_key"}
     base = path == "/api/modules/planning/request"
     operation_fields = (
         {"id", "kind", "prompt", "fields", "author", "execution_id", "session_id", "expires_at"}
@@ -443,14 +424,14 @@ def request_command(routing: PlanningRouting, path: str, payload: dict) -> dict:
             400, "invalid_request", "request body has missing or unknown fields"
         )
     parameters = {key: [payload[key]] for key in scope_fields}
-    parameters["scope_kind"] = ["project"]
+    parameters["scope_kind"] = ["space"]
     with routing.conn:
         if not routing.conn.in_transaction:
             routing.conn.execute("BEGIN IMMEDIATE")
-        project_id, space_ref = _exact_parameters(parameters, set())
+        space_ref = _exact_parameters(parameters, set())
         if space_ref["data_scope_id"] != routing.metadata["data_scope_id"]:
             raise api.PlanningHttpError(409, "unavailable", "attached_store_readonly")
-        with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+        with routing.planning_store(_store_parameters(space_ref)) as (conn, _key):
             _capability(conn)
             operation = {key: value for key, value in payload.items() if key not in scope_fields}
             if base:
@@ -473,7 +454,7 @@ def request_command(routing: PlanningRouting, path: str, payload: dict) -> dict:
             record = answer[1]
     return {
         "interface_version": "valkama-planning-requests",
-        "target": _target(routing, project_id, space_ref, record["reference"]),
+        "target": _target(routing, space_ref, record["reference"]),
         "request": record,
     }
 
@@ -490,9 +471,8 @@ def _one(parameters: Mapping[str, list[str]], name: str) -> str:
     return values[0]
 
 
-def _store_parameters(project_id: str, space_ref: dict) -> dict[str, list[str]]:
+def _store_parameters(space_ref: dict) -> dict[str, list[str]]:
     return {
-        "project": [project_id],
         "data_scope_id": [space_ref["data_scope_id"]],
         "space_key": [space_ref["space_key"]],
     }

@@ -406,7 +406,7 @@ class AnsweredInTheInterfaceTests(Listener):
             "data_scope_id": read_store_metadata(self.conn)["data_scope_id"],
             "space_key": "MAIN",
         }
-        self.scope = {"project_id": "example", **reference}
+        self.scope = dict(reference)
         entry = project_entry("example", self.root)
         entry["planning_binding"] = planning_space_entity(reference)
         registry = registry_bytes([entry])

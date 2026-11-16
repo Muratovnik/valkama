@@ -228,8 +228,7 @@ class PlanningScaleTests(unittest.TestCase):
                         answer = exact_api.work_item_payload(
                             PlanningRouting(conn, db, registry_reader=registry.read_bytes),
                             {
-                                "scope_kind": ["project"],
-                                "project_id": ["example-project"],
+                                "scope_kind": ["space"],
                                 "data_scope_id": [space_ref["data_scope_id"]],
                                 "space_key": ["MAIN"],
                                 "reference": [reference],

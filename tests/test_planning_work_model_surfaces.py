@@ -333,11 +333,11 @@ HTTP_WRITES: dict[str, list[Args]] = {
 def _exact(case: Surfaces, **extra: str) -> dict:
     """The fields that name the space exactly: a read's, and a write's with no kind."""
 
-    return {"project_id": PROJECT, "data_scope_id": case.data_scope_id, "space_key": KEY, **extra}
+    return {"data_scope_id": case.data_scope_id, "space_key": KEY, **extra}
 
 
 def _exact_read(case: Surfaces, **extra: str) -> dict[str, list[str]]:
-    return _query(scope_kind="project", **_exact(case, **extra))
+    return _query(scope_kind="space", **_exact(case, **extra))
 
 
 EXACT_READS: dict[str, list[Args]] = {
@@ -712,7 +712,7 @@ class Surfaces(unittest.TestCase):
         self.assertEqual(set(api.READ_PATHS), set(HTTP_READS))
         self.assertEqual(set(api.WRITE_PATHS), set(HTTP_WRITES))
 
-    def test_every_exact_project_path_is_called(self) -> None:
+    def test_every_exact_space_path_is_called(self) -> None:
         self.assertEqual(set(exact_api.READ_PATHS), set(EXACT_READS))
         self.assertEqual(set(exact_api.WRITE_PATHS), set(EXACT_WRITES))
 
@@ -737,7 +737,7 @@ class Surfaces(unittest.TestCase):
 
         self.each(HTTP_WRITES, write)
 
-    def test_the_exact_project_routes_show_no_service_state(self) -> None:
+    def test_the_exact_space_routes_show_no_service_state(self) -> None:
         def read(conn: sqlite3.Connection, path: str, query: dict) -> object:
             return exact_api.handle_get(
                 conn,

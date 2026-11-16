@@ -6,7 +6,7 @@ questions about the store and knows nothing about who asked:
     store.py        the schema, its migrations, backups and the connection
     store_identity/ which store this is, and the exact refs of what it holds
     planning/       spaces, workflows, work items, links and their events, and
-                    the routing that answers a read for one exact project scope
+                    the routing that answers a read for one exact space scope
     app_shell.py    what the web shell reads first: modules, context, last route
     ui_state.py     the envelope those reads answer in, and its refusal
     executions/     one attempt at a work item: its lifecycle and the drivers

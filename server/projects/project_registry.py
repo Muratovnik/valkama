@@ -196,6 +196,34 @@ def binding_entity(binding: Mapping[str, Any] | None) -> dict[str, str] | None:
     return {"kind": str(binding["kind"]), "resource_id": str(binding["resource_id"])}
 
 
+def space_projects(
+    projects: Iterable[Mapping[str, Any]], space_ref: Mapping[str, Any]
+) -> list[Mapping[str, Any]]:
+    """The projects bound to one planning space: its default first, then the others by id."""
+
+    entity = planning_space_entity(space_ref)
+    return sorted(
+        (project for project in projects if binding_entity(project["planning_binding"]) == entity),
+        key=lambda project: (not project["planning_binding"]["default"], project["project_id"]),
+    )
+
+
+def projects_shown(bound: list[Mapping[str, Any]]) -> dict[str, Any]:
+    """How a space names its projects: the default one's id, and each one's id and name.
+
+    `bound` is `space_projects`' answer, so the default project, which every bound
+    space has, comes first.
+    """
+
+    return {
+        "default_project": str(bound[0]["project_id"]) if bound else None,
+        "projects": [
+            {"project_id": str(project["project_id"]), "display_name": project["display_name"]}
+            for project in bound
+        ],
+    }
+
+
 def foreign_bindings(
     projects: Iterable[Mapping[str, Any]], known: frozenset[str]
 ) -> list[dict[str, Any]]:

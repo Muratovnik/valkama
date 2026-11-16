@@ -20,6 +20,8 @@ from .documents import REF_RESOLVE_TIMEOUT, doc_roots
 from .projects import project_registry
 from .sessions import session_context
 from .store import REF_KINDS, connect
+from .store_identity.primitives import ContractError
+from .store_identity.refs import planning_space_ref
 
 # A recorded commit value may name its repository before the revision, as
 # `repo@abc1234` or `repo abc1234`: a name that starts with a letter or digit,
@@ -44,9 +46,10 @@ def _commit_roots(space: str | None, name: str | None) -> list[str]:
     Every directory comes from the owner's configuration, never from the
     request. First the registered project the value names (`name` matched,
     ignoring case, against a project's id or its directory's name), then the
-    project the registry binds the card's planning space to, then the
-    configured document roots, then every other registered project: a space
-    bound to one repository still carries commits of the others.
+    projects the registry binds the card's planning space to, its default
+    project first and the others by id, then the configured document roots,
+    then every other registered project: a space still carries commits of
+    repositories it does not hold.
 
     `space` is the exact identity of the card's planning space, never a path.
     An identity that does not parse is refused, so a crafted value reaches no
@@ -54,30 +57,34 @@ def _commit_roots(space: str | None, name: str | None) -> list[str]:
     that matches no project only leaves the usual order.
     """
 
-    named: list[str] = []
-    bound: list[str] = []
-    registered: list[str] = []
+    space_ref = None
     if space is not None:
-        mapping = project_registry.resolve_space_root(
-            {"kind": "planning-space", "resource_id": space}
-        )
-        # The registry says "malformed" for a value that does not parse and for
-        # a registry file that does not; only the first is the request's fault.
-        if mapping["status"] == "malformed" and mapping["resource_ref"] is None:
-            raise ValueError("space must be a planning space's exact identity")
-        if mapping["status"] == "mapped":
-            bound.append(str(mapping["canonical_root"]))
+        try:
+            space_ref = planning_space_ref({"kind": "planning-space", "resource_id": space})
+        except ContractError as error:
+            raise ValueError("space must be a planning space's exact identity") from error
     # An unreadable or malformed registry adds no root; the card still shows
     # whatever the other sources find.
-    for project in project_registry.read_registry()["projects"]:
-        root = str(project["canonical_root"])
-        if name is not None and name.lower() in {
+    projects = project_registry.read_registry()["projects"]
+    named = [
+        str(project["canonical_root"])
+        for project in projects
+        if name is not None
+        and name.lower()
+        in {
             project["project_id"].lower(),
-            os.path.basename(os.path.normpath(root)).lower(),
-        }:
-            named.append(root)
-        else:
-            registered.append(root)
+            os.path.basename(os.path.normpath(str(project["canonical_root"]))).lower(),
+        }
+    ]
+    bound = (
+        []
+        if space_ref is None
+        else [
+            str(project["canonical_root"])
+            for project in project_registry.space_projects(projects, space_ref)
+        ]
+    )
+    registered = [str(project["canonical_root"]) for project in projects]
     roots: list[str] = []
     seen: set[str] = set()
     for root in [*named, *bound, *doc_roots(), *registered]:

@@ -214,8 +214,7 @@ class _Scenario:
     def scope(self, **others: str) -> str:
         return urlencode(
             {
-                "scope_kind": "project",
-                "project_id": PROJECT,
+                "scope_kind": "space",
                 "data_scope_id": self.space_ref["data_scope_id"],
                 "space_key": SPACE,
                 **others,
