@@ -353,6 +353,33 @@ class OwnSubagentTests(Harness):
         self.assertIsNone(self.hook(SECOND), "a subagent hears neither its orchestrator nor a1")
         self.assertIsNone(self.hook(CHILD), "nor the reply of its sibling in its thread")
 
+    def test_a_list_on_its_agents_comment_is_no_question_to_the_owner(self) -> None:
+        """Nobody waits on a list: the work does not wait for the owner, so no line says so."""
+
+        self.agent("claim_work_item", AS_CHILD, id=self.held)
+        self.assertIsNotNone(self.hook(), "the claim")
+        options = [{"id": "a", "label": "Keep"}, {"id": "b", "label": "Drop"}]
+        answer = self.agent(
+            "apply_work_item_changes",
+            AS_CHILD,
+            id=self.held,
+            comment={
+                "body": "Tick what to keep, marker L-1",
+                "list": {"label": "Keep", "options": options},
+            },
+        )
+        listed = str(answer["applied"]["comment"]["list_request_id"])
+        self.assertIsNone(self.hook(), "no question_asked by your agent for a list")
+        revision = self.agent("get_work_item_request", AS_CHILD, id=listed)["revision"]
+        self.agent("expire_work_item_request", AS_CHILD, id=listed, expected_revision=revision)
+        self.assertIsNone(self.hook(), "nor question_withdrawn when it is taken back")
+        self.close(AS_CHILD, self.held)
+        told = self.hook()
+        self.told_closed(told, self.held, "Held by B")
+        assert told is not None
+        self.assertNotIn("- question_", told)
+        self.assertNotIn("get_work_item", told, "an own agent's line asks for no read")
+
     def test_past_three_notices_its_agents_work_on_an_item_folds(self) -> None:
         for number in range(1, 4):
             self.agent("claim_work_item", AS_CHILD, id=self.held)
@@ -589,8 +616,9 @@ class FoldTests(Harness):
             told,
             rf"\n{self.held} «Held by B»: 2 events by session {A}, session {THIRD}, the newest"
             rf" at \S+, folded into this line after 3 notices on this item within the hour;"
-            r" read the item with get_work_item for what they say\.\n",
+            r" read the item with get_work_item, parts comments and events, for what they say\.\n",
         )
+        self.assertTrue(told.endswith(notify.READ_THE_REST), "a folded line is something left out")
         self.comment(AS_A, self.held, "News 6, marker F-6")
         again = self.hook()
         assert again is not None

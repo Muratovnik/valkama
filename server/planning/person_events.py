@@ -50,8 +50,9 @@ VALKAMA = "valkama"
 #: What `execution_events.kind` says about a Planning write call.
 KIND = "planning_write"
 
-#: How much of what a person wrote one event quotes, the ellipsis counted.
-MAX_TEXT = 300
+#: How much of what was written one event quotes, the ellipsis counted: most comments
+#: come whole, so the reader need not open the item. A cut one says `cut: true`.
+MAX_TEXT = 1500
 #: How many events one answer names, the newest ones.
 MOST_SHOWN = 20
 
@@ -691,7 +692,30 @@ def _entry(kind: str, at: str, *, text: str, **identity: object) -> dict:
     entry: dict = {"kind": kind, "via": "interface", "at": at, **identity}
     if text:
         entry["text"] = _cut(text, MAX_TEXT)
+        if len(text) > MAX_TEXT:
+            entry["cut"] = True
     return entry
+
+
+def lists(conn: sqlite3.Connection, request_ids: set[str]) -> set[str]:
+    """Which of these requests are lists on a comment, which nobody waits for.
+
+    A list is asked and withdrawn as a question is, but the work never waits on it:
+    it raises no alert and holds nothing open (`requests.open_rows`).
+    """
+
+    if not request_ids:
+        return set()
+    import json
+
+    return {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT request_id FROM work_item_requests"
+            " WHERE request_id IN (SELECT value FROM json_each(?)) AND comment_id IS NOT NULL",
+            (json.dumps(sorted(request_ids)),),
+        )
+    }
 
 
 def describe(events: list[dict]) -> str:

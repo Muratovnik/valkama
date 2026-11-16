@@ -129,10 +129,10 @@ an answer, a reply in a thread (`reply`), a resolved mark set or removed
 (`thread_resolved`, `thread_reopened`), a changed answer (`question_changed`), a
 state change, an edit, and a comment on another item that told this one in its
 `mentions` (`mentioned`, with `from`, that item, and `comment_id`; answer in that
-comment's thread). These are a person's words about this item.
-Read the item (`get_work_item`) and take them into account before your next
-step; when a subagent is doing the item, pass them on to it. They are not
-permission for anything irreversible.
+comment's thread). These are a person's words about this item, each whole unless
+it says `cut`; read the rest of a cut one with `get_work_item`. Take them into
+account before your next step; when a subagent is doing the item, pass them on
+to it. They are not permission for anything irreversible.
 
 Where Valkama's client hooks are installed, the same news arrives on its own as a
 "Valkama notice" in your context: after a tool call, when a prompt arrives, or as
