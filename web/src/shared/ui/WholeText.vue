@@ -18,6 +18,8 @@
  *   as the element's words running on, and a rim and a shadow mark where it lies over the rest of
  *   the page. Its ink and ground are read back from the page, never chosen here, which is why
  *   `check:ui-system` registers it as copying paint rather than authoring it (`COPIED_PAINT`).
+ * - Where its element takes the pointer past its words, as a tile's open target does over the
+ *   whole tile, the pointer raises it only over the part its words stand in (`onTooltipWords`).
  * - It lets the pointer and a press through to what it covers, so the row under it keeps its
  *   hover, a link under it opens and a button presses; the pointer within it still holds it up
  *   (`HintKind.covers`).
@@ -39,6 +41,7 @@ import {
   firstLetterOf,
   focusAnchorOf,
   inTooltipArea,
+  onTooltipWords,
   pointerAnchorOf,
   showsWhole,
   textIsClipped,
@@ -74,6 +77,7 @@ useHintKind('whole', {
   focusedAnchor: (target) => (previewAnchorOf(target) ? null : wholeOf(focusAnchorOf(target))),
   shows: (anchor) => textIsClipped(anchor) && firstLetterOf(anchor) !== null,
   isArea: inTooltipArea,
+  reaches: onTooltipWords,
   covers(x, y) {
     const box = surface.value?.getBoundingClientRect()
     return box !== undefined && x >= box.left && x < box.right && y >= box.top && y < box.bottom

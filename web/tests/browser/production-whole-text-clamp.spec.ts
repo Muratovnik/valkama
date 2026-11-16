@@ -178,6 +178,36 @@ async function expectNoneOver(page: Page, clamp: Locator) {
   await expect(whole(page)).toHaveCount(0)
 }
 
+/**
+ * Points on `tile` off its title, each named: its ground beside the title and under it, where
+ * the open target stretched over the tile is the target, and the middle of each of its marks.
+ */
+const groundOf = (tile: Locator) =>
+  tile.evaluate((element) => {
+    const sheet = element.getBoundingClientRect()
+    const title = element.querySelector('.tile-title')?.getBoundingClientRect() ?? sheet
+    const marks = ['.tile-lead', '.tile-exceptions', '.tile-labels', '.tile-facts'].flatMap(
+      (name) => {
+        const mark = element.querySelector(name)?.getBoundingClientRect()
+        return mark && mark.width > 0 && mark.height > 0
+          ? [{ name, x: mark.left + mark.width / 2, y: mark.top + mark.height / 2 }]
+          : []
+      },
+    )
+    const grounds = [
+      { name: 'beside the title', x: sheet.left + 3, y: title.top + title.height / 2 },
+      { name: 'under the title', x: title.left + title.width / 2, y: sheet.bottom - 3 },
+    ]
+    return { grounds, marks }
+  })
+
+/** What the window has at `point`: the tile's open target, or something else. */
+const targetAt = (page: Page, point: { x: number; y: number }) =>
+  page.evaluate(
+    ({ x, y }) => (document.elementFromPoint(x, y)?.closest('.tile-open') ? 'open target' : 'else'),
+    point,
+  )
+
 /** Longer than three lines of a board column, and than two lines of the card or the finder. */
 const LONG_TITLE =
   'Read an attached planning store that an older build wrote without migrating it, name every scope the read had to skip instead of dropping it, and say which of them a newer build can still open'
@@ -239,23 +269,65 @@ test.describe('a clamp off the graph', () => {
       await expect(page.locator('.drawer')).toBeVisible()
     })
 
-  test("a board tile's cut title shows its whole words on the focus a key brings, and a whole one none", async ({
-    page,
-  }) => {
-    await openBoard(page, 1440)
-    const open = (reference: string) => page.locator(`[data-reference="${reference}"] .tile-open`)
-    await expect(open(workItemRef.reference)).toBeVisible()
-    expect(await markClamp(open(workItemRef.reference).locator('.tile-title'))).not.toBeNull()
-    await page.mouse.move(2, 898)
-    await open(SHORT).focus()
-    await page.keyboard.press('ArrowUp')
-    await expect(open(workItemRef.reference)).toBeFocused()
-    await expectLaid(page, LONG_TITLE)
-    await page.keyboard.press('ArrowDown')
-    await expect(open(SHORT)).toBeFocused()
-    await page.clock.runFor(1000)
-    await expect(whole(page)).toHaveCount(0)
-  })
+  for (const width of [1440, 390])
+    test(`at ${width}px a board tile's cut title shows its whole words only while the pointer rests on its lines`, async ({
+      page,
+    }) => {
+      await openBoard(page, width)
+      const tile = page.locator(`[data-reference="${workItemRef.reference}"] .work-item-tile`)
+      await expect(tile).toBeVisible()
+      const letter = await markClamp(tile.locator('.tile-title'))
+      expect(letter, 'a title its clamp cuts').not.toBeNull()
+      // The open target takes the pointer over the whole tile; off the title it raises nothing.
+      const { grounds, marks } = await groundOf(tile)
+      expect(marks.map(({ name }) => name)).toContain('.tile-lead')
+      for (const ground of grounds) {
+        await restAt(page, ground)
+        expect(await targetAt(page, ground), `what is ${ground.name}`).toBe('open target')
+        await expect(whole(page), `no whole words ${ground.name}`).toHaveCount(0)
+      }
+      for (const mark of marks) {
+        await restAt(page, mark)
+        await expect(whole(page), `no whole words on ${mark.name}`).toHaveCount(0)
+      }
+      // On its lines they rise; moved off them onto the tile's ground, they go after the grace.
+      await restAt(page, letter ?? { x: 0, y: 0 })
+      await expectLaid(page, LONG_TITLE)
+      const [beside = { x: 0, y: 0 }] = grounds
+      const laid = (await whole(page).boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 }
+      expect(beside.x, 'the ground beside the title is off the whole words').toBeLessThan(laid.x)
+      await page.mouse.move(beside.x, beside.y, { steps: 4 })
+      await page.clock.runFor(200)
+      await expect(whole(page)).toHaveCount(0)
+      await page.clock.runFor(1000)
+      await expect(whole(page)).toHaveCount(0)
+      // Back on the title, a press through the whole words still opens the card.
+      await page.mouse.move(letter?.x ?? 0, letter?.y ?? 0, { steps: 4 })
+      await page.clock.runFor(1000)
+      await expectLaid(page, LONG_TITLE)
+      await page.mouse.down()
+      await page.mouse.up()
+      await expect(page.locator('.drawer')).toBeVisible()
+    })
+
+  for (const width of [1440, 390])
+    test(`at ${width}px a board tile's cut title shows its whole words on the focus a key brings, and a whole one none`, async ({
+      page,
+    }) => {
+      await openBoard(page, width)
+      const open = (reference: string) => page.locator(`[data-reference="${reference}"] .tile-open`)
+      await expect(open(workItemRef.reference)).toBeVisible()
+      expect(await markClamp(open(workItemRef.reference).locator('.tile-title'))).not.toBeNull()
+      await page.mouse.move(2, 898)
+      await open(SHORT).focus()
+      await page.keyboard.press('ArrowUp')
+      await expect(open(workItemRef.reference)).toBeFocused()
+      await expectLaid(page, LONG_TITLE)
+      await page.keyboard.press('ArrowDown')
+      await expect(open(SHORT)).toBeFocused()
+      await page.clock.runFor(1000)
+      await expect(whole(page)).toHaveCount(0)
+    })
 
   test("an outcome's preview cut at its two lines shows its whole words", async ({ page }) => {
     const preview = await outcomePreview(page, DONE)

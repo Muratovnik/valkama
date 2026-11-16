@@ -50,6 +50,10 @@
  * names that row's key as `data-tooltip-row`, and the row is marked while the pointer or the
  * keyboard's focus is on that part.
  *
+ * An element whose box takes the pointer past its words, as a board tile's open target stretched
+ * over the whole tile does, marks the part its words stand in `data-tooltip-words`: the pointer
+ * raises their whole words only over that part, and focus a key brings still shows them.
+ *
  * For assistive technology it does what `title` did. With nothing else naming the element
  * the hint is its name, as `aria-label`; otherwise it is its description, through
  * `aria-describedby` and a hidden copy of the words the host keeps, unless it says nothing
@@ -323,6 +327,19 @@ export function focusAnchorOf(target: EventTarget | null): HTMLElement | null {
 
 /** The element whose hover holds `anchor`'s hint up: its area, or itself. */
 export const tooltipReachOf = (anchor: HTMLElement) => areaOf(anchor) ?? anchor
+
+/**
+ * Whether the pointer at `x`, `y` on `anchor` reaches its words: anywhere on it, or only over the
+ * part it marks as the one its words stand in (`data-tooltip-words`). Laid over a whole tile from
+ * the open target the tile is stretched under, a title's whole words rose wherever the pointer
+ * rested on the tile and ran over the neighbouring columns, as if the tile had a hint of its own.
+ */
+export function onTooltipWords(anchor: HTMLElement, x: number, y: number): boolean {
+  const part = anchor.querySelector('[data-tooltip-words]')
+  if (!part) return true
+  const box = part.getBoundingClientRect()
+  return x >= box.left && x < box.right && y >= box.top && y < box.bottom
+}
 
 /** Whether the element stands in an area, which speaks with the one hint it holds. */
 export const inTooltipArea = (element: Element) => areaOf(element) !== null

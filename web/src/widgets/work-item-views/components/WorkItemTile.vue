@@ -10,8 +10,9 @@
  * room keeps its glyph. Below it the title, at most three lines, with no hint beside
  * it: one hung over the whole sheet and stood over the tile's top edge, saying again
  * the words the sheet shows. While the clamp cuts it, its whole words are laid over
- * those lines instead, on the open target's hover and on the focus a key brings it
- * (`v-tooltip.clipped`); the card says it whole. The labels on one line, up to three whole chips and «+N» for the
+ * those lines instead, while the pointer rests on those lines, never on the rest of the
+ * sheet, and on the focus a key brings the open target (`v-tooltip.clipped`); the card says
+ * it whole. The labels on one line, up to three whole chips and «+N» for the
  * rest, which opens the card like the rest of the sheet; and, only when there is
  * something to say, its executor and how far its steps are. The executor is the
  * glyph of the client that holds it, then what that client's session is doing, as
@@ -189,7 +190,8 @@ const describedBy = computed(() => {
       />
     </span>
     <!-- The open target's whole sheet is its pointer box, so it carries the title's whole
-         words: on the title alone the pointer never reached them. -->
+         words, and the title marks where they rise: on the title alone the pointer never
+         reached them, and over the whole sheet they rose wherever it rested on the tile. -->
     <button
       v-tooltip.clipped="props.item.title"
       class="tile-open"
@@ -204,6 +206,7 @@ const describedBy = computed(() => {
       <strong
         v-slash-breaks="props.item.title"
         class="tile-title"
+        data-tooltip-words
       />
     </button>
     <component

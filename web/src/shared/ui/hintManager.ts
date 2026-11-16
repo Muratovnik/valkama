@@ -10,7 +10,9 @@
  * - The pointer, a mouse or a pen, shows a hint after `REST_MS` on its anchor. While a hint shows,
  *   and for `WARM_MS` after it closes, the next anchor's opens at once and the surface moves to
  *   it, so passing between neighbours never leaves a frame without one. The delay is one for every
- *   kind.
+ *   kind. An anchor whose target takes the pointer past what its hint speaks for
+ *   (`HintKind.reaches`), as a board tile's open target stretched over the whole tile does past
+ *   the title, is reached only there, asked again as the pointer moves within that target.
  * - When the pointer leaves the anchor the hint stays `GRACE_MS`, and for as long as the pointer is
  *   on the hint itself (`[data-hint-surface]`): a hint the pointer raised can be entered (WCAG 2.2,
  *   1.4.13). Another anchor takes over at once, but on the way to a hint that can be entered
@@ -45,6 +47,7 @@
  */
 import { computed, effectScope, onScopeDispose, shallowRef, watch } from 'vue'
 
+import { crossesReach, reachedAt } from '@/shared/ui/hintReach.ts'
 import { onWayTo } from '@/shared/ui/hintWay.ts'
 import type { Point } from '@/shared/ui/hintWay.ts'
 import { overlayTop, underPopup } from '@/shared/ui/overlayStack.ts'
@@ -80,6 +83,12 @@ export interface HintKind {
    * it lets the pointer through: the pointer heading there keeps it over what lies between.
    */
   reachable?: () => DOMRect | null
+  /**
+   * Whether the pointer at the point reaches what the anchor's hint speaks for, where the target
+   * the anchor was found from takes the pointer past it: asked as the pointer arrives and again as
+   * it moves within that target (`hintReach.ts`). Without it the anchor is reached anywhere on it.
+   */
+  reaches?: (anchor: HTMLElement, x: number, y: number) => boolean
   /** Whether the anchor's hint may show now: asked as it would open. */
   shows: (anchor: HTMLElement) => boolean
 }
@@ -195,11 +204,12 @@ function onWay() {
   }, GRACE_MS)
 }
 
-function resolve(target: EventTarget | null, by: Raiser): Asked | null {
+/** The anchor `target` asks for, raised `by` focus or the pointer, which stands at `at`. */
+function resolve(target: EventTarget | null, by: Raiser, at: Point | null = null): Asked | null {
   if (!(target instanceof Element)) return null
   for (const [kind, rules] of kinds) {
     const anchor = by === 'pointer' ? rules.pointedAnchor(target) : rules.focusedAnchor(target)
-    if (anchor) return { kind, anchor }
+    if (anchor && reachedAt(rules.reaches, anchor, target, at)) return { kind, anchor }
   }
   return null
 }
@@ -226,7 +236,7 @@ function open(asked: Asked, by: Raiser, rested = false) {
 
 /** The anchor the pointer is on: the one it rests on, or the one under the hint laid over it. */
 function underPointer(): Asked | null {
-  return hovered ?? (covering && pointed.value ? resolve(pointed.value, 'pointer') : null)
+  return hovered ?? (covering && pointed.value ? resolve(pointed.value, 'pointer', lastAt) : null)
 }
 
 function close() {
@@ -301,10 +311,11 @@ function point(event: PointerEvent) {
   const at = { x: event.clientX, y: event.clientY }
   lastAt = at
   // A move within the element already heard changes nothing else, unless it crosses the edge of
-  // a hint laid over that element or goes on along the way to a hint; anchors are found on
-  // arrival.
+  // a hint laid over that element or of what an anchor found from it reaches, or goes on along
+  // the way to a hint; anchors are found on arrival.
   const over = coveredAt(event)
-  if (moved && target === lastTarget && over === covering && wayTimer === undefined) {
+  const same = target === lastTarget && !crossesReach(target, at)
+  if (moved && same && over === covering && wayTimer === undefined) {
     keepLeftFrom(at)
     return
   }
@@ -347,7 +358,7 @@ function arrive(target: Element | null, at: Point | null = null) {
   }
   const offSurface = onSurface
   onSurface = false
-  const asked = target ? resolve(target, 'pointer') : null
+  const asked = target ? resolve(target, 'pointer', at ?? lastAt) : null
   if (asked && asked.anchor === hovered?.anchor) {
     stopWay()
     askAgain(asked, target)

@@ -985,7 +985,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   register with the reason the place needs it. No hint says again the words its element
   shows: a board tile, a label chip and the usage line have none, since everything they
   would say is on screen, save the whole words of a tile's title its clamp cuts, laid over it
-  as above. A hint may carry a note, a second line in the quiet ink, for a
+  as above. Those rise while the pointer rests on the title's lines, never on the rest of the
+  tile, though the tile's open target takes the pointer everywhere on it: an element whose box
+  takes the pointer past its words marks the part they stand in (`data-tooltip-words`), and
+  focus a key brings still shows them. A hint may carry a note, a second line in the quiet ink, for a
   state that qualifies the action: a session button hints what a press does — «Open in
   VS Code» — over the session's state, and never the holder's name it shows. A detail on
   an element whose own words can be cut (a one-line name, a path, a value) is given those
@@ -1504,8 +1507,8 @@ priority is not medium, and at its end only what stops the work — the open
 blocker it waits on, drawn as its glyph and its reference («⛔ MAIN-12», named
 «Ждёт MAIN-12»); the line never wraps, and an exception short of room keeps
 its glyph and says its words on hover. The title follows, at most three lines,
-its whole words laid over them while they cut it (Hints), on the sheet's hover
-and on the focus a key brings it,
+its whole words laid over them while they cut it (Hints), while the pointer rests
+on its lines rather than anywhere on the sheet, and on the focus a key brings it,
 then the labels on one line — as many whole ones as it holds, up to three, then
 «+N», which opens the card like the rest of the sheet — then the holder and the
 steps when there are any, the steps only while the item is open. The holder is
