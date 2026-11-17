@@ -325,6 +325,7 @@ files = [
   "server",
   "valkama.py",
   "tests/isolated.py",
+  "tests/agent_probes.py",
   "tests/commit_subjects.py",
   "tests/machine_lock.py",
 ]

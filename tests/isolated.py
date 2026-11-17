@@ -777,8 +777,13 @@ def _clear_state(out: Path) -> None:
     (out / STOP).unlink(missing_ok=True)
 
 
-def start(out: Path, source: Path | None) -> int:
-    """Start a supervisor, wait until it says how the start went, and return."""
+def start(out: Path, source: Path | None, environment: Mapping[str, str] | None = None) -> int:
+    """Start a supervisor, wait until it says how the start went, and return.
+
+    The supervisor starts in `environment`, by default the caller's own. The
+    project registry a store copy brings along is the one its `LOCALAPPDATA`
+    names, so a caller with a registry of its own names it there.
+    """
 
     if _read_state(out) is not None:
         _say(f"a server is recorded in {out}; run stop first")
@@ -792,6 +797,7 @@ def start(out: Path, source: Path | None) -> int:
         supervisor = subprocess.Popen(
             argv,
             cwd=ROOT,
+            env=None if environment is None else dict(environment),
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=subprocess.STDOUT,

@@ -1,0 +1,65 @@
+{
+  "id": "A1",
+  "about": "A seeded task, claimed in the first turn and commented on in the second after another session wrote to it.",
+  "clients": ["claude", "codex"],
+  "workspace": "../workspace",
+  "overlay": "../overlay",
+  "repos": ["app", "lib"],
+  "registry": {"space": "ALPHA", "projects": ["app", "lib"], "default": "app"},
+  "mcp": "tip",
+  "setup": [
+    {
+      "tool": "create_work_item",
+      "author": "worker-a",
+      "session": "setup",
+      "as": "n",
+      "args": {
+        "space": "ALPHA",
+        "kind": "task",
+        "title": "Say when the greeting is printed",
+        "description": "app/README.md should say the greeting is printed on start.",
+        "acceptance": "assignment"
+      }
+    }
+  ],
+  "turns": [
+    {
+      "prompt": "{\"calls\": [{\"tool\": \"claim_work_item\", \"args\": {\"id\": \"{{n}}\", \"author\": \"worker-b\"}}], \"answer\": \"Claimed {{n}}.\"}"
+    },
+    {
+      "before": [
+        {
+          "tool": "apply_work_item_changes",
+          "author": "worker-c",
+          "session": "other",
+          "args": {"id": "{{n}}", "comment": {"body": "Another session read this."}}
+        }
+      ],
+      "prompt": "{\"calls\": [{\"tool\": \"apply_work_item_changes\", \"args\": {\"id\": \"{{n}}\", \"author\": \"worker-b\", \"comment\": {\"body\": \"The README says it now.\"}}}], \"answer\": \"Commented on {{n}}.\"}"
+    }
+  ],
+  "expect": {
+    "start": [
+      {
+        "check": "hook_output",
+        "clients": ["claude"],
+        "event": "SessionStart",
+        "contains": "Replaced coordination text"
+      },
+      {
+        "check": "file",
+        "clients": ["codex"],
+        "path": "{{env.CODEX_HOME}}/AGENTS.md",
+        "contains": "Replaced coordination text"
+      },
+      {"check": "session", "event": "session_start", "client": "{{client}}"},
+      {"check": "dir_empty", "path": "{{store_dir}}/spool"},
+      {"check": "handshake", "contains": "Planned work lives in a planning space"},
+      {"check": "first_call", "identity": "confirmed"}
+    ],
+    "seeded": [
+      {"check": "file", "path": "app/README.md", "contains": "printed on start"}
+    ]
+  },
+  "rubric": {}
+}
