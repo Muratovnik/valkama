@@ -228,6 +228,13 @@ EVENT_ACTIONS = (
     # A task made a goal or stage, or one made a task again, by the call that converted
     # it: `task -> stage`, then `; leftover MAIN-15` and `; projects dropped: …` when so.
     "converted",
+    # A step a checklist edit left out, or the text a step repeated by its id with
+    # another text had: that text's first 120 characters.
+    "checklist_removed",
+    # A part split off a task, by the call that split it: on the task the part and how
+    # many steps it took, `MAIN-15: 2 steps`, and on the part the task's reference.
+    "split_off",
+    "split_from",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 #: The actions that say which state an item came to stand in: `created` and

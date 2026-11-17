@@ -89,10 +89,10 @@ await confirmation: check each and complete it, as the skill's Close section say
 
 | Tool | Also answers |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started` |
+| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
 `claim_ready_work_item` takes the first workable task in the order of work —
@@ -176,6 +176,18 @@ new item in the same call, all or nothing:
 
 A refused claim, step or link creates nothing and spends no number.
 
+`split_from` names an open task to split a part off, and `steps` the ids of its
+steps the part takes. The part stands beside the task, under the same parent,
+and is accepted as the task is: in the first ready state when the task is
+accepted (`inherited` under goals and stages all accepted, else the task's
+basis), in triage beside a task in triage, put off on the same condition beside
+one put off. The steps go with their ids, ticks and `done_by`, and their claims
+end; the part names the task's projects unless `projects` names others. The task
+records `split_off`, the part `split_from`. `parent`, `state` and `acceptance`
+are the task's to set and are refused beside `split_from`, as are a task in
+review or closed and a step it does not have (`[split]`); a task another session
+holds needs `force`.
+
 `priority` on `create_work_item` and in the batch's `update` is how much the item
 matters, not when to do it:
 
@@ -200,7 +212,12 @@ A step is text, or `{"text": "…", "done": true}` for one already done, which i
 recorded done by you with the event a tick writes. A checklist holds at most
 100 steps of at most 1000 characters each. A step sent with the text of one the
 item has is that step and keeps its `item_id`, claim and tick; a new text is a
-new step. Leaving out a claimed or completed step needs `force`.
+new step. Leaving out a claimed or completed step needs `force`. A step sent as
+`{"id": "…", "text": "…"}` with its `item_id` and another text is that step
+reworded, keeping its tick and claim. Each step left out, and the former text of
+each one reworded, is recorded as a `checklist_removed` event, and entering
+review or completing then answers `conditions_changed`: `removed`, those texts,
+and `moved`, each item that took steps along (`{to, count}`).
 
 ## One call, several writes
 
@@ -410,6 +427,7 @@ owner is open on it, `force` or not; cancelling is not.
 | `[move_out]` | Give the reason the item leaves its goal or stage; an item under none, or closed, has nothing to move out of. |
 | `[parent]` | Clear a parent with `move_out`, not an edit; accept the goal or stage first, or move the item out, before accepted work goes under it. |
 | `[convert]` | Send the word the refusal names: `stage` for a task under a parent, `goal` for one without, a task kind for a goal or stage; move out what stands under a goal or stage first, and reopen a closed item. |
+| `[split]` | Send `split_from` with `steps` alone, without `parent`, `state` or `acceptance`; split a part off an open task, not one in review, and name only its own step ids. |
 | `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
 | `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |

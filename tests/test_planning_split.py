@@ -623,3 +623,301 @@ class ConvertingTests(ConvertingTree):
         said = self.refused(AS_A, "apply_work_item_changes", id=t, convert={"to": "stage"})
         self.assertIn("[convert]", said)
         self.assertIn("review", said)
+
+
+class ChangedConditionsTests(ConvertingTree):
+    """What an edit of the steps took off or reworded stays named on the item."""
+
+    def test_a_step_left_out_and_one_reworded_by_its_id_are_recorded_with_their_text(
+        self,
+    ) -> None:
+        """The reworded step keeps its id and tick, and both texts that went are named."""
+
+        t = self.made("t", parent=self.goal, steps=["X", "Y"])
+        self.agent("claim_work_item", AS_A, id=t)
+        y = self.steps(t)["Y"]
+        self.agent("apply_work_item_changes", AS_A, id=t, checklist_ticks=[{"item_id": y["id"]}])
+        ticked = self.steps(t)["Y"]
+
+        self.agent("apply_work_item_changes", AS_A, id=t, checklist=[{"id": y["id"], "text": "Y2"}])
+
+        [step] = self.record(t)["checklist"]
+        self.assertEqual(
+            (y["id"], "Y2", True, ticked["done_by"]),
+            (step["id"], step["text"], step["done"], step["done_by"]),
+        )
+        self.assertEqual(["X", "Y"], [d for d, *_ in self.events(t, "checklist_removed")])
+        self.assertEqual(["1"], [d for d, *_ in self.events(t, "checklist_replaced")][-1:])
+
+    def test_a_step_kept_by_its_text_or_id_unchanged_records_nothing_removed(self) -> None:
+        t = self.made("t", parent=self.goal, steps=["X", "Y"])
+        x = self.steps(t)["X"]
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=t,
+            checklist=[{"id": x["id"], "text": "X"}, "Y", "Z"],
+        )
+        self.assertEqual([], self.events(t, "checklist_removed"))
+
+    def test_the_recorded_text_is_cut_to_what_an_event_holds(self) -> None:
+        """A step runs to 1 000 characters and an event's detail to 512: the first 120 go."""
+
+        long = "w" * 1000
+        t = self.made("t", parent=self.goal, steps=[long])
+        self.agent("apply_work_item_changes", AS_A, id=t, checklist=["short"])
+        self.assertEqual([long[:120]], [d for d, *_ in self.events(t, "checklist_removed")])
+
+    def test_the_close_names_the_steps_taken_off_and_reworded(self) -> None:
+        """The answer names both texts that went; without them, no field."""
+
+        t = self.made("t", parent=self.goal, steps=["X", "Y"])
+        self.agent("claim_work_item", AS_A, id=t)
+        y = self.steps(t)["Y"]
+        self.agent("apply_work_item_changes", AS_A, id=t, checklist_ticks=[{"item_id": y["id"]}])
+        self.agent("apply_work_item_changes", AS_A, id=t, checklist=[{"id": y["id"], "text": "Y2"}])
+
+        answer = self.agent(
+            "apply_work_item_changes", AS_A, id=t, summary=DONE, transition={"state": "done"}
+        )
+
+        self.assertEqual(
+            {"removed": ["X", "Y"], "moved": []},
+            answer["applied"]["transition"]["conditions_changed"],
+        )
+        plain = self.made("plain", parent=self.goal)
+        closed = self.close(AS_A, plain)
+        self.assertNotIn("conditions_changed", closed["applied"]["transition"])
+
+    def test_entering_review_names_them_and_a_cancel_does_not(self) -> None:
+        t = self.made("t", parent=self.goal, steps=["X", "Y"])
+        self.agent("claim_work_item", AS_A, id=t)
+        self.agent("apply_work_item_changes", AS_A, id=t, checklist=[{"text": "Y", "done": True}])
+        answer = self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=t,
+            summary=DONE,
+            transition={"state": "review", "to_check": "That Y holds"},
+        )
+        self.assertEqual(
+            {"removed": ["X"], "moved": []}, answer["applied"]["transition"]["conditions_changed"]
+        )
+        s = self.made("s", parent=self.goal, steps=["X", "Y"])
+        self.agent("apply_work_item_changes", AS_A, id=s, checklist=["Y"])
+        cancelled = self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=s,
+            summary={"done": "Not needed", "next": "Nothing"},
+            transition={"state": "cancelled"},
+        )
+        self.assertNotIn("conditions_changed", cancelled["applied"]["transition"])
+
+
+class SplittingTests(ConvertingTree):
+    """A part split off a task is the same work: it stands beside it, accepted as it is."""
+
+    def split(self, meta: object, source: str, steps: list[str], **fields: object) -> dict:
+        return self.agent(
+            "create_work_item", meta, split_from=source, steps=steps, title="part", **fields
+        )
+
+    def stored_projects(self, reference: str) -> list[tuple]:
+        return [
+            tuple(row)
+            for row in self.conn.execute(
+                "SELECT project_id, source FROM work_item_projects WHERE work_item_id = ?",
+                (self.identity(reference),),
+            )
+        ]
+
+    def test_a_part_takes_its_steps_beside_the_task_accepted_with_it(self) -> None:
+        t = self.made("t", parent=self.goal, steps=["s1", "s2", "s3"])
+        steps = self.steps(t)
+        self.person(APPLY, id=t, checklist_ticks=[{"item_id": steps["s1"]["id"]}])
+        self.conn.execute(
+            "INSERT INTO work_item_projects(work_item_id, project_id, source) VALUES(?,?,?)",
+            (self.identity(t), "alpha", "commits"),
+        )
+        self.conn.commit()
+
+        answer = self.split(AS_A, t, [steps["s2"]["id"]])
+
+        p = str(answer["reference"])
+        part = self.record(p)
+        self.assertEqual(self.identity(self.goal), part["parent_id"])
+        ready = self.conn.execute(
+            "SELECT key FROM workflow_states WHERE category = 'ready' ORDER BY position LIMIT 1"
+        ).fetchone()[0]
+        self.assertEqual((ready, "inherited"), (part["state"]["key"], self.basis(p)))
+        self.assertEqual(
+            [(steps["s2"]["id"], "s2")], [(s["id"], s["text"]) for s in part["checklist"]]
+        )
+        self.assertEqual(["s1", "s3"], [s["text"] for s in self.record(t)["checklist"]])
+        self.assertEqual([f"{p}: 1 steps"], [d for d, *_ in self.events(t, "split_off")])
+        self.assertEqual([t], [d for d, *_ in self.events(p, "split_from")])
+        self.assertEqual([], self.events(t, "checklist_removed"), "moved, not taken off")
+        self.assertEqual([("alpha", "named")], self.stored_projects(p))
+        self.assertEqual([("alpha", "commits")], self.stored_projects(t))
+        self.assertEqual((t, [steps["s2"]["id"]]), (answer["split_from"], answer["moved_steps"]))
+        # One call wrote it all.
+        [(_, _, call, _, _)] = self.events(p, "split_from")
+        self.assertEqual([call], [c for _, _, c, *_ in self.events(t, "split_off")])
+        self.holds()
+
+    def test_steps_go_with_their_ticks_and_marks_and_without_their_claims(self) -> None:
+        """Acceptance 2: the ids, ticks and `done_by` move; a claim ends on the task."""
+
+        t = self.made("t", parent=self.goal, steps=["u1", "u2", "u3"])
+        steps = self.steps(t)
+        self.agent("claim_work_item_checklist_item", AS_B, id=t, item_id=steps["u1"]["id"])
+        self.agent("claim_work_item", AS_A, id=t)
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=t,
+            checklist_ticks=[{"item_id": steps["u2"]["id"]}],
+        )
+        ticked = self.steps(t)["u2"]
+
+        answer = self.split(AS_A, t, [steps["u2"]["id"], steps["u1"]["id"]], claim=True)
+
+        p = str(answer["reference"])
+        moved = {s["text"]: s for s in self.record(p)["checklist"]}
+        self.assertEqual(["u1", "u2"], list(moved))
+        u2 = moved["u2"]
+        self.assertEqual(
+            (ticked["id"], True, ticked["done_by"], False),
+            (u2["id"], u2["done"], u2["done_by"], u2["by_previous_holder"]),
+        )
+        self.assertEqual((steps["u1"]["id"], ""), (moved["u1"]["id"], moved["u1"]["claimed_by"]))
+        self.assertEqual(["u1"], [d for d, *_ in self.events(t, "checklist_released")])
+        self.assertEqual("active", self.category(p), "claim: true takes the part at once")
+        self.assertEqual(["u3"], [s["text"] for s in self.record(t)["checklist"]])
+
+    def test_a_task_held_by_a_step_alone_goes_back_to_the_queue_when_that_step_leaves(
+        self,
+    ) -> None:
+        t = self.made("t", parent=self.goal, steps=["u1", "u2"])
+        steps = self.steps(t)
+        self.agent("claim_work_item_checklist_item", AS_A, id=t, item_id=steps["u1"]["id"])
+        self.assertEqual("active", self.category(t))
+        self.split(AS_A, t, [steps["u1"]["id"]])
+        self.assertEqual("ready", self.category(t))
+
+    def test_a_part_of_triage_work_stays_in_triage_and_review_is_refused(self) -> None:
+        t = self.agents_item(AS_B, "t")
+        self.agent("apply_work_item_changes", AS_B, id=t, checklist=["u1", "u2"])
+        p = str(self.split(AS_B, t, [self.steps(t)["u2"]["id"]])["reference"])
+        self.assertEqual(("triage", None), (self.category(p), self.basis(p)))
+        self.assertIsNone(self.record(p)["parent_id"])
+
+        r = self.made("r", parent=self.goal, steps=["u1"])
+        self.agent("claim_work_item", AS_A, id=r)
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=r,
+            checklist_ticks=[{"item_id": self.steps(r)["u1"]["id"]}],
+            summary=DONE,
+            transition={"state": "review", "to_check": "That it holds"},
+        )
+        said = self.refused(AS_A, "create_work_item", split_from=r, steps=[], title="part")
+        self.assertIn("[split]", said)
+        self.assertIn("review", said)
+
+    def test_another_sessions_task_splits_only_with_force(self) -> None:
+        t = self.made("t", parent=self.goal, steps=["u1", "u2"])
+        self.agent("claim_work_item", AS_A, id=t)
+        holder = str(self.record(t)["claim_ref"])
+        u2 = self.steps(t)["u2"]["id"]
+        said = self.refused(AS_B, "create_work_item", split_from=t, steps=[u2], title="part")
+        self.assertIn(f"{t} is held by {holder}", said)
+        self.assertIn("force", said)
+
+        answer = self.split(AS_B, t, [u2], force=True)
+
+        self.assertEqual(["claim"], answer["overridden"])
+        self.assertEqual(["claim"], [d for d, *_ in self.events(t, "overridden")])
+        self.assertEqual(holder, self.record(t)["claim_ref"], "the task stays with its holder")
+
+    def test_a_part_of_put_off_work_is_put_off_on_the_same_condition(self) -> None:
+        t = self.made("t", parent=self.goal, steps=["u1"])
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=t,
+            defer={"until": "2099-01-01", "reason": "after the freeze"},
+        )
+        p = str(self.split(AS_A, t, [])["reference"])
+        self.assertEqual(("deferred", None), (self.category(p), self.basis(p)))
+        names = ("until", "until_item", "reason", "since")
+        self.assertEqual(
+            {name: self.record(t)["deferred"][name] for name in names},
+            {name: self.record(p)["deferred"][name] for name in names},
+        )
+
+    def test_a_part_of_an_accepted_task_outside_an_accepted_chain_takes_its_basis(
+        self,
+    ) -> None:
+        t = self.agents_item(AS_A, "t")
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=t,
+            transition={"state": "ready", "acceptance": "assignment"},
+        )
+        p = str(self.split(AS_A, t, [])["reference"])
+        self.assertEqual(("ready", "assignment"), (self.category(p), self.basis(p)))
+
+    def test_what_the_task_sets_and_what_it_lacks_are_refused(self) -> None:
+        t = self.made("t", parent=self.goal, steps=["u1"])
+        u1 = self.steps(t)["u1"]["id"]
+        sent = (("parent", self.goal), ("state", "ready"), ("acceptance", "assignment"))
+        for field, value in sent:
+            with self.subTest(field=field):
+                said = self.refused(
+                    AS_A, "create_work_item", split_from=t, steps=[u1], title="p", **{field: value}
+                )
+                self.assertIn("[split]", said)
+                self.assertIn(field, said)
+        said = self.refused(AS_A, "create_work_item", split_from=t, steps=["nope"], title="p")
+        self.assertIn(f"{t} has no step nope", said)
+        said = self.refused(AS_A, "create_work_item", space="MAIN", steps=[u1], title="p")
+        self.assertIn("split_from", said)
+        said = self.refused(AS_A, "create_work_item", split_from=self.goal, steps=[], title="p")
+        self.assertIn("goal or stage", said)
+        done = self.made("done", parent=self.goal)
+        self.close(AS_A, done)
+        said = self.refused(AS_A, "create_work_item", split_from=done, steps=[], title="p")
+        self.assertIn("closed", said)
+
+    def test_the_task_names_where_its_steps_went_when_it_closes(self) -> None:
+        """The task a part left names it on completing and in its full record."""
+
+        t = self.made("t", parent=self.goal, steps=["u1", "u2", "u3"])
+        steps = self.steps(t)
+        p = str(self.split(AS_A, t, [steps["u2"]["id"], steps["u3"]["id"]])["reference"])
+        self.agent("claim_work_item", AS_A, id=t)
+        answer = self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=t,
+            checklist_ticks=[{"item_id": steps["u1"]["id"]}],
+            summary=DONE,
+            transition={"state": "done"},
+        )
+        changed = {"removed": [], "moved": [{"to": p, "count": 2}]}
+        self.assertEqual(changed, answer["applied"]["transition"]["conditions_changed"])
+        self.assertEqual(changed, self.record(t)["conditions_changed"])
+
+    def test_a_conversion_that_left_work_names_the_task_it_left(self) -> None:
+        t = self.made("t", parent=self.goal, steps=["u1", "u2"])
+        self.agent("claim_work_item", AS_A, id=t)
+        self.convert(AS_A, t, to="stage", leftover={"steps": [self.steps(t)["u2"]["id"]]})
+        [left] = self.under(t)
+        self.assertEqual(
+            {"removed": [], "moved": [{"to": left, "count": 1}]},
+            self.record(t)["conditions_changed"],
+        )

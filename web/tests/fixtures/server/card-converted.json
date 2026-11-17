@@ -219,6 +219,15 @@
         "mentions": [],
         "mentions_total": 0,
         "subscribers": [],
+        "conditions_changed": {
+          "removed": [],
+          "moved": [
+            {
+              "to": "MAIN-24",
+              "count": 0
+            }
+          ]
+        },
         "agents": [],
         "last_claim_executor": {
           "session": null,

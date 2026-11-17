@@ -109,6 +109,13 @@ projects, and each holder's top-level session follows the new goal or stage.
 A goal or stage with nothing under it becomes a task again with `to: task`.
 An agent does not convert an item while a question to the owner on it is open.
 
+A task of which only a part is to go elsewhere, later or to another holder,
+splits that part off: `create_work_item` with `split_from` and the `steps` it
+takes. The part stands beside the task under the same parent, accepted as the
+task is, and its steps keep their ids and ticks. When the task enters review or
+completes, its answer names where its steps went and which were taken off or
+reworded (`conditions_changed`), so the close says what it stands for.
+
 Work that is to wait is put off with `defer`, never by a move into a deferred
 state: `until` names the day (`2026-12-01`, from 00:00 UTC), a time with its zone,
 or the open item whose close it waits on, and `reason` says why, which the owner

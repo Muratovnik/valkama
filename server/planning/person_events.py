@@ -99,6 +99,10 @@ KINDS = {
     # A task made a goal or stage, or back: a change of what it is, not of where it
     # stands, which the `opened` or `transitioned` beside it tells as `status`.
     "converted": "converted",
+    # A step taken off, or the wording a rewritten one had: an edit of the steps.
+    "checklist_removed": "steps_edited",
+    # Steps that left with a part split off: they left the item, as an edit takes them.
+    "split_off": "steps_edited",
 }
 #: The kinds that say where the work stands: its state changed, it got its summary, it
 #: was left without a holder or changed holders, it came to wait for the owner or
@@ -114,6 +118,7 @@ WORK_KINDS = frozenset(
 #: `accepted`: the basis of an acceptance, beside the write that accepted the item.
 #: `child_left`: a child's move out of this container, told on the child itself.
 #: `returned`: why put-off work came back, beside the move that brought it, which is told.
+#: `split_from`: a part's origin, which says no more than its creation does.
 NOT_TOLD = frozenset(
     {
         "created",
@@ -123,6 +128,7 @@ NOT_TOLD = frozenset(
         "accepted",
         "child_left",
         "returned",
+        "split_from",
     }
 )
 #: What a goal or stage put off is told with, after the move's own words: the work

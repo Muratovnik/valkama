@@ -24,8 +24,11 @@ decides on it, then writes.
   and claims, started as it was and with its projects: work under way is never
   stranded by a container nobody holds.
 
-Splitting a part off a task belongs here too: it divides work the same way, from
-the same writes.
+- **Splitting a part off** (`split_off`). A new item takes some of an open task's
+  steps and stands beside it, under the same parent: it is the same work, so it is
+  accepted as the task is, put off when it is, and names its projects. The steps go
+  with their ids, ticks and marks and without their claims; the task records
+  `split_off`, the part `split_from`.
 """
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ from collections.abc import Mapping
 
 from . import (
     calls,
+    deferral,
     item_projects,
     item_tree,
     model,
@@ -52,6 +56,11 @@ from . import transitions as guards
 MOVE_OUT = "move_out"
 #: The tag a refusal of converting carries.
 CONVERT = "convert"
+#: The tag a refusal of splitting a part off carries.
+SPLIT = "split"
+#: What the task a part is split off sets for the part, and a creation that splits names
+#: none of.
+_SET_BY_SOURCE = ("parent", "state", "acceptance")
 #: What a goal or stage made a task records as the move into its ready state, and an
 #: accepted task made a goal or stage as its opening: `converted from a stage`.
 _FROM = "converted from a {}"
@@ -415,6 +424,154 @@ def _leftover(leftover: object, row: sqlite3.Row, *, item: str) -> tuple[str, se
         if wanted not in ids:
             raise model.PlanningError(f"[{CONVERT}] {item} has no step {wanted}")
     return title, set(named)
+
+
+def split_off(
+    conn: sqlite3.Connection,
+    reference: object,
+    *,
+    steps: object,
+    title: object,
+    kind: object = None,
+    priority: object = None,
+    description: object = None,
+    labels: object = None,
+    source: object = None,
+    projects: object = None,
+    set_by_source: Mapping[str, object] | None = None,
+    force: bool = False,
+    author: str | None = None,
+) -> dict:
+    """Split a part off an open task: a new item beside it, with the steps `steps` names.
+
+    The part stands under the task's parent and is accepted with it: a task accepted
+    gives it the first ready state, `inherited` under goals and stages all accepted and
+    open and the task's own basis otherwise; one in triage gives it triage, and one put
+    off puts it off on the same condition. The steps go with their ids, ticks, `done_by`
+    and `by_previous_holder`, each claim on one ending on the task (`checklist_released`).
+    It names `projects`, or the task's projects, each `named`; its kind and priority
+    are the task's unless named. The task records `split_off`, `MAIN-15: 2 steps`, and
+    the part `split_from`, the task's reference.
+
+    `set_by_source` is what the caller sent of `parent`, `state` and `acceptance`, which
+    the task sets: any of them is refused, as is a closed task, a goal or stage, one in
+    review, whose steps the owner is checking, a step the task does not have, and a task
+    another session holds unless `force`, recorded on the task as `overridden`. A question
+    to the owner on the task does not stop it: the task stays open with it. The answer
+    is the part, with `split_from`, `moved_steps` (the ids it took), `overridden` and
+    `awaiting_confirmation`.
+    """
+
+    with service.one_write(conn) as entered:
+        row = service.locked_row(conn, reference)
+        item = read_model.reference(conn, row)
+        identity = str(row["work_item_id"])
+        sent = [
+            name for name in _SET_BY_SOURCE if (set_by_source or {}).get(name) not in (None, "")
+        ]
+        if sent:
+            raise model.PlanningError(
+                f"[{SPLIT}] a part stands beside {item} and is accepted as it is: send no"
+                f" {', '.join(sent)}"
+            )
+        current = read_model.state_by_id(conn, str(row["state_id"]))
+        if row["kind"] == model.CONTAINER_KIND:
+            raise model.PlanningError(
+                f"[{SPLIT}] {item} is a goal or stage: a part is split off a task, and work"
+                " for a goal or stage is filed under it with parent"
+            )
+        if current["is_terminal"]:
+            raise model.PlanningError(f"[{SPLIT}] {item} is closed: reopen it first")
+        if current["category"] == guards.REVIEW:
+            raise model.PlanningError(
+                f"[{SPLIT}] {item} is in review, where the owner checks its steps: split it"
+                " once the answer returns it"
+            )
+        moved = _taken(row, steps, item=item)
+        state, basis, held = _part_place(conn, row, current, item=item)
+        named = item_projects.named(projects)
+        if named is not None:
+            item_projects.require_nameable(named, container=False)
+        part_kind = model.public_kind(row["kind"] if kind is None else kind)
+        if part_kind not in model.TASK_KINDS:
+            raise model.PlanningError(
+                f"[{SPLIT}] a part is a task, bug or improvement, as the work it was part of"
+            )
+        part = service.Part(
+            title=model.text_field(title, "work_item.title"),
+            kind=part_kind,
+            priority=model.priority(row["priority"] if priority is None else priority),
+            description=model.multiline_field(description or "", "work_item.description"),
+            labels=model.labels(labels),
+            source=model.text_field(source or "", "work_item.source", limit=512, required=False),
+            projects=(
+                sorted(item_projects.ids_of_items(conn, [identity])[identity])
+                if named is None
+                else named
+            ),
+            steps=moved,
+            state=state,
+            basis=basis,
+            deferred=held,
+        )
+        overridden = service.held_elsewhere(conn, [row], author, force, doing="split a part off it")
+        made = service.file_part(conn, row, part, author)
+        service.hand_over_steps(conn, row, moved, made, author)
+        if overridden:
+            service.record_overrides(conn, identity, ["claim"], author)
+        words.bring_current(conn)
+    answer = read_model.present(conn, read_model.item_row(conn, made), full=True)
+    answer["split_from"] = item
+    answer["moved_steps"] = [str(step["id"]) for step in moved]
+    if overridden:
+        answer["overridden"] = ["claim"]
+    if entered:
+        answer["awaiting_confirmation"] = entered
+    return answer
+
+
+def _taken(row: sqlite3.Row, steps: object, *, item: str) -> list[dict]:
+    """The task's steps `steps` names, in the task's order, each without its claim."""
+
+    named = [] if steps is None else steps
+    if not isinstance(named, list) or not all(isinstance(entry, str) for entry in named):
+        raise model.PlanningError(f"[{SPLIT}] steps is a list of the ids of {item}'s steps")
+    own = model.checklist(row["checklist"])
+    ids = {str(step["id"]) for step in own}
+    for wanted in named:
+        if wanted not in ids:
+            raise model.PlanningError(f"[{SPLIT}] {item} has no step {wanted}")
+    return [{**step, "claimed_by": ""} for step in own if str(step["id"]) in set(named)]
+
+
+def _part_place(
+    conn: sqlite3.Connection, row: sqlite3.Row, current: sqlite3.Row, *, item: str
+) -> tuple[sqlite3.Row, str | None, deferral.Held | None]:
+    """Where a part split off the task `row` stands, on what basis, and the condition it waits on.
+
+    In the task's own state when that is triage or deferred, the condition copied with
+    it; else in the first ready state, as accepted work.
+    """
+
+    category = str(current["category"])
+    if category == "deferred":
+        return current, None, deferral.held(conn, str(row["work_item_id"]))
+    if category == "triage" or row["acceptance"] is None:
+        found = (
+            current
+            if category == "triage"
+            else states.first_state(conn, str(row["workflow_id"]), "triage")
+        )
+        basis = None
+    else:
+        found = states.first_state(conn, str(row["workflow_id"]), "ready")
+        parent = None if row["parent_id"] is None else str(row["parent_id"])
+        basis = "inherited" if item_tree.accepted_chain(conn, parent) else str(row["acceptance"])
+    if found is None:
+        raise model.PlanningError(
+            f"[{SPLIT}] {item}'s workflow has no state a part of it could stand in"
+        )
+    return found, basis, None
 
 
 def _blocked_for(conn: sqlite3.Connection, identity: str) -> str:

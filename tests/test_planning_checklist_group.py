@@ -272,7 +272,11 @@ class ChecklistGroupTests(unittest.TestCase):
 
         self.assertEqual(["checklist_discard"], forced["overridden"])
         self.assertEqual(["checklist_discard"], self.overrides())
-        self.assertEqual(["checklist_replaced", "overridden"], self.actions()[-2:])
+        # Each step it discarded is named by its text, then the override that let it.
+        self.assertEqual(
+            ["checklist_replaced", "checklist_removed", "checklist_removed", "overridden"],
+            self.actions()[-4:],
+        )
 
     def test_a_forced_completion_of_a_step_held_by_another_records_the_override(self) -> None:
         step = service.set_checklist(self.conn, self.reference, ["theirs"])["checklist"][0]

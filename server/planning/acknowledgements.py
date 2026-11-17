@@ -104,7 +104,9 @@ def created(item: dict, _arguments: Mapping[str, object]) -> dict:
     """A new item: the defaults the caller may not have named are the news.
 
     A creation that also claimed or linked the item says so in `applied`, as a
-    batch does; one that did neither answers without it.
+    batch does; one that did neither answers without it. A part split off a task
+    names that task as `split_from` and the ids of the steps it took as
+    `moved_steps`, and `overridden` when `force` took it from another session.
     """
 
     answer = {
@@ -113,7 +115,11 @@ def created(item: dict, _arguments: Mapping[str, object]) -> dict:
         "kind": item["kind"],
         "priority": item["priority"],
         **_moved(item),
+        **_forced(item),
     }
+    if "split_from" in item:
+        answer["split_from"] = item["split_from"]
+        answer["moved_steps"] = item["moved_steps"]
     if "applied" in item:
         answer["applied"] = item["applied"]
     return answer

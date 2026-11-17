@@ -165,6 +165,46 @@ class WhatCountsTests(Harness):
         self.assertNotIn("converted", person_events.WORK_KINDS)
         self.assertNotIn("converted", person_events.SERVER_ASKS)
 
+    def test_a_step_taken_off_or_reworded_is_told_as_an_edit_of_the_steps_with_its_text(
+        self,
+    ) -> None:
+        """A reworded step as the holder hears it: the edit, then each wording that went."""
+
+        self.agent("claim_work_item", id=self.ref)
+        self.agent("apply_work_item_changes", id=self.ref, checklist=["X", "Y"])
+        kept = service.get_work_item(self.conn, self.ref)["checklist"][1]
+        self.person(
+            "/api/planning/work-item/checklist",
+            id=self.ref,
+            items=[{"id": kept["id"], "text": "Y2"}],
+        )
+
+        told = self.window()
+        self.assertEqual(["steps_edited"] * 3, [event["kind"] for event in told])
+        self.assertEqual(["1 steps", "X", "Y"], [event["text"] for event in told])
+        self.assertEqual("steps_edited", person_events.KINDS["checklist_removed"])
+        self.assertNotIn("checklist_removed", person_events.WORK_KINDS)
+        self.assertNotIn("checklist_removed", person_events.SERVER_ASKS)
+
+    def test_a_part_split_off_is_told_on_the_task_as_an_edit_of_its_steps(self) -> None:
+        """The holder hears its steps leave with the part; the part's own origin is not told."""
+
+        self.agent("claim_work_item", id=self.ref)
+        self.agent("apply_work_item_changes", id=self.ref, checklist=["one", "two"])
+        two = service.get_work_item(self.conn, self.ref)["checklist"][1]["id"]
+        part = self.person(
+            "/api/planning/work-items",
+            split_from=self.ref,
+            steps=[two],
+            title="The rest",
+            force=True,
+        )
+
+        told = self.window()
+        self.assertEqual(["steps_edited"], [event["kind"] for event in told])
+        self.assertEqual(f"{part['reference']}: 1 steps", told[0]["text"])
+        self.assertIn("split_from", person_events.NOT_TOLD)
+
     def test_the_browser_and_kind_spellings_are_the_call_rows_own(self) -> None:
         self.assertEqual(calls.BROWSER, person_events.BROWSER)
         self.assertEqual(calls.VALKAMA, person_events.VALKAMA)

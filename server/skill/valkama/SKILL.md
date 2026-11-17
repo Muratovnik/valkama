@@ -23,7 +23,7 @@ a test-based "done when" holds, checked by a verify command the item names. A
 finding is evidence attached to an item, not an item of its own. Work that
 shares a cause, a fix or one mechanical rule is one item. Read
 [the work model](references/work-model.md) before filing several items,
-splitting one, or handing items to other agents.
+splitting one or a part off it, or handing items to other agents.
 
 ## Start
 

@@ -752,32 +752,22 @@ def create_work_item(
             ("executor", "the new item has no executor: create it with claim to start it at once")
         )
     transitions.refuse(refusals, False)
-    item_id = model.new_id()
-    number = store.next_number(conn, space_id)
     closing.note(conn, parent_id, author)
     starts = stored_kind != model.CONTAINER_KIND and target["category"] in model.STARTING_CATEGORIES
-    conn.execute(
-        "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,"
-        "parent_id,priority,title,description,labels,source,acceptance,accepted_at,"
-        "started_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,"
-        f" CASE WHEN ? IS NULL THEN NULL ELSE {_NOW} END, CASE WHEN ? THEN {_NOW} END)",
-        (
-            item_id,
-            space_id,
-            number,
-            workflow_id,
-            str(target["state_id"]),
-            stored_kind,
-            parent_id,
-            model.priority(priority),
-            model.text_field(title, "work_item.title"),
-            model.multiline_field(description, "work_item.description"),
-            model.dumps(model.labels(labels)),
-            model.text_field(source, "work_item.source", limit=512, required=False),
-            basis,
-            basis,
-            starts,
-        ),
+    item_id = _insert_item(
+        conn,
+        space_id=space_id,
+        workflow_id=workflow_id,
+        state=target,
+        kind=stored_kind,
+        parent_id=parent_id,
+        priority=model.priority(priority),
+        title=model.text_field(title, "work_item.title"),
+        basis=basis,
+        started=True if starts else None,
+        description=model.multiline_field(description, "work_item.description"),
+        labels=model.labels(labels),
+        source=model.text_field(source, "work_item.source", limit=512, required=False),
     )
     item_projects.replace(conn, item_id, changes)
     opened = target["category"] == model.SERVICE_CATEGORY
@@ -794,6 +784,64 @@ def create_work_item(
         subscriptions.follow(conn, item_id, creator)
     words.bring_current(conn)
     return read_model.present(conn, read_model.item_by_id(conn, item_id), full=True)
+
+
+def _insert_item(
+    conn: sqlite3.Connection,
+    *,
+    space_id: str,
+    workflow_id: str,
+    state: sqlite3.Row,
+    kind: str,
+    parent_id: str | None,
+    priority: str,
+    title: str,
+    basis: str | None,
+    started: str | bool | None,
+    description: str = "",
+    labels: Sequence[str] = (),
+    source: str = "",
+    claim: str = "",
+    claim_call_id: object = None,
+    steps: Sequence[Mapping[str, object]] = (),
+) -> str:
+    """Insert a new item's row, its values checked by the caller; its id.
+
+    The one INSERT of a work item, which creating, a conversion's leftover and a
+    split part each make. `started` is the moment the item started, or True for
+    now; `basis` sets `accepted_at` to now with it. Its number is the space's next.
+    """
+
+    identity = model.new_id()
+    conn.execute(
+        "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,"
+        "parent_id,priority,title,description,labels,source,claim_ref,claim_call_id,checklist,"
+        "acceptance,accepted_at,started_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+        f" CASE WHEN ? IS NULL THEN NULL ELSE {_NOW} END,"
+        f" CASE WHEN ? = 1 THEN {_NOW} ELSE ? END)",
+        (
+            identity,
+            space_id,
+            store.next_number(conn, space_id),
+            workflow_id,
+            str(state["state_id"]),
+            kind,
+            parent_id,
+            priority,
+            title,
+            description,
+            model.dumps(list(labels)),
+            source,
+            claim,
+            claim_call_id,
+            model.dumps(list(steps)),
+            basis,
+            basis,
+            started is True,
+            None if started is True else started,
+        ),
+    )
+    return identity
 
 
 def _placed_space(
@@ -1099,32 +1147,22 @@ def file_leftover(
     """
 
     parent = str(row["work_item_id"])
-    identity = model.new_id()
-    number = store.next_number(conn, str(row["planning_space_id"]))
     closing.note(conn, parent, author)
     claim = str(row["claim_ref"]) if holder else ""
-    conn.execute(
-        "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,"
-        "parent_id,priority,title,claim_ref,claim_call_id,checklist,acceptance,accepted_at,"
-        f"started_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ? IS NULL THEN NULL ELSE {_NOW}"
-        " END,?)",
-        (
-            identity,
-            str(row["planning_space_id"]),
-            number,
-            str(row["workflow_id"]),
-            str(state["state_id"]),
-            str(row["kind"]),
-            parent,
-            str(row["priority"]),
-            model.text_field(title, "leftover.title"),
-            claim,
-            row["claim_call_id"] if claim else None,
-            model.dumps(steps),
-            basis,
-            basis,
-            row["started_at"],
-        ),
+    identity = _insert_item(
+        conn,
+        space_id=str(row["planning_space_id"]),
+        workflow_id=str(row["workflow_id"]),
+        state=state,
+        kind=str(row["kind"]),
+        parent_id=parent,
+        priority=str(row["priority"]),
+        title=model.text_field(title, "leftover.title"),
+        basis=basis,
+        started=row["started_at"],
+        claim=claim,
+        claim_call_id=row["claim_call_id"] if claim else None,
+        steps=steps,
     )
     _log(conn, identity, "created", f"{state['key']}: {reason}" if reason else state["key"], author)
     if basis is not None:
@@ -1142,6 +1180,94 @@ def log_converted(conn: sqlite3.Connection, identity: str, detail: str, author: 
     """Record on a converted item what it became and what the conversion left: `converted`."""
 
     _log(conn, identity, "converted", detail, author)
+
+
+# -- splitting a part off ----------------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class Part:
+    """What a part split off a task is filed with, read and checked by `split.split_off`.
+
+    `steps` are the task's steps it takes, with their ids, ticks and marks and no claim;
+    `state` and `basis` where it stands and on what; `deferred` the condition it waits
+    on, when it stands put off as the task does.
+    """
+
+    title: str
+    kind: str
+    priority: str
+    description: str
+    labels: list[str]
+    source: str
+    projects: list[str]
+    steps: list[dict]
+    state: sqlite3.Row
+    basis: str | None
+    deferred: deferral.Held | None
+
+
+def file_part(conn: sqlite3.Connection, row: sqlite3.Row, part: Part, author: str | None) -> str:
+    """File a part split off the task `row` beside it, under its parent; its reference.
+
+    One of `split.split_off`'s writes, which decides the part: it stands in
+    `part.state` with `part.basis`, names `part.projects`, each `named`, and records
+    `split_from` with the task's reference; one put off waits on the task's condition.
+    """
+
+    parent_id = None if row["parent_id"] is None else str(row["parent_id"])
+    closing.note(conn, parent_id, author)
+    identity = _insert_item(
+        conn,
+        space_id=str(row["planning_space_id"]),
+        workflow_id=str(row["workflow_id"]),
+        state=part.state,
+        kind=part.kind,
+        parent_id=parent_id,
+        priority=part.priority,
+        title=part.title,
+        basis=part.basis,
+        started=None,
+        description=part.description,
+        labels=part.labels,
+        source=part.source,
+        steps=part.steps,
+    )
+    item_projects.replace(conn, identity, part.projects)
+    if part.deferred is not None:
+        deferral.restore(conn, identity, part.deferred)
+    _log(conn, identity, "created", str(part.state["key"]), author)
+    if part.basis is not None:
+        _log(conn, identity, "accepted", part.basis, author)
+    _log(conn, identity, "split_from", read_model.reference(conn, row), author)
+    return read_model.reference(conn, read_model.item_by_id(conn, identity))
+
+
+def hand_over_steps(
+    conn: sqlite3.Connection, row: sqlite3.Row, moved: list[dict], to: str, author: str | None
+) -> None:
+    """Take the steps `moved` off the task `row`, which a part `to` split off it took.
+
+    Each claim on one ends (`checklist_released`), and the task records `split_off`,
+    `MAIN-15: 2 steps`: the steps went with their work, not discarded, so no
+    `checklist_removed` is written. A task at work whose last holder was such a step
+    goes back to the queue at the end of the write (`_settle`).
+    """
+
+    identity = str(row["work_item_id"])
+    gone = {str(step["id"]) for step in moved}
+    steps = model.checklist(row["checklist"])
+    _write(
+        conn,
+        row,
+        ["checklist = ?"],
+        [model.dumps([step for step in steps if str(step["id"]) not in gone])],
+    )
+    for step in steps:
+        if str(step["id"]) in gone and step["claimed_by"]:
+            _log(conn, identity, "checklist_released", str(step["text"])[:120], author)
+    _log(conn, identity, "split_off", f"{to}: {len(moved)} steps", author)
+    _settle(conn, identity, author, "steps split off")
 
 
 def _edited_kind(conn: sqlite3.Connection, row: sqlite3.Row, kind: str) -> str:
@@ -2775,6 +2901,11 @@ def set_checklist(
     and ticking it are one history; a step is reopened by a tick, not by
     leaving `done` out. A step that names an `id` the item does not have is one
     being carried over from elsewhere, and keeps the state it carries.
+
+    Every step the new list leaves out is recorded `checklist_removed` with its
+    text, and every step repeated by its `id` with another text with the text it
+    had: that wording is gone, and a tick made under it now stands under the new
+    one, which the item's close is to name.
     """
 
     row = _row_for_write(conn, reference, expected_revision)
@@ -2788,6 +2919,7 @@ def set_checklist(
     kept: set[str] = set()
     replacement: list[dict] = []
     completed: list[dict] = []
+    rewritten: list[str] = []
     guards: list[str] = []
     for step, raw in zip(sent_steps, sent, strict=True):
         named = raw.get("id") if isinstance(raw, dict) else None
@@ -2808,6 +2940,8 @@ def set_checklist(
             replacement.append(step)
             continue
         kept.add(match["id"])
+        if match["text"] != step["text"]:
+            rewritten.append(str(match["text"]))
         same = {**match, "text": step["text"]}
         if step["done"] and not match["done"]:
             held = match["claimed_by"]
@@ -2841,6 +2975,9 @@ def set_checklist(
     _keep_held(conn, row, str(row["claim_ref"]), replacement)
     identity = str(row["work_item_id"])
     _write_checklist(conn, row, replacement, completed, author)
+    removed = [str(step["text"]) for step in existing if step["id"] not in kept]
+    for text in (*removed, *rewritten):
+        _log(conn, identity, "checklist_removed", text[:120], author)
     overridden = record_overrides(conn, identity, guards, author)
     # A step completed or dropped here ends its claim, which may have been the last holder.
     _settle(conn, identity, author, "steps replaced")
