@@ -144,6 +144,16 @@ class RegistryOwnerTests(unittest.TestCase):
         self.assertFalse(self.inventory.exists())
         self.assertFalse(self.target.exists())
 
+    def test_first_project_on_a_machine_with_no_registry_downgrades_to_no_registry(self) -> None:
+        self.assertTrue(registry_owner.update(self.inventory, self.target, add=self.entry))
+        kept = json.loads(registry_owner.upgrade_path(self.target).read_bytes())
+        self.assertEqual(
+            {"inventory": None, "projection": None, "rollback": None},
+            {name: kept[name] for name in ("inventory", "projection", "rollback")},
+        )
+        self.assertTrue(registry_owner.downgrade(self.inventory, self.target))
+        self.assertEqual(dict.fromkeys(self._state()), self._state())
+
     def test_one_space_holds_several_projects_with_exactly_one_default(self) -> None:
         entries = []
         for project_id, default in (("alpha", True), ("alpha-tool", False)):

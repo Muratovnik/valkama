@@ -742,6 +742,7 @@ def update(
             projects = []
         else:
             projects = parse_inventory(before_inventory)
+        first = not projects and not existing
         if any(value is not None for value in (add, bind, edit, remove)):
             if existing is not None and existing != projects:
                 raise RegistryOwnerError("inventory and projection differ; run projects check")
@@ -777,6 +778,7 @@ def update(
             before_target,
             render_inventory(projects),
             render_projection(projects),
+            first=first,
         )
 
 
