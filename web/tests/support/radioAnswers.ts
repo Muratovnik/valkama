@@ -17,8 +17,23 @@ export const radios = (wrapper: Wrapper, index = 0) =>
     `radio group ${index + 1}`,
   ).findAll('input[type="radio"]')
 
-/** A radio's visible label: the text of the label element that wraps it. */
-export const radioLabel = (input: { element: Element }) => input.element.parentElement?.textContent
+/**
+ * A radio's name as a reader hears it: the elements it is labelled by, else its `aria-label`, else
+ * the labels it belongs to. Read from what names it, not from where it stands, so a radio moved
+ * out of the element that held its words keeps its name, and one named by no words has none.
+ */
+export function radioLabel(input: { element: Element }): string {
+  const radio = input.element as HTMLInputElement
+  const root = radio.getRootNode() as Document | DocumentFragment | Element
+  const by = radio.getAttribute('aria-labelledby')
+  return by
+    ? by
+        .split(/\s+/u)
+        .map((id) => root.querySelector(`[id="${id}"]`)?.textContent?.trim() ?? '')
+        .join(' ')
+    : (radio.getAttribute('aria-label') ??
+        [...(radio.labels ?? [])].map((label) => label.textContent?.trim() ?? '').join(' '))
+}
 
 /** Chooses the radio with this label, as a click would. */
 export async function answer(wrapper: Wrapper, label: string, index = 0) {
