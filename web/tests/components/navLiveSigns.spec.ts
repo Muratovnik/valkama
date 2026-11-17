@@ -106,8 +106,10 @@ describe('rows with no work moving', () => {
     const idle = row(wrapper, 'MAIN-20')
     const working = row(wrapper, 'MAIN-31')
     expect(idle.classList).toContain('muted')
-    expect(idle.querySelector('.nav-row-lead')?.children).toHaveLength(0)
-    expect(working.querySelector('.nav-row-lead')?.children).toHaveLength(1)
+    // The room stands on both rows; the sign only on the one with work.
+    expect(idle.querySelector('.nav-row-lead')).not.toBeNull()
+    expect(idle.querySelector('.nav-row-lead .session-sign')).toBeNull()
+    expect(working.querySelector('.nav-row-lead .session-sign')).not.toBeNull()
     expect(hintOf(idle)).toBe('Pinned · no work now · Backlog')
     expect(idle.querySelector('.nav-row-link')?.getAttribute('aria-label')).toBe(
       'MAIN-20 Notes for the owner: Pinned · no work now · Backlog',
