@@ -651,6 +651,8 @@ def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         author=_author(payload),
         acceptance=payload.get("acceptance"),
         projects=payload.get("projects"),
+        # `_create` claims it in the same all-or-nothing change, before anything is kept.
+        claimed=payload.get("claim") is True,
     )
 
 

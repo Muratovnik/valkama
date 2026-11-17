@@ -388,11 +388,29 @@ class PlanningDomainTests(unittest.TestCase):
                 ({"state": "triage"}, "triage"),
                 ({"state": "ready", "acceptance": "assignment"}, "ready"),
                 ({"acceptance": "assignment", "claim": True}, "active"),
+                # An active state named outright, by its key and by its category: the
+                # claim in the same call is its executor.
+                ({"state": "dev", "acceptance": "assignment", "claim": True}, "active"),
+                ({"state": "active", "acceptance": "assignment", "claim": True}, "active"),
             ):
-                with self.subTest(who=who, created=category):
+                with self.subTest(who=who, created=category, state=payload.get("state")):
                     created = create(who, **payload)
                     stands = service.get_work_item(self.conn, str(created["reference"]))
                     self.assertEqual(category, stands["state"]["category"])
+                    if payload.get("claim"):
+                        self.assertEqual("dev", stands["state"]["key"])
+                        self.assertNotEqual("", stands["claim_ref"])
+            # Without the claim nobody would work it, and the refusal says to send one.
+            with self.subTest(who=who, state="dev", claim=False):
+                before = counts()
+                with self.assertRaises(model.WorkflowGuardError) as refusal:
+                    create(who, state="dev", acceptance="assignment")
+                self.assertEqual(
+                    "[executor] the new item has no executor: create it with claim to start"
+                    " it at once",
+                    str(refusal.exception),
+                )
+                self.assertEqual(before, counts())
 
     # -- claims and revisions ------------------------------------------------
 
