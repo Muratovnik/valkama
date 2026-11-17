@@ -7,7 +7,7 @@ hook of the session that made the commit takes it here, in a transaction of its
 own, after the shell call the commit was made in.
 
 `take` records the commits of each record, strictly by the time it was written,
-and attaches each new one to the task its agent works on. Taking a record twice
+across every session, and attaches each new one to the task its agent works on. Taking a record twice
 inserts nothing the second time: the pair is unique, and only a commit inserted
 now is attached. A record that changes nothing is worked off, and whoever reads
 it may delete its file, inside a transaction not yet committed as well: what
@@ -137,11 +137,13 @@ class Hook:
 @dataclass
 class Taken:
     """What one `take` did: the lines that answer the agent, the files of the records that
-    changed the store, and those that changed nothing (worked off)."""
+    changed the store, those that changed nothing (worked off), and those of another
+    session that changed it, left for that session's hook."""
 
     lines: list[str] = field(default_factory=list)
     applied: list[str] = field(default_factory=list)
     worked_off: list[str] = field(default_factory=list)
+    kept: list[str] = field(default_factory=list)
 
     @property
     def done(self) -> list[str]:
@@ -276,32 +278,116 @@ def agent_of(hook: Hook, record: dict) -> str | None:
     return None
 
 
-def take(conn: sqlite3.Connection, records: Iterable[tuple[str, dict, bool]], hook: Hook) -> Taken:
-    """Take records inside the caller's transaction, strictly by the time each was written;
-    the lines that tell the agent where each commit went.
+@dataclass(frozen=True)
+class _Entry:
+    """One record a reader takes: its file, the hook of the session it is decided for, and
+    whether it is a leftover, whose agent is not known, so its session decides."""
 
-    Each record comes with its file and whether it is a leftover, whose agent is
-    not known, so its session decides. A commit a rewrite in this same batch
-    replaces, the old commit known by then, is recorded without a decision of its
-    own: the rewrite gives it the old one's links when its turn comes, so an amend
-    reported twice is decided once.
+    path: str
+    record: dict
+    hook: Hook
+    leftover: bool
+
+
+def take(conn: sqlite3.Connection, records: Iterable[tuple[str, dict, bool]], hook: Hook) -> Taken:
+    """Take a client hook's records inside the caller's transaction; the lines that tell
+    its agent where each commit went.
+
+    Each record comes with its file and whether it is a leftover. A batch holding
+    a rewrite first takes the records of the rewrite's project lying on disk before
+    it, any session's (`_earlier`): the record of the commit it rewrote may be
+    another session's, and a commit decided before that record would be decided
+    by the wrong session. Each of those is decided by its own session, and says
+    nothing to this agent; its file is left for its own session's hook, which finds
+    it worked off.
+    """
+
+    entries = [_Entry(path, record, hook, leftover) for path, record, leftover in records]
+    return _take(conn, entries, hook.session_id)
+
+
+def _take(conn: sqlite3.Connection, entries: list[_Entry], reader: str | None) -> Taken:
+    """Take records strictly by the time each was written, across every session.
+
+    The lines and the files to delete are the reader's session's; a reader of
+    no session (the sweep, the net) answers nobody and owns every file. A commit
+    a rewrite in this same batch replaces, the old commit known by then, is
+    recorded without a decision of its own: the rewrite gives it the old one's
+    links when its turn comes, so an amend reported twice is decided once.
     """
 
     taken = Taken()
-    decision = _Decision(conn, hook)
-    batch = sorted(records, key=lambda found: str(found[1]["occurred_at"]))
+    batch = sorted(
+        [*entries, *_earlier(conn, entries)],
+        key=lambda entry: (
+            str(entry.record["occurred_at"]),
+            _written(entry.path),
+            entry.hook.session_id != reader,
+        ),
+    )
+    decisions: dict[str, _Decision] = {}
     replacing: dict[tuple[str, str], list[str]] = {}
-    for _path, record, _leftover in batch:
-        for pair in record["rewritten"]:
-            replacing.setdefault((str(record["project_id"]), pair["to"]), []).append(pair["from"])
-    for path, record, leftover in batch:
+    for entry in batch:
+        for pair in entry.record["rewritten"]:
+            project_id = str(entry.record["project_id"])
+            replacing.setdefault((project_id, pair["to"]), []).append(pair["from"])
+    for entry in batch:
+        hook, record = entry.hook, entry.record
+        ours = reader is None or hook.session_id == reader
+        lines = taken.lines if ours else []
         if record["rewrite"] is None:
-            agent = None if leftover else agent_of(hook, record)
-            changed = _record(conn, decision, record, agent, replacing, taken.lines)
+            decision = decisions.setdefault(hook.session_id, _Decision(conn, hook))
+            agent = None if entry.leftover else agent_of(hook, record)
+            changed = _record(conn, decision, record, agent, replacing, lines)
         else:
-            changed = _rewrite(conn, record, hook, taken.lines)
-        (taken.applied if changed else taken.worked_off).append(path)
+            changed = _rewrite(conn, record, hook, lines)
+        if not changed:
+            taken.worked_off.append(entry.path)
+        elif ours:
+            taken.applied.append(entry.path)
+        else:
+            taken.kept.append(entry.path)
     return taken
+
+
+def _written(path: str) -> int:
+    """The nanosecond a record's file name carries; 0 for a name that carries none."""
+
+    named = commit_records.name_parts(os.path.basename(path))
+    return named[1] if named is not None else 0
+
+
+def _earlier(conn: sqlite3.Connection, entries: Sequence[_Entry]) -> list[_Entry]:
+    """The records lying on disk before a rewrite among `entries`, of its project and of
+    any session, that `entries` do not hold: each a leftover of the session its file
+    is named for."""
+
+    before: dict[str, int] = {}
+    for entry in entries:
+        if entry.record["rewrite"] is not None:
+            project_id = str(entry.record["project_id"])
+            before[project_id] = max(before.get(project_id, 0), _written(entry.path))
+    if not before:
+        return []
+    held = {_same(entry.path) for entry in entries}
+    now = entries[0].hook.now
+    found = []
+    for at, key, path in _files(conn):
+        if at >= max(before.values()):
+            break
+        if _same(path) in held:
+            continue
+        record = commit_records.read(path, notify.loads)
+        owner = _owner(record, key) if record is not None else None
+        if record is None or owner is None:
+            continue
+        if at < before.get(str(record["project_id"]), 0):
+            found.append(_Entry(path, record, Hook(owner[0], owner[1], None, now), True))
+    return found
+
+
+def _same(path: str) -> str:
+    return os.path.normcase(os.path.abspath(path))
 
 
 def _record(
@@ -552,31 +638,31 @@ def sweep_pending(conn: sqlite3.Connection) -> bool:
 def sweep(conn: sqlite3.Connection, *, limit: int) -> int:
     """The planning sweep's step: take the oldest `limit` records nobody took for an hour.
 
-    Each is decided by the session its file is named for, as a leftover is: which
-    agent made it is not known. The step answers nobody. It runs inside the pass's
-    transaction and has no moment after it commits, so it deletes only the records
-    that changed nothing, which whatever made them so has committed already or
-    writes in this transaction: a record it applied stays until the next pass or
+    They are taken in one pass, by the time each was written across every session,
+    and each is decided by the session its file is named for, as a leftover is:
+    which agent made it is not known. The step answers nobody. It runs inside the
+    pass's transaction and has no moment after it commits, so it deletes only the
+    records that changed nothing, which whatever made them so has committed already
+    or writes in this transaction: a record it applied stays until the next pass or
     its session's hook finds it worked off. A file that is no record goes to
     `rejected/` once it is a week old. How many records changed the store.
     """
 
     now_ns = _now_ns()
-    batches: dict[tuple[str, str], list[tuple[str, dict, bool]]] = {}
+    now = commit_records.timestamp(now_ns)
+    entries: list[_Entry] = []
     for due in itertools.islice(_due(conn, now_ns), limit):
         if isinstance(due, str):
             commit_records.reject(due)
             continue
-        path, record, owner = due
-        batches.setdefault(owner, []).append((path, record, True))
-    changed = 0
-    for (client, session), records in batches.items():
-        hook = Hook(client, session, None, commit_records.timestamp(now_ns))
-        taken = take(conn, records, hook)
-        changed += len(taken.applied)
-        for path in taken.worked_off:
-            commit_records.remove(path)
-    return changed
+        path, record, (client, session) = due
+        entries.append(_Entry(path, record, Hook(client, session, None, now), True))
+    if not entries:
+        return 0
+    taken = _take(conn, entries, None)
+    for path in taken.worked_off:
+        commit_records.remove(path)
+    return len(taken.applied)
 
 
 def _owner(record: dict, key: str) -> tuple[str, str] | None:
@@ -812,30 +898,30 @@ def _take_waiting(
 ) -> None:
     """Take the records waiting for a closing session or for a commit in a closed card's
     projects, in a transaction of their own, and delete the files it is through with
-    once it commits. Each is decided by the session its file is named for, as a
-    leftover is. A busy store leaves them all for their session's hook or the sweep.
+    once it commits. They are taken by the time each was written across every
+    session, each decided by the session its file is named for, as a leftover is.
+    A busy store leaves them all for their session's hook or the sweep.
     """
 
     sessions = {window.session for window in windows if window.session is not None}
     projects = {str(root["project_id"]) for found in roots.values() for root in found}
-    batches: dict[tuple[str, str], list[tuple[str, dict, bool]]] = {}
+    now = commit_records.timestamp(_now_ns())
+    entries: list[_Entry] = []
     for _at, key, path in _files(conn):
         record = commit_records.read(path, notify.loads)
         owner = _owner(record, key) if record is not None else None
         if record is None or owner is None:
             continue
         if owner[1] in sessions or str(record["project_id"]) in projects:
-            batches.setdefault(owner, []).append((path, record, True))
-    if not batches:
+            entries.append(_Entry(path, record, Hook(owner[0], owner[1], None, now), True))
+    if not entries:
         return
-    now = commit_records.timestamp(_now_ns())
     done: list[str] = []
     try:
         conn.execute("BEGIN IMMEDIATE")
         try:
             with calls.bind(calls.valkama(), HOOK_TOOL):
-                for (client, session), records in batches.items():
-                    done += take(conn, records, Hook(client, session, None, now)).done
+                done = _take(conn, entries, None).done
             conn.execute("COMMIT")
         except BaseException:
             conn.execute("ROLLBACK")

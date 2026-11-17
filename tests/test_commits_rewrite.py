@@ -16,14 +16,17 @@ import threading
 import time
 import unittest
 
+from server import mcp_surface
 from server.hooks import commit_records, notify
-from server.planning import calls, commits
+from server.planning import calls, commits, sweep
 
 from .commit_fixtures import CLAUDE, PROJECT, SCRIPT
 from .test_commits_pickup import RuleCase, context
 
 #: Turns the second line of a `rebase -i` list into a squash into the first.
 SQUASH_SECOND = "sed -i -e '2s/^pick/squash/'"
+#: A second Claude Code session, S2.
+OTHER = "019a3c2e-cccc-7c11-9e0f-2f4b6d8a1c3e"
 
 
 class RewriteCase(RuleCase):
@@ -350,6 +353,88 @@ class MergeTests(RewriteCase):
                 )
                 self.assertEqual([], self.place.everywhere())
         self.assertEqual([], self.rows())
+
+
+class OrderAcrossSessionsTests(RewriteCase):
+    """Records apply in one time order across sessions, whichever reader takes them.
+
+    S1 holds T1 and S2 holds T2, both of `alpha`. S2 commits d, S1 commits c, and
+    S2 amends c into c'. The record of S1's commit lies on disk before S2's amend,
+    and S2's own commit d before both, so a pass grouped by session would decide
+    c' as S2's commit before it knew c.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.t1, self.t2 = self.task("First", PROJECT), self.task("Second", PROJECT)
+        self.claim(self.t1)
+        meta = {"sessionId": OTHER, "threadId": OTHER}
+        mcp_surface.call_tool(self.conn, "claim_work_item", {"id": self.t2}, meta=meta)
+        self.conn.commit()
+        self.d = self.by_other("d")
+        self.c = self.made("c")
+        (self.repository / "amended.txt").write_text("amended", encoding="utf-8")
+        self.git("add", "amended.txt", session=False, CLAUDE_CODE_SESSION_ID=OTHER)
+        self.git(
+            "commit", "-q", "--amend", "--no-edit", session=False, CLAUDE_CODE_SESSION_ID=OTHER
+        )
+        self.amended = self.place.head()
+
+    def by_other(self, name: str) -> str:
+        (self.repository / f"{name}.txt").write_text(name, encoding="utf-8")
+        self.git("add", f"{name}.txt", session=False, CLAUDE_CODE_SESSION_ID=OTHER)
+        self.git("commit", "-qm", f"feat: {name}", session=False, CLAUDE_CODE_SESSION_ID=OTHER)
+        return self.place.head()
+
+    def settled(self) -> None:
+        """c' on T1, as S1 decided c; d on T2; c rewritten to c'."""
+
+        self.assertEqual(
+            {(self.t1, self.amended), (self.t2, self.d)},
+            {row[:2] for row in self.attached()},
+        )
+        self.assertEqual(self.amended, self.rewritten()[self.c])
+
+    def s1_finds_its_record_worked_off(self) -> None:
+        self.assertEqual(1, len(self.place.everywhere()), "S1's record waits for S1's hook")
+        self.finds_worked_off(CLAUDE)
+
+    def s2_finds_its_records_worked_off(self) -> None:
+        self.finds_worked_off(OTHER)
+
+    def finds_worked_off(self, session: str) -> None:
+        written = self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        stdout, stderr = self.claude(session)
+        self.assertEqual(("", b""), (stderr, stdout), "nothing to say: worked off")
+        self.assertEqual([], self.place.everywhere())
+        self.assertEqual(
+            written, self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        )
+
+    def test_a_rewrite_of_another_sessions_commit_waits_for_its_record(self) -> None:
+        """The hook of S2 takes the record of S1 lying before its amend first."""
+
+        stdout, stderr = self.claude(OTHER)
+        self.assertEqual("", stderr)
+        self.assertEqual(
+            f"Valkama attached your commit {self.short(self.d)} to {self.t2}.\n"
+            f"{self.moved(self.c, self.amended)}",
+            context(stdout),
+            "S2's lines say nothing of where S1's commit went",
+        )
+        self.settled()
+        self.s1_finds_its_record_worked_off()
+
+    def test_the_sweep_takes_the_same_records_in_the_same_order(self) -> None:
+        for path in self.place.everywhere():
+            self.aged(path, 61 * 60)
+        step = [found for found in sweep.STEPS if found.name == sweep.COMMITS]
+        self.assertEqual({sweep.COMMITS: 4}, sweep.run_pass(self.conn, steps=step).changed)
+        self.settled()
+        self.assertEqual(4, len(self.place.everywhere()), "applied: they wait for a hook")
+        self.assertEqual((b"", ""), self.claude(), "S1's record is worked off")
+        self.assertEqual(3, len(self.place.everywhere()))
+        self.s2_finds_its_records_worked_off()
 
 
 class ConcurrentPickupTests(RewriteCase):

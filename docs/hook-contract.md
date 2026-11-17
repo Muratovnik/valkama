@@ -2061,10 +2061,19 @@ deleted as well: that is how the second file of a nested client's commit goes.
 A busy store, or one of another schema, leaves every record where it is for the
 session's next hook, and the answer says nothing of it.
 
+Records apply in one order of time across every session. When the hook's records
+hold a rewrite, it first takes every record of that rewrite's project lying
+before it in the same places, whichever session's: the commit an amend rewrote
+may be another session's, whose record is older than the amend, and deciding
+the new commit before that record is taken would decide it for the wrong
+session. Each such record is decided by the session its file is named for, as a
+leftover is, the answer says nothing of it, and its file stays for its own
+session's hook, which finds it changing nothing and deletes it.
+
 The planning sweep of a long-lived process takes what no hook took: its
 `commits` step, every ten minutes, takes up to 200 records an hour old or more
-from the same places, each decided by the session its file is named for, and
-answers nobody. It writes as Valkama's own call under the step's name. The step
+from the same places, in the order they were written across every session, each
+decided by the session its file is named for, and answers nobody. It writes as Valkama's own call under the step's name. The step
 cannot act after the pass commits, so it deletes only records that change
 nothing: a record it applied stays until the next pass, or until a hook of its
 session, finds it changing nothing and deletes it. A file there that is no

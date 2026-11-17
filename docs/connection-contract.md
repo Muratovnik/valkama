@@ -944,8 +944,9 @@ transition ends the claim, by the first of these that holds:
 
 Once the transition has committed, the records the commit hook left that no
 client hook has taken yet -- the closing session's and those of a commit in the
-card's projects -- are taken first, in a transaction of their own, so a commit a
-hook did report is known before anything is named. Then Git is asked, outside any
+card's projects -- are taken first, in a transaction of their own and in the
+order they were written across every session, so a commit a hook did report is
+known before anything is named. Then Git is asked, outside any
 transaction and for at most 5 seconds, in each root of the card's projects that
 is on this machine with a repository of its own:
 `git log --branches --tags HEAD --since=<window>`. Of what it lists, a commit is
