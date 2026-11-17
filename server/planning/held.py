@@ -239,7 +239,11 @@ def lost_since_last_call(
 
 @read_model.whole_store_read()
 def held_by_holder(
-    conn: sqlite3.Connection, session: object, agent: str | None
+    conn: sqlite3.Connection,
+    session: object,
+    agent: str | None,
+    *,
+    settings: participation.Settings,
 ) -> list[sqlite3.Row]:
     """The open items one holder of a session holds, by the rule of `held_by_session`.
 
@@ -247,7 +251,9 @@ def held_by_holder(
     own holder, whose label names no agent: `codex (session S)` and not
     `codex agent A (session S)`. A label that is a name and no session's holds
     for nobody here. Each row is the item's, with its space's `space_key`, most
-    recently changed first. Read-only.
+    recently changed first. `settings` is the caller's snapshot of the
+    participation setting (`participation.load`), read once for its whole write.
+    Read-only.
     """
 
     session = _required(session)
@@ -255,24 +261,24 @@ def held_by_holder(
     suffix = subscriptions.holder_suffix(session, agent or None)
     return [
         row
-        for row, _held_as in _holds(
-            conn, suffix, participation.load(conn), lambda label: _agent(label) == wanted
-        )
+        for row, _held_as in _holds(conn, suffix, settings, lambda label: _agent(label) == wanted)
     ]
 
 
 @read_model.whole_store_read()
-def held_by_agents(conn: sqlite3.Connection, session: object) -> list[sqlite3.Row]:
+def held_by_agents(
+    conn: sqlite3.Connection, session: object, *, settings: participation.Settings
+) -> list[sqlite3.Row]:
     """The open items an agent of the session holds, by its claim or a step: what the
-    session's own holder holds alone is left out. Rows as `held_by_holder` gives them.
-    Read-only."""
+    session's own holder holds alone is left out. Rows and `settings` as
+    `held_by_holder` has them. Read-only."""
 
     session = _required(session)
     suffix = subscriptions.holder_suffix(session)
     return [
         row
         for row, _held_as in _holds(
-            conn, suffix, participation.load(conn), lambda label: _agent(label) not in ("", None)
+            conn, suffix, settings, lambda label: _agent(label) not in ("", None)
         )
     ]
 

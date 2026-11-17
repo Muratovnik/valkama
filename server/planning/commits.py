@@ -34,8 +34,10 @@ level that holds anything decides:
   none holding its space's default one; with several such, or none, the commit
   goes nowhere and the answer names them, or every task held when none fits;
 - none at either level: to the task the session closed last, into review or
-  completed, within `RECENT_CLOSE`, the same two levels deciding, when its
-  projects hold the commit's; otherwise nowhere, and the answer recalls the rule.
+  completed, within the period its own space sets (`recent_close_minutes` of
+  the participation setting, 30 by default), the same two levels deciding, when
+  its projects hold the commit's; otherwise nowhere, and the answer recalls the
+  rule. The setting is read once for the whole write (`participation.load`).
 
 An attachment gives the task the commit's project with the source `commits`
 (`item_projects.put_from_commit`) and one `commit_attached` event, both signed
@@ -79,15 +81,26 @@ from typing import Any, TypeVar
 from .. import git_worktrees
 from ..hooks import commit_records, notify
 from ..projects import project_registry
-from . import calls, held, item_projects, leases, model, read_model, request_model, service
+from . import (
+    calls,
+    held,
+    item_projects,
+    leases,
+    model,
+    participation,
+    read_model,
+    request_model,
+    service,
+)
 
 #: The tool a client hook's own call is bound under (`calls.bind`): what it writes is
 #: Valkama's, and the session and agent of the commit live on the commit's row.
 HOOK_TOOL = "commit-hook"
 #: Who an attachment the server makes is signed by, in its row and its event.
 AUTHOR = calls.VALKAMA
-#: How long after the session closed a task a commit holding nothing still goes to it.
-RECENT_CLOSE = 30 * 60
+#: The number of the participation setting that says how many minutes after the session
+#: closed a task a commit holding nothing still goes to it, read by the task's space.
+CLOSE_PERIOD = "recent_close_minutes"
 #: The categories a close moves into: review, since entering it ends the claim, and
 #: completed. Cancelled work takes no commit.
 CLOSED_CATEGORIES = ("review", "completed")
@@ -98,8 +111,10 @@ SHORT_HASH = 9
 SUBJECT_LIMIT = 72
 
 #: The newest move of a session's confirmed call, or of one holder of it, into a state
-#: of `CLOSED_CATEGORIES` on a task, since a time; and how many whole minutes ago. A
-#: move logs the key of the state it reached, before `: ` and a note when there is one.
+#: of `CLOSED_CATEGORIES` on a task, within the period of the task's own space; and how
+#: many whole minutes ago. The period is in minutes: `:periods` maps each space that
+#: sets its own to it, and every other space reads `:period`, the common one. A move
+#: logs the key of the state it reached, before `: ` and a note when there is one.
 _RECENT = (
     "SELECT w.work_item_id, p.key, w.number,"
     " CAST((julianday(:now) - julianday(e.created_at)) * 1440 AS INTEGER)"
@@ -114,7 +129,8 @@ _RECENT = (
     " AND {agent} AND e.action = 'transitioned'"
     " AND st.category IN (SELECT value FROM json_each(:categories))"
     " AND w.kind IN (SELECT value FROM json_each(:kinds))"
-    " AND julianday(e.created_at) >= julianday(:now) - :window / 86400.0"
+    " AND julianday(e.created_at) >= julianday(:now) - coalesce("
+    "(SELECT value FROM json_each(:periods) WHERE key = w.planning_space_id), :period) / 1440.0"
     " AND julianday(e.created_at) <= julianday(:now)"
     " ORDER BY e.id DESC LIMIT 1"
 )
@@ -195,11 +211,15 @@ class _Level:
 
 
 class _Decision:
-    """The holds and the registry one `take` reads, each once, for every commit in it."""
+    """The holds and the registry one `take` reads, each once, for every commit in it;
+    `settings` is the write's one snapshot of the participation setting."""
 
-    def __init__(self, conn: sqlite3.Connection, hook: Hook) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, hook: Hook, settings: participation.Settings
+    ) -> None:
         self.conn = conn
         self.hook = hook
+        self.settings = settings
         self._holds: dict[tuple[str, str | None], list[_Task]] = {}
         self._listing: project_registry.RegistryResult | None = None
 
@@ -213,9 +233,9 @@ class _Decision:
         if key not in self._holds:
             session = self.hook.session_id
             rows = (
-                held.held_by_agents(self.conn, session)
+                held.held_by_agents(self.conn, session, settings=self.settings)
                 if level.holder == "agents"
-                else held.held_by_holder(self.conn, session, level.agent)
+                else held.held_by_holder(self.conn, session, level.agent, settings=self.settings)
             )
             tasks = [
                 _Task(
@@ -238,8 +258,11 @@ class _Decision:
         return any(root["project_id"] == project_id for root in roots)
 
     def recent(self, level: _Level) -> tuple[_Task, int] | None:
-        """The task this level closed last within `RECENT_CLOSE`, and how many minutes ago."""
+        """The task this level closed last within the period its own space sets, and how
+        many minutes ago: a newer close past its space's period hides no older one within
+        its own."""
 
+        spaces = (space for space in self.settings.own_values if space is not None)
         found = self.conn.execute(
             _RECENT.format(agent=_AGENT_CLAUSES[level.holder]),
             {
@@ -250,7 +273,10 @@ class _Decision:
                 "agent": level.agent,
                 "categories": json.dumps(CLOSED_CATEGORIES),
                 "kinds": json.dumps(sorted(model.TASK_KINDS)),
-                "window": RECENT_CLOSE,
+                "periods": json.dumps(
+                    {space: self.settings.number(space, CLOSE_PERIOD) for space in spaces}
+                ),
+                "period": self.settings.number(None, CLOSE_PERIOD),
             },
         ).fetchone()
         if found is None:
@@ -319,6 +345,7 @@ def _take(conn: sqlite3.Connection, entries: list[_Entry], reader: str | None) -
     """
 
     taken = Taken()
+    settings = participation.load(conn)
     batch = sorted(
         [*entries, *_earlier(conn, entries)],
         key=lambda entry: (
@@ -338,7 +365,7 @@ def _take(conn: sqlite3.Connection, entries: list[_Entry], reader: str | None) -
         ours = reader is None or hook.session_id == reader
         lines = taken.lines if ours else []
         if record["rewrite"] is None:
-            decision = decisions.setdefault(hook.session_id, _Decision(conn, hook))
+            decision = decisions.setdefault(hook.session_id, _Decision(conn, hook, settings))
             agent = None if entry.leftover else agent_of(hook, record)
             changed = _record(conn, decision, record, agent, replacing, lines)
         else:
