@@ -49,6 +49,11 @@ otherwise cascade into them:
 - **waiting-words** creates the table of the words a person left on a goal or stage that no
   session heard (`work_item_waiting_notices`) and its two indexes. It starts empty:
   which of a person's acts before 3.0 nobody heard cannot be known now.
+- **ended-requests** rebuilds `work_item_requests` from the fresh declaration, with the `purpose`
+  a question to the owner may carry and the reasons a close stores: a request still
+  pending on a closed item, which 2.9 read `task_closed` and left pending, ends
+  `expired` as `item_completed` or `item_cancelled` by the category its item stands
+  in, with no event, as does one that stored `task_closed`.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -56,7 +61,7 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
-The postconditions `fresh-shape` to `second-run` and `store-identity` to `fresh-tables` are checked after the steps, inside the
+The postconditions `fresh-shape` to `second-run` and `store-identity` to `requests-ended` are checked after the steps, inside the
 same transaction, `second-run` last; `store` adds `recovery-point`, the recovery point. `row-counts` compares the
 row counts of the tables `oracle` counted and of the projects `item-projects` fills; `fresh-tables` holds every
 other table to being empty and declared by a fresh store.
@@ -74,7 +79,7 @@ from typing import Any
 
 from .. import store_steps
 from ..store_steps import Context, Postcondition, Step, UnmetError
-from . import item_tree, model, read_model, words, work_model_probes
+from . import item_tree, model, questions, read_model, words, work_model_probes
 from . import store as planning_store
 
 #: Who every record the migration writes names as its author.
@@ -268,6 +273,10 @@ class Oracle:
     content: dict[str, dict[str, Any]] = field(default_factory=dict)
     numbers: set[tuple[str, int]] = field(default_factory=set)
     request_ids: frozenset[str] = frozenset()
+    #: Each request's item, kind and status, and the reason `ended-requests` ends it with, by id:
+    #: one pending on a closed item, or one that stored `task_closed`.
+    requests: dict[str, tuple[str, str, str]] = field(default_factory=dict)
+    ended: dict[str, str] = field(default_factory=dict)
     containers: int = 0
     started_from_created: int = 0
     #: The rows `item-projects` leaves in `work_item_projects`, a table the store `oracle`
@@ -439,6 +448,28 @@ def _derived(conn: sqlite3.Connection, query: str, containers: Iterable[str]) ->
         str(row[0]): _derive(row[1], row[2], row[3])
         for row in conn.execute(query, (identities, identities))
     }
+
+
+def _read_requests(
+    conn: sqlite3.Connection, oracle: Oracle, states: Mapping[str, sqlite3.Row]
+) -> None:
+    """`oracle`'s reading of the requests `ended-requests` ends, in Python: every pending one, and every one
+    that stored `task_closed`, on an item standing in a state that closes it."""
+
+    places = {
+        str(row[0]): states.get(str(row[1]))
+        for row in conn.execute("SELECT work_item_id, state_id FROM work_items")
+    }
+    for row in conn.execute(
+        "SELECT request_id, work_item_id, kind, status, expired_reason FROM work_item_requests"
+    ):
+        identity = str(row["request_id"])
+        oracle.requests[identity] = (str(row["work_item_id"]), str(row["kind"]), str(row["status"]))
+        state = places.get(str(row["work_item_id"]))
+        if state is None or not state["is_terminal"]:
+            continue
+        if row["status"] == "pending" or row["expired_reason"] == "task_closed":
+            oracle.ended[identity] = questions.closed_reason(str(state["category"]))
 
 
 def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
@@ -673,6 +704,7 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
     )
     oracle.data_scope_id = _data_scope_id(conn)
     oracle.spaces = _spaces(conn)
+    _read_requests(conn, oracle, states)
     context.memo["oracle"] = oracle
     context.memo["renames"] = renames
     return {
@@ -1070,46 +1102,58 @@ def _table_info(conn: sqlite3.Connection, table: str) -> list[tuple[str, ...]]:
 _SESSIONS = "sessions"
 
 
-def _fresh_sessions(context: Context) -> tuple[str, list[tuple[str, ...]]]:
-    """The `CREATE TABLE` of `sessions` and its columns, as a fresh store of this build
+def _fresh_table(context: Context, table: str) -> tuple[str, list[tuple[str, ...]]]:
+    """The `CREATE TABLE` of one table and its columns, as a fresh store of this build
     holds them; read once a run."""
 
-    found = context.memo.get("fresh_sessions")
+    found = context.memo.get(f"fresh_{table}")
     if found is None:
         if context.reference is None:
             raise UnmetError("no fresh store to compare with")
         with context.reference() as fresh:
             declared = fresh.execute(
-                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (_SESSIONS,)
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
             ).fetchone()
-            found = (str(declared[0]), _table_info(fresh, _SESSIONS))
-        context.memo["fresh_sessions"] = found
+            found = (str(declared[0]), _table_info(fresh, table))
+        context.memo[f"fresh_{table}"] = found
     return found
 
 
 def _sessions_needed(conn: sqlite3.Connection, context: Context) -> bool:
-    return _table_info(conn, _SESSIONS) != _fresh_sessions(context)[1]
+    return _table_info(conn, _SESSIONS) != _fresh_table(context, _SESSIONS)[1]
 
 
 def _rebuild_sessions(conn: sqlite3.Connection, context: Context) -> list[str]:
     """`sessions` in the shape a fresh store declares, every value carried as stored."""
 
-    declared, columns = _fresh_sessions(context)
+    definition, names = _fresh_rebuild(conn, context, _SESSIONS)
+    carried = ", ".join(names)
+    rows = f"({carried}) SELECT {carried} FROM {_SESSIONS}"  # noqa: S608 - the pragma's names
+    return planning_store.rebuild_table(conn, _SESSIONS, definition, rows)
+
+
+def _fresh_rebuild(conn: sqlite3.Connection, context: Context, table: str) -> tuple[str, list[str]]:
+    """What rebuilding `table` to a fresh store's declaration takes: that declaration
+    under the replacement's name, and the columns of it the table holds, in its order.
+
+    A column the table holds that this build does not declare is refused: its values
+    would have nowhere to go.
+    """
+
+    declared, columns = _fresh_table(context, table)
     names = [column[0] for column in columns]
-    present = _columns(conn, _SESSIONS)
+    present = _columns(conn, table)
     unknown = present - set(names)
     if unknown:
-        raise RuntimeError(f"sessions holds columns this build does not know: {sorted(unknown)}")
-    carried = ", ".join(name for name in names if name in present)
+        raise RuntimeError(f"{table} holds columns this build does not know: {sorted(unknown)}")
     definition = re.sub(
-        rf'^CREATE TABLE\s+"?{_SESSIONS}"?',
-        f"CREATE TABLE {_SESSIONS}{planning_store.REPLACEMENT}",
+        rf'^CREATE TABLE\s+"?{table}"?',
+        f"CREATE TABLE {table}{planning_store.REPLACEMENT}",
         declared,
         count=1,
         flags=re.IGNORECASE,
     )
-    rows = f"({carried}) SELECT {carried} FROM {_SESSIONS}"  # noqa: S608 - the pragma's names
-    return planning_store.rebuild_table(conn, _SESSIONS, definition, rows)
+    return definition, [name for name in names if name in present]
 
 
 def _items_needed(conn: sqlite3.Connection, context: Context) -> bool:
@@ -1578,6 +1622,100 @@ def _check_waiting(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError(f"{_WAITING} or one of its indexes is missing")
 
 
+# -- how a request on a closed item ended --------------------------------------
+
+_REQUESTS = "work_item_requests"
+#: A request `ended-requests` ends, read from a row `r` of the requests joined to its item's state
+#: `s`: pending, or stored `task_closed`, on an item that stands closed.
+_ENDS = "s.is_terminal = 1 AND (r.status = 'pending' OR r.expired_reason = 'task_closed')"
+#: The reason it ends with, by the category of that state, read apart from
+#: `questions.closed_reason`, which `oracle` reads with.
+_ENDED_REASON = "CASE s.category WHEN 'cancelled' THEN 'item_cancelled' ELSE 'item_completed' END"
+_REQUEST_STATES = (
+    " FROM work_item_requests r"
+    " LEFT JOIN work_items w ON w.work_item_id = r.work_item_id"
+    " LEFT JOIN workflow_states s ON s.state_id = w.state_id"
+)
+
+
+def _requests_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    declared = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (_REQUESTS,)
+    ).fetchone()
+    return (
+        "purpose" not in _columns(conn, _REQUESTS)
+        or "'task_closed'" in str(declared[0])
+        or conn.execute(f"SELECT 1{_REQUEST_STATES} WHERE {_ENDS} LIMIT 1").fetchone() is not None
+    )
+
+
+def _end_requests(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`ended-requests`: the requests in a fresh store's shape, each that a close ended stored so.
+
+    Every value is carried as stored, but a request still pending on a closed item, or
+    one that stored `task_closed`, which goes as a reason, ends `expired`: as
+    `item_cancelled` on a cancelled item and as `item_completed` on any other closed
+    one, at the moment of the migration if nothing closed it before, with its revision
+    raised as any write of a request raises it, and with no event. A request that
+    stored `task_closed` on an item that is open again is refused: which close ended
+    it is not known, and nothing may guess.
+    """
+
+    reopened = [
+        str(row[0])
+        for row in conn.execute(
+            f"SELECT r.request_id{_REQUEST_STATES}"
+            " WHERE r.expired_reason = 'task_closed' AND coalesce(s.is_terminal, 0) = 0"
+        )
+    ]
+    if reopened:
+        raise RuntimeError(
+            f"requests {reopened[:5]} stored task_closed on an item that is open:"
+            " which close ended them is not known"
+        )
+    ended = Counter(
+        str(row[0])
+        for row in conn.execute(f"SELECT {_ENDED_REASON}{_REQUEST_STATES} WHERE {_ENDS}")
+    )
+    definition, carried = _fresh_rebuild(conn, context, _REQUESTS)
+    changed = {
+        "status": f"CASE WHEN {_ENDS} THEN 'expired' ELSE r.status END",
+        "expired_reason": f"CASE WHEN {_ENDS} THEN {_ENDED_REASON} ELSE r.expired_reason END",
+        "answered_by": f"CASE WHEN {_ENDS} AND r.status = 'pending' THEN '{AUTHOR}'"
+        " ELSE r.answered_by END",
+        "resolved_at": f"CASE WHEN {_ENDS} THEN coalesce(r.resolved_at, '{context.now}')"
+        " ELSE r.resolved_at END",
+        "revision": f"CASE WHEN {_ENDS} THEN r.revision + 1 ELSE r.revision END",
+    }
+    values = ", ".join(changed.get(name, f"r.{name}") for name in carried)
+    # A trigger of another table that reads this one, as the shape of a thread reads a
+    # question, would name a table that is gone between the drop and the rename, which
+    # SQLite refuses: it goes first and comes back after, from its stored text.
+    readers = conn.execute(
+        "SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name != ?"
+        " AND sql LIKE ? ORDER BY rowid",
+        (_REQUESTS, f"%{_REQUESTS}%"),
+    ).fetchall()
+    for name, _sql in readers:
+        conn.execute(f'DROP TRIGGER "{name}"')
+    recreated = planning_store.rebuild_table(
+        conn,
+        _REQUESTS,
+        definition,
+        f"({', '.join(carried)}) SELECT {values}{_REQUEST_STATES}",
+    )
+    for name, sql in readers:
+        conn.execute(str(sql))
+        recreated.append(str(name))
+    return {"ended": dict(sorted(ended.items())), "recreated": recreated}
+
+
+def _check_requests(conn: sqlite3.Connection, context: Context) -> None:
+    if _requests_needed(conn, context):
+        raise UnmetError(f"{_REQUESTS} has not taken its new shape, or one waits on a closed item")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1599,6 +1737,30 @@ STEPS = (
     Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
     Step("addressee", "the session a request asks", _add_addressee, _addressee_needed, _check_addressee),
     Step("waiting-words", "words that wait for a session", _create_waiting, _waiting_needed, _check_waiting),
+    Step(
+        "item-projects",
+        "item projects",
+        _create_item_projects,
+        _item_projects_needed,
+        _check_item_projects,
+    ),
+    Step("labels", "labels", _drop_labels, _labels_needed, _check_labels),
+    Step("spaces", "the space", _rebuild_spaces, _space_needed, _check_space),
+    Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
+    Step(
+        "addressee",
+        "the session a request asks",
+        _add_addressee,
+        _addressee_needed,
+        _check_addressee,
+    ),
+    Step(
+        "ended-requests",
+        "how a request on a closed item ended",
+        _end_requests,
+        _requests_needed,
+        _check_requests,
+    ),
 )
 
 
@@ -2282,7 +2444,73 @@ def _holds_fresh_tables(conn: sqlite3.Connection, context: Context) -> Mapping[s
     return {"added": sorted(added)}
 
 
-def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_requests_kept(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Every request keeps its item, kind and status, but those `ended-requests` ended. How
+    many there are is `row-counts`'s to compare and which ids `requests-asked`'s, so a lost
+    one is refused there."""
+
+    oracle = _oracle(context)
+    after = {
+        str(row[0]): (str(row[1]), str(row[2]), str(row[3]))
+        for row in conn.execute(
+            "SELECT request_id, work_item_id, kind, status FROM work_item_requests"
+        )
+    }
+    found = []
+    for identity, (item, kind, status) in sorted(oracle.requests.items()):
+        now = after.get(identity)
+        if now is None:
+            continue
+        expected = (item, kind, "expired" if identity in oracle.ended else status)
+        if now != expected:
+            found.append(f"the request {identity} reads {now}, not {expected}")
+    _unmet(found, "requests")
+    return {"requests": len(after)}
+
+
+def _holds_no_closed_waits(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """No request waits on a closed item, and none says `task_closed`."""
+
+    del context
+    found = [
+        f"the request {row[0]} waits on a closed item"
+        for row in conn.execute(
+            f"SELECT r.request_id{_REQUEST_STATES} WHERE s.is_terminal = 1 AND r.status = 'pending'"
+        )
+    ]
+    found += [
+        f"the request {row[0]} says task_closed"
+        for row in conn.execute(
+            "SELECT request_id FROM work_item_requests WHERE expired_reason = 'task_closed'"
+        )
+    ]
+    _unmet(found, "requests on closed items")
+    return {"pending_on_closed": 0}
+
+
+def _p29(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The requests a close ended are the ones `oracle` foresaw, each with the reason of its
+    item's category."""
+
+    oracle = _oracle(context)
+    rows = conn.execute(
+        f"SELECT r.request_id, r.expired_reason, s.category{_REQUEST_STATES}"
+        " WHERE r.expired_reason IN ('item_completed', 'item_cancelled')"
+    ).fetchall()
+    held = {str(row[0]): str(row[1]) for row in rows}
+    found = []
+    if held != oracle.ended:
+        found.append(f"the requests a close ended are {held}, not {oracle.ended}")
+    found += [
+        f"the request {row[0]} says {row[1]} on an item in {row[2]}"
+        for row in rows
+        if row[1] != questions.closed_reason(str(row[2]))
+    ]
+    _unmet(found, "requests a close ended")
+    return {"ended": dict(sorted(Counter(held.values()).items()))}
+
+
+def _holds_second_run(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
     return {"steps_needed_again": again}
@@ -2313,6 +2541,11 @@ POSTCONDITIONS = (
     Postcondition("no-old-waiting", "no words wait from before 3.0", _p24),
     Postcondition("request-shapes", "requests and waiting words shaped as a fresh store's", _p25),
     Postcondition("fresh-tables", "a table the store lacked is declared fresh and empty", _p26),
+    Postcondition(
+        "requests-kept", "every request keeps its item, kind and status but those a close ended", _p27
+    ),
+    Postcondition("no-closed-waits", "no request waits on a closed item or says task_closed", _p28),
+    Postcondition("requests-ended", "a close ended the requests foreseen, each by its item's category", _p29),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 

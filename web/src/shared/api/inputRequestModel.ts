@@ -119,12 +119,25 @@ const requestSchema = strictObject({
   created_at: boundedText(ISO, 96),
   resolved_at: boundedText(ISO, 96).nullable(),
   revision: positiveInt(true),
-  /** `session_gone`: the session asked ended or went quiet, read while it stays so. */
+  /**
+   * `item_completed` and `item_cancelled`: its item's close ended it, done or cancelled, and
+   * reopening the item leaves it so. `session_gone`: the session asked ended or went quiet,
+   * read while it stays so.
+   */
   expired_reason: z
-    .enum(['deadline', 'withdrawn', 'execution_closed', 'task_closed', 'session_gone'])
+    .enum([
+      'deadline',
+      'withdrawn',
+      'execution_closed',
+      'item_completed',
+      'item_cancelled',
+      'session_gone',
+    ])
     .nullable(),
   /** The comment a list stands under; null for any other question. */
   comment_id: positiveInt().nullable().optional(),
+  /** What the owner's answer carries out: review, confirm or return; null for any other question. */
+  purpose: z.enum(['review', 'confirm', 'return']).nullable(),
 })
   .refine(
     (request) => new Set(request.fields.map((field) => field.id)).size === request.fields.length,
@@ -177,6 +190,11 @@ export type InputRequestField = z.infer<typeof fieldSchema>
 export type InputAnswers = z.infer<typeof answersSchema>
 export type InputRequestEntry = z.infer<typeof entrySchema>
 export type InputRequestList = z.infer<typeof listSchema>
+
+/** Whether its item's close ended the request, done or cancelled. */
+export function endedByClose(request: Pick<InputRequestEntry['request'], 'expired_reason'>) {
+  return request.expired_reason === 'item_completed' || request.expired_reason === 'item_cancelled'
+}
 
 export function validateInputRequestDetail(value: unknown): InputRequestEntry {
   const { target, request } = detailSchema.parse(value)

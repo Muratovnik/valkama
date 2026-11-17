@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from . import model
+from . import model, request_model
 
 _EVENT_ACTION_SQL = ",".join(f"'{action}'" for action in model.EVENT_ACTIONS)
 _CATEGORY_SQL = ",".join(f"'{category}'" for category in model.STORED_CATEGORIES)
@@ -73,7 +73,7 @@ def _appended(table: str) -> str:
 
 #: The agent session a request asks instead of the owner, a top-level one; null asks
 #: the owner. The 3.0 migration appends it after the columns above, so the base
-#: schema declares it last and both stores have one order.
+#: schema declares it after them, with only `purpose` behind it.
 ADDRESSEE_COLUMN = "addressee TEXT REFERENCES sessions(id)"
 #: The open requests asked of one session, read by that session.
 ADDRESSEE_INDEX = (
@@ -217,10 +217,37 @@ _WORK_ITEMS = f"""(
     started_at TEXT,
     UNIQUE(planning_space_id, number)
 )"""
+_EXPIRED_REASON_SQL = ",".join(f"'{reason}'" for reason in request_model.EXPIRED_REASONS)
+_PURPOSE_SQL = ",".join(f"'{purpose}'" for purpose in request_model.PURPOSES)
+#: A question, a decision or a list, asked of the owner or of one agent session, and
+#: how it ended. Closing its item ends one still pending (`questions.end`), as done or
+#: cancelled. The 3.0 migration rebuilds the table from this text, so the columns
+#: later schemas appended stand in the order they were appended, `purpose` last.
+_WORK_ITEM_REQUESTS = f"""(
+    request_id TEXT PRIMARY KEY,
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK(kind IN ('question','decision')),
+    prompt TEXT NOT NULL,
+    fields_json TEXT NOT NULL,
+    answers_json TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','answered','declined','expired')),
+    author TEXT NOT NULL,
+    answered_by TEXT NOT NULL DEFAULT '',
+    execution_id TEXT REFERENCES executions(execution_id),
+    session_id TEXT REFERENCES sessions(id),
+    expires_at TEXT,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT,
+    revision INTEGER NOT NULL DEFAULT 0,
+    expired_reason TEXT CHECK(expired_reason IN ({_EXPIRED_REASON_SQL})){_appended("work_item_requests")},
+    {ADDRESSEE_COLUMN},
+    purpose TEXT CHECK(purpose IS NULL OR purpose IN ({_PURPOSE_SQL}))
+)"""
 _REBUILT = {
     "planning_spaces": _PLANNING_SPACES,
     "workflow_states": _WORKFLOW_STATES,
     "work_items": _WORK_ITEMS,
+    "work_item_requests": _WORK_ITEM_REQUESTS,
 }
 #: The items of one state of one space, which every read of a state's items takes.
 #: Declared apart because the 3.0 migration creates it anew rather than from the
@@ -324,25 +351,7 @@ CREATE TABLE IF NOT EXISTS work_item_events(
     call_id INTEGER REFERENCES execution_events(id)
 );
 CREATE INDEX IF NOT EXISTS work_item_events_item ON work_item_events(work_item_id, id);
-CREATE TABLE IF NOT EXISTS work_item_requests(
-    request_id TEXT PRIMARY KEY,
-    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK(kind IN ('question','decision')),
-    prompt TEXT NOT NULL,
-    fields_json TEXT NOT NULL,
-    answers_json TEXT,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','answered','declined','expired')),
-    author TEXT NOT NULL,
-    answered_by TEXT NOT NULL DEFAULT '',
-    execution_id TEXT REFERENCES executions(execution_id),
-    session_id TEXT REFERENCES sessions(id),
-    expires_at TEXT,
-    created_at TEXT NOT NULL,
-    resolved_at TEXT,
-    revision INTEGER NOT NULL DEFAULT 0,
-    expired_reason TEXT CHECK(expired_reason IN ('deadline','withdrawn','execution_closed','task_closed')){_appended("work_item_requests")},
-    {ADDRESSEE_COLUMN}
-);
+CREATE TABLE IF NOT EXISTS work_item_requests{_WORK_ITEM_REQUESTS};
 CREATE INDEX IF NOT EXISTS work_item_requests_item ON work_item_requests(work_item_id,created_at);
 {ADDRESSEE_INDEX};
 -- The answers a question's current one replaced, one row per version. The

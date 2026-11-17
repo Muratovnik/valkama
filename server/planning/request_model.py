@@ -9,6 +9,15 @@ from datetime import UTC, datetime
 from . import model
 
 STATUSES = frozenset({"pending", "answered", "declined", "expired"})
+#: Why a request ended unanswered, as the store writes it: past its deadline, taken
+#: back, its execution over, or its item closed, done or cancelled (`questions.end`).
+#: What is only read and never written, such as `session_gone`, is not among them.
+EXPIRED_REASONS = ("deadline", "withdrawn", "execution_closed", "item_completed", "item_cancelled")
+#: What a question to the owner asks for beyond an answer: a task in review to be
+#: accepted, a goal or stage whose work is all closed to be confirmed, put-off work
+#: that came back to be taken up again. Null on any other request. Declared here,
+#: beside the statuses, because the store's CHECK reads it.
+PURPOSES = ("review", "confirm", "return")
 MAX_NOTE = 8000
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each
@@ -885,7 +894,8 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
     `last_reply` quotes its latest reply as a thread's root carries it. A review
     adds `verdicts` and `undecided`, which stand whole before any row, and a list
     on a comment `comment_id`, the comment it stands under, and `undecided`, its
-    field while nothing on it is ticked.
+    field while nothing on it is ticked. One that ended unanswered says why in
+    `expired_reason`, and one with a purpose names it in `purpose`.
     `clipped` appears when anything was left out or cut: past `MAX_COMPACT_TEXT`
     in a text, or past `MAX_COMPACT_JSON` the replaced answer first, then every
     label, then the later fields of the current one.
@@ -904,6 +914,10 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
         "question": prompt[:QUESTION_PREVIEW] + ("…" if len(prompt) > QUESTION_PREVIEW else ""),
         # Only a list stands under a comment, and only a list says which.
         **({"comment_id": record["comment_id"]} if listed else {}),
+        # Why one ended unanswered, done or cancelled among it, and what one with a
+        # purpose carries out: each only where it is set.
+        **({"expired_reason": record["expired_reason"]} if record.get("expired_reason") else {}),
+        **({"purpose": record["purpose"]} if record.get("purpose") else {}),
         **(_verdicts(descriptors, record) if review else {}),
         **(_list_undecided(descriptors, record) if listed else {}),
         "answer": [],

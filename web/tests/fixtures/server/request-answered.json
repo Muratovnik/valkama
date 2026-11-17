@@ -86,6 +86,7 @@
     "revision": 2,
     "expired_reason": null,
     "comment_id": null,
+    "purpose": null,
     "by_person": false,
     "history": [
       {

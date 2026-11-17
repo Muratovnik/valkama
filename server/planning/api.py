@@ -1301,10 +1301,10 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     batch found it.
 
     The one refusal no single tool makes: a question, or a list on a comment,
-    beside the transition that closes its item. Closing reads a waiting question
-    expired, which takes back the owner's alert before it is seen, so the question
-    would be asked and lost in one write, and a list would freeze unticked. `force`
-    does not carry it: no guard is being overridden.
+    beside the transition that closes its item. The close ends every request still
+    pending on the item in the same write, so the question would be asked and ended
+    unanswered at once, and the list ended unticked. `force` does not carry it: no
+    guard is being overridden.
     """
 
     reference = _text(payload, "id")
@@ -1330,8 +1330,9 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 def _refuse_unanswerable(applied: Mapping[str, Any]) -> None:
     """Refuse a batch that closes its item over a question or a list it wrote itself.
 
-    A closed item reads a waiting question `expired`, which takes back the owner's
-    alert before it is seen, and freezes a list before anybody could tick it.
+    The close ended both in the same write: the question before anybody saw it, the
+    list before anybody could tick it. The refusal leads to the write that passes,
+    asking or listing in a call that leaves the item open.
     """
 
     step = {"step": {"group": "transition", "index": 0}}
@@ -1339,8 +1340,8 @@ def _refuse_unanswerable(applied: Mapping[str, Any]) -> None:
         raise PlanningHttpError(
             400,
             "invalid_request",
-            "transition: a question on an item this call closes could never be"
-            " answered; move it to review, or leave the question out",
+            "transition: a question on an item this call closes would end unanswered in"
+            " the same write: ask it in a call that leaves the item open",
             step,
         )
     comments = applied.get("comments", [])
@@ -1349,8 +1350,8 @@ def _refuse_unanswerable(applied: Mapping[str, Any]) -> None:
         raise PlanningHttpError(
             400,
             "invalid_request",
-            "transition: a list on an item this call closes could never be answered;"
-            " send it to review, or leave the list out",
+            "transition: a list on an item this call closes would end unticked in the"
+            " same write: write it in a call that leaves the item open",
             step,
         )
 

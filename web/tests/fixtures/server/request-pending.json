@@ -41,6 +41,7 @@
     "revision": 0,
     "expired_reason": null,
     "comment_id": null,
+    "purpose": null,
     "by_person": null,
     "history": []
   }

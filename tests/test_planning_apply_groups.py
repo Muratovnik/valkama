@@ -450,6 +450,13 @@ class QuestionsGroupTests(BatchCase):
         self.assertEqual(before, self.untouched())
 
 
+#: The refusal of a question beside the close that would end it, word for word.
+ENDS_UNANSWERED = (
+    "transition: a question on an item this call closes would end unanswered in the"
+    " same write: ask it in a call that leaves the item open"
+)
+
+
 class AskingAndClosingTests(BatchCase):
     def closing(self, state: str, **force: object) -> dict:
         return {
@@ -459,19 +466,44 @@ class AskingAndClosingTests(BatchCase):
             "transition": {"state": state, **force},
         }
 
-    def test_a_batch_that_asks_and_closes_is_refused_and_says_why(self) -> None:
-        for state in ("done", "cancelled"):
-            with self.subTest(state=state):
-                before = self.untouched()
-                error = self.refused_batch(**self.closing(state))
-                self.assertEqual("invalid_request", error["code"])
-                self.assertEqual({"group": "transition", "index": 0}, error["step"])
-                self.assertEqual(
-                    "transition: a question on an item this call closes could never be"
-                    " answered; move it to review, or leave the question out",
-                    error["message"],
-                )
-                self.assertEqual(before, self.untouched())
+    def test_a_batch_that_asks_and_cancels_is_refused_and_says_why(self) -> None:
+        before = self.untouched()
+        error = self.refused_batch(**self.closing("cancelled"))
+        self.assertEqual("invalid_request", error["code"])
+        self.assertEqual({"group": "transition", "index": 0}, error["step"])
+        self.assertEqual(ENDS_UNANSWERED, error["message"])
+        self.assertEqual(before, self.untouched())
+
+    def test_a_batch_that_asks_and_completes_is_refused_and_writes_nothing(self) -> None:
+        # Which refusal meets an agent here is the guard on a close over an open
+        # question to the owner; whichever it is, nothing of the batch stands.
+        before = self.untouched()
+        with self.assertRaises((model.PlanningError, api.PlanningHttpError)):
+            mcp_surface.run_tool_call(
+                self.conn, BATCH, {"id": self.ref, **self.closing("done")}, meta=AGENT
+            )
+        self.conn.commit()
+        self.assertEqual(before, self.untouched())
+
+    def test_a_person_who_asks_and_closes_in_one_write_is_refused_the_same(self) -> None:
+        before = self.untouched()
+        payload = {
+            "id": self.ref,
+            "questions": [QUESTION],
+            "summary": SUMMARY,
+            "transition": {"state": "done"},
+        }
+        with self.assertRaises(api.PlanningHttpError) as caught:
+            with calls.bind(calls.browser(), "/api/planning/work-item/apply"):
+                api.handle_post(self.conn, "/api/planning/work-item/apply", payload)
+        self.conn.commit()
+        status, body = api.error_response(caught.exception)
+        self.assertEqual(400, status)
+        self.assertEqual(
+            ("invalid_request", ENDS_UNANSWERED, {"group": "transition", "index": 0}),
+            (body["error"]["code"], body["error"]["message"], body["error"]["step"]),
+        )
+        self.assertEqual(before, self.untouched())
 
     def test_force_does_not_carry_it_through(self) -> None:
         # force overrides a guard; here there is nothing to override, only a question to lose.
@@ -490,12 +522,14 @@ class AskingAndClosingTests(BatchCase):
 
     def test_a_close_with_no_question_in_it_stands_as_the_single_transition_does(self) -> None:
         # Only a question this very call asks is lost unseen: one asked before has
-        # had its chance, and closing over it reads it expired, as it always did.
+        # had its chance, and the close ends it, saying the item was done.
         asked = self.question()
         answer = self.apply(claim=True, summary=SUMMARY, transition={"state": "done"})
         self.assertEqual("done", answer["state"]["key"])
         closed = self.agent("get_work_item_request", id=asked)
-        self.assertEqual(("expired", "task_closed"), (closed["status"], closed["expired_reason"]))
+        self.assertEqual(
+            ("expired", "item_completed"), (closed["status"], closed["expired_reason"])
+        )
 
 
 class EditingAndClosingTests(BatchCase):

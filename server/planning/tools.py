@@ -239,8 +239,9 @@ _TRANSITION_FORM = (
     " acceptance, deferred and the refusals that keep a goal or stage out of work. Any"
     " state but an active or blocked one"
     " also ends the item's claim and any step claim, whoever holds them; the answer"
-    " names the holder as released, and last_claim_ref keeps reading it. Reopening"
-    " restores no claim. An"
+    " names the holder as released, and last_claim_ref keeps reading it. A close also"
+    " ends the item's pending questions and lists, expired as item_completed or"
+    " item_cancelled. Reopening restores no claim and no question. An"
     " agent's close is refused with person_spoke while a person acted on the item in"
     " the interface since an agent last wrote to it; the refusal quotes it."
 )

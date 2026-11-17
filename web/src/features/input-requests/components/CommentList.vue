@@ -43,6 +43,7 @@ import {
 } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
+import { endedByClose } from '@/shared/api/inputRequestModel.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import FieldError from '@/shared/ui/FieldError.vue'
@@ -117,7 +118,7 @@ const ticked = computed(() => {
 const isTicked = (option: string) => ticked.value.includes(option)
 
 /** Closed under it: by the card's own read, or by the list's, whichever came first. */
-const frozen = computed(() => props.itemClosed || request.value.expired_reason === 'task_closed')
+const frozen = computed(() => props.itemClosed || endedByClose(request.value))
 const waiting = computed(() => request.value.status === 'pending' && !frozen.value)
 const inForm = computed(() => waiting.value || (changing.value && !frozen.value))
 const busyMark = computed(() => busy.value || undefined)

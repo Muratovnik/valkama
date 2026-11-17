@@ -31,7 +31,7 @@ export type Outcome = 'asked' | 'failed' | 'held' | 'refused' | 'sent'
 
 function failure(error: unknown) {
   if (!(error instanceof InputRequestError)) return 'mutationError'
-  if (error.reason === 'task_closed') return 'taskClosed'
+  if (error.reason === 'item_closed') return 'taskClosed'
   return error.status === 409 || error.status === 410 ? 'conflict' : 'mutationError'
 }
 
