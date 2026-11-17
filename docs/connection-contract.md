@@ -925,10 +925,10 @@ anything; attaching a commit the item holds already changes nothing.
 
 **Since 3.0.** A commit no hook reported -- one a person made, a client without a
 session, a session whose hook is off, or `git am` and a commit inside
-`rebase -i`, which fire no commit hook -- reaches no item on its own. So a
-transition into a `review` or `completed` state names the commits made in the
-card's repositories while the work was held, and attaches none of them: the
-agent attaches the ones that belong with the `commits` group of
+`rebase -i`, which fire no commit hook -- reaches no item on its own. So an
+agent's transition into a `review` or `completed` state names the commits made
+in the card's repositories since the card was taken, and attaches none of them:
+the agent attaches the ones that belong with the `commits` group of
 [Several changes in one call](#several-changes-in-one-call).
 
 The window opens where the work began, read in the same write before the
@@ -944,8 +944,9 @@ transition ends the claim, by the first of these that holds:
 
 Once the transition has committed, the records the commit hook left that no
 client hook has taken yet -- the closing session's and those of a commit in the
-card's projects -- are taken first, in a transaction of their own, so a commit a
-hook did report is known before anything is named. Then Git is asked, outside any
+card's projects -- are taken first, in a transaction of their own and in the
+order they were written across every session, so a commit a hook did report is
+known before anything is named. Then Git is asked, outside any
 transaction and for at most 5 seconds, in each root of the card's projects that
 is on this machine with a repository of its own:
 `git log --branches --tags HEAD --since=<window>`. Of what it lists, a commit is
@@ -955,11 +956,15 @@ the store does not hold it for that project. `refs/stash`, a remote's branches
 and the notes are not read, and a commit somebody else committed into a local
 branch, such as one a pull brought, has another address. A commit of the same
 address from another machine, pulled into a local branch while the work was
-held, is named too; the agent leaves it.
+held, is named too; the agent leaves it. So is the copy a rebase in the window
+makes of a commit Valkama did not know: its committer time falls in the window,
+and its address is the session's own.
 
-The answer of the transition -- the acknowledgement and the `verbose` card of
-`apply_work_item_changes`, and the HTTP transition of the interface -- carries
-each field only when it is not empty:
+Only an agent's close runs the net. A person's transition in the interface
+does not, and its HTTP answer carries none of these fields: the line speaks to
+an agent and offers the `commits` group, which a person does not have. The
+answer of the agent's transition -- the acknowledgement and the `verbose` card
+of `apply_work_item_changes` -- carries each field only when it is not empty:
 
 | Field | Holds |
 | --- | --- |
@@ -968,9 +973,10 @@ each field only when it is not empty:
 | `unreported_unread` | the ids of the projects whose root did not answer: the transition stands all the same |
 
 A line among the answer's `warnings` names them to the agent: "These commits in
-the card's repositories were made while you held it and no hook reported them:
-valkama 3f2a9c1d0, valkama 7b1e2a9c4 and 3 more. Attach the ones that belong here
-with the commits group."
+the card's repositories were made since the card was taken and no hook reported
+them: valkama 3f2a9c1d0, valkama 7b1e2a9c4 and 3 more. Attach the ones that
+belong here with the commits group." The card was taken when the window above
+began: by its claim, by a step's claim or by the session's last claim of it.
 
 ```json
 {"reference": "MAIN-12", "state": {"key": "review", "name": "Review", "is_terminal": false},

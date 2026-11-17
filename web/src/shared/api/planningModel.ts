@@ -249,14 +249,6 @@ const commitSchema = strictObject({
   label: blankable(200),
 })
 
-/** A commit a close names as made while the item was held, which no hook reported. */
-const unreportedCommitSchema = strictObject({
-  repository: boundedText(PROJECT_ID, 160),
-  hash: boundedText(/^[0-9a-f]{40,64}$/u, 64),
-  subject: blankable(10_000),
-  committed_at: boundedText(/^\d{4}-\d{2}-\d{2}T[^\s]{1,80}$/u, 96),
-})
-
 /**
  * A root's resolved mark: who set it, when, and the one-line decision, which may
  * be blank. `by_person` is the server's fact about the call, as on a comment.
@@ -467,10 +459,6 @@ const workItemSchema = recordObject({
   requeued: stateMoveSchema.optional(),
   // The holder whose claim a close ended.
   released: holderField().optional(),
-  // What a close found made behind it that no hook reported: each only when it is not empty.
-  unreported_commits: boundedList(unreportedCommitSchema, 20).optional(),
-  unreported_total: positiveInt().optional(),
-  unreported_unread: uniqueList(boundedText(PROJECT_ID, 160), 100).optional(),
 })
 
 const workflowSchema = strictObject({

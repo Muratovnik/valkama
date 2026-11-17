@@ -34,6 +34,7 @@ export const EVENT_ACTIONS = [
   'child_left',
   'commit_attached',
   'commit_detached',
+  'commit_rewritten',
 ] as const
 
 /** The longest detail any event but `labels_changed` carries. */

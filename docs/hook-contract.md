@@ -2061,10 +2061,19 @@ deleted as well: that is how the second file of a nested client's commit goes.
 A busy store, or one of another schema, leaves every record where it is for the
 session's next hook, and the answer says nothing of it.
 
+Records apply in one order of time across every session. When the hook's records
+hold a rewrite, it first takes every record of that rewrite's project lying
+before it in the same places, whichever session's: the commit an amend rewrote
+may be another session's, whose record is older than the amend, and deciding
+the new commit before that record is taken would decide it for the wrong
+session. Each such record is decided by the session its file is named for, as a
+leftover is, the answer says nothing of it, and its file stays for its own
+session's hook, which finds it changing nothing and deletes it.
+
 The planning sweep of a long-lived process takes what no hook took: its
 `commits` step, every ten minutes, takes up to 200 records an hour old or more
-from the same places, each decided by the session its file is named for, and
-answers nobody. It writes as Valkama's own call under the step's name. The step
+from the same places, in the order they were written across every session, each
+decided by the session its file is named for, and answers nobody. It writes as Valkama's own call under the step's name. The step
 cannot act after the pass commits, so it deletes only records that change
 nothing: a record it applied stays until the next pass, or until a hook of its
 session, finds it changing nothing and deletes it. A file there that is no
@@ -2104,9 +2113,22 @@ A rewrite is not decided: it carries what was decided for the old commit. For
 each pair whose old commit Valkama knows, the new commit gets a row with the old
 commit's session and agent, unless it has one, the old commit's attachments move
 to it, and the old commit is marked as rewritten to it. A squash unites the
-attachments of its old commits on the new one. A card's projects stay as they
-are: the repository is the same. When the old commit is unknown nothing is
-recorded for the pair: after an amend the new commit is the session's own, and
+attachments of its old commits on the new one. Each card whose attachment a
+pair moved or united gets one history event `commit_rewritten`, signed
+`valkama`, whose detail is `<project id> <old hash> -> <new hash>`; a card the
+pair did not touch gets none, and the event is not news to anyone. The new
+commit of a pair is always live: a mark it carries goes, so a rewrite back --
+two amends at a pinned committer time that make the first commit again --
+returns that commit to its cards and hides the one between. A pair applies only
+when its record was written later than the last pair applied to its old or its
+new commit, the pairs of one record not counting against each other (a squash
+names one new commit several times). A record read again, which the sweep does
+until its next pass and a hook does with another session's record, therefore
+changes nothing and is worked off: without this, a rewrite back read again
+would hide the first commit and return it on every pass. A pair whose old
+and new hash are one changes nothing. A card's projects stay as they are: the
+repository is the same. When the old commit is unknown nothing is recorded for
+the pair: after an amend the new commit is the session's own, and
 its `post-commit` decides it; a rebase of commits nobody reported is no new work.
 A commit that a rewrite later in the same batch replaces is recorded without a
 decision of its own, so `git commit && git commit --amend` in one shell call is

@@ -223,9 +223,11 @@ EVENT_ACTIONS = (
     "opened",
     "child_left",
     # A commit attached to the item or detached from it, `<project_id> <hash>` as the
-    # detail. No schema raise: the open widens the CHECK (`widen_event_actions`).
+    # detail, and an attachment a rewrite carried to the new commit, `<project_id>
+    # <old> -> <new>`. No schema raise: the open widens the CHECK (`widen_event_actions`).
     "commit_attached",
     "commit_detached",
+    "commit_rewritten",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 #: The actions that say which state an item came to stand in: `created` and

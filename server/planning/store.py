@@ -263,7 +263,9 @@ _ITEM_PROJECTS = "".join(f"{statement};\n" for statement in ITEM_PROJECTS)
 #: which item each is attached to and by whom (`planning.commits`). `project_id` is NULL
 #: only for a commit carried over whose repository was not found, `session_id` for one
 #: no hook reported; `rewritten_to` names the commit an amend or a rebase replaced it
-#: with. A fresh store creates them from this text, and so does the work-model migration.
+#: with, and `rewrite_recorded_ns` when the record of the last rewrite applied to it, as
+#: its old or its new commit, was written. A fresh store creates them from this text, and
+#: so does the work-model migration.
 COMMITS = (
     "CREATE TABLE IF NOT EXISTS commits(\n"
     "    commit_id INTEGER PRIMARY KEY,\n"
@@ -276,7 +278,8 @@ COMMITS = (
     "    agent_id TEXT,\n"
     "    client TEXT,\n"
     "    reported_at TEXT NOT NULL,\n"
-    "    rewritten_to INTEGER REFERENCES commits(commit_id)\n"
+    "    rewritten_to INTEGER REFERENCES commits(commit_id),\n"
+    "    rewrite_recorded_ns INTEGER\n"
     ")",
     "CREATE UNIQUE INDEX IF NOT EXISTS commits_pair ON commits(COALESCE(project_id, ''), hash)",
     "CREATE INDEX IF NOT EXISTS commits_session ON commits(session_id, reported_at)",

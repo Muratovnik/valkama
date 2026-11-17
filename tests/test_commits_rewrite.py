@@ -16,14 +16,19 @@ import threading
 import time
 import unittest
 
+from server import mcp_surface
 from server.hooks import commit_records, notify
-from server.planning import calls, commits
+from server.planning import calls, commits, sweep
 
 from .commit_fixtures import CLAUDE, PROJECT, SCRIPT
 from .test_commits_pickup import RuleCase, context
 
 #: Turns the second line of a `rebase -i` list into a squash into the first.
 SQUASH_SECOND = "sed -i -e '2s/^pick/squash/'"
+#: A second Claude Code session, S2.
+OTHER = "019a3c2e-cccc-7c11-9e0f-2f4b6d8a1c3e"
+#: One committer and author time, so an amend that restores a tree restores its hash.
+PINNED = {"GIT_COMMITTER_DATE": "2026-11-20T10:00:00Z", "GIT_AUTHOR_DATE": "2026-11-20T10:00:00Z"}
 
 
 class RewriteCase(RuleCase):
@@ -87,6 +92,17 @@ class RewriteCase(RuleCase):
     def moved(self, old: str, new: str) -> str:
         return f"Valkama moved the links of {PROJECT} {old[:9]} to the rewritten commit {new[:9]}."
 
+    def rewrites(self) -> list[tuple[str, str, str]]:
+        """Each `commit_rewritten` event: its card, its detail and who signed it."""
+
+        return [
+            (self.reference(str(row[0])), str(row[1]), str(row[2]))
+            for row in self.conn.execute(
+                "SELECT work_item_id, detail, author FROM work_item_events"
+                " WHERE action = 'commit_rewritten' ORDER BY id"
+            )
+        ]
+
 
 class AmendTests(RewriteCase):
     """An amend replaces the commit on its card, whichever call reports which."""
@@ -148,6 +164,35 @@ class AmendTests(RewriteCase):
         self.taken()
         self.assertEqual({(t1, new), (t2, new)}, {row[:2] for row in self.attached()})
         self.assertFalse(post_commit.exists())
+        self.assertEqual(
+            [(t1, f"{PROJECT} {old} -> {new}", "valkama")],
+            self.rewrites(),
+            "the card whose attachment the rewrite carried over; T2 had the new commit already",
+        )
+
+    def test_a_rewrite_leaves_an_event_on_each_card_it_moved(self) -> None:
+        t1, t2, t3 = (self.task(title, PROJECT) for title in ("Held", "Other", "Also"))
+        self.claim(t1)
+        old = self.made("one")
+        self.taken()
+        self.attach(t3, old)
+        self.attach(t2, self.made("two", session=False))
+        self.git("reset", "-q", "--hard", old)
+        new = self.amended()
+        records = {path: path.read_bytes() for path in self.place.everywhere()}
+        self.assertEqual(self.moved(old, new), self.taken(), "the event is no news")
+        self.assertEqual(
+            [
+                (t1, f"{PROJECT} {old} -> {new}", "valkama"),
+                (t3, f"{PROJECT} {old} -> {new}", "valkama"),
+            ],
+            sorted(self.rewrites()),
+        )
+        self.assertEqual([], [event for event in self.rewrites() if event[0] == t2])
+        for path, content in records.items():
+            path.write_bytes(content)
+        self.assertEqual("", self.taken(), "taken again, the records move nothing")
+        self.assertEqual(2, len(self.rewrites()), "one per card and pair")
 
     def test_an_amend_of_an_unknown_commit_is_the_session_s_commit(self) -> None:
         t1 = self.task("Held", PROJECT)
@@ -158,6 +203,88 @@ class AmendTests(RewriteCase):
         self.assertEqual(f"Valkama attached your commit {self.short(new)} to {t1}.", line)
         self.assertEqual([(t1, new, "server", "valkama")], self.attached())
         self.assertEqual({new: None}, self.rewritten())
+
+    def rewritten_back(self) -> tuple[str, str, str]:
+        """T1 holds a commit c, taken; two amends at a pinned committer time, c -> c' and
+        c' -> c, the second making c again, lie on disk. T1, c and c'."""
+
+        t1 = self.task("Held", PROJECT)
+        self.claim(t1)
+        (self.repository / "one.txt").write_text("one", encoding="utf-8")
+        self.git("add", "one.txt")
+        self.git("commit", "-qm", "feat: one", **PINNED)
+        first = self.place.head()
+        self.taken()
+        second = self.amended_pinned()
+        self.git("rm", "-q", "amended.txt")
+        self.git("commit", "-q", "--amend", "--no-edit", **PINNED)
+        self.assertEqual(first, self.place.head(), "the second amend made the first commit again")
+        return t1, first, second
+
+    def amended_pinned(self) -> str:
+        (self.repository / "amended.txt").write_text("amended", encoding="utf-8")
+        self.git("add", "amended.txt")
+        self.git("commit", "-q", "--amend", "--no-edit", **PINNED)
+        return self.place.head()
+
+    def events(self) -> int:
+        return int(self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0])
+
+    def test_a_rewrite_back_returns_the_first_commit(self) -> None:
+        t1, first, second = self.rewritten_back()
+        self.assertEqual(f"{self.moved(first, second)}\n{self.moved(second, first)}", self.taken())
+        self.assertEqual([(t1, first, "server", "valkama")], self.attached())
+        self.assertEqual({first: None, second: first}, self.rewritten())
+        card = self.tool("get_work_item", id=t1, parts="commits")
+        self.assertEqual([first], [commit["hash"] for commit in card["commits"]])
+        self.assertEqual([], self.waiting(), "the second commit is hidden")
+        written = self.events()
+        self.git("commit", "-q", "--amend", "--no-edit", **PINNED)
+        self.assertEqual(first, self.place.head(), "an amend that changes nothing: c -> c")
+        self.assertEqual("", self.taken(), "a pair of one hash changes nothing")
+        self.assertEqual([(t1, first, "server", "valkama")], self.attached())
+        self.assertEqual({first: None, second: first}, self.rewritten())
+        self.assertEqual(written, self.events())
+        self.assertEqual([], self.place.everywhere())
+
+    def test_a_rewrite_back_read_again_changes_nothing(self) -> None:
+        """The sweep keeps the records it applied until its next pass, which reads them
+        again: the pair c -> c', older than the c' -> c applied after it, hides nothing."""
+
+        t1, first, second = self.rewritten_back()
+        for path in self.place.everywhere():
+            self.aged(path, 61 * 60)
+        step = [found for found in sweep.STEPS if found.name == sweep.COMMITS]
+        self.assertGreater(sweep.run_pass(self.conn, steps=step).changed[sweep.COMMITS], 0)
+        self.assertEqual([(t1, first, "server", "valkama")], self.attached())
+        self.assertEqual({first: None, second: first}, self.rewritten())
+        self.assertEqual(2, len(self.rewrites()), "c -> c' and c' -> c, on T1")
+        self.assertNotEqual([], self.place.everywhere(), "applied: kept for the next pass")
+        written = self.events()
+
+        self.assertEqual({sweep.COMMITS: 0}, sweep.run_pass(self.conn, steps=step).changed)
+        self.assertEqual([(t1, first, "server", "valkama")], self.attached())
+        self.assertEqual({first: None, second: first}, self.rewritten())
+        self.assertEqual(written, self.events(), "no commit_rewritten nor any other event")
+        self.assertEqual([], self.place.everywhere(), "worked off, and deleted")
+
+        self.assertEqual({}, sweep.run_pass(self.conn, steps=step).changed, "nothing to take")
+
+    def test_an_amend_after_a_rewrite_back_carries_the_commit_again(self) -> None:
+        """A later amend c -> c', the same pair as the first amend but recorded after the
+        rewrite back, is new work on the commit: it applies."""
+
+        t1, first, second = self.rewritten_back()
+        self.taken()
+        written = len(self.rewrites())
+        self.assertEqual(second, self.amended_pinned(), "the same tree at the same time: c'")
+        self.assertEqual(self.moved(first, second), self.taken())
+        self.assertEqual([(t1, second, "server", "valkama")], self.attached())
+        self.assertEqual({first: second, second: None}, self.rewritten())
+        self.assertEqual(
+            [(t1, f"{PROJECT} {first} -> {second}", "valkama")], self.rewrites()[written:]
+        )
+        self.assertEqual([], self.place.everywhere())
 
 
 class RebaseTests(RewriteCase):
@@ -314,6 +441,88 @@ class MergeTests(RewriteCase):
         self.assertEqual([], self.rows())
 
 
+class OrderAcrossSessionsTests(RewriteCase):
+    """Records apply in one time order across sessions, whichever reader takes them.
+
+    S1 holds T1 and S2 holds T2, both of `alpha`. S2 commits d, S1 commits c, and
+    S2 amends c into c'. The record of S1's commit lies on disk before S2's amend,
+    and S2's own commit d before both, so a pass grouped by session would decide
+    c' as S2's commit before it knew c.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.t1, self.t2 = self.task("First", PROJECT), self.task("Second", PROJECT)
+        self.claim(self.t1)
+        meta = {"sessionId": OTHER, "threadId": OTHER}
+        mcp_surface.call_tool(self.conn, "claim_work_item", {"id": self.t2}, meta=meta)
+        self.conn.commit()
+        self.d = self.by_other("d")
+        self.c = self.made("c")
+        (self.repository / "amended.txt").write_text("amended", encoding="utf-8")
+        self.git("add", "amended.txt", session=False, CLAUDE_CODE_SESSION_ID=OTHER)
+        self.git(
+            "commit", "-q", "--amend", "--no-edit", session=False, CLAUDE_CODE_SESSION_ID=OTHER
+        )
+        self.amended = self.place.head()
+
+    def by_other(self, name: str) -> str:
+        (self.repository / f"{name}.txt").write_text(name, encoding="utf-8")
+        self.git("add", f"{name}.txt", session=False, CLAUDE_CODE_SESSION_ID=OTHER)
+        self.git("commit", "-qm", f"feat: {name}", session=False, CLAUDE_CODE_SESSION_ID=OTHER)
+        return self.place.head()
+
+    def settled(self) -> None:
+        """c' on T1, as S1 decided c; d on T2; c rewritten to c'."""
+
+        self.assertEqual(
+            {(self.t1, self.amended), (self.t2, self.d)},
+            {row[:2] for row in self.attached()},
+        )
+        self.assertEqual(self.amended, self.rewritten()[self.c])
+
+    def s1_finds_its_record_worked_off(self) -> None:
+        self.assertEqual(1, len(self.place.everywhere()), "S1's record waits for S1's hook")
+        self.finds_worked_off(CLAUDE)
+
+    def s2_finds_its_records_worked_off(self) -> None:
+        self.finds_worked_off(OTHER)
+
+    def finds_worked_off(self, session: str) -> None:
+        written = self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        stdout, stderr = self.claude(session)
+        self.assertEqual(("", b""), (stderr, stdout), "nothing to say: worked off")
+        self.assertEqual([], self.place.everywhere())
+        self.assertEqual(
+            written, self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        )
+
+    def test_a_rewrite_of_another_sessions_commit_waits_for_its_record(self) -> None:
+        """The hook of S2 takes the record of S1 lying before its amend first."""
+
+        stdout, stderr = self.claude(OTHER)
+        self.assertEqual("", stderr)
+        self.assertEqual(
+            f"Valkama attached your commit {self.short(self.d)} to {self.t2}.\n"
+            f"{self.moved(self.c, self.amended)}",
+            context(stdout),
+            "S2's lines say nothing of where S1's commit went",
+        )
+        self.settled()
+        self.s1_finds_its_record_worked_off()
+
+    def test_the_sweep_takes_the_same_records_in_the_same_order(self) -> None:
+        for path in self.place.everywhere():
+            self.aged(path, 61 * 60)
+        step = [found for found in sweep.STEPS if found.name == sweep.COMMITS]
+        self.assertEqual({sweep.COMMITS: 4}, sweep.run_pass(self.conn, steps=step).changed)
+        self.settled()
+        self.assertEqual(4, len(self.place.everywhere()), "applied: they wait for a hook")
+        self.assertEqual((b"", ""), self.claude(), "S1's record is worked off")
+        self.assertEqual(3, len(self.place.everywhere()))
+        self.s2_finds_its_records_worked_off()
+
+
 class ConcurrentPickupTests(RewriteCase):
     """One batch taken twice at once is written once: two processes, two connections."""
 
@@ -359,8 +568,9 @@ class ConcurrentPickupTests(RewriteCase):
         for thread in threads:
             thread.join()
         self.assertEqual(2, len(answers))
-        # Two rows, one attachment, one event; whichever process came second wrote nothing.
-        self.assertEqual((before[0] + 2, before[1] + 1, before[2] + 1), self.counts())
+        # Two rows, one attachment, and its two events, attached and rewritten; whichever
+        # process came second wrote nothing.
+        self.assertEqual((before[0] + 2, before[1] + 1, before[2] + 2), self.counts())
         self.assertEqual(1, self.decisions())
         self.assertEqual(1, sum(1 for answer in answers if answer), "one of them answers")
         self.assertEqual([], self.place.everywhere())
@@ -404,7 +614,7 @@ class ConcurrentPickupTests(RewriteCase):
         for thread in threads:
             thread.join()
         self.assertEqual([], failures)
-        self.assertEqual((before[0] + 2, before[1] + 1, before[2] + 1), self.counts())
+        self.assertEqual((before[0] + 2, before[1] + 1, before[2] + 2), self.counts())
         first, second = sorted(results, key=lambda taken: len(taken.worked_off))
         self.assertEqual((3, []), (len(first.applied), first.worked_off))
         self.assertEqual(([], 3), (second.applied, len(second.worked_off)), "the second: nothing")
