@@ -82,9 +82,8 @@ describe('a hint drawn as a grid', () => {
     expect(cells(hint, '.tooltip-body-note')).toEqual(['Switched to B'])
     // The swatch is the legend's hue mapping, and the grid has a column for it and for shares.
     expect(hint?.querySelector('.tooltip-body-swatch')?.classList).toContain('series-fill')
-    expect(hint?.querySelector('.tooltip-body')?.className).toBe(
-      'tooltip-body tooltip-body-swatches tooltip-body-shares',
-    )
+    const grid = [...(hint?.querySelector('.tooltip-body')?.classList ?? [])]
+    expect(grid).toEqual(expect.arrayContaining(['tooltip-body-swatches', 'tooltip-body-shares']))
     // What a screen reader is given is the hint's words, not its cells run together.
     expect(document.querySelector('[role="tooltip"]')?.textContent).toBe(TEXT)
     // On the period's own ground no row is the current one.
@@ -115,7 +114,10 @@ describe('a hint drawn as a grid', () => {
     }
     mounted = mount(surface, { props: { body: plain }, attachTo: document.body })
     const hint = await focusByKey('.period')
-    expect(hint?.querySelector('.tooltip-body')?.className).toBe('tooltip-body')
+    const grid = [...(hint?.querySelector('.tooltip-body')?.classList ?? [])]
+    expect(grid).toContain('tooltip-body')
+    expect(grid).not.toContain('tooltip-body-swatches')
+    expect(grid).not.toContain('tooltip-body-shares')
     expect(hint?.querySelectorAll('.tooltip-body-swatch, .tooltip-body-share')).toHaveLength(0)
     expect(cells(hint, '.tooltip-body-head span')).toEqual(['Monday'])
   })

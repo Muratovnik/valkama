@@ -41,12 +41,31 @@ describe('PlanningPortfolio', () => {
   it('keeps every registered project visible with its human name before its identifier', () => {
     const rows = portfolio().findAll('.portfolio-project')
     expect(rows).toHaveLength(bindingStates.length)
-    expect(rows[1]?.find('.project-head > div').text()).toBe('unbound Projectunbound-project')
-    const binding = rows[1]?.get('[data-dimension="project-binding"]')
+    const unbound = rows[1]
+    const name = unbound?.get('.project-title')
+    const id = unbound?.get('.project-id')
+    expect(name?.text()).toBe('unbound Project')
+    expect(id?.text()).toBe('unbound-project')
+    const after = name?.element.compareDocumentPosition(id?.element as Node) ?? 0
+    expect(after & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const binding = unbound?.get('[data-dimension="project-binding"]')
     expect(binding?.attributes('data-state')).toBe('unbound')
     expect(binding?.text()).toBe('Unbound')
-    expect(rows[1]?.text()).toContain('No bound planning spaces yet.')
-    expect(rows[1]?.find('.binding-reason').exists()).toBe(false)
+    // Its name, its identifier, its state, that it has no space and the link to its setup are all
+    // it says: no line gives a reason besides.
+    const said = [
+      'unbound Project',
+      'unbound-project',
+      'Unbound',
+      'No bound planning spaces yet.',
+      'Review project setup',
+    ]
+    let rest = unbound?.text() ?? ''
+    for (const part of said) {
+      expect(rest).toContain(part)
+      rest = rest.replace(part, '')
+    }
+    expect(rest.trim()).toBe('')
   })
 
   // «Mapped» on every card, beside the «Open project» that says the same, told
