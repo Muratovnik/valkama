@@ -99,7 +99,10 @@ function listLayout(where: Locator) {
       const lineHeight = Number.parseFloat(getComputedStyle(label ?? row).lineHeight)
       const text = label?.textContent ?? ''
       const reference = /^MAIN-\d+/u.exec(text)?.[0] ?? ''
-      const node = document.createTreeWalker(label ?? row, NodeFilter.SHOW_TEXT).nextNode()
+      // The first text the name prints, past the empty ones its template leaves.
+      const walker = document.createTreeWalker(label ?? row, NodeFilter.SHOW_TEXT)
+      let node = walker.nextNode()
+      while (node && !node.textContent?.trim()) node = walker.nextNode()
       let referenceWhole = reference === ''
       if (node && reference) {
         const range = document.createRange()
@@ -132,7 +135,7 @@ function listLayout(where: Locator) {
     })
     const rest = section.querySelector('.ranked-rest')
     return {
-      listWidth: Math.round(box(section.querySelector('.ranked-bars')).width),
+      listWidth: Math.round(box(section).width),
       chartsWidth: Math.round(inner),
       multiples: section.closest('.dimension-charts')?.querySelectorAll('.small-multiples').length,
       ring: section.querySelectorAll('.donut-chart').length,
@@ -153,13 +156,17 @@ function legendLayout(page: Page) {
     // eslint-disable-next-line unicorn/consistent-function-scoping -- serialized into the page
     const box = (element: Element | null) => element?.getBoundingClientRect() ?? new DOMRect()
     const bounds = box(legend)
+    const chart = box(legend.closest('.spending-days'))
     return {
       height: Math.round(bounds.height),
+      within: bounds.left >= chart.left - 0.5 && bounds.right <= chart.right + 0.5,
       entries: [...legend.querySelectorAll('.chart-key-name')].map((name) => {
         const lineHeight = Number.parseFloat(getComputedStyle(name).lineHeight)
         const text = name.textContent ?? ''
         const reference = /^MAIN-\d+/u.exec(text)?.[0] ?? ''
-        const node = name.firstChild
+        const walker = document.createTreeWalker(name, NodeFilter.SHOW_TEXT)
+        let node = walker.nextNode()
+        while (node && !node.textContent?.trim()) node = walker.nextNode()
         let referenceWhole = reference === ''
         if (node && reference) {
           const range = document.createRange()
@@ -214,9 +221,14 @@ for (const lang of ['en', 'ru'] as const)
         // The first ten tasks ranked, then the rest folded and the work on no task, apart.
         expect(measured.rows.filter((row) => !row.apart)).toHaveLength(10)
         expect(measured.rows.filter((row) => row.apart)).toHaveLength(2)
-        // The longest title is cut on its second line, not before.
-        expect(measured.rows.some((row) => row.cut && row.lines === 2)).toBe(true)
+        // A name cut is cut on its second line, not before; the narrow column cuts the longest.
+        const cut = measured.rows.filter((row) => row.cut)
+        expect(cut.map((row) => row.lines)).toEqual(cut.map(() => 2))
+        expect(width > 390 || cut.length > 0).toBe(true)
         const legend = await legendLayout(page)
+        expect(legend.within).toBe(true)
+        // The longest title is longer than the legend is wide at every width, so it is cut.
+        expect(legend.entries.some((entry) => entry.cut)).toBe(true)
         for (const entry of legend.entries) {
           expect(entry.lines).toBe(1)
           expect(entry.referenceWhole).toBe(true)

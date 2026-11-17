@@ -179,7 +179,9 @@ const figureOf = (key: string) => props.figures?.get(key)
 
 <style scoped>
 /* The lines step 24 pixels, the target WCAG 2.5.8 asks, with no gap between them: every key fills
-   its line, so one that acts is pressed across all 24 and never reaches into the next line's. */
+   its line, so one that acts is pressed across all 24 and never reaches into the next line's. The
+   legend is as wide as its host gives it and asks no width of its own: a name kept to one line
+   would otherwise widen the column it stands in to its whole length, past the page's edge. */
 .chart-legend {
   display: flex;
   flex-wrap: wrap;
@@ -189,6 +191,7 @@ const figureOf = (key: string) => props.figures?.get(key)
   color: var(--color-text-muted);
   font: var(--font-detail);
   list-style: none;
+  contain: inline-size;
 }
 
 .chart-entry {
