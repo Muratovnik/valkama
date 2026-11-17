@@ -320,7 +320,7 @@ const PLOT_WIDTHS = [390, 1024, 1440, 1920]
 /**
  * How the plot sits in its frame: what the frame has to scroll up and down, where each name on the
  * time axis stands against the middle of its column and against the plot's edges, and how tall
- * and how wide each mark of the period before is beside its column.
+ * and how wide each tick of the period before is beside its column.
  */
 const plotFit = (page: Page) =>
   page.evaluate(() => {
@@ -401,10 +401,17 @@ for (const panel of PANELS)
           `${name.key} off its column further than the plot's edge needs`,
         ).toBeLessThanOrEqual(1)
       }
-      // The period before is a short mark at its height, never a box up the plot.
+      // The period before is a tick at its height, never a box up the plot: no narrower than its
+      // column and no more than 4px past each side of it (`production-analytics-period-marks`
+      // measures the overhang itself).
       for (const mark of fit.before) {
         expect(mark.height, 'the mark of the period before').toBeLessThanOrEqual(3)
-        expect(mark.width, 'the mark of the period before').toBeLessThanOrEqual(mark.column + 1)
+        expect(mark.width, 'the mark of the period before').toBeGreaterThanOrEqual(
+          mark.column - HALF_PIXEL,
+        )
+        expect(mark.width, 'the mark of the period before').toBeLessThanOrEqual(
+          mark.column + 8 + HALF_PIXEL,
+        )
       }
     })
 

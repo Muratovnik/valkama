@@ -3,7 +3,7 @@
  * scrolls in, its tracks — the scale's figures in a column as wide as the widest, the periods
  * beside them and the periods' names under — what keeps the
  * scale in view while the periods scroll, and what a period's slot holds besides its stack: the
- * column the pointer and a press take, the mark of the period before, the ground of a period with
+ * column the pointer and a press take, the tick of the period before, the ground of a period with
  * no data yet and the line of a change.
  */
 
@@ -171,18 +171,30 @@
   }
 }
 
-/* The period compared with: a short line at the height it reached, as wide as the stack and
-   over it, never under, ringed in the ground where it crosses the stack. It says higher or lower
-   without a hue of its own, and without a box up the plot that outweighs this period's columns
-   when the period before was the larger. Drawn as an edge in the text's colour, it takes the
-   forced palette's ink with the text. */
+/* The period compared with: a tick at the height it reached, across the stack and over it, never
+   under, in the text's main ink and ringed in the ground. It says higher or lower without a hue
+   of its own, and without a box up the plot that outweighs this period's columns when the period
+   before was the larger. It reaches `--period-overhang` past each side of its column, which no
+   border between two segments does, so its shape tells it from such a gap on a grey segment as
+   on a hue, and under a forced palette, which drops the ring and inks the edge with the text.
+   As wide as its column in the quiet ink, it vanished into the grey of «no task» and its ring
+   read as two more gaps.
+
+   Where the period's room leaves less than that beside its column, the tick reaches what it can
+   and stays a hair inside the room, so it never meets a neighbour's column or tick; with no room
+   at all it is as wide as its column. */
 .period-before {
+  --period-overhang: var(--space-1);
+
   position: absolute;
   inset-inline: 0;
-  inline-size: min(100%, var(--period-column));
+  inline-size: max(
+    min(100%, var(--period-column)),
+    min(100% - 2 * var(--space-hair), var(--period-column) + 2 * var(--period-overhang))
+  );
   margin-inline: auto;
   border-block-start: var(--space-half) solid currentcolor;
-  color: var(--color-text-muted);
+  color: var(--color-text);
   box-shadow: 0 0 0 var(--space-hair) var(--color-canvas);
   transform: translateY(50%);
   pointer-events: none;

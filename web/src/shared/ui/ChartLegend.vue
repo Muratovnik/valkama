@@ -208,13 +208,13 @@ const figureOf = (key: string) => props.figures?.get(key)
   overflow-wrap: anywhere;
 }
 
-/* The mark of the period compared with, as the plot draws it: a short line, an edge in the
-   text's colour that a forced palette inks with the text. */
+/* The tick of the period compared with, as the plot draws it: a short line, an edge in the
+   text's main ink that a forced palette inks with the text. */
 .chart-outline {
   flex: none;
   inline-size: var(--space-3);
   border-block-start: var(--space-half) solid currentcolor;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .chart-swatch {

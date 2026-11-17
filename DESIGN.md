@@ -1107,10 +1107,19 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   plot), keeps the value axis in view over the plot's start, and brings a period the keyboard
   reaches clear of that axis with its focus ring whole. Periods that only show
   keep sharing the chart's width, however narrow that makes them. A period compared with the
-  one shown stands on the same scale as a short line at its height over each column, an edge
-  and not a hue, so a period before that was larger never outweighs the columns shown: the
-  legend names it beside the same short line, a period's hint says its figure beside the sum, and
-  the table gives it a column after the sum. The time axis names each period under the middle
+  one shown stands on the same scale as a tick at its height across each column, an edge and
+  not a hue, so a period before that was larger never outweighs the columns shown: the legend
+  names it beside the same short line, a period's hint says its figure beside the sum, and the
+  table gives it a column after the sum. The tick reaches 4px past each side of its column, in
+  the text's main ink and ringed in the ground's colour. A segment's border never leaves its
+  column, so the overhang is what tells the tick from a gap between two segments, in grey and in
+  coloured segments alike and under a forced palette, which drops the ring. Drawn as wide as its
+  column in the quiet ink, it vanished into the grey of «no task» and left only its dark ring,
+  two stripes that read as two more gaps. Where a period's room leaves less than 4px beside its
+  column, the tick reaches what it can and stays 1px inside that room, so it never touches a
+  neighbour's column or tick: four weeks at 1440px leave it a little over 1px past each side,
+  and on a phone, where their columns of 24px stand 2px apart, it is as wide as its column and
+  told by its ink and its ring alone. The time axis names each period under the middle
   of its column, the first and the last too, moved in only as far as a name would hang past the
   plot, and no two names come within 8px of each other, measured in the axis's font: a period
   still running keeps its name, and a neighbour that would touch it gives way. A day is named by

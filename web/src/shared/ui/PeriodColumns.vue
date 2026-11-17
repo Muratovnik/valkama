@@ -6,10 +6,13 @@
  * is hatched, so a short last column does not read as a drop; a change at the start of a period
  * (the account switched) is a line up the plot in the gap before it, and the period's hint, name
  * and table row say what changed: no row of the chart is kept for it, above the plot or under it.
- * A period compared with this one (`before`) stands on the same scale as a short mark at its
- * height over each column, an edge and not a hue, named in the legend, and the period's hint says
- * its figure. A series with no figure in a period (`absent`, such as work with no price) draws
- * nothing there, and the hint and the period's name say so rather than a zero. A period whose
+ * A period compared with this one (`before`) stands on the same scale as a tick at its height
+ * across each column, an edge in the text's main ink and not a hue, named in the legend, and the
+ * period's hint says its figure. The tick reaches 4px past each side of its column, where no
+ * border between two segments ever reaches, so it is never read as a gap in a grey stack; where a
+ * period's room leaves less, it reaches what it can and stays a hair inside that room
+ * (`periodPlot.css`). A series with no figure in a period (`absent`, such as work with no price)
+ * draws nothing there, and the hint and the period's name say so rather than a zero. A period whose
  * figures are not in yet (`pending`) stands as a hatched ground the plot's height, never a column
  * of zero, and its hint and name say it has no data yet. `PeriodColumnsTable` is the same periods
  * as a table.
