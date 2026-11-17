@@ -19,6 +19,7 @@ _EXPECTED_SECONDARY_CONTEXTS = {
         "space": ["planning-space", "work-item"],
     },
     "analytics": {"global": ["work-item"], "space": ["work-item"]},
+    "decisions": {"global": ["work-item"], "space": ["work-item"]},
     "memory": {"global": ["memory-resource"], "space": ["memory-resource", "work-item"]},
     "settings": {"global": ["work-item"], "space": ["work-item"]},
 }
@@ -221,7 +222,7 @@ class ModuleRegistryTests(unittest.TestCase):
         # A caller holding the answer cannot change the list behind it.
         payload["modules"][0]["manifest"]["title_key"] = "changed"
         payload["modules"].clear()
-        self.assertEqual(4, len(platform_modules.modules_payload()["modules"]))
+        self.assertEqual(5, len(platform_modules.modules_payload()["modules"]))
         self.assertNotEqual(
             "changed", platform_modules.modules_payload()["modules"][0]["manifest"]["title_key"]
         )
