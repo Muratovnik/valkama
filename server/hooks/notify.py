@@ -727,26 +727,32 @@ def _handed(
     conn: sqlite3.Connection, session_id: str, after: int
 ) -> tuple[list[tuple[str, bool, list[tuple[int, dict]]]], int]:
     """The words left waiting that claims of this session took after the claim call `after`:
-    per row, the goal or stage, whether a subagent took them, and the words up to the claim,
-    with their calls; and the last claim call read.
+    per claim and goal or stage, whether a subagent took them, and the words it handed over,
+    with their calls (`waiting.containers_left`: a goal or stage with nothing left for the
+    session is not listed); and the last claim call read.
 
     The place is a claim's call, not a row's number: a row is numbered when it is left and
-    handed over later, so a row left before another can be handed after it. A store
-    without the rows yet hands nothing.
+    handed over later, so a row left before another can be handed after it. A claim that
+    took both rows of a goal or stage hands its words over once. A store without the rows
+    yet hands nothing.
     """
 
     import _sqlite3
 
-    from ..planning import person_events
+    from ..planning import waiting
 
     try:
         rows = conn.execute(_HANDED, (session_id, after)).fetchall()
     except _sqlite3.OperationalError:
         return [], after
-    found = []
+    claims: dict[tuple[str, int], list] = {}
     for item, start, call, agent in rows:
-        words = person_events.unheard(conn, str(item), int(start) - 1)
-        found.append((str(item), bool(agent), [pair for pair in words if pair[0] < int(call)]))
+        claim = claims.setdefault((str(item), int(call)), [int(start), bool(agent)])
+        claim[0] = min(claim[0], int(start))
+    found = []
+    for (item, call), (start, agent) in claims.items():
+        for _container, words in waiting.containers_left(conn, session_id, [(item, start)], call):
+            found.append((item, agent, words))
     return found, max([after, *(int(row[2]) for row in rows)])
 
 

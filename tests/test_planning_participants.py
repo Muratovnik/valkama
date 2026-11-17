@@ -168,6 +168,35 @@ class TreeTests(Harness):
         )
         assert isinstance(read, dict)
         self.assertNotIn("participants", read, "an agent's default read leaves them out")
+        # An agent reads them as a part, which the card counts, on a goal or a stage only.
+        for ref, expected in ((self.goal, [A, B]), (self.s1, [A, E])):
+            card = mcp_surface.run_tool_call(
+                self.conn, "get_work_item", {"id": ref}, meta={"sessionId": E}
+            )
+            part = mcp_surface.run_tool_call(
+                self.conn,
+                "get_work_item",
+                {"id": ref, "parts": ["participants"]},
+                meta={"sessionId": E},
+            )
+            assert isinstance(card, dict) and isinstance(part, dict)
+            self.assertEqual({"count": len(expected)}, card["parts"]["participants"], ref)
+            self.assertEqual(expected, [entry["session"] for entry in part["participants"]])
+            self.assertEqual(self.http(ref)["participants"], part["participants"])
+        task_card = mcp_surface.run_tool_call(
+            self.conn, "get_work_item", {"id": self.t3}, meta={"sessionId": E}
+        )
+        assert isinstance(task_card, dict)
+        self.assertNotIn("participants", task_card["parts"])
+        with self.assertRaisesRegex(
+            model.PlanningError, "unknown part 'participants'; a task's parts are"
+        ):
+            mcp_surface.call_tool(
+                self.conn,
+                "get_work_item",
+                {"id": self.t3, "parts": ["participants"]},
+                meta={"sessionId": E},
+            )
         self.assertNotIn("participants", service.get_work_item(self.conn, self.goal))
         self.assertNotIn("participants", service.get_work_item_brief(self.conn, self.goal))
         with self.acting(B):

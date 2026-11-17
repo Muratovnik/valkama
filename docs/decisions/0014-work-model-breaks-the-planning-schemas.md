@@ -167,8 +167,9 @@ and no compatibility layer.
    import`, which takes a former writer's inventory of format 1, read the former
    format, through one reader and one translation. What is kept is three files —
    the inventory, the projection and the one-write snapshot `rollback` restores
-   from — each with its SHA-256 or recorded as absent; an import onto a machine
-   with no registry keeps that absence the same way.
+   from — each with its SHA-256 or recorded as absent; every first write onto a
+   machine with no registry keeps that absence the same way, and an upgrade there
+   writes an empty registry.
 
 ## What a client does instead
 

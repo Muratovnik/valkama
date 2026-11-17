@@ -393,6 +393,7 @@ def list_page(
     answered_after: object = None,
     lists: bool = True,
     addressed: bool = False,
+    session: str | None = None,
 ) -> dict:
     """One page of requests, and whether more follow.
 
@@ -406,6 +407,8 @@ def list_page(
     list on a comment as well: a reader of what waits for a person, which nobody waits
     on a list for. `addressed=True` reads instead the open requests asked of the
     session the call in progress proved, and refuses a call that proved none.
+    `session` names that session instead, for a reader with no call of its own, the
+    note a session start gets (`waiting_items`); no surface passes it.
     """
 
     if status is not None:
@@ -417,7 +420,7 @@ def list_page(
             raise model.PlanningError("addressed lists the open requests; leave status out")
         status = "pending"
         clauses.append("r.addressee=?")
-        parameters.append(_own_session())
+        parameters.append(_own_session() if session is None else session)
     if space is not None:
         clauses.append("i.planning_space_id=?")
         parameters.append(service.space_identity(conn, space))
@@ -478,6 +481,25 @@ def list_page(
         "truncated": more,
         "next_offset": start + len(result) if more else None,
     }
+
+
+def waiting_items(conn: sqlite3.Connection, session: str) -> list[str]:
+    """The items with an open request asked of `session`, by reference, each once.
+
+    The item of the newest such request comes first. The requests are those
+    `list_page` reads with `addressed`, asked of `session` rather than of a call's
+    proved session, which the hook of a session start does not have.
+    """
+
+    found: dict[str, None] = {}
+    offset = 0
+    while True:
+        page = list_page(conn, addressed=True, session=session, limit=200, offset=offset)
+        for record in page["requests"]:
+            found.setdefault(str(record["reference"]), None)
+        if page["next_offset"] is None:
+            return list(found)
+        offset = int(page["next_offset"])
 
 
 #: The columns a reader of requests names that a store an earlier build wrote may lack.
