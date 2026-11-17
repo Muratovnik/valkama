@@ -14,11 +14,9 @@ import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { openList } from './boardPage.ts'
-import { brief, identity, serveSpace, stateOf, stillFrames } from './longSpace.ts'
+import { brief, serveSpace, stateOf, stillFrames } from './longSpace.ts'
+import { widestFarDown, windowRows } from './served/listFind.ts'
 import { test } from './test.ts'
-
-const items = (count: number) =>
-  Array.from({ length: count }, (_, index) => brief(1000 + index, stateOf(index)))
 
 async function openLong(page: Page, rows: object[]) {
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -46,7 +44,7 @@ const inSight = async (list: Locator, row: Locator) =>
   )
 
 test('a list of 299 rows draws every one, and a list of 300 only its window', async ({ page }) => {
-  const rows = items(299)
+  const rows = windowRows(299)
   await openLong(page, rows)
   const drawn = drawnOf(page)
   const gaps = page.locator('.work-item-list tbody tr[aria-hidden="true"]')
@@ -72,7 +70,7 @@ test('a list of 299 rows draws every one, and a list of 300 only its window', as
 })
 
 test("End and Home reach the list's last and first rows, not the last drawn", async ({ page }) => {
-  await openLong(page, items(1000))
+  await openLong(page, windowRows(1000))
   const list = listOf(page)
   const focused = page.locator('.work-item-list tbody tr:has(.list-open:focus)')
   await list.locator('tbody .list-open').first().focus()
@@ -98,7 +96,7 @@ test("End and Home reach the list's last and first rows, not the last drawn", as
 test('the Tab stop and the focused row stay drawn wherever a long list scrolls', async ({
   page,
 }) => {
-  await openLong(page, items(1000))
+  await openLong(page, windowRows(1000))
   const list = listOf(page)
   const fifth = list.locator('tbody .list-open').nth(4)
   const reference = (await fifth.textContent()) ?? ''
@@ -126,24 +124,7 @@ test('a long list keeps its columns while it scrolls, a far row that is widest i
   page,
 }) => {
   // Everything that makes a column wider lies in one row far below the fold.
-  const updated_at = new Date().toISOString()
-  const rows = Array.from({ length: 600 }, (_, index) =>
-    brief(1000 + index, stateOf(0), { updated_at }),
-  )
-  rows[580] = brief(9580, stateOf(2), {
-    reference: 'MAIN-99580',
-    claim_ref: 'a holder with a long name',
-    priority: 'urgent',
-    checklist: Array.from({ length: 12 }, (_, at) => ({
-      id: identity(3000 + at),
-      text: 'Step',
-      done: false,
-      claimed_by: '',
-      done_by: '',
-      by_previous_holder: false,
-    })),
-    updated_at: '2020-08-28T20:08:00Z',
-  })
+  const rows = widestFarDown()
   await openLong(page, rows)
   const list = listOf(page)
   const columns = () =>
@@ -177,7 +158,7 @@ test('printing a long list draws every row, and the window comes back after', as
       })
     })
   })
-  await openLong(page, items(400))
+  await openLong(page, windowRows(400))
   const drawn = drawnOf(page)
   expect(await drawn.count()).toBeLessThan(100)
   await page.pdf()

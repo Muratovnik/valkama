@@ -23,24 +23,12 @@ import {
   findTaken,
   hearFind,
   listOf,
-  reference,
-  row,
 } from './listFindPage.ts'
 import { serveSpace, stillFrames } from './longSpace.ts'
+import { reference, thousand } from './served/listFind.ts'
 import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
 
-/** A thousand rows, «quartz» in four far down the list and twice in one of them. */
-const QUARTZ: Record<number, string> = {
-  120: 'Quartz sample to look for',
-  400: 'Quartz sample, and quartz again',
-  650: 'Quartz sample in the middle',
-  980: 'Quartz sample near the end',
-}
-const thousand = () =>
-  Array.from({ length: 1000 }, (_, index) =>
-    row(index, QUARTZ[index] ? { title: QUARTZ[index] } : {}),
-  )
 /** The matches of «quartz» in the list's order: row by row, and in a row as it reads. */
 const WALK = [120, 400, 400, 650, 980]
 

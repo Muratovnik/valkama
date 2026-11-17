@@ -7,17 +7,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { picture } from './graphPixels.ts'
-import { brief, stateOf } from './longSpace.ts'
-
-const START = Date.UTC(2026, 9, 1, 12)
-
-/** Row `index` of a list sorted by Updated, newest first, stands at `index`. */
-export const row = (index: number, extra: object = {}) =>
-  brief(1000 + index, stateOf(index), {
-    updated_at: new Date(START - index * 3_600_000).toISOString(),
-    ...extra,
-  })
-export const reference = (index: number) => `MAIN-${1000 + index}`
+import { reference } from './served/listFind.ts'
 
 export const listOf = (page: Page) => page.locator('.work-item-list')
 export const barOf = (page: Page) => page.getByRole('search', { name: 'Find in the list' })
