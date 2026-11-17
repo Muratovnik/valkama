@@ -297,6 +297,10 @@ const row: Finder = (hinted) => {
 const reading: Finder = (hinted) => {
   const mark = hinted.querySelector('.step-mark')?.getBoundingClientRect()
   const reach = hinted.getBoundingClientRect()
+  // A step narrower than 8px is skipped, so the latest reading, whose step ends where «now» takes
+  // the pointer, may be measured here by none of its spots. That it keeps the pointer, its dot
+  // painted and «now» not taking it, is held in `production-analytics-quota-forecast.spec.ts`
+  // (`pointAtLatest`); where its hint stands is not held for it anywhere.
   if (!mark || reach.width < 8) return null
   return {
     mark: { bottom: mark.bottom, left: mark.left, right: mark.right, top: mark.top },
