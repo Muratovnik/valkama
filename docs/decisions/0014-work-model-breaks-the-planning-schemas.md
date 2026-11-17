@@ -66,6 +66,29 @@ and no compatibility layer.
      where it read `task_closed`, reopening brings none back, a change of an
      answer on a closed item is refused with `[item_closed]`, and the record
      carries `purpose`;
+   - a new item is never created in a state of the categories `review`,
+     `blocked`, `completed` or `cancelled`: a creation that names one is refused
+     with `new_item`, which `force` does not carry;
+   - a move into `blocked` needs a stated reason: an open item linked `blocks`
+     no longer stands for one (`blocker`);
+   - a move into a `review` state from a state of another category asks what a
+     completed close asks, every checklist step ticked (`checklist`) and a
+     summary (`summary`), and `to_check` in the `transition` group, without
+     which it is refused with `review_question`, which `force` does not carry;
+   - an agent's move that completes an item, or that takes it out of `review`
+     to anything but a cancelled state, is refused with `question` while a
+     question to the owner is open on the item, other than the one that asks to
+     confirm the goal or stage being completed, and `force` does not carry it;
+   - a question with a `purpose` carries its answer out in the write that gives
+     it: an answer by anyone but a person in Valkama is refused with
+     `owner_only`, a withdrawal by anyone but the session that asked it with
+     `not_asker`, and declining it, changing its answer or answering it with an
+     own variant with `[purpose]`; withdrawing the question of review returns
+     its item to `ready`;
+   - a goal or stage is refused a move to `completed` while an item under it,
+     at any depth, is open (`children`), and `force` does not carry it;
+   - the ending of a launch moves its item nowhere: an outcome `complete` or
+     `expected_no_change` no longer moves it from its active state to `review`;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -135,6 +158,13 @@ and no compatibility layer.
 | scope `project` | scope `space`, the project an optional refinement |
 | `expired_reason: "task_closed"`, read until the item reopens | `"item_completed"` or `"item_cancelled"`, written by the close |
 | `[task_closed]` on an answer change | `[item_closed]` |
+| `create_work_item` with a `state` in `review`, `blocked`, `completed` or `cancelled` | create it, then move it there with `transition` |
+| a `blocks` link to enter `blocked` | a stated `reason`; work that waits on an item stays where it is, linked `blocks` |
+| `{"state": "review"}` with open steps or no summary | every step ticked, a `summary`, and `to_check`: what the owner is to check |
+| an agent completing an item, or taking it out of `review`, over an open question to the owner | wait for the owner's answer, or withdraw a question you asked |
+| an agent answering, declining or changing the answer of any question to the owner | leave a question with a `purpose` to the owner; only the session that asked withdraws it |
+| completing a goal or stage with open work under it | close, cancel or move out what is open under it; completing it then is the confirmation |
+| a launch that ends `complete` moves its item to `review` | the launched agent moves it to `review` with `to_check` |
 
 ## Consequences
 

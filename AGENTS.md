@@ -27,7 +27,12 @@ is complete on its own.
   work and its queue (`rank` retired, `within`, `label`, `project`, the
   session's space, `queue_order`, `withheld`, `lapsed_claim`,
   `by_previous_holder`), a close that ends its item's requests (`expired_reason`
-  `item_completed` and `item_cancelled`, `[item_closed]`, `purpose`), and the
+  `item_completed` and `item_cancelled`, `[item_closed]`, `purpose`), the
+  guards a creation or a move meets (`new_item`, `blocker` with a stated reason
+  only, `checklist`, `summary` and `review_question` entering review,
+  `question`, `children`), a question with a purpose (`owner_only`,
+  `not_asker`, `[purpose]`; withdrawing review's returns its item to `ready`),
+  a launch that no longer moves its item to review, and the
   retired words
   refused on input — for spaces and projects — the registry formats 2 and 4, a
   space without `project_id`, an optional `space` on `create_work_item`, the
