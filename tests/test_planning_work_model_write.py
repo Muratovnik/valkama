@@ -427,7 +427,17 @@ class ThroughMcpTests(WriteCase):
         mark = self.mark()
         self.update("a", parent=self.ref("G"))
         self.assertEqual(self.tree.ids["G"], self.record("a")["parent_id"])
-        self.assertEqual([("child_left", self.ref("a"))], self.actions("S", mark))
+        # With nothing open under it, the stage enters the wait in a call of Valkama's own.
+        self.assertEqual(
+            [
+                ("child_left", self.ref("a")),
+                (
+                    "awaiting_confirmation",
+                    f"moved out {self.ref('a')}; no steps: check it against its description",
+                ),
+            ],
+            self.actions("S", mark),
+        )
         self.assertEqual("awaiting_confirmation", self.record("S")["container_state"])
 
     def test_a_stage_takes_a_stage_and_a_task_at_any_depth(self) -> None:

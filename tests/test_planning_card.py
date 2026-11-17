@@ -16,7 +16,7 @@ import uuid
 from unittest import mock
 
 from server import mcp_surface, store
-from server.planning import api, images, model, read_model, requests, service, tools
+from server.planning import api, calls, images, model, read_model, requests, service, tools
 from tests.test_planning_images import png
 
 HOLDER = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
@@ -180,7 +180,8 @@ class DefaultReadTests(FullItemCase):
 
     def test_the_table_of_contents_counts_each_part_as_its_read_does(self) -> None:
         contents = self.read()["parts"]
-        named = set(read_model.PARTS) - {"card", "sections", "participants"}
+        # A task has no participants, and no wait for confirmation.
+        named = set(read_model.PARTS) - {"card", "sections", "participants", "confirmation"}
         self.assertEqual(named, set(contents), "this item has something in each part")
         for name in read_model.PARTS[1:]:
             with self.subTest(part=name):
@@ -320,6 +321,64 @@ class PartTests(FullItemCase):
         self.assertEqual(["a root", "a reply"], [comment["body"] for comment in thread])
 
 
+class ConfirmationPartTests(CardCase):
+    """A goal whose one task closed, so that it awaits confirmation."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        # Filed by the owner, so the goal is accepted work at once.
+        with calls.bind(calls.browser(), "/api/planning/work-items"):
+            answer = api.handle_post(
+                self.conn,
+                "/api/planning/work-items",
+                {"space": "CRD", "title": "Goal", "kind": "goal"},
+            )
+        assert answer is not None
+        self.ref = str(answer[1]["reference"])
+        self.agent("apply_work_item_changes", id=self.ref, checklist=["It holds"])
+        task = self.item("Last", parent=self.ref)
+        self.agent("claim_work_item", id=task)
+        closed = self.agent(
+            "apply_work_item_changes",
+            id=task,
+            summary={"done": "Done", "next": "Nothing"},
+            transition={"state": "done"},
+        )
+        self.assertEqual([self.ref], closed["awaiting_confirmation"])
+
+    def test_the_card_names_the_part_and_a_read_by_name_reads_it(self) -> None:
+        card = self.read()
+        self.assertEqual("awaiting_confirmation", card["container_state"])
+        self.assertNotIn("confirmation", card)
+        # Nothing was cancelled or moved out, and the wait is still what to read.
+        self.assertEqual({"count": 0}, card["parts"]["confirmation"])
+        part = self.read(parts=["confirmation"])["confirmation"]
+        self.assertEqual(1, part["steps"])
+        self.assertEqual(([], []), (part["cancelled"], part["moved_out"]))
+        self.assertIsNone(part["asked"])
+        self.assertEqual(part, self.http()["confirmation"])
+        self.assertEqual(part, self.http(parts="confirmation")["confirmation"])
+
+    def test_every_field_of_an_awaiting_record_is_placed(self) -> None:
+        placed = set(read_model.CARD_FIELDS) | set(read_model.PARTS) | set(read_model.OFF_CARD)
+        self.assertEqual(set(), set(self.http(sessions="true")) - placed)
+
+    def test_once_confirmed_the_part_is_gone(self) -> None:
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            checklist_ticks=[
+                {"item_id": step["id"]}
+                for step in service.get_work_item(self.conn, self.ref)["checklist"]
+            ],
+            summary={"done": "It holds", "next": "Nothing"},
+            transition={"state": "done"},
+        )
+        self.assertNotIn("confirmation", self.read()["parts"])
+        self.assertNotIn("confirmation", self.http())
+        self.assertNotIn("confirmation", self.read(parts=["confirmation"]))
+
+
 class SizeTests(unittest.TestCase):
     def test_what_the_card_adds(self) -> None:
         """The table with every part at nine digits, and the frame of a flagged step."""
@@ -331,9 +390,15 @@ class SizeTests(unittest.TestCase):
         counts["questions"] |= {"open": most, "addressed_open": most}
         # An item has one lease or none.
         counts["claim"] = {"count": 1}
+        # The confirmation part is not the card's own: it stands only on a goal or stage
+        # awaiting confirmation, which no lease holds, and fits the margin of the rule.
+        confirmation = {"confirmation": counts.pop("confirmation")}
         contents = read_model.table_of_contents(counts)
-        self.assertEqual(list(read_model.PARTS[1:]), list(contents))
+        self.assertEqual(
+            [name for name in read_model.PARTS[1:] if name != "confirmation"], list(contents)
+        )
         self.assertLessEqual(len(compact(contents)), 490)
+        self.assertLessEqual(len(compact(read_model.table_of_contents(confirmation))) - 1, 35)
         step = {
             "id": str(uuid.uuid4()),
             "text": "",

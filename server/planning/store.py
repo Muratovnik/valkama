@@ -110,6 +110,18 @@ WAITING_DELIVERED_INDEX = (
     "CREATE INDEX IF NOT EXISTS work_item_waiting_notices_delivered"
     " ON work_item_waiting_notices(delivered_session, notice_id) WHERE delivered_call IS NOT NULL"
 )
+#: A goal or stage that awaits confirmation, one row for exactly as long as it does
+#: (`planning.closing`): since when, the call that recorded it -- Valkama's call that
+#: wrote the event, or the sweep step's that wrote the row; none for a row the
+#: work-model migration wrote -- the question to confirm it, once asked, and when the
+#: owner left it to the next session. It goes with the item.
+CONFIRMATIONS = """CREATE TABLE IF NOT EXISTS work_item_confirmations(
+    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    since TEXT NOT NULL,
+    call_id INTEGER REFERENCES execution_events(id),
+    request_id TEXT REFERENCES work_item_requests(request_id),
+    left_at TEXT
+)"""
 
 
 _ACCEPTED_SQL = ",".join(f"'{category}'" for category in model.ACCEPTED_CATEGORIES)
@@ -410,6 +422,7 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {WAITING_NOTICES};
 {WAITING_OPEN_INDEX};
 {WAITING_DELIVERED_INDEX};
+{CONFIRMATIONS};
 
 {_ITEM_PROJECTS}
 """
@@ -827,6 +840,7 @@ SCHEMA_TABLES = (
     "work_item_subscriptions",
     "work_item_images",
     "work_item_waiting_notices",
+    "work_item_confirmations",
     "work_item_projects",
 )
 

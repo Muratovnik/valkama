@@ -43,11 +43,11 @@ T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [f"M{number}" for number in range(15)]
+STEP_NAMES = [f"M{number}" for number in range(17)]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(1, 16)),
-    *(f"P{number}" for number in range(18, 30)),
+    *(f"P{number}" for number in range(18, 31)),
     "second-run",
     "recovery-point",
 ]
@@ -848,6 +848,37 @@ class MigratedStoreTests(StoreCase):
             details,
         )
 
+    def test_m15_gives_a_row_to_each_goal_or_stage_awaiting_confirmation(self) -> None:
+        """Every child of WM-18 is done: it awaits, since the migration, with no call."""
+
+        rows = self.read(
+            "SELECT work_item_id, since, call_id, request_id, left_at FROM work_item_confirmations"
+        )
+        self.assertEqual(
+            [(self.ids["WM-18"], None, None, None)],
+            [(row[0], row[2], row[3], row[4]) for row in rows],
+        )
+        # The moment every record of the migration carries.
+        [(moment,)] = self.read(
+            "SELECT DISTINCT created_at FROM work_item_events WHERE author = ?",
+            (migration.AUTHOR,),
+        )
+        self.assertEqual(moment, rows[0][1])
+        self.assertEqual([], self.events("WM-18", "awaiting_confirmation"), "no event, no call")
+        [follows] = self.read("SELECT COUNT(*) FROM work_item_subscriptions")
+        self.assertEqual(0, follows[0], "no session follows it")
+        steps = {step["name"]: step for step in self.report["steps"]}
+        self.assertEqual(
+            (True, {"table_created": True, "awaiting": ["WM-18"]}),
+            (steps["confirmations"]["needed"], steps["confirmations"]["result"]),
+        )
+        # `items` widened the CHECK with every action this build declares.
+        self.assertFalse(steps["history-actions"]["needed"])
+        [p30] = [entry for entry in self.report["postconditions"] if entry["name"] == "awaiting-rows"]
+        self.assertEqual({"rows": 1}, p30["detail"])
+        [p26] = [entry for entry in self.report["postconditions"] if entry["name"] == "fresh-tables"]
+        self.assertNotIn("work_item_confirmations", p26["detail"]["added"])
+
     def test_m8_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
         self,
     ) -> None:
@@ -1541,6 +1572,7 @@ FAULTS = (
         " WHERE request_id = 'kept-request'",
     ),
     fault("fresh-tables", "CREATE TABLE stray_rows(id INTEGER PRIMARY KEY)"),
+    fault("awaiting-rows", "UPDATE work_item_confirmations SET left_at = since"),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
     fault(
@@ -1642,7 +1674,8 @@ def emptied(half: str) -> Callable[[sqlite3.Connection, store_steps.Context], No
 
 
 #: For each `fresh-shape` probe, a store that passes the pragmas and fails the probe alone: the
-#: fault, and what `fresh-shape` says of it.
+#: fault, and what `fresh-shape` says of it. A narrowed events CHECK is `history-actions`'s to widen again, so a
+#: second run would take it (`second-run`).
 P1_FAULTS = (
     (
         "the update half of the trigger refuses nothing",
@@ -1658,6 +1691,7 @@ P1_FAULTS = (
         "the events table refuses an action a fresh store takes",
         rebuilt("work_item_events", "'accepted',", ""),
         "with {'action': 'accepted'} is refused (CHECK constraint failed",
+        ["fresh-shape", "second-run"],
     ),
     (
         "the states table takes a category the work model retired",
@@ -1945,11 +1979,16 @@ class RollbackTests(StoreCase):
         entry = next(entry for entry in report["postconditions"] if entry["name"] == name)
         self.assertIn(says, entry["error"])
 
-    def test_p1_probes_each_check_and_both_halves_of_the_trigger(self) -> None:
-        for title, write, says in P1_FAULTS:
+    def test_fresh_shape_probes_each_check_and_both_halves_of_the_trigger(self) -> None:
+        for title, write, says, *failed in FRESH_SHAPE_FAULTS:
             with self.subTest(fault=title):
                 self.own_store()
-                self.assert_only(once(title, write), ["fresh-shape"], "fresh-shape", says)
+                self.assert_only(
+                    once(title, write),
+                    failed[0] if failed else ["fresh-shape"],
+                    "fresh-shape",
+                    says,
+                )
 
     def test_each_clause_refuses_a_store_only_it_sees_broken(self) -> None:
         for name, says, statements, failed in CLAUSE_FAULTS:

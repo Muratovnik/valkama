@@ -613,7 +613,7 @@ several modes read each of their parts. Each of these is refused with
 
 | Call | Refusal |
 | --- | --- |
-| a part no item has | `unknown part 'history'; parts are card, comments, events, links, refs, questions, mentions, sessions, images, subscribers, claim, sections, participants` |
+| a part no item has | `unknown part 'history'; parts are card, comments, events, links, refs, questions, mentions, sessions, images, subscribers, claim, sections, participants, confirmation` |
 | a mode beside a `parts` without its part | `thread reads the comments part: add comments to parts or leave parts out`, and the same for `unresolved` and `comments_after`; `events reads the events part: …`; `section reads the sections part: …` |
 | `events` outside its bounds | `events must be between 1 and 1000` |
 | `thread` with `comments_after` or `unresolved` | `thread and comments_after exclude each other`, or `thread and unresolved …` |

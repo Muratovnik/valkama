@@ -38,6 +38,8 @@ row's call on.
 
 A row never lapses: words are not stale because nobody was there to hear them.
 A delivered one stays as the record of who got them, and a row goes with its item.
+An open one goes when what it asked for is over: a goal or stage that stopped
+awaiting its confirmation (`drop`).
 """
 
 from __future__ import annotations
@@ -139,6 +141,20 @@ def leave(
         return False
     conn.execute(_LEAVE, (work_item_id, scope, call if from_call is None else from_call, call))
     return True
+
+
+def drop(conn: sqlite3.Connection, work_item_id: str) -> int:
+    """Take away the words still waiting on a container, of every scope; how many rows went.
+
+    What they asked for is over: a goal or stage that stopped awaiting its confirmation
+    leaves nothing for the next session to confirm. A delivered row stays as the record
+    of who got it.
+    """
+
+    return conn.execute(
+        "DELETE FROM work_item_waiting_notices WHERE work_item_id = ? AND delivered_call IS NULL",
+        (work_item_id,),
+    ).rowcount
 
 
 def place(conn: sqlite3.Connection) -> Place:
