@@ -75,21 +75,6 @@ ALLOWED_PASSAGES = (
         "names the retired scope by what its refusal says",
     ),
     Allowed(
-        "docs/connection-contract.md",
-        '"tasks": 40, "containers": 2',
-        "the volumes read's count of the goals and stages in a category, not the service state",
-    ),
-    Allowed(
-        "docs/connection-contract.md",
-        '"tasks": 31, "containers": 1',
-        "the volumes read's count of the goals and stages in a category, not the service state",
-    ),
-    Allowed(
-        "docs/connection-contract.md",
-        "`containers` (the goals and stages)",
-        "the volumes read's count of the goals and stages in a category, not the service state",
-    ),
-    Allowed(
         "docs/product-model.md",
         "runtime container",
         "a provider's runtime, not a word of the work model",

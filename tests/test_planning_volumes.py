@@ -45,6 +45,8 @@ CATEGORIES = (
     "cancelled",
 )
 CLOSED = ("completed", "cancelled")
+#: The three fields a category holds: its tasks, its goals and its stages.
+SHAPES = ("tasks", "goals", "stages")
 
 
 def _moment(text: str) -> datetime:
@@ -206,19 +208,33 @@ class VolumesCase(unittest.TestCase):
         ]
         return _moment(stamps[-1] if stamps else str(self.rows()[identity]["created_at"]))
 
-    def counted(self, items: set[str]) -> dict[str, tuple[int, int]]:
-        """Tasks and containers in each category; a closed one only when it closed in the period."""
+    @staticmethod
+    def shape_of(row: sqlite3.Row) -> str:
+        """Which field a stored item counts in: a task, a goal (no parent) or a stage (a parent)."""
+
+        if row["kind"] != "container":
+            return "tasks"
+        return "stages" if row["parent_id"] is not None else "goals"
+
+    @staticmethod
+    def tally(category: dict) -> dict[str, int]:
+        """The three counts one category of the read answer holds."""
+
+        return {field: category[field] for field in SHAPES}
+
+    def counted(self, items: set[str]) -> dict[str, dict[str, int]]:
+        """Tasks, goals and stages in each category; a closed one only when it closed in the period."""
 
         rows = self.rows()
-        found = {category: [0, 0] for category in CATEGORIES}
+        found = {category: dict.fromkeys(SHAPES, 0) for category in CATEGORIES}
         for identity in items:
             row = rows[identity]
             if row["category"] not in found:
                 continue  # an accepted open goal or stage, in no category
             if row["category"] in CLOSED and not BEGINS <= self.since(identity) < ENDS:
                 continue
-            found[row["category"]][1 if row["kind"] == "container" else 0] += 1
-        return {category: (tasks, containers) for category, (tasks, containers) in found.items()}
+            found[row["category"]][self.shape_of(row)] += 1
+        return found
 
     def oldest(self, items: set[str]) -> dict[str, str | None]:
         """The id of the card standing longest in each open category."""
@@ -326,18 +342,18 @@ class StoreCountTests(VolumesCase):
                 self.assertEqual(list(CATEGORIES), list(found))
                 self.assertEqual(
                     self.counted(self.board_set(space, project)),
-                    {name: (row["tasks"], row["containers"]) for name, row in found.items()},
+                    {name: self.tally(row) for name, row in found.items()},
                 )
         # The case is what it says. In MAIN's read the work closed in the period is d, v, f
         # and the goal C, and y, m and ALPHA's r; c1, w, e, n and z closed outside it, and
         # G, S and ALPHA's K stand accepted and open, in no category.
         main = self.categories(self.volumes("MAIN"))
-        self.assertEqual((3, 1), (main["completed"]["tasks"], main["completed"]["containers"]))
-        self.assertEqual((3, 0), (main["cancelled"]["tasks"], main["cancelled"]["containers"]))
-        self.assertEqual((2, 1), (main["triage"]["tasks"], main["triage"]["containers"]))
+        self.assertEqual({"tasks": 3, "goals": 1, "stages": 0}, self.tally(main["completed"]))
+        self.assertEqual({"tasks": 3, "goals": 0, "stages": 0}, self.tally(main["cancelled"]))
+        self.assertEqual({"tasks": 2, "goals": 1, "stages": 0}, self.tally(main["triage"]))
         self.assertEqual(
             len(self.board_set("MAIN")) - 3 - 5,
-            sum(row["tasks"] + row["containers"] for row in main.values()),
+            sum(row["tasks"] + row["goals"] + row["stages"] for row in main.values()),
         )
 
     def test_the_oldest_card_is_the_longest_in_its_state(self) -> None:
@@ -394,15 +410,31 @@ class BoardSetTests(VolumesCase):
                     self.conn, space="MAIN", project=project, other_spaces=True, limit=None
                 )
                 self.assertEqual(self.ids(*names), {str(item["work_item_id"]) for item in board})
-                expected = {category: [0, 0] for category in CATEGORIES}
+                expected = {category: dict.fromkeys(SHAPES, 0) for category in CATEGORIES}
                 for identity in self.ids(*names):
                     row = rows[identity]
-                    expected[row["category"]][1 if row["kind"] == "container" else 0] += 1
+                    expected[row["category"]][self.shape_of(row)] += 1
                 found = self.categories(self.volumes("MAIN", project))
-                self.assertEqual(
-                    {category: tuple(pair) for category, pair in expected.items()},
-                    {name: (row["tasks"], row["containers"]) for name, row in found.items()},
-                )
+                self.assertEqual(expected, {name: self.tally(row) for name, row in found.items()})
+
+
+class GoalAndStageTests(VolumesCase):
+    """A category that holds a goal and two stages: each counts in its own field, not the other's."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.place("MAIN", "G", kind="goal", state="deferred")
+        self.place("MAIN", "S1", kind="stage", state="deferred", parent="G")
+        self.place("MAIN", "S2", kind="stage", state="deferred", parent="G")
+        self.place("MAIN", "t", state="deferred", parent="S1")
+        self.conn.commit()
+
+    def test_a_goal_and_a_stage_are_counted_in_their_own_fields(self) -> None:
+        found = self.categories(self.volumes("MAIN"))
+        self.assertEqual({"tasks": 1, "goals": 1, "stages": 2}, self.tally(found["deferred"]))
+        self.assertEqual(
+            self.counted(self.board_set("MAIN"))["deferred"], self.tally(found["deferred"])
+        )
 
 
 class FrameTests(VolumesCase):

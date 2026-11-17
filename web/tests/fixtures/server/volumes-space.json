@@ -20,7 +20,8 @@
         {
           "category": "triage",
           "tasks": 5,
-          "containers": 5,
+          "goals": 3,
+          "stages": 2,
           "oldest": {
             "work_item_id": "00000000-0000-4000-8000-000000000005",
             "reference": "MAIN-1",
@@ -30,7 +31,8 @@
         {
           "category": "deferred",
           "tasks": 1,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": {
             "work_item_id": "00000000-0000-4000-8000-000000000050",
             "reference": "MAIN-19",
@@ -40,7 +42,8 @@
         {
           "category": "ready",
           "tasks": 2,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": {
             "work_item_id": "00000000-0000-4000-8000-000000000039",
             "reference": "MAIN-12",
@@ -50,7 +53,8 @@
         {
           "category": "active",
           "tasks": 5,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": {
             "work_item_id": "00000000-0000-4000-8000-000000000010",
             "reference": "MAIN-3",
@@ -60,25 +64,29 @@
         {
           "category": "review",
           "tasks": 0,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         },
         {
           "category": "completed",
           "tasks": 1,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         },
         {
           "category": "blocked",
           "tasks": 0,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         },
         {
           "category": "cancelled",
           "tasks": 0,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         }
       ]

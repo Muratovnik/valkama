@@ -22,19 +22,22 @@
         {
           "category": "triage",
           "tasks": 0,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         },
         {
           "category": "deferred",
           "tasks": 0,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         },
         {
           "category": "ready",
           "tasks": 1,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": {
             "work_item_id": "00000000-0000-4000-8000-000000000039",
             "reference": "MAIN-12",
@@ -44,31 +47,36 @@
         {
           "category": "active",
           "tasks": 0,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         },
         {
           "category": "review",
           "tasks": 0,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         },
         {
           "category": "completed",
           "tasks": 0,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         },
         {
           "category": "blocked",
           "tasks": 0,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         },
         {
           "category": "cancelled",
           "tasks": 0,
-          "containers": 0,
+          "goals": 0,
+          "stages": 0,
           "oldest": null
         }
       ]

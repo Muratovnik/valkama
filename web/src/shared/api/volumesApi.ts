@@ -50,7 +50,8 @@ const oldestSchema = strictObject({
 const categorySchema = strictObject({
   category: enumField(STATE_CATEGORIES),
   tasks: count(),
-  containers: count(),
+  goals: count(),
+  stages: count(),
   oldest: oldestSchema.nullable(),
 })
 

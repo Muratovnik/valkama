@@ -1728,10 +1728,10 @@ of another space that the space's items name keeps only the space's own.
    "measured_from": "2030-02-17T16:03:29.000Z",
    "counts": {
      "categories": [
-       {"category": "triage", "tasks": 40, "containers": 2,
+       {"category": "triage", "tasks": 40, "goals": 1, "stages": 1,
         "oldest": {"work_item_id": "6f1c2a8e-0000-4000-8000-000000000012",
                    "reference": "MAIN-12", "since": "2030-01-03T10:00:00Z"}},
-       {"category": "completed", "tasks": 31, "containers": 1, "oldest": null},
+       {"category": "completed", "tasks": 31, "goals": 1, "stages": 0, "oldest": null},
        {"…": "the other six categories"}]}}}
 ```
 
@@ -1740,7 +1740,7 @@ of another space that the space's items name keeps only the space's own.
 | `scope` | the scope read: `kind`, `space_ref` (`{data_scope_id, space_key}`, or `null` for `global`) and `project_ref` (`{project_id}`, or `null`) |
 | `period` | the period asked for, with `from` and `to` at the caller's offset |
 | `measured_from` | the start of the first stretch of agent work counted to an item in this store, as the usage rows hold it, or `null` when none is: an item started before it may have spent more than its usage says (see [How much work an item took](#how-much-work-an-item-took)) |
-| `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `containers` (the goals and stages) and `oldest` |
+| `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest` |
 
 A category counts the items of the scope that stand in a state of it. An accepted open
 goal or stage stands in no category and is in none of these counts. Work in an open

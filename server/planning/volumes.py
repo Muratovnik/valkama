@@ -165,7 +165,7 @@ def _known_project(conn: sqlite3.Connection, project: str) -> bool:
 #: Each item of a scope with its category and the moment it came to stand where it is:
 #: its last state entry (`model.STATE_ENTRY_ACTIONS`), or its creation when it has none.
 _STANDING = (
-    "SELECT i.work_item_id, i.number, i.kind, s.category, p.key AS space_key,"
+    "SELECT i.work_item_id, i.number, i.kind, i.parent_id, s.category, p.key AS space_key,"
     " COALESCE((SELECT e.created_at FROM work_item_events e"
     "  WHERE e.work_item_id = i.work_item_id"
     "  AND e.action IN ({entries}) ORDER BY e.id DESC LIMIT 1), i.created_at) AS since"
@@ -185,20 +185,20 @@ def _micro(text: str) -> int:
 def category_counts(
     conn: sqlite3.Connection, scope: Scope, period: Period | None = None
 ) -> dict[str, dict]:
-    """The scope's tasks and containers in each stored category, with the card longest there.
+    """The scope's tasks, goals and stages in each stored category, with the card longest there.
 
     Keyed by every category the store holds, the service one too, where an accepted
-    open container stands. Each says `tasks`, `containers` and `oldest`: the card
-    that came to stand there first, with its `since`, or None when none stands there.
-    With a period, a completed or cancelled card counts only when it came to stand
-    there inside it; without one, every card counts as it stands now.
+    open goal or stage stands. Each says `tasks`, `goals`, `stages` and `oldest`: the
+    card that came to stand there first, with its `since`, or None when none stands
+    there. With a period, a completed or cancelled card counts only when it came to
+    stand there inside it; without one, every card counts as it stands now.
     """
 
     entries = ", ".join("?" * len(model.STATE_ENTRY_ACTIONS))
     query = _STANDING.format(entries=entries, where=scope.where())
     rows = conn.execute(query, (*model.STATE_ENTRY_ACTIONS, *scope.parameters)).fetchall()
     found: dict[str, dict] = {
-        category: {"tasks": 0, "containers": 0, "oldest": None}
+        category: {"tasks": 0, "goals": 0, "stages": 0, "oldest": None}
         for category in model.STORED_CATEGORIES
     }
     first: dict[str, tuple] = {}
@@ -208,7 +208,8 @@ def category_counts(
         if period is not None and category in model.TERMINAL_CATEGORIES and not period.holds(since):
             continue
         counted = found[category]
-        counted["containers" if row["kind"] == model.CONTAINER_KIND else "tasks"] += 1
+        shape = model.outward_kind(row["kind"], row["parent_id"])
+        counted["goals" if shape == "goal" else "stages" if shape == "stage" else "tasks"] += 1
         order = (since, str(row["space_key"]), int(row["number"]))
         if category not in first or order < first[category]:
             first[category] = order
@@ -228,7 +229,8 @@ def _categories(conn: sqlite3.Connection, request: Request) -> list[dict]:
         {
             "category": category,
             "tasks": counted[category]["tasks"],
-            "containers": counted[category]["containers"],
+            "goals": counted[category]["goals"],
+            "stages": counted[category]["stages"],
             "oldest": counted[category]["oldest"] if category in OPEN_CATEGORIES else None,
         }
         for category in model.PUBLIC_CATEGORIES
