@@ -255,8 +255,9 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
 # (`participation_settings`, `label_settings`), empty in a migrated store, which reads
 # as the default set. The owner sets there where an agent's decision waits for them; a
 # build at 19 would read none of it and let an agent go ahead where the owner chose to
-# decide, so the ratchet makes it refuse a store at 20. The work-model migration carries
-# a store at 17 straight to 20.
+# decide, so the ratchet makes it refuse a store at 20. The same schema marks the
+# decisions an agent took on its own (`agent_decisions`), empty in a migrated store. The
+# work-model migration carries a store at 17 straight to 20.
 STORE_SCHEMA_VERSION = 20
 
 

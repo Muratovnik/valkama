@@ -213,6 +213,30 @@ PARTICIPATION = (
 )
 _PARTICIPATION = "".join(f"{statement};\n" for statement in PARTICIPATION)
 
+#: The points at which an agent's own decision is marked for the owner to read back
+#: (`planning.decisions`): the participation points, and an acceptance by assignment.
+DECISION_POINTS = (
+    "finding",
+    "proposed_goal",
+    "task_in_goal",
+    "decision",
+    "cancel_outside",
+    "cancel_shared",
+    "condition",
+    "goal_close",
+    "goal_defer",
+    "assignment",
+)
+_DECISION_POINT_SQL = ",".join(f"'{point}'" for point in DECISION_POINTS)
+#: An agent's decision, as a mark on the event that recorded it: when, which item and
+#: which session are the event's and its call's, so the mark holds only the point and
+#: what was decided. It goes with its event, and the event with its item.
+AGENT_DECISIONS = f"""CREATE TABLE IF NOT EXISTS agent_decisions(
+    event_id INTEGER PRIMARY KEY REFERENCES work_item_events(id) ON DELETE CASCADE,
+    point TEXT NOT NULL CHECK(point IN ({_DECISION_POINT_SQL})),
+    what TEXT NOT NULL
+)"""
+
 
 _ACCEPTED_SQL = ",".join(f"'{category}'" for category in model.ACCEPTED_CATEGORIES)
 
@@ -517,6 +541,7 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {DEFERRALS_UNTIL_AT_INDEX};
 {DEFERRALS_UNTIL_ITEM_INDEX};
 {_PARTICIPATION}
+{AGENT_DECISIONS};
 {_ITEM_PROJECTS}
 """
 
@@ -938,6 +963,7 @@ SCHEMA_TABLES = (
     "work_item_projects",
     "participation_settings",
     "label_settings",
+    "agent_decisions",
 )
 
 

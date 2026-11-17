@@ -23,6 +23,7 @@ from .. import query_params
 from . import (
     calls,
     chain,
+    decisions,
     held,
     images,
     item_projects,
@@ -544,6 +545,26 @@ def _participation(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]
     return participation.shown(conn, None if space is None else service.space_identity(conn, space))
 
 
+def _decisions(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """One page of the decisions agents took on their own, newest first.
+
+    `point` may be repeated, each naming one more point; `from` and `to` are a day
+    or a timestamp, both ends taken in.
+    """
+
+    space = _first(parameters, "space")
+    return decisions.page(
+        conn,
+        space=None if space is None else service.space_identity(conn, space),
+        project=_first(parameters, "project"),
+        points=[value for value in parameters.get("point") or [] if value != ""],
+        start=_first(parameters, "from"),
+        end=_first(parameters, "to"),
+        limit=_int(_first(parameters, "limit"), "limit", decisions.PAGE_DEFAULT),
+        offset=_offset(parameters),
+    )
+
+
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
     "/api/planning": _read_model,
     "/api/planning/spaces": _spaces,
@@ -562,6 +583,7 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/request": _request,
     "/api/planning/held": _held,
     "/api/planning/participation": _participation,
+    "/api/planning/decisions": _decisions,
 }
 
 

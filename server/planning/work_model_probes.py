@@ -59,6 +59,8 @@ _NEW = _New()
 #: are new in each probe, and a fixed key such as a singleton's is replaced, since
 #: the write is `INSERT OR REPLACE`, so no row a store already holds collides.
 _ROWS: dict[str, dict[str, object]] = {
+    # The event it marks is the new rowid each probe takes.
+    "agent_decisions": {"point": "decision", "what": "probe"},
     "analytics_surface_uses": {"day": "0001-01-01", "kind": "page_open", "count": 1},
     "execution_sessions": {"execution_id": _NEW, "session_id": _NEW, "relation": "launched"},
     "executions": {
