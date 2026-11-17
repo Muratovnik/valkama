@@ -719,6 +719,18 @@ def _move_out(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     )
 
 
+def _convert(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    return split.convert(
+        conn,
+        _text(payload, "id"),
+        to=payload.get("to"),
+        leftover=payload.get("leftover"),
+        force=_flag(payload, "force"),
+        expected_revision=_optional_int(payload, "expected_revision"),
+        author=_author(payload),
+    )
+
+
 def _claim(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.claim_work_item(
         conn,
@@ -1135,6 +1147,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("claim", frozenset()),
     ("subscribe", frozenset()),
     ("update", frozenset({*model.UPDATABLE_FIELDS, "mentions"})),
+    ("convert", frozenset({"to", "leftover", "force"})),
     ("checklist", frozenset({"items", "force"})),
     ("checklist_ticks", frozenset({"item_id", "done", "force"})),
     ("refs", frozenset({"kind", "value", "label"})),
@@ -1161,8 +1174,9 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("defer", frozenset({"until", "reason", "force"})),
     ("move_out", frozenset({"reason", "force"})),
 )
-#: The groups that each change the state: a batch names at most one of them.
-_STATE_CHANGES = ("transition", "defer", "move_out")
+#: The groups that each change the state: a batch names at most one of them. Converting
+#: changes what the item is, and where it stands with it.
+_STATE_CHANGES = ("convert", "transition", "defer", "move_out")
 #: What a creation may do to the item it just made, after making it and in this
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
 CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
@@ -1337,6 +1351,8 @@ def _apply_step(
         return {}, written
     if group == "move_out":
         return _moved_out(conn, {**entry, **base})
+    if group == "convert":
+        return _converted(conn, {**entry, **base})
     if group == "defer":
         return _deferred(conn, {**entry, **base})
     answer = _transition(conn, {**entry, **base})
@@ -1373,6 +1389,22 @@ def _moved_out(conn: sqlite3.Connection, payload: Mapping[str, object]) -> tuple
         name: answer[name] for name in ("warnings", "overridden", "moved_out") if answer.get(name)
     }
     moved: dict[str, object] = {"state": answer["state"]["key"]}
+    if answer.get("released"):
+        moved["released"] = answer["released"]
+    return found, moved
+
+
+def _converted(conn: sqlite3.Connection, payload: Mapping[str, object]) -> tuple[dict, object]:
+    """A batch's conversion: what the item is now, where it stands, and whose claim it ended."""
+
+    answer = _convert(conn, payload)
+    found = {name: answer[name] for name in ("overridden", "converted") if answer.get(name)}
+    moved: dict[str, object] = {
+        "kind": answer["kind"],
+        "state": answer["state"]["key"] if answer["state"] is not None else None,
+    }
+    if answer["container_state"] is not None:
+        moved["container_state"] = answer["container_state"]
     if answer.get("released"):
         moved["released"] = answer["released"]
     return found, moved
@@ -1520,6 +1552,7 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/transition": _transition,
     "/api/planning/work-item/defer": _defer,
     "/api/planning/work-item/move-out": _move_out,
+    "/api/planning/work-item/convert": _convert,
     "/api/planning/work-item/claim": _claim,
     "/api/planning/work-item/claim-ready": _claim_ready,
     "/api/planning/work-item/checklist": _checklist,

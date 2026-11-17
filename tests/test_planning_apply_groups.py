@@ -583,7 +583,7 @@ class EditingAndClosingTests(BatchCase):
         parent = self.item("A task")
         self.conn.commit()
         before = self.untouched()
-        # A task holds no children.
+        # A task holds no children: the refusal names the conversion that passes.
         error = self.refused_batch(
             claim=True,
             update={"parent": parent},
@@ -591,7 +591,8 @@ class EditingAndClosingTests(BatchCase):
             transition={"state": "done"},
         )
         self.assertEqual({"group": "update", "index": 0}, error["step"])
-        self.assertIn("a task holds no children", error["message"])
+        self.assertIn("is a task and holds no children", error["message"])
+        self.assertIn("convert {to: goal}", error["message"])
         self.assertEqual(before, self.untouched())
 
     def test_an_edit_and_a_close_land_on_a_closed_item_as_the_single_tools_do(self) -> None:
@@ -750,6 +751,7 @@ class OrderTests(BatchCase):
                 "claim",
                 "subscribe",
                 "update",
+                "convert",
                 "checklist",
                 "checklist_ticks",
                 "refs",
@@ -967,9 +969,9 @@ class PublishedSchemaTests(unittest.TestCase):
     def test_the_description_states_the_order(self) -> None:
         tool = next(entry for entry in tools.TOOLS if entry["name"] == BATCH)
         self.assertIn(
-            "claim, subscribe, update, checklist, checklist_ticks, refs, links, comment or"
-            " comments, resolutions, questions, summary, then one of transition, defer or"
-            " move_out",
+            "claim, subscribe, update, convert, checklist, checklist_ticks, refs, links,"
+            " comment or comments, resolutions, questions, summary, then one of transition,"
+            " defer or move_out",
             tool["description"],
         )
 

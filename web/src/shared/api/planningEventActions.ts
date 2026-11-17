@@ -34,6 +34,7 @@ export const EVENT_ACTIONS = [
   'child_left',
   'awaiting_confirmation',
   'returned',
+  'converted',
 ] as const
 
 /** The longest detail any event but `labels_changed` carries. */

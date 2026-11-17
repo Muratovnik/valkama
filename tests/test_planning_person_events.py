@@ -149,6 +149,22 @@ class WhatCountsTests(Harness):
         self.assertEqual("awaiting_confirmation", person_events.KINDS["awaiting_confirmation"])
         self.assertNotIn("awaiting_confirmation", person_events.WORK_KINDS)
 
+    def test_a_conversion_is_told_as_its_own_kind_beside_the_move_it_made(self) -> None:
+        """A person converting the task an agent holds: the holder hears its claim end, the
+        item come to stand open as a goal, and what it became, in that order."""
+
+        self.agent("claim_work_item", id=self.ref)
+        self.person("/api/planning/work-item/convert", id=self.ref, to="goal", force=True)
+
+        told = self.window()
+        self.assertEqual(["released", "status", "converted"], [event["kind"] for event in told])
+        leftover = service.get_work_item(self.conn, self.ref)["reference"]
+        self.assertRegex(told[-1]["text"], r"^task -> goal; leftover [A-Z]+-\d+$")
+        self.assertNotIn(leftover, told[-1]["text"])
+        self.assertEqual("converted", person_events.KINDS["converted"])
+        self.assertNotIn("converted", person_events.WORK_KINDS)
+        self.assertNotIn("converted", person_events.SERVER_ASKS)
+
     def test_the_browser_and_kind_spellings_are_the_call_rows_own(self) -> None:
         self.assertEqual(calls.BROWSER, person_events.BROWSER)
         self.assertEqual(calls.VALKAMA, person_events.VALKAMA)

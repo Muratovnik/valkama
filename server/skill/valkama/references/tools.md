@@ -214,6 +214,7 @@ resolves its discussion, records its summary and moves its state:
 | `claim` | `true` | claims the item as `claim_work_item` does |
 | `subscribe` | `true` or `false` | follows the item's news for this session, or stops |
 | `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | edits the fields a transition does not own |
+| `convert` | `{"to": "stage", "leftover": {"title": "…", "steps": ["…"]}, "force": false}`, not with `transition`, `defer` or `move_out` | turns a task into a goal or stage, or one with nothing under it into a task ([work model](work-model.md#goals-and-stages)) |
 | `checklist` | `["…", {"text": "…", "done": true}]`, or `{"items": [...], "force": true}` to carry a refusal through | sets the steps |
 | `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | completes or reopens steps |
 | `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | attaches pointers |
@@ -224,8 +225,8 @@ resolves its discussion, records its summary and moves its state:
 | `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | asks as `create_work_item_request` does |
 | `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
 | `transition` | `{"state": "completed", "reason": "…", "force": false}` | moves the state |
-| `defer` | `{"until": "2026-12-01", "reason": "…", "force": false}`, not with `transition` or `move_out` | puts the item off until a day, a time with its zone, or an open item's close ([work model](work-model.md#goals-and-stages)) |
-| `move_out` | `{"reason": "…", "force": false}`, not with `transition` or `defer` | takes the item out of its goal or stage, to triage |
+| `defer` | `{"until": "2026-12-01", "reason": "…", "force": false}`, not with `transition`, `move_out` or `convert` | puts the item off until a day, a time with its zone, or an open item's close ([work model](work-model.md#goals-and-stages)) |
+| `move_out` | `{"reason": "…", "force": false}`, not with `transition`, `defer` or `convert` | takes the item out of its goal or stage, to triage |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
 the item already had and a `checklist` in the same call kept; send a new step
@@ -408,6 +409,7 @@ owner is open on it, `force` or not; cancelling is not.
 | `[deferral]` | Send `until` and `reason`; `until` is a day, a time with its zone, or an open item other than this one and the goals and stages over it. |
 | `[move_out]` | Give the reason the item leaves its goal or stage; an item under none, or closed, has nothing to move out of. |
 | `[parent]` | Clear a parent with `move_out`, not an edit; accept the goal or stage first, or move the item out, before accepted work goes under it. |
+| `[convert]` | Send the word the refusal names: `stage` for a task under a parent, `goal` for one without, a task kind for a goal or stage; move out what stands under a goal or stage first, and reopen a closed item. |
 | `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
 | `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |

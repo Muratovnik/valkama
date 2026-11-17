@@ -97,6 +97,18 @@ goal or stage that is not accepted (`[parent]`): accept that one first, or move
 the item out. Work in triage moved under goals and stages all accepted is
 accepted with them, as if filed there.
 
+A task that turns out to be several is converted into a goal or stage
+(`convert`, `to: stage` under a parent, `to: goal` without one), and an
+edit of its kind or a child filed under it is refused naming that word. It
+keeps its number, text, discussion, history, links, questions, subscribers,
+refs and steps with their ticks; a bug or improvement keeps its kind as a
+label. A goal or stage is held by nobody, so a held task leaves its work at
+hand in a new task under it: the same holder, every claimed step with its
+claim, the steps `leftover.steps` names, started as it was and with its
+projects, and each holder's top-level session follows the new goal or stage.
+A goal or stage with nothing under it becomes a task again with `to: task`.
+An agent does not convert an item while a question to the owner on it is open.
+
 Work that is to wait is put off with `defer`, never by a move into a deferred
 state: `until` names the day (`2026-12-01`, from 00:00 UTC), a time with its zone,
 or the open item whose close it waits on, and `reason` says why, which the owner
