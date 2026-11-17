@@ -4,7 +4,7 @@ The owner reads these counts to tell the surfaces that are used from the ones no
 opens. A use is counted where it happens, on this machine, and nothing about it leaves
 the store: the table (`store`) holds a day, a kind and a count, and nothing else. The
 day is the caller's, at the offset from UTC it states, checked as the usage read checks
-its own (`usage.caller_zone`).
+its own (`planning.usage.caller_zone`).
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import datetime as dt
 import re
 import sqlite3
 
-from . import usage
+from ..planning import usage
 from .store import KINDS
 
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")

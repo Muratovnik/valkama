@@ -30,6 +30,9 @@ Who spent a stretch and how its run was launched follow one rule here, `role` an
 the same groups. Their seconds and costs for a group differ only by where each rounds: this
 read adds a line's rows and then rounds, the analytics read rounds each row and then adds.
 `docs/connection-contract.md` states the bound.
+
+A read over a period takes the period's grammar from here (`period`), so every such read
+answers and refuses about `from`, `to` and `utc_offset` in the same words.
 """
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
+import re
 import sqlite3
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -71,8 +75,9 @@ _MIXED = "mixed"
 
 
 @dataclass
-class _Tally:
-    """What some rows add up to."""
+class Tally:
+    """What some rows add up to: their seconds, their tokens by kind, their cost and the
+    tokens of the rows with no cost."""
 
     seconds: float = 0.0
     tokens: dict[str, int] = field(default_factory=dict)
@@ -117,7 +122,7 @@ def _elapsed(rows: Iterable[sqlite3.Row]) -> float:
     return total
 
 
-def _time(rows: Sequence[sqlite3.Row], tally: _Tally) -> dict:
+def _time(rows: Sequence[sqlite3.Row], tally: Tally) -> dict:
     """The two numbers of time. A row's stamps round to the millisecond and its seconds do not."""
 
     return {
@@ -126,19 +131,19 @@ def _time(rows: Sequence[sqlite3.Row], tally: _Tally) -> dict:
     }
 
 
-def _breakdown(rows: Sequence[sqlite3.Row], name: str) -> list[tuple[object, _Tally]]:
+def _breakdown(rows: Sequence[sqlite3.Row], name: str) -> list[tuple[object, Tally]]:
     """These rows added up by one column, the most time first."""
 
-    tallies: dict[object, _Tally] = {}
+    tallies: dict[object, Tally] = {}
     for row in rows:
-        tallies.setdefault(row[name], _Tally()).add(row)
+        tallies.setdefault(row[name], Tally()).add(row)
     return sorted(tallies.items(), key=lambda entry: -entry[1].seconds)
 
 
 def _agents(rows: Sequence[sqlite3.Row]) -> list[dict]:
-    tallies: dict[tuple[str, str], _Tally] = {}
+    tallies: dict[tuple[str, str], Tally] = {}
     for row in rows:
-        tallies.setdefault((str(row["session_id"]), str(row["agent_id"])), _Tally()).add(row)
+        tallies.setdefault((str(row["session_id"]), str(row["agent_id"])), Tally()).add(row)
     return [
         {
             "session_id": session,
@@ -151,7 +156,7 @@ def _agents(rows: Sequence[sqlite3.Row]) -> list[dict]:
 
 
 def _summary(rows: Sequence[sqlite3.Row]) -> dict:
-    whole = _Tally()
+    whole = Tally()
     for row in rows:
         whole.add(row)
     estimated = sum(float(row["seconds"]) for row in rows if row["quality"] == _ESTIMATED)
@@ -299,7 +304,7 @@ def _cut(parts: Sequence[float | None], whole: float | None, places: int) -> lis
     return shares
 
 
-def _parts(tallies: Sequence[_Tally], whole: _Tally) -> list[dict]:
+def _parts(tallies: Sequence[Tally], whole: Tally) -> list[dict]:
     """What each of these tallies spent, cut so that together they are the whole."""
 
     seconds = _cut([tally.seconds for tally in tallies], whole.seconds, 3)
@@ -316,16 +321,16 @@ def _parts(tallies: Sequence[_Tally], whole: _Tally) -> list[dict]:
 
 def _ranked(
     rows: Sequence[sqlite3.Row], key: Callable[[sqlite3.Row], tuple]
-) -> list[tuple[tuple, _Tally]]:
+) -> list[tuple[tuple, Tally]]:
     """These rows added up by `key`, in the order of `ranking`."""
 
-    tallies: dict[tuple, _Tally] = {}
+    tallies: dict[tuple, Tally] = {}
     for row in rows:
-        tallies.setdefault(key(row), _Tally()).add(row)
+        tallies.setdefault(key(row), Tally()).add(row)
     return sorted(tallies.items(), key=lambda e: ranking(e[1].seconds, e[1].cost, e[0]))
 
 
-def _accounts(rows: Sequence[sqlite3.Row], whole: _Tally) -> dict:
+def _accounts(rows: Sequence[sqlite3.Row], whole: Tally) -> dict:
     """The work by the account it ran under: each stretch of one account in time order, cut
     wherever the next row's account differs, and each account whole with its share.
 
@@ -342,7 +347,7 @@ def _accounts(rows: Sequence[sqlite3.Row], whole: _Tally) -> dict:
             stretches.append((row["organization"], [row]))
     tallies = []
     for _, found in stretches:
-        tally = _Tally()
+        tally = Tally()
         for row in found:
             tally.add(row)
         tallies.append(tally)
@@ -379,7 +384,7 @@ def _role(row: sqlite3.Row) -> tuple[str, Value, str | None]:
     return role(agent, row["advisor"]), launch_class(agent, row["launch_class"]), row["effort"]
 
 
-def _roles(rows: Sequence[sqlite3.Row], whole: _Tally) -> list[dict]:
+def _roles(rows: Sequence[sqlite3.Row], whole: Tally) -> list[dict]:
     """The work by role, launch class and effort, ranked."""
 
     ranked = _ranked(rows, _role)
@@ -415,7 +420,7 @@ def item_names(conn: sqlite3.Connection, items: Iterable[str]) -> dict[str, dict
 
 
 def _item_line(item: str | None, names: dict[str, dict], rows: Sequence[sqlite3.Row]) -> dict:
-    tally = _Tally()
+    tally = Tally()
     for row in rows:
         tally.add(row)
     named = names.get(item, {}) if item is not None else {}
@@ -444,7 +449,7 @@ def for_item(conn: sqlite3.Connection, reference: object, scope: str | None = No
     ).fetchall()
     names = item_names(conn, order)
     by_item: dict[str, list[sqlite3.Row]] = {item: [] for item in order}
-    whole = _Tally()
+    whole = Tally()
     for row in rows:
         by_item[str(row["work_item_id"])].append(row)
         whole.add(row)
@@ -510,3 +515,89 @@ def _excluded(runs: Iterable[sqlite3.Row]) -> dict:
         name: round(sum(float(run[f"{name}_seconds"]) for run in found), 3)
         for name in ("human", "subagent", "external", "gap")
     }
+
+
+# -- the period ----------------------------------------------------------------
+
+#: The length of each step a period is read by, in seconds. A day is always 24 hours at one
+#: offset.
+STEPS = {"minute": 60, "hour": 3600, "day": 86400}
+#: Forty hours by the minute, a hundred days by the hour, or six and a half years by the day.
+MAX_STEPS = 2400
+#: The furthest any zone is from UTC.
+MAX_OFFSET_MINUTES = 14 * 60
+
+_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+#: The moment a period's microseconds count from.
+EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
+_MICRO = dt.timedelta(microseconds=1)
+#: The moments a period and its comparison may lie between: nothing is stored before
+#: the first, and a date past the second could not be written at every offset.
+_EARLIEST = 0
+_LATEST = (dt.datetime(9999, 1, 1, tzinfo=dt.UTC) - EPOCH) // _MICRO
+
+
+class UsageQueryError(ValueError):
+    """A request a usage read cannot answer, saying what in it is wrong."""
+
+
+def micro(moment: dt.datetime) -> int:
+    """A moment in microseconds since the epoch, the unit a period is held in."""
+
+    return (moment - EPOCH) // _MICRO
+
+
+def _moment(text: str, name: str, zone: dt.tzinfo) -> int:
+    """A date as the start of that day in the caller's zone, or a time with its own offset."""
+
+    try:
+        if _DATE.fullmatch(text):
+            return micro(dt.datetime.combine(dt.date.fromisoformat(text), dt.time(), zone))
+        moment = dt.datetime.fromisoformat(text)
+        if moment.tzinfo is None:
+            raise UsageQueryError(f"{name} must be a date or a time with its offset")
+        return micro(moment)
+    except (ValueError, OverflowError) as error:
+        if isinstance(error, UsageQueryError):
+            raise
+        raise UsageQueryError(f"{name} must be a date or a time with its offset") from error
+
+
+def caller_zone(utc_offset: int) -> dt.timezone:
+    """The caller's zone, from its offset from UTC in minutes, or a refusal of the offset."""
+
+    if not -MAX_OFFSET_MINUTES <= utc_offset <= MAX_OFFSET_MINUTES:
+        raise UsageQueryError(
+            f"utc_offset must be from {-MAX_OFFSET_MINUTES} to {MAX_OFFSET_MINUTES} minutes"
+        )
+    return dt.timezone(dt.timedelta(minutes=utc_offset))
+
+
+def period(
+    start: str, end: str, *, step: str = "day", utc_offset: int = 0, compare: bool = False
+) -> tuple[int, int]:
+    """The period from `start` up to `end`, which it does not hold, in microseconds since the
+    epoch, or a refusal naming the first thing wrong in it.
+
+    A date is the start of that day in the caller's zone, `utc_offset` minutes from UTC, and
+    a time carries its own offset. The period lies between 1970 and 9999, with `compare` the
+    period of equal length before it too, and holds at most `MAX_STEPS` steps of one `step`
+    counted on the caller's clock.
+    """
+
+    if step not in STEPS:
+        raise UsageQueryError("step must be minute, hour or day")
+    zone = caller_zone(utc_offset)
+    begins, ends = _moment(start, "from", zone), _moment(end, "to", zone)
+    if ends <= begins:
+        raise UsageQueryError("to must be later than from")
+    if (2 * begins - ends if compare else begins) < _EARLIEST or ends > _LATEST:
+        raise UsageQueryError(
+            "from and to must lie between 1970 and 9999, and with compare the period before too"
+        )
+    length = dt.timedelta(seconds=STEPS[step]) // _MICRO
+    shift = dt.timedelta(minutes=utc_offset) // _MICRO
+    steps = -(-(ends + shift) // length) - (begins + shift) // length
+    if steps > MAX_STEPS:
+        raise UsageQueryError(f"the period holds more than {MAX_STEPS} steps of one {step}")
+    return begins, ends
