@@ -11,10 +11,12 @@ has lapsed although nothing wrote that down, `lapse`. A read of many items asks
 `asked` once for all of them.
 
 A request row is written in two places only: `ask` inserts one with its
-`request_created`, and `end` ends every one still pending on an item, with
-`request_expired`. A move that closes an item calls `end` in its own write, so a
-question there says whether its item was done or cancelled, the asker hears it, and
-reopening the item brings none back.
+`request_created`, and `end` ends every one still pending on an item: one still
+waiting with `request_expired`, one that has lapsed with the reason it lapsed for.
+A move that closes an item calls `end` in its own write, so a question there says
+whether its item was done or cancelled, the asker hears it, a question its deadline
+or its execution had already ended keeps saying so, and reopening the item brings
+none back.
 
 The conditions read a request row named `r`. The module sits below the read model,
 the leases and the service, which call it inside their writes, so it reads and
@@ -217,29 +219,43 @@ def end(
 ) -> list[str]:
     """End every request still pending on an item, or those of one `purpose`, unanswered.
 
-    Each becomes `expired` with `reason`, one of `request_model.EXPIRED_REASONS`,
-    and gets its `request_expired`, whoever it asks: a question, a decision or a
-    list, of the owner or of a session. The event names the request, as every event
-    of one does, and the reason is read from its row. Answers the ids it ended.
+    One still waiting becomes `expired` with `reason`, one of
+    `request_model.EXPIRED_REASONS`, and gets its `request_expired`, whoever it
+    asks: a question, a decision or a list, of the owner or of a session. The event
+    names the request, as every event of one does, and the reason is read from its
+    row. One that has lapsed (`lapse`) is written as it lapsed, `deadline` or
+    `execution_closed`, resolved when it lapsed where that is known, and gets no
+    event: nothing happened to it now. Either way no request is left pending.
+    Answers the ids `reason` ended.
     """
 
     model.enum_field(reason, frozenset(request_model.EXPIRED_REASONS), "expired_reason")
-    query = "SELECT request_id FROM work_item_requests WHERE work_item_id=? AND status='pending'"
+    query = _FACTS + " WHERE r.work_item_id = ? AND r.status = 'pending'"
     parameters: tuple[str, ...] = (work_item_id,)
     if purpose is not None:
-        query += " AND purpose=?"
+        query += " AND r.purpose = ?"
         parameters += (purpose,)
-    ended = [
-        str(row[0]) for row in conn.execute(query + " ORDER BY created_at, request_id", parameters)
-    ]
+    rows = _read(conn, query + " ORDER BY r.created_at, r.request_id", parameters)
     at = request_model.now()
-    for identity in ended:
+    ended = []
+    for row in rows:
+        identity = str(row["request_id"])
+        lapsed = lapse(row, at)
+        if lapsed is None:
+            conn.execute(
+                "UPDATE work_item_requests SET status='expired',expired_reason=?,answered_by=?,"
+                "resolved_at=?,revision=revision+1 WHERE request_id=?",
+                (reason, model.actor(author), at, identity),
+            )
+            log_event(conn, work_item_id, "request_expired", identity, author)
+            ended.append(identity)
+            continue
+        when = row["expires_at"] if lapsed == "deadline" else row["execution_ended_at"]
         conn.execute(
-            "UPDATE work_item_requests SET status='expired',expired_reason=?,answered_by=?,"
+            "UPDATE work_item_requests SET status='expired',expired_reason=?,"
             "resolved_at=?,revision=revision+1 WHERE request_id=?",
-            (reason, model.actor(author), at, identity),
+            (lapsed, when or at, identity),
         )
-        log_event(conn, work_item_id, "request_expired", identity, author)
     return ended
 
 

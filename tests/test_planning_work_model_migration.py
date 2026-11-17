@@ -1212,7 +1212,10 @@ class ClosedItemRequestsTests(StoreCase):
             {
                 "requests-kept": {"requests": 6},
                 "no-closed-waits": {"pending_on_closed": 0},
-                "requests-ended": {"ended": {"item_cancelled": 2, "item_completed": 1}},
+                "requests-ended": {
+                    "ended": {"item_cancelled": 2, "item_completed": 1},
+                    "lapsed": {},
+                },
             },
             details,
         )
@@ -1239,6 +1242,68 @@ class ClosedItemRequestsTests(StoreCase):
         finally:
             conn.rollback()
             conn.close()
+
+    def test_ended_requests_ends_a_request_that_had_lapsed_on_a_closed_item_as_it_lapsed(
+        self,
+    ) -> None:
+        """A pending request past its deadline, or on a run that ended, on a closed item
+        ends `deadline` or `execution_closed`, resolved when it lapsed, not as the close."""
+
+        conn = sqlite3.connect(self.path)
+        try:
+            conn.execute(
+                "INSERT INTO executions(execution_id, work_item_id, client_family, role,"
+                " environment, expected_effect, status, ended_at)"
+                " VALUES ('run-1', ?, 'claude', 'r', 'e', 'x', 'complete', ?)",
+                (self.ids["WM-10"], T2),
+            )
+            conn.execute(
+                "INSERT INTO work_item_requests(request_id,work_item_id,kind,prompt,fields_json,"
+                "author,status,created_at,expires_at) VALUES"
+                " ('overdue', ?, 'question', 'By noon?', '[]', 'agent-a', 'pending', ?, ?)",
+                (self.ids["WM-5"], T1, T2),
+            )
+            conn.execute(
+                "INSERT INTO work_item_requests(request_id,work_item_id,kind,prompt,fields_json,"
+                "author,status,created_at,execution_id) VALUES"
+                " ('run-bound', ?, 'question', 'During the run?', '[]', 'agent-a', 'pending', ?,"
+                " 'run-1')",
+                (self.ids["WM-10"], T1),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        add_requests(self.path, self.ids, ())
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        self.assertTrue(all(entry["passed"] for entry in report["postconditions"]))
+        [step] = [step for step in report["steps"] if step["name"] == "ended-requests"]
+        self.assertEqual(
+            {"deadline": 1, "execution_closed": 1, "item_cancelled": 2, "item_completed": 1},
+            step["result"]["ended"],
+        )
+        [post_requests_ended] = [
+            entry for entry in report["postconditions"] if entry["name"] == "requests-ended"
+        ]
+        self.assertEqual(
+            {
+                "ended": {"item_cancelled": 2, "item_completed": 1},
+                "lapsed": {"deadline": 1, "execution_closed": 1},
+            },
+            post_requests_ended["detail"],
+        )
+        held = {
+            str(row[0]): (row[1], row[2], row[3], row[4])
+            for row in self.read(
+                "SELECT request_id, status, expired_reason, resolved_at, answered_by"
+                " FROM work_item_requests WHERE request_id IN ('overdue', 'run-bound', 'on-done')"
+            )
+        }
+        self.assertEqual(("expired", "deadline", T2), held["overdue"][:3])
+        self.assertEqual(("expired", "execution_closed", T2), held["run-bound"][:3])
+        self.assertNotEqual(migration.AUTHOR, held["overdue"][3], "no close ended it")
+        self.assertEqual(("expired", "item_completed"), held["on-done"][:2])
+        self.assertEqual("current", self.migrate()["status"])
 
     def test_a_stored_task_closed_on_an_item_open_again_is_refused_and_nothing_written(
         self,

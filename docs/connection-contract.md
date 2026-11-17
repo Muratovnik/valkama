@@ -2877,7 +2877,9 @@ into a `cancelled` one, and gets a `request_expired` event naming the request, a
 the `transitioned` one, with the close's author and call. When a person closes the
 item, the agent that asked hears it as `question_withdrawn`, as it hears any question
 a person takes back (see [the hook contract](hook-contract.md#who-is-told)), and
-reads the reason on the request.
+reads the reason on the request. A request that had already lapsed, past its
+deadline or on an execution that ended, is written with that reason, `deadline` or
+`execution_closed`, and gets no event: the close did not end it.
 
 A checklist step's claim ends too, recorded as `checklist_released` with the
 step's text. A completed close never has one: the guard requires every step
