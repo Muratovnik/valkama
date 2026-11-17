@@ -5,7 +5,7 @@ once with one small task, and reports what reached the set's store:
 
     python tests/commit_live_check.py prepare SET --python BASE_PYTHON
     python tests/commit_live_check.py claude SET
-    python tests/commit_live_check.py codex SET [--session-hooks]
+    python tests/commit_live_check.py codex SET [--session-hooks] [--kept]
     python tests/commit_live_check.py report SET
 
 The set holds a space root W with a `.git` of its own and a registered repository R
@@ -226,22 +226,30 @@ def codex_hooks(hook: str, layer: str = "") -> dict:
 
 
 def task(state: dict, client: str) -> str:
-    """The one task each client gets: the inspection, then three commits."""
+    """The one task each client gets: the inspection, then three commits, the subagent's
+    after an inspection of its own shell.
+
+    An inspection writes its result into W, the one directory a Codex sandbox lets the
+    command write; its output also stays in the client's event stream."""
 
     python = _slashed(state["python"])
-    inspection = (
-        f"{python} -I -S {_slashed(Path(state['checkout']) / 'tests' / 'commit_inspection.py')}"
-        f" --repository R --interpreter {python}"
-        f" --registry {_slashed(state['real_registry'])}"
-        f" --global-file {_slashed(state['real_global_file'])}"
-        f" --output {_slashed(Path(state['paths']['state']).parent / f'inspection-{client}.json')}"
-    )
+    script = _slashed(Path(state["checkout"]) / "tests" / "commit_inspection.py")
+
+    def inspection(name: str) -> str:
+        return (
+            f"{python} -I -S {script} --repository R --interpreter {python}"
+            f" --registry {_slashed(state['real_registry'])}"
+            f" --global-file {_slashed(state['real_global_file'])}"
+            f" --output {_slashed(Path(state['paths']['space']) / f'inspection-{name}.json')}"
+        )
+
     return (
         "This is a test of commit hooks. Run exactly these shell commands, each as its own"
         " command, change nothing else, and do not retry a command that fails.\n"
-        f"1. {inspection}\n"
+        f"1. {inspection(client)}\n"
         f'2. git -C R commit --allow-empty -m "test: coordinator commit {client}"\n'
-        "3. Start one subagent and have it run exactly this one shell command, then come back:"
+        "3. Start one subagent and have it run exactly these two shell commands, each as its"
+        f" own command, then come back: {inspection(client + '-subagent')} and then"
         f' git -C R commit --allow-empty -m "test: subagent commit {client}"\n'
         f'4. git -C R commit --allow-empty -m "test: failing command {client}"; exit 3\n'
         "Then reply DONE."
@@ -256,7 +264,10 @@ def _environment(state: dict) -> dict[str, str]:
     }
 
 
-def launch(set_dir: Path, client: str, *, session_hooks: bool = False) -> dict:
+def launch(set_dir: Path, client: str, *, session_hooks: bool = False, kept: bool = False) -> dict:
+    """Run one client on the set. `kept` runs Codex without `--ephemeral`: an ephemeral
+    thread keeps no rollout, and a subagent cannot start from it."""
+
     state = json.loads(_paths(set_dir)["state"].read_text(encoding="utf-8"))
     space = state["paths"]["space"]
     text = task(state, client)
@@ -283,7 +294,7 @@ def launch(set_dir: Path, client: str, *, session_hooks: bool = False) -> dict:
             space,
             "-s",
             "workspace-write",
-            "--ephemeral",
+            *(() if kept else ("--ephemeral",)),
             "--json",
             "--ignore-user-config",
             "-c",
@@ -295,7 +306,7 @@ def launch(set_dir: Path, client: str, *, session_hooks: bool = False) -> dict:
         if session_hooks:
             argv += ["-c", "hooks=" + _toml_inline(codex_hooks(_hook_of(state), "session"))]
         argv.append("-")
-    name = f"{client}{'-session-hooks' if session_hooks else ''}"
+    name = f"{client}{'-session-hooks' if session_hooks else ''}{'-kept' if kept else ''}"
     # The task goes in on stdin: `--allowedTools` takes every word after it, and a
     # command line with line breaks does not survive a `.cmd` launcher.
     started = {"argv": argv, "stdin": text, "cwd": space}
@@ -434,6 +445,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("set", type=Path)
     parser.add_argument("--python", help="the interpreter the hook commands start (prepare)")
     parser.add_argument("--session-hooks", action="store_true", help="codex: hooks by -c")
+    parser.add_argument("--kept", action="store_true", help="codex: without --ephemeral")
     options = parser.parse_args(argv)
     set_dir = options.set.resolve()
     if options.action == "prepare":
@@ -443,7 +455,9 @@ def main(argv: list[str] | None = None) -> int:
     elif options.action == "report":
         result = report(set_dir)
     else:
-        result = launch(set_dir, options.action, session_hooks=options.session_hooks)
+        result = launch(
+            set_dir, options.action, session_hooks=options.session_hooks, kept=options.kept
+        )
     sys.stdout.write(json.dumps(result, indent=1, ensure_ascii=False) + "\n")
     return 0
 
