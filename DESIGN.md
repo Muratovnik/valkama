@@ -1121,12 +1121,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   Two forms draw one window of a limit, a share of it spent and never a sum of two:
   `WindowBar`, the share as a fill on a track of the series hue's own tint, a tick across the
   bar where steady use from the window's start would stand now, and the share and the state in
-  words beside it where no line over it says them; and `StepLine`, the window's readings as steps from its start,
-  flat until the next reading and never a slope between two, with steady use as a thin diagonal
-  in the text ink; a reading pointed at or focused says its moment, its share and its source in
-  its hint, as every mark does. A step line opens on «To now and the forecast», from the window's
-  start to now and the forecast past it, with a switch to the whole window up to its reset:
-  drawn to the reset, a running week left its readings the first third of the plot. A window no
+  words beside it where no line over it says them; and `StepLine`, the window's readings as
+  steps from its start, flat until the next reading and never a slope between two, with steady
+  use as a thin diagonal in the text ink. A reading draws no dot at rest, the line alone, and no
+  end marker either: the line holds to now past its last reading, so a dot there stood hours
+  before now on a silent window. The reading pointed at or focused draws its dot and says its
+  moment, its share and its source in its hint, as every mark does; the one a key stands on
+  keeps its dot whatever the pointer does, and Tab lands on the latest. A step line opens on «To
+  now and the forecast», from the window's start to now and the forecast past it, with a switch
+  to the whole window up to its reset: drawn to the reset, a running week left its readings the
+  first third of the plot. A window no
   longer fresh is hatched, a 0 % has no fill, and a window with no figure draws
   the track alone; the fill stands apart from the ground and the track by lightness, so both read
   in grayscale and under a forced palette in its inks. Their table twins are `WindowBarTable`

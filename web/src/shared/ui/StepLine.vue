@@ -15,9 +15,18 @@
  *
  * One axis, of percents from 0, its top written once over the plot: 100, or the highest reading
  * where one ran past it. The two lines are told apart by their drawing — the readings a heavier
- * line in the chart's hue with a mark at each reading, the pace a hairline in the quiet ink — and
- * a legend names both, so neither is told by a hue alone, in grayscale too. The two ends of the
- * span shown are named under the plot (`moment`).
+ * line in the chart's hue, the pace a hairline in the quiet ink — and a legend names both, so
+ * neither is told by a hue alone, in grayscale too. The two ends of the span shown are named under
+ * the plot (`moment`).
+ *
+ * At rest no reading paints its mark: a mark at each reading made a busy window a chain of dots
+ * that hid its own steps. The reading under the pointer paints its mark, and so does the one the
+ * keyboard stands on for as long as it holds the focus, a pointer passing elsewhere or not, so a
+ * forced palette shows it too. Nothing marks the latest reading at rest: the line ends at now,
+ * the window's lead says the share it ends at, and on a window that has been silent for hours a
+ * dot at that reading stood far before the line's end and read as now, where a dot at the end
+ * would be a reading nobody took. Tab lands on the latest reading and paints it. The line's ends
+ * are round, so a last step too short to see still leaves its point.
  *
  * No line stands over the plot. Each reading is a mark with its own hint (`markHints.ts`): the
  * whole step it holds, from its moment to the next reading, and its mark are what the pointer
@@ -320,6 +329,8 @@ function stand(index: number) {
   gap: var(--space-2);
   min-inline-size: 0;
   margin: 0;
+  font: var(--font-count);
+  font-variant-numeric: tabular-nums;
 }
 
 /* The switch of the span at the line's start and the legend over its end, on one row as tall as
@@ -332,8 +343,6 @@ function stand(index: number) {
   min-inline-size: 0;
   min-block-size: var(--size-control-height-compact);
   color: var(--color-text-muted);
-  font: var(--font-count);
-  font-variant-numeric: tabular-nums;
 }
 
 .step-legend {
@@ -384,8 +393,6 @@ function stand(index: number) {
   inset-block-start: 0;
   inset-inline-start: 0;
   color: var(--color-text-tertiary);
-  font: var(--font-count);
-  font-variant-numeric: tabular-nums;
 }
 
 /* The plot a frame is dragged along: nothing in it is text a press would select. The drawing
@@ -442,6 +449,7 @@ function stand(index: number) {
 .step-path {
   fill: none;
   stroke: var(--color-series-1);
+  stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2;
 
@@ -450,8 +458,8 @@ function stand(index: number) {
   }
 }
 
-/* A reading: a mark in the line's hue, ringed in the ground so marks that meet stay apart, at
-   the start of its step and as far down as the drawing puts its value (`--step-down`). */
+/* A reading: a mark in the line's hue, ringed in the ground, at its step's start and value
+   (`--step-down`); at rest unpainted, its box kept for its hint and the pointer. */
 .step-mark {
   --step-down: 0;
 
@@ -463,6 +471,7 @@ function stand(index: number) {
   background: var(--color-series-1);
   border-radius: 50%;
   outline: var(--space-hair) solid var(--color-canvas);
+  opacity: 0;
   translate: -50% -50%;
 
   @media (forced-colors: active) {
@@ -472,8 +481,10 @@ function stand(index: number) {
   }
 }
 
-/* The reading under the pointer or the keyboard: a larger mark, the same hue. */
-.step-shown {
+/* Under the pointer, or holding the keyboard's focus whatever the pointer does: painted, larger. */
+.step-shown,
+.step-reach:focus-visible > .step-mark {
+  opacity: 1;
   scale: 1.5;
 }
 
@@ -497,7 +508,5 @@ function stand(index: number) {
   gap: var(--space-3);
   justify-content: space-between;
   color: var(--color-text-tertiary);
-  font: var(--font-count);
-  font-variant-numeric: tabular-nums;
 }
 </style>
