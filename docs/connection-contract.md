@@ -1522,10 +1522,12 @@ answers with `interface_version` and `usage`:
 | `by_item` | one line per item: `work_item_id`, `reference`, `title`, `elapsed_seconds`, `agent_seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. A chain's starts at its root and lists every member; a session's lists the items it worked on, then its line with no item, whose `work_item_id` is `null`. An item since deleted keeps its id, with a `null` number and title |
 
 An item's read adds `work_item_id`, `reference`, `title` and `scope`, and says who spent
-the work and under which account:
+the work, under which account and how much of each account's week it took:
 
 | Field | What it holds |
 | --- | --- |
+| `sessions` | how many sessions worked on the item, or with `chain` or `tree` on any of its members: each session whose stretches of work went to it, with its subagents', and each session whose confirmed write calls acted on it, counted once. It can be larger than the list of sessions on the item's card, which holds only the writers |
+| `quota` | `weeks` and `unknown_share`, below |
 | `account_stretches` | the work in time order, one line for each run of stretches under one account: `account`, `started_at` (its first stretch's start), `ended_at` (the latest end among them), `seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. Two neighbouring lines never share an account, and an unknown account is a value of its own, so not every line after the first is a change of account: a change is a line under a known account after one under a different known account, with or without lines under an unknown account between them, and a line under an unknown account is never one. `a`, unknown, `a` has no change; `a`, unknown, `b` has one, where `b` starts. Stretches of agents working side by side follow one another by their start |
 | `accounts` | each account the work ran under, the most time first, then the most cost: `account`, `share` of `agent_seconds`, and the same figures |
 | `roles` | the work by who did it, ranked the same way: `role` — `main` for the session's own agent, `subagent`, or `advisor` for an adviser's own calls, whoever it advised — with `launch_class`, `effort` and the same figures |
@@ -1557,6 +1559,28 @@ one unit of what its segments add up to, and each segment the period read adds i
 half a unit of its own figure. Three segments of 10.0004 s at $0.0000304 each make one line
 of 30.001 s and $0.000091 here, and 30.0 s and $0.00009 in the period read. Where every
 segment's seconds and cost are whole units, the two are equal.
+
+`quota` is the item's part of each account's weekly quota, for the same stretches of work
+as the rest of the read, so with `tree` for the whole tree. Each stretch is on the seat the
+[quota samples](#subscription-quota-samples-and-accounts) put it on. `weeks` has one line per
+seat the work was on, the latest week first:
+
+| Field | What it holds |
+| --- | --- |
+| `account` | `organization`, and `account_uuid`, `null` for a seat no account, or two, can be shown to name |
+| `seat` | the seat, which names one week of that account |
+| `week_ends_at` | when that week resets |
+| `share` | the item's cost at API prices on that seat, divided by the cost of every stretch on the seat that week, the item's and everyone else's; `null` when the seat's work that week had no cost |
+| `week_used_percent` | how much of the week is spent, by the latest `week` sample of the seat; `null` with none |
+| `percent` | `share` times `week_used_percent`, rounded to two places; `null` when either is |
+
+`unknown_share` is the part of the item's cost on stretches with no seat that can be shown,
+`null` when the item's work had no cost. No figure is a sum of percentages: lines of
+different accounts and weeks are never added up, as in
+[each account's quota](#each-accounts-subscription-quota). The figure assumes a quota is
+spent in proportion to the API price, which no published formula confirms. It also leans
+high: a week's percent holds work no stretch here records, such as another client's or a
+chat in a browser, while the share counts only the recorded stretches.
 
 A session's adds
 `session_id`, `first_at`, `last_at`, `excluded` (`human`, `subagent`, `external` and

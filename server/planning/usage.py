@@ -31,6 +31,12 @@ the same groups. Their seconds and costs for a group differ only by where each r
 read adds a line's rows and then rounds, the analytics read rounds each row and then adds.
 `docs/connection-contract.md` states the bound.
 
+An item's read counts its `sessions` too: those that spent on it and those that wrote to
+it, each once (`read_model.session_ids`). Its quota, the share of each account's week its
+rows took, is Quota's figure and not Planning's: a caller that can read Quota hands
+`for_item` a `QuotaReader`, and the read carries what it answers for the rows it adds up as
+`quota`. Without one the read has no `quota`.
+
 A read over a period takes the period's grammar from here (`period`), so every such read
 answers and refuses about `from`, `to` and `utc_offset` in the same words.
 """
@@ -72,6 +78,8 @@ ROLES = (MAIN, SUBAGENT, ADVISOR)
 _OBSERVED = "observed"
 _ESTIMATED = "estimated"
 _MIXED = "mixed"
+#: What reads the quota of some usage rows: the item's rows in, the `quota` object out.
+QuotaReader = Callable[[sqlite3.Connection, Sequence[sqlite3.Row]], dict]
 
 
 @dataclass
@@ -433,8 +441,15 @@ def _item_line(item: str | None, names: dict[str, dict], rows: Sequence[sqlite3.
     }
 
 
-def for_item(conn: sqlite3.Connection, reference: object, scope: str | None = None) -> dict:
-    """One item's usage, or with `scope` chain or tree its whole chain's, root first."""
+def for_item(
+    conn: sqlite3.Connection,
+    reference: object,
+    scope: str | None = None,
+    *,
+    quota: QuotaReader | None = None,
+) -> dict:
+    """One item's usage, or with `scope` chain or tree its whole chain's, root first; with
+    `quota`, what it answers for the same rows."""
 
     root = str(read_model.item_row(conn, reference)["work_item_id"])
     order = [root]
@@ -448,21 +463,26 @@ def for_item(conn: sqlite3.Connection, reference: object, scope: str | None = No
         (json.dumps(order),),
     ).fetchall()
     names = item_names(conn, order)
+    sessions = read_model.session_ids(conn, order)
     by_item: dict[str, list[sqlite3.Row]] = {item: [] for item in order}
     whole = Tally()
     for row in rows:
         by_item[str(row["work_item_id"])].append(row)
         whole.add(row)
-    return {
+    found = {
         "work_item_id": root,
         "reference": names[root]["reference"],
         "title": names[root]["title"],
         "scope": scope or ITEM_SCOPE,
+        "sessions": len({session for named in sessions.values() for session in named}),
         **_summary(rows),
         **_accounts(rows, whole),
         "roles": _roles(rows, whole),
         "by_item": [_item_line(item, names, by_item[item]) for item in order],
     }
+    if quota is not None:
+        found["quota"] = quota(conn, rows)
+    return found
 
 
 def for_session(conn: sqlite3.Connection, session_id: str) -> dict:

@@ -178,10 +178,20 @@ def error_response(error: BaseException) -> tuple[int, dict]:
 
 
 def handle_get(
-    conn: sqlite3.Connection, path: str, parameters: Mapping[str, list[str]]
+    conn: sqlite3.Connection,
+    path: str,
+    parameters: Mapping[str, list[str]],
+    *,
+    item_quota: usage.QuotaReader | None = None,
 ) -> tuple[int, dict] | None:
-    """Answer one neutral read, or return None when the path is not ours."""
+    """Answer one neutral read, or return None when the path is not ours.
 
+    `item_quota` reads the quota of an item's usage, and only the item's usage read takes
+    it: a caller that can read Quota passes it, and without it that read has no `quota`.
+    """
+
+    if path == _ITEM_USAGE:
+        return 200, _item_usage(conn, parameters, item_quota)
     reader = _READS.get(path)
     if reader is None:
         return None
@@ -480,12 +490,18 @@ def _chain(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dic
     }
 
 
-def _item_usage(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+def _item_usage(
+    conn: sqlite3.Connection,
+    parameters: Mapping[str, list[str]],
+    quota: usage.QuotaReader | None = None,
+) -> dict:
     """What work on one item took; `scope` `tree` or `chain` takes in what it grew into."""
 
     return {
         "interface_version": PLANNING_API_INTERFACE,
-        "usage": usage.for_item(conn, _required(parameters, "id"), _first(parameters, "scope")),
+        "usage": usage.for_item(
+            conn, _required(parameters, "id"), _first(parameters, "scope"), quota=quota
+        ),
     }
 
 
@@ -600,6 +616,9 @@ def _goal_volumes(conn: sqlite3.Connection, parameters: Mapping[str, list[str]])
 #: takes no data scope.
 SCOPED_READS = frozenset({"/api/planning/volumes"})
 
+#: The item's usage read, the one read that takes a reader of the quota.
+_ITEM_USAGE = "/api/planning/work-item/usage"
+
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
     "/api/planning": _read_model,
     "/api/planning/spaces": _spaces,
@@ -611,7 +630,7 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     # keys on exact paths and a segment would need a second matching rule.
     "/api/planning/work-item": _work_item,
     "/api/planning/work-item/chain": _chain,
-    "/api/planning/work-item/usage": _item_usage,
+    _ITEM_USAGE: _item_usage,
     "/api/planning/session/usage": _session_usage,
     "/api/planning/search": _search,
     "/api/planning/requests": _requests,
