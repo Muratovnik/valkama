@@ -43,7 +43,7 @@ function graph(count: number, fanout = false) {
     started_at: null,
     waits_for: [],
     workable: index === 0,
-    withheld: index === 0 ? [] : ['not_ready'],
+    withheld: index === 0 ? [] : base.withheld,
     state: { ...stateOf(base), is_terminal: false },
   }))
   const edges: PlanningEdge[] = Array.from({ length: count - 1 }, (_, index) => ({
