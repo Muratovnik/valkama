@@ -1061,8 +1061,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   them, every line one height, and every key fills its line: one that acts, a link or a button
   alike, is the 24px target WCAG 2.5.8 asks and reaches no key of the next line, and one that
   only shows takes no focus, no pointer's hand and no press. A legend's name takes one line, as
-  wide as the legend at most, and ends in an ellipsis from its end, so a task's reference stays;
-  the entry's hint says it whole. Broken wherever a letter fell, a task's name took two lines an
+  wide as the legend at most, and ends in an ellipsis from its end, so a task's reference stays,
+  and a pair's first part gives way before its end, the model, does; the entry's hint says it
+  whole. Broken wherever a letter fell, a task's name took two lines an
   entry and 164 of the day chart's 435 pixels, and a session's four, «Valkama: проектирова / ние
   системы агентов».
   Every mark of a chart — a period, a segment of one, a small chart's name, a legend entry, a
