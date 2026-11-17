@@ -8,7 +8,8 @@ waits for that session alone, and the session hears it. Every reader must agree,
 so the rule is stated once here, as the one condition a request row meets to be
 a question to the owner, `OWNER_QUESTION`, and the one test of whether a request
 has lapsed although nothing wrote that down, `lapse`. A read of many items asks
-`asked` once for all of them.
+`asked` once for all of them. Whether the owner is asked whether to do an item, which
+an agent's claim and its move out of triage or deferred meet, is `acceptance_asked`.
 
 A request row is written in two places only: `ask` inserts one with its
 `request_created`, and `end` ends every one still pending on an item: one still
@@ -29,7 +30,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from . import calls, model, request_model
 
@@ -151,7 +152,77 @@ def answered_by_owner(conn: sqlite3.Connection, request_id: str, items: Iterable
     return found is not None and found[0] == calls.BROWSER
 
 
-def _read(conn: sqlite3.Connection, query: str, parameters: tuple[str, ...]) -> list[sqlite3.Row]:
+#: The questions whether to do the item they stand on, by purpose, with the category the
+#: item stands in while the question asks that: whether to take up again work put off
+#: that came back (`return`), and whether to take on a goal, a task in a goal or a group
+#: of findings lying in triage. A `goal` on an accepted goal asks whether to put it off,
+#: not whether to do it.
+ACCEPTANCE = {"return": "deferred", "goal": "triage", "task": "triage", "triage": "triage"}
+#: The questions to the owner still pending on the items of a chain, the first item and
+#: every item over it while the second parameter is true, with the category each item
+#: stands in; those whose purpose and category are a pair of the JSON object of the
+#: third parameter. The first item's come first. `UNION` keeps each item once, so a
+#: cycle in a damaged store ends instead of looping.
+_ACCEPTANCE = (
+    "WITH RECURSIVE over(id) AS (SELECT ?"  # noqa: S608 - constant text
+    " UNION SELECT w.parent_id FROM over o JOIN work_items w ON w.work_item_id = o.id"
+    " WHERE w.parent_id IS NOT NULL AND ?) "
+    + _PENDING
+    + " AND r.work_item_id IN (SELECT id FROM over)"
+    " AND EXISTS (SELECT 1 FROM workflow_states s JOIN json_each(?) a"
+    "  ON a.key = r.purpose AND a.value = s.category WHERE s.state_id = i.state_id)"
+    " ORDER BY r.work_item_id = ? DESC, r.created_at, r.request_id"
+)
+
+
+def acceptance_asked(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row | Mapping[str, object],
+    *,
+    purposes: Iterable[str] = tuple(ACCEPTANCE),
+) -> sqlite3.Row | None:
+    """The open question to the owner whether to do the item `row`, or None.
+
+    Asked on the item itself (`ACCEPTANCE`), or, while the item has no basis, on an
+    item over it: work under a goal the owner has not decided on is decided by that
+    answer. Accepted work under such a goal stays with whoever holds it. The item's own
+    question comes first. `row` names `work_item_id`, `parent_id` and `acceptance`;
+    an item not written yet names no `work_item_id`, and is asked about through its
+    parent. `purposes` narrows the questions that count to those purposes.
+    """
+
+    return next(iter(_acceptance(conn, row, purposes)), None)
+
+
+def acceptance_on(conn: sqlite3.Connection, row: sqlite3.Row) -> list[sqlite3.Row]:
+    """Every open question whether to do the item `row` that stands on the item itself,
+    by the rule of `acceptance_asked`: what a person's claim or move of it answers."""
+
+    return [
+        facts
+        for facts in _acceptance(conn, row, tuple(ACCEPTANCE))
+        if facts["work_item_id"] == row["work_item_id"]
+    ]
+
+
+def _acceptance(
+    conn: sqlite3.Connection, row: sqlite3.Row | Mapping[str, object], purposes: Iterable[str]
+) -> list[sqlite3.Row]:
+    """The open questions `acceptance_asked` reads, the item's own first."""
+
+    climbs = row["acceptance"] is None
+    start = row["work_item_id"] if row["work_item_id"] is not None else row["parent_id"]
+    if start is None:
+        return []
+    asking = json.dumps({key: ACCEPTANCE[key] for key in purposes})
+    found = _read(conn, _ACCEPTANCE, (str(start), int(climbs), asking, str(start)))
+    at = request_model.now()
+    return [facts for facts in found if lapse(facts, at) is None]
+
+
+def _read(
+    conn: sqlite3.Connection, query: str, parameters: tuple[object, ...]
+) -> list[sqlite3.Row]:
     """The rows of a query over `_FACTS`, from the store as this build writes it or an earlier one.
 
     The store this build writes is asked first, so its read costs one statement;

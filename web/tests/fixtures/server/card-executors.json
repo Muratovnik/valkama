@@ -213,7 +213,8 @@
               "source": "claude-hook",
               "session_id": "00000000-0000-4000-8000-000000000012",
               "agent_id": null
-            }
+            },
+            "point": "assignment"
           },
           {
             "action": "transitioned",

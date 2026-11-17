@@ -116,6 +116,17 @@ and no compatibility layer.
      cancelled state, is refused with `acceptance_question`, which `force` does
      not carry. A close, a delete or a merge that brings work back answers
      with `returned`;
+   - the same refusal holds while the owner is asked whether to do an item in
+     `triage` (a question of `purpose` `goal`, `task` or `triage`): an agent's
+     claim of it, its move out of `triage` anywhere but a cancelled state, an
+     `acceptance: assignment` included, and a `create_work_item` that claims
+     what it leaves waiting are refused, and so is a claim or move of an item
+     with no basis under a goal or stage the owner is asked about; work already
+     accepted under it is not. An agent's move of a task in `triage` into
+     accepted work under goals and stages all accepted waits for the owner
+     where the setting `task_in_goal` is `human`, answering `waits_for_owner`
+     and leaving the task in `triage`. A person's claim or move of the item ends
+     its question `withdrawn` and drops the write waiting on it;
    - a commit is attached to an item rather than written as a ref: the `refs`
      group and `POST /api/planning/work-item/ref` refuse the kind `commit`,
      naming the `commits` group, an item record's `refs` holds no commit, and
@@ -210,7 +221,7 @@ and no compatibility layer.
 | `update` with `parent: ""` | `move_out` with the `reason` the item leaves its goal or stage for |
 | moving accepted work under a goal or stage in triage or deferred | accept that goal or stage first, or move the item out |
 | `transition` into a deferred state | `defer` with `until` and `reason`; the work comes back by itself |
-| an agent claiming or moving work the owner is asked to take up again | wait for the owner's answer; only a cancel moves it before then |
+| an agent claiming or moving work the owner is asked to do or to take up again, or work with no basis under a goal or stage the owner is asked about | wait for the owner's answer; only a cancel moves it before then |
 | `refs: [{"kind": "commit", "value": "…"}]` | `commits: [{"repository": "<project id>", "hash": "…"}]` |
 | a card's commits among its `refs` | its `commits` |
 | `GET /api/ref?kind=commit&value=…&space=…` | `GET /api/commit?repository=<project id>&hash=…` |

@@ -279,8 +279,8 @@ _TRANSITION_FORM = (
     " the list of what would close and a list_token (cancel_list): send the same"
     " transition with cancels set to that token to cancel it all; a list that changed"
     " meanwhile is refused again with the new one. Entering deferred is refused: use"
-    " defer. An agent moves an item the owner is asked whether to take up again only"
-    " to cancelled (acceptance_question)."
+    " defer. An agent moves an item the owner is asked whether to do or to take up"
+    " again only to cancelled (acceptance_question)."
     " A cancelled state needs only the summary, saying why the work stopped; its undone"
     " steps stay open. force carries a refusal through and records it, except executor,"
     " acceptance, deferred, children, question, review_question, cancel_list,"
@@ -740,7 +740,9 @@ TOOLS = [
         " their words about this work, to read before the next step, each text whole up to"
         " 1500 characters and marked cut past them."
         " It carries waiting when a person's words on a goal or stage above the work found"
-        " nobody working there: read them before you start.",
+        " nobody working there: read them before you start. Refused while the owner has not"
+        " answered whether the item, or the goal or stage over an item not yet accepted, is"
+        " to be done (acceptance_question).",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -884,7 +886,8 @@ TOOLS = [
         " setting only the server reads: such a write is not made, the answer names it in"
         " waits_for_owner with the question the owner answers, and the server makes it"
         " then if it still applies. transition.following names the owner's answer a"
-        " cancel follows.",
+        " cancel follows. While the owner has not answered whether an item is to be done,"
+        " only a cancel moves it out of triage (acceptance_question).",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,

@@ -55,11 +55,16 @@ says what it is:
   leaves it to the agent: a goal you file with no parent is accepted at once on it,
   or, where the owner decides, stays in `triage` and the answer says
   `waits_for_owner` with the question they answer. A task you file or move under
-  goals and stages that are all accepted and open meets the owner's setting the
-  same way: it is `inherited`, or it waits for their answer, a new one in `triage`
-  under the goal and a moved one where it was. A task lying in `triage` outside
-  them is accepted on `label_rule` when the call that files it, or puts a label on
-  it, gives it a label the owner's rule makes ready.
+  goals and stages that are all accepted and open, or move out of `triage` into
+  accepted work under them, meets the owner's setting the same way: it is
+  `inherited`, or it waits for their answer, a new one or one moved out of `triage`
+  in `triage` under the goal and one moved under it where it was. While the owner's
+  question whether to do an item stands on it, or over an item with no basis, you
+  neither claim it nor move it anywhere but cancelled (`acceptance_question`). The
+  owner's summary of decisions marks work you accept on `assignment`, and your
+  claim of a task lying in `triage` under such goals and stages. A task lying in
+  `triage` outside them is accepted on `label_rule` when the call that files it, or
+  puts a label on it, gives it a label the owner's rule makes ready.
   Other work an agent files without a `state` stays in `triage` unless it sends
   `acceptance: "assignment"`, on the owner's word; an item with no basis moved to
   `ready`, `active`, `review`, `blocked` or `completed` without it is refused with
@@ -407,7 +412,7 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 | an active state | a holder after the move: a claim on the item or on one of its steps; `force` does not carry this |
 | ready, active, review, blocked or completed, for an item with no basis | a basis of acceptance (`acceptance`), which `force` does not carry |
 | a deferred state | refused: put work off with `defer` |
-| anything but a cancelled state, for an agent, while the owner is asked whether to take put-off work up again | refused with `acceptance_question`, which `force` does not carry |
+| anything but a cancelled state, for an agent, out of triage or deferred, while the owner is asked whether to do the item or take it up again, on it or over an item with no basis | refused with `acceptance_question`, which `force` does not carry |
 | active, review or blocked, for a goal or stage | refused: a goal or stage is accepted (ready), completed or cancelled |
 | a triage state, for an accepted open goal or stage | refused: an accepted goal or stage is completed or cancelled |
 | a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
