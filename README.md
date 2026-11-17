@@ -450,7 +450,8 @@ is carried across once with `projects upgrade`. It keeps, in
 their SHA-256: the inventory, the projection and the one-write snapshot
 `projects.json.valkama.rollback`, each recorded as absent when it was. On a
 registry that is already format 4 it answers `{"changed": false}` and touches
-nothing. `projects downgrade` returns all three files to those bytes exactly,
+nothing. On a machine with no registry it writes the empty registry of formats 2 and
+4, and keeps the absence the same way. `projects downgrade` returns all three files to those bytes exactly,
 removing a file that was absent, and removes the upgrade snapshot; changes made
 after the upgrade are lost with it, and the earlier release's `rollback` again
 undoes its own last write. Downgrade before installing the earlier release,
@@ -458,9 +459,9 @@ which cannot read format 4. For a one-time transfer from a former writer's
 format-1 TOML inventory, use
 `projects import --source <absolute-path-to-inventory>`: it writes inventory
 format 2 and projection schema v4, and importing the same inventory again writes
-nothing. An import onto a machine with no inventory and no projection keeps
-that state in the upgrade snapshot too, so `projects downgrade` later returns
-the machine to no registry. Import refuses to overwrite an inventory or
+nothing. Every first write onto a machine with no registry (an import, `add` or any other
+write) keeps that state in the upgrade snapshot too, so `projects downgrade` later
+returns the machine to no registry. Import refuses to overwrite an inventory or
 projection with different project data. There is no project-registry path
 override.
 
