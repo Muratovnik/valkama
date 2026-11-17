@@ -2,9 +2,10 @@
 import ChartTable from '@/shared/ui/ChartTable.vue'
 /**
  * `WindowBar` as a table: a row a window, its name heading the row, then the share spent, where
- * steady use would stand now and its state, each in words. It is the bars' accessible
- * equivalent and stands beside them or instead of them; every figure a bar draws is a cell here.
- * A row is one window of one account, so no cell adds two of them.
+ * steady use would stand now, its state with how long it has been silent, and its forecast, each
+ * in words. It is the bars' accessible equivalent and stands beside them or instead of them;
+ * every figure a bar draws, its hatched forecast too, is a cell here. A row is one window of one
+ * account, so no cell adds two of them.
  */
 import type { WindowRow, WindowWords } from '@/shared/ui/windowGeometry.ts'
 
@@ -50,6 +51,12 @@ defineProps<{
         >
           {{ words.note }}
         </th>
+        <th
+          scope="col"
+          class="chart-cell chart-heading"
+        >
+          {{ words.forecast }}
+        </th>
       </tr>
     </thead>
     <tbody>
@@ -78,6 +85,12 @@ defineProps<{
         </td>
         <td class="chart-cell">
           {{ row.noteText }}
+        </td>
+        <td
+          class="chart-cell"
+          data-cell="forecast"
+        >
+          {{ row.forecastText }}
         </td>
       </tr>
     </tbody>

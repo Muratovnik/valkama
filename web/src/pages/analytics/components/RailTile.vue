@@ -3,7 +3,7 @@
  * The figures of one section under its name on the rail: a line of words — the total and how it
  * moved, the first value and its share, or the account of the tightest window of the quota and
  * its share — over a small chart, the overview's days (`MiniTrend`), a dimension's first shares
- * (`MiniShareBar`) or that one window with its pace (`WindowBar`).
+ * (`MiniShareBar`) or that one window with its pace and its forecast (`WindowBar`).
  *
  * Every state takes the same box: the line is one line, cut with an ellipsis and whole in its
  * hint, and the chart's place is kept at its height while there is no chart to draw, so a tile
@@ -93,7 +93,7 @@ const pending = useAnewDimmed(usePageStanding(), () => props.tile.busy)
         :label="tile.meter.label"
         :used="tile.meter.used"
         :even="tile.meter.even"
-        :held="tile.meter.held"
+        :forecast="tile.meter.forecast"
         compact
       />
     </span>

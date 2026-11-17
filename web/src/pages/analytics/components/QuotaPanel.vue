@@ -27,8 +27,7 @@ import type { QuotaRead } from '@/pages/analytics/composables/useQuotaRead.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { provideWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
-import { accountKey } from '@/pages/analytics/utils/quotaFigures.ts'
-import { momentAtOffset } from '@/pages/analytics/utils/readMoments.ts'
+import { accountKey, answerMoment } from '@/pages/analytics/utils/quotaFigures.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type { Quota } from '@/shared/api/analyticsApi.ts'
@@ -58,14 +57,6 @@ const state = computed<PlatformUiState<Quota>>(() => {
 })
 
 provideWindowSpend(() => (props.read.status === 'ready' ? props.read.quota : null))
-
-/**
- * The answer's moment at its own offset, as its other moments are written: the words say every
- * time at the offset of the moment they are given as the answer's and date it against that
- * moment's day (`useQuotaWords`). The answer's `now` is held in UTC (`analyticsApi`), so given as
- * it is, a run-out would be said on UTC's clock and every time dated against UTC's day.
- */
-const todayOf = (quota: Quota) => momentAtOffset(Date.parse(quota.now), quota.utc_offset)
 
 const title = computed(() => words.sectionName(props.section))
 /** What does not reach the quota and what used each window, which the heading's «ⓘ» says. */
@@ -100,7 +91,7 @@ const narrow = useNarrowCharts(root)
               shown="chart"
               :account="account"
               :section="section"
-              :today="todayOf(payload)"
+              :today="answerMoment(payload)"
               :now="now"
             />
           </template>
@@ -111,7 +102,7 @@ const narrow = useNarrowCharts(root)
               shown="table"
               :account="account"
               :section="section"
-              :today="todayOf(payload)"
+              :today="answerMoment(payload)"
               :now="now"
             />
           </template>

@@ -1,0 +1,21 @@
+/*
+ * The hatch of a figure that is not final yet — here the forecast of a window of a limit to its
+ * reset — read as its own scoped style by each drawing of it and by the key that names it
+ * (`WindowBar`, `StepLine`, `StepLineHead`, the quota window's forecast line). One drawing for
+ * all of them: the hue of what it continues, in 135° stripes of the whole hue and two fifths of
+ * it, a mask that adds no colour, so it reads in grayscale too. A forced palette keeps the mask
+ * and draws the stripes in its ink.
+ */
+.forecast-hatch {
+  background: var(--color-series-1);
+  mask-image: repeating-linear-gradient(
+    135deg,
+    black 0 var(--space-half),
+    rgb(0 0 0 / 40%) var(--space-half) var(--space-1)
+  );
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+}

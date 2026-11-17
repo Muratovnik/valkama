@@ -7,7 +7,10 @@
  * else the start of its id, and for each window its bar, its share, its reset, its forecast — a
  * point for the five hours, a range for a week — and how old its reading is and who read it. No
  * source, a silent window and a fresh 0 % each read in words of their own, on the tile and in the
- * panel, and nothing adds two shares or puts money beside one.
+ * panel, and nothing adds two shares or puts money beside one. A silent window's share is drawn as
+ * solid as a fresh one's and says how long it has been silent; the forecast is the bar's hatched
+ * tail, which the words name «Forecast ·» on the tile and in the panel, and the readings' table
+ * ends with it.
  *
  * The figures come from `quotaAt`: the tightest five hours is the fourth account's 74 %, the
  * tightest week the second account's 88 %, and the first account is neither.
@@ -78,7 +81,9 @@ function windowOf(account: DOMWrapper<Element>, kind: string) {
     state: window.attributes('data-state'),
     lead: plain(window.get('.quota-window-lead').text()),
     filled: window.find('.window-fill').exists(),
-    hatched: window.find('.window-held').exists(),
+    /** The parts of the bar's hatched tail, and whether the forecast's line names its hatch. */
+    tail: window.findAll('.window-ahead').length,
+    keyed: window.find('[data-fact="forecast"] .quota-window-swatch').exists(),
     reset: fact('reset'),
     forecast: fact('forecast'),
     facts: window.findAll('[data-fact]').map((one) => one.attributes('data-fact')),
@@ -124,12 +129,18 @@ describe('the quota tiles', () => {
       aside: '74%',
       count: 'fresh',
     })
-    expect(says(page, 'quota_week')).toEqual({ lead: '7e6d5c4b', aside: '88%', count: 'silent' })
-    // The week's bar is hatched, being silent; the five hours' is not.
-    expect(tile(page, 'quota_week').find('.window-held').exists()).toBe(true)
-    expect(tile(page, 'quota_five_hour').find('.window-held').exists()).toBe(false)
+    expect(says(page, 'quota_week')).toEqual({
+      lead: '7e6d5c4b',
+      aside: '88%',
+      count: 'silent 3\u{A0}h',
+    })
+    // Silent or fresh, the share spent is solid; each forecast is a hatched tail past it, the
+    // week's range parted where its slower pace ends, and the bar's words name the hatch.
+    expect(tile(page, 'quota_week').get('.window-fill').classes()).toEqual(['window-fill'])
+    expect(tile(page, 'quota_week').findAll('.window-ahead')).toHaveLength(2)
+    expect(tile(page, 'quota_five_hour').findAll('.window-ahead')).toHaveLength(1)
     expect(tile(page, 'quota_five_hour').get('.window-track').attributes('aria-label')).toBe(
-      'Five hours: 74% used, steady use 70%, fresh',
+      'Five hours: 74% used, steady use 70%, fresh. Forecast · Runs out at 15:10',
     )
   })
 
@@ -231,23 +242,29 @@ describe('the quota panel', () => {
     expect(fresh).toMatchObject({
       state: 'fresh',
       lead: '41% used · fresh',
-      hatched: false,
+      tail: 2,
+      keyed: true,
       // The forecast, then the reset: the pace and the reading's age are the bar's hint.
       facts: ['forecast', 'reset'],
       even: 'Steady use would be at 57% now',
       more: [],
     })
     expect(fresh.latest).toBe('Read 2 min ago from the poll')
-    expect(fresh.label).toBe('Week: 41% used, steady use 57%, fresh. Read 2 min ago from the poll')
+    expect(fresh.label).toBe(
+      'Week: 41% used, steady use 57%, fresh. Forecast · By the reset: 57% to 61%. Read 2 min ago from the poll',
+    )
     const silent = windowOf(accountNamed(week, 'Work'), 'week_model')
     expect(silent).toMatchObject({
       state: 'silent',
-      lead: '13% used · silent',
-      hatched: true,
+      lead: '13% used · silent 5 h',
+      filled: true,
+      tail: 0,
+      keyed: false,
     })
     expect(silent.latest).toMatch(/^No change since \d{2}:\d{2}, 5 h ago, from the poll$/u)
-    // A week forecasts a range, said as one; one too new for a forecast says so, quieter.
-    expect(fresh.forecast).toBe('By the reset: 57% to 61%')
+    // A week forecasts a range, said as one after the key of its hatch; one too new for a
+    // forecast says so, quieter, and draws no tail.
+    expect(fresh.forecast).toBe('Forecast · By the reset: 57% to 61%')
     expect(fresh.reset).toMatch(/^Resets .+, in 3 d$/u)
     expect(silent.forecast).toBe('Too few readings for a forecast')
     const quiet = (window: string, key: string) =>
@@ -261,13 +278,16 @@ describe('the quota panel', () => {
     stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
     const five = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
     const zero = windowOf(accountNamed(five, '7e6d5c4b'), 'five_hour')
-    expect(zero).toMatchObject({ lead: '0% used · fresh', filled: false, hatched: false })
+    // Lasting to the reset names no share to draw to, so the bar has no tail and no key.
+    expect(zero).toMatchObject({ lead: '0% used · fresh', filled: false, tail: 0, keyed: false })
     expect(zero.latest).toBe('Read 3 min ago from the status line')
-    // The five hours forecast a point: it lasts, or runs out at a time.
-    expect(zero.forecast).toBe('Lasts to the reset')
-    expect(windowOf(accountNamed(five, 'Work'), 'five_hour').forecast).toMatch(
-      /^Runs out at \d{2}:\d{2}$/u,
-    )
+    // The five hours forecast a point: it lasts, or runs out at a time, drawn to the track's end.
+    expect(zero.forecast).toBe('Forecast · Lasts to the reset')
+    expect(windowOf(accountNamed(five, 'Work'), 'five_hour')).toMatchObject({
+      forecast: expect.stringMatching(/^Forecast · Runs out at \d{2}:\d{2}$/u),
+      tail: 1,
+      keyed: true,
+    })
     expect(windowOf(accountNamed(five, 'Work'), 'five_hour').reset).toMatch(
       /^Resets \d{2}:\d{2}, in 2 h/u,
     )
@@ -289,7 +309,7 @@ describe('the quota panel', () => {
     const page = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
     const work = accountNamed(page, 'Work')
     expect(work.get('.step-line').attributes('aria-label')).toMatch(
-      /^Five hours of Work from .+ to .+: 10% at .+, 35% at .+, 62% at .+$/u,
+      /^Five hours of Work from .+ to .+: 10% at .+, 35% at .+, 62% at .+\. Forecast · Runs out at \d{2}:\d{2}$/u,
     )
     // The running window opens on its start to now and a third of that past it, said on the
     // reader's clock: 11:30 to 14:30, and an hour of forecast to 15:30.
@@ -305,10 +325,11 @@ describe('the quota panel', () => {
     await flushPromises()
     const readings = accountNamed(page, 'Work')
     expect(readings.find('.step-line').exists()).toBe(false)
-    expect(
-      readings.findAll('.quota-window-readings tbody tr').map((row) => row.text()),
-    ).toHaveLength(3)
-    expect(readings.get('.quota-window-readings tbody tr').text()).toContain('the poll')
+    // Its three readings, and the forecast after them.
+    const rows = readings.findAll('.quota-window-readings tbody tr').map((row) => plain(row.text()))
+    expect(rows).toHaveLength(4)
+    expect(rows[0]).toContain('the poll')
+    expect(rows[3]).toMatch(/^Forecast by the reset100%Runs out at \d{2}:\d{2}; Resets /u)
   })
 
   it('says the quota could not be read, and that an organization with no source has nothing more', async () => {
@@ -364,7 +385,7 @@ describe('the quota panel’s times', () => {
     stubAnalyticsReads(usage, workWith(at, [week]))
     const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
     const said = windowOf(accountNamed(page, 'Work'), 'week')
-    expect(said.forecast).toBe('Runs out before the reset, by about Nov 15, 00:46')
+    expect(said.forecast).toBe('Forecast · Runs out before the reset, by about Nov 15, 00:46')
     // The reset falls after the answer's midnight, so it carries its date.
     expect(said.reset).toBe('Resets Nov 15, 02:46, in 5 h')
   })
@@ -390,7 +411,7 @@ describe('the quota panel’s times', () => {
     const work = accountNamed(page, 'Work')
     const said = windowOf(work, 'five_hour')
     expect(said.reset).toBe('Resets 02:30, in 1 h 50 min')
-    expect(said.forecast).toBe('Runs out at 01:50')
+    expect(said.forecast).toBe('Forecast · Runs out at 01:50')
     expect(said.latest).toMatch(/^No change since Nov 14, 23:10, /u)
     // The line opens on the window's start, the day before, to now and a third of that past it:
     // 21:30 to 00:40 is 3 h 10 min, so it runs on to 01:43.
@@ -425,9 +446,12 @@ describe('the quota panel’s times', () => {
       facts: ['forecast', 'reset'],
       reset: 'No reset named yet',
     })
-    expect(said.label).toBe('Week: 30% used, fresh. Read 2 min ago from the poll')
+    expect(said.label).toBe(
+      'Week: 30% used, fresh. Too few readings for a forecast. Read 2 min ago from the poll',
+    )
 
-    // As a table no hint shows, so the window says its pace and its latest reading in words.
+    // As a table no hint shows, so the window says its pace and its latest reading in words; its
+    // forecast is a column of its account's table.
     const table = page
       .findAll('.quota-panel [role="radio"]:not([aria-checked="true"])')
       .find((one) => one.element.closest('.step-views') === null)
@@ -438,10 +462,12 @@ describe('the quota panel’s times', () => {
     expect(
       window.findAll('[data-fact]').map((one) => [one.attributes('data-fact'), plain(one.text())]),
     ).toEqual([
-      ['forecast', 'Too few readings for a forecast'],
       ['reset', 'No reset named yet'],
       ['even', 'No pace until the window has a reset'],
       ['latest', 'Read 2 min ago from the poll'],
     ])
+    expect(plain(accountNamed(page, 'Work').get('[data-cell="forecast"]').text())).toBe(
+      'Too few readings for a forecast',
+    )
   })
 })

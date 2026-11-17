@@ -173,13 +173,18 @@ for (const colorScheme of ['light', 'dark'] as const)
       await expect(page.locator('.quota-panel h2')).toHaveText('Five hours')
       await settled(page)
 
-      // The week, its forecasts said as ranges.
+      // The week, its forecasts said as ranges: drawn, after the key of their hatch; as a table,
+      // as narrow pages open, in its account's table.
       await choose(page, 'quota_week')
       await settled(page)
       await expect(page.locator('.quota-panel h2')).toHaveText('Week')
       await expect(
-        page.locator('.quota-window[data-window="week"] [data-fact="forecast"]').first(),
-      ).toHaveText('By the reset: 57% to 61%')
+        page
+          .locator(
+            '.quota-window[data-window="week"] [data-fact="forecast"], tr[data-key="week"] [data-cell="forecast"]',
+          )
+          .first(),
+      ).toContainText('By the reset: 57% to 61%')
       // «Work» reads two weeks, side by side where the width allows.
       expect(await edges(page), 'every part of the week at its edge').toEqual([])
       await expectNoSilentClipping(page, `week at ${width}px`, '.analytics-panel')

@@ -4,39 +4,61 @@
  * and up or down at it, never a slope between them, since a source writes a reading only when a
  * value changed (`windowGeometry`). The last reading holds to `end`, the moment the answer was
  * read. Beside the steps, where steady use from the window's start would stand at each moment
- * (`even`): a thin line from nothing at the start to the whole at the reset.
+ * (`even`): a thin line from nothing at the start to the whole at the reset. Past `end`, while the
+ * window still runs (`ahead`), the corridor of its forecast: from the share it stands at now to
+ * where its slower and its faster pace leave it at the reset, a band in the readings' hue under
+ * the one hatch of a figure not final yet (`forecastHatch.css`); a forecast of one value is a
+ * ribbon of the same hatch, flat along the top from where it runs out. The band keeps half a
+ * ribbon's width outside each edge, so its start at now and a range said alike are never a
+ * hairline.
  *
  * A running window opens on its start to now and the forecast past it (`aheadSpan`), now at three
  * quarters of the plot, with a switch to the whole window up to its reset; a window past its reset
- * is the whole window alone. A frame dragged along the plot with a mouse or a pen
- * (`useAxisFrame`), or stretched from the reading the keyboard stands on with Shift and an arrow,
- * narrows this line alone to the moments it covers, and the switch takes it back to either span.
- * Nothing else on the page follows it.
+ * is the whole window alone and draws nothing past its readings. A span that ends before the
+ * reset shows the corridor as far as its end, where it runs on. A frame dragged along the plot
+ * with a mouse or a pen (`useAxisFrame`), or stretched from the place the keyboard stands on with
+ * Shift and an arrow, narrows this line alone to the moments it covers, and the switch takes it
+ * back to either span. Nothing else on the page follows it.
  *
  * One axis, of percents from 0, its top written once over the plot: 100, or the highest reading
- * where one ran past it. The two lines are told apart by their drawing — the readings a heavier
- * line in the chart's hue, the pace a hairline in the quiet ink — and a legend names both in the
- * line's head with the switch (`StepLineHead`). The two ends of the span shown are named under
- * the plot (`moment`).
+ * where one ran past it. What the plot draws is told apart by its drawing — the readings a heavier
+ * line in the chart's hue, the pace a hairline in the quiet ink, the forecast a hatched band — and
+ * a legend names each in the line's head with the switch (`StepLineHead`), the forecast while the
+ * span shows it. The two ends of the span shown are named under the plot (`moment`).
  *
  * At rest no reading paints its mark: a mark at each reading made a busy window a chain of dots
  * that hid its own steps. The reading under the pointer paints its mark, and so does the one the
  * keyboard stands on for as long as it holds the focus, a pointer passing elsewhere or not, so a
- * forced palette shows it too. Nothing marks the latest reading at rest: the line ends at now,
- * the window's lead says the share it ends at, and on a window that has been silent for hours a
- * dot at that reading stood far before the line's end and read as now, where a dot at the end
- * would be a reading nobody took. Tab lands on the latest reading and paints it. The line's ends
- * are round, so a last step too short to see still leaves its point.
+ * forced palette shows it too. Nothing marks the latest reading or the line's end at rest: the
+ * window's lead says the share it ends at, and on a window that has been silent for hours a dot at
+ * that reading stood far before the line's end and read as now, where a dot at the end would be a
+ * reading nobody took. The line's ends are round, so a last step too short to see still leaves its
+ * point.
  *
  * No line stands over the plot. Each reading is a mark with its own hint (`markHints.ts`): the
  * whole step it holds, from its moment to the next reading, and its mark are what the pointer
- * points at, so a reader aims at a moment and not at a dot, and the readings are one stop for Tab,
- * walked with the arrows, each saying itself in its hint and as its name. The hint lies over the
- * page at the top right of the reading's mark, the point it speaks for (`data-hint-point`,
- * `hintPlacement.ts`), so pointing moves nothing. Every reading is also in the figure's name and in its table twin
- * (`StepLineTable`). The drawing stretches to its host's width, so its lines keep their width
- * (`vector-effect`) and every word and mark is HTML over it rather than SVG text or circles the
- * stretch would distort. A forced palette draws the lines in its inks.
+ * points at, so a reader aims at a moment and not at a dot. Past the readings the line has two
+ * more places to point at, each with its own hint, and each paints its mark only while it is
+ * pointed at or focused, as a reading does. Where the line ends, «now» (`ahead.now`): the share
+ * it stands at, when its latest reading was and how long the window has been silent; its mark is
+ * a ring rather than a reading's dot, so it never reads as a reading, and it takes the pointer from
+ * the line's end on, so the last reading keeps its own mark before it. Where the corridor ends,
+ * its forecast at the reset (`ahead.forecast`): what the slower and the faster pace leave, when
+ * the reset is and when the window runs out before it; its mark is a ring around the band's end,
+ * and it takes the pointer along the rest of the corridor. Where the span ends before the reset,
+ * that mark stands at the plot's end, where the band runs on, and its hint says the reset stands
+ * past it (`words.past`). Without a corridor «now» takes the pointer to the plot's end.
+ *
+ * The readings and the two places are one stop for Tab, walked with the arrows in the order they
+ * stand — the readings, then «now», then the forecast — each saying itself in its hint and as its
+ * name. Tab lands on the latest reading. Each hint lies over the page at its mark, so pointing
+ * moves nothing: a reading's at the top right of its dot (`data-hint-point`, `hintPlacement.ts`),
+ * a place's beside its ring, level with the ring's top (`data-hint-mark`), so a forecast that runs
+ * out at the top of the plot keeps its hint off the line's head. Every reading is also in the
+ * figure's name and in its table twin (`StepLineTable`), and so is the forecast. The drawing
+ * stretches to its host's width, so its lines keep their width (`vector-effect`) and every word,
+ * mark and hatch is HTML over it rather than SVG the stretch would distort. A forced palette draws
+ * the lines, the hatch and the marks in its inks.
  */
 import { computed, nextTick, ref } from 'vue'
 
@@ -45,18 +67,21 @@ import { readingHint } from '@/shared/ui/markHints.ts'
 import StepLineHead from '@/shared/ui/StepLineHead.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { FRAME_KEYS, useAxisFrame, useKeyFrame } from '@/shared/ui/useAxisFrame.ts'
+import { useStepAhead } from '@/shared/ui/useStepAhead.ts'
+import type { StepTargetPlace } from '@/shared/ui/useStepAhead.ts'
 import { useStepSpan } from '@/shared/ui/useStepSpan.ts'
 import {
   evenAt,
   readingsIn,
   STEP_HEIGHT,
   STEP_WIDTH,
+  stepAcross,
   stepPath,
   stepTop,
   stepX,
   stepY,
 } from '@/shared/ui/windowGeometry.ts'
-import type { StepPoint, StepSpan, StepWords } from '@/shared/ui/windowGeometry.ts'
+import type { StepAhead, StepPoint, StepSpan, StepWords } from '@/shared/ui/windowGeometry.ts'
 
 const props = defineProps<{
   /** The moment the last reading holds to: when the answer was read. */
@@ -65,11 +90,13 @@ const props = defineProps<{
   from: number
   /** All the line says, in words, for a reader who cannot see it. */
   label: string
-  /** The legend's names of the two lines. */
-  legend: { line: string; even?: string }
+  /** The legend's names of the two lines and of the forecast's corridor. */
+  legend: { line: string; ahead?: string; even?: string }
   points: readonly StepPoint[]
   to: number
   words: StepWords
+  /** What the line draws past its last reading, the window now and its forecast; none past the reset. */
+  ahead?: StepAhead | null
   /** Whether to draw where steady use would stand: from 0 at `from` to 100 at `to`. */
   even?: boolean
   /** A moment as the axis names an end of the span shown, «14:05». */
@@ -90,9 +117,6 @@ const evenLine = computed(() => ({
   y1: stepY(frame.value, evenAt(whole.value, shown.value.from)),
   y2: stepY(frame.value, evenAt(whole.value, shown.value.to)),
 }))
-
-/** A place across the plot as a share of its box. */
-const across = (at: number) => `${(stepX(frame.value, at) / STEP_WIDTH) * 100}%`
 
 /**
  * How far down the drawing a mark stands, as a share of its height: the mark stands in its
@@ -117,20 +141,40 @@ function stepStyle(index: number) {
   const start = stepX(frame.value, point.at)
   const stop = stepX(frame.value, stepEnd(index))
   return {
-    insetInlineStart: across(point.at),
+    insetInlineStart: stepAcross(frame.value, point.at),
     inlineSize: `${(Math.max(0, stop - start) / STEP_WIDTH) * 100}%`,
   }
 }
 
-/** The reading under the pointer or the keyboard, marked larger. */
+/** The corridor past the readings, whether the span shows it and the places past them. */
+const { clip: corridorClip, drawn: corridorShown, targets } = useStepAhead(() => props, frame)
+/** The stretch a place past the readings takes the pointer along, as its style. */
+const reachStyle = ({ reach }: StepTargetPlace) => ({
+  insetInlineStart: reach.start ?? 'auto',
+  insetInlineEnd: reach.start && reach.size ? 'auto' : '0',
+  inlineSize: reach.size ?? 'auto',
+})
+/** Where a place's mark stands, as its style: its top and its foot, at its stretch's side. */
+const targetMark = ({ mark }: StepTargetPlace) => ({
+  '--step-high': mark.high,
+  '--step-low': mark.low,
+  '--step-side': mark.side,
+})
+
+/** How many places the keyboard walks: the readings shown and the places past them. */
+const stops = computed(() => readings.value.inside.length + targets.value.length)
+/** A place past the readings by its order among them. */
+const stopOf = (index: number) => readings.value.inside.length + index
+
+/** The place under the pointer or the keyboard, its mark painted. */
 const pointed = ref<number | null>(null)
 const markClass = (index: number) => ({ 'step-shown': pointed.value === index })
 
-/** The one reading Tab lands on: the last stood on while it is still there, else the latest. */
+/** The one place Tab lands on: the last stood on while it is still there, else the latest reading. */
 const stood = ref<number | null>(null)
 const stop = computed(() => {
-  const count = readings.value.inside.length
-  return stood.value !== null && stood.value < count ? stood.value : count - 1
+  const latest = Math.max(0, readings.value.inside.length - 1)
+  return stood.value !== null && stood.value < stops.value ? stood.value : latest
 })
 
 const field = ref<HTMLElement | null>(null)
@@ -148,14 +192,23 @@ function spanOf(start: number, end: number): StepSpan {
   return { from: from + (start / width) * (to - from), to: from + (end / width) * (to - from) }
 }
 
-/** The moments the readings from `first` to `last` hold, from the first's to the last's end. */
-function readingsSpan(first: number, last: number): StepSpan | null {
-  const start = readings.value.inside[first]
-  return start ? { from: start.at, to: stepEnd(last) } : null
+/** The moments a place covers: a reading its step, «now» its moment, the forecast its corridor. */
+function coveredBy(index: number): StepSpan | null {
+  const point = readings.value.inside[index]
+  return point
+    ? { from: point.at, to: stepEnd(index) }
+    : (targets.value[index - readings.value.inside.length]?.covers ?? null)
+}
+
+/** The moments the places from `first` to `last` cover, from the first's start to the last's end. */
+function placesSpan(first: number, last: number): StepSpan | null {
+  const start = coveredBy(first)
+  const ends = coveredBy(last)
+  return start && ends ? { from: start.from, to: ends.to } : null
 }
 
 const { drawn } = useAxisFrame(field, (start, end) => span.narrow(spanOf(start, end)))
-const keys = useKeyFrame(field, (first, last) => span.narrow(readingsSpan(first, last)))
+const keys = useKeyFrame(field, (first, last) => span.narrow(placesSpan(first, last)))
 
 /** A frame across the plot between `one` and `other` of `width`, as shares of its box. */
 const spanStyle = (one: number, other: number, width: number) => ({
@@ -170,18 +223,18 @@ const framing = computed(() => {
   if (pointer) return spanStyle(pointer.from, pointer.to, width)
   const stretched = keys.stretched.value
   const [first, last] = stretched ? [stretched.anchor, stretched.reached].sort((a, b) => a - b) : []
-  const covered = first === undefined || last === undefined ? null : readingsSpan(first, last)
+  const covered = first === undefined || last === undefined ? null : placesSpan(first, last)
   return covered
     ? spanStyle(stepX(frame.value, covered.from), stepX(frame.value, covered.to), STEP_WIDTH)
     : null
 })
 
 /**
- * A key on a reading: the arrows, Home and End walk the readings, and Shift with an arrow
- * stretches the frame from the reading stood on as it walks (`useKeyFrame`).
+ * A key on a place: the arrows, Home and End walk the readings and the places past them, and
+ * Shift with an arrow stretches the frame from the place stood on as it walks (`useKeyFrame`).
  */
 async function move(event: KeyboardEvent) {
-  const count = readings.value.inside.length
+  const count = stops.value
   if (!count) return
   const stretched = keys.stretch(event, stop.value, count)
   const to = MOVES[event.key]
@@ -189,10 +242,10 @@ async function move(event: KeyboardEvent) {
   event.preventDefault()
   stood.value = stretched ?? to?.(stop.value, count - 1) ?? stop.value
   await nextTick()
-  moveFocus(field.value?.querySelector<HTMLElement>(`[data-reading="${stood.value}"]`))
+  moveFocus(field.value?.querySelector<HTMLElement>(`[data-stop="${stood.value}"]`))
 }
 
-/** Only the reading Tab lands on is in the page's order; the arrows reach the rest. */
+/** Only the place Tab lands on is in the page's order; the arrows reach the rest. */
 const tabOf = (index: number) => (index === stop.value ? 0 : -1)
 
 function stand(index: number) {
@@ -213,6 +266,7 @@ function stand(index: number) {
       :switched="span.switched.value"
       :views="words.views"
       :legend="legend"
+      :ahead="corridorShown"
       :even="even"
       @choose="span.choose"
     />
@@ -263,6 +317,12 @@ function stand(index: number) {
             :d="path"
           />
         </svg>
+        <span
+          v-if="corridorClip"
+          class="step-ahead forecast-hatch"
+          aria-hidden="true"
+          :style="{ clipPath: corridorClip }"
+        />
         <!-- A reading is a picture of its moment and value, walked with the arrows as one stop. -->
         <!-- Its mark is the point its hint speaks for, and takes the pointer for it. -->
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
@@ -274,6 +334,7 @@ function stand(index: number) {
           role="img"
           :aria-keyshortcuts="FRAME_KEYS"
           :data-reading="index"
+          :data-stop="index"
           :tabindex="tabOf(index)"
           :style="stepStyle(index)"
           @pointerenter="pointed = index"
@@ -289,6 +350,32 @@ function stand(index: number) {
             :data-key="point.key"
             :style="markStyle(point)"
             data-hint-point
+        /></span>
+        <!-- «Now» and the forecast, walked on after the readings, each a picture of what it says. -->
+        <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
+        <span
+          v-for="(target, index) in targets"
+          :key="target.kind"
+          v-tooltip.detail="target.hint"
+          class="step-target"
+          role="img"
+          :aria-keyshortcuts="FRAME_KEYS"
+          :data-target="target.kind"
+          :data-stop="stopOf(index)"
+          :tabindex="tabOf(stopOf(index))"
+          :style="reachStyle(target)"
+          @pointerenter="pointed = stopOf(index)"
+          @pointerleave="pointed = null"
+          @focus="stand(stopOf(index))"
+          @blur="pointed = null"
+          @keydown="move"
+          @keyup="keys.release"
+          ><span
+            class="step-target-mark"
+            aria-hidden="true"
+            :class="[`step-${target.kind}-mark`, markClass(stopOf(index))]"
+            :style="targetMark(target)"
+            data-hint-mark
         /></span>
         <span
           v-if="framing"
@@ -309,6 +396,10 @@ function stand(index: number) {
 </template>
 
 <style scoped src="@/shared/ui/axisFrame.css"></style>
+
+<style scoped src="@/shared/ui/forecastHatch.css"></style>
+
+<style scoped src="@/shared/ui/stepMarks.css"></style>
 
 <style scoped>
 .step-line {
@@ -338,9 +429,12 @@ function stand(index: number) {
    stands inset in it by half a mark as it is drawn when pointed at, ring and all, so a mark at 0 %
    and one at the top stand whole inside the plot, and in the step that takes the pointer for it:
    drawn to the plot's edge, the mark of a reading at 0 % hung half under the floor, and there the
-   pointer found no reading. */
+   pointer found no reading. The least width a place takes the pointer along, and half the width
+   of the forecast's ribbon, are the plot's own. */
 .step-field {
   --step-inset: calc(var(--space-2) * 0.75 + var(--space-hair));
+  --step-reach: 24px;
+  --step-ribbon: calc(var(--space-1) * 0.75);
 
   position: relative;
   block-size: var(--space-24);
@@ -395,45 +489,6 @@ function stand(index: number) {
   @media (forced-colors: active) {
     stroke: CanvasText;
   }
-}
-
-/* A reading: a mark in the line's hue, ringed in the ground, at its step's start and value
-   (`--step-down`); at rest unpainted, its box kept for its hint and the pointer. */
-.step-mark {
-  --step-down: 0;
-
-  position: absolute;
-  inset-block-start: calc(var(--step-inset) + (100% - 2 * var(--step-inset)) * var(--step-down));
-  inset-inline-start: 0;
-  inline-size: var(--space-2);
-  block-size: var(--space-2);
-  background: var(--color-series-1);
-  border-radius: 50%;
-  outline: var(--space-hair) solid var(--color-canvas);
-  opacity: 0;
-  translate: -50% -50%;
-
-  @media (forced-colors: active) {
-    background: CanvasText;
-    outline-color: Canvas;
-    forced-color-adjust: none;
-  }
-}
-
-/* Under the pointer, or holding the keyboard's focus whatever the pointer does: painted, larger. */
-.step-shown,
-.step-reach:focus-visible > .step-mark {
-  opacity: 1;
-  scale: 1.5;
-}
-
-/* What the pointer points at for a reading: the whole step it holds, the plot's height, at
-   least as wide as a pointer can hit. It paints nothing, and the keyboard's ring is drawn on it. */
-.step-reach {
-  position: absolute;
-  inset-block: 0;
-  min-inline-size: 24px;
-  border-radius: var(--radius-status);
 }
 
 /* A frame over the moments it covers (`axisFrame.css`), as tall as the plot. */

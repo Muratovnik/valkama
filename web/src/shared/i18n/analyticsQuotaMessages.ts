@@ -2,7 +2,11 @@
  * The subscription quota on the Analytics page: its two tiles on the rail and its panel. A share
  * of a window is always one account's and one window's: no message adds two of them, and none
  * names money beside a share. A window with no source, a silent one and a fresh 0 % each have
- * words of their own. `analyticsMessages` holds these under `analytics.quota`.
+ * words of their own; a silent one says how long it has been silent (`silentFor`). Wherever a
+ * window's forecast is drawn hatched, its words lead with the key that names the hatch
+ * (`forecastKey`, `forecastLine`), and what a step line points at past its readings — the window
+ * now and its forecast at the reset — has its own words (`readings.now`, `readings.forecast`).
+ * `analyticsMessages` holds these under `analytics.quota`.
  *
  * What used a window (`spent`) is the one place money is named, apart from the window's share: its
  * heading names the stretch it covers, and work its organization did with no account known has
@@ -41,9 +45,12 @@ export const analyticsQuotaMessages = {
       detail: '{window} of {account}',
     },
     lead: '{share} used · {state}',
-    bar: '{window}: {share} used, steady use {even}, {state}',
+    silentFor: 'silent {for}',
+    bar: '{window}: {share} used, steady use {even}, {state}. {forecast}',
     barRead: '{bar}. {read}',
-    barNoPace: '{window}: {share} used, {state}',
+    barNoPace: '{window}: {share} used, {state}. {forecast}',
+    forecastKey: 'Forecast',
+    forecastLine: '{key} · {forecast}',
     even: 'Steady use would be at {share} now',
     noPace: 'No pace until the window has a reset',
     resets: 'Resets {at}, in {in}',
@@ -86,6 +93,7 @@ export const analyticsQuotaMessages = {
       value: 'Used',
       even: 'Steady use',
       note: 'State',
+      forecast: 'Forecast',
       empty: 'No window',
       caption: 'Windows of {account}',
     },
@@ -110,7 +118,7 @@ export const analyticsQuotaMessages = {
       failedAgain: 'Could not read it again; these figures run to {to} and may be behind.',
     },
     readings: {
-      label: '{window} of {account} from {from} to {to}: {readings}',
+      label: '{window} of {account} from {from} to {to}: {readings}. {forecast}',
       reading: '{share} at {at}',
       text: '{at}: {share}, {source}',
       caption: 'Readings of {window} of {account}',
@@ -124,6 +132,11 @@ export const analyticsQuotaMessages = {
       ahead: 'To now and the forecast',
       whole: 'Whole window',
       views: 'Span of the readings of {window}',
+      now: 'Now',
+      last: 'Last reading at {at}, {ago}, from {source}',
+      silent: 'Silent {for}; last reading at {at}, from {source}',
+      forecast: 'Forecast by the reset',
+      past: 'The reset is past the right edge; Whole window shows it',
     },
   },
   ru: {
@@ -156,9 +169,12 @@ export const analyticsQuotaMessages = {
       detail: '{window}, {account}',
     },
     lead: '{share} израсходовано · {state}',
-    bar: '{window}: израсходовано {share}, при ровном расходе {even}, {state}',
+    silentFor: 'молчит {for}',
+    bar: '{window}: израсходовано {share}, при ровном расходе {even}, {state}. {forecast}',
     barRead: '{bar}. {read}',
-    barNoPace: '{window}: израсходовано {share}, {state}',
+    barNoPace: '{window}: израсходовано {share}, {state}. {forecast}',
+    forecastKey: 'Прогноз',
+    forecastLine: '{key} · {forecast}',
     even: 'При ровном расходе сейчас было бы {share}',
     noPace: 'Темпа нет: окно ещё не назвало сброс',
     resets: 'Сброс {at}, через {in}',
@@ -200,6 +216,7 @@ export const analyticsQuotaMessages = {
       value: 'Израсходовано',
       even: 'Ровный расход',
       note: 'Состояние',
+      forecast: 'Прогноз',
       empty: 'Нет окна',
       caption: 'Окна: {account}',
     },
@@ -224,7 +241,7 @@ export const analyticsQuotaMessages = {
       failedAgain: 'Не удалось прочитать снова; цифры — до {to}, они могут отставать.',
     },
     readings: {
-      label: '{window}, {account}, с {from} до {to}: {readings}',
+      label: '{window}, {account}, с {from} до {to}: {readings}. {forecast}',
       reading: '{share} в {at}',
       text: '{at}: {share}, {source}',
       caption: 'Показания: {window}, {account}',
@@ -238,6 +255,11 @@ export const analyticsQuotaMessages = {
       ahead: 'До сейчас и прогноз',
       whole: 'Всё окно',
       views: 'Отрезок показаний: {window}',
+      now: 'Сейчас',
+      last: 'Последнее показание в {at}, {ago}, источник: {source}',
+      silent: 'Молчит {for}; последнее показание в {at}, источник: {source}',
+      forecast: 'Прогноз к сбросу',
+      past: 'Сброс — за правым краем; его показывает «Всё окно»',
     },
   },
 } as const

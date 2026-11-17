@@ -2,8 +2,9 @@
 /**
  * One account of the quota panel: its name — the owner's, or else the start of its id, the whole
  * id in its hint — its plan, and each window of the section on show (`QuotaWindow`), the week
- * before each model's week. As a table its windows are one table of their figures, each window's
- * facts and readings after it.
+ * before each model's week. As a table its windows are one table of their figures — the share,
+ * the pace, the state with how long a silent one has been silent, and the forecast — each
+ * window's facts and readings after it.
  *
  * An account nobody's source read says so and shows no window, and one with no window of the
  * section says that instead, so no source, a window never read and a fresh 0 % never read alike.
@@ -63,7 +64,8 @@ const rows = computed<WindowRow[]>(() =>
     label: words.windowName(window),
     valueText: words.share(window.latest.used_percent),
     evenText: window.even_percent === null ? '—' : words.share(window.even_percent),
-    noteText: words.state(window),
+    noteText: words.stateAt(window, props.now),
+    forecastText: words.forecast(window, props.today),
   })),
 )
 const tableWords = computed<WindowWords>(() => ({
@@ -71,6 +73,7 @@ const tableWords = computed<WindowWords>(() => ({
   value: t('analytics.quota.table.value'),
   even: t('analytics.quota.table.even'),
   note: t('analytics.quota.table.note'),
+  forecast: t('analytics.quota.table.forecast'),
   empty: t('analytics.quota.table.empty'),
 }))
 </script>

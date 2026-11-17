@@ -4,19 +4,27 @@
  * step line of its readings (`StepLine`) and what used the window (`QuotaWindowSpend`).
  *
  * What stands now leads with one line, the share spent as the window's figure and its state in
- * words beside it, «75% used · silent», over the bar with its pace tick (`WindowBar`), then the
- * forecast in the text's ink and when the window resets, in absolute and relative time, quieter.
- * Where steady use would stand and how old the latest reading is and who read it are the bar's
- * hint and its words for a screen reader, not lines of the block: four lines of the same weight
- * once stood over every window. As a table the bar is a row of its account's table, which holds
- * the share, the pace and the state, and the window prints its forecast, its reset and its latest
- * reading in words, since a table has no hint to hold them; the pace stands there only as words
- * that it has none, which the table's dash does not say. The readings are a table of their own.
+ * words beside it, «75% used · silent 3 d», over the bar with its pace tick (`WindowBar`), then
+ * the forecast in the text's ink and when the window resets, in absolute and relative time,
+ * quieter. The bar draws the forecast as a hatched tail past the share spent, and the forecast's
+ * line leads with the key of that hatch, a swatch and «Forecast ·», the swatch while a tail is
+ * drawn: the hatch was once a silent window's and nothing on the page said so. Where steady use
+ * would stand and how old the latest reading is and who read it are the bar's hint and its words
+ * for a screen reader, not lines of the block: four lines of the same weight once stood over
+ * every window. As a table the bar is a row of its account's table, which holds the share, the
+ * pace, the state and the forecast, and the window prints its reset and its latest reading in
+ * words, since a table has no hint to hold them; the pace stands there only as words that it has
+ * none, which the table's dash does not say. The readings are a table of their own, closed by the
+ * forecast.
  *
  * The five hours forecast a point: it lasts to the reset, runs out at a time, or is spent. A week
- * forecasts a range, said never past 100 % (`useQuotaWords`). A window too new for a forecast says
- * so in the quiet ink. A silent window is hatched, says «silent» and, in its hint, when its
- * reading last changed; a fresh 0 % is a bar with no fill that says «0% used» and «fresh».
+ * forecasts a range, said never past 100 % (`useQuotaWords`); both are drawn from one mapping
+ * (`forecastCourses`). A window too new for a forecast says so in the quiet ink and draws no
+ * tail. A silent window's share is as solid as a fresh one's, since a reading is final however
+ * old: it says «silent» and for how long, and its hint when its reading last changed; a fresh 0 %
+ * is a bar with no fill that says «0% used» and «fresh». While the window stands, its step line
+ * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`); a
+ * window past its reset has neither.
  *
  * What used the window is the work Valkama recorded on the account since the window's start, by
  * its API price estimate, on an axis of its own. A window that names no start has no span to read
@@ -28,6 +36,7 @@ import { Translation, useI18n } from 'vue-i18n'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import QuotaWindowSpend from '@/pages/analytics/components/QuotaWindowSpend.vue'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
+import { forecastCourses, forecastEnds, stands } from '@/pages/analytics/utils/quotaFigures.ts'
 import { momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
 
@@ -37,7 +46,7 @@ import StepLineTable from '@/shared/ui/StepLineTable.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import WindowBar from '@/shared/ui/WindowBar.vue'
 import { stepTop } from '@/shared/ui/windowGeometry.ts'
-import type { StepWords } from '@/shared/ui/windowGeometry.ts'
+import type { StepAhead, StepWords } from '@/shared/ui/windowGeometry.ts'
 
 const props = defineProps<{
   account: QuotaAccount
@@ -54,17 +63,30 @@ const words = useQuotaWords()
 
 const name = computed(() => words.windowName(props.window))
 /**
- * The window's lead and its bar: the share and the state the line says, and what the bar's hint
- * adds. A window no longer fresh is hatched, so a silent one never reads as fresh.
+ * The window's forecast as its drawings take it, from the answer's moment to the reset, while the
+ * window stands at the panel's moment: a window past its reset forecasts nothing more.
+ */
+const courses = computed(() => {
+  const { window, now, today } = props
+  return stands(window, now) ? forecastCourses(window, Date.parse(today)) : null
+})
+/**
+ * The window's lead and its bar: the share and the state the line says, the forecast's share at
+ * the reset its tail draws, and what the bar's hint adds. A silent window says how long it has
+ * been silent, so it never reads as fresh.
  */
 const bar = computed(() => {
   const { window, now, today } = props
+  const forecast = forecastEnds(courses.value)
+  const used = window.latest.used_percent
   return {
-    share: words.share(window.latest.used_percent),
-    state: words.state(window),
+    share: words.share(used),
+    state: words.stateAt(window, now),
     label: words.barRead(window, now, today),
     hint: words.meterHint(window, now, today),
-    held: window.state !== 'fresh',
+    forecast,
+    /** Whether the bar draws a tail, whose hatch the forecast's line names. */
+    hatched: forecast !== null && used < 100 && forecast.high > used,
   }
 })
 /** Whether the window has a pace: it named its start and its reset. */
@@ -74,21 +96,28 @@ const points = computed(() => words.points(props.window, props.today))
 const spends = computed(() => seatOf(props.account) !== null && props.window.started_at !== null)
 
 /**
- * The facts said in words: the forecast, in the text's ink where there is one, and the reset. A
- * table adds what the bar's hint holds and its account's table does not: the latest reading, and
- * that there is no pace, where that table has only a dash for it.
+ * The facts said in words: the forecast after its key, in the text's ink where there is one, and
+ * the reset. A table leaves the forecast to its account's table and adds what the bar's hint
+ * holds and that table does not: the latest reading, and that there is no pace, where that table
+ * has only a dash for it. `swatch` is whether the line leads with the key of the bar's hatch.
  */
 const facts = computed(() => {
   const { window, now, today, shown } = props
-  const said = [
-    { key: 'forecast', text: words.forecast(window, today), quiet: window.forecast === null },
-    { key: 'reset', text: words.reset(window, now, today), quiet: true },
-  ]
-  if (shown === 'chart') return said
+  const reset = { key: 'reset', text: words.reset(window, now, today), quiet: true, swatch: false }
+  if (shown === 'chart') {
+    const forecast = {
+      key: 'forecast',
+      text: words.forecastLine(window, today),
+      quiet: window.forecast === null,
+      swatch: bar.value.hatched,
+    }
+    return [forecast, reset]
+  }
+  const latest = { key: 'latest', text: words.latest(window, now, today), quiet: true }
   return [
-    ...said,
-    ...(paced.value ? [] : [{ key: 'even', text: words.even(window), quiet: true }]),
-    { key: 'latest', text: words.latest(window, now, today), quiet: true },
+    reset,
+    ...(paced.value ? [] : [{ key: 'even', text: words.even(window), quiet: true, swatch: false }]),
+    { ...latest, swatch: false },
   ]
 })
 
@@ -122,11 +151,30 @@ const stepWords = computed<StepWords>(() => ({
   value: t('analytics.quota.readings.value'),
   note: t('analytics.quota.readings.note'),
   empty: t('analytics.quota.readings.empty'),
+  past: t('analytics.quota.readings.past'),
 }))
 const legend = computed(() => ({
   line: t('analytics.quota.readings.line'),
+  ahead: t('analytics.quota.forecastKey'),
   ...(props.window.even_percent === null ? {} : { even: t('analytics.quota.readings.even') }),
 }))
+
+/**
+ * What the line draws past its readings while the window stands: where it stands now, and the
+ * corridor of its forecast to the reset with what its end says, where the window has one to draw.
+ */
+const ahead = computed<StepAhead | null>(() => {
+  const { window, now, today } = props
+  if (!stands(window, now) || !window.readings.length) return null
+  const found = courses.value
+  const ends = forecastEnds(found)
+  return {
+    value: window.latest.used_percent,
+    now: words.nowTarget(window, now, today),
+    forecast:
+      found && ends ? { ...words.forecastTarget(window, ends, now, today), ...found } : null,
+  }
+})
 const readingsLabel = computed(() => words.readingsLabel(props.account, props.window, props.today))
 const readingsCaption = computed(() =>
   t('analytics.quota.readings.caption', {
@@ -163,7 +211,7 @@ const readingsCaption = computed(() =>
             :label="bar.label"
             :used="window.latest.used_percent"
             :even="window.even_percent"
-            :held="bar.held"
+            :forecast="bar.forecast"
           />
         </template>
         <ul class="quota-window-facts">
@@ -173,7 +221,11 @@ const readingsCaption = computed(() =>
             :class="{ 'quota-window-quiet': fact.quiet }"
             :data-fact="fact.key"
           >
-            {{ fact.text }}
+            <span
+              v-if="fact.swatch"
+              class="quota-window-swatch forecast-hatch"
+              aria-hidden="true"
+            />{{ fact.text }}
           </li>
         </ul>
       </div>
@@ -189,6 +241,7 @@ const readingsCaption = computed(() =>
         :moment="stepMoment"
         :even="paced"
         :legend="legend"
+        :ahead="ahead"
       />
       <StepLineTable
         v-else
@@ -196,6 +249,7 @@ const readingsCaption = computed(() =>
         :label="readingsCaption"
         :points="points"
         :words="stepWords"
+        :forecast="ahead?.forecast ?? null"
       />
       <QuotaWindowSpend
         v-if="spends"
@@ -208,6 +262,8 @@ const readingsCaption = computed(() =>
     </div>
   </PanelLevel>
 </template>
+
+<style scoped src="@/shared/ui/forecastHatch.css"></style>
 
 <style scoped>
 /* The window's three parts — what stands now, its readings and what used it — stand as far apart
@@ -255,5 +311,16 @@ const readingsCaption = computed(() =>
 
 .quota-window-quiet {
   color: var(--color-text-muted);
+}
+
+/* The key of the bar's hatch, as the step line's legend draws it: a short bar of the stripes on
+   the line's baseline, before the words that name it. */
+.quota-window-swatch {
+  display: inline-block;
+  vertical-align: baseline;
+  inline-size: var(--space-3);
+  block-size: var(--space-2);
+  margin-inline-end: var(--space-1);
+  border-radius: 999px;
 }
 </style>

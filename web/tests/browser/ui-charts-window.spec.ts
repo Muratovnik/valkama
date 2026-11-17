@@ -4,12 +4,15 @@
  * light and the dark theme a bar's fill is as long as the share spent and stops at the track's
  * end, its tick stands where steady use would be and crosses the bar, and the fill, the track and
  * the tick stand apart from each other and the fill from the ground by a contrast a reader can see
- * — a contrast of lightness, so the bar reads in grayscale too; a window that is not fresh is
- * hatched and a fresh one is not; no word is cut. The step line draws only flat and upright
- * strokes, a mark at each reading where its moment and value put it, painted only for the reading
- * under the pointer or the keyboard's focus, and that reading says itself in a hint over the plot
- * without moving anything, with no line over the plot. A forced palette draws them in its inks,
- * the focused reading too.
+ * — a contrast of lightness, so the bar reads in grayscale too; the share spent is solid, silent
+ * or fresh, and the forecast alone is hatched, a tail inside the track from a surface gap past
+ * the fill, parted where its slower pace ends; no word is cut. The step line draws only flat and
+ * upright strokes, a mark at each reading where its moment and value put it, painted only for the
+ * reading under the pointer or the keyboard's focus, and that reading says itself in a hint over
+ * the plot without moving anything, with no line over the plot. Past its readings «now» and the
+ * forecast at the reset each say themselves in a hint at their mark, off the line's head, the
+ * corridor between them inside the plot, and nothing moves. A forced palette draws them in its
+ * inks, the focused reading and the tail too.
  * Each theme attaches what it measured.
  */
 import { expect } from '@playwright/test'
@@ -60,6 +63,7 @@ function windowBars(page: Page) {
       const track = bar.querySelector('.window-track')
       const fill = bar.querySelector('.window-fill')
       const tick = bar.querySelector('.window-tick')
+      const tail = [...bar.querySelectorAll('.window-ahead')]
       const paint = (element: Element | null) =>
         element ? getComputedStyle(element).backgroundColor : null
       const [trackPaint, fillPaint, tickPaint] = [paint(track), paint(fill), paint(tick)]
@@ -75,6 +79,23 @@ function windowBars(page: Page) {
         // The tick crosses the bar, standing over and under it.
         crosses: ticked ? ticked.top < along.top && ticked.bottom > along.bottom : null,
         mask: fill ? getComputedStyle(fill).maskImage : null,
+        // Each part of the tail: where it starts and ends along the track, in whole percents and
+        // in pixels from the fill's end or the part before, and whether it is hatched.
+        tail: tail.map((part, index) => {
+          const drawn = part.getBoundingClientRect()
+          const before = index === 0 ? filled : tail[index - 1]?.getBoundingClientRect()
+          return {
+            from: share(drawn.left - along.left),
+            to: share(drawn.right - along.left),
+            gap: before ? Math.round((drawn.left - before.right) * 10) / 10 : null,
+            inside:
+              drawn.left >= along.left - 0.5 &&
+              drawn.right <= along.right + 0.5 &&
+              drawn.top >= along.top - 0.5 &&
+              drawn.bottom <= along.bottom + 0.5,
+            hatched: getComputedStyle(part).maskImage.includes('repeating-linear-gradient'),
+          }
+        }),
         fillOnGround: fillPaint ? contrast(fillPaint, ground) : null,
         fillOnTrack: fillPaint && trackPaint ? contrast(fillPaint, trackPaint) : null,
         tickOnFill: tickPaint && fillPaint ? contrast(tickPaint, fillPaint) : null,
@@ -97,7 +118,9 @@ for (const colorScheme of ['light', 'dark'] as const)
     await page.goto(HARNESS)
     const section = page.locator('[data-harness="window"]')
     await expect(
-      section.getByRole('img', { name: 'Five hours: 62% used, steady use 40%, fresh' }),
+      section.getByRole('img', {
+        name: 'Week: 62% used, steady use 40%, fresh. Forecast · By the reset: 70% to 84%',
+      }),
     ).toBeVisible()
     const bars = await windowBars(page)
     await testInfo.attach(`window-bars-${colorScheme}`, {
@@ -112,14 +135,43 @@ for (const colorScheme of ['light', 'dark'] as const)
       { name: 'spent', used: 62, even: 40, crosses: true, cut: false },
       { name: 'over', used: 100, even: 100, crosses: true, cut: false },
       { name: 'zero', used: null, even: 20, crosses: true, cut: false },
-      { name: 'held', used: 88, even: 86, crosses: true, cut: false },
+      { name: 'stale', used: 88, even: 86, crosses: true, cut: false },
+      { name: 'runs', used: 74, even: 70, crosses: true, cut: false },
       { name: 'none', used: null, even: null, crosses: null, cut: false },
       { name: 'compact', used: 74, even: 70, crosses: true, cut: false },
     ])
-    // Not fresh is hatched, fresh is not.
-    const masks = Object.fromEntries(bars.map((bar) => [bar.case, bar.mask]))
-    expect(masks.held).toContain('repeating-linear-gradient')
-    expect(masks.spent).toBe('none')
+    // The share spent is solid, silent or fresh: only the forecast is hatched.
+    for (const bar of bars.filter((one) => one.used !== null))
+      expect(bar.mask, `${bar.case}: the fill`).toBe('none')
+    // The tail, hatched inside the track: from 2px past the fill to the slower pace's end, and
+    // 2px on to the faster's; from the track's start at 0 %; to its end where the window runs
+    // out; none past 100 % or with no figure. Each end within a percent of its share.
+    const tails = Object.fromEntries(
+      bars.map((bar) => [bar.case, bar.tail.map(({ from, to, gap }) => [from, to, gap])]),
+    )
+    expect(tails).toEqual({
+      spent: [
+        [62, 70, 2],
+        [70, 84, 2],
+      ],
+      over: [],
+      zero: [[0, 12, null]],
+      stale: [
+        [88, 98, 2],
+        [98, 100, 2],
+      ],
+      runs: [[74, 100, 2]],
+      none: [],
+      compact: [
+        [74, 86, 2],
+        [86, 95, 2],
+      ],
+    })
+    for (const bar of bars)
+      for (const part of bar.tail) {
+        expect(part.inside, `${bar.case}: a part inside its track`).toBe(true)
+        expect(part.hatched, `${bar.case}: a part hatched`).toBe(true)
+      }
     // Apart by lightness: the fill from its ground and its track, the tick from both.
     for (const bar of bars.filter((one) => one.used !== null)) {
       expect(bar.fillOnGround, `${bar.case}: fill on ground`).toBeGreaterThanOrEqual(
@@ -131,10 +183,13 @@ for (const colorScheme of ['light', 'dark'] as const)
       expect(bar.tickOnFill, `${bar.case}: tick on fill`).toBeGreaterThanOrEqual(GRAPHIC_CONTRAST)
     for (const bar of bars.filter((one) => one.even !== null))
       expect(bar.tickOnTrack, `${bar.case}: tick on track`).toBeGreaterThanOrEqual(GRAPHIC_CONTRAST)
-    // The table holds a row a window with each figure in words.
+    // The table holds a row a window with each figure in words, its forecast too.
     const table = page.locator('[data-harness="window-table"] table')
-    await expect(table.locator('tbody tr')).toHaveCount(5)
+    await expect(table.locator('tbody tr')).toHaveCount(6)
     await expect(table.locator('tbody tr').first()).toContainText('62%')
+    await expect(table.locator('tbody tr').first().locator('[data-cell="forecast"]')).toHaveText(
+      'By the reset: 70% to 84%',
+    )
   })
 
 /** The step line as drawn: its path, its marks against its drawing, and the boxes of its parts. */
@@ -212,7 +267,8 @@ for (const colorScheme of ['light', 'dark'] as const)
     const pointed = await stepLine(page)
     expect(pointed.boxes).toEqual(before.boxes)
     expect(pointed.height).toBe(before.height)
-    await expect(page.locator('[data-harness="step-table"] tbody tr')).toHaveCount(4)
+    // The four readings and the forecast after them.
+    await expect(page.locator('[data-harness="step-table"] tbody tr')).toHaveCount(5)
   })
 
 /**
@@ -343,6 +399,9 @@ test('in a forced palette a window bar and a step line keep their marks in the p
       trackEdge: found('[data-case="spent"] .window-track').outlineColor,
       path: found('[data-harness="step"] .step-path').stroke,
       mark: found('[data-harness="step"] .step-mark').backgroundColor,
+      tail: found('[data-case="spent"] .window-ahead').backgroundColor,
+      ring: found('[data-harness="step"] .step-now-mark').boxShadow,
+      corridor: found('[data-harness="step"] .step-ahead').backgroundColor,
     }
     probe.remove()
     return result
@@ -353,6 +412,9 @@ test('in a forced palette a window bar and a step line keep their marks in the p
   expect(paints.trackEdge).toBe(paints.canvasText)
   expect(paints.path).toBe(paints.canvasText)
   expect(paints.mark).toBe(paints.canvasText)
+  expect(paints.tail).toBe(paints.canvasText)
+  expect(paints.corridor).toBe(paints.canvasText)
+  expect(paints.ring).toContain(paints.canvasText)
   // The reading a key stands on still shows: its dot painted in the palette's ink, and its step
   // ringed in the palette's own colour for the focus.
   const figure = page.locator('[data-harness="step"] .step-line')
