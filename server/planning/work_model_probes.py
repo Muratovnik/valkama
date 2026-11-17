@@ -60,6 +60,7 @@ _NEW = _New()
 #: the write is `INSERT OR REPLACE`, so no row a store already holds collides.
 _ROWS: dict[str, dict[str, object]] = {
     "analytics_surface_uses": {"day": "0001-01-01", "kind": "page_open", "count": 1},
+    "commits": {"project_id": _NEW, "hash": "0" * 40, "reported_at": "probe"},
     "execution_sessions": {"execution_id": _NEW, "session_id": _NEW, "relation": "launched"},
     "executions": {
         "execution_id": _NEW,
@@ -116,6 +117,7 @@ _ROWS: dict[str, dict[str, object]] = {
         "quality": "observed",
     },
     "work_item_comments": {"work_item_id": _NEW, "body": "probe"},
+    "work_item_commits": {"work_item_id": _NEW, "commit_id": 0, "attached_by": "server"},
     "work_item_events": {"work_item_id": _NEW, "action": "created"},
     "work_item_images": {
         "work_item_id": _NEW,
@@ -187,6 +189,10 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
     ("analytics_surface_uses", "typeof(count) = 'integer' AND count > 0"): (
         ({"count": 0}, {"count": 1.5}),
         (),
+    ),
+    ("commits", "length(hash) BETWEEN 7 AND 64 AND hash NOT GLOB '*[^0-9a-f]*'"): (
+        ({"hash": "0" * 6}, {"hash": "0" * 65}, {"hash": "A" * 40}),
+        ({"hash": "0" * 7}, {"hash": "f" * 64}),
     ),
     ("planning_spaces", "next_number >= 1"): (({"next_number": 0},), ({"next_number": 1},)),
     ("quota_account_names", "length(organization) BETWEEN 1 AND 512"): (

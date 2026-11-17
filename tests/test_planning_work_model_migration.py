@@ -43,7 +43,7 @@ T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [f"M{number}" for number in range(14)]
+STEP_NAMES = [f"M{number}" for number in range(15)]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(1, 16)),
@@ -846,6 +846,36 @@ class MigratedStoreTests(StoreCase):
             details,
         )
 
+    def test_m14_creates_the_commit_tables_empty_and_shaped_as_a_fresh_store(self) -> None:
+        names = {
+            (str(row[0]), str(row[1]))
+            for row in self.read(
+                "SELECT type, name FROM sqlite_master"
+                " WHERE tbl_name IN ('commits', 'work_item_commits')"
+            )
+        }
+        self.assertLessEqual(
+            {
+                ("table", "commits"),
+                ("index", "commits_pair"),
+                ("index", "commits_session"),
+                ("table", "work_item_commits"),
+                ("index", "work_item_commits_by_commit"),
+            },
+            names,
+        )
+        [step] = [step for step in self.report["steps"] if step["name"] == "commits"]
+        self.assertEqual(
+            (True, {"tables_created": ["commits", "work_item_commits"]}),
+            (step["needed"], step["result"]),
+        )
+        details = {entry["name"]: entry["detail"] for entry in self.report["postconditions"]}
+        # `fresh-shape` compared their shape with a fresh store's and probed the hash CHECK;
+        # `row-counts` counts both, at nothing, and `fresh-tables` leaves them to it.
+        self.assertEqual(0, details["row-counts"]["tables"]["commits"])
+        self.assertEqual(0, details["row-counts"]["tables"]["work_item_commits"])
+        self.assertNotIn("commits", details["fresh-tables"]["added"])
+
     def test_m8_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
         self,
     ) -> None:
@@ -1316,6 +1346,11 @@ FAULTS = (
     ),
     fault("request-shapes", "DROP INDEX work_item_waiting_notices_delivered"),
     fault("fresh-tables", "CREATE TABLE stray_rows(id INTEGER PRIMARY KEY)"),
+    fault(
+        "row-counts",
+        "INSERT INTO commits(project_id, hash, reported_at)"
+        " VALUES('alpha', 'abcdef0', '2026-01-02T03:04:05Z')",
+    ),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
     fault(
@@ -1440,6 +1475,16 @@ P1_FAULTS = (
         "with {'category': 'backlog'} is taken, a fresh store refuses it",
     ),
     (
+        "the commits take a hash of six characters",
+        rebuilt("commits", "length(hash) BETWEEN 7 AND 64", "length(hash) BETWEEN 6 AND 64"),
+        "with {'hash': '000000'} is taken, a fresh store refuses it",
+    ),
+    (
+        "the commits take a hash in capitals",
+        rebuilt("commits", " AND hash NOT GLOB '*[^0-9a-f]*'", ""),
+        f"with {{'hash': '{'A' * 40}'}} is taken, a fresh store refuses it",
+    ),
+    (
         "a table holds a CHECK a fresh store does not declare",
         rebuilt(
             "work_item_refs", "value TEXT NOT NULL,", "value TEXT NOT NULL CHECK(value != ''),"
@@ -1509,6 +1554,31 @@ CLAUSE_FAULTS: tuple[
             )
         ],
         ["integrity", "no-old-waiting", "fresh-tables"],
+    ),
+    (
+        "row-counts",
+        "commits holds 1 rows, not 0",
+        lambda _ids: [
+            (
+                "INSERT INTO commits(project_id, hash, reported_at)"
+                " VALUES('alpha', 'abcdef0', '2026-01-02T03:04:05Z')",
+                (),
+            )
+        ],
+        ["row-counts"],
+    ),
+    (
+        "row-counts",
+        "work_item_commits holds 1 rows, not 0",
+        lambda ids: [
+            (
+                "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+                " VALUES(?, 1, 'manual')",
+                (ids["WM-9"],),
+            )
+        ],
+        # The attachment names a commit no row holds, which the foreign keys see too.
+        ["row-counts", "integrity"],
     ),
     (
         "requests-asked",
