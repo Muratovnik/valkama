@@ -348,6 +348,14 @@ class OwnerOnlyError(PlanningError):
     """
 
 
+class QueueOffError(PlanningError):
+    """The queue of a space whose owner hands out work by hand, asked for its next task.
+
+    Its own code: the call is well formed and nothing is wrong with the work; the
+    owner names the item, and it is taken by its number instead.
+    """
+
+
 class RevisionConflictError(PlanningError):
     """Someone else wrote this item since the caller read it."""
 

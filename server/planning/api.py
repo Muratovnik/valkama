@@ -166,6 +166,8 @@ def error_response(error: BaseException) -> tuple[int, dict]:
         return 403, {"error": {"code": "not_asker", "message": str(error)}}
     if isinstance(error, model.OwnerOnlyError):
         return 403, {"error": {"code": "owner_only", "message": str(error)}}
+    if isinstance(error, model.QueueOffError):
+        return 409, {"error": {"code": "queue_off", "message": str(error)}}
     if isinstance(error, model.StoreSchemaError):
         return 409, {"error": {"code": model.STORE_SCHEMA_MISMATCH, "message": str(error)}}
     if isinstance(error, model.PlanningError):

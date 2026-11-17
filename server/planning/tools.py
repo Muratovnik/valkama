@@ -762,6 +762,7 @@ TOOLS = [
         " session's folder (session_space in list_planning_spaces). within (a goal or"
         " stage, at any depth), label and project narrow it; project keeps the tasks that"
         " name that project. A task of any space is claimed by number with claim_work_item."
+        " Refused with queue_off where the owner hands out work by hand."
         " The claim starts the task as claim_work_item does. The answer names the root of"
         " each project the task changes in project_roots: read each one's instructions"
         " before editing it. Answers with nothing when no task is workable; a record's"
