@@ -11,7 +11,9 @@
  * column of numbers to read down beside the names.
  *
  * An entry is a mark of its chart: its hint says what the name does not (`hints`, by series key,
- * `outline` for the mark of the period compared with), and a series that acts (`MarkAction`) is
+ * `outline` for the mark of the period compared with). It names a series rather than standing
+ * for a value, so it is no plot mark: its hint is a detail under it, clear of the entries beside it that a reader
+ * reads it against (`hintPlacement.ts`). A series that acts (`MarkAction`) is
  * pressed here as on its segments: a link sent out as `follow` with the press, a button as
  * `select` with its key. The rest only show. An entry named by what it does is described by its
  * whole name where that names a part of it, as a pair's names its first value. The pointer

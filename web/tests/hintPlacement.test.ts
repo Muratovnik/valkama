@@ -1,5 +1,5 @@
 /**
- * Where a hint stands, from its kind, its list and the room beside it, with no page. The window
+ * Where a hint stands, from its kind, its mark, its list and the room beside it, with no page. The window
  * is 1440px wide and a rem 16px, so a hint is drawn at most 320px wide and beside a list no
  * narrower than 192px; a hint stands 6px from what it is placed against and 8px from the edge.
  * A cut text's whole words are laid over it rather than placed beside it: first letter on first
@@ -126,13 +126,12 @@ test('out of a list the room beside an element does not move a hint', () => {
 })
 
 test('in a list every kind stands aside of it, on the right, level with its row', () => {
-  for (const list of ['rows', 'columns'] as const)
-    for (const kind of ['name', 'detail'] as const)
-      assert.deepEqual(
-        placeHint(setting({ aside: box(0, 260), kind, list })),
-        { align: 'start', aside: true, side: 'right' },
-        `${list} ${kind}`,
-      )
+  for (const kind of ['name', 'detail'] as const)
+    assert.deepEqual(
+      placeHint(setting({ aside: box(0, 260), kind, list: 'rows' })),
+      { align: 'start', aside: true, side: 'right' },
+      kind,
+    )
 })
 
 test('in a list of wide rows a hint stands beside its element inside its row, as wide as the room', () => {
@@ -184,109 +183,101 @@ test('in a list of wide rows a hint with no room beside its element stands above
 
 test('a list with no room on the right puts the hint on the left', () => {
   // 1440 - 1100 - 14 = 326 >= 200 on the right; with the row ending at 1300 it is 126.
-  assert.equal(placeHint(setting({ aside: box(1000, 1100), list: 'columns' })).side, 'right')
-  assert.deepEqual(placeHint(setting({ aside: box(1200, 1300), list: 'columns' })), {
+  assert.equal(placeHint(setting({ aside: box(1000, 1100), list: 'rows' })).side, 'right')
+  assert.deepEqual(placeHint(setting({ aside: box(1200, 1300), list: 'rows' })), {
     align: 'start',
     aside: true,
     side: 'left',
   })
 })
 
-test('along a chart every period puts its hint on one side, inside the frame, whatever its width', () => {
+/** A chart's mark drawn as `drawn`, a box with a height whose hint stands level with its top. */
+const bar = (drawn: Box) => ({ mark: { box: drawn, drawn: 'box' as const } })
+
+test('a chart’s mark has its hint beside it, level with its top, on the right where there is room', () => {
+  // A column of a small chart from 848 to 917, its top at 539, the next chart on its right:
+  // the hint stands past its right edge, over the next chart, 1440 - 917 - 14 = 509 there.
+  assert.deepEqual(placeHint(setting({ ...bar(box(848, 917, 539, 586)), width: 180 })), {
+    align: 'start',
+    aside: true,
+    mark: true,
+    side: 'right',
+  })
+  // Whatever list its element stands in, and whatever its kind: the mark decides.
+  assert.deepEqual(placeHint(setting({ ...bar(box(300, 400)), kind: 'name', list: 'rows' })), {
+    align: 'start',
+    aside: true,
+    mark: true,
+    side: 'right',
+  })
+})
+
+test('along a chart every mark puts its hint on one side, inside the frame, whatever its width', () => {
   // Twenty-eight periods 28px wide, 2px apart, in a frame from 532 to 1416; their hints alternate
   // between 180px and the widest, 320px.
   const frame = { left: 532, right: 1416 }
   const placed = Array.from({ length: 28 }, (_, index) => {
-    const aside = box(568 + index * 30, 596 + index * 30)
-    const place = placeHint(
-      setting({ aside, frame, list: 'columns', width: index % 2 ? 320 : 180 }),
-    )
-    return { aside, place }
+    const drawn = box(568 + index * 30, 596 + index * 30)
+    const place = placeHint(setting({ ...bar(drawn), frame, width: index % 2 ? 320 : 180 }))
+    return { drawn, place }
   })
   const sides = placed.map(({ place }) => place.side)
   const changes = sides.filter((side, index) => index > 0 && side !== sides[index - 1])
   assert.deepEqual(changes, ['left'], sides.join(' '))
   assert.equal(sides[0], 'right')
-  for (const { aside, place } of placed) {
+  for (const { drawn, place } of placed) {
     // Drawn at most 320px, or as wide as its place allows.
-    const drawn = place.widest ?? 320
+    const width = place.widest ?? 320
     const [from, to] =
       place.side === 'right'
-        ? [aside.right + 6, aside.right + 6 + drawn]
-        : [aside.left - 6 - drawn, aside.left - 6]
-    assert.ok(from >= frame.left && to <= frame.right, `${place.side} at ${aside.left}`)
+        ? [drawn.right + 6, drawn.right + 6 + width]
+        : [drawn.left - 6 - width, drawn.left - 6]
+    assert.ok(from >= frame.left && to <= frame.right, `${place.side} at ${drawn.left}`)
   }
 })
 
-test('a small chart that keeps its hints inside puts a period’s inside it, away from the period', () => {
-  // A chart 209px wide and 90px high, from 978 to 1187 and 497 to 587; its periods stand in its
-  // plot, the lower half, and a name over them would stand in its upper half.
-  const frame = { left: 978, right: 1187, inside: { top: 497, bottom: 587 } }
-  const period = box(1048, 1117, 539, 586)
-  for (const width of [180, 320])
-    assert.deepEqual(placeHint(setting({ aside: period, frame, list: 'columns', width })), {
-      align: 'start',
-      aside: false,
-      inside: 'top',
-      side: 'bottom',
-      widest: 209,
-    })
-  assert.equal(
-    placeHint(setting({ aside: box(978, 1187, 497, 513), frame, list: 'columns' })).inside,
-    'bottom',
-  )
-  // A frame that keeps its hints across alone leaves a period's hint beside it, as before.
-  assert.equal(
-    placeHint(setting({ aside: period, frame: { left: 978, right: 1187 }, list: 'columns' }))
-      .inside,
-    undefined,
-  )
-})
-
-test('a chart’s frame narrower than the window leaves less room beside a period', () => {
+test('a chart’s frame narrower than the window leaves less room beside a mark', () => {
   // 1440 - 1000 - 14 = 426 in the window; 1200 - 1000 - 6 = 194 inside the frame.
-  const aside = box(970, 1000)
-  assert.equal(placeHint(setting({ aside, list: 'columns' })).side, 'right')
-  assert.equal(
-    placeHint(setting({ aside, frame: { left: 300, right: 1200 }, list: 'columns' })).side,
-    'left',
-  )
+  const drawn = bar(box(970, 1000))
+  assert.equal(placeHint(setting(drawn)).side, 'right')
+  assert.equal(placeHint(setting({ ...drawn, frame: { left: 300, right: 1200 } })).side, 'left')
   // A frame from 700 to 1200 holds 320px on neither side of it (264 and 194): the roomier side
   // of the window, 956px on the left, at the hint's whole width rather than narrowed.
-  assert.deepEqual(
-    placeHint(setting({ aside, frame: { left: 700, right: 1200 }, list: 'columns' })),
-    { align: 'start', aside: true, side: 'left' },
-  )
+  assert.deepEqual(placeHint(setting({ ...drawn, frame: { left: 700, right: 1200 } })), {
+    align: 'start',
+    aside: true,
+    mark: true,
+    side: 'left',
+  })
 })
 
-test('a hint wider than either side is drawn narrower on the roomier one, down to 12rem', () => {
-  // Drawn at most 320px: beside a row ending at 1200 the right holds 226 and the left 1086.
-  const wide = { list: 'columns', width: 400 } as const
-  assert.equal(placeHint(setting({ ...wide, aside: box(1100, 1200) })).side, 'left')
+test('a hint wider than either side of a mark is drawn narrower on the roomier one, down to 12rem', () => {
+  // Drawn at most 320px: beside a mark ending at 1200 the right holds 226 and the left 1086.
+  const wide = (drawn: Box) => placeHint(setting({ ...bar(drawn), width: 400 }))
+  assert.equal(wide(box(1100, 1200)).side, 'left')
   // Neither side holds 320px: 250 - 14 = 236 left, 1440 - 1190 - 14 = 236 right; the right wins
   // a tie, drawn 236px wide.
-  assert.deepEqual(placeHint(setting({ ...wide, aside: box(250, 1190) })), {
+  assert.deepEqual(wide(box(250, 1190)), {
     align: 'start',
     aside: true,
-    side: 'right',
-    widest: 236,
-  })
-  assert.deepEqual(placeHint(setting({ ...wide, aside: box(200, 1190) })), {
-    align: 'start',
-    aside: true,
+    mark: true,
     side: 'right',
     widest: 236,
   })
   // 286 on the left, 126 on the right: the left, drawn 286px wide.
-  assert.deepEqual(placeHint(setting({ ...wide, aside: box(300, 1300) })), {
+  assert.deepEqual(wide(box(300, 1300)), {
     align: 'start',
     aside: true,
+    mark: true,
     side: 'left',
     widest: 286,
   })
+  // A mark asks the widest hint's room however narrow its own: 180px fit on the right of a mark
+  // ending at 1200, and the hint still stands on the left.
+  assert.equal(placeHint(setting({ ...bar(box(1100, 1200)), width: 180 })).side, 'left')
 })
 
-test('a list with no room on either side for 12rem puts the hint above its element', () => {
+test('with no room on either side for 12rem a hint stands above its element, or its mark', () => {
   // 200 - 14 = 186 and 1440 - 1240 - 14 = 186, both under 192.
   assert.deepEqual(placeHint(setting({ aside: box(200, 1240), list: 'rows', width: 400 })), {
     align: 'center',
@@ -295,6 +286,13 @@ test('a list with no room on either side for 12rem puts the hint above its eleme
   })
   // A narrow hint still fits beside it.
   assert.equal(placeHint(setting({ aside: box(200, 1240), list: 'rows', width: 150 })).aside, true)
+  // A mark's, over the mark, centred.
+  assert.deepEqual(placeHint(setting({ ...bar(box(200, 1240)), width: 400 })), {
+    align: 'center',
+    aside: false,
+    mark: true,
+    side: 'top',
+  })
 })
 
 test('a point’s hint stands at its mark’s top right, else top left, else over it', () => {
@@ -302,25 +300,54 @@ test('a point’s hint stands at its mark’s top right, else top left, else ove
   const point = box(594, 606, 140, 152)
   const frame = { left: 100, right: 1000 }
   const atPoint = (over: Partial<HintSetting>) =>
-    placeHint(setting({ aside: box(594, 900, 120, 216), frame, point, ...over }))
+    placeHint(
+      setting({
+        aside: box(594, 900, 120, 216),
+        frame,
+        mark: { box: point, drawn: 'point' as const },
+        ...over,
+      }),
+    )
   // 1000 - 606 - 6 = 388 on the right.
-  assert.deepEqual(atPoint({}), { align: 'start', aside: true, corner: 'right', side: 'top' })
+  assert.deepEqual(atPoint({}), {
+    align: 'start',
+    aside: true,
+    corner: 'right',
+    mark: true,
+    side: 'top',
+  })
   // 700 - 606 - 6 = 88 on the right, 594 - 6 - 100 = 488 on the left: the left, mirrored.
   assert.deepEqual(atPoint({ frame: { left: 100, right: 700 } }), {
     align: 'end',
     aside: true,
     corner: 'left',
+    mark: true,
     side: 'top',
   })
-  // Asked by its own width, as a row's hint: 88px hold a hint 80px wide on the right.
+  // Asked by its own width: 88px hold a hint 80px wide on the right.
   assert.equal(atPoint({ frame: { left: 100, right: 700 }, width: 80 }).corner, 'right')
+  // A box drawn with no height, a period of nothing, stands at its corner as a point does but
+  // asks the room of the widest hint, as its chart's other periods do: the left.
+  const floor = { mark: { box: box(594, 606, 152, 152), drawn: 'floor' as const } }
+  assert.deepEqual(atPoint({ ...floor, frame: { left: 100, right: 700 }, width: 80 }), {
+    align: 'end',
+    aside: true,
+    corner: 'left',
+    mark: true,
+    side: 'top',
+  })
   // A frame with room on neither side, 88px each: the window's roomier side, as beside a row,
   // 1440 - 8 - 606 - 6 = 820 on the right against 594 - 6 - 8 = 580 on the left.
   assert.equal(atPoint({ frame: { left: 500, right: 700 } }).corner, 'right')
   // A window with no 12rem on either side of the mark: over it, centred.
   assert.deepEqual(
-    atPoint({ frame: null, point: box(190, 202, 140, 152), width: 400, window: 390 }),
-    { align: 'center', aside: false, side: 'top' },
+    atPoint({
+      frame: null,
+      mark: { box: box(190, 202, 140, 152), drawn: 'point' as const },
+      width: 400,
+      window: 390,
+    }),
+    { align: 'center', aside: false, mark: true, side: 'top' },
   )
   // A registered exception's side wins over the point.
   const asked = { align: 'center', side: 'bottom' } as const

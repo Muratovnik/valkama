@@ -14,7 +14,8 @@
  * Every mark has its hint (`markHints.ts`): a chart's name says its share of the whole where the
  * caller says how a share reads (`formatShare`), and while the name is cut says it whole first; a
  * period of a chart, where the caller names the periods (`periods`), says its name and its figure.
- * Each chart keeps the hints of its periods, a list of columns, inside it (`data-hint-frame`).
+ * A hint stands at its mark (`data-hint-mark`): a name's at the name, a period's at its
+ * column, or at its floor where it has none, and may stand over a neighbouring chart.
  * Presentational: a name whose value acts (`MarkAction`) is pressed as its value's row is, a link
  * sent out as `follow` with the press, a button as `select` with the key; the rest only show. A
  * name named by what it does is described by its whole words where that names a part of them.
@@ -124,13 +125,10 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
     <template v-else>
       <p class="multiples-scale">{{ words.scale }} {{ top }}</p>
       <ul class="multiples-grid">
-        <!-- Each chart keeps its periods' hints inside it: a period's hint stands over part of
-             its own chart, rather than below it over the charts of the next row. -->
         <li
           v-for="one in placed.shared"
           :key="one.key"
           class="multiple"
-          data-hint-frame="inside"
           :data-key="one.key"
           :data-kind="one.kind"
         >
@@ -139,6 +137,7 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             v-tooltip.detail="nameHint(one)"
             class="multiple-name one-line"
             v-bind="nameAttrs(one)"
+            data-hint-mark
             @click="(event: MouseEvent) => press(one, event)"
             @auxclick="(event: MouseEvent) => pressAside(one, event)"
             ><span :id="wordsId(one)"
@@ -150,7 +149,6 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
           <span
             class="multiple-plot"
             aria-hidden="true"
-            data-hint-list="columns"
           >
             <span
               v-for="(height, index) in one.heights"
@@ -163,6 +161,13 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
                 class="multiple-column series-fill"
                 :data-slot="one.slot ?? 'other'"
                 :style="columnStyle(height)"
+                data-hint-mark
+              />
+              <!-- A period of nothing: its hint stands at its floor. -->
+              <span
+                v-else
+                class="multiple-floor"
+                data-hint-mark
               />
             </span>
           </span>
@@ -184,6 +189,7 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             v-tooltip.detail="nameHint(one)"
             class="multiple-name one-line"
             v-bind="nameAttrs(one)"
+            data-hint-mark
             @click="(event: MouseEvent) => press(one, event)"
             @auxclick="(event: MouseEvent) => pressAside(one, event)"
             ><span :id="wordsId(one)"
@@ -298,6 +304,13 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
   .multiple-period:hover > & {
     background: var(--series-lifted);
   }
+}
+
+/* Where a period of nothing would rise from, for its hint to stand at. */
+.multiple-floor {
+  display: block;
+  inline-size: 100%;
+  block-size: 0;
 }
 
 /* What is no value of the dimension reads as a note on the charts, as in a ranked chart: apart

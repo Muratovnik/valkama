@@ -8,10 +8,11 @@
  * names a side (`hintPlacement.ts`). Before that, a name in the rail written without the side
  * stood above its icon over the row before, and a title the rail cut stood at the title's end,
  * over the rows above and under it. A list of rows down (the rail) puts every hint past its edge,
- * so a hint there stands over no part of the list, and so do a ranking's bars, whose hint stood
- * under its row and over the rows after it; the chart's periods are a list of rows across,
- * whose hint stands beside its own stack, the column drawn, over the rest of its period and the
- * periods after it by the place they chose.
+ * so a hint there stands over no part of the list. A chart's mark has its hint at the mark: a
+ * period's beside its own stack, the column drawn, over the rest of its period and the periods
+ * after it, and a ranked row's beside its bar, over the rest of its row and the rows under it,
+ * never over the bar; under its row it stood over the rows after it, and past the ranking's edge
+ * far from a short bar.
  * The settings and a card's checklist are lists of wide rows, whose hint stands inside its own
  * row and over no other (`production-hint-row.spec.ts` measures how near).
  */
@@ -65,7 +66,7 @@ interface List {
 
 const RAIL: List = { across: false, holder: '.app-nav-shell' }
 const PERIODS: List = { across: true, holder: '.period-slot', drawn: '.period-stack' }
-const RANKING: List = { across: false, holder: '.ranked-grid' }
+const RANKING: List = { across: true, holder: '.ranked-row', drawn: '.ranked-bar' }
 const STEPS: List = { across: false, holder: '.checklist', row: '.step-row' }
 const SETTINGS: List = { across: false, holder: '.settings-general-sheet', row: '.settings-row' }
 const RAIL_TILES: List = { across: false, holder: '.analytics-rail-list' }
@@ -106,7 +107,7 @@ function placedAt([[x, y], list]: [[number, number], List | null]): Placed | nul
 /** What a hint in `list` stood over that it must not. */
 function overWhat(list: List | null) {
   if (list?.row) return 'another row of its list'
-  return list?.across ? 'its own stack' : 'the rows of its list'
+  return list?.across ? 'its own mark' : 'the rows of its list'
 }
 
 /** Points at every element with a hint inside `where` and lists each hint that covers what it must not. */
@@ -224,17 +225,15 @@ for (const width of [1440, 1024]) {
       expect(chart.covered).toEqual([])
     })
 
-    test('no hint of the Analytics bars covers its element, nor a row of the ranking', async ({
-      page,
-    }) => {
+    test('no hint of the Analytics bars covers its own bar', async ({ page }) => {
       await openDays(page, width)
       // Each section drawn as its chart, whichever the width of the panel opened it as.
       await drawAllLined(page)
       const ranking = page.locator('.spending-bars .ranked-grid')
       await expect(ranking.locator('.ranked-line')).not.toHaveCount(0)
       await ranking.evaluate((list) => list.scrollIntoView({ block: 'center', inline: 'nearest' }))
-      // Each row's hint stands past the ranking's edge: under its row, it stood over the rows
-      // after it and took the pointer on its way to the next one.
+      // Each row's hint stands beside its bar: under its row it stood over the rows after it,
+      // and past the ranking's edge far from a short bar.
       const placed = await sweep(page, ranking, RANKING)
       expect(placed.placed.length).toBeGreaterThan(2)
       expect(placed.covered).toEqual([])

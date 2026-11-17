@@ -1,6 +1,7 @@
 /**
- * What a hint aside of a list stands against, read from the page: the list a container declares
- * once, the row its element stands in, and the box past the list's edge or beside the row. The
+ * What a hint aside of a list or at a chart's mark stands against, read from the page: the list
+ * a container declares once, the row its element stands in, the box past the list's edge or beside
+ * the row, and the mark an element declares. The
  * boxes are laid out by hand, since this DOM lays out nothing.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -83,11 +84,11 @@ describe('a hint aside of a list', () => {
     // On a one-line row the title, the number and the pin stand side by side, so the row is the
     // list's item. On a row of two lines the words have the second line under them, but they
     // stand inside the link that stands beside the pin: a line of the row, not a row.
-    expect(hintRowOf(one('.first .title'), container, 'rows')).toBe(one('.first'))
-    expect(hintRowOf(one('.first .pin'), container, 'rows')).toBe(one('.first'))
-    expect(hintRowOf(one('.second .pin'), container, 'rows')).toBe(one('.second'))
-    expect(hintRowOf(one('.second .title'), container, 'rows')).toBe(one('.second'))
-    expect(hintRowOf(one('.second .line'), container, 'rows')).toBe(one('.second'))
+    expect(hintRowOf(one('.first .title'), container)).toBe(one('.first'))
+    expect(hintRowOf(one('.first .pin'), container)).toBe(one('.first'))
+    expect(hintRowOf(one('.second .pin'), container)).toBe(one('.second'))
+    expect(hintRowOf(one('.second .title'), container)).toBe(one('.second'))
+    expect(hintRowOf(one('.second .line'), container)).toBe(one('.second'))
   })
 
   it('stands level with the top of a row of two lines for each of its lines', () => {
@@ -104,7 +105,7 @@ describe('a hint aside of a list', () => {
     rail()
     one('.first').insertAdjacentHTML('afterend', '<li class="unseen">hidden</li>')
     at(one('.unseen'), [8, 110, 1, 1])
-    expect(hintRowOf(one('.first .title'), one('.rail'), 'rows')).toBe(one('.first'))
+    expect(hintRowOf(one('.first .title'), one('.rail'))).toBe(one('.first'))
   })
 
   it('stands past the list’s edge, level with the row’s top, for a title and a pin alike', () => {
@@ -118,49 +119,52 @@ describe('a hint aside of a list', () => {
     }
   })
 
-  it('stands beside its own row in a list of rows across', () => {
+  it('stands beside the mark its element declares, or the one its area holds, level with its top', () => {
     document.body.innerHTML = `
-      <div class="bars" data-hint-list="columns">
-        <div class="slot one"><span class="column"></span><span class="stack"></span></div>
-        <div class="slot two"><span class="column"></span><span class="stack"></span></div>
+      <div class="bars">
+        <div class="slot one" data-tooltip-area><span class="column"></span><span class="stack" data-hint-mark></span></div>
+        <div class="row two"><span class="name"></span><span class="bar" data-hint-mark></span></div>
+        <span class="name three" data-hint-mark></span>
       </div>`
-    at(one('.bars'), [100, 50, 400, 200])
-    at(one('.one'), [100, 50, 40, 200])
-    at(one('.one .column'), [100, 50, 40, 200])
-    at(one('.one .stack'), [110, 150, 20, 100])
-    at(one('.two'), [140, 50, 40, 200])
-    const column = one<HTMLElement>('.one .column')
-    expect(hintRowOf(column, one('.bars'), 'columns')).toBe(one('.one'))
-    const place = hintPlaceOf(column, { kind: 'detail' }, 200)
-    expect(place).toMatchObject({ align: 'start', aside: true, side: 'right' })
-    const reference = place.reference as { getBoundingClientRect: () => DOMRect }
-    const { left, right, top } = reference.getBoundingClientRect()
-    expect({ left, right, top }).toEqual({ left: 100, right: 140, top: 50 })
-  })
-
-  it('stands beside the bar its row draws, level with the bar’s top, or the row’s where none is drawn', () => {
-    document.body.innerHTML = `
-      <div class="bars" data-hint-list="columns">
-        <div class="slot one"><span class="column"></span><span class="stack" data-hint-bar></span></div>
-        <div class="slot two"><span class="column"></span><span class="stack" data-hint-bar></span></div>
-      </div>`
-    at(one('.bars'), [100, 50, 400, 200])
+    at(one('.bars'), [100, 50, 800, 200])
     at(one('.one'), [100, 50, 200, 200])
     at(one('.one .column'), [100, 50, 200, 200])
     at(one('.one .stack'), [190, 150, 20, 100])
-    at(one('.two'), [300, 50, 200, 200])
-    at(one('.two .column'), [300, 50, 200, 200])
-    // A period of nothing: its stack is drawn no taller than nothing, on the floor.
-    at(one('.two .stack'), [390, 250, 20, 0])
+    at(one('.two'), [300, 50, 400, 20])
+    at(one('.two .bar'), [400, 56, 60, 8])
+    at(one('.three'), [300, 80, 160, 20])
     const edges = (selector: string) => {
       const place = hintPlaceOf(one<HTMLElement>(selector), { kind: 'detail' }, 200)
-      expect(place).toMatchObject({ align: 'start', aside: true })
+      expect(place).toMatchObject({ align: 'start', aside: true, mark: true, side: 'right' })
       const reference = place.reference as { getBoundingClientRect: () => DOMRect }
       const { left, right, top } = reference.getBoundingClientRect()
       return { left, right, top }
     }
+    // A period's stack, which stands beside the period that takes the pointer, in its area.
     expect(edges('.one .column')).toEqual({ left: 190, right: 210, top: 150 })
-    expect(edges('.two .column')).toEqual({ left: 390, right: 410, top: 50 })
+    // A ranked row's bar, inside the row.
+    expect(edges('.two')).toEqual({ left: 400, right: 460, top: 56 })
+    // A small chart's name, its own mark.
+    expect(edges('.three')).toEqual({ left: 300, right: 460, top: 80 })
+  })
+
+  it('stands over a mark drawn with no height at its top right, as at a point on its floor', () => {
+    document.body.innerHTML = `
+      <span class="period"><span class="floor" data-hint-mark></span></span>`
+    at(one('.period'), [400, 100, 40, 48])
+    at(one('.floor'), [400, 148, 40, 0])
+    const place = hintPlaceOf(one<HTMLElement>('.period'), { kind: 'detail' }, 160)
+    const reference = place.reference as { getBoundingClientRect: () => DOMRect }
+    const { left, right, top, bottom } = reference.getBoundingClientRect()
+    expect({ ...place, reference: undefined }).toEqual({
+      align: 'start',
+      aside: true,
+      corner: 'right',
+      mark: true,
+      reference: undefined,
+      side: 'top',
+    })
+    expect({ left, right, top, bottom }).toEqual({ left: 446, right: 446, top: 148, bottom: 148 })
   })
 
   it('stands at a corner of the point its element holds, as a line past the mark’s edge', () => {
@@ -182,12 +186,26 @@ describe('a hint aside of a list', () => {
     }
     // Room on the right inside the line's frame: 700 - 206 - 6 = 488 for a hint 180px wide.
     expect(corner('.one')).toEqual({
-      place: { align: 'start', aside: true, corner: 'right', reference: undefined, side: 'top' },
+      place: {
+        align: 'start',
+        aside: true,
+        corner: 'right',
+        mark: true,
+        reference: undefined,
+        side: 'top',
+      },
       edge: { left: 212, right: 212, top: 160, bottom: 172 },
     })
     // 700 - 606 - 6 = 88 on the right: the left, mirrored.
     expect(corner('.two')).toEqual({
-      place: { align: 'end', aside: true, corner: 'left', reference: undefined, side: 'top' },
+      place: {
+        align: 'end',
+        aside: true,
+        corner: 'left',
+        mark: true,
+        reference: undefined,
+        side: 'top',
+      },
       edge: { left: 588, right: 588, top: 140, bottom: 152 },
     })
   })

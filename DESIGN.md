@@ -959,24 +959,27 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   declares itself once on
   its container (`data-hint-list`), and its rows say nothing: in it every other hint stands
   aside of the list, level with its row's
-  top, over no other row — the rail's past the rail's edge, a ranked bar's past the
-  ranking's edge, a tile's past the Analytics rail, a row's past the list view's table, a
-  chart period's beside its column
-  at the plot's top — on the left where the right has no room, on the roomier side drawn
-  narrower down to 12rem where neither holds it, and above its element where neither has even
-  that. A list of rows wide enough to hold a hint (`data-hint-list="wide-rows"`), as the
+  top, over no other row — the rail's past the rail's edge, a tile's past the Analytics rail,
+  a row's past the list view's table — on the left where the right has no room, on the roomier
+  side drawn narrower down to 12rem where neither holds it, and above its element where neither
+  has even that. A list of rows wide enough to hold a hint (`data-hint-list="wide-rows"`), as the
   settings sheet and a card's checklist are, keeps it inside its element's own row instead:
   beside the element on the side of the row with more room, level with the row's top, over
   the row's own label and no other row, and drawn as wide as that room, up to 40rem, so a long
-  one takes as few lines as the row's height allows. Every period of a chart asks the chart's
-  frame (`data-hint-frame`) for the room of
-  the widest hint, not of its own: the right inside the frame for every period that has it,
-  the left past them, so along the chart the side changes once and never jumps between
-  neighbours; a frame with that room on neither side gives the roomier side of the window.
-  A frame that keeps its hints inside (`data-hint-frame="inside"`), as each chart of a small
-  multiple does for its periods, takes a period's hint inside it instead: no wider than the
-  chart, from its top, over part of its own plot and over no other chart, letting the pointer
-  through to the next period as a day's hint does.
+  one takes as few lines as the row's height allows. A hint of a chart's mark — a period's
+  stack, a small chart's column and its name, a ranked row's bar, a reading of a step line, a
+  sector of a ring — stands at that mark, by one rule, whatever the chart: the mark declares
+  itself (`data-hint-mark`, a point `data-hint-point`), and the hint's start stands 6px past
+  the mark's right edge, level with its top; at a point, and at a column of nothing on its floor,
+  at its top right, 6px past it and over it. Where the chart's frame (`data-hint-frame`, else
+  the window) has no room on the right it stands mirrored on the left, where the window has no
+  room over a point under it, and where neither side has room, as in a phone's narrow chart,
+  over the mark, centred. Every mark asks for the room of the widest hint, not of its own, so
+  along a chart the side changes once and never jumps between neighbours; a frame with that
+  room on neither side gives the roomier side of the window. A point asks by its own hint's
+  width; a column of nothing asks as its neighbours do. A mark's hint lets the pointer through to what it covers, which may be the next mark
+  or a neighbouring small chart, and covers no part of its own mark. A legend entry names a
+  series rather than standing for a value: its hint is a detail, under it.
   A hint keeps 8px from the window's edge. `check:ui-system` refuses a side written at a
   call site, save an exception its register names with the reason. Every hint states its kind, and the kind says when it shows: `name` is
   the words of an element that shows only a glyph, shown whenever it is pointed at;

@@ -15,9 +15,9 @@
  * library's internal context.
  *
  * What the manager does not decide is decided here:
- * - Where a hint stands is its kind's and its list's (`hintPlacement.ts`), asked as it opens; the
- *   library keeps it inside the window from there, a hint aside of a list read against a box
- *   that follows its row as the page moves.
+ * - Where a hint stands is its kind's, its mark's and its list's (`hintPlacement.ts`), asked as
+ *   it opens; the library keeps it inside the window from there, a hint aside of a list or at a
+ *   mark read against a box that follows its row or its mark as the page moves.
  * - A hint of the `clipped` kind is not drawn here: its words are laid whole over the cut ones
  *   (`WholeText`), the second surface of this host. Words hidden whole, as an icon rail's labels,
  *   show no letter to lay them from, and are drawn here, placed as a name. A name and a detail
@@ -27,8 +27,8 @@
  *   the same manager, so it and a hint replace each other as any two hints do.
  * - A hint the pointer raised can be entered by the pointer. One the keyboard holds up lets a
  *   press through to what it covers, since it stands over every control the keyboard reaches,
- *   and a chart period's lets the pointer through, since it follows the pointer along the plot, as
- *   one inside its element's frame does, since it stands over what the frame holds.
+ *   and one at a chart's mark lets the pointer through, since it follows the pointer from mark to
+ *   mark, standing over the marks beside its own.
  * - A hint of words is a tooltip itself and holds its words once; a hint drawn as a grid keeps
  *   its text, for assistive technology alone, beside a grid drawn for the eye alone. The element
  *   is described by its hint through the hidden copies under this host, whether or not it shows.
@@ -96,16 +96,16 @@ const place = shallowRef<ReturnType<typeof hintPlaceOf> | null>(null)
 
 /**
  * The pointer and a press go through the hint rather than onto it: a hint focus a key brought
- * stands over every control the keyboard reaches, a chart period's follows the pointer along
- * the plot, standing beside its column over the periods that come next, one at a corner of a
- * point's mark stands over the plot and the steps of the readings after it, and one inside its
- * element's frame stands over what the frame holds, the next period of a small chart among it.
- * Every other hint the pointer raised can be entered.
+ * stands over every control the keyboard reaches, and one at a chart's mark (`hintPlacement.ts`)
+ * follows the pointer along the chart, standing over the marks beside its own: the periods that
+ * come next, the rows under a ranked row, the steps of the readings after a reading, a
+ * neighbouring small chart. Every other hint the pointer raised can be entered.
  */
 const passedThrough = computed(() => {
   const now = mine.value
-  const over = place.value?.inside !== undefined || place.value?.corner !== undefined
-  return now !== null && (now.by === 'focus' || inTooltipArea(now.anchor) || over)
+  return (
+    now !== null && (now.by === 'focus' || inTooltipArea(now.anchor) || place.value?.mark === true)
+  )
 })
 /** The shown element's own words are cut, so its hint says them first. */
 const whole = ref(false)
