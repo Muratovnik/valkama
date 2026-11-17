@@ -860,6 +860,18 @@ class Waiting(Tree):
             body["note"] = note
         return self.person(self.ANSWER, **body)
 
+    def open_notices(self, reference: str) -> list[str]:
+        """The scopes of the words waiting for the next session on the item, not yet delivered."""
+
+        return [
+            str(row[0])
+            for row in self.conn.execute(
+                "SELECT scope FROM work_item_waiting_notices WHERE work_item_id = ?"
+                " AND delivered_call IS NULL ORDER BY notice_id",
+                (self.identity(reference),),
+            )
+        ]
+
     def written(self) -> tuple:
         """What a refused write must leave as it was."""
 
@@ -931,6 +943,18 @@ class OwnerQuestionTests(Waiting):
         self.assertEqual("answered", self.questions(self.goal)[0]["status"])
         self.assertEqual({}, self.rows())
         self.holds()
+        # Nobody worked there, and the answer that ended the wait leaves no words for
+        # the next session about a goal with nothing left to confirm.
+        self.assertEqual([], self.open_notices(self.goal))
+
+    def test_a_person_filing_work_under_it_ends_the_wait_and_its_words(self) -> None:
+        self.sweep()
+        self.assertIn("tree", self.open_notices(self.goal), "nobody heard the last close")
+        self.made("d", parent=self.goal)
+        [asked] = self.questions(self.goal)
+        self.assertEqual(("expired", "withdrawn"), (asked["status"], asked["expired_reason"]))
+        self.assertEqual({}, self.rows())
+        self.assertEqual([], self.open_notices(self.goal))
 
     def test_leave_leaves_it_to_the_next_session_in_the_space_and_asks_no_more(self) -> None:
         self.sweep()
@@ -939,11 +963,7 @@ class OwnerQuestionTests(Waiting):
         with mock.patch.object(leases, "utc_now", lambda: later):
             answer = self.answer(asked, "leave")
         self.assertEqual("left_for_next_session", answer["carried_out"])
-        notices = self.conn.execute(
-            "SELECT scope, delivered_call FROM work_item_waiting_notices WHERE work_item_id = ?",
-            (self.identity(self.goal),),
-        ).fetchall()
-        self.assertIn(("space", None), [tuple(row) for row in notices])
+        self.assertIn("space", self.open_notices(self.goal))
         self.assertEqual(
             "2026-11-17T11:30:00Z", self.confirmation(self.goal)["left_for_next_session"]
         )

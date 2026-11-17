@@ -704,6 +704,7 @@ def create_work_item(
     author: str | None = None,
     acceptance: object = None,
     projects: object = None,
+    claimed: bool = False,
 ) -> dict:
     """A new item, placed where the work model puts it, accepted when it is accepted work.
 
@@ -714,7 +715,9 @@ def create_work_item(
     `created` names no state for it, and `accepted` and `opened` follow. A named
     state is held to the refusals a move there meets (`transitions.placement`),
     and review, blocked and the closed states are refused (`new_item`): the move
-    there carries what entering asks for.
+    there carries what entering asks for. An active state needs an executor, and
+    `claimed` says the write creating the item claims it before it ends, which is
+    the executor; without it the active state is refused (`executor`).
     `projects` names the projects a task changes, each `named`
     (`item_projects`); a goal or stage names none. `space` may be left out: the
     item then lies where `item_projects.placement` puts it.
@@ -747,7 +750,7 @@ def create_work_item(
     target = _destination(conn, item, target)
     basis = given if target["category"] in model.ACCEPTED_CATEGORIES else None
     refusals = transitions.placement(item, None, target, reference="the new item", basis=basis)
-    if target["category"] == "active":
+    if target["category"] == "active" and not claimed:
         refusals.append(
             ("executor", "the new item has no executor: create it with claim to start it at once")
         )
@@ -2433,7 +2436,7 @@ def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
 
 
 @contextlib.contextmanager
-def marking(conn: sqlite3.Connection) -> Iterator[list[str]]:
+def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> Iterator[list[str]]:
     """The container marks of one write (`closing.frame`), without the holder rule's wait.
 
     Every write route opens it, and so does every write here that changes the work
@@ -2441,10 +2444,18 @@ def marking(conn: sqlite3.Connection) -> Iterator[list[str]]:
     the end of the outermost the marked containers enter or leave the wait for their
     confirmation, the words left on one that stopped waiting go (`waiting.drop`), and
     the list this yields names the references of those that came to wait.
+
+    `person` is where the history stood before a person's write, which the route
+    passes to the frame it opens: what that write told nobody is left for the next
+    session (`waiting.after_person`) after the wait is settled, so what entering it
+    recorded counts, and before the words on a container that stopped waiting go, so
+    a person's act that ended the wait leaves no words behind it.
     """
 
     with closing.frame(conn) as settled:
         yield settled.entered
+    if person is not None:
+        waiting.after_person(conn, person)
     for identity in settled.left:
         waiting.drop(conn, identity)
 
