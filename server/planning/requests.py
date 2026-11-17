@@ -21,7 +21,19 @@ import json
 import sqlite3
 from collections.abc import Iterator
 
-from . import calls, leases, model, questions, read_model, request_model, service, states, words
+from . import (
+    calls,
+    closing,
+    leases,
+    model,
+    questions,
+    read_model,
+    request_model,
+    service,
+    states,
+    waiting,
+    words,
+)
 
 #: How many questions a read of one item carries; `questions.total` says the rest.
 ITEM_QUESTIONS = 5
@@ -964,11 +976,15 @@ def carry_out(
     ready state, started as it was, and so does its asker's withdrawal. The move is
     the answerer's, held to its guards, so a refusal refuses the answer with it.
     The owner's note is the move's reason when it fits the event that records the
-    move; the answer keeps it whole either way. Answers what the move did: the
-    category it reached; None for a question with no purpose.
+    move; the answer keeps it whole either way. The answer to confirm a goal or
+    stage is carried out by `_confirmed`. Answers what the move did: the category
+    it reached, or `left_for_next_session`; None for a question with no purpose.
     """
 
-    if _purpose(row) != "review":
+    purpose = _purpose(row)
+    if purpose == closing.CONFIRM:
+        return _confirmed(conn, row, answers, note, author)
+    if purpose != "review":
         return None
     given = None if answers is None else answers.get(request_model.REVIEW_ANSWER)
     if answers is not None and given not in (
@@ -981,13 +997,7 @@ def carry_out(
         )
     category = "completed" if given == request_model.REVIEW_ACCEPT else "ready"
     item = read_model.item_by_id(conn, str(row["work_item_id"]))
-    target = states.first_state(conn, str(item["workflow_id"]), category)
-    if target is None:
-        raise model.WorkflowGuardError(
-            f"[transition] {read_model.reference(conn, item)} has no {category} state in its"
-            " workflow for this answer to move it to"
-        )
-    key = str(target["key"])
+    key = _first_state(conn, item, category)
     reason = note if answers is not None else "review withdrawn"
     try:
         reason = service.transition_reason(reason, key)
@@ -997,6 +1007,61 @@ def carry_out(
         conn, read_model.reference(conn, item), key, reason=reason, author=author
     )
     return category
+
+
+#: What a summary the owner's confirmation writes says comes next.
+CONFIRMED_NEXT = "Nothing: the work under it is closed."
+
+
+def _confirmed(
+    conn: sqlite3.Connection, row: sqlite3.Row, answers: dict | None, note: str, author: str | None
+) -> str | None:
+    """The owner's answer to confirm a goal or stage whose work is all closed.
+
+    `confirm` ticks the steps still open, as the owner's, writes the summary
+    (`closing.CONFIRMED`, with the note as its `why`) and moves the goal or stage to
+    its workflow's first completed state; `leave` leaves it to the next session that
+    takes work in its space, and the period of waiting asks the owner nothing again.
+    Valkama asked it, so nobody withdraws it: the write that ends the wait ends it.
+    """
+
+    if answers is None:
+        return None
+    given = answers.get(request_model.REVIEW_ANSWER)
+    if given not in (request_model.CONFIRM_CONFIRM, request_model.CONFIRM_LEAVE):
+        raise model.PlanningError(
+            f"[purpose] answer is {request_model.CONFIRM_CONFIRM} or"
+            f" {request_model.CONFIRM_LEAVE}: an own variant carries nothing out; say more in note"
+        )
+    identity = str(row["work_item_id"])
+    if given == request_model.CONFIRM_LEAVE:
+        waiting.leave(conn, identity, waiting.SPACE)
+        closing.left(conn, identity)
+        return "left_for_next_session"
+    item = read_model.item_by_id(conn, identity)
+    reference = read_model.reference(conn, item)
+    for step in model.checklist(item["checklist"]):
+        if not step["done"]:
+            service.tick_checklist_item(conn, reference, str(step["id"]), author=author, force=True)
+    summary = {"done": closing.CONFIRMED, "next": CONFIRMED_NEXT}
+    if note:
+        summary["why"] = note[: model.SUMMARY_LIMIT]
+    service.set_summary(conn, reference, summary, author=author)
+    key = _first_state(conn, item, "completed")
+    service.transition_work_item(conn, reference, key, author=author)
+    return "completed"
+
+
+def _first_state(conn: sqlite3.Connection, item: sqlite3.Row, category: str) -> str:
+    """The key of the first state of `category` in the item's workflow, for an answer to move it to."""
+
+    target = states.first_state(conn, str(item["workflow_id"]), category)
+    if target is None:
+        raise model.WorkflowGuardError(
+            f"[transition] {read_model.reference(conn, item)} has no {category} state in its"
+            " workflow for this answer to move it to"
+        )
+    return str(target["key"])
 
 
 def change(

@@ -33,6 +33,15 @@ What a confirmer reads is the `confirmation` part of the container (`confirmatio
 the children cancelled and moved out, each with its reason, and how many steps the
 container has to check, 0 meaning its description is what to check against.
 
+- **The owner's question.** A session working there confirms by completing the
+  container. When none of them is live, or none has confirmed within
+  `CONFIRMATION_HOLD`, the planning sweep's `confirmations` step asks the owner in a
+  call of Valkama's own (`QUESTION_TOOL`), once in a period of waiting: `confirm`
+  ticks the container's steps, writes its summary and completes it, `leave` leaves it
+  to the next session that takes work in its space (`left`); `requests.carry_out` does
+  either in the write that answers. The same step records a container that came to
+  wait in a write that went around the marks, so the invariant holds after every pass.
+
 - **The cancel list.** Cancelling a goal or stage cancels the open work under it, at
   any depth, so the caller sees that work first: `cancel_list` builds what the cancel
   would close (`cancels`) and the open work outside it that waits on it
@@ -47,9 +56,8 @@ container has to check, 0 meaning its description is what to check against.
   in its `cancelled_blockers` (`item_tree`).
 
 This module sits below the read model and the service, as `questions` does: the
-service and `read_model` call it, and it imports neither (nor `requests`, `split` or
-`sweep`; `pyproject.toml` holds the direction). Later parts of closing extend it here:
-the confirmation question and its sweep step.
+service, `read_model`, `requests` and `sweep` call it, and it imports none of them (nor
+`split`; `pyproject.toml` holds the direction).
 """
 
 from __future__ import annotations
@@ -61,13 +69,23 @@ import json
 import sqlite3
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 
-from . import calls, item_tree, leases, model, questions, subscriptions
+from . import calls, item_tree, leases, model, participants, questions, request_model, subscriptions
 
 #: What a container derives while nothing under it is open.
 AWAITING = "awaiting_confirmation"
 #: The tool Valkama's own call that records the wait is recorded under.
 EVENT_TOOL = "awaiting-confirmation"
+#: The tool Valkama's own call that asks the owner to confirm is recorded under.
+QUESTION_TOOL = "confirmation-question"
+#: How long the sessions working on a goal or stage have to confirm it before the
+#: owner is asked; with none of them live, the owner is asked at once.
+CONFIRMATION_HOLD = timedelta(days=1)
+#: The longest question the owner is asked, as the longest an agent may ask.
+PROMPT_LIMIT = 8000
+#: What the summary of a goal or stage the owner confirmed says was done.
+CONFIRMED = "Confirmed by the owner: all work under it is closed."
 #: Who that record names as its author: Valkama, as the lease expiry does.
 AUTHOR = leases.EXPIRY_AUTHOR
 #: The longest detail of the event, as every event detail.
@@ -271,24 +289,35 @@ def _segment(label: str, references: list[str], shown: int) -> str:
 def _enter(conn: sqlite3.Connection, identity: str) -> str:
     """The container came to wait: its row, its follower and Valkama's record of it."""
 
-    reference = _reference_of(conn, identity)
-    container = conn.execute(
-        "SELECT work_item_id, checklist FROM work_items WHERE work_item_id = ?", (identity,)
-    ).fetchone()
-    text = detail(confirmation(conn, container))
     session = subscriptions.agent_session(calls.current())
     if session is not None:
         subscriptions.follow(conn, identity, session)
-    since = leases.utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
     with calls.bind(calls.valkama(), EVENT_TOOL):
-        call = calls.call_id(conn, identity)
-        conn.execute(
-            "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id)"
-            " VALUES(?,?,?,?,?)",
-            (identity, model.event_action(AWAITING), text, AUTHOR, call),
-        )
-        conn.execute(_ENTER, (identity, since, call))
-    return reference
+        _record(conn, identity)
+    return _reference_of(conn, identity)
+
+
+def _record(conn: sqlite3.Connection, identity: str) -> None:
+    """The period of waiting begins: its row and its event, both under the call in progress."""
+
+    text = detail(confirmation(conn, _container(conn, identity)))
+    call = calls.call_id(conn, identity)
+    conn.execute(
+        "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id) VALUES(?,?,?,?,?)",
+        (identity, model.event_action(AWAITING), text, AUTHOR, call),
+    )
+    conn.execute(_ENTER, (identity, _stamp(leases.utc_now()), call))
+
+
+def _container(conn: sqlite3.Connection, identity: str) -> sqlite3.Row:
+    found: sqlite3.Row = conn.execute(
+        "SELECT work_item_id, checklist FROM work_items WHERE work_item_id = ?", (identity,)
+    ).fetchone()
+    return found
+
+
+def _stamp(moment: datetime) -> str:
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _leave(conn: sqlite3.Connection, identity: str, author: str | None) -> None:
@@ -346,6 +375,171 @@ def _moved_out(conn: sqlite3.Connection, identity: str) -> list[dict]:
         for reference, reason in left.items()
         if reference not in held
     ]
+
+
+# -- the confirmation question and the sweep step ---------------------------------------
+
+#: The containers with a row, and of those the ones whose owner has been neither asked
+#: nor told to leave them, with when their wait began.
+_RECORDED = "SELECT work_item_id FROM work_item_confirmations"
+_UNASKED = (
+    "SELECT work_item_id, since FROM work_item_confirmations"
+    " WHERE request_id IS NULL AND left_at IS NULL"
+)
+#: The items named, as one JSON array, by space and number.
+_NUMBERED = (
+    "SELECT work_item_id FROM work_items WHERE work_item_id IN (SELECT value FROM json_each(?))"
+    " ORDER BY planning_space_id, number"
+)
+
+
+def pending(conn: sqlite3.Connection) -> bool:
+    """Whether the sweep's `confirmations` step has anything to do now; it writes nothing."""
+
+    waiting = awaiting(conn)
+    return bool(_unrecorded(conn, waiting) or _unasked(conn, waiting))
+
+
+def sweep_confirmations(conn: sqlite3.Connection, *, limit: int) -> int:
+    """Record the containers no row records, then ask the owner about those due; how many changed.
+
+    A write that went around the marks leaves a container awaiting with no row: it is
+    recorded here under the call in progress, the step's own, with its event and no
+    follower, since no agent's write brought it to wait. The owner is then asked about
+    a container nobody works on (`participants.live`), or one its sessions have not
+    confirmed within `CONFIRMATION_HOLD`, once in a period of waiting: a row that names
+    its question, or that the owner left to the next session, asks nothing again. Only
+    a container that awaits confirmation now is asked about, so a row a damaged store
+    keeps for one that does not asks the owner nothing. At most `limit` containers
+    change, one recorded and asked counting once.
+    """
+
+    waiting = awaiting(conn)
+    changed: set[str] = set()
+    for identity in _unrecorded(conn, waiting):
+        if len(changed) >= limit:
+            return len(changed)
+        _record(conn, identity)
+        changed.add(identity)
+    for identity in _unasked(conn, waiting):
+        if len(changed) >= limit and identity not in changed:
+            continue
+        ask(conn, identity)
+        changed.add(identity)
+    return len(changed)
+
+
+def ask(conn: sqlite3.Connection, identity: str) -> str:
+    """Ask the owner to confirm the container, in Valkama's own call; the question's id.
+
+    The question names what was cancelled and what moved out under it, each with its
+    reason, and its steps, or says it has none and is checked against its description.
+    Its row names it from then on.
+    """
+
+    reference = _reference_of(conn, identity)
+    container = _container(conn, identity)
+    part = confirmation(conn, container)
+    steps = [str(step["text"]) for step in model.checklist(container["checklist"])]
+    with calls.bind(calls.valkama(), QUESTION_TOOL):
+        asked = questions.ask(
+            conn,
+            identity,
+            kind="question",
+            prompt=prompt(reference, part, steps),
+            fields=request_model.fields(list(request_model.CONFIRM_FIELDS)),
+            author=AUTHOR,
+            purpose=CONFIRM,
+        )
+    conn.execute(
+        "UPDATE work_item_confirmations SET request_id = ? WHERE work_item_id = ?",
+        (asked, identity),
+    )
+    return asked
+
+
+def prompt(reference: str, part: dict, steps: list[str]) -> str:
+    """The question to confirm, at most `PROMPT_LIMIT` characters.
+
+    The lines that do not fit are counted at its end rather than cut mid-line.
+    """
+
+    head = (
+        f"All work under {reference} is closed: confirm it, or leave it to the next session"
+        " that takes work in this space."
+    )
+    lines = [*_listed("Cancelled", part["cancelled"]), *_listed("Moved out", part["moved_out"])]
+    if steps:
+        lines += ["", "Its steps:", *(f"- {text}" for text in steps)]
+    else:
+        lines += ["", "It has no steps: check what was done against its description."]
+    whole = "\n".join([head, *lines])
+    if len(whole) <= PROMPT_LIMIT:
+        return whole
+    text = head
+    for shown, line in enumerate(lines):
+        more = f"\n({len(lines) - shown} more line(s) not shown: see {reference})"
+        if len(text) + 1 + len(line) + len(more) > PROMPT_LIMIT:
+            return text + more
+        text += "\n" + line
+    return text  # pragma: no cover - every line fitting is the whole fitting
+
+
+def left(conn: sqlite3.Connection, identity: str) -> None:
+    """The owner left the container to the next session: no question in this period again."""
+
+    conn.execute(
+        "UPDATE work_item_confirmations SET left_at = ? WHERE work_item_id = ?",
+        (_stamp(leases.utc_now()), identity),
+    )
+
+
+def _listed(label: str, entries: list[dict]) -> list[str]:
+    if not entries:
+        return []
+    return [
+        "",
+        f"{label}:",
+        *(
+            f"- {entry['reference']}: {entry['reason']}"
+            if entry["reason"]
+            else f"- {entry['reference']}"
+            for entry in entries
+        ),
+    ]
+
+
+def _unrecorded(conn: sqlite3.Connection, waiting: set[str]) -> list[str]:
+    """The containers awaiting confirmation that no row records."""
+
+    recorded = {str(row[0]) for row in conn.execute(_RECORDED)}
+    return _in_order(conn, waiting - recorded)
+
+
+def _unasked(conn: sqlite3.Connection, waiting: set[str]) -> list[str]:
+    """The containers awaiting confirmation whose owner is to be asked now."""
+
+    now = leases.utc_now()
+    found = set()
+    for identity, since in conn.execute(_UNASKED).fetchall():
+        if str(identity) not in waiting:
+            continue
+        began = leases.moment(since)
+        held = began is not None and now < began + CONFIRMATION_HOLD
+        # Within the hold the sessions working there may still confirm it; nobody does
+        # when none of them is live.
+        if not held or not participants.live(conn, str(identity)):
+            found.add(str(identity))
+    return _in_order(conn, found)
+
+
+def _in_order(conn: sqlite3.Connection, identities: set[str]) -> list[str]:
+    """The items named, by space and number, so a pass takes the same ones first."""
+
+    if not identities:
+        return []
+    named = json.dumps(sorted(identities))
+    return [str(row[0]) for row in conn.execute(_NUMBERED, (named,))]
 
 
 # -- the cancel list ------------------------------------------------------------------
