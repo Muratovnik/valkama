@@ -53,9 +53,14 @@ and no compatibility layer.
      not give it, and `lapsed_claim`, the holder whose claim the sweep released;
      a checklist step carries `by_previous_holder`;
    - `claim_ready_work_item` reads one space's queue: `space`, or the space of
-     a goal or stage named in `within`, which keeps the tasks under it, and
-     `label` keeps the tasks that carry that label; a call naming neither
-     `space` nor `within` is refused;
+     a goal or stage named in `within`, which keeps the tasks under it, or the
+     space whose project root holds the calling session's folder; `label`
+     keeps the tasks that carry that label, and `project` the tasks that name
+     that project, never a task that names none; a call with no such space is
+     refused;
+   - in a read of one space, an item of another space that names one of its
+     projects carries `outside_space` in `withheld`: that space's queue does
+     not give it;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -118,7 +123,7 @@ and no compatibility layer.
 | creating work an agent was asked for | `acceptance: "assignment"` |
 | `rank` to place an item | nothing: the order of work is computed |
 | a chain member's `rank` | the members' order, and `queue_order` |
-| `claim_ready_work_item` with no `space`, taking from every space | `space`, or `within` naming a goal or stage |
+| `claim_ready_work_item` with no `space`, taking from every space | `space`, or `within` naming a goal or stage, or else the space of the session's project root |
 | a registry projection of `schema_version: 3` | `4`, after `valkama projects upgrade` |
 | one project binds a space | each binding says `default`; a space has one default project |
 | `create_planning_space` with `project_id` | `{name, key}`; `valkama projects bind` joins a project |

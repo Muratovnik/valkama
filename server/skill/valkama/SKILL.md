@@ -226,7 +226,8 @@ then work already started, then tasks of a goal or stage already under way,
 then priority, then age. A list row the queue gives says its `queue_order`, 1
 being what `claim_ready_work_item` gives next; any other row says `withheld`.
 The queue is one space's: `space`, or that of `within`, a goal or stage whose
-work it keeps at any depth; `label` keeps the tasks carrying that label.
+work it keeps at any depth, or else your session's space; `label` keeps the
+tasks carrying that label, `project` those naming that project.
 
 **Priority.** `urgent`: blocks work or loses data. `high`: serious; could block
 work. `medium`: noticeably affects work, with a workaround. `low`: minor. A label

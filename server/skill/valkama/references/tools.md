@@ -74,10 +74,13 @@ holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
 urgent, started, a goal or stage under way, priority, age — which a list row
 says as `queue_order`, and answers with the card of the item it took as
 `work_item`, null when no task is workable. It reads one space's queue: `space`, or the space of
-`within`, a goal or stage whose tasks at any depth it keeps; `label` keeps the
-tasks that carry that label themselves. A call naming neither `space` nor
-`within` is refused with the spaces, as is `within` naming a task or a goal of
-another space than `space`; a task of any space is claimed by number. A goal, a stage and work in triage or deferred are never
+`within`, a goal or stage whose tasks at any depth it keeps, or else the space
+whose project root holds your session's folder (`session_space` in
+`list_planning_spaces`); `label` keeps the tasks that carry that label
+themselves, and `project` the tasks that name that project, never one that
+names none. A call naming neither `space` nor `within` from a session in no
+space's project root is refused with the spaces, as is `within` naming a task or
+a goal of another space than `space`; a task of any space is claimed by number. A goal, a stage and work in triage or deferred are never
 taken. Nothing sets the order by hand. A comment in `applied` has `comment_id`, and `reply_to` and
 `reply_to_request`: the root a reply joined, both null for a new root, and
 `list_request_id` when it carried a `list`, as the summary does. A comment or a

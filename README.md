@@ -626,8 +626,11 @@ nobody sets it: urgent work first, then work already started, then work whose
 goal or stage is under way, then by priority, then the older. Dropping a card in
 another column moves it to that state, and the move is announced to a screen
 reader; a drop within its own column changes nothing. Agents see the same order:
-`claim_ready_work_item` takes the first workable task of it, `list_work_items`
-lists each state in it, a row the queue would give carries its place there as
+`claim_ready_work_item` takes the first workable task of one space's queue, the
+space it names, else that of the goal or stage it names in `within`, else the
+space whose project root holds the agent session's folder; `within`, `label` and
+`project` narrow that queue without reordering it. `list_work_items` lists each
+state in the same order, a row the queue would give carries its place there as
 `queue_order`, and a `rank` sent to place an item is refused. The exact rules
 are in [the connection contract](docs/connection-contract.md#the-order-of-work).
 
