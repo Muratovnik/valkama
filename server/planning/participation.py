@@ -242,21 +242,38 @@ class Settings:
         return next((label for label in labels if self.label(space, label).ready), None)
 
 
-def load(conn: sqlite3.Connection) -> Settings:
-    """Both tables, read once."""
+#: Both tables in one statement, a value row first (0) or a label rule (1): a read
+#: loads the setting once, and a single read of a held item pays one statement for it.
+_LOAD = (
+    "SELECT 0, planning_space_id, key, value, NULL FROM participation_settings"
+    " UNION ALL SELECT 1, planning_space_id, label, ready, description FROM label_settings"
+)
 
+
+def load(conn: sqlite3.Connection) -> Settings:
+    """Both tables, read once.
+
+    A store an earlier build wrote, read as it is in an attached scope, has neither
+    table, and reads as a store without a row: the default set and numbers.
+    """
+
+    try:
+        rows = conn.execute(_LOAD).fetchall()
+    except sqlite3.OperationalError as error:
+        if "no such table" not in str(error):
+            raise
+        return Settings({}, {})
     values: dict[str | None, dict[str, Value]] = {}
-    for row in conn.execute("SELECT planning_space_id, key, value FROM participation_settings"):
-        stored = _stored(str(row[1]), str(row[2]))
-        if stored is not None:
-            values.setdefault(row[0], {})[str(row[1])] = stored
     labels: dict[str | None, dict[str, Label]] = {}
-    for row in conn.execute(
-        "SELECT planning_space_id, label, ready, description FROM label_settings"
-    ):
-        labels.setdefault(row[0], {})[str(row[1])] = Label(
-            ready=None if row[2] is None else bool(row[2]),
-            description=None if row[3] is None else str(row[3]),
+    for kind, space, name, value, description in rows:
+        if kind == 0:
+            stored = _stored(str(name), str(value))
+            if stored is not None:
+                values.setdefault(space, {})[str(name)] = stored
+            continue
+        labels.setdefault(space, {})[str(name)] = Label(
+            ready=None if value is None else bool(value),
+            description=None if description is None else str(description),
         )
     return Settings(values, labels)
 

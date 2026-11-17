@@ -20,7 +20,7 @@ from unittest import mock
 
 from server import sessions
 from server.analytics import usage
-from server.planning import executors, live_frame, live_work, model, service
+from server.planning import executors, live_frame, live_work, model, participation, service
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -410,8 +410,10 @@ class AgentTests(FrameCase):
         self.subagent(session, "a1")
         self.comment(first, session, "a1")
         items = service.list_work_items(self.conn, space=SPACE, limit=None)
+        settings = participation.load(self.conn)
         self.assertEqual(
-            live_work.live_work(self.conn, items), live_work.placed(self.conn, items).live
+            live_work.live_work(self.conn, items, settings=settings),
+            live_work.placed(self.conn, items, settings=settings).live,
         )
 
 

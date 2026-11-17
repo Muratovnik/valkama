@@ -40,7 +40,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from ..hooks import light
-from . import calls, closing, deferral, leases, service, subscriptions, waiting
+from . import calls, closing, deferral, leases, participation, service, subscriptions, waiting
 
 #: The most items one step changes in one pass; the next pass takes the rest.
 LIMIT = 200
@@ -120,7 +120,8 @@ def _apply(conn: sqlite3.Connection, step: Step) -> int:
 
 
 def _leases_pending(conn: sqlite3.Connection) -> bool:
-    return next(service.lapsed_holds(conn), None) is not None
+    found = service.lapsed_holds(conn, settings=participation.load(conn))
+    return next(found, None) is not None
 
 
 def _leases(conn: sqlite3.Connection) -> int:

@@ -51,7 +51,16 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from . import calls, item_tree, leases, model, participants, person_events, read_model
+from . import (
+    calls,
+    item_tree,
+    leases,
+    model,
+    participants,
+    participation,
+    person_events,
+    read_model,
+)
 
 TREE = "tree"
 SPACE = "space"
@@ -345,7 +354,10 @@ def lapsed(conn: sqlite3.Connection) -> list[tuple[str, str]]:
         return []
     named = sorted({session for session, _item in pairs})
     rows = {str(row["id"]): row for row in conn.execute(_SESSIONS, (json.dumps(named),))}
-    return sorted(pair for pair in pairs if not leases.session_live(rows.get(pair[0])))
+    settings = participation.load(conn)
+    return sorted(
+        pair for pair in pairs if not leases.session_live(rows.get(pair[0]), settings=settings)
+    )
 
 
 def recover_lapsed(conn: sqlite3.Connection, *, limit: int) -> int:

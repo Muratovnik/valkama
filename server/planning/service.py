@@ -33,6 +33,7 @@ from . import (
     item_tree,
     leases,
     model,
+    participation,
     pending,
     questions,
     queue,
@@ -323,6 +324,7 @@ def list_work_items(
     # A read of one space asks another space's item of that space's queue, which
     # never gives it: its record says `outside_space`, and it has no place there.
     read_space = space_id if marked else None
+    settings = participation.load(conn)
     found = []
     for row in rows:
         record = read_model.present(
@@ -333,6 +335,7 @@ def list_work_items(
             tree=tree,
             projects=projects,
             read_space=read_space,
+            settings=settings,
         )
         outside = marked and str(row["planning_space_id"]) != space_id
         record["queue_order"] = None if outside else places.get(str(row["work_item_id"]))
@@ -486,7 +489,8 @@ def search_work_items(
         if rows is not None:
             tree = _page_tree(conn, rows)
             projects = item_projects.of_items(conn, rows)
-            return [_word_hit(conn, row, found, tree, projects) for row in rows]
+            settings = participation.load(conn)
+            return [_word_hit(conn, row, found, tree, projects, settings) for row in rows]
     return _phrase_search(conn, text, space_id=space_id, limit=limit, offset=offset)
 
 
@@ -496,11 +500,12 @@ def _word_hit(
     found: list[str],
     tree: item_tree.Tree,
     projects: Mapping[str, list[dict]],
+    settings: participation.Settings,
 ) -> dict:
     """One item a word search found, with the lines that say why (`words.hits`)."""
 
     return {
-        **read_model.present(conn, row, tree=tree, projects=projects),
+        **read_model.present(conn, row, tree=tree, projects=projects, settings=settings),
         **words.hits(conn, row, found),
     }
 
@@ -561,8 +566,9 @@ def _phrase_search(
     found = []
     tree = _page_tree(conn, rows)
     projects = item_projects.of_items(conn, rows)
+    settings = participation.load(conn)
     for row in rows:
-        item = read_model.present(conn, row, tree=tree, projects=projects)
+        item = read_model.present(conn, row, tree=tree, projects=projects, settings=settings)
         comment_hit = row["comment_hit"] or decisions.get(str(row["work_item_id"]))
         if comment_hit:
             item["comment_hit"] = str(comment_hit)[:240]
@@ -1596,7 +1602,13 @@ def _transition(
     note = transition_reason(reason, str(target["key"]))
     gives = _basis(conn, row, target, named)
     refusals, warnings = transitions.findings(
-        conn, row, target, reason=reason, basis=row["acceptance"] or gives, to_check=check
+        conn,
+        row,
+        target,
+        reason=reason,
+        basis=row["acceptance"] or gives,
+        to_check=check,
+        settings=participation.load(conn),
     )
     refusals = [finding for finding in refusals if finding[0] not in spared]
     transitions.refuse(refusals, force)
@@ -2234,10 +2246,11 @@ def claim_work_item(
     actor = model.actor(author)
     label = calls.holder(author)
     caller = calls.current()
-    lease = leases.lease(conn, row)
+    settings = participation.load(conn)
+    lease = leases.lease(conn, row, settings=settings)
     expired = False
     if lease is not None and leases.abandoned(lease) and not leases.held_by(lease, caller, actor):
-        row = _expire(conn, row, lease, _lapsed_steps(conn, row, lease))
+        row = _expire(conn, row, lease, _lapsed_steps(conn, row, lease, settings=settings))
         lease, expired = None, True
     held = lease.holder if lease is not None else ""
     holder = lease is not None and leases.held_by(lease, caller, actor)
@@ -2247,7 +2260,7 @@ def claim_work_item(
     if release:
         if expired:
             # The lease this release named is already gone, released above.
-            return read_model.present(conn, row, full=True)
+            return read_model.present(conn, row, full=True, settings=settings)
         if lease is not None and not holder:
             if not force:
                 raise model.PlanningError(
@@ -2258,7 +2271,7 @@ def claim_work_item(
         _hold(conn, row, "")
         _log(conn, identity, "released", held, author)
     else:
-        start = _starting(conn, row, move_state)
+        start = _starting(conn, row, move_state, settings=settings)
         taking_over = lease is not None and not holder
         if taking_over and not force:
             raise model.PlanningError(
@@ -2270,7 +2283,7 @@ def claim_work_item(
         except model.RevisionConflictError:
             if taking_over:
                 raise
-            return _claim_lost(conn, row, actor)
+            return _claim_lost(conn, row, actor, settings)
         if taking_over:
             carried.append("claim")
             _log(conn, identity, "taken_over", held, author)
@@ -2280,11 +2293,13 @@ def claim_work_item(
         waiting.deliver(conn, row)
     overridden = record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
-    answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    answer = read_model.present(
+        conn, read_model.item_by_id(conn, identity), full=True, settings=settings
+    )
     if requeued is not None:
         answer["requeued"] = requeued
     if start is not None:
-        _say_started(conn, answer, start)
+        _say_started(conn, answer, start, settings)
     if overridden:
         answer["overridden"] = overridden
     return answer
@@ -2334,7 +2349,13 @@ class _Start:
     gives: str | None = None
 
 
-def _starting(conn: sqlite3.Connection, row: sqlite3.Row, move_state: bool = True) -> _Start:
+def _starting(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    move_state: bool = True,
+    *,
+    settings: participation.Settings,
+) -> _Start:
     """What taking this task writes beside its holder, decided before anything is written.
 
     A claim is the moment work starts, and an item left in triage while an agent
@@ -2368,7 +2389,7 @@ def _starting(conn: sqlite3.Connection, row: sqlite3.Row, move_state: bool = Tru
         )
     gives = _basis(conn, row, target, model.NAMED_BASIS)
     refusals, _warnings = transitions.findings(
-        conn, row, target, basis=row["acceptance"] or gives, held=True
+        conn, row, target, basis=row["acceptance"] or gives, held=True, settings=settings
     )
     transitions.refuse(refusals, False)
     parameters.append(str(target["state_id"]))
@@ -2392,14 +2413,16 @@ def _started(
         _put_off_ends(conn, identity, author)
 
 
-def _say_started(conn: sqlite3.Connection, answer: dict, start: _Start) -> None:
+def _say_started(
+    conn: sqlite3.Connection, answer: dict, start: _Start, settings: participation.Settings
+) -> None:
     """Name in a claim's answer where it started the item from and went, and its warnings."""
 
     if start.target is None or start.current is None:
         return
     answer["started"] = {"from": str(start.current["key"]), "to": str(start.target["key"])}
     row = read_model.item_by_id(conn, str(answer["work_item_id"]))
-    warning = transitions.lease_warning(conn, row, str(answer["reference"]))
+    warning = transitions.lease_warning(conn, row, str(answer["reference"]), settings=settings)
     if warning:
         answer["warnings"] = [warning]
 
@@ -2526,7 +2549,9 @@ def _stranded(conn: sqlite3.Connection, row: sqlite3.Row) -> model.WorkflowGuard
     )
 
 
-def _claim_lost(conn: sqlite3.Connection, row: sqlite3.Row, actor: str) -> dict:
+def _claim_lost(
+    conn: sqlite3.Connection, row: sqlite3.Row, actor: str, settings: participation.Settings
+) -> dict:
     """Answer a claim that lost its race the way a claim is supposed to fail.
 
     What a caller is promised is that a claim fails naming the holder, not that
@@ -2536,9 +2561,9 @@ def _claim_lost(conn: sqlite3.Connection, row: sqlite3.Row, actor: str) -> dict:
     """
 
     fresh = read_model.item_by_id(conn, str(row["work_item_id"]))
-    lease = leases.lease(conn, fresh)
+    lease = leases.lease(conn, fresh, settings=settings)
     if lease is not None and leases.held_by(lease, calls.current(), actor):
-        return read_model.present(conn, fresh, full=True)
+        return read_model.present(conn, fresh, full=True, settings=settings)
     if lease is not None:
         raise model.PlanningError(
             f"{read_model.reference(conn, fresh)} is already held by {lease.holder};"
@@ -2563,7 +2588,8 @@ def expire_leases(
     """
 
     expired = 0
-    for row, claim, steps in lapsed_holds(conn, space_id=space_id):
+    settings = participation.load(conn)
+    for row, claim, steps in lapsed_holds(conn, settings=settings, space_id=space_id):
         if limit is not None and expired >= limit:
             break
         try:
@@ -2575,11 +2601,13 @@ def expire_leases(
 
 
 def lapsed_holds(
-    conn: sqlite3.Connection, *, space_id: str | None = None
+    conn: sqlite3.Connection, *, settings: participation.Settings, space_id: str | None = None
 ) -> Iterator[tuple[sqlite3.Row, leases.Lease | None, dict[str, leases.Lease]]]:
     """Each item `expire_leases` would release a hold on, by number: its row, claim and steps.
 
-    The claim is the lapsed lease to release, or None when only steps lapsed. It
+    `settings` is the caller's snapshot of the participation setting, which gives
+    each item the quiet period of its space. The claim is the lapsed lease to
+    release, or None when only steps lapsed. It
     only reads, so a caller that asks whether there is anything to release takes
     no write lock; an item whose release would leave it at work unheld for good
     (`_strands`) is not one.
@@ -2599,9 +2627,9 @@ def lapsed_holds(
     )
     for row in conn.execute(query + " ORDER BY i.number", parameters).fetchall():
         asked = leases.question_stands(conn, row)
-        lease = leases.lease(conn, row, asked=asked)
+        lease = leases.lease(conn, row, settings=settings, asked=asked)
         claim = lease if lease is not None and leases.lapsed(lease) else None
-        steps = _lapsed_steps(conn, row, claim, asked=asked)
+        steps = _lapsed_steps(conn, row, claim, settings=settings, asked=asked)
         if claim is None and not steps:
             continue
         left = model.checklist(row["checklist"])
@@ -2619,6 +2647,7 @@ def _lapsed_steps(
     row: sqlite3.Row,
     claim: leases.Lease | None,
     *,
+    settings: participation.Settings,
     asked: bool | None = None,
 ) -> dict[str, leases.Lease]:
     """The claimed steps of the item to release, by step id, each with its lease.
@@ -2637,7 +2666,7 @@ def _lapsed_steps(
         if step["done"] or not holder:
             continue
         if holder not in read:
-            read[holder] = leases.of_step(conn, row, holder, asked=asked)
+            read[holder] = leases.of_step(conn, row, holder, settings=settings, asked=asked)
         held = read[holder]
         if leases.lapsed(held) or (claim is not None and _same_holder(held, claim)):
             found[str(step["id"])] = held
@@ -2788,13 +2817,14 @@ def claim_ready_work_item(
     expire_leases(conn, space_id=scope.space_id)
     # So does work put off until a day that came: the queue reads the space as it is.
     return_due(conn, space_id=scope.space_id)
+    settings = participation.load(conn)
     lost: model.RevisionConflictError | None = None
     for _ in range(_READY_CLAIM_ATTEMPTS):
         chosen = _next_given(conn, scope)
         if chosen is None:
             return None
         row = read_model.item_by_id(conn, chosen)
-        start = _starting(conn, row)
+        start = _starting(conn, row, settings=settings)
         try:
             _hold(conn, row, holder, start.updates, start.parameters)
         except model.RevisionConflictError as conflict:
@@ -2803,8 +2833,10 @@ def claim_ready_work_item(
         _log(conn, chosen, "claimed", "", author)
         _started(conn, chosen, start, author, "claimed")
         waiting.deliver(conn, row)
-        answer = read_model.present(conn, read_model.item_by_id(conn, chosen), full=True)
-        _say_started(conn, answer, start)
+        answer = read_model.present(
+            conn, read_model.item_by_id(conn, chosen), full=True, settings=settings
+        )
+        _say_started(conn, answer, start, settings)
         return answer
     if lost is not None:
         raise lost
@@ -3070,6 +3102,7 @@ def claim_checklist_item(
     mine = held in (label, model.actor(author))
     carried: list[str] = []
     start = _Start([], [])
+    settings = participation.load(conn)
     if release:
         if held and not mine:
             if not force:
@@ -3091,7 +3124,7 @@ def claim_checklist_item(
     if not release:
         current = read_model.state_by_id(conn, str(row["state_id"]))
         if current["category"] in states.STARTABLE:
-            start = _starting(conn, row)
+            start = _starting(conn, row, settings=settings)
     else:
         _keep_held(conn, row, str(row["claim_ref"]), steps)
     _write(conn, row, ["checklist = ?", *start.updates], [model.dumps(steps), *start.parameters])
@@ -3102,8 +3135,10 @@ def claim_checklist_item(
         waiting.deliver(conn, row)
     overridden = record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
-    answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
-    _say_started(conn, answer, start)
+    answer = read_model.present(
+        conn, read_model.item_by_id(conn, identity), full=True, settings=settings
+    )
+    _say_started(conn, answer, start, settings)
     if requeued is not None:
         answer["requeued"] = requeued
     if overridden:
@@ -3367,8 +3402,9 @@ def held_elsewhere(
     actor = model.actor(author)
     caller = calls.current()
     overridden: dict[str, str] = {}
+    settings = participation.load(conn)
     for row in rows:
-        lease = leases.lease(conn, row)
+        lease = leases.lease(conn, row, settings=settings)
         if lease is None or leases.abandoned(lease) or leases.held_by(lease, caller, actor):
             continue
         if not force:

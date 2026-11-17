@@ -35,6 +35,7 @@ from server.planning import (
     closing,
     leases,
     model,
+    participation,
     person_events,
     questions,
     service,
@@ -828,7 +829,7 @@ class Waiting(Tree):
         return done.changed
 
     def live(self, session: str, at: datetime = NOW) -> None:
-        """The session was seen at `at`: live for `leases.QUIET_PERIOD` after it."""
+        """The session was seen at `at`: live for the common quiet period of a lease after it."""
 
         seen = at.strftime("%Y-%m-%dT%H:%M:%SZ")
         self.conn.execute(
@@ -1027,7 +1028,7 @@ class HoldTests(Waiting):
         self.assertEqual({}, self.rows())
 
     def test_once_nobody_is_live_the_owner_is_asked_at_once(self) -> None:
-        self.live(COORDINATOR, NOW - leases.QUIET_PERIOD)
+        self.live(COORDINATOR, NOW - leases.quiet_period(participation.load(self.conn), None))
         changed = self.sweep(NOW + timedelta(minutes=10))
         self.assertEqual(1, changed[sweep.CONFIRMATIONS])
         self.assertEqual(1, len(self.questions(self.goal)))

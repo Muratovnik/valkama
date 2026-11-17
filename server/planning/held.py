@@ -34,6 +34,7 @@ from . import (
     item_tree,
     leases,
     model,
+    participation,
     questions,
     read_model,
     states,
@@ -119,7 +120,7 @@ def held_by_session(conn: sqlite3.Connection, session: object) -> dict:
     """
 
     session = _required(session)
-    held = _holds(conn, subscriptions.holder_suffix(session))
+    held = _holds(conn, subscriptions.holder_suffix(session), participation.load(conn))
     return {"session": session, "items": [_item(conn, row, held_as) for row, held_as in held]}
 
 
@@ -154,7 +155,7 @@ def held_for_note(
     session = _required(session)
     agent = agent or None
     suffix = subscriptions.holder_suffix(session, agent)
-    held = _holds(conn, suffix)
+    held = _holds(conn, suffix, participation.load(conn))
     if not held:
         return []
     writes = {
@@ -239,18 +240,28 @@ def _required(session: object) -> str:
     return session
 
 
-def _holds(conn: sqlite3.Connection, suffix: str) -> list[tuple[sqlite3.Row, str]]:
-    """Each open item a label ending in `suffix` holds, and how: the one rule of holding."""
+def _holds(
+    conn: sqlite3.Connection, suffix: str, settings: participation.Settings
+) -> list[tuple[sqlite3.Row, str]]:
+    """Each open item a label ending in `suffix` holds, and how: the one rule of holding.
+
+    `settings` is the read's snapshot of the participation setting, which each
+    item's lease is read by.
+    """
 
     # The SQL finds every candidate; the label rule decides, because a suffix
     # inside a step's text or a done step's holder is not a hold.
     rows = conn.execute(_OPEN_ITEMS, (suffix, suffix)).fetchall()
     found = []
     for row in rows:
-        lease = leases.lease(conn, row) if subscriptions.holds_claim(row, suffix) else None
+        lease = (
+            leases.lease(conn, row, settings=settings)
+            if subscriptions.holds_claim(row, suffix)
+            else None
+        )
         if lease is not None and lease.state != leases.STALE:
             held_as = CLAIM
-        elif _holds_standing_step(conn, row, suffix):
+        elif _holds_standing_step(conn, row, suffix, settings):
             held_as = STEP
         else:
             continue
@@ -258,13 +269,15 @@ def _holds(conn: sqlite3.Connection, suffix: str) -> list[tuple[sqlite3.Row, str
     return found
 
 
-def _holds_standing_step(conn: sqlite3.Connection, row: sqlite3.Row, suffix: str) -> bool:
+def _holds_standing_step(
+    conn: sqlite3.Connection, row: sqlite3.Row, suffix: str, settings: participation.Settings
+) -> bool:
     """Whether an open step of the item is held under `suffix` by a lease not gone stale."""
 
     for step in model.checklist(row["checklist"]):
         holder = str(step["claimed_by"] or "")
         if not step["done"] and holder.endswith(suffix):
-            return leases.of_step(conn, row, holder).state != leases.STALE
+            return leases.of_step(conn, row, holder, settings=settings).state != leases.STALE
     return False
 
 

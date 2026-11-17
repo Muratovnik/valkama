@@ -13,7 +13,7 @@ An item takes its state from the sessions behind it:
 
 | A session behind the item, checked in order | The item's state |
 |---|---|
-| not `active`, no row, or `last_seen` older than `leases.QUIET_PERIOD` | none |
+| not `active`, no row, or `last_seen` older than the common quiet period of a lease | none |
 | `last_seen` older than `LIVE_QUIET` | `quiet`, with `quiet_since` |
 | at work in a turn of its own, and this is the item it stands on | `working` |
 | at work, and a live subagent of it wrote to this item since that subagent last started | `working` |
@@ -132,7 +132,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from .. import sessions
-from . import agents, calls, ladder, leases
+from . import agents, calls, ladder, leases, participation
 
 #: How long a live session may stay silent before it reads `quiet`.
 LIVE_QUIET = timedelta(hours=24)
@@ -504,12 +504,18 @@ def _turn(read: _Lifecycle, transcript: str, heard: str, now: datetime) -> str:
 
 
 def _states(
-    conn: sqlite3.Connection, named: set[str], references: Mapping[str, str]
+    conn: sqlite3.Connection,
+    named: set[str],
+    references: Mapping[str, str],
+    horizon: timedelta,
 ) -> tuple[dict[str, dict], dict[str, _SeenOn]]:
     """The state of every live session, named or recently heard from, and what it is seen on.
 
     A session at work reads `working` here; which items it moves is the item's
     question, answered in `placed`. `references` are the items a label can name.
+    `horizon` is how long a session may be silent and still be live: the common
+    quiet period of a lease, since a session has no item of its own to take a
+    space's from.
     """
 
     now = leases.utc_now()
@@ -524,7 +530,7 @@ def _states(
             continue
         transcripts[str(row["id"])] = str(row["transcript_path"] or "")
         seen = leases.moment(row["last_seen"])
-        if row["status"] != "active" or seen is None or seen < now - leases.QUIET_PERIOD:
+        if row["status"] != "active" or seen is None or seen < now - horizon:
             continue
         if seen < now - LIVE_QUIET:
             live[str(row["id"])] = {"state": QUIET, "quiet_since": seen.strftime(_STAMP)}
@@ -678,22 +684,26 @@ def _outdoes(first: dict | None, second: dict) -> bool:
     )
 
 
-def live_work(conn: sqlite3.Connection, items: Iterable[Mapping]) -> dict[str, dict]:
+def live_work(
+    conn: sqlite3.Connection, items: Iterable[Mapping], *, settings: participation.Settings
+) -> dict[str, dict]:
     """The items with live work on them, each with its state; see the module's rule.
 
     `items` are records as a list read presents them: an id and a checklist.
+    `settings` is the read's snapshot of the participation setting.
     """
 
     listed = list(items)
     if not listed:
         return {}
-    return placed(conn, listed).live
+    return placed(conn, listed, settings=settings).live
 
 
 def placed(
     conn: sqlite3.Connection,
     items: Iterable[Mapping],
     *,
+    settings: participation.Settings,
     held_steps: Mapping[str, str] | None = None,
 ) -> Placement:
     """The map `live_work` gives, with where each live subagent stands and what each session does.
@@ -703,6 +713,8 @@ def placed(
     its latest write since it last started, else an open step it holds, the item its
     packet names first, the first item its label names, or its session's one hold.
 
+    `settings` is the read's snapshot of the participation setting, which gives the
+    common quiet period a session is live within (`leases.quiet_period`).
     `held_steps` is `ladder.held_steps` as the caller already read it, by holder,
     for a caller whose items are every open item: it saves the read of them all.
     """
@@ -717,7 +729,10 @@ def placed(
         str(item["reference"]): str(item["work_item_id"]) for item in listed if "reference" in item
     }
     states, seen_on = _states(
-        conn, {session for held in behind.values() for session in held}, references
+        conn,
+        {session for held in behind.values() for session in held},
+        references,
+        leases.quiet_period(settings, None),
     )
     at_work = sorted(session for session in seen_on if states[session]["state"] == WORKING)
     holds = _holds(conn, at_work, own_steps, held_steps)
