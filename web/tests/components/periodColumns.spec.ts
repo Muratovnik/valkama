@@ -12,6 +12,8 @@ import type {
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
+import { plotWords } from '../support/plotWords.ts'
+
 const words: PeriodWords = {
   total: 'total',
   incomplete: 'so far',
@@ -162,10 +164,19 @@ describe('period columns that open nothing', () => {
 
     expect(chart.findAll('.period-mark')).toHaveLength(1)
     expect(chart.find('[data-key="d3"] .period-mark').exists()).toBe(true)
-    // No footnote under the chart, and no row of numbers over the plot.
-    expect(chart.find('.period-notes').exists()).toBe(false)
-    expect(chart.find('.period-markers').exists()).toBe(false)
-    expect(chart.findAll('.period-plot > .chart-ticks')).toHaveLength(2)
+    // No footnote under the chart, and no row of numbers over the plot: the only rows of labels
+    // are the scale up its side and the periods' names under it, and the change's words stand
+    // nowhere on the chart.
+    const words = plotWords(chart.element)
+    const along = words.edges.map((edge) => edge.along)
+    expect(along).toHaveLength(2)
+    expect(along).toEqual(expect.arrayContaining(['block', 'inline']))
+    // The axis names as many periods as it has room for, the last always among them.
+    const names = words.edges.find((edge) => edge.along === 'inline')?.labels ?? []
+    expect(names).toContain('4')
+    expect(names.filter((name) => !columns.some((column) => column.label === name))).toEqual([])
+    expect(words.stray).toEqual([])
+    expect(chart.text()).not.toContain('Switched to work')
     expect(chart.get('[data-cell="2:"]').attributes('data-tooltip')).toBe(
       'May 3: total 3 h\nSwitched to work\nwork 3 h',
     )
@@ -175,9 +186,11 @@ describe('period columns that open nothing', () => {
   it('stands no line of words over the plot', () => {
     const chart = mountColumns()
 
-    expect(chart.find('.period-readout').exists()).toBe(false)
-    expect(chart.findAll('figure > p')).toHaveLength(0)
-    expect(chart.get('figure').element.children[1]?.classList.contains('period-frame')).toBe(true)
+    const words = plotWords(chart.element)
+    // The chart's words are its legend's and its edges' alone: present, and no line besides.
+    expect(words.legend).toEqual(['ci', 'work', 'in progress'])
+    expect(words.edges.flatMap((edge) => edge.labels)).toContain('4')
+    expect(words.stray).toEqual([])
   })
 
   it('gives each period a hint of its sum, the period before and its series largest first', () => {
@@ -200,7 +213,9 @@ describe('period columns that open nothing', () => {
 
     // The period's slot is one place for the pointer and the focus, its column the one hint.
     expect(slot.attributes()).toHaveProperty('data-tooltip-area')
-    expect(slot.findAll('[data-tooltip]').map((one) => one.classes())).toEqual([['period-column']])
+    const hints = slot.findAll('[data-tooltip]')
+    expect(hints).toHaveLength(1)
+    expect(hints[0]?.classes()).toContain('period-column')
     expect(slot.get('.period-column').attributes('data-tooltip')).toBe(
       'May 1: total 3 h\nci 2 h, 67% of the total\nwork 1 h, 33% of the total',
     )

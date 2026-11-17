@@ -19,6 +19,7 @@ import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 import { momentAt, noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analytics.ts'
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { plotWords } from '../support/plotWords.ts'
 
 // What the panel asks is counted and ordered here; the rail's own reads are held elsewhere.
 vi.mock('@/pages/analytics/composables/useRailReads.ts', () => import('../support/quietRail.ts'))
@@ -209,16 +210,15 @@ describe('the days', () => {
 
   it('mark the day not over yet as running, and only that day', () => {
     const days = mountDays(week())
-    const stacks = days.findAll('.period-stack')
-    expect(stacks.map((stack) => stack.classes().includes('period-incomplete'))).toEqual([
-      false,
-      false,
-      true,
-    ])
-    // Its hatching and its hint say it is under way; no word stands under its name.
-    expect(days.get('.period-axis').text()).not.toContain('running')
+    const stacks = days.findAll('.period-stack').map((stack) => stack.classes('period-incomplete'))
+    expect(stacks).toEqual([false, false, true])
+    // Its hatching and its hint say it is under way: no word stands under its name, and no line
+    // of words over the plot, whose words are its edges' labels alone (`plotWords`, which
+    // periodColumns.spec.ts shows reading a legend and both edges present).
     expect(spokenDays(days).at(-1)?.holds).toContain('running')
-    expect(days.find('.period-readout').exists()).toBe(false)
+    const { edges, stray } = plotWords(days.get('figure').element)
+    expect(edges.flatMap((edge) => edge.labels).join(' ')).not.toContain('running')
+    expect(stray).toEqual([])
   })
 
   it('mark no day once the period is over', () => {
@@ -234,8 +234,9 @@ describe('the days', () => {
     ])
     const days = mountDays(fiveDays(), { accounts: byAccount(), readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(2)
-    // Said where the day is read, not in a note under the chart.
-    expect(days.find('.period-notes').exists()).toBe(false)
+    // Said where the day is read, in its hint below, and nowhere in the section's words: not in a
+    // note under the chart, nor in a row over the plot.
+    expect(days.text()).not.toContain('Account change')
     // A span of time keeps its figure and unit together with a space no line breaks at.
     const hint = (index: number) =>
       (spokenDays(days)[index]?.holds ?? '').replaceAll(/[^\S\n]/gu, ' ')
