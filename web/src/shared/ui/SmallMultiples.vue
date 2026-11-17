@@ -286,12 +286,18 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
   block-size: 100%;
 }
 
+/* A period's column lifts under the pointer (`seriesFill.css`): the period's whole height is
+   where the pointer finds it, so a short column lifts as a tall one does. */
 .multiple-column {
   display: block;
   inline-size: 100%;
   min-block-size: 1px;
   border-start-start-radius: calc(var(--radius-status) - var(--space-1));
   border-start-end-radius: calc(var(--radius-status) - var(--space-1));
+
+  .multiple-period:hover > & {
+    background: var(--series-lifted);
+  }
 }
 
 /* What is no value of the dimension reads as a note on the charts, as in a ranked chart: apart

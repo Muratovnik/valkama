@@ -1,8 +1,7 @@
 /**
  * The arithmetic of a ring of shares (`DonutChart`), kept apart from what draws it so a test can
  * hold every number a reader is shown: which rows the ring draws and in what order, what folds
- * into «the rest», each sector's share and place around the ring, its outline, and whether its
- * share fits on it in words.
+ * into «the rest», each sector's share and place around the ring, and its outline.
  *
  * The ring is drawn on a box of `RING_BOX` units a side, from 12 o'clock clockwise, largest first.
  * Nothing here formats a value or knows a word: the caller hands in the rows as `rankRows` takes
@@ -157,40 +156,7 @@ export function sectorPath(start: number, end: number): string {
   ].join(' ')
 }
 
-/**
- * The middle of a sector's band, in the ring's box: where its share is written and the point its
- * hint stands at (`data-hint-point`).
- */
+/** The middle of a sector's band, in the ring's box: the point its hint stands at (`data-hint-point`). */
 export function bandMiddle(sector: Pick<RingSector, 'start' | 'end'>) {
   return pointAt((sector.start + sector.end) / 2, (OUTER + INNER) / 2)
-}
-
-/** Where a sector's share is written: the middle of its band, as shares of the ring's box. */
-export function labelPlace(sector: Pick<RingSector, 'start' | 'end'>) {
-  const middle = bandMiddle(sector)
-  return { left: middle.x / RING_BOX, top: middle.y / RING_BOX }
-}
-
-/** The room a label keeps from its sector's edges on each side, in pixels. */
-const LABEL_AIR = 4
-
-/**
- * Whether words `width` by `height` pixels fit inside a sector of a ring `size` pixels across:
- * as wide as the chord across the sector through the middle of its band, and as tall as the band,
- * each less the air the label keeps on both sides. Where they do not, the share is said by the
- * sector's hint and the table and never cut by its own sector.
- */
-export function labelFits(
-  sector: Pick<RingSector, 'start' | 'end'>,
-  size: number,
-  width: number,
-  height: number,
-) {
-  if (size <= 0 || width <= 0) return false
-  const scale = size / RING_BOX
-  const band = (OUTER - INNER) * scale
-  const middle = ((OUTER + INNER) / 2) * scale
-  const span = Math.min(sector.end - sector.start, 0.5) * 2 * Math.PI
-  const chord = 2 * middle * Math.sin(span / 2) - GAP * scale
-  return band >= height + 2 * LABEL_AIR && chord >= width + 2 * LABEL_AIR
 }

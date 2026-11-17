@@ -458,7 +458,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
 }
 
 /* The stack stands over its period, centred on its foot; the pointer passes through its gaps to
-   the period, and stops on a segment. The period under the pointer or the keyboard lifts. */
+   the period, and stops on a segment. */
 .period-stack {
   position: absolute;
   inset-block-end: 0;
@@ -466,15 +466,12 @@ function focus(event: FocusEvent, index: number, at: number | null) {
   inline-size: min(100%, var(--period-column));
   margin-inline: auto;
   pointer-events: none;
-
-  .period-column:is(:hover, :focus-visible) + & {
-    filter: brightness(1.2);
-  }
 }
 
 /* Each series a block of its own hue, a 2px gap of ground between them; the top of the stack
-   is rounded and its foot square on the baseline. A segment under the pointer or the keyboard
-   lifts on its own. */
+   is rounded and its foot square on the baseline. Every segment of the period under the pointer
+   or the keyboard lifts, as every mark lifts (`seriesFill.css`), and so does a segment pointed at
+   or focused on its own: the period and the segment are each a place the pointer stands. */
 .period-segment {
   position: absolute;
   inset-inline: 0;
@@ -493,8 +490,9 @@ function focus(event: FocusEvent, index: number, at: number | null) {
     cursor: pointer;
   }
 
-  &:is(:hover, :focus-visible) {
-    filter: brightness(1.2);
+  &:is(:hover, :focus-visible),
+  .period-column:is(:hover, :focus-visible) + .period-stack > & {
+    background: var(--series-lifted);
   }
 
   /* A period still running, hatched in its own hues: what it holds so far, not a drop. */

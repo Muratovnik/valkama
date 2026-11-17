@@ -6,11 +6,17 @@
  * that marks a period it is compared with names that mark last (`outline`), beside a short line
  * as the plot draws it at the height that period reached.
  *
+ * A legend given a figure for its entries (`figures`), as a ring's is, lists down, an entry a
+ * line, each figure at the end of its line in the quiet ink, ending where the others end: a
+ * column of numbers to read down beside the names.
+ *
  * An entry is a mark of its chart: its hint says what the name does not (`hints`, by series key,
  * `outline` for the mark of the period compared with), and a series that acts (`MarkAction`) is
  * pressed here as on its segments: a link sent out as `follow` with the press, a button as
  * `select` with its key. The rest only show. An entry named by what it does is described by its
- * whole name where that names a part of it, as a pair's names its first value.
+ * whole name where that names a part of it, as a pair's names its first value. The pointer
+ * or the keyboard standing on an entry is sent out as `point` with its key, and leaving it as
+ * `point` with none, so the chart can lift the entry's marks.
  */
 import { useId } from 'vue'
 
@@ -20,13 +26,19 @@ import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   series: readonly PeriodSeries[]
+  /** The figure each entry gives at the end of its line, by series key; none for a legend of names. */
+  figures?: ReadonlyMap<string, string>
   /** What each entry says in its hint, by series key; `outline` for the period compared with. */
   hints?: ReadonlyMap<string, string>
   /** The name of the mark of the period compared with, when the chart draws one. */
   outline?: string
 }>()
 
-const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
+const emit = defineEmits<{
+  follow: [key: string, press: MouseEvent]
+  point: [key: string | null]
+  select: [key: string]
+}>()
 
 function press(one: PeriodSeries, event: MouseEvent) {
   if (one.href) emit('follow', one.key, event)
@@ -58,14 +70,23 @@ const keyAttrs = (one: PeriodSeries) =>
 
 /** What an entry says that its name does not, by its series' key. */
 const hintOf = (key: string) => props.hints?.get(key)
+/** The figure an entry gives at the end of its line; none in a legend of names. */
+const figureOf = (key: string) => props.figures?.get(key)
 </script>
 
 <template>
-  <ul class="chart-legend">
+  <ul
+    class="chart-legend"
+    :class="{ 'chart-legend-figures': figures }"
+  >
     <li
       v-for="one in series"
       :key="one.key"
       class="chart-entry"
+      @pointerenter="emit('point', one.key)"
+      @pointerleave="emit('point', null)"
+      @focusin="emit('point', one.key)"
+      @focusout="emit('point', null)"
     >
       <component
         :is="markTag(one, 'span')"
@@ -87,6 +108,11 @@ const hintOf = (key: string) => props.hints?.get(key)
           >{{ one.label }}</span
         >
       </component>
+      <span
+        v-if="figureOf(one.key)"
+        class="chart-figure"
+        >{{ figureOf(one.key) }}</span
+      >
     </li>
     <li
       v-if="outline"
@@ -127,6 +153,23 @@ const hintOf = (key: string) => props.hints?.get(key)
   display: flex;
   min-width: 0;
   min-block-size: var(--space-6);
+}
+
+/* Given figures, the legend reads down, an entry a line, its figure at the line's end. */
+.chart-legend-figures {
+  flex-flow: column nowrap;
+
+  & .chart-entry {
+    gap: var(--space-3);
+    justify-content: space-between;
+  }
+}
+
+.chart-figure {
+  flex: none;
+  align-self: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* An entry that acts is a line of the legend, not a control standing in it: the same box and

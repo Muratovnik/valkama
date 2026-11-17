@@ -2,8 +2,8 @@
  * The numbers a ring of shares draws. Each expectation is worked out by hand from the rows in the
  * test, not read back from the module: which parts the ring draws and in what order, what folds
  * into the rest past five sectors or past a colour close to one named before it, each part's
- * share of the whole and its place round the ring,
- * that a part keeps the hue its page gave its value, and when a share fits on its sector in words.
+ * share of the whole and its place round the ring, and
+ * that a part keeps the hue its page gave its value.
  */
 import assert from 'node:assert/strict'
 
@@ -11,7 +11,7 @@ import { describe, test } from 'vitest'
 
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
-import { labelFits, ringOf, sectorPath } from '@/shared/ui/donutGeometry.ts'
+import { ringOf, sectorPath } from '@/shared/ui/donutGeometry.ts'
 
 const row = (key: string, value: number, more: Partial<RankedRow> = {}): RankedRow => ({
   key,
@@ -201,24 +201,5 @@ describe('the ring', () => {
     assert.ok(start !== undefined && start > 50 && start < 51.5)
     assert.match(quarter, / L /)
     assert.equal(sectorPath(0.5, 0.5001), '')
-  })
-})
-
-describe('a share on its sector', () => {
-  // A ring of 176 pixels: a band of 33 pixels, its middle 71 pixels from the centre.
-  const size = 176
-
-  test('fits on a sector whose chord through its band is wider than the words', () => {
-    // A quarter: a chord of about 100 pixels, room for «42 %» of 28 by 16.
-    assert.equal(labelFits({ start: 0, end: 0.25 }, size, 28, 16), true)
-  })
-
-  test('does not fit on a thin sector, a band too narrow, or a ring not laid out yet', () => {
-    // A twentieth: a chord of about 22 pixels, short of 28 and the air at both ends.
-    assert.equal(labelFits({ start: 0, end: 0.05 }, size, 28, 16), false)
-    // A ring of 60 pixels has a band of 11, short of a line of 16.
-    assert.equal(labelFits({ start: 0, end: 0.5 }, 60, 28, 16), false)
-    assert.equal(labelFits({ start: 0, end: 0.5 }, 0, 28, 16), false)
-    assert.equal(labelFits({ start: 0, end: 0.5 }, size, 0, 16), false)
   })
 })

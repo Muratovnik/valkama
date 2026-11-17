@@ -11,9 +11,9 @@
  * and figure, slanted in the quiet ink, as the rows apart of a ranked chart do (`RankedBars`).
  *
  * A legend always names the parts beside the ring, in its order (`ChartLegend`), so no part is told
- * by its hue alone, and a sector wide enough for it says its share in words on itself, in the ink
- * that reads on every series hue (`labelFits`); a narrower one says it in its hint alone. The
- * sectors stand apart by a gap of ground.
+ * by its hue alone, and gives each its figure and its bare share in a column at its end, in the
+ * text roles of the rows apart under it: the numbers are read there, and no sector carries words,
+ * which no hue of the palette held well. The sectors stand apart by a gap of ground.
  *
  * A sector is a mark of its chart: its one hint, under the pointer or the keyboard, gives its
  * figure and its share of the whole, and for the rest each part it holds (`markHints.ts` draws the
@@ -22,29 +22,21 @@
  * Home and End; a sector whose row opens something (`actionable`) is a button there, pressed with
  * Enter or Space as with the pointer, and sent out as `select` with the row's key, as its legend
  * entry is. A row that leads somewhere (`href`) is followed from its legend entry and the table.
+ * A sector under the pointer or the keyboard lifts (`seriesFill.css`), and so does the sector of a
+ * legend entry pointed at or focused, so the reader sees which part the line names.
  *
  * Presentational, and it moves nothing under the pointer. With no part above zero it is the
  * chart's empty state. Its table twin is `RankedBarsTable`, which the host shows instead.
  */
 import { computed, nextTick, ref } from 'vue'
 
-import { useElementSize } from '@vueuse/core'
-
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
-import { drawnWidth } from '@/shared/lib/textWidth.ts'
 import type { PeriodSeries, RankedRow } from '@/shared/ui/chartGeometry.ts'
 import { shareWords } from '@/shared/ui/chartGeometry.ts'
 import ChartLegend from '@/shared/ui/ChartLegend.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import type { RingSector } from '@/shared/ui/donutGeometry.ts'
-import {
-  bandMiddle,
-  labelFits,
-  labelPlace,
-  RING_BOX,
-  ringOf,
-  sectorPath,
-} from '@/shared/ui/donutGeometry.ts'
+import { bandMiddle, RING_BOX, ringOf, sectorPath } from '@/shared/ui/donutGeometry.ts'
 import type { TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
@@ -61,7 +53,7 @@ const props = defineProps<{
   label: string
   rows: readonly RankedRow[]
   words: DonutWords
-  /** A share bare, «42 %», on a sector and against each part of the rest in its hint. */
+  /** A share bare, «42 %», in the legend and against each part of the rest in its hint. */
   formatPart?: (ratio: number) => string
   /** A share of the whole as the reader reads it, «42 % of the total», in hints. */
   formatShare?: (ratio: number) => string
@@ -138,38 +130,21 @@ const legend = computed<PeriodSeries[]>(() =>
     href: sector.row?.href,
   })),
 )
-/** What each entry says in its hint: its figure and its share of the whole. */
-const legendHints = computed(
+/** What each entry gives at its end: its figure and its bare share, «6 h · 47 %». */
+const figures = computed(
   () =>
     new Map(
       ring.value.sectors.map((sector) => [
         sector.key,
-        [figureOf(sector), shareOf(sector)].filter(Boolean).join(', '),
+        [figureOf(sector), props.formatPart?.(sector.share)].filter(Boolean).join(' · '),
       ]),
     ),
 )
 
-/** The ring's box, whose width says how much room a sector has for its share in words. */
-const box = ref<HTMLElement | null>(null)
-const { width: size } = useElementSize(box)
-/** How tall a share in words stands, in pixels: a line of the dense type the axes use. */
-const LABEL_HEIGHT = 16
-/** Each share that fits on its sector, where it is written there. */
-const labels = computed(() => {
-  const part = props.formatPart
-  if (!part) return []
-  const font = getComputedStyle(document.documentElement).getPropertyValue('--font-count').trim()
-  return drawn.value.flatMap((sector) => {
-    const text = part(sector.share)
-    const fits = labelFits(sector, size.value, drawnWidth(text, font), LABEL_HEIGHT)
-    return fits ? [{ key: sector.key, text, place: labelPlace(sector) }] : []
-  })
-})
-/** Where a share stands over the ring, as shares of its box. */
-const labelStyle = (place: { left: number; top: number }) => ({
-  insetInlineStart: `${place.left * 100}%`,
-  insetBlockStart: `${place.top * 100}%`,
-})
+/** The part whose legend entry the pointer or the keyboard stands on, whose sector lifts. */
+const pointed = ref<string | null>(null)
+/** A sector lifted by its legend entry is marked; one that is not carries no mark at all. */
+const liftedBy = (sector: RingSector) => (sector.key === pointed.value ? '' : undefined)
 
 /** The one sector Tab lands on: the last stood on while it is still there, else the first. */
 const stood = ref(0)
@@ -232,10 +207,7 @@ async function walk(event: KeyboardEvent, index: number) {
       v-else
       class="donut-body"
     >
-      <div
-        ref="box"
-        class="donut-ring"
-      >
+      <div class="donut-ring">
         <svg
           ref="drawing"
           class="donut-drawing"
@@ -255,29 +227,21 @@ async function walk(event: KeyboardEvent, index: number) {
             :data-key="sector.key"
             :data-sector="index"
             :data-hint-point="sector.point"
+            :data-lifted="liftedBy(sector)"
             v-bind="sectorAttrs(sector, index)"
             @click="press(sector)"
             @keydown="(event: KeyboardEvent) => walk(event, index)"
             @focus="stood = index"
           />
         </svg>
-        <span
-          v-for="one in labels"
-          :key="one.key"
-          class="donut-share"
-          aria-hidden="true"
-          :data-key="one.key"
-          :style="labelStyle(one.place)"
-          >{{ one.text }}</span
-        >
       </div>
       <div class="donut-keys">
         <ChartLegend
-          class="donut-legend"
           :series="legend"
-          :hints="legendHints"
+          :figures="figures"
           @follow="(key, event) => emit('follow', key, event)"
           @select="(key) => emit('select', key)"
+          @point="(key) => (pointed = key)"
         />
         <ul
           v-if="ring.notes.length"
@@ -321,9 +285,9 @@ async function walk(event: KeyboardEvent, index: number) {
   }
 }
 
-/* A square of 11rem: a band wide enough for a share in words across a tenth of the ring. */
+/* A square of 11rem, which a column of a quota card holds beside nothing and a section beside
+   its legend. */
 .donut-ring {
-  position: relative;
   inline-size: 11rem;
   max-inline-size: 100%;
   aspect-ratio: 1;
@@ -338,12 +302,17 @@ async function walk(event: KeyboardEvent, index: number) {
 
 /* A sector that only shows is a picture of its part; one that opens something takes the hand. Its
    focus is drawn round its own outline rather than its box, in the ring's colour, and the band
-   between sectors keeps it clear of the next. */
+   between sectors keeps it clear of the next. Under the pointer or the keyboard, or with its
+   legend entry pointed at, it lifts as every mark does (`seriesFill.css`). */
 .donut-sector {
   outline: none;
 
   &.donut-acts {
     cursor: pointer;
+  }
+
+  &:is(:hover, :focus-visible, [data-lifted]) {
+    fill: var(--series-lifted);
   }
 
   &:focus-visible {
@@ -360,36 +329,14 @@ async function walk(event: KeyboardEvent, index: number) {
   }
 }
 
-/* A share on its sector, centred on the middle of its band, in the ink that reads on every hue of
-   the palette. A forced palette draws the sectors in one ink, so the shares give way to the
-   legend's hints and the table there. */
-.donut-share {
-  position: absolute;
-  color: var(--color-text-on-series);
-  font: var(--font-count);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  translate: -50% -50%;
-  pointer-events: none;
-
-  @media (forced-colors: active) {
-    display: none;
-  }
-}
-
 .donut-keys {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
 }
 
-/* The legend reads down, an entry a line, in the ring's order from its top. */
-.donut-legend {
-  flex-flow: column nowrap;
-}
-
 /* The rows apart: a note on the whole rather than a part of it, their names slanted in the quiet
-   ink and their figures at the end of their line. */
+   ink and their figures at the end of their line, where the legend's figures end. */
 .donut-notes {
   display: grid;
   gap: var(--space-1);

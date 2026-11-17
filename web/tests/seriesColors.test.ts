@@ -87,10 +87,11 @@ describe('the assignment', () => {
 describe('the palette', () => {
   test('every slot the assignment hands out is a token, and one fill rule draws each', () => {
     const fill = readFileSync(new URL('../src/shared/ui/seriesFill.css', import.meta.url), 'utf8')
-    // One hue a mark is drawn in, painting a box's background and a drawn shape's fill alike.
+    // One hue a mark is drawn in, painting a box's background and a drawn shape's fill alike, and
+    // the one lift every mark takes is that hue raised.
     assert.match(
       fill,
-      /\.series-fill \{\s*--series-hue: var\(--color-series-1\);\s*background: var\(--series-hue\);\s*fill: var\(--series-hue\);/u,
+      /\.series-fill \{\s*--series-hue: var\(--color-series-1\);\s*--series-lifted: oklch\(from var\(--series-hue\) [^;]+\);\s*background: var\(--series-hue\);\s*fill: var\(--series-hue\);/u,
     )
     for (const slot of [...slots.slice(1), ...NEUTRALS] as const) {
       hue(slot)

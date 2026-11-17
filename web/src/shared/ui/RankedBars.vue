@@ -268,12 +268,18 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
   min-width: 0;
 }
 
-/* Thin, square where it grows from and rounded at its end. A bar of nothing draws nothing. */
+/* Thin, square where it grows from and rounded at its end. A bar of nothing draws nothing. The
+   row is what the pointer and the keyboard stand on, so the bar of the row they stand on lifts
+   (`seriesFill.css`) over the row's band. */
 .ranked-bar {
   display: block;
   block-size: var(--space-2);
   border-start-end-radius: 999px;
   border-end-end-radius: 999px;
+
+  .ranked-line:is(:hover, :focus-visible) & {
+    background: var(--series-lifted);
+  }
 }
 
 .ranked-value {

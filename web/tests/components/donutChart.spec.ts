@@ -2,9 +2,11 @@
  * The ring of shares as a reader and a keyboard meet it. The oracle is the chart's contract: a
  * figure named by its label; a sector a part, in the hue its page gave the value, and past five
  * the smaller parts in one rest in the folded tail's neutral; a legend naming every part in the
- * ring's order; the rows apart listed by name and figure outside the ring; one hint a sector,
- * giving its figure and share, and for the rest each part it holds; one Tab stop walked round the
- * ring with the arrows; a sector that opens something pressed with the pointer, Enter or Space.
+ * ring's order, each with its figure and bare share at the end of its line, and no words on any
+ * sector; the rows apart listed by name and figure outside the ring; one hint a sector, giving its
+ * figure and share, and for the rest each part it holds; one Tab stop walked round the ring with
+ * the arrows; a sector that opens something pressed with the pointer, Enter or Space; and a
+ * legend entry pointed at or focused lifting its sector.
  */
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -110,10 +112,46 @@ describe('the ring of shares', () => {
       ],
       notes: ['6% of the total'],
     })
-    // The legend says the same figure and share for each part.
-    expect(chart.get('[data-series="high"]').attributes('data-tooltip')).toBe(
-      '250 min, 50% of the total',
-    )
+  })
+
+  it('gives each part its figure and bare share in the legend, and writes nothing on a sector', () => {
+    const chart = mountRing()
+
+    expect(
+      chart
+        .findAll('.chart-entry')
+        .map((one) => [one.get('.chart-key-name').text(), one.get('.chart-figure').text()]),
+    ).toEqual([
+      ['high', '250 min · 50%'],
+      ['medium', '120 min · 24%'],
+      ['low', '60 min · 12%'],
+      ['max', '40 min · 8%'],
+      // The rest's figure is the sum of its parts, as the caller formats it.
+      ['Other, 2 more', '30 min · 6%'],
+    ])
+    // The legend prints them, so its entries repeat them in no hint.
+    expect(chart.get('[data-series="high"]').attributes('data-tooltip')).toBeUndefined()
+    expect(chart.get('.donut-ring').text()).toBe('')
+    expect(chart.find('text').exists()).toBe(false)
+  })
+
+  it('lifts the sector of a legend entry the pointer or the keyboard stands on', async () => {
+    const chart = mountRing()
+    const lifted = () =>
+      sectors(chart)
+        .filter((one) => one.attributes('data-lifted') !== undefined)
+        .map((one) => one.attributes('data-key'))
+
+    expect(lifted()).toEqual([])
+    const medium = chart.findAll('.chart-entry')[1]
+    await medium?.trigger('pointerenter')
+    expect(lifted()).toEqual(['medium'])
+    await medium?.trigger('pointerleave')
+    expect(lifted()).toEqual([])
+    await chart.findAll('.chart-entry')[4]?.trigger('focusin')
+    expect(lifted()).toEqual([' rest'])
+    await chart.findAll('.chart-entry')[4]?.trigger('focusout')
+    expect(lifted()).toEqual([])
   })
 
   it('lists the rows apart under its legend by name and figure, and no sector for them', () => {
