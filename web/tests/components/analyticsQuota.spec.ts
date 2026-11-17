@@ -236,11 +236,7 @@ describe('the quota panel', () => {
     // As a table, where no hint shows, the line says it all in words.
     stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
     const table = await mountAnalytics({ routeState: { by: 'quota_week' } })
-    const chooseTable = table
-      .findAll('.quota-panel [role="radio"]:not([aria-checked="true"])')
-      .find((one) => one.element.closest('.step-views') === null)
-    await chooseTable?.trigger('click')
-    await flushPromises()
+    await showTable(table)
     expect(plain(accountNamed(table, 'Work').get('.quota-account-others').text())).toBe(
       'Usage credits: silent, read 2 d ago from the poll',
     )
@@ -307,11 +303,19 @@ describe('the quota panel', () => {
       'No quota source has read this account’s work in the past seven days.',
     )
     // No money stands beside a share, and no share is a total: what used a window is a block of
-    // its own under the readings (`analyticsQuotaSpent.spec.ts`).
-    const shares = five.findAll(
-      '.quota-account-head, .window-bar, .quota-window-facts, .step-line, .quota-account-others',
+    // its own under the readings (`analyticsQuotaSpent.spec.ts`). Each account's head is its name,
+    // and its facts beside it where it has a plan or a seat: «Work» and the seat «a1b2c3d4».
+    const heads = five.findAll('[data-account-head]')
+    expect(heads.map((one) => one.attributes('data-account-head')).join(' ')).toBe(
+      'name facts name name name facts',
     )
-    expect(shares.length).toBeGreaterThan(0)
+    // Each of the three windows of five hours has its bar, its facts and its line; «Work» alone
+    // has a window of money, its credits.
+    const parts = accounts(five).flatMap((account) =>
+      account.findAll('.window-bar, .quota-window-facts, .step-line, .quota-account-others'),
+    )
+    expect(parts).toHaveLength(3 * 3 + 1)
+    const shares = [...heads, ...parts]
     for (const part of shares) expect(part.text()).not.toMatch(/\$|total/iu)
   })
 

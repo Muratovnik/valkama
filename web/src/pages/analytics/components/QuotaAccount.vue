@@ -14,6 +14,9 @@
  *
  * It is a group of the panel on a surface of its own, its windows side by side where the width
  * keeps each readable and one under the next where it does not (`PanelLevel`).
+ *
+ * What a reader of the page selects it by: the account is `data-account`, its name; the two parts
+ * of its head are `data-account-head`, `name` for its name and `facts` for what stands beside it.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -96,7 +99,10 @@ const tableWords = computed<WindowWords>(() => ({
     surface
   >
     <template #heading>
-      <span class="quota-account-name">
+      <span
+        class="quota-account-name"
+        data-account-head="name"
+      >
         <span v-tooltip.detail="{ text: detail, words: name }">{{ name }}</span>
       </span>
     </template>
@@ -104,7 +110,10 @@ const tableWords = computed<WindowWords>(() => ({
       v-if="account.plan || account.seat"
       #beside
     >
-      <p class="quota-account-facts">
+      <p
+        class="quota-account-facts"
+        data-account-head="facts"
+      >
         <span v-if="account.plan">{{
           t('analytics.quota.panel.plan', { plan: account.plan })
         }}</span>

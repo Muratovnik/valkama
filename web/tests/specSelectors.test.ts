@@ -45,7 +45,6 @@ const DEAD_USES = new Map<string, string>([
   ['browser/production-analytics-steady.spec.ts .period-readout', REPAIRED_BY_FIX],
   ['browser/ui-charts.spec.ts .period-readout', REPAIRED_BY_FIX],
   ['browser/ui-charts.spec.ts .step-readout', REPAIRED_BY_FIX],
-  ['components/analyticsQuota.spec.ts .quota-account-head', REPAIRED_BY_FIX],
 ])
 
 /** Where the classes a library writes at runtime begin; no source of this app names them. */
