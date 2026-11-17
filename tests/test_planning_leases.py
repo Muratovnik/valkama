@@ -1179,6 +1179,26 @@ class SilenceTests(SweepTestCase):
         self.assertEqual(("", ["", "", ""], "ready"), self.holders())
         self.assertEqual(("released", f"session-ended: {held(ONE)}"), self.by_valkama()[0])
 
+    def test_a_question_past_its_deadline_on_the_lease_clock_stops_nothing(self) -> None:
+        # Read by the sweep, a question's deadline is judged by the clock every lease is read
+        # against, the one the step takes its time from, not by a second one.
+        deadline = datetime.now(UTC) + timedelta(days=1)
+        self.now = deadline + timedelta(days=1)
+        self.take(codex(ONE))
+        requests.create(
+            self.conn,
+            self.reference,
+            kind="question",
+            prompt="Which?",
+            fields=[FIELD],
+            expires_at=deadline.isoformat(),
+        )
+        self.conn.commit()
+        self.silent(ONE, timedelta(days=4))
+        self.assertEqual(1, self.sweep())
+        self.assertEqual(("", ["", "", ""], "ready"), self.holders())
+        self.assertEqual(("released", f"lease-expired: {held(ONE)}"), self.by_valkama()[0])
+
 
 class StepHoldTests(SweepTestCase):
     """A lease is the session's, and its steps lapse with it."""

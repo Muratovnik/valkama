@@ -104,10 +104,14 @@ def asked(
     *,
     spaces: Iterable[str] = (),
     items: Iterable[str] = (),
+    at: str | None = None,
 ) -> frozenset[str]:
-    """The items with an open question to the owner, of these spaces and these items, in one read."""
+    """The items with an open question to the owner, of these spaces and these items, in one read.
 
-    at = request_model.now()
+    A question is open while its deadline is after `at` (now, when not given).
+    """
+
+    at = request_model.now() if at is None else at
     rows = _read(conn, _ASKED, (json.dumps(sorted(set(spaces))), json.dumps(sorted(set(items)))))
     return frozenset(str(row["work_item_id"]) for row in rows if lapse(row, at) is None)
 

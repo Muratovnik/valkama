@@ -57,7 +57,7 @@ import sqlite3
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
-from . import calls, questions
+from . import calls, questions, request_model
 
 #: How long a session, or an item no session holds by proof, may go without a sign of
 #: life before what it holds lapses. Read here and nowhere else.
@@ -274,9 +274,13 @@ def of_step(
 
 
 def question_stands(conn: sqlite3.Connection, row: sqlite3.Row) -> bool:
-    """Whether an open question to the owner stands on this item and stops its count."""
+    """Whether an open question to the owner stands on this item and stops its count.
 
-    return bool(questions.asked(conn, items=[str(row["work_item_id"])]))
+    Its deadline is read against `utc_now`, the clock of the lease it stops.
+    """
+
+    at = request_model.stamp(utc_now())
+    return bool(questions.asked(conn, items=[str(row["work_item_id"])], at=at))
 
 
 def _aged(conn: sqlite3.Connection, row: sqlite3.Row, found: Lease, asked: bool) -> Lease:
