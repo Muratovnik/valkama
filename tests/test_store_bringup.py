@@ -175,6 +175,75 @@ class ProcedureTests(Harness):
             checked = [sql for sql in statements if "foreign_key_check" in sql.lower()]
             self.assertEqual(checks, len(checked), checked)
 
+    def test_widening_on_a_connection_with_foreign_keys_on_is_refused(self) -> None:
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        with widened(), self.assertRaises(RuntimeError) as caught:
+            planning_store.widen_event_actions(conn)
+        self.assertIn("agent_decisions", str(caught.exception))
+        conn.rollback()
+        self.assertEqual([self.mark], self.marks(conn))
+        self.assertNotIn(f"'{WIDENED}'", self.events_definition(conn))
+
+
+#: A parent whose CHECK the rebuild widens, and a child that cascades from it.
+PARENT = "CREATE TABLE parent(id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('a')))"
+CHILD = "CREATE TABLE child(parent_id INTEGER NOT NULL REFERENCES parent(id) ON DELETE CASCADE)"
+WIDER_PARENT = (
+    f"CREATE TABLE parent{planning_store.REPLACEMENT}"
+    "(id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('a','b')))"
+)
+
+
+class RebuildGuardTests(unittest.TestCase):
+    def store(self, *, keys: bool, child: bool) -> sqlite3.Connection:
+        conn = sqlite3.connect(":memory:", isolation_level=None)
+        self.addCleanup(conn.close)
+        conn.execute(f"PRAGMA foreign_keys={'ON' if keys else 'OFF'}")
+        conn.execute(PARENT)
+        conn.execute("CREATE INDEX parent_kind ON parent(kind)")
+        conn.execute("INSERT INTO parent(id, kind) VALUES(1, 'a')")
+        if child:
+            conn.execute(CHILD)
+            conn.execute("INSERT INTO child(parent_id) VALUES(1)")
+        return conn
+
+    def rebuild(self, conn: sqlite3.Connection) -> list[str]:
+        return planning_store.rebuild_table(conn, "parent", WIDER_PARENT, "SELECT * FROM parent")
+
+    def definition(self, conn: sqlite3.Connection) -> str:
+        return str(
+            conn.execute("SELECT sql FROM sqlite_master WHERE name = 'parent'").fetchone()[0]
+        )
+
+    def test_a_referenced_table_is_refused_while_foreign_keys_are_on(self) -> None:
+        conn = self.store(keys=True, child=True)
+        catalog = conn.execute("SELECT type, name, sql FROM sqlite_master").fetchall()
+        changes = conn.total_changes
+        with self.assertRaises(RuntimeError) as caught:
+            self.rebuild(conn)
+        self.assertIn("rebuilding parent with foreign keys on", str(caught.exception))
+        self.assertIn("child", str(caught.exception))
+        # Refused before its first statement: the catalog and every row as they were.
+        self.assertEqual(
+            catalog, conn.execute("SELECT type, name, sql FROM sqlite_master").fetchall()
+        )
+        self.assertEqual(changes, conn.total_changes)
+        self.assertEqual([(1,)], conn.execute("SELECT parent_id FROM child").fetchall())
+
+    def test_a_referenced_table_is_rebuilt_with_foreign_keys_off(self) -> None:
+        conn = self.store(keys=False, child=True)
+        self.assertEqual(["parent_kind"], self.rebuild(conn))
+        self.assertIn("'b'", self.definition(conn))
+        self.assertEqual([(1, "a")], conn.execute("SELECT * FROM parent").fetchall())
+        self.assertEqual([(1,)], conn.execute("SELECT parent_id FROM child").fetchall())
+
+    def test_a_table_nothing_references_is_rebuilt_with_foreign_keys_on(self) -> None:
+        conn = self.store(keys=True, child=False)
+        self.assertEqual(["parent_kind"], self.rebuild(conn))
+        self.assertIn("'b'", self.definition(conn))
+        self.assertEqual([(1, "a")], conn.execute("SELECT * FROM parent").fetchall())
+
 
 if __name__ == "__main__":
     unittest.main()
