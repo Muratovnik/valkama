@@ -1193,12 +1193,36 @@ def _returned(
         key = _first_state(conn, item, "ready")
         service.transition_work_item(conn, reference, key, reason=_said(note, key), author=author)
         return "ready"
+    _drop(
+        conn,
+        item,
+        answers,
+        note,
+        author,
+        done="Nothing: it was put off, and dropped when it came back.",
+        then=DROPPED_NEXT,
+    )
+    return "cancelled"
+
+
+def _drop(
+    conn: sqlite3.Connection,
+    item: sqlite3.Row,
+    answers: dict,
+    note: str,
+    author: str | None,
+    *,
+    done: str,
+    then: str,
+) -> None:
+    """Cancel the item the owner's answer drops, with the answer's `cancels` for a goal
+    or stage with open work under it, writing a summary that keeps what it says was
+    done, or else says `done`, and what comes next, `then`."""
+
+    reference = read_model.reference(conn, item)
     said = model.summary(item["summary"], required=False)
-    done = "" if said is None else str(said.get("done") or "").strip()
-    summary = {
-        "done": done or "Nothing: it was put off, and dropped when it came back.",
-        "next": DROPPED_NEXT,
-    }
+    kept = "" if said is None else str(said.get("done") or "").strip()
+    summary = {"done": kept or done, "next": then}
     if note:
         summary["why"] = note[: model.SUMMARY_LIMIT]
     service.set_summary(conn, reference, summary, author=author)
@@ -1211,7 +1235,66 @@ def _returned(
         author=author,
         cancels=answers.get(request_model.RETURN_CANCELS) or None,
     )
-    return "cancelled"
+
+
+#: What a summary the owner's drop of a goal they were asked about says comes next.
+GOAL_DROPPED_NEXT = "Nothing: the owner dropped it when asked whether to take it on."
+#: The reason a goal the owner's answer puts off records, when the answer's note
+#: does not fit it.
+GOAL_LATER = "the owner put it off when asked whether to take it on"
+
+
+def _goal(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about a goal lying in triage: one an agent proposed, or one
+    that came back from being put off.
+
+    `do` accepts it, as the owner's, with the work in triage under it
+    (`inherited`); `later` puts it off until the answer's `until`, the note its
+    reason when it fits; `drop` cancels it, with the answer's `cancels` for a goal
+    with open work under it.
+    """
+
+    item = read_model.item_by_id(conn, action.work_item_id)
+    reference = read_model.reference(conn, item)
+    given = answers.get(request_model.REVIEW_ANSWER)
+    if given == request_model.RETURN_DO:
+        key = _first_state(conn, item, "ready")
+        service.transition_work_item(conn, reference, key, reason=_said(note, key), author=author)
+    elif given == request_model.RETURN_LATER:
+        service.defer_work_item(
+            conn,
+            reference,
+            until=answers.get(request_model.RETURN_UNTIL),
+            reason=note if note and len(note) <= service.PUT_OFF_REASON_LIMIT else GOAL_LATER,
+            author=author,
+        )
+    else:
+        _drop(
+            conn,
+            item,
+            answers,
+            note,
+            author,
+            done="Nothing: it was not taken on.",
+            then=GOAL_DROPPED_NEXT,
+        )
+
+
+CARRIERS["proposed_goal"] = Carrier(
+    {
+        request_model.RETURN_DO: pending.CARRIED_OUT,
+        request_model.RETURN_LATER: pending.DECLINED,
+        request_model.RETURN_DROP: pending.DECLINED,
+    },
+    _goal,
+)
 
 
 def _said(note: str, key: str) -> str:

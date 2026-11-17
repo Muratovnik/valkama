@@ -95,6 +95,25 @@ RETURN_FIELDS = (
         "under": {"field": REVIEW_ANSWER, "option": RETURN_DROP},
     },
 )
+
+
+def goal_fields(*, recommend: bool) -> list[dict]:
+    """The fields of the question about a goal the owner decides on: one an agent
+    proposed, or one that came back from being put off. Under the ids put-off work
+    asks with, `do` accepts it, `later` puts it off until `until` and `drop` cancels it,
+    with `cancels` the list token for a goal with open work under it. `recommend` marks
+    `do`, which the agent that proposed it asks for; Valkama's asking recommends nothing.
+    """
+
+    choice, until, cancels = (dict(field) for field in RETURN_FIELDS)
+    choice["options"] = [
+        {"id": RETURN_DO, "label": "Take it on", **({"recommended": True} if recommend else {})},
+        {"id": RETURN_LATER, "label": "Put it off"},
+        {"id": RETURN_DROP, "label": "Drop it"},
+    ]
+    return [choice, until, cancels]
+
+
 MAX_NOTE = 8000
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each

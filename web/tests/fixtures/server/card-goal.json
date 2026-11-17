@@ -74,6 +74,18 @@
               "session_id": "00000000-0000-4000-8000-000000000018",
               "agent_id": "a7c3e9f1d2b4a608"
             }
+          },
+          {
+            "action": "request_created",
+            "detail": "00000000-0000-4000-8000-000000000019",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "claude-hook",
+              "session_id": "00000000-0000-4000-8000-000000000018",
+              "agent_id": "a7c3e9f1d2b4a608"
+            }
           }
         ],
         "mentions": [],
@@ -127,9 +139,9 @@
             "last_seen": "2026-01-02T03:04:05Z"
           },
           {
-            "session": "00000000-0000-4000-8000-000000000019",
+            "session": "00000000-0000-4000-8000-000000000020",
             "client": "claude-code",
-            "label": "claude (session 00000000-0000-4000-8000-000000000019)",
+            "label": "claude (session 00000000-0000-4000-8000-000000000020)",
             "holds": [
               "MAIN-6"
             ],

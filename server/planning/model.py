@@ -88,6 +88,9 @@ LAUNCH_PLACES = ("space", "item_project")
 #: The one basis a caller names itself: an agent taking on work it was asked to do.
 #: A person's write is the owner's without naming it, and the rest the server gives.
 NAMED_BASIS = "assignment"
+#: The basis of an agent's own decision, which the server gives where the owner's
+#: participation setting leaves the decision to the agent.
+AGENT_BASIS = "agent"
 
 
 class RetiredWord(NamedTuple):
