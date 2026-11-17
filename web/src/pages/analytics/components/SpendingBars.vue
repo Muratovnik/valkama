@@ -39,6 +39,7 @@ import { firstSplitView } from '@/pages/analytics/utils/splitView.ts'
 import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
 import { breakdownOf, measureOf, rankedLines } from '@/pages/analytics/utils/usageFigures.ts'
 
+import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
@@ -69,6 +70,10 @@ const { t } = useI18n()
 const words = useSpendingWords()
 
 const title = computed(() => words.chartTitle(props.measure, props.by, props.across))
+/** The title under every measure, whose room its heading row keeps. */
+const titles = computed(() =>
+  MEASURES.map((each) => words.chartTitle(each, props.by, props.across)),
+)
 
 const all = computed(() =>
   rankedLines(
@@ -122,6 +127,7 @@ const formatValue = (amount: number) => words.scale(props.measure, amount)
   <ChartSection
     class="spending-bars"
     :title="title"
+    :titles="titles"
     :narrow="narrow"
     :notice="notice"
     :views="views"

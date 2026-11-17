@@ -167,7 +167,7 @@ async function outline(page: Page) {
     const enclosing = (heading: Element) => {
       let level = heading.parentElement?.closest('[data-level]')
       while (level) {
-        const own = level.querySelector(`:scope > .level-head > ${HEADING}`)
+        const own = level.querySelector(`:scope > .level-head ${HEADING}`)
         if (own && own !== heading) return own
         level = level.parentElement?.closest('[data-level]')
       }

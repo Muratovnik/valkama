@@ -51,6 +51,7 @@ import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/
 import type { StackLine } from '@/pages/analytics/utils/dayFigures.ts'
 import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
+import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
 import type { PeriodChartProps } from '@/shared/ui/chartGeometry.ts'
@@ -95,6 +96,10 @@ const step = computed(() => props.usage.period.step)
 
 const title = computed(() =>
   words.stepChartTitle(props.measure, props.by, step.value, props.across),
+)
+/** The title under every measure, whose room its heading row keeps. */
+const titles = computed(() =>
+  MEASURES.map((each) => words.stepChartTitle(each, props.by, step.value, props.across)),
 )
 
 /** The steps of the period before, when they were read. */
@@ -215,6 +220,7 @@ function frame(firstKey: string, lastKey: string) {
   <ChartSection
     class="spending-days"
     :title="title"
+    :titles="titles"
     :narrow="narrow"
     :notice="notice"
   >

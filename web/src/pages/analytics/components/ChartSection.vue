@@ -9,7 +9,9 @@
  * in it did nothing stands under its title, said to a screen reader as it comes (`notice`).
  *
  * It is a block of the panel, a chart under its heading, unless it says it is a whole section, as
- * the quota's is (`PanelLevel`), whose caveats its heading's «ⓘ» says (`about`).
+ * the quota's is (`PanelLevel`), whose caveats its heading's «ⓘ» says (`about`). A title that
+ * names the page's measure keeps the room of its title under every measure (`titles`), so
+ * choosing one moves nothing beside or under it.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -38,6 +40,8 @@ const props = withDefaults(
     listLabel?: string
     /** Why the last press in the chart did nothing, in words; empty otherwise. */
     notice?: string
+    /** Every title it takes in turn, as under each of the page's measures, whose room it keeps. */
+    titles?: readonly string[]
     /** The drawings it offers before its table, in the switch's order. */
     views?: readonly Drawn[]
   }>(),
@@ -47,6 +51,7 @@ const props = withDefaults(
     listLabel: undefined,
     about: () => [],
     first: undefined,
+    titles: () => [],
     views: () => ['chart'],
   },
 )
@@ -80,6 +85,7 @@ const switchLabel = computed(() => t('analytics.shown.label', { chart: props.tit
     :level="level"
     :data-shown="shown"
     :title="title"
+    :titles="titles"
     :about="about"
     :body-as="bodyAs"
     :body-label="listLabel"

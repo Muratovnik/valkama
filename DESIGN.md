@@ -2522,7 +2522,10 @@ those that spent in the period only in another measure — the adviser has token
 time — and those that spent only before it. The line is a row of its own, kept while it has
 nothing to say, so its words are whole whatever the measure adds to them and choosing a measure
 moves nothing under it; where even that row is too narrow it breaks between its parts, never
-inside one. Under the measure «tokens» each value's tokens by kind follow its change: the name,
+inside one. A chart whose title names the measure keeps the room of its title under every
+measure, so the switch beside it wraps alike whichever measure stands and choosing one moves
+nothing under the chart either. Under the measure «tokens» each value's tokens by kind follow
+its change: the name,
 the three measures, the period before and the change stand in the table's width as it opens,
 their headings taking a second line rather than that width, and the kinds are reached by the
 table's own sideways scroll.
