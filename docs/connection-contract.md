@@ -2739,8 +2739,8 @@ Who may release or take over a claim follows the lease:
 - An `unconfirmed` claim is compared by `author`, as every claim was before
   leases. It has no session to go quiet, so it lapses when its item has had no
   history event for 3 days, and so does a step whose holder no session proved.
-  The owner's own claim made in the browser lapses the same way, as does a claim
-  a launch took for its runner. It reads `unconfirmed` until the release.
+  The owner's own claim made in the browser lapses the same way. It reads
+  `unconfirmed` until the release.
 
 With nobody calling, [the planning sweep](#the-planning-sweep) releases every
 lapsed hold: each claim and claimed step whose stale lease is past its grace, or
@@ -3287,7 +3287,13 @@ not held.
 A launch moves nothing. The ending of a launch writes its comment and leaves the
 item where its agent left it; the launched agent moves the item to `review` with
 `to_check` when the work is done. A task its launch left at work goes back to
-`ready` when the launch's claim lapses.
+`ready` when the launch's claim lapses. That claim is taken in a call of the
+launch's own (`identity_source` `launch`) and is the lease of the session the
+launch started, so it lapses 12 hours after that session ends. The session is
+the client's own when the launch assigns or resumes it, and the launch's
+(`launch-…`) on a fresh run of a client that announces its session once it runs,
+as Codex does; the session that client announces does not hold the claim, and a
+resume of that item reattaches to it.
 
 ### What a person did reaches the agent
 

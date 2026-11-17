@@ -695,6 +695,10 @@ class LaunchedRootsTests(LaunchHarness):
         fresh = self.attempt(reference)["base_artifact"]
         assert fresh is not None
         self.assertEqual(["beside"], [entry["project_id"] for entry in fresh["added"]])
+        # A resume reattaches to the session the client announced as it ran.
+        runner.RUNNER._running[reference].capture.append(
+            json.dumps({"type": "thread.started", "thread_id": "thread-a"})
+        )
         self.processes[-1].code = 0
         lifecycle.reap_launches(self.conn)
 

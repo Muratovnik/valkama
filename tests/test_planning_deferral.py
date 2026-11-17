@@ -25,7 +25,6 @@ from server import mcp_surface
 from server.planning import api, leases, person_events, service, sweep
 from tests.test_planning_closing import APPLY, AS_A, AS_B, DELETE, DONE, MERGE, Tree
 
-DEFER = "/api/planning/work-item/defer"
 CLAIM = "/api/planning/work-item/claim"
 ANSWER = "/api/planning/request/answer"
 #: The day after the fixed clock, and a moment once it has come.

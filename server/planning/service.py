@@ -1353,6 +1353,7 @@ def put_back_after_launch(
     expected_revision: int,
     author: str,
     deferred: deferral.Held | None = None,
+    claim: PriorClaim | None = None,
 ) -> dict:
     """Put a task a failed launch started back in the state the launch found it in.
 
@@ -1365,6 +1366,12 @@ def put_back_after_launch(
     back to triage or deferred takes away the basis the claim gave. Nothing on a
     surface reaches this: a create, a move and `force` keep refusing entry into
     deferred.
+
+    `claim` is the claim the launch took over (`claim_of`), put back with the call
+    that took it, so its lease reads as it did: a confirmed claim comes back
+    confirmed, by its session, and an unconfirmed one unconfirmed. It is recorded as
+    its holder taking the item back over from the launch, forced, as a claim that
+    puts it back always was; it names its own call and makes none.
     """
 
     answer = _transition(
@@ -1382,6 +1389,13 @@ def put_back_after_launch(
     category = read_model.state_by_id(conn, str(row["state_id"]))["category"]
     if deferred is not None and category == "deferred":
         deferral.restore(conn, identity, deferred)
+    if claim is not None:
+        row = read_model.item_by_id(conn, identity)
+        held = str(row["claim_ref"])
+        _write(conn, row, ["claim_ref = ?", "claim_call_id = ?"], [claim.holder, claim.call_id])
+        _log(conn, identity, "taken_over", held, claim.holder)
+        record_overrides(conn, identity, ["claim"], claim.holder)
+        answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     return answer
 
 
@@ -1389,6 +1403,30 @@ def deferral_of(conn: sqlite3.Connection, reference: str) -> deferral.Held | Non
     """The condition the item stands put off on, or None, for a write that puts it back."""
 
     return deferral.held(conn, str(read_model.item_row(conn, reference)["work_item_id"]))
+
+
+@dataclasses.dataclass(frozen=True)
+class PriorClaim:
+    """A claim as a write found it: who held the item, and the call that took it.
+
+    `call_id` is `work_items.claim_call_id`, None for a claim no call took. The lease
+    is read from that call (`leases.lease`), so a claim put back with it reads as it
+    did before.
+    """
+
+    holder: str
+    call_id: int | None
+
+
+def claim_of(conn: sqlite3.Connection, reference: str) -> PriorClaim | None:
+    """The item's claim with the call that took it, or None, for a write that puts it back."""
+
+    row = read_model.item_row(conn, reference)
+    holder = str(row["claim_ref"] or "")
+    if not holder:
+        return None
+    call = row["claim_call_id"]
+    return PriorClaim(holder, None if call is None else int(call))
 
 
 @_marked

@@ -13,9 +13,9 @@ once it has started speaking, so an execution created afterwards could be
 matched to its session by nothing better than time. Created first, the identity
 travels into the child in its environment and is read back out.
 
-A resume still reads the exact session row the previous launch wrote rather than
-searching for one that looks related; correlating an attempt to a task by
-anything less exact stays forbidden.
+A resume still reads the exact client session the previous launch linked to its
+attempt rather than searching for one that looks related; correlating an attempt
+to a task by anything less exact stays forbidden.
 """
 
 from __future__ import annotations
@@ -82,13 +82,15 @@ def _launch_reserved(
             raise planning_model.container_unheld()
         resume_session_id = _resumable_session(conn, record, packet.client) if packet.resume else ""
         state_before = str(record["state"]["key"])
-        claim_before = str(record["claim_ref"] or "")
+        # The claim as it stood, with the call that took it: a launch that never
+        # started puts it back as it was, confirmed or not.
+        claim_before = planning_service.claim_of(conn, reference)
         # Put off, the item stands on a condition the claim below takes away with the
         # move out; a launch that never started puts it back with the state.
         deferred_before = planning_service.deferral_of(conn, reference)
-        session = _LaunchSession.of(
-            conn, packet, runner.session_identity(packet, resume_session_id)
-        )
+        assigned = runner.session_identity(packet, resume_session_id)
+        launch_id = runner.new_launch_id()
+        session = _LaunchSession.of(conn, packet, assigned or launch_id)
         # The reservation proves no launch of this item runs here any more, so an
         # earlier launch's claim is this one's to take over, though its end awaits
         # the next reap and its session still reads live.
@@ -162,7 +164,8 @@ def _launch_reserved(
             directory=directory,
             reservation=reservation,
             added_dirs=[root["root"] for root in added],
-            session_id=session.session_id,
+            session_id=assigned,
+            launch_id=launch_id,
         )
     except runner.LaunchError as error:
         # A process that never started must not leave a phantom executor or a
@@ -182,7 +185,7 @@ def _launch_reserved(
         )
         raise
 
-    session_identity = started["client_session_id"] or started["launch_id"]
+    session_identity = session.session_id
     # The ingest opens its own transaction, so it runs before any statement
     # here leaves one open: sqlite3 refuses a nested BEGIN.
     op_ingest_session_event(
@@ -301,17 +304,16 @@ def stop_work_item(conn: sqlite3.Connection, reference: str) -> dict:
             else None,
         )
         conn.commit()
-    op_ingest_session_event(
-        conn,
-        {
-            "session_id": stopped.get("client_session_id")
-            or stopped.get("launch_id")
-            or f"launch-unknown-{reference}",
-            "client": "runner",
-            "event": "session_end",
-            "status": "stopped" if stopped["stopped"] else "ended",
-        },
-    )
+    for session_id in _ended_sessions(stopped):
+        op_ingest_session_event(
+            conn,
+            {
+                "session_id": session_id,
+                "client": "runner",
+                "event": "session_end",
+                "status": "stopped" if stopped["stopped"] else "ended",
+            },
+        )
     note = (
         "launch stopped from the platform"
         if stopped["stopped"]
@@ -350,24 +352,24 @@ def _record_ending(conn: sqlite3.Connection, item: dict) -> None:
     result = item["result"]
     reference = str(item["reference"])
     failed = result["outcome"] in results.FAILED_OUTCOMES
-    session_identity = item["client_session_id"] or item["launch_id"]
-    op_ingest_session_event(
-        conn,
-        {
-            "session_id": session_identity,
-            "client": item["client"],
-            "event": "session_end",
-            "work_item": reference,
-            "status": "error" if failed else result["outcome"],
-            "detail": {
-                "exit_code": item["exit_code"],
-                "launch_id": item["launch_id"],
-                "outcome": result["outcome"],
-                "expected_effect": result["expected_effect"],
-                "structured": result["structured"],
+    for session_id in _ended_sessions(item):
+        op_ingest_session_event(
+            conn,
+            {
+                "session_id": session_id,
+                "client": item["client"],
+                "event": "session_end",
+                "work_item": reference,
+                "status": "error" if failed else result["outcome"],
+                "detail": {
+                    "exit_code": item["exit_code"],
+                    "launch_id": item["launch_id"],
+                    "outcome": result["outcome"],
+                    "expected_effect": result["expected_effect"],
+                    "structured": result["structured"],
+                },
             },
-        },
-    )
+        )
     if item["client_session_id"]:
         planning_service.attach_ref(
             conn,
@@ -380,9 +382,11 @@ def _record_ending(conn: sqlite3.Connection, item: dict) -> None:
     if item.get("execution_id"):
         execution_id = str(item["execution_id"])
         # The identity a client mints arrives on its own output, so this is
-        # the first moment a Codex attempt can be bound to its session. The
-        # link is idempotent, so a client that assigned its identity up
-        # front is simply linked once.
+        # the first moment a Codex attempt can be bound to the client's own
+        # session, the one a resume reattaches to (`_resumable_session`); the
+        # session the launch ran under was linked at its start. The link is
+        # idempotent, so a client that assigned its identity up front is
+        # simply linked once.
         execution_service.link_session(
             conn, execution_id, str(item["client_session_id"] or ""), "launched"
         )
@@ -405,6 +409,19 @@ def _record_ending(conn: sqlite3.Connection, item: dict) -> None:
         conn, reference, _note(item, result, failed), author="runner"
     )
     conn.commit()  # finish this attempt before the next session-end ingest
+
+
+def _ended_sessions(item: dict) -> list[str]:
+    """The sessions a launch's end ends, from what the runner handed over.
+
+    The session the launch ran under from its start (`session_id`), whose end its
+    claim's lease follows; and the client's own when it announced a different one
+    as it ran, because the process that ran it ended too. Nothing a claim reads
+    follows the second.
+    """
+
+    named = (str(item.get("session_id") or ""), str(item.get("client_session_id") or ""))
+    return [session_id for session_id in dict.fromkeys(named) if session_id]
 
 
 def _report_ending_failure(conn: sqlite3.Connection, item: dict, failure: BaseException) -> None:
@@ -462,29 +479,26 @@ def _base_artifact(conn: sqlite3.Connection, execution_id: str) -> dict | None:
 def _resumable_session(conn: sqlite3.Connection, record: dict, client: str) -> str:
     """The exact client session a resume must reattach to, or a refusal.
 
-    This reads the session row the previous launch wrote and linked to this
-    item; it does not search for a session that merely looks related. A launch
-    with no such row cannot be resumed, which is the honest answer.
+    This reads the client's session the previous launch linked to its attempt
+    (`execution_service.resumable_session`), never the launch's own id; it does
+    not search for a session that merely looks related. A launch with no such
+    link cannot be resumed, which is the honest answer.
     """
 
-    row = conn.execute(
-        "SELECT id FROM sessions WHERE work_item_id = ? AND client = ?"
-        " ORDER BY started_at DESC, rowid DESC LIMIT 1",
-        (str(record["work_item_id"]), client),
-    ).fetchone()
-    if row is None:
+    found = execution_service.resumable_session(conn, str(record["work_item_id"]), client)
+    if found is None:
         raise runner.LaunchError(
             f"{record['reference']} has no exact resumable {client} session;"
             " heuristic task correlation is forbidden"
         )
-    return str(row[0])
+    return found
 
 
 def _restore(
     conn: sqlite3.Connection,
     reference: str,
     state: str,
-    claim: str,
+    claim: planning_service.PriorClaim | None,
     launched: dict,
     actor: str,
     execution_id: str,
@@ -495,10 +509,11 @@ def _restore(
 ) -> None:
     """Compensate only the unchanged launch-owned item, with the write lock held.
 
-    The launch's own release is made in the launch's call, since only the session
-    its claim names holds it; a session the claim opened is ended, because its
-    process never ran. An item the launch took out of deferred goes back with
-    `deferred`, the condition it stood there on.
+    A claim the launch took over goes back with the call that took it, so it is
+    as confirmed as it was. The launch's own release is made in the launch's call,
+    since only the session its claim names holds it; a session the claim opened is
+    ended, because its process never ran. An item the launch took out of deferred
+    goes back with `deferred`, the condition it stood there on.
     """
 
     conn.execute("BEGIN IMMEDIATE")
@@ -517,21 +532,13 @@ def _restore(
                 author=actor,
                 expected_revision=int(launched["revision"]),
                 deferred=deferred,
+                claim=claim,
             )
-            # The state was put back above, so neither claim write may move
-            # it: a claim would start it again and a release would requeue it.
-            # A move out of work has already let the launch's claim go, and a
-            # second release would only write a second, empty `released`.
-            if claim:
-                planning_service.claim_work_item(
-                    conn,
-                    reference,
-                    author=claim,
-                    force=True,
-                    expected_revision=int(restored["revision"]),
-                    move_state=False,
-                )
-            elif restored["claim_ref"] == actor:
+            # The state was put back above, so the release may not move it: it
+            # would requeue it. A move out of work has already let the launch's
+            # claim go, and a second release would only write a second, empty
+            # `released`.
+            if claim is None and restored["claim_ref"] == actor:
                 with session.proving():
                     planning_service.claim_work_item(
                         conn,
@@ -574,12 +581,13 @@ def _restore(
 class _LaunchSession:
     """The session a launch's claim names, and whether the claim opened it.
 
-    The launch proves that session (`calls.launch`) when it knows it before the
-    process exists, assigned or resumed (`runner.session_identity`): the claim is
-    then a lease of the session, live while it runs and released
-    `leases.ENDED_GRACE` after it ends, and the session opens and ends under that
-    one id. A client that announces its own identity names none yet, and its claim
-    stays unconfirmed, as every claim was before leases.
+    The launch proves that session (`calls.launch`), so the claim is a lease of
+    it, live while it runs and released `leases.ENDED_GRACE` after it ends, and the
+    session opens and ends under that one id. It is the client's identity when the
+    launch knows it before the process exists, assigned or resumed
+    (`runner.session_identity`); on a fresh run of a client that announces its own
+    once it runs, it is the launch's id (`runner.new_launch_id`), and the identity
+    the client announces is linked to the attempt for a resume and holds nothing.
     """
 
     session_id: str
@@ -593,14 +601,12 @@ class _LaunchSession:
         cls, conn: sqlite3.Connection, packet: runner.LaunchPacket, session_id: str
     ) -> _LaunchSession:
         row = conn.execute("SELECT status FROM sessions WHERE id = ?", (session_id,)).fetchone()
-        opens = bool(session_id) and (row is None or row[0] != "active")
+        opens = row is None or row[0] != "active"
         return cls(session_id, packet.client, opens)
 
     def proving(self) -> contextlib.AbstractContextManager[None]:
-        """Make the writes inside this block the launch's call for its session, if it has one."""
+        """Make the writes inside this block the launch's call for its session."""
 
-        if not self.session_id:
-            return contextlib.nullcontext()
         return planning_calls.bind(planning_calls.launch(self.session_id, self.client), _TOOL)
 
     def open(self, conn: sqlite3.Connection) -> None:

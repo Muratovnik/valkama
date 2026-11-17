@@ -19,14 +19,14 @@ writes `call_id` NULL and reads exactly like history written before identity
 existed: unconfirmed.
 
 A launch's claim is the one write the client never makes and still names its
-session. Valkama starts the process, so it knows the session the process runs
-under before it exists when that identity is assigned or resumed, and the claim
-is taken in a call of the launch's own (`launch`, source `launch`): a lease of
-that session, live while it runs and released `leases.ENDED_GRACE` after it
-ends. Nothing else reads that call as an agent's: no client proved it, so it
-hands no words over and moves no boundary of what a person said. A client that
-announces its own identity once it runs names no session at the claim, which
-then stays unconfirmed.
+session. Valkama starts the process, so it names the session the process runs
+under before it exists, and the claim is taken in a call of the launch's own
+(`launch`, source `launch`): a lease of that session, live while it runs and
+released `leases.ENDED_GRACE` after it ends. The session is the client's identity
+when it is assigned or resumed, and the launch's id on a fresh run of a client
+that announces its own once it runs; what that client announces holds nothing.
+Nothing else reads that call as an agent's: no client proved it, so it hands no
+words over and moves no boundary of what a person said.
 
 Verification is a pure function of what the client sent and of the pair its
 hook left. Codex puts the session in `_meta` of every call. Claude Code repeats
