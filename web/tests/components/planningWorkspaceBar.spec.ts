@@ -272,6 +272,9 @@ describe('the work bar', () => {
     expect(wrapper.find('.workspace-left-out').exists()).toBe(false)
     await wrapper.setProps({ grouping: null, view: 'graph', exclusion: null })
     expect(wrapper.find('.workspace-left-out').exists()).toBe(false)
+    // The same line where something is left out: what the view holds was not all read.
+    await wrapper.setProps({ stored: false })
+    expect(wrapper.find('.workspace-left-out').exists()).toBe(true)
   })
 
   it('says when the address cannot keep the whole filter', () => {

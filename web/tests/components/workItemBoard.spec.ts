@@ -125,7 +125,9 @@ describe('the order hint of the grouped board', () => {
       expect(note.classes()).not.toContain('shown')
       // Seen, not read twice: the tiles' description already carries it.
       expect(note.attributes('aria-hidden')).toBe('true')
-      expect(note.text()).toBe(messages.en.workItem.order.shared)
+      expect(note.text()).toBe(
+        'The order is shared by the whole board: one order per state, across all lanes.',
+      )
       await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowUp', altKey: true })
       expect(note.classes()).toContain('shown')
       vi.advanceTimersByTime(5000)
