@@ -253,11 +253,10 @@ test('Settings ranks its headings by their nesting, under the module name', asyn
   const general = await outline(page)
   expect.soft(skips(general), 'General: no rank skipped').toEqual([])
   const groups = general.filter((heading) => heading.under === 'Настройки')
-  const groupCount = await page.locator('.settings-group').count()
-  expect(groupCount, 'General has groups to rank').toBeGreaterThan(0)
+  // General has groups to rank: the visible group heading awaited above says so.
   expect
     .soft(groups, 'General: its groups stand right under the module name')
-    .toHaveLength(groupCount)
+    .toHaveLength(await page.locator('.settings-group').count())
 
   await page
     .getByRole('tablist', { name: 'Раздел настроек' })
