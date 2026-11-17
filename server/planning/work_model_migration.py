@@ -834,8 +834,19 @@ def _oracle_needed(conn: sqlite3.Connection, context: Context) -> bool:
 # -- states --------------------------------------------------------------------
 
 
+def _states_declared_old(conn: sqlite3.Connection) -> bool:
+    """Whether `workflow_states` is still declared with 2.9's categories, rows or none."""
+
+    stored = str(
+        conn.execute("SELECT sql FROM sqlite_master WHERE name = 'workflow_states'").fetchone()[0]
+    )
+    return f"'{_SERVICE}'" not in stored
+
+
 def _states_needed(conn: sqlite3.Connection, context: Context) -> bool:
     del context
+    if _states_declared_old(conn):
+        return True
     old = conn.execute(
         f"SELECT 1 FROM workflow_states WHERE category IN ({_sql_set(_RENAMED_CATEGORIES)})"  # noqa: S608
         " LIMIT 1"
@@ -887,10 +898,7 @@ def _add_state(
 def _migrate_states(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     """`states`: the eight categories and the service state in every workflow."""
 
-    stored = str(
-        conn.execute("SELECT sql FROM sqlite_master WHERE name = 'workflow_states'").fetchone()[0]
-    )
-    if f"'{_SERVICE}'" not in stored:
+    if _states_declared_old(conn):
         mapped = " ".join(f"WHEN '{old}' THEN '{new}'" for old, new in _RENAMED_CATEGORIES.items())
         planning_store.rebuild_table(
             conn,
@@ -980,7 +988,8 @@ def _migrate_states(conn: sqlite3.Connection, context: Context) -> Mapping[str, 
 def _check_states(conn: sqlite3.Connection, context: Context) -> None:
     if _states_needed(conn, context):
         raise UnmetError(
-            "a workflow still has an old category or lacks Deferred or the service state"
+            "workflow_states is declared with the old categories, or a workflow still has"
+            " an old category or lacks Deferred or the service state"
         )
 
 

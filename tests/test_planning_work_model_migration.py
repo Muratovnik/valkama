@@ -29,6 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import cli, store, store_backups, store_steps
 from server.planning import images as planning_images
+from server.planning import service as planning_service
 from server.planning import store as planning_store
 from server.planning import words
 from server.planning import work_model_migration as migration
@@ -1433,6 +1434,82 @@ class KeptStepClaimTests(StoreCase):
         )
         self.assertIn(f"{self.ids['WM-7']} changed its checklist", post_identities["error"])
         self.assertEqual((identity_before, digest), (identity(self.path), file_digest(self.path)))
+
+
+#: The tables a store that never had planning holds no row of, before and after.
+PLANNING_TABLES = ("planning_spaces", "workflows", "workflow_states", "work_items")
+
+
+class NeverPlannedStoreTests(StoreCase):
+    """A store 2.9 left in which no space was ever created, beside a registry of no
+    project: every step that reshapes a table reshapes it with no row to carry, and the
+    store comes out a 3.0 store that still never had planning."""
+
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self.directory.cleanup)
+        self.path = os.path.join(self.directory.name, "valkama.sqlite3")
+        schema17.build_2_9(self.path)
+        registry(self, self.directory.name, bound={})
+        self.file = item_projects_file(self.path, self.directory.name)
+
+    def assert_never_planned(self) -> None:
+        self.assertEqual(
+            dict.fromkeys(PLANNING_TABLES, 0),
+            {
+                table: int(self.read(f"SELECT count(*) FROM {table}")[0][0])
+                for table in PLANNING_TABLES
+            },
+        )
+
+    def test_it_migrates_every_postcondition_holds_and_a_second_run_changes_nothing(
+        self,
+    ) -> None:
+        self.assert_never_planned()
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(STEP_NAMES, [step["name"] for step in report["steps"]])
+        self.assertEqual(
+            [(name, True) for name in POSTCONDITION_NAMES],
+            [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
+        )
+        self.assertEqual(store.STORE_SCHEMA_VERSION, identity(self.path)[0])
+        self.assert_never_planned()
+        before = file_digest(self.path)
+        again = self.migrate()
+        self.assertEqual("current", again["status"])
+        self.assertEqual(before, file_digest(self.path))
+
+    def test_the_migrated_store_takes_its_first_space_and_item(self) -> None:
+        self.assertEqual("migrated", self.migrate()["status"])
+        conn = store.connect(self.path)
+        try:
+            # The default workflow holds a state of every category of the work model,
+            # the service state among them: a table still declared as 2.9 refuses four.
+            planning_service.create_planning_space(conn, name="Alpha", key="ALPHA")
+            item = planning_service.create_work_item(conn, space="ALPHA", title="First work")
+            goal = planning_service.create_work_item(
+                conn, space="ALPHA", title="First goal", kind="goal"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        self.assertEqual(("ALPHA-1", "triage"), (item["reference"], item["state"]["category"]))
+        self.assertEqual("ALPHA-2", goal["reference"])
+        self.assertEqual(
+            {
+                "triage",
+                "deferred",
+                "ready",
+                "active",
+                "review",
+                "blocked",
+                "completed",
+                "cancelled",
+                "container",
+            },
+            {str(row[0]) for row in self.read("SELECT category FROM workflow_states")},
+        )
 
 
 class RefusalTests(unittest.TestCase):
