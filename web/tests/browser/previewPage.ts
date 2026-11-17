@@ -176,6 +176,21 @@ const PAST_THE_DELAY_MS = 800
 const PAST_THE_WARM_MS = 350
 
 /**
+ * A wheel over what scrolls, awaited to the end of the scroll it starts. The browser scrolls on
+ * its own clock, not the page's, so the page's clock run past a delay would not wait for it.
+ */
+export async function wheelToItsEnd(page: Page, by: number) {
+  const ended = page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        addEventListener('scrollend', () => resolve(), { capture: true, once: true })
+      }),
+  )
+  await page.mouse.wheel(0, by)
+  await ended
+}
+
+/**
  * How many cards show once the delay a card would take has passed: what never came, or what
  * stayed. The delay runs on the page's clock, which the spec installs before the page opens, so
  * a slow machine neither shortens it nor stretches it.

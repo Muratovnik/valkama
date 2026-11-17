@@ -23,6 +23,7 @@ import {
   SPACE,
   spaceModel,
   watchOpening,
+  wheelToItsEnd,
 } from './previewPage.ts'
 import { test } from './test.ts'
 
@@ -341,14 +342,14 @@ test('a scroll closes the card, and its end asks again for what the still pointe
   const at = await middle(links.nth(3))
   await expect(card(page)).toBeVisible()
   const closed = closing(page)
-  await page.mouse.wheel(0, 120)
+  await wheelToItsEnd(page, 120)
   expect(await closed, 'closed by the scroll').toBe(true)
   // A resting pointer points at whatever the scroll brought under it, as for a hint.
   expectTheCardOfWhatIsUnder(await afterTheScroll(page, at))
 
   // Wheeling on: the reference the card came from has moved from under the pointer.
   const standing = await links.nth(3).boundingBox()
-  await page.mouse.wheel(0, 60)
+  await wheelToItsEnd(page, 60)
   expectTheCardOfWhatIsUnder(await afterTheScroll(page, at))
   expect(await links.nth(3).boundingBox()).not.toEqual(standing)
   await expect(drawer).toBeVisible()
@@ -362,7 +363,7 @@ test('a scroll closes the card, and its end asks again for what the still pointe
   const waited = await links
     .nth(8)
     .evaluate((link) => [...document.querySelectorAll('[data-reference-preview]')].indexOf(link))
-  await page.mouse.wheel(0, 240)
+  await wheelToItsEnd(page, 240)
   const after = await afterTheScroll(page, resting)
   expectTheCardOfWhatIsUnder(after)
   expect(after.under, 'the waited reference has left the pointer').not.toBe(waited)
