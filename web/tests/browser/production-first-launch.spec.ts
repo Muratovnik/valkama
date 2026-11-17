@@ -9,9 +9,9 @@
  * is the board's to say once it has read it. Each part stands where the shell draws it,
  * so the handoff moves nothing; a part that stood a pixel off was a visible jump.
  *
- * The application's bundle is held back here, so the skeleton is measured on screen as a
- * slow load leaves it, and the shell is measured in the same page once the bundle is let
- * through.
+ * The application's bundle is held back here, and its stylesheets for a moment, so the
+ * skeleton is measured on screen as a slow load leaves it, and the shell is measured in
+ * the same page once the bundle is let through.
  */
 import { createRequire } from 'node:module'
 
@@ -194,6 +194,22 @@ async function holdBundle(page: Page): Promise<() => void> {
   return () => release?.()
 }
 
+/**
+ * The bundle's stylesheets, held until the returned call lets them through. Until they
+ * apply the page draws no frame, so a layout read then is one nobody sees.
+ */
+async function holdStyles(page: Page): Promise<() => void> {
+  let release: (() => void) | undefined
+  const released = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route(/\/assets\/[^/]+\.css$/u, async (route) => {
+    await released
+    await route.continue()
+  })
+  return () => release?.()
+}
+
 /** The reader's rail width, in the page's storage before its first script runs. */
 async function rememberRail(page: Page, rail: number | null) {
   await page.addInitScript(
@@ -243,8 +259,12 @@ for (const size of SIZES) {
       await installBackend(page)
       await rememberRail(page, rail)
       const release = await holdBundle(page)
+      const releaseStyles = await holdStyles(page)
       await page.goto('/', { waitUntil: 'commit' })
       await expect(page.locator('#app > .sk')).toBeVisible()
+      // The stylesheets come a moment after the skeleton is in the page, as on a slow
+      // load: what is measured is the first frame drawn, not a layout read before it.
+      setTimeout(releaseStyles, 300)
 
       // Only the chrome: nothing in the skeleton says a word or stands for a row of content.
       const drawn = await page.locator('#app').evaluate((app) => ({
@@ -283,6 +303,7 @@ for (const size of SIZES) {
         panelChildren: 0,
         entries: 4,
       })
+      await settled(page)
       const skeleton = await measure(page, true)
 
       await watchFrames(page)
