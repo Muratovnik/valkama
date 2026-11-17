@@ -313,6 +313,7 @@ model; the card's `state` has no `is_terminal`:
 | `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule` or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
+| `cancelled_blockers` | the cancelled items still linked `blocks` to it, by reference, which `waits_for` no longer names: the work it waited for will not be done. Only on open work and only when there is one; it lasts while the link stands |
 | `workable` | whether its space's take-next queue may give it now: `withheld` is empty. It is the rule `claim_ready_work_item` takes work by |
 | `withheld` | why the queue does not give it, as codes in this order: `goal_or_stage` (a goal or stage, which has no other code), `not_ready` (not in a `ready` state), `held` (a claim, or a claimed step), `waits` (an unfinished blocker), `question` (an open question to the owner), `no_start` (in a `ready` state its workflow leads nowhere into work from), `ancestor_triage` and `ancestor_deferred` (a goal or stage over it stands there), `ancestor_waits` (a goal or stage over it has an unfinished blocker), `ancestor_closed` (a goal or stage over it is closed while it is open), `outside_space` (a read of another space holds it, for a project of that space it names: that space's queue never gives it). Empty exactly when `workable` |
 | `projects` | the projects it changes, by `project_id`: each with the registry's `display_name` (`null` while the registry does not record it) and its `source`, `named`, `commits` or `migrated` (see [The projects an item changes](#the-projects-an-item-changes)). A goal's or stage's are those of every task under it |
@@ -2185,7 +2186,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?, addressees?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
-| `transition` | `{state, reason?, force?, acceptance?, to_check?}` | `/transition` |
+| `transition` | `{state, reason?, force?, acceptance?, to_check?, cancels?}` | `/transition` |
 
 Each path in the last column is under `POST /api/planning/work-item`.
 
@@ -2919,6 +2920,60 @@ the field is `null`.
 The card's own read says more about who that was: `last_claim_executor` is the
 same `executor` its claim, steps and agents carry, for the holder
 `last_claim_ref` names, with `state` `none` when there is no session to open.
+
+### Cancelling a goal or stage
+
+A goal or stage is cancelled with the open work under it, at any depth, so a cancel
+of one with open work under it takes two calls: the first answers with what would
+close, the second confirms it.
+
+The first call, a move of the goal or stage to a `cancelled` state without
+`cancels`, is refused with code `cancel_list` (409), and nothing is written. `force`
+does not carry it, and a person meets it as an agent does. Its body carries, beside
+`code` and `message`:
+
+| Field | What it holds |
+| --- | --- |
+| `cancels` | the open items under it, at any depth, in number order: `reference`, `title`, `kind`, `state` (`{key, name, category}`, `null` for an accepted open goal or stage) with `container_state`, and `holder`, who holds the item or one of its steps, empty when nobody does |
+| `dependents` | the open items outside that list that wait on one of its items or on the goal or stage itself: `reference`, `title`, `kind`, `waits_on` and `how`, `blocks` for a `blocks` link; one row for each item waited on |
+| `list_token` | 16 hexadecimal digits that fingerprint the list |
+
+The second call is the same move with `cancels` set to `list_token`. The server
+builds the list again and cancels exactly that list when its token matches; when
+it does not, because work was filed under the goal, a holder or a state changed, or
+a dependent came or went, the call is refused again with the new list and its
+token, and nothing is cancelled. A new title, description or comment changes no
+token. The token is the first 16 hexadecimal digits of the SHA-256 of
+`{"cancels": [[reference, state, holders], ...], "dependents": [[reference, waits_on,
+how], ...]}` written as JSON with sorted keys, no spaces and ASCII only, where
+`state` is the item's state key or, for an accepted open goal or stage, its
+`container_state`, `holders` is the sorted `holder` list, and each table is sorted.
+It holds nothing on the server, so any caller that read the list gets the same one.
+
+In that one write every item of the list moves to the first `cancelled` state its
+workflow reaches, the deepest first, with the reason `cancelled with MAIN-3`, so its
+`transitioned` detail reads `cancelled: cancelled with MAIN-3`. The guard for what a
+person did holds for the goal or stage named, not for the work under it. Each
+closes with a summary written as a new report: one without a summary gets `done`
+`Cancelled with MAIN-3.` and `next` `Nothing: the goal or stage it served was
+cancelled.`; one with a summary keeps its `done` and gets `next` `Nothing: cancelled
+with MAIN-3, the goal or stage it served.`, the summary before staying a report in
+its comments. The goal's or stage's `reason`, when the move gives one, is each
+summary's `why`. Their claims and step claims end and their requests end as
+[a close ends the claims](#a-close-ends-the-claims) says. An item of the list whose
+workflow reaches no `cancelled` state refuses the whole cancel, before any list is
+handed over: `[transition] MAIN-14 is under MAIN-3 and cannot be cancelled from where
+it stands`. `cancels` with any other move, a task's cancel among them, is refused with
+`invalid_request`.
+
+The answer, and `applied.transition` of a batch, adds `cancelled`, the references of
+the items under it the cancel closed, and `released`, a list of `{reference,
+holder}` for each claim it ended on them, in place of the one holder a close names.
+
+A cancel of a task, or of a goal or stage with nothing open under it, is one call.
+Any close, completed or cancelled, adds `freed`: the open items it blocked that
+nothing open blocks any more, by reference. An open item still linked `blocks` to a
+cancelled one names it in `cancelled_blockers`.
 
 ### Review asks the owner
 
