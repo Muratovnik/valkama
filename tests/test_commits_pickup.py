@@ -205,29 +205,6 @@ class CodexCallTests(PickupCase):
         self.assertEqual([SUBAGENT, "agent-from-input"], [row[4] for row in self.rows()])
 
 
-class NestedClientTests(PickupCase):
-    def test_the_first_client_hook_takes_a_nested_record(self) -> None:
-        files = self.committed(
-            CLAUDE_CODE_SESSION_ID=CLAUDE,
-            CODEX_SESSION_ID=CODEX,
-            CODEX_THREAD_ID=CODEX,
-            CODEX_TOOL_CALL_ID=CALL,
-        )
-        by_key = {path.name.split("--")[0]: path for path in files}
-        self.assertEqual({CLAUDE, CODEX}, set(by_key))
-        self.claude()
-        self.assertEqual([(CLAUDE, None, "claude")], [row[3:] for row in self.rows()])
-        self.assertFalse(by_key[CLAUDE].exists())
-        self.assertTrue(by_key[CODEX].exists())
-        conn = sqlite3.connect(self.place.store)
-        self.addCleanup(conn.close)
-        before = conn.execute("PRAGMA data_version").fetchone()[0]
-        self.assertEqual((b"", ""), self.hook("codex", session_id=CODEX, tool_use_id=CALL))
-        self.assertEqual(1, len(self.rows()), "the outer hook writes nothing")
-        self.assertEqual(before, conn.execute("PRAGMA data_version").fetchone()[0])
-        self.assertFalse(by_key[CODEX].exists(), "its worked-off file is deleted")
-
-
 class StoreAccessTests(PickupCase):
     def test_without_records_the_store_is_not_opened_for_writing(self) -> None:
         refused = mock.patch.object(light, "open_light", side_effect=AssertionError("opened"))
@@ -409,6 +386,32 @@ class RuleCase(PickupCase):
         return f'{PROJECT} {commit[:9]} "{subject.fetchone()[0]}"'
 
 
+class NestedClientTests(RuleCase):
+    def test_the_first_client_hook_takes_a_nested_record(self) -> None:
+        t1 = self.task("Held", PROJECT)
+        self.claim(t1)
+        files = self.committed(
+            CLAUDE_CODE_SESSION_ID=CLAUDE,
+            CODEX_SESSION_ID=CODEX,
+            CODEX_THREAD_ID=CODEX,
+            CODEX_TOOL_CALL_ID=CALL,
+        )
+        by_key = {path.name.split("--")[0]: path for path in files}
+        self.assertEqual({CLAUDE, CODEX}, set(by_key))
+        self.claude()
+        self.assertEqual([(CLAUDE, None, "claude")], [row[3:] for row in self.rows()])
+        self.assertEqual([(t1, self.place.head(), "server", "valkama")], self.attached())
+        self.assertFalse(by_key[CLAUDE].exists())
+        self.assertTrue(by_key[CODEX].exists())
+        conn = sqlite3.connect(self.place.store)
+        self.addCleanup(conn.close)
+        before = conn.execute("PRAGMA data_version").fetchone()[0]
+        self.assertEqual((b"", ""), self.hook("codex", session_id=CODEX, tool_use_id=CALL))
+        self.assertEqual(1, len(self.rows()), "the outer hook writes nothing")
+        self.assertEqual(before, conn.execute("PRAGMA data_version").fetchone()[0])
+        self.assertFalse(by_key[CODEX].exists(), "its worked-off file is deleted")
+
+
 class HeldTaskTests(RuleCase):
     def test_a_commit_goes_to_the_one_task_the_agent_holds(self) -> None:
         t1 = self.task("One")
@@ -419,6 +422,10 @@ class HeldTaskTests(RuleCase):
         self.assertEqual("", stderr)
         self.assertEqual(
             f"Valkama attached your commit {self.short(commit)} to {t1}.", context(stdout)
+        )
+        self.assertEqual(
+            [(PROJECT, commit, CLAUDE, None, "claude")],
+            [(row[0], row[1], row[3], row[4], row[5]) for row in self.rows()],
         )
         self.assertEqual([(t1, commit, "server", "valkama")], self.attached())
         self.assertEqual([(PROJECT, "commits")], self.projects(t1))
