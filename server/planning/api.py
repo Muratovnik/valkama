@@ -757,6 +757,9 @@ def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict
         acceptance=payload.get("acceptance"),
         to_check=payload.get("to_check"),
         cancels=payload.get("cancels"),
+        following=payload.get("following"),
+        # The caller's own move: the owner's setting may keep it for their answer.
+        gated=True,
     )
 
 
@@ -1275,7 +1278,10 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         ),
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
-    ("transition", frozenset({"state", "reason", "force", "acceptance", "to_check", "cancels"})),
+    (
+        "transition",
+        frozenset({"state", "reason", "force", "acceptance", "to_check", "cancels", "following"}),
+    ),
     ("defer", frozenset({"until", "reason", "force"})),
     ("move_out", frozenset({"reason", "force"})),
 )
@@ -1462,7 +1468,11 @@ def _apply_step(
     if group == "defer":
         return _deferred(conn, {**entry, **base})
     answer = _transition(conn, {**entry, **base})
-    found = {name: answer[name] for name in ("warnings", "overridden") if answer.get(name)}
+    found = {
+        name: answer[name]
+        for name in ("warnings", "overridden", "waits_for_owner")
+        if answer.get(name)
+    }
     # An accepted open goal or stage stands in no state a caller names: it shows what it derives.
     moved = {"state": answer["state"]["key"] if answer["state"] is not None else None}
     if answer["container_state"] is not None:

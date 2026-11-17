@@ -128,6 +128,29 @@ def asked(
     return frozenset(str(row["work_item_id"]) for row in rows if lapse(row, at) is None)
 
 
+#: A question to the owner, by its id, answered and standing on one of the items named
+#: as one JSON array, with the source of the call that gave the answer it holds: the
+#: latest answer or change of it. A merge moves a request and leaves its history where
+#: it was written, so the history is read by the request.
+_ANSWERED = (
+    "SELECT c.identity_source FROM work_item_requests r"  # noqa: S608 - constant text
+    " LEFT JOIN work_item_events e ON e.id = (SELECT MAX(id) FROM work_item_events"
+    "  WHERE action IN ('request_answered', 'request_changed') AND detail = r.request_id)"
+    " LEFT JOIN execution_events c ON c.id = e.call_id"
+    " WHERE r.request_id = ? AND r.status = 'answered' AND "
+    + OWNER_ASKED
+    + " AND r.work_item_id IN (SELECT value FROM json_each(?))"
+)
+
+
+def answered_by_owner(conn: sqlite3.Connection, request_id: str, items: Iterable[str]) -> bool:
+    """Whether `request_id` is a question to the owner on one of `items` that a person
+    answered, in Valkama's interface, and nobody changed since through another call."""
+
+    found = conn.execute(_ANSWERED, (request_id, json.dumps(sorted(set(items))))).fetchone()
+    return found is not None and found[0] == calls.BROWSER
+
+
 def _read(conn: sqlite3.Connection, query: str, parameters: tuple[str, ...]) -> list[sqlite3.Row]:
     """The rows of a query over `_FACTS`, from the store as this build writes it or an earlier one.
 

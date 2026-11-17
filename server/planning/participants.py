@@ -99,6 +99,16 @@ def sessions(conn: sqlite3.Connection, work_item_id: str) -> list[str]:
     return [entry["session"] for entry in _live(conn, work_item_id, chain)]
 
 
+def working(conn: sqlite3.Connection, row: sqlite3.Row) -> list[str]:
+    """The live sessions that work on the item of `row` now: a goal's or a stage's
+    participants, and those that hold a task, by its claim or an open step of it."""
+
+    identity = str(row["work_item_id"])
+    if str(row["kind"]) == model.CONTAINER_KIND:
+        return sessions(conn, identity)
+    return [entry["session"] for entry in _live(conn, identity, ())]
+
+
 def heard(conn: sqlite3.Connection, work_item_id: str) -> bool:
     """Whether a live session hears this item: a participant of it or of any container over it.
 

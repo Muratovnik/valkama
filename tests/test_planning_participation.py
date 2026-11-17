@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from unittest import mock
 
 from server import store
-from server.planning import api, calls, model, participation, questions, service, tools
+from server.planning import api, calls, model, participation, questions, requests, service, tools
 from server.planning import store as planning_store
 from tests.planning_fixtures import standing_in
 
@@ -665,6 +665,67 @@ class QueueTests(Harness):
         other = self.ready("BETA")
         self.conn.commit()
         self.assertEqual(other, self.take_next("BETA")["reference"])
+
+    def test_the_queue_holds_back_work_whose_goal_waits_to_be_cancelled(self) -> None:
+        self.person(space="ALPHA", set="maximal")
+        goal = self.owners("A goal outside the agent's work", kind="goal")
+        task = self.owners("Ready work under it", parent=goal)
+        self.assertEqual("ready", service.get_work_item(self.conn, task)["state"]["category"])
+        cancel = {"state": "cancelled", "reason": "the plan changed"}
+        summary = {"done": "Nothing: the plan changed.", "next": "Nothing."}
+        # The agent has its say on the owner's goal before it closes it (`person_spoke`).
+        self.agents_batch(goal, comment={"body": "The plan changed: this goal is not needed."})
+        with self.assertRaises(Exception) as listed:
+            self.agents_batch(goal, summary=summary, transition=cancel)
+        status, body = api.error_response(listed.exception)
+        self.assertEqual((409, "cancel_list"), (status, body["error"]["code"]), body)
+        token = body["error"]["list_token"]
+        confirmed = {**cancel, "cancels": token}
+        waits = self.agents_batch(goal, summary=summary, transition=confirmed)["waits_for_owner"]
+        self.assertEqual("cancel_outside", waits["point"])
+        # Nothing is handed out under the goal while its cancel waits for the owner.
+        with calls.bind(AGENT, "claim_ready_work_item"):
+            self.assertIsNone(service.claim_ready_work_item(self.conn, space="ALPHA"))
+        self.conn.rollback()
+        self.assertIn("ancestor_cancelling", service.get_work_item(self.conn, task)["withheld"])
+        # The owner keeps the goal: the work under it is handed out again.
+        request = questions.open_rows(self.conn)[0]
+        self.assertEqual(waits["question"], request["request_id"])
+        with calls.bind(calls.browser(), "/api/planning/request/resolve"):
+            requests.resolve(
+                self.conn,
+                waits["question"],
+                status="answered",
+                expected_revision=int(request["revision"]),
+                answers={"answer": "keep"},
+                author="user",
+            )
+        self.conn.commit()
+        self.assertEqual([], service.get_work_item(self.conn, task)["withheld"])
+        self.assertEqual(task, self.take_next()["reference"])
+
+    def owners(self, title: str, **fields: object) -> str:
+        """An item the owner files in ALPHA, accepted as the owner's; its reference."""
+
+        with calls.bind(calls.browser(), "/api/planning/work-items"):
+            _status, body = api.handle_post(
+                self.conn, "/api/planning/work-items", {"space": "ALPHA", "title": title, **fields}
+            ) or (0, {})
+        self.conn.commit()
+        return str(body["reference"])
+
+    def agents_batch(self, reference: str, **groups: object) -> dict:
+        try:
+            with calls.bind(AGENT, "apply_work_item_changes"):
+                answer = tools.OPS["apply_work_item_changes"](
+                    self.conn, {"id": reference, **groups}
+                )
+        except BaseException:
+            self.conn.rollback()
+            raise
+        self.conn.commit()
+        assert isinstance(answer, dict)
+        return answer
 
 
 if __name__ == "__main__":

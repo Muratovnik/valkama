@@ -134,6 +134,27 @@ def task_fields(*, moving: bool) -> list[dict]:
     return [choice, until]
 
 
+#: The answers about an agent's cancel the owner decides on: `cancel` makes it, `keep`
+#: leaves the item as it is.
+CANCEL_CANCEL = "cancel"
+CANCEL_KEEP = "keep"
+
+
+def cancel_fields() -> list[dict]:
+    """The fields of the question about a cancel the owner decides on: `cancel` cancels
+    the item, with `cancels` the list token for a goal or stage with open work under
+    it, as a cancel's second call names it; `keep` leaves it. The agent asks for
+    `cancel`."""
+
+    choice, _until, cancels = (dict(field) for field in RETURN_FIELDS)
+    choice["options"] = [
+        {"id": CANCEL_CANCEL, "label": "Cancel it", "recommended": True},
+        {"id": CANCEL_KEEP, "label": "Keep it"},
+    ]
+    cancels["under"] = {"field": REVIEW_ANSWER, "option": CANCEL_CANCEL}
+    return [choice, cancels]
+
+
 MAX_NOTE = 8000
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each

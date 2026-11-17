@@ -3,7 +3,7 @@
 A task is given when it is in a ready state, nobody holds it or any step of it,
 nothing unfinished blocks it, no question to the owner waits on it, its workflow
 leads from where it stands into work, and no goal or stage over it is in triage
-or deferred, closed, or waiting on a blocker. `withheld` says which of those fail,
+or deferred, waiting to be cancelled, closed, or waiting on a blocker. `withheld` says which of those fail,
 as codes in one fixed order, and an item is `workable` exactly when it names none.
 A read of one space that holds another space's item, for a project of the space
 read it names, adds `outside_space`: the queue of the space read never gives it.
@@ -62,6 +62,9 @@ CODES = (
     "ancestor_triage",
     #: A goal or stage over it is deferred.
     "ancestor_deferred",
+    #: A cancel of a goal or stage over it waits for the owner, or for the sessions it
+    #: asked: work there is likely to be cancelled.
+    "ancestor_cancelling",
     #: An unfinished item blocks a goal or stage over it.
     "ancestor_waits",
     #: A goal or stage over it is closed while it is open.
@@ -118,6 +121,8 @@ def withheld(
         found.append("ancestor_triage")
     if any(ancestor.category == "deferred" for ancestor in over):
         found.append("ancestor_deferred")
+    if any(tree.cancel_waits(ancestor) for ancestor in ancestors):
+        found.append("ancestor_cancelling")
     if any(tree.waits_for(ancestor) for ancestor in ancestors):
         found.append("ancestor_waits")
     if not node.closed and any(ancestor.closed for ancestor in over):

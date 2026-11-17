@@ -53,6 +53,9 @@ VALKAMA = "Valkama"
 DETAIL_LIMIT = 512
 #: The purposes whose question shows the cancel list as it stands (`part`).
 _LISTED = frozenset({"goal", "cancel"})
+#: Why a cancel no longer applies when its list alone changed: the owner may confirm
+#: the list as it stands instead (`requests.Carrier.by_list`).
+LIST_CHANGED = "the work it cancels changed since"
 
 _ITEM = (
     "SELECT i.*, p.key AS space_key, s.key AS state_key, s.category AS state_category,"
@@ -369,11 +372,22 @@ def _cancel_changed(conn: sqlite3.Connection, action: Action, row: sqlite3.Row) 
     now = cancel_seen(conn, row)
     if now["item"] != action.seen.get("item"):
         return "the item changed since"
+    return LIST_CHANGED if _grown(action, now) else None
+
+
+def list_changed(conn: sqlite3.Connection, action: Action) -> bool:
+    """Whether a row of the cancel list is new or changed since the cancel was asked."""
+
+    row = conn.execute(_ITEM, (action.work_item_id,)).fetchone()
+    return _grown(action, cancel_seen(conn, row))
+
+
+def _grown(action: Action, now: Mapping[str, list]) -> bool:
     for part in ("cancels", "dependents"):
         seen = {json.dumps(entry) for entry in action.seen.get(part) or []}
         if any(json.dumps(entry) not in seen for entry in now[part]):
-            return "the work it cancels changed since"
-    return None
+            return True
+    return False
 
 
 def _steps_changed(action: Action, row: sqlite3.Row) -> str | None:
