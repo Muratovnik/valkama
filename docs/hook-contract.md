@@ -58,13 +58,13 @@ For Codex, `user-prompt-submit` does. `post-tool-use` would too, but Host Runtim
 does not register it: Codex runs a hook's command through the session's shell, so
 a handler there starts a shell on every tool call, and no Codex release documents
 `agent_id` on a subagent's `PostToolUse` yet. Codex `stop` is never answered, and
-a Codex input with `agent_id` is a subagent's hook and is answered with nothing
+a Codex input with `agent_id` is a subagent's hook and gets no notice
 (see [when it is told](#when-it-is-told)). That is described in
 [Telling the agent what a person did](#telling-the-agent-what-a-person-did).
 `session-start` with `source` `resume` or `compact` may answer, for both
 clients, with [the resume note](#the-resume-note). `post-tool-use` of both
 clients and `post-tool-use-failure` first take the [commits](#commits) the
-session's shell made.
+session's shell made, and answer with where each went.
 
 An event a client does not have, an unknown client, or input whose
 `hook_event_name` names a different hook than the command line is ignored, with
@@ -755,10 +755,12 @@ Codex reads `additionalContext` from `PostToolUse` and `UserPromptSubmit` the sa
 way, so `valkama hook codex post-tool-use` and `valkama hook codex
 user-prompt-submit` answer too. Three things differ from Claude Code:
 
-- **A subagent's hook says nothing.** A Codex subagent's hook carries its parent's
+- **A subagent's hook gives no notice.** A Codex subagent's hook carries its parent's
   `session_id`, so only `agent_id` tells it apart. Since 3.0 an input with any
-  `agent_id` is answered with nothing and moves no place: the news stays for the
+  `agent_id` gets no notice and moves no place: the news stays for the
   orchestrator, whose subagent hears nothing of its own session and no tree anyway.
+  It is answered only with the lines about the commits it made
+  ([the answer](#the-answer)).
   An input without one is the orchestrator's; if a Codex release sent a subagent's
   input without `agent_id`, that subagent would be handed the orchestrator's news.
 - **`Stop` is not answered.** Codex has a `Stop` hook, and a `block` answer there
@@ -2025,9 +2027,66 @@ session), the client and the time. After the transaction commits it deletes
 those files. A record that changes nothing, because its commit is recorded
 already, is deleted as well: that is how the second file of a nested client's
 commit goes. A busy store, or one of another schema, leaves every record where
-it is for the session's next hook.
+it is for the session's next hook, and the answer says nothing of it.
 
-`post-tool-use-failure` is no lifecycle event and answers with nothing.
+### Which task a commit goes to
+
+The same transaction attaches each commit it recorded to a task, signed
+`valkama`: an attachment marked `server`, and a `commit_attached` event whose
+detail is `<project id> <hash>`. A commit recorded already is not decided
+again.
+
+The holds count as `held` counts them, a live claim or an open step, but for
+one holder at a time, in two levels. For a subagent, first the tasks the agent
+holds, then those its session's own holder holds; never another subagent's. For
+the session's own holder, first its own, then its subagents'. The first level
+that holds a task decides:
+
+1. one task: the commit goes to it;
+2. several: it goes to the one whose projects hold the commit's project, a task
+   naming none holding its space's default project. With several such, or none,
+   it goes nowhere, and the answer names those that fit, or every task of the
+   level when none does;
+3. none at either level: it goes to the task the session last moved into a
+   review or completed state, within the last 30 minutes, by the same two
+   levels, when that task's projects hold the commit's project. Entering review
+   ends the claim, so a commit made just after it would otherwise find no task.
+   Otherwise the commit goes nowhere and stays among the commits on no card.
+
+Only tasks: nobody holds a goal or a stage. An attachment gives the task the
+commit's project with the source `commits`, unless the task names it already.
+
+### The answer
+
+The lines about the commits come first in the hook's `additionalContext`, one
+per commit, five at most and then one that counts the rest:
+
+| When | Line |
+| --- | --- |
+| attached | `Valkama attached your commit <repo> <short> "<subject>" to <REF>.` |
+| to the other level's task | `Valkama attached your commit <repo> <short> "<subject>" to <REF>, which your session holds.` |
+| to a task closed lately | `Valkama attached your commit <repo> <short> "<subject>" to <REF>, which you closed <n> min ago. If it belongs elsewhere, move it with the commits group of apply_work_item_changes.` |
+| several tasks fit, or none | `Your commit <repo> <short> "<subject>" fits <REF1> and <REF2>, which you hold. Attach it to the right one: apply_work_item_changes {"id": "<REF>", "commits": [{"repository": "<repo>", "hash": "<short>"}]}.` |
+| no task | `Your commit <repo> <short> "<subject>" is on no card: you hold no task it fits. Claim the task before the work; to attach this commit, use the commits group of apply_work_item_changes on its card.` |
+| past five | `And <n> more commits: see the cards.` |
+
+`<repo>` is the project id, `<short>` the first nine digits of the hash and
+`<subject>` the subject, cut to 72 characters. On `post-tool-use` a notice, when
+there is one, follows the lines in the same `additionalContext`, after an empty
+line, and keeps to what the lines leave of its bound. A Codex subagent gets its
+own lines and, as before, no notice. `post-tool-use-failure` is no lifecycle
+event and no point a notice is delivered at: it answers with the lines alone,
+
+```json
+{"hookSpecificOutput": {"hookEventName": "PostToolUseFailure", "additionalContext": "<lines>"}}
+```
+
+and with nothing when there are none. No `systemMessage` is about a commit: a
+person sees it on the card.
+
+Claude Code does not tell a command which agent ran it, so when two agents of
+one session commit at the same time, a commit may go to the other one's task.
+The line names the task, and the agent can move it.
 
 ## Not covered
 
