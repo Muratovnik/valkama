@@ -8,14 +8,17 @@ is spelled as the contract spells a holder.
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import tempfile
 import unittest
 from collections.abc import Mapping
+from pathlib import Path
 from unittest import mock
 
 from server import store
 from server.planning import api, calls, decisions, item_projects, service
+from server.planning import store as planning_store
 
 PATH = "/api/planning/decisions"
 AGENT = calls.Identity(calls.CONFIRMED, calls.CLAUDE_PAIR, session_id="session-a")
@@ -23,6 +26,15 @@ AGENT = calls.Identity(calls.CONFIRMED, calls.CLAUDE_PAIR, session_id="session-a
 SESSION = "claude (session session-a)"
 DAY_ONE = "2026-11-15"
 DAY_TWO = "2026-11-16"
+#: Where the web lists the decision points its strict reader accepts.
+WEB_POINTS = (
+    Path(__file__).resolve().parents[1]
+    / "web"
+    / "src"
+    / "shared"
+    / "api"
+    / "planningDecisionPoints.ts"
+)
 
 
 class Harness(unittest.TestCase):
@@ -305,6 +317,20 @@ class MarkTests(Harness):
         [(_event, _point, what)] = self.marks()
         self.assertEqual(300, len(what))
         self.assertEqual("removed step " + "x" * 286 + "…", what)
+
+
+def web_points(path: Path) -> set[str]:
+    """The points the web list names, read from its source."""
+
+    source = path.read_text(encoding="utf-8")
+    listed = source.split("export const DECISION_POINTS = [", 1)[1].split("]", 1)[0]
+    return set(re.findall(r"'([a-z_]+)'", listed))
+
+
+class WebPointTests(unittest.TestCase):
+    def test_the_web_lists_every_decision_point_the_store_holds(self) -> None:
+        # The web's strict reader refuses a `point` its list lacks, so the two lists move together.
+        self.assertEqual(set(planning_store.DECISION_POINTS), web_points(WEB_POINTS))
 
 
 if __name__ == "__main__":
