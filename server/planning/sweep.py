@@ -2,7 +2,8 @@
 
 Of Planning's work rules only these wait for nobody's call: a lease lapses while
 its session is silent or gone, and what the session follows lapses with it; work
-put off until a day comes back when the day comes. A
+put off until a day comes back when the day comes; a cancel the sessions whose work
+it ends were asked about passes to the owner after a day of their silence. A
 pass of this sweep is what releases them. `housekeeping` runs the first pass when
 a long-lived process starts, inside its start-up budget, and then repeats it on
 its own connection in a background thread of both processes that start up, the
@@ -21,8 +22,9 @@ What every step promises, because the steps added later lean on it:
 2. it writes as Valkama's own call, so the history says who and why: the pass
    binds `calls.valkama()` with the step's name as the tool, and a step whose
    writes are recorded under a name of their own binds that one inside
-   (the lease expiry's `leases.EXPIRY_TOOL`, one call per item, and the return of
-   put-off work's `deferral.RETURN_TOOL`);
+   (the lease expiry's `leases.EXPIRY_TOOL`, one call per item, the return of
+   put-off work's `deferral.RETURN_TOOL`, and the round of consent's
+   `pending.ROUND_TOOL` and `consent.CANCEL_TOOL`);
 3. it changes at most `LIMIT` items in one pass and leaves the rest to the next;
 4. it reads the time from `leases.utc_now`, which tests replace.
 
@@ -44,6 +46,7 @@ from . import (
     calls,
     closing,
     commits,
+    consent,
     deferral,
     leases,
     participation,
@@ -61,6 +64,7 @@ SUBSCRIPTIONS = "subscriptions"
 COMMITS = "commits"
 RETURNS = "returns"
 CONFIRMATIONS = "confirmations"
+CONSENT = "consent"
 
 
 @dataclass(frozen=True)
@@ -171,6 +175,10 @@ def _confirmations(conn: sqlite3.Connection) -> int:
     return closing.sweep_confirmations(conn, limit=LIMIT)
 
 
+def _consent(conn: sqlite3.Connection) -> int:
+    return consent.sweep(conn, limit=LIMIT)
+
+
 #: The steps of a pass, in order. The leases go first: the subscriptions of a
 #: session lapse by the same rule, and a later step may ask who still holds what.
 #: Words a lapsed session left unheard are recovered next (`waiting`), while the
@@ -178,8 +186,10 @@ def _confirmations(conn: sqlite3.Connection) -> int:
 #: a day that came, or until an item that closed by a path that did not bring it
 #: back, comes back next (`returns`). The commit records no client hook took follow,
 #: decided by the holds the steps before left (`commits`). Whether anyone still works
-#: on a goal or stage awaiting confirmation is asked last (`confirmations`), once the
-#: passes before have released whoever does not.
+#: on a goal or stage awaiting confirmation is asked next (`confirmations`), once the
+#: passes before have released whoever does not. A cancel that waits for the sessions
+#: whose work it ends is decided last (`consent`), by a day of their silence or by none
+#: of them being left to answer, once the leases have said who is still there.
 STEPS: tuple[Step, ...] = (
     Step(LEASES, _leases_pending, _leases),
     Step(WAITING, _waiting_pending, _waiting),
@@ -187,4 +197,5 @@ STEPS: tuple[Step, ...] = (
     Step(RETURNS, _returns_pending, _returns),
     Step(COMMITS, commits.sweep_pending, _commits),
     Step(CONFIRMATIONS, closing.pending, _confirmations),
+    Step(CONSENT, consent.sweep_pending, _consent),
 )

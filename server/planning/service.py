@@ -1800,14 +1800,18 @@ def transition_work_item(
     `gated` says the move is the caller's own write, as a surface takes it, which meets
     the owner's setting of the space: an agent's cancel of an item filed outside its
     own work is the owner's to make where `cancel_outside` says `human`, and then it
-    is not made but waits for their answer (`_cancel_point`, `waits_for_owner`). So is
+    is not made but waits for their answer (`_cancel_point`, `waits_for_owner`). A cancel
+    of work other live sessions do asks those sessions (`cancel_shared`): with the owner
+    where the setting says `human`, alone otherwise, and then it waits for their
+    answers (`waits_for_sessions`), even when it follows an owner's answer. So is
     an agent's move of a task in triage into accepted work under goals and stages all
     accepted and open, where `task_in_goal` says `human`: the task stays in triage and
     the question `task` asks about it; left to the agent, the acceptance is marked in
     the summary of decisions, as is an assignment an agent names. The
     writes Valkama composes, the cancel an owner's answer carries out among them, are
     not gated. `following` names the owner's answered question, on the item or over
-    it, that the cancel follows from: it needs no question and reads no setting.
+    it, that the cancel follows from: it needs no question of the owner and reads no
+    setting.
 
     While the owner is asked whether to do an item, an agent moves it out of triage or
     deferred only to a cancel (`acceptance_question`); a person's move out is their
@@ -1935,9 +1939,11 @@ def _transition(
     ruled: str | None = None,
     following: object = None,
     gated: bool = False,
+    agreed: str | None = None,
 ) -> dict:
     """`transition_work_item`, sparing the refusals named in `spared`; `ruled` is the
-    label whose rule accepts the item on this move (`label_rule`)."""
+    label whose rule accepts the item on this move (`label_rule`); `agreed` is the line
+    of the summary of decisions a cancel the sessions agreed to marks (`cancel_agreed`)."""
 
     row = _row_for_write(conn, reference, expected_revision)
     named = model.named_basis(acceptance)
@@ -1946,7 +1952,7 @@ def _transition(
     target = _destination(conn, row, states.resolve(conn, str(row["workflow_id"]), state))
     cancel = target["category"] == "cancelled" and current["category"] != "cancelled"
     followed = _following(conn, row, following, cancel)
-    point = _cancel_point(conn, row, followed) if gated and cancel else None
+    gate = _cancel_point(conn, row, followed) if gated and cancel else None
     opened = target["category"] == model.SERVICE_CATEGORY
     if opened and current["state_id"] == target["state_id"]:
         answer = read_model.present(conn, row, full=True)
@@ -1974,9 +1980,10 @@ def _transition(
     transitions.refuse(refusals, force)
     # Past every other refusal, so the list it hands over is the last thing in the way.
     cancelling = _cancel_listing(conn, row, current, target, cancels)
-    if point == participation.HUMAN:
-        # Checked as the cancel would be made now, it is the owner's to make: it waits.
-        return _ask_about_cancel(conn, row, target, note, author, warnings)
+    if gate is not None and (gate.mode == participation.HUMAN or gate.busy):
+        # Checked as the cancel would be made now, it is the owner's to make, or the
+        # sessions' whose work it ends to hear first: it waits.
+        return _ask_about_cancel(conn, row, target, note, author, warnings, gate, followed)
     in_goal = _accepted_in_goal(conn, row, current, gives, named) if gated else None
     if in_goal == participation.HUMAN:
         # Checked as the move would be made now, taking the task on is the owner's: it
@@ -2034,9 +2041,11 @@ def _transition(
             f"{target['key']}: {note}" if note else str(target["key"]),
             author,
         )
-        if point is not None:
+        if gate is not None:
             # A cancel the setting, or the owner's answer it follows, left to the agent.
-            decisions.mark(conn, moved, "cancel_outside", _cancel_what(conn, row, followed))
+            decisions.mark(conn, moved, gate.point, _cancel_what(conn, row, followed))
+        if agreed is not None:
+            decisions.mark(conn, moved, "cancel_shared", agreed)
     if held:
         _log(conn, identity, "released", held, author)
     for step in unheld:
@@ -2409,8 +2418,9 @@ class _Cancelling:
 
 # -- a cancel the owner may decide on --------------------------------------------
 
-#: How an agent's cancel of an item filed outside its work goes when it follows an
-#: owner's answer: made, with no question, whatever the setting says.
+#: How an agent's cancel goes when it follows an owner's answer, whatever the setting
+#: says: with no question of the owner, made at once, or once the sessions whose work it
+#: ends agree.
 FOLLOWING = "following"
 
 #: The call that filed an item: the session it proved, and whether it proved one.
@@ -2451,24 +2461,43 @@ def _following(
     return named
 
 
-def _cancel_point(conn: sqlite3.Connection, row: sqlite3.Row, followed: str | None) -> str | None:
-    """How an agent's own cancel of the item goes: `human`, it waits for the owner;
-    `agent` or `following`, it is made and marked `cancel_outside` in the summary of
-    decisions; None, it is made as any cancel is.
+@dataclasses.dataclass(frozen=True)
+class _CancelGate:
+    """How an agent's own cancel of an item goes, at the point that decides it.
+
+    `mode` is `human`, `agent` or `following`; `busy` the live sessions besides the
+    caller's that work on the item, which a cancel at `cancel_shared` asks.
+    """
+
+    point: str
+    mode: str
+    busy: tuple[str, ...] = ()
+
+
+def _cancel_point(
+    conn: sqlite3.Connection, row: sqlite3.Row, followed: str | None
+) -> _CancelGate | None:
+    """How an agent's own cancel of the item goes; None, it is made as any cancel is.
 
     A person's cancel and Valkama's are the owner's own. A cancel of work other live
-    sessions do, a goal's or a stage's participants or a task's holders, is theirs to
-    hear first and goes as a cancel did before the setting. An item the caller's own
-    work filed, by a call of the caller's top-level session, is the agent's to cancel.
-    Any other the setting of its space decides (`cancel_outside`), unless the cancel
-    follows an owner's answer.
+    sessions do, a goal's or a stage's participants or a task's holders, asks them
+    (`cancel_shared`): the setting of its space says whether the owner decides at
+    once, and a cancel that follows an owner's answer asks the sessions alone, as one
+    the setting leaves to the agent does. An item the caller's own work filed, by a
+    call of the caller's top-level session, is the agent's to cancel. Any other the
+    setting decides (`cancel_outside`), unless the cancel follows an owner's answer:
+    then, as where the setting says `agent`, it is made and marked in the summary of
+    decisions.
     """
 
     if not calls.from_agent():
         return None
     caller = calls.confirmed_session()
-    if any(session != caller for session in working.working(conn, row)):
-        return None
+    busy = tuple(session for session in working.working(conn, row) if session != caller)
+    if busy:
+        settings = participation.load(conn)
+        mode = settings.mode(str(row["planning_space_id"]), "cancel_shared")
+        return _CancelGate("cancel_shared", FOLLOWING if followed else mode, busy)
     filed = conn.execute(_FILED_BY, (str(row["work_item_id"]),)).fetchone()
     own = (
         caller is not None
@@ -2479,8 +2508,9 @@ def _cancel_point(conn: sqlite3.Connection, row: sqlite3.Row, followed: str | No
     if own:
         return None
     if followed is not None:
-        return FOLLOWING
-    return participation.load(conn).mode(str(row["planning_space_id"]), "cancel_outside")
+        return _CancelGate("cancel_outside", FOLLOWING)
+    mode = participation.load(conn).mode(str(row["planning_space_id"]), "cancel_outside")
+    return _CancelGate("cancel_outside", mode)
 
 
 def _cancel_what(conn: sqlite3.Connection, row: sqlite3.Row, followed: str | None) -> str:
@@ -2491,6 +2521,25 @@ def _cancel_what(conn: sqlite3.Connection, row: sqlite3.Row, followed: str | Non
     return said if followed is None else f"{said} following question {followed}"
 
 
+#: What the owner's question says of the item an agent cancels, at each point.
+_CANCEL_ASKED = {
+    "cancel_outside": "filed outside its own work",
+    "cancel_shared": "which other sessions work on",
+}
+#: What the question then asks the owner to do.
+CANCEL_OR_KEEP = " Cancel it, or keep it."
+
+
+def cancel_asked(conn: sqlite3.Connection, row: sqlite3.Row, point: str, reason: str | None) -> str:
+    """The owner's question about an agent's cancel at `point`, up to what it asks them to
+    do: the item, why it is the owner's to decide, and the agent's reason."""
+
+    return (
+        f"An agent cancels {read_model.reference(conn, row)}, {_CANCEL_ASKED[point]}:"
+        f" {row['title']}.{_reason_said(reason)}"
+    )
+
+
 def _ask_about_cancel(
     conn: sqlite3.Connection,
     row: sqlite3.Row,
@@ -2498,39 +2547,88 @@ def _ask_about_cancel(
     reason: str,
     author: str | None,
     warnings: list[str],
+    gate: _CancelGate,
+    followed: str | None,
 ) -> dict:
-    """Ask the owner whether to make an agent's cancel of an item filed outside its
-    work, which waits on the answer (`requests.carry_out`): the item stays as it is.
-    The action keeps where the item stood, who held it and what its cancel list held
-    (`pending.cancel_seen`); the answer reads the list as it stands then."""
+    """Keep back an agent's cancel that waits on an answer: the item stays as it is.
+
+    At `cancel_outside` the owner is asked whether to make it (`requests.carry_out`). At
+    `cancel_shared` the sessions whose work it ends are asked at once as well
+    (`pending.ask_sessions`): beside the owner's question where the setting says
+    `human`, whose answer then decides and shows theirs; alone otherwise, and then the
+    cancel waits for them (`waits_for_sessions`) and their answers decide it, or pass it
+    to the owner (`consent.settle`). The action keeps where the item stood, who held it
+    and what its cancel list held (`pending.cancel_seen`); an answer reads the list as
+    it stands then. The same cancel sent again while it waits answers the same wait
+    and asks nobody again.
+    """
 
     identity = str(row["work_item_id"])
-    reference = read_model.reference(conn, row)
     proposal = pending.Proposal(
         "transition",
         {"state": str(target["key"]), "reason": reason},
-        _cancel_what(conn, row, None),
+        _cancel_what(conn, row, followed),
         seen=pending.cancel_seen(conn, row),
         reason=reason or None,
         proposed={"state": "cancelled"},
     )
-    said = f" Its reason: {reason}." if reason else ""
-    waits = pending.ask(
-        conn,
-        identity,
-        "cancel_outside",
-        proposal,
-        purpose="cancel",
-        prompt=f"An agent cancels {reference}, filed outside its own work: {row['title']}."
-        + said
-        + " Cancel it, or keep it.",
-        fields=request_model.fields(request_model.cancel_fields()),
-        author=author,
-    )
+    action, fresh = pending.hold(conn, identity, gate.point, proposal)
+    asked = cancel_asked(conn, row, gate.point, reason)
+    question = pending.owner_question(conn, action)
+    if fresh and gate.mode == participation.HUMAN:
+        shown = " The sessions are asked as well, and their answers show here." if gate.busy else ""
+        question = pending.ask_owner(
+            conn,
+            action,
+            purpose="cancel",
+            prompt=asked + shown + CANCEL_OR_KEEP,
+            fields=request_model.fields(request_model.cancel_fields()),
+            author=author,
+        )
+    if fresh and gate.busy:
+        pending.ask_sessions(
+            conn,
+            action,
+            list(gate.busy),
+            prompt=f"Another session's agent cancels {read_model.reference(conn, row)}, work"
+            f" you take part in: {row['title']}.{_reason_said(reason)} Answer agree, object with a"
+            " reason, or move your work out of it with move_out and answer moved_out.",
+            author=author,
+        )
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     answer["warnings"] = warnings
-    answer["waits_for_owner"] = waits.answer()
+    if question:
+        answer["waits_for_owner"] = pending.Waiting(
+            action.id, gate.point, question, action.what
+        ).answer()
+    else:
+        answer["waits_for_sessions"] = pending.round_of(conn, action).answer()
     return answer
+
+
+def _reason_said(reason: str | None) -> str:
+    """The agent's reason, as a question about its cancel says it."""
+
+    return f" Its reason: {reason}." if reason else ""
+
+
+def cancel_agreed(
+    conn: sqlite3.Connection,
+    reference: str,
+    state: str,
+    *,
+    reason: str,
+    cancels: str | None,
+    what: str,
+    author: str | None,
+) -> dict:
+    """Make a cancel the sessions whose work it ends agreed to, as Valkama's write: the
+    write the agent asked for, marked `cancel_shared` in the summary of decisions with
+    `what`, the line the agent's cancel carried."""
+
+    return _transition(
+        conn, reference, state, reason=reason, cancels=cancels, author=author, agreed=what
+    )
 
 
 #: What a cancel of a goal or stage does not ask of the work under it: the guard holds

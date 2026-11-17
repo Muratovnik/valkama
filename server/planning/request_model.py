@@ -155,6 +155,42 @@ def cancel_fields() -> list[dict]:
     return [choice, cancels]
 
 
+#: The answers a session gives about a cancel of its work: it agrees, it objects with a
+#: reason, or it has moved its work out of what the cancel closes.
+CONSENT_AGREE = "agree"
+CONSENT_OBJECT = "object"
+CONSENT_MOVED_OUT = "moved_out"
+CONSENT_ANSWERS = (CONSENT_AGREE, CONSENT_OBJECT, CONSENT_MOVED_OUT)
+CONSENT_REASON = "reason"
+
+
+def consent_fields() -> list[dict]:
+    """The fields of the request asking a session about a cancel of its work: `answer`,
+    and under `object` the `reason`, which an objection needs."""
+
+    return [
+        {
+            "id": REVIEW_ANSWER,
+            "label": "Answer",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {"id": CONSENT_AGREE, "label": "Agree"},
+                {"id": CONSENT_OBJECT, "label": "Object"},
+                {"id": CONSENT_MOVED_OUT, "label": "Moved my work out"},
+            ],
+        },
+        {
+            "id": CONSENT_REASON,
+            "label": "Why you object",
+            "type": "text",
+            "required": True,
+            "options": [],
+            "under": {"field": REVIEW_ANSWER, "option": CONSENT_OBJECT},
+        },
+    ]
+
+
 MAX_NOTE = 8000
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each

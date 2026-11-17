@@ -10,7 +10,8 @@ decides on it, then writes.
 
 - **Moving out** (`move_out`). An item leaves its goal or stage for the top level
   with a reason: it goes to triage, keeps that it started, loses its claims and its
-  basis, and the goal or stage it left records the reason (`child_left`), which its
+  basis, unless the session moving it answers a cancel of that goal or stage this way
+  and keeps all three, and the goal or stage it left records the reason (`child_left`), which its
   `confirmation` part reads. A goal or stage moved out takes the work under it along,
   and becomes a goal. Clearing a parent by an edit is refused, so this is the one
   way out, and the reason is never skipped. Moving an item under another goal or
@@ -40,6 +41,7 @@ from collections.abc import Mapping
 
 from . import (
     calls,
+    consent,
     deferral,
     item_projects,
     item_tree,
@@ -87,6 +89,10 @@ def move_out(
     as `overridden`. The answer is the item, with `moved_out: {from, reason}` and
     what the move to triage says: `released`, `warnings`, `overridden`, and
     `awaiting_confirmation` for the goals and stages it left waiting.
+
+    A session asked whether a cancel of a goal or stage over the item may end its work
+    answers by moving that work out first (`consent`): such a move keeps the item where
+    it stands, with its holders and its basis, and only takes it out.
     """
 
     with service.one_write(conn) as entered:
@@ -112,13 +118,15 @@ def move_out(
         said = _reason(reason, item=item, left=left, key=str(target["key"]))
         overridden = service.held_elsewhere(conn, [row], author, force, doing="move it out")
         identity = str(row["work_item_id"])
-        moved = service.move_to_triage(
-            conn,
-            identity,
-            str(target["state_id"]),
-            reason=f"moved out of {left}: {said}",
-            author=author,
-        )
+        moved: dict = {}
+        if not consent.asked_of_mover(conn, row):
+            moved = service.move_to_triage(
+                conn,
+                identity,
+                str(target["state_id"]),
+                reason=f"moved out of {left}: {said}",
+                author=author,
+            )
         service.take_out(conn, identity, said, author)
         if overridden:
             service.record_overrides(conn, identity, ["claim"], author)

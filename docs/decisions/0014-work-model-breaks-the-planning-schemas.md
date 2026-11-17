@@ -127,6 +127,20 @@ and no compatibility layer.
      where the setting `task_in_goal` is `human`, answering `waits_for_owner`
      and leaving the task in `triage`. A person's claim or move of the item ends
      its question `withdrawn` and drops the write waiting on it;
+   - an agent's cancel of an item its own work did not file waits for the
+     owner where the setting `cancel_outside` is `human`, answering
+     `waits_for_owner` and leaving the item as it was. An agent's cancel of work
+     other live sessions do is no longer made at once: each of those sessions
+     is asked by a request of `purpose` `consent`, which it answers `agree`,
+     `object` with a `reason`, or `moved_out` once nothing it holds is left in
+     what the cancel closes (`[consent]` otherwise). Where the setting
+     `cancel_shared` is `human` the owner is asked beside them and the answer
+     names `waits_for_owner`; otherwise, and for a cancel with
+     `transition.following`, the answer names `waits_for_sessions`, and the
+     cancel is made as Valkama's write once every session agreed, moved its
+     work out or ended, or passes to the owner on an objection or after a day.
+     A `move_out` with which an asked session answers keeps the item's
+     holders, state and basis instead of returning it to `triage`;
    - a commit is attached to an item rather than written as a ref: the `refs`
      group and `POST /api/planning/work-item/ref` refuse the kind `commit`,
      naming the `commits` group, an item record's `refs` holds no commit, and
@@ -237,6 +251,8 @@ and no compatibility layer.
 | `GET /api/ref?kind=commit&value=…&space=…` | `GET /api/commit?repository=<project id>&hash=…` |
 | the reason before the step's text in an expired step's `checklist_released` | the step's text alone; the reason in a `released` or a move back that went with it |
 | a `decision` with a required field that recommends nothing | a `question`; a decision recommends an answer in every required field, and when it comes back `answered` by that recommendation, act on the answer |
+| an agent's cancel of work outside its own, or that other sessions do, made at once | read `waits_for_owner` or `waits_for_sessions` in the answer: the cancel is made, if it still applies, when the owner or those sessions agree |
+| a session whose work another agent cancels hears only the cancel | answer its `consent` request: `agree`, `object` with a `reason`, or `move_out` your work and then `moved_out` |
 
 ## Consequences
 

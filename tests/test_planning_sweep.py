@@ -170,6 +170,7 @@ class LeaseStepTests(PassTestCase):
                     sweep.RETURNS,
                     sweep.COMMITS,
                     sweep.CONFIRMATIONS,
+                    sweep.CONSENT,
                 ],
                 {},
             ),

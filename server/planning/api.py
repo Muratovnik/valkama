@@ -1552,7 +1552,7 @@ def _apply_step(
     answer = _transition(conn, {**entry, **base})
     found = {
         name: answer[name]
-        for name in ("warnings", "overridden", "waits_for_owner")
+        for name in ("warnings", "overridden", "waits_for_owner", "waits_for_sessions")
         if answer.get(name)
     }
     # An accepted open goal or stage stands in no state a caller names: it shows what it derives.
