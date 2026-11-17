@@ -53,6 +53,19 @@ def git_text(
     return processes.run_text(["git", "-C", repo, *args], timeout=timeout, errors=errors)
 
 
+def committer_address(repo: str, timeout: float | None = None) -> str | None:
+    """The address Git makes a commit with in `repo`, or None when it names none.
+
+    `git var GIT_COMMITTER_IDENT` reads it as a commit does: the environment
+    (`GIT_COMMITTER_EMAIL`) first, then the configuration. `git config user.email`
+    sees no environment, so it can name an address no commit here carries.
+    """
+
+    ident = git_text(repo, "var", "GIT_COMMITTER_IDENT", timeout=timeout, errors="replace")
+    own = ident.stdout.rpartition("<")[2].partition(">")[0]
+    return own if ident.returncode == 0 and own else None
+
+
 def is_reparse_point(path: str) -> bool:
     """Whether a path redirects elsewhere. Windows junctions are not always
     reported by `os.path.islink`, so the attribute bit is consulted too."""

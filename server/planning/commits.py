@@ -50,18 +50,29 @@ task holds by its commits takes that project away (the projects rule).
 On no card. A session's commit that no item holds and no rewrite replaced waits
 on the list `unattached` reads, by a project or by the projects the registry
 binds to a space, until someone attaches it.
+
+The net at a close. A move into review or completed reads, before it ends the
+claim, when the work began (`window_start`); once the write commits, the surface
+that committed it asks the card's repositories for the commits made since then
+that no hook reported (`unreported`), and the answer names them. Nothing is
+attached: a person's commit, or one of a client without a session, may be among
+them, and the agent attaches the ones that belong with the `commits` group.
 """
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import itertools
 import json
 import os
 import re
 import sqlite3
-from collections.abc import Iterable, Iterator, Sequence
+import subprocess
+import time
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypeVar
 
 from .. import git_worktrees
 from ..hooks import commit_records, notify
@@ -496,17 +507,10 @@ def _due(
     """The records the sweep takes now, oldest first: each with its file and whose it is,
     or, for a file that is no record of anyone's and is past `REJECT_AGE_NS`, its path.
 
-    Records wait beside the store this connection is open on and in the Git
-    directory of each registered project, as a client hook looks for them. One
-    that cannot be read and is younger than that is neither: it waits.
+    One that cannot be read and is younger than that is neither: it waits.
     """
 
-    databases = conn.execute("PRAGMA database_list").fetchall()
-    store_path = next((str(row[2]) for row in databases if row[1] == "main" and row[2]), None)
-    if store_path is None:
-        return
-    directories = commit_records.record_directories(store_path, notify.loads)
-    for at, key, path in commit_records.every(directories):
+    for at, key, path in _files(conn):
         if at > now_ns - SWEEP_AGE_NS:
             break
         record = commit_records.read(path, notify.loads)
@@ -515,6 +519,20 @@ def _due(
             yield path, record, owner
         elif at <= now_ns - REJECT_AGE_NS:
             yield path
+
+
+def _files(conn: sqlite3.Connection) -> list[tuple[int, str, str]]:
+    """Every record file, oldest first: its time, session key and path.
+
+    Records wait beside the store this connection is open on and in the Git
+    directory of each registered project, as a client hook looks for them.
+    """
+
+    databases = conn.execute("PRAGMA database_list").fetchall()
+    store_path = next((str(row[2]) for row in databases if row[1] == "main" and row[2]), None)
+    if store_path is None:
+        return []
+    return commit_records.every(commit_records.record_directories(store_path, notify.loads))
 
 
 def sweep_pending(conn: sqlite3.Connection) -> bool:
@@ -561,6 +579,311 @@ def _owner(record: dict, key: str) -> tuple[str, str] | None:
         if isinstance(own, dict) and commit_records.file_key(str(own["session_id"])) == key:
             return client, str(own["session_id"])
     return None
+
+
+# -- the net at a close ------------------------------------------------------------
+
+#: How many commits one close names at most; `unreported_total` counts them all past it.
+UNREPORTED_MOST = 20
+#: How long one root's repository may take to say what was made in it.
+NET_SECONDS = 5.0
+#: What the net reads of each commit: its hash, committer time and address, and subject.
+_NET_FORMAT = "--format=%H%x00%cI%x00%ce%x00%s"
+#: When the call that took the item's claim was received: the lease's `acquired_at`.
+_CLAIM_RECEIVED = "SELECT received_at FROM execution_events WHERE id = ?"
+#: The newest claim or takeover of a step, by its text, or of the item, by a confirmed
+#: call of one session.
+_STEP_TAKEN = (
+    "SELECT MAX(e.created_at) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.work_item_id = ? AND e.detail = ?"
+    " AND e.action IN ('checklist_claimed', 'checklist_taken_over')"
+    " AND c.session_id = ? AND c.identity_state = ?"
+)
+_ITEM_TAKEN = (
+    "SELECT MAX(e.created_at) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.work_item_id = ? AND e.action IN ('claimed', 'taken_over')"
+    " AND c.session_id = ? AND c.identity_state = ?"
+)
+
+
+@dataclass(frozen=True)
+class Window:
+    """A close the net looks behind: the item, the second its work began, and the session
+    that closed it, None for a call no session proved."""
+
+    work_item_id: str
+    since: int
+    session: str | None
+
+
+@dataclass(frozen=True)
+class Before:
+    """The item as a transition found it: its state, and where its window would start."""
+
+    work_item_id: str
+    state_id: str
+    since: int | None
+    session: str | None
+
+
+_WINDOWS: contextvars.ContextVar[list[Window] | None] = contextvars.ContextVar(
+    "valkama_commit_net", default=None
+)
+_T = TypeVar("_T")
+
+
+@contextlib.contextmanager
+def closes() -> Iterator[list[Window]]:
+    """Collect the windows of the closes written inside, for `with_unreported` once the
+    write commits.
+
+    A surface opens it around one write it commits itself; a transition outside it
+    leaves nothing, so a write whose caller commits later never looks for commits.
+    A write that fails leaves the block with its windows unread.
+    """
+
+    found: list[Window] = []
+    token = _WINDOWS.set(found)
+    try:
+        yield found
+    finally:
+        _WINDOWS.reset(token)
+
+
+def before_transition(
+    conn: sqlite3.Connection, reference: str, author: str | None
+) -> Before | None:
+    """What the net needs of an item before a transition ends its claim and steps.
+
+    Read under the write's own lock, so nothing lands between it and the move.
+    None outside `closes`, which reads nothing.
+    """
+
+    if _WINDOWS.get() is None:
+        return None
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    row = read_model.item_row(conn, reference)
+    return Before(
+        str(row["work_item_id"]),
+        str(row["state_id"]),
+        window_start(conn, row, author),
+        calls.confirmed_session(),
+    )
+
+
+def after_transition(before: Before | None, answer: Mapping[str, Any]) -> None:
+    """Note the window of a move into review or completed that `before` found one for."""
+
+    found = _WINDOWS.get()
+    state = answer.get("state")
+    if found is None or before is None or before.since is None or not isinstance(state, dict):
+        return
+    if state["category"] in CLOSED_CATEGORIES and state["state_id"] != before.state_id:
+        found.append(Window(before.work_item_id, before.since, before.session))
+
+
+def window_start(conn: sqlite3.Connection, row: sqlite3.Row, author: str | None) -> int | None:
+    """The second the work a close ends began, by the first rule that holds; None for none.
+
+    1. The item's claim: when the call that took it was received.
+    2. Else the caller's holder holds a step: the newest claim or takeover of that
+       step by a call of its session; the earliest such start when it holds several.
+    3. Else the newest claim or takeover of the item by a call of the closing
+       session, as at a close from review, whose entry ended the claim.
+    4. Else no window: a session that never held the item made nothing for it.
+    """
+
+    # A store an earlier build wrote, read as it is, has no `claim_call_id` (`leases`);
+    # `in row` would search a Row's values, not its names.
+    columns = row.keys()
+    if row["claim_ref"] and "claim_call_id" in columns and row["claim_call_id"] is not None:
+        received = conn.execute(_CLAIM_RECEIVED, (int(row["claim_call_id"]),)).fetchone()
+        claimed = leases.moment(received[0]) if received is not None else None
+        if claimed is not None:
+            return int(claimed.timestamp())
+    session = calls.confirmed_session()
+    if session is None:
+        return None
+    holder = calls.holder(author)
+    taken = [
+        conn.execute(
+            _STEP_TAKEN, (row["work_item_id"], step["text"][:120], session, calls.CONFIRMED)
+        ).fetchone()[0]
+        for step in model.checklist(row["checklist"])
+        if not step["done"] and step["claimed_by"] == holder
+    ]
+    starts = [moment for moment in map(leases.moment, taken) if moment is not None]
+    if not row["claim_ref"] and starts:
+        return int(min(starts).timestamp())
+    last = conn.execute(_ITEM_TAKEN, (row["work_item_id"], session, calls.CONFIRMED)).fetchone()
+    found = leases.moment(last[0]) if last is not None else None
+    return int(found.timestamp()) if found is not None else None
+
+
+def with_unreported(conn: sqlite3.Connection, windows: Sequence[Window], answer: _T) -> _T:
+    """A committed write's answer, a dict, with what `unreported` found behind its closes
+    added to it; the line goes among its `warnings`."""
+
+    if not windows or not isinstance(answer, dict):
+        return answer
+    found = unreported(conn, windows)
+    line = found.pop("line", None)
+    if line is not None:
+        answer["warnings"] = [*answer.get("warnings", []), line]
+    answer.update(found)
+    return answer
+
+
+def unreported(conn: sqlite3.Connection, windows: Sequence[Window]) -> dict[str, Any]:
+    """The commits made behind these closes that no hook reported, read after they commit.
+
+    First the records still waiting for a closing session or for a commit in a
+    closed card's projects are taken, in a transaction of their own, so a commit a
+    hook did report is known before anything is named. Then each mapped root of
+    the card's projects with a repository of its own is asked, outside any
+    transaction, for the commits its branches, tags and HEAD gained since the
+    window began whose committer address is the one Git commits with there: not
+    `refs/stash`, not a remote's branches, not somebody else's commits a pull
+    brought. A commit `commits` does not hold for its project is named, at most
+    `UNREPORTED_MOST`, with `unreported_total` past that; a root that did not
+    answer is named in `unreported_unread`. Each field is there only when it is
+    not empty, and `line` says the names to the agent. Nothing is attached.
+    """
+
+    listing = project_registry.read_registry()
+    roots = {
+        window: item_projects.project_roots(conn, window.work_item_id, listing=listing)
+        for window in windows
+    }
+    _take_waiting(conn, windows, roots)
+    named: dict[tuple[str, str], dict] = {}
+    unread: list[str] = []
+    for window in windows:
+        for root in roots[window]:
+            project_id = str(root["project_id"])
+            if root["status"] != "mapped" or not rooted(root):
+                continue
+            made = _made_since(str(root["root"]), window.since)
+            if made is None:
+                unread.append(project_id)
+                continue
+            known = _recorded(conn, project_id, [commit["hash"] for commit in made])
+            for commit in made:
+                if commit["hash"] not in known:
+                    named.setdefault(
+                        (project_id, commit["hash"]), {"repository": project_id, **commit}
+                    )
+    return _unreported_fields(list(named.values()), unread)
+
+
+def _unreported_fields(named: list[dict], unread: list[str]) -> dict[str, Any]:
+    """The answer's fields, each only when it is not empty, and the line that names them."""
+
+    found: dict[str, Any] = {}
+    if named:
+        shown = named[:UNREPORTED_MOST]
+        found["unreported_commits"] = shown
+        if len(named) > len(shown):
+            found["unreported_total"] = len(named)
+        names = [f"{commit['repository']} {commit['hash'][:SHORT_HASH]}" for commit in shown]
+        if len(named) > len(shown):
+            names.append(f"{len(named) - len(shown)} more")
+        found["line"] = (
+            "These commits in the card's repositories were made while you held it and no hook"
+            f" reported them: {_listed(names)}. Attach the ones that belong here with the"
+            " commits group."
+        )
+    if unread:
+        found["unreported_unread"] = sorted(set(unread))
+    return found
+
+
+def _take_waiting(
+    conn: sqlite3.Connection, windows: Sequence[Window], roots: Mapping[Window, list[dict]]
+) -> None:
+    """Take the records waiting for a closing session or for a commit in a closed card's
+    projects, in a transaction of their own, and delete the files it is through with
+    once it commits. Each is decided by the session its file is named for, as a
+    leftover is. A busy store leaves them all for their session's hook or the sweep.
+    """
+
+    sessions = {window.session for window in windows if window.session is not None}
+    projects = {str(root["project_id"]) for found in roots.values() for root in found}
+    batches: dict[tuple[str, str], list[tuple[str, dict, bool]]] = {}
+    for _at, key, path in _files(conn):
+        record = commit_records.read(path, notify.loads)
+        owner = _owner(record, key) if record is not None else None
+        if record is None or owner is None:
+            continue
+        if owner[1] in sessions or str(record["project_id"]) in projects:
+            batches.setdefault(owner, []).append((path, record, True))
+    if not batches:
+        return
+    now = commit_records.timestamp(_now_ns())
+    done: list[str] = []
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            with calls.bind(calls.valkama(), HOOK_TOOL):
+                for (client, session), records in batches.items():
+                    done += take(conn, records, Hook(client, session, None, now)).done
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    except sqlite3.Error:
+        return  # busy past the connection's wait: the records wait too
+    for path in done:
+        commit_records.remove(path)
+
+
+def _made_since(root: str, since: int) -> list[dict] | None:
+    """The commits of the root's branches, tags and HEAD its own committer made since a
+    second, newest first; None when the repository did not answer in `NET_SECONDS`."""
+
+    deadline = time.monotonic() + NET_SECONDS
+    try:
+        own = git_worktrees.committer_address(root, timeout=NET_SECONDS)
+        if own is None:
+            return None
+        logged = git_worktrees.git_text(
+            root,
+            "-c",
+            "i18n.logOutputEncoding=UTF-8",
+            "log",
+            "--branches",
+            "--tags",
+            "HEAD",
+            f"--since=@{since}",
+            _NET_FORMAT,
+            timeout=max(0.1, deadline - time.monotonic()),
+            # Shown to the agent: which commits these are was read from their hashes.
+            errors="replace",
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if logged.returncode != 0:
+        return None
+    made = []
+    for line in logged.stdout.splitlines():
+        whole, committed_at, address, subject = [*line.split("\x00", 3), "", "", ""][:4]
+        if _HASH.fullmatch(whole) and address.lower() == own.lower():
+            made.append({"hash": whole, "subject": subject, "committed_at": committed_at})
+    return made
+
+
+def _recorded(conn: sqlite3.Connection, project_id: str, hashes: list[str]) -> set[str]:
+    """Which of these hashes `commits` holds for the project."""
+
+    return {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT hash FROM commits WHERE project_id = ?"
+            " AND hash IN (SELECT value FROM json_each(?))",
+            (project_id, json.dumps(hashes)),
+        )
+    }
 
 
 # -- on no card ----------------------------------------------------------------

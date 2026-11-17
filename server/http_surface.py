@@ -50,6 +50,7 @@ from .ops import configuration, desktop_app, doctor
 from .planning import agents as planning_agents
 from .planning import api as planning_api
 from .planning import calls as planning_calls
+from .planning import commits as planning_commits
 from .planning import display_links, live_frame
 from .planning import exact_api as planning_exact_api
 from .planning import images as planning_images
@@ -1059,7 +1060,8 @@ class Handler(BaseHTTPRequestHandler):
                 conn, path, query, parameters or {}, payload if payload is not None else {}
             )
             try:
-                answer = boundary.handler(call)
+                with planning_commits.closes() as closed:
+                    answer = boundary.handler(call)
                 if answer is None:
                     self._answer(_NOT_FOUND)
                     return
@@ -1069,6 +1071,10 @@ class Handler(BaseHTTPRequestHandler):
                     planning_images.settle(conn)
                 if boundary.after_commit is not None:
                     boundary.after_commit(call)
+                if closed and conn is not None and not isinstance(answer, _Raw):
+                    # A close names, once committed, the commits behind it no hook reported.
+                    status, body = answer
+                    answer = (status, planning_commits.with_unreported(conn, closed, body))
                 publishes = _publishes(boundary.notify, path)
                 after_answer = boundary.notify is not None and boundary.notify.after_answer
                 if publishes and not after_answer:
