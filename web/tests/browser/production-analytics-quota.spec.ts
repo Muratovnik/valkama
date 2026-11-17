@@ -181,7 +181,7 @@ for (const colorScheme of ['light', 'dark'] as const)
       await expect(
         page
           .locator(
-            '.quota-window[data-window="week"] [data-fact="forecast"], tr[data-key="week"] [data-cell="forecast"]',
+            '[data-window="week"] [data-fact="forecast"], [data-key="week"] [data-cell="forecast"]',
           )
           .first(),
       ).toContainText('By the reset: 57% to 61%')

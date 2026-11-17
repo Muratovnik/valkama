@@ -6,7 +6,7 @@
  * pointed at or focused, each saying itself in a hint beside its mark and level with it, clear of
  * the line's head, with nothing of the line moving; opened on now, the forecast's hint says the
  * reset stands past the plot's edge; the keyboard walks on from the latest reading to both. Each
- * view attaches what it measured.
+ * view attaches what it measured. Each part is read by the hook `StepLine` documents for it.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -15,7 +15,7 @@ import { aheadOfLines, cornersOutside } from './stepAhead.ts'
 import { test } from './test.ts'
 
 const HARNESS = '/tests/browser/harness.html?lang=en&surface=charts'
-const LINE = '[data-harness="step"] .step-line'
+const LINE = '[data-harness="step"] [data-chart="steps"]'
 
 /** The harness's one step line past its readings (`aheadOfLines`). */
 async function aheadOfLine(page: Page) {
@@ -100,7 +100,7 @@ for (const { view, title, hints } of VIEWS)
         `${aim.kind}: one mark painted`,
       ).toHaveLength(1)
       const hint = await page
-        .locator('.tooltip-hint')
+        .locator('[data-hint-surface]')
         .evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
       const mark = place?.mark ?? hint
       // Beside its mark, on whichever side has the room, level with its top, under the head.

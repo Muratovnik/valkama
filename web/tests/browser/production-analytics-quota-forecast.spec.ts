@@ -14,6 +14,10 @@
  * place's hint at its mark and clear of the line's head, nothing moving while pointed at; the
  * latest reading keeps its own dot, however close to «now» it was read. A window past its reset
  * draws neither. Each run attaches what it measured.
+ *
+ * Every part is read by the hook its component documents (`QuotaAccount`, `QuotaWindow`,
+ * `WindowBar`, `StepLine`), and every set is held to the size its case gives before anything is
+ * said of each of its members.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -28,6 +32,9 @@ import type { LineAhead } from './stepAhead.ts'
 import { test } from './test.ts'
 
 const HOUR = 3_600_000
+
+/** Every quota window's step line. */
+const LINES = '[data-window] [data-chart="steps"]'
 
 /**
  * What each window draws, by account and window: its fill and its tail's parts, to the half percent
@@ -114,19 +121,19 @@ const WEEKS: Record<string, Drawn> = {
  * part in pixels, and its forecast's line.
  */
 const windowsOf = (page: Page) =>
-  page.locator('.quota-window').evaluateAll((windows) =>
+  page.locator('[data-window]').evaluateAll((windows) =>
     windows.map((window) => {
-      const account = window.closest('.quota-account')?.querySelector('.quota-account-name')
-      const track = window.querySelector('.window-track')?.getBoundingClientRect()
-      const fill = window.querySelector('.window-fill')
+      const account = window.closest<HTMLElement>('[data-account]')?.dataset.account
+      const track = window.querySelector('[data-mark="track"]')?.getBoundingClientRect()
+      const fill = window.querySelector('[data-mark="fill"]')
       const width = track?.width || 1
       // To the half percent, so a share such as 12.5 % reads as itself and not as a rounding.
       const share = (at: number) => Math.round(((at - (track?.left ?? 0)) / width) * 200) / 2
-      const parts = [...window.querySelectorAll('.window-ahead')].map((part) =>
+      const parts = [...window.querySelectorAll('[data-mark="ahead"]')].map((part) =>
         part.getBoundingClientRect(),
       )
       return {
-        key: `${account?.textContent?.trim() ?? ''} ${(window as HTMLElement).dataset.window ?? ''}`,
+        key: `${account ?? ''} ${(window as HTMLElement).dataset.window ?? ''}`,
         lead: (window.querySelector('.quota-window-lead')?.textContent ?? '')
           .replaceAll(/\s+/gu, ' ')
           .trim(),
@@ -152,23 +159,32 @@ const windowsOf = (page: Page) =>
         forecast: (window.querySelector('[data-fact="forecast"]')?.textContent ?? '')
           .replaceAll(/\s+/gu, ' ')
           .trim(),
-        swatch: Boolean(window.querySelector('[data-fact="forecast"] .quota-window-swatch')),
-        corridor: Boolean(window.querySelector('.step-ahead')),
+        swatch: Boolean(window.querySelector('[data-fact="forecast"] [data-mark="hatch"]')),
+        corridor: Boolean(window.querySelector('[data-mark="corridor"]')),
         legend: Boolean(window.querySelector('[data-key="ahead"]')),
       }
     }),
   )
 
-/** Where every window, bar and step line of the panel stands, to the fraction of a pixel. */
+/**
+ * Where every window of the panel stands, its bar's track and its step line's head, plot and
+ * axis, to the fraction of a pixel: two boxes a window and three a line.
+ */
 const boxes = (page: Page) =>
   page
-    .locator('.quota-window, .window-bar, .step-head, .step-plot, .step-axis')
+    .locator(
+      [
+        '[data-window]',
+        '[data-window] [data-mark="track"]',
+        ...['head', 'plot', 'axis'].map((part) => `${LINES} [data-region="${part}"]`),
+      ].join(', '),
+    )
     .evaluateAll((parts) => parts.map((part) => part.getBoundingClientRect().toJSON() as unknown))
 
 /** Opens a section's panel drawn as charts, its five accounts read and their spending too. */
 async function openDrawn(page: Page, section: string, accounts = 5) {
   await openPanel(page, pageAt({ by: section }))
-  await expect(page.locator('.quota-account')).toHaveCount(accounts)
+  await expect(page.locator('[data-account]')).toHaveCount(accounts)
   await drawLined(page.locator('.chart-section').first())
   await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
@@ -177,11 +193,11 @@ async function openDrawn(page: Page, section: string, accounts = 5) {
 /** Where a place's hint stood once pointed at: by its mark, clear of the line's head. */
 const hintOf = (page: Page, at: number, kind: string) =>
   page.evaluate(
-    ({ line, place }) => {
-      const one = document.querySelectorAll('.quota-window .step-line')[line]
-      const hint = document.querySelector('.tooltip-hint')?.getBoundingClientRect()
-      const head = one?.querySelector('.step-head')?.getBoundingClientRect()
-      const drawn = one?.querySelector(`[data-target="${place}"] .step-target-mark`)
+    ({ lines, line, place }) => {
+      const one = document.querySelectorAll(lines)[line]
+      const hint = document.querySelector('[data-hint-surface]')?.getBoundingClientRect()
+      const head = one?.querySelector('[data-region="head"]')?.getBoundingClientRect()
+      const drawn = one?.querySelector(`[data-target="${place}"] [data-mark="place"]`)
       const painted = drawn?.checkVisibility({ opacityProperty: true }) ?? false
       const box = drawn?.getBoundingClientRect()
       if (!hint || !head || !box) return { painted, near: false, clear: false }
@@ -198,7 +214,7 @@ const hintOf = (page: Page, at: number, kind: string) =>
         hint.left >= head.right
       return { painted, near: beside || centred, clear }
     },
-    { line: at, place: kind },
+    { lines: LINES, line: at, place: kind },
   )
 
 /** Where a place is pointed at: 4px into its stretch, from its start for «now», from its end for the forecast. */
@@ -216,12 +232,12 @@ async function pointAtPlaces(page: Page, lines: LineAhead[]) {
   const strays: string[] = []
   for (const [at, line] of lines.entries())
     for (const { kind } of line.places) {
-      const figure = page.locator('.quota-window .step-line').nth(at)
+      const figure = page.locator(LINES).nth(at)
       await figure.evaluate((node) => node.scrollIntoView({ block: 'center' }))
       const still = JSON.stringify(await boxes(page))
       const target = figure.locator(`[data-target="${kind}"]`)
       const reach = (await target.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 }
-      const mark = await target.locator('.step-target-mark').boundingBox()
+      const mark = await target.locator('[data-mark="place"]').boundingBox()
       const x = AIM[kind]?.(reach.x, reach.x + reach.width) ?? reach.x
       await page.mouse.move(x, (mark?.y ?? reach.y) + 4)
       await expect(page.getByRole('tooltip')).toBeVisible()
@@ -240,8 +256,9 @@ async function pointAtPlaces(page: Page, lines: LineAhead[]) {
   return strays
 }
 
-/** Whether a mark is painted as pointed at or focused. */
-const shown = (mark: Locator) => mark.evaluate((node) => node.classList.contains('step-shown'))
+/** Whether a mark is painted, as it is only while pointed at or focused. */
+const painted = (mark: Locator) =>
+  mark.evaluate((node) => node.checkVisibility({ opacityProperty: true }))
 
 /**
  * Points at the latest reading's dot on each line «now» follows, however close to now it was
@@ -252,9 +269,9 @@ async function pointAtLatest(page: Page, lines: LineAhead[]) {
   const strays: string[] = []
   for (const [at, line] of lines.entries()) {
     if (!line.places.some(({ kind }) => kind === 'now')) continue
-    const figure = page.locator('.quota-window .step-line').nth(at)
+    const figure = page.locator(LINES).nth(at)
     await figure.evaluate((node) => node.scrollIntoView({ block: 'center' }))
-    const dot = figure.locator('.step-reach').last().locator('.step-mark')
+    const dot = figure.locator('[data-reading]').last().locator('[data-mark="reading"]')
     const box = await dot.boundingBox()
     if (!box) {
       strays.push(`line ${at}: no latest reading`)
@@ -262,8 +279,8 @@ async function pointAtLatest(page: Page, lines: LineAhead[]) {
     }
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     await expect(page.getByRole('tooltip')).toBeVisible()
-    if (!(await shown(dot))) strays.push(`line ${at}: the latest reading's dot unpainted`)
-    if (await shown(figure.locator('[data-target="now"] .step-target-mark')))
+    if (!(await painted(dot))) strays.push(`line ${at}: the latest reading's dot unpainted`)
+    if (await painted(figure.locator('[data-target="now"] [data-mark="place"]')))
       strays.push(`line ${at}: «now» took the latest reading's dot`)
     await page.mouse.move(1, 1)
   }
@@ -298,8 +315,14 @@ for (const lang of ['en', 'ru'] as const)
         await openDrawn(page, section)
         await page.mouse.move(1, 1)
         const windows = await windowsOf(page)
-        const lines = await page.evaluate(aheadOfLines, '.quota-window .step-line')
+        const lines = await page.evaluate(aheadOfLines, LINES)
         measured[section] = { windows, lines }
+        // A window a case, each with its step line, before anything is said of each.
+        expect(windows, `${section}: its windows`).toHaveLength(Object.keys(cases).length)
+        expect(lines, `${section}: a step line a window`).toHaveLength(windows.length)
+        expect(await boxes(page), `${section}: the boxes held still`).toHaveLength(
+          windows.length * 2 + lines.length * 3,
+        )
         // Each window as its case draws it: the fill, the tail, the swatch, the corridor and the
         // places past its readings.
         const drawn = Object.fromEntries(
@@ -352,7 +375,7 @@ test('a window past its reset draws no tail, no corridor and no place past its r
   await page.setViewportSize({ width: 1024, height: 1000 })
   await openDrawn(page, 'quota_five_hour', 4)
   const windows = await windowsOf(page)
-  const lines = await page.evaluate(aheadOfLines, '.quota-window .step-line')
+  const lines = await page.evaluate(aheadOfLines, LINES)
   expect(windows.map(({ key, tail, swatch, corridor }) => [key, tail, swatch, corridor])).toEqual([
     ['Work five_hour', [], false, false],
     ['7e6d5c4b five_hour', [], false, false],
@@ -361,7 +384,13 @@ test('a window past its reset draws no tail, no corridor and no place past its r
   expect(lines.map(({ places }) => places)).toEqual([[], [], []])
   // No forecast is said either, the reset in its place.
   expect(windows.map(({ forecast }) => forecast)).toEqual(['', '', ''])
-  await expect(page.locator('.quota-window [data-fact="reset"]')).toHaveCount(3)
+  await expect(page.locator('[data-window] [data-fact="reset"]')).toHaveCount(3)
   // The line is the whole window alone, with nothing to switch to.
-  await expect(page.locator('.quota-window .step-views')).toHaveCount(0)
+  const switches = page.locator(LINES).getByRole('radiogroup')
+  await expect(switches).toHaveCount(0)
+  // The control: every week still stands, and each of its lines has its switch.
+  await openDrawn(page, 'quota_week', 4)
+  const weeks = await page.locator(LINES).count()
+  expect(weeks, 'the weeks drawn').toBeGreaterThan(0)
+  await expect(switches).toHaveCount(weeks)
 })

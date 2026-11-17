@@ -5,7 +5,7 @@
  * can tell that nothing moved; its field; every corner of its forecast's corridor where the field
  * resolves it — a probe laid where the corridor's outline puts each — or none without one; and
  * each place past its readings («now», the forecast at the reset): its stretch, its mark and
- * whether the mark is painted.
+ * whether the mark is painted. It reads each part by the hook `StepLine` documents for it.
  */
 
 /** A box as the browser reports it, plain for the spec's side. */
@@ -55,8 +55,9 @@ export function aheadOfLines(selector: string): LineAhead[] {
     return [...parts, text.slice(from).trim()]
   }
   return [...document.querySelectorAll(selector)].map((figure) => {
-    const field = figure.querySelector<HTMLElement>('.step-field')
-    const outline = figure.querySelector<HTMLElement>('.step-ahead')?.style.clipPath.trim() ?? ''
+    const field = figure.querySelector<HTMLElement>('[data-region="field"]')
+    const outline =
+      figure.querySelector<HTMLElement>('[data-mark="corridor"]')?.style.clipPath.trim() ?? ''
     const corners = outline
       ? split(outline.slice(outline.indexOf('(') + 1, outline.lastIndexOf(')')), ',').map(
           (corner) => {
@@ -71,15 +72,15 @@ export function aheadOfLines(selector: string): LineAhead[] {
         )
       : []
     return {
-      boxes: ['.step-head', '.step-plot', '.step-axis'].map((part) =>
-        box(figure.querySelector(part)),
+      boxes: ['head', 'plot', 'axis'].map((part) =>
+        box(figure.querySelector(`[data-region="${part}"]`)),
       ),
       height: figure.getBoundingClientRect().height,
       field: box(field),
-      head: box(figure.querySelector('.step-head')),
+      head: box(figure.querySelector('[data-region="head"]')),
       corners,
-      places: [...figure.querySelectorAll<HTMLElement>('.step-target')].map((target) => {
-        const mark = target.querySelector('.step-target-mark')
+      places: [...figure.querySelectorAll<HTMLElement>('[data-target]')].map((target) => {
+        const mark = target.querySelector('[data-mark="place"]')
         return {
           kind: target.dataset.target ?? '',
           reach: box(target),
