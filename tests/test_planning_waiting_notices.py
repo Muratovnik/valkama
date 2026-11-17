@@ -13,10 +13,11 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
-from server import mcp_surface, store
-from server.planning import api, calls, leases, model, person_events, service, waiting
+from server import mcp_surface, sessions, store
+from server.planning import api, calls, leases, model, person_events, service, sweep, waiting
 
 B = "b0000000-0000-4000-8000-00000000000b"
 E = "e0000000-0000-4000-8000-00000000000e"
@@ -342,6 +343,136 @@ class LapsedParticipantTests(Harness):
         self.conn.commit()
         [row] = self.rows(self.goal)
         self.assertEqual((said, N), (row["from_call"], row["delivered_session"]))
+
+
+class SweepStepTests(Harness):
+    """The sweep's `waiting` step: a session that stopped working while what it holds or
+    follows still stands leaves the words it missed waiting, in a call of Valkama's."""
+
+    def run_pass(self) -> sweep.Pass:
+        done = sweep.run_pass(self.conn)
+        self.assertEqual(({}, []), (done.failures, done.busy))
+        return done
+
+    def event(self, kind: str, session: str) -> None:
+        """A client's hook ending or starting the session, as the hook reports it."""
+
+        sessions.op_ingest_session_event(
+            self.conn, {"event": kind, "session_id": session, "client": "codex"}
+        )
+        self.conn.commit()
+
+    def silent(self, session: str, days: int, now: datetime | None = None) -> None:
+        seen = (now or leases.utc_now()) - timedelta(days=days)
+        self.conn.execute(
+            "UPDATE sessions SET last_seen = ? WHERE id = ?",
+            (seen.strftime("%Y-%m-%dT%H:%M:%SZ"), session),
+        )
+        self.conn.commit()
+
+    def follow(self, reference: str, session: str) -> None:
+        self.agent("apply_work_item_changes", session, id=reference, subscribe=True)
+
+    def all_rows(self) -> list[tuple]:
+        return [
+            tuple(row)
+            for row in self.conn.execute(
+                "SELECT * FROM work_item_waiting_notices ORDER BY notice_id"
+            ).fetchall()
+        ]
+
+    def test_an_ended_holder_and_a_silent_follower_leave_the_words_after_a_pass(self) -> None:
+        """O17: B ended while its claim of T7 under G3 waits out its grace, and F, following
+        G4, went silent past the lease while its subscription stands; a person spoke on
+        both goals while each was still heard."""
+
+        g3 = self.item("G3", "goal")
+        t7 = self.item("T7", parent=g3)
+        g4 = self.item("G4", "goal")
+        self.agent("claim_work_item", B, id=t7)
+        self.follow(g4, F)
+        said = {g3: self.says(g3), g4: self.says(g4, "Keep the old format on G4")}
+        self.assertEqual(([], []), (self.rows(g3), self.rows(g4)), "B and F were there")
+        self.event("session_end", B)
+        self.silent(F, days=4)
+
+        self.assertEqual({sweep.WAITING: 2}, self.run_pass().changed)
+        [left3], [left4] = self.rows(g3), self.rows(g4)
+        self.assertEqual((said[g3], said[g4]), (left3["from_call"], left4["from_call"]))
+        self.assertEqual(left3["created_call"], left4["created_call"], "one call of the step")
+        self.assertEqual(
+            ("valkama", waiting.RECOVERY_TOOL, None),
+            tuple(self.call(left3["created_call"]))[:3],
+        )
+        held = service.get_work_item(self.conn, t7)["claim_ref"]
+        self.assertEqual(f"codex (session {B})", held, "B's claim still stands")
+        followers = service.get_work_item(self.conn, g4)["subscribers"]
+        self.assertEqual([F], [entry["session"] for entry in followers], "so does F's")
+
+        before = self.all_rows()
+        self.assertEqual({}, self.run_pass().changed, "a second pass in a row changes nothing")
+        self.assertEqual(before, self.all_rows())
+        [taken] = self.agent("claim_work_item", N, id=t7)["waiting"]
+        self.assertEqual((g3, [SAID]), (taken["reference"], [e["text"] for e in taken["said"]]))
+
+    def test_a_pass_takes_two_hundred_containers_and_the_next_the_rest(self) -> None:
+        """The step reads the time from `leases.utc_now`: by the real clock F is live."""
+
+        goals = [self.item(f"Goal {index}", "goal") for index in range(sweep.LIMIT + 1)]
+        for goal in goals:
+            self.follow(goal, F)
+        for goal in goals:
+            self.says(goal)
+        self.assertEqual([], self.all_rows(), "F heard every word")
+        # A year past the real clock, F last seen four days before it.
+        now = datetime.now(UTC).replace(microsecond=0) + timedelta(days=365)
+        self.silent(F, days=4, now=now)
+        self.assertEqual({}, self.run_pass().changed, "by the real clock F is still live")
+        with mock.patch.object(leases, "utc_now", return_value=now):
+            self.assertEqual({sweep.WAITING: sweep.LIMIT}, self.run_pass().changed)
+            self.assertEqual(sweep.LIMIT, len(self.all_rows()))
+            self.assertEqual([], self.rows(goals[-1]), "by number: the last goal is left")
+            self.assertEqual({sweep.WAITING: 1}, self.run_pass().changed)
+            self.assertEqual({}, self.run_pass().changed)
+        waited = {
+            int(row[0])
+            for row in self.conn.execute(
+                "SELECT i.number FROM work_item_waiting_notices n"
+                " JOIN work_items i USING (work_item_id)"
+            )
+        }
+        self.assertEqual({int(goal.rsplit("-", 1)[1]) for goal in goals}, waited)
+
+    def test_a_step_with_nothing_to_recover_takes_no_write_lock(self) -> None:
+        g3 = self.item("G3", "goal")
+        t7 = self.item("T7", parent=g3)
+        self.agent("claim_work_item", B, id=t7)
+        self.event("session_end", B)
+        [step] = [step for step in sweep.STEPS if step.name == sweep.WAITING]
+        self.assertFalse(step.pending(self.conn), "B ended, but nothing was said after its call")
+        self.conn.execute("PRAGMA busy_timeout = 50")
+        other = sqlite3.connect(store.db_path(), isolation_level=None)
+        self.addCleanup(other.close)
+
+        other.execute("BEGIN IMMEDIATE")
+        try:
+            done = sweep.run_pass(self.conn)
+        finally:
+            other.execute("ROLLBACK")
+        self.assertEqual(({}, [], {}), (done.changed, done.busy, done.failures))
+
+        # With words it missed, the step asks for the lock, and waits for the next pass.
+        self.event("session_start", B)
+        self.says(g3)
+        self.event("session_end", B)
+        self.assertTrue(step.pending(self.conn))
+        other.execute("BEGIN IMMEDIATE")
+        try:
+            done = sweep.run_pass(self.conn)
+        finally:
+            other.execute("ROLLBACK")
+        self.assertEqual(({}, [sweep.WAITING]), (done.changed, done.busy))
+        self.assertEqual({sweep.WAITING: 1}, self.run_pass().changed)
 
 
 if __name__ == "__main__":

@@ -38,12 +38,13 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from ..hooks import light
-from . import calls, service, subscriptions
+from . import calls, service, subscriptions, waiting
 
 #: The most items one step changes in one pass; the next pass takes the rest.
 LIMIT = 200
 
 LEASES = "leases"
+WAITING = "waiting"
 SUBSCRIPTIONS = "subscriptions"
 
 
@@ -121,6 +122,14 @@ def _leases(conn: sqlite3.Connection) -> int:
     return service.expire_leases(conn, limit=LIMIT)
 
 
+def _waiting_pending(conn: sqlite3.Connection) -> bool:
+    return next(waiting.unheard_since(conn, waiting.lapsed(conn)), None) is not None
+
+
+def _waiting(conn: sqlite3.Connection) -> int:
+    return waiting.recover_lapsed(conn, limit=LIMIT)
+
+
 def _subscriptions_pending(conn: sqlite3.Connection) -> bool:
     return next(subscriptions.lapsed(conn), None) is not None
 
@@ -131,7 +140,10 @@ def _subscriptions(conn: sqlite3.Connection) -> int:
 
 #: The steps of a pass, in order. The leases go first: the subscriptions of a
 #: session lapse by the same rule, and a later step may ask who still holds what.
+#: Words a lapsed session left unheard are recovered next (`waiting`), while the
+#: subscriptions that make it one of those sessions still stand.
 STEPS: tuple[Step, ...] = (
     Step(LEASES, _leases_pending, _leases),
+    Step(WAITING, _waiting_pending, _waiting),
     Step(SUBSCRIPTIONS, _subscriptions_pending, _subscriptions),
 )

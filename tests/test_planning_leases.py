@@ -874,6 +874,7 @@ class StartUpTests(unittest.TestCase):
         self.assertEqual(
             [
                 f"planning sweep leases: {later}",
+                f"planning sweep waiting: {later}",
                 f"planning sweep subscriptions: {later}",
                 "quota retention: no time left; it runs at the next start",
             ],

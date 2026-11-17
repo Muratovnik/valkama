@@ -2736,6 +2736,7 @@ A pass runs its steps in order, each in a transaction of its own:
 | Step | What it does |
 | --- | --- |
 | `leases` | releases every lapsed claim and claimed step, as [above](#who-holds-a-claim-or-a-step), and marks the lapsed holder's ticks |
+| `waiting` | leaves [words waiting](#words-that-wait-for-a-session) on a goal or stage that a session stopped working on while its claim, step or subscription still stands -- it ended, or went quiet past the lease -- once no live session works there; the words are what a person did there after that session's last call, and they wait under a call of `valkama` with the tool `waiting-recovery` |
 | `subscriptions` | removes every [subscription](#subscriptions) and mute whose session lapsed |
 
 Every step keeps the same contract:
@@ -2982,6 +2983,10 @@ stage: a later act adds to what it holds rather than adding another. Words also
 wait when the session that worked there went quiet past its lease or ended
 without hearing them: Valkama's release of its lapsed claim leaves what a person
 did over the work after that session's last call, if nobody else works there.
+A session can stop working there before anything is released -- it ended while
+its claim waits out its grace, or it went quiet past the lease while its
+subscription stands -- and the [planning sweep](#the-planning-sweep) leaves the
+same words for it.
 A record Valkama makes on a goal or stage in a call of its own waits the same way
 when its kind is one that asks for a session, which wakes whoever works there; no
 kind asks yet, so today only a person's words wait.

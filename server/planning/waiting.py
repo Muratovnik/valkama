@@ -23,8 +23,13 @@ row's call on.
   whatever a person said after its last call reached nobody, since the server
   cannot see what a client hook told it. `recover` looks for such acts on the
   containers over the work a lapsed session left, once nobody hears them, and
-  leaves a row from the first of them. `service._expire` calls it for every claim
-  it releases, inside its own call, so the row names that call.
+  leaves a row from the first of them. `service._expire` calls it for every lease
+  it releases, inside its own call, so the row names that call. A session can
+  also stop being a participant while what it holds or follows still stands: it
+  ended, and its claim waits out its grace, or it went quiet past the lease while
+  its subscription keeps its own longer silence. The planning sweep's `waiting`
+  step finds those (`lapsed`) and recovers for them in a call of its own
+  (`recover_lapsed`).
 - **Delivered.** A claim of a task or of one of its steps by an agent session a
   client proved takes every open row on the containers over the task (`tree`) and
   in its space (`space`), in the claim's own transaction: a claim that is refused
@@ -37,17 +42,21 @@ A delivered one stays as the record of who got them, and a row goes with its ite
 
 from __future__ import annotations
 
+import itertools
 import json
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from . import calls, item_tree, model, participants, person_events, read_model
+from . import calls, item_tree, leases, model, participants, person_events, read_model
 
 TREE = "tree"
 SPACE = "space"
 SCOPES = (TREE, SPACE)
+
+#: The tool the sweep's recovery is recorded under, as the call its rows name.
+RECOVERY_TOOL = "waiting-recovery"
 
 _LEAVE = (
     "INSERT INTO work_item_waiting_notices(work_item_id, scope, from_call, created_call)"
@@ -75,8 +84,32 @@ _COVERED = (
     "SELECT 1 FROM work_item_waiting_notices WHERE work_item_id = ? AND scope = 'tree'"
     " AND delivered_call IS NOT NULL AND from_call <= ? AND delivered_call > ?"
 )
+#: An open row of a container that holds every word from a call on already.
+_OPEN_FROM = (
+    "SELECT 1 FROM work_item_waiting_notices WHERE work_item_id = ? AND scope = 'tree'"
+    " AND delivered_call IS NULL AND from_call <= ?"
+)
+#: The numbers of the items named, as one JSON array, to take them in that order.
+_NUMBERS = "SELECT work_item_id, number FROM work_items WHERE work_item_id IN (SELECT value FROM json_each(?))"
 #: The last Planning call a session made, its subagents' included.
 _LAST_CALL = "SELECT MAX(id) FROM execution_events WHERE session_id = ? AND kind = ?"
+#: The claims a session proved, by the session of the call that took them.
+_CLAIMS = (
+    "SELECT c.session_id, i.work_item_id FROM work_items i"
+    " JOIN execution_events c ON c.id = i.claim_call_id"
+    " WHERE i.claim_ref != '' AND c.identity_state = ? AND c.session_id IS NOT NULL"
+)
+#: The items with a claimed step, whose holder label names its session.
+_STEPS = (
+    "SELECT i.work_item_id, i.checklist FROM work_items i WHERE EXISTS"
+    " (SELECT 1 FROM json_each(i.checklist) j WHERE json_extract(j.value, '$.claimed_by') != '')"
+)
+#: What sessions follow; a mute makes no participant.
+_FOLLOWED = "SELECT session_id, work_item_id FROM work_item_subscriptions WHERE follows = 1"
+_SESSIONS = (
+    "SELECT id, status, ended_at, last_seen FROM sessions"
+    " WHERE id IN (SELECT value FROM json_each(?))"
+)
 
 
 @dataclass(frozen=True)
@@ -217,15 +250,32 @@ def delivered(conn: sqlite3.Connection, call: int) -> list[dict]:
 
 
 def recover(conn: sqlite3.Connection, lapsed: Iterable[tuple[str, str]]) -> int:
-    """Leave a `tree` row where a lapsed session took words with it; how many stand open.
+    """Leave a `tree` row where a lapsed session took words with it; how many it left.
 
     `lapsed` pairs a session that stopped working with an item it stopped working
-    on: a task whose claim lapsed, a container it followed. For each container over
-    that item (the item too, when it is one) that no live session hears any more, what
-    waits there (`person_events.unheard`) after the last call of the sessions gone from it reached
-    nobody: after its last call a session heard nothing, since it called nothing. A
-    row is left from the first of it, in the call in progress, unless a row delivered
-    after that already gave it to a session.
+    on: a task whose claim lapsed, a container it followed. Each container over
+    those items that `unheard_since` names gets a row from the first word nobody
+    heard, in the call in progress.
+    """
+
+    return sum(
+        leave(conn, container, TREE, from_call=first)
+        for container, first in unheard_since(conn, lapsed)
+    )
+
+
+def unheard_since(
+    conn: sqlite3.Connection, lapsed: Iterable[tuple[str, str]]
+) -> Iterator[tuple[str, int]]:
+    """Each container that lapsed sessions left words unheard on, with the call they start at.
+
+    For each container over an item of `lapsed` (the item too, when it is one) that
+    no live session hears any more, what waits there (`person_events.unheard`) after
+    the last call of the sessions gone from it reached nobody: after its last call a
+    session heard nothing, since it called nothing. A container is named with the
+    first of it, unless a row already holds it: an open one from that call or
+    earlier, or one delivered after it, which gave it to a session. It only reads,
+    by the containers' numbers.
     """
 
     gone: dict[str, int] = {}
@@ -236,18 +286,62 @@ def recover(conn: sqlite3.Connection, lapsed: Iterable[tuple[str, str]]) -> int:
             continue
         for container in _over(conn, work_item_id):
             gone[container] = max(gone.get(container, 0), int(last))
-    left = 0
-    for container, last in sorted(gone.items()):
-        if participants.heard(conn, container):
-            continue
+    numbers = dict(conn.execute(_NUMBERS, (json.dumps(sorted(gone)),)).fetchall())
+    for container, last in sorted(
+        gone.items(), key=lambda pair: (numbers.get(pair[0], 0), pair[0])
+    ):
         found = person_events.unheard(conn, container, last)
         if not found:
             continue
         first = found[0][0]
+        if conn.execute(_OPEN_FROM, (container, first)).fetchone() is not None:
+            continue
         if conn.execute(_COVERED, (container, first, first)).fetchone() is not None:
             continue
-        left += leave(conn, container, TREE, from_call=first)
-    return left
+        if participants.heard(conn, container):
+            continue
+        yield container, first
+
+
+def lapsed(conn: sqlite3.Connection) -> list[tuple[str, str]]:
+    """The sessions no longer working on what they still hold or follow, with each such item.
+
+    A claim, an open step or a subscription stands, but its session is not live
+    (`leases.session_live`): it ended and its claim waits out its grace, or it went
+    quiet past the lease while a question held its claim or its subscription keeps a
+    longer silence. Such a session is no participant, so nobody may hear what a
+    person says over that work. Read without a write, against `leases.utc_now`.
+    """
+
+    pairs: set[tuple[str, str]] = set()
+    for session, work_item_id in conn.execute(_CLAIMS, (calls.CONFIRMED,)):
+        pairs.add((str(session), str(work_item_id)))
+    for work_item_id, checklist in conn.execute(_STEPS):
+        for step in model.checklist(checklist):
+            ids = None if step["done"] else calls.holder_ids(str(step["claimed_by"] or ""))
+            if ids is not None:
+                pairs.add((ids[0], str(work_item_id)))
+    for session, work_item_id in conn.execute(_FOLLOWED):
+        pairs.add((str(session), str(work_item_id)))
+    if not pairs:
+        return []
+    named = sorted({session for session, _item in pairs})
+    rows = {str(row["id"]): row for row in conn.execute(_SESSIONS, (json.dumps(named),))}
+    return sorted(pair for pair in pairs if not leases.session_live(rows.get(pair[0])))
+
+
+def recover_lapsed(conn: sqlite3.Connection, *, limit: int) -> int:
+    """Recover for the sessions `lapsed` names, at most `limit` containers, in a call of Valkama's.
+
+    The rows name that call (`RECOVERY_TOOL`). A container already given its row
+    is not named again, so the next call goes on with the rest; how many rows it left.
+    """
+
+    with calls.bind(calls.valkama(), RECOVERY_TOOL):
+        return sum(
+            leave(conn, container, TREE, from_call=first)
+            for container, first in itertools.islice(unheard_since(conn, lapsed(conn)), limit)
+        )
 
 
 def _over(conn: sqlite3.Connection, work_item_id: str) -> list[str]:
