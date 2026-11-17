@@ -14,7 +14,8 @@ import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { openBoard, openList } from './boardPage.ts'
-import { brief, identity, serveSpace, stateOf, stillFrames } from './longSpace.ts'
+import { brief, serveSpace, stateOf, stillFrames } from './longSpace.ts'
+import { LIST_ROW_NODES, longRows, space } from './served/boardLoad.ts'
 import { test } from './test.ts'
 
 /**
@@ -24,38 +25,6 @@ import { test } from './test.ts'
  * snapshot fell after the board was drawn.
  */
 test.use({ trace: 'off' })
-
-const POOL = ['agent-packets', 'coordinator', 'decision-review', 'ui', 'runtime-state', 'docs']
-
-/** The fullest row of this space, drawn with nothing to spare. */
-const LIST_ROW_NODES = 43
-
-/**
- * Sixty tiles, each with four labels, a glyph or two, a holder and steps, so
- * every run a tile draws is there; the control is the same space unlabelled.
- */
-function space(labelled: boolean) {
-  return Array.from({ length: 60 }, (_, index) =>
-    brief(100 + index, stateOf(index), {
-      labels: labelled
-        ? Array.from({ length: 4 }, (_, at) => POOL[(index + at) % POOL.length])
-        : [],
-      priority: index % 3 ? 'high' : 'urgent',
-      kind: index % 2 ? 'bug' : 'improvement',
-      claim_ref: 'codex',
-      checklist: [
-        {
-          id: identity(3000 + index),
-          text: 'Step',
-          done: false,
-          claimed_by: '',
-          done_by: '',
-          by_previous_holder: false,
-        },
-      ],
-    }),
-  )
-}
 
 /**
  * The layouts of drawing the board, read from before the space's data arrives
@@ -212,23 +181,7 @@ test('a list one row short of a window paints its first rows first, then all of 
   // Everything that makes a column wider lies in the last row, the longest
   // unchanged, far below the fold; a date of another year prints its year too.
   const updated_at = new Date().toISOString()
-  const rows = Array.from({ length: 299 }, (_, index) =>
-    brief(1000 + index, stateOf(0), { updated_at }),
-  )
-  rows[280] = brief(9280, stateOf(2), {
-    reference: 'MAIN-99280',
-    claim_ref: 'a holder with a long name',
-    priority: 'urgent',
-    checklist: Array.from({ length: 12 }, (_, at) => ({
-      id: identity(3000 + at),
-      text: 'Step',
-      done: false,
-      claimed_by: '',
-      done_by: '',
-      by_previous_holder: false,
-    })),
-    updated_at: '2020-08-28T20:08:00Z',
-  })
+  const rows = longRows(updated_at)
   const gate: { open?: () => void } = {}
   const answered = new Promise<void>((resolve) => {
     gate.open = resolve
