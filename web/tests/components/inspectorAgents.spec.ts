@@ -15,6 +15,8 @@ import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorA
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
 import { agentsByParent } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 
+import OpenAction from '@/features/session-open/OpenAction.vue'
+
 import type { Executor } from '@/shared/api/executorModel.ts'
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
@@ -224,8 +226,8 @@ describe('the whole list', () => {
 
   it('has no heading of its own, which the tab already is', () => {
     const wrapper = mountAgents(many.slice(0, 2))
-    expect(wrapper.find('h3').exists()).toBe(false)
-    expect(wrapper.find('.section-header-count').exists()).toBe(false)
+    // No heading by any element or role, and so no count beside one.
+    expect(wrapper.findAll('h1, h2, h3, h4, h5, h6, [role="heading"]')).toHaveLength(0)
   })
 
   it('follows a live read, the newest row first', async () => {
@@ -255,6 +257,11 @@ const NOBODY: Executor = {
   opened_host: '',
 }
 
+/** One row whose coordinator is ambiguous, under the executor given. */
+const orphanUnder = (executor: Executor) =>
+  mountAgents([
+    agent({ agent_id: 'a', session_id: 'orphan', executor, link: 'claim', coordinator_items: 5 }),
+  ])
 const ofParent = (id: string, session: string, executor: Executor | undefined) =>
   agent({ agent_id: id, session_id: session, executor })
 const names = (groups: ReturnType<typeof agentsByParent>) =>
@@ -394,17 +401,11 @@ describe('the ambiguity, said once for its group', () => {
   })
 
   it('says it under a group with no way to its parent too', () => {
-    const wrapper = mountAgents([
-      agent({
-        agent_id: 'a',
-        session_id: 'orphan',
-        executor: NOBODY,
-        link: 'claim',
-        coordinator_items: 5,
-      }),
-    ])
-    expect(wrapper.find('.agent-group-head').exists()).toBe(false)
+    const wrapper = orphanUnder(NOBODY)
+    expect(wrapper.findAllComponents(OpenAction)).toHaveLength(0)
     expect(groupLines(wrapper)).toEqual(['ambiguous: the coordinator held 5 items'])
+    // The same group with a way to its parent offers it.
+    expect(orphanUnder(executorOf('orphan')).findAllComponents(OpenAction)).toHaveLength(1)
   })
 
   it('says nothing where no row of the group is ambiguous', () => {

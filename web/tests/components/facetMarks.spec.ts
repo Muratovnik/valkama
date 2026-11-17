@@ -365,8 +365,9 @@ describe("a tile's executor", () => {
     expect(svg.attributes('aria-hidden')).toBe('true')
     expect(holder.get('.facet-word-hidden').text()).toBe(words)
     expect(hintOf(holder)).toBe(words)
-    // None of the old marks is left: no dots, no bare ring.
-    expect(holder.find('.work-dots').exists()).toBe(false)
+    // None of the old marks is left: no dots, no bare ring. The client's glyph and the sign are
+    // the only marks the holder draws.
+    expect(holder.findAll('svg')).toHaveLength(2)
   })
 
   it('says a session asks in Russian apart from one that waits', () => {
