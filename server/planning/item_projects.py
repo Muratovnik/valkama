@@ -547,6 +547,17 @@ def carry(conn: sqlite3.Connection, source_id: str, target_id: str) -> int:
     return len(moving)
 
 
+def drop(conn: sqlite3.Connection, work_item_id: str) -> list[str]:
+    """Take every project off an item, which is becoming a goal or stage; the ids taken, sorted.
+
+    A goal or stage names none: the tasks under it do (`CONTAINER_NAMES_NONE`).
+    """
+
+    dropped = sorted(_stored(conn, work_item_id))
+    conn.execute("DELETE FROM work_item_projects WHERE work_item_id = ?", (work_item_id,))
+    return dropped
+
+
 #: The items that name one of the projects of a JSON list, and every goal or stage above
 #: them: a container names what the tasks under it name, at any depth.
 _NAMING = (

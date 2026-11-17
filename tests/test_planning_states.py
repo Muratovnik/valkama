@@ -16,7 +16,10 @@ from unittest import mock
 
 from server import mcp_surface, store
 from server.planning import model, service
-from tests.planning_fixtures import basis_for
+from tests.planning_fixtures import basis_for, standing_in
+
+#: The summary a move into review needs, as a close does.
+SUMMARY = {"done": "it", "next": "nothing"}
 
 
 class StateNameTests(unittest.TestCase):
@@ -66,8 +69,9 @@ class StateNameTests(unittest.TestCase):
         created = self.item(state="ready")
         self.assertEqual("ready", created["state"]["key"])
         service.claim_work_item(self.conn, created["reference"], author="tester")
+        service.set_summary(self.conn, created["reference"], SUMMARY, author="tester")
         moved = service.transition_work_item(
-            self.conn, created["reference"], "review", acceptance="assignment"
+            self.conn, created["reference"], "review", acceptance="assignment", to_check="it"
         )
         self.assertEqual("review", moved["state"]["key"])
         blocked = service.transition_work_item(
@@ -87,12 +91,18 @@ class StateNameTests(unittest.TestCase):
         # Two review states make `review` an ambiguous category, but it is also
         # a key, and the key is the more specific name.
         self.add_state("qa", "review")
-        created = self.item(state="review")
-        self.assertEqual("review", created["state"]["key"])
+        created = self.item(state="ready")
+        service.set_summary(self.conn, created["reference"], SUMMARY, author="tester")
+        moved = service.transition_work_item(
+            self.conn, created["reference"], "review", to_check="it"
+        )
+        self.assertEqual("review", moved["state"]["key"])
 
     def test_a_category_two_states_share_is_refused_naming_both(self) -> None:
         self.add_state("pairing", "active")
-        created = self.item(state="review")
+        created = standing_in(
+            self.conn, "review", space=self.space["key"], title="Name a state", author="tester"
+        )
         with self.assertRaises(model.PlanningError) as refusal:
             service.transition_work_item(
                 self.conn, created["reference"], "active", acceptance="assignment"

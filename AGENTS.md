@@ -26,7 +26,18 @@ is complete on its own.
   and item record fields, the scope `tree`, `acceptance`, the computed order of
   work and its queue (`rank` retired, `within`, `label`, `project`, the
   session's space, `queue_order`, `withheld`, `lapsed_claim`,
-  `by_previous_holder`), and the retired words
+  `by_previous_holder`), a close that ends its item's requests (`expired_reason`
+  `item_completed` and `item_cancelled`, `[item_closed]`, `purpose`), the
+  guards a creation or a move meets (`new_item`, `blocker` with a stated reason
+  only, `checklist`, `summary` and `review_question` entering review,
+  `question`, `children`), a question with a purpose (`owner_only`,
+  `not_asker`, `[purpose]`; withdrawing review's returns its item to `ready`),
+  a launch that no longer moves its item to review, a cancel of a goal or stage
+  with open work under it (`cancel_list`, `cancels`), a parent cleared only by
+  `move_out` and never under an unaccepted goal (`[parent]`), work put off
+  only by `defer` and brought back by itself (`deferred`, `returned`,
+  `acceptance_question`), and the
+  retired words
   refused on input — for spaces and projects — the registry formats 2 and 4, a
   space without `project_id`, an optional `space` on `create_work_item`, the
   scope `space` and the module levels — and for reading an item by parts — the

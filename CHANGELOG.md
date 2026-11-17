@@ -12,7 +12,7 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
-- **`valkama migrate work-model` carries a store Valkama 2.9 left to schema 18.** Run
+- **`valkama migrate work-model` carries a store Valkama 2.9 left to schema 19.** Run
   once with every session stopped, it takes a verified `pre3.0` snapshot with the
   pictures beside it, then gives the workflows their eight categories and the service
   state, the history their renamed keys and every item its kind, acceptance and start,
@@ -32,13 +32,23 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
-- **A fresh store holds the work model, at schema 18.** A new space's workflow has a
+- **A fresh store holds the work model, at schema 19.** A new space's workflow has a
   state for each of eight categories — Triage, Deferred, Ready, Dev, Review, Done,
   Blocked and Cancelled — and new work starts in Triage; `backlog` and `queued` are no
   longer categories. A goal or a stage is stored as a container, which the store keeps
   out of ready, active, review and blocked, and a service state beside the eight holds
   an accepted open one. A store Valkama 2.9 left is refused with "run `valkama migrate
-  work-model` once" and left as it was, and a 2.9 build refuses a store at 18.
+  work-model` once" and left as it was, and a 2.9 build refuses a store at 19.
+- **A close ends the questions on its item and says how.** Closing an item writes
+  every question, decision and list still pending on it `expired`, with
+  `expired_reason` `item_completed` or `item_cancelled` in place of `task_closed`,
+  and a `request_expired` event; reopening brings none back. A change of an answer
+  on a closed item is refused with `[item_closed]`, a question or list in the call
+  that closes its item is refused as one that would end unanswered in the same
+  write, and a request record carries `purpose`. The migration ends the requests
+  2.9 left pending on closed items the same way, with no event. A request whose
+  deadline or execution had already ended it keeps that reason, `deadline` or
+  `execution_closed`, and the close tells nobody of it.
 - **The service state stays out of reach.** `get_planning_space` lists the eight category
   states and the moves between them only. `container` named as a state, in a transition
   or a list filter, or as a category is refused with the text that says what replaces

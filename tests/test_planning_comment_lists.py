@@ -4,8 +4,8 @@ An agent reporting several findings offers them as a list under its own comment.
 The expectations come from the connection contract, "A list on a comment": the
 comment and its list are one write; a list is a question of one `multi_choice`
 field and reads as one where its item is read; it raises no alert, is not in the
-interface's read of what waits for the person, holds no close, freezes with its
-item, and goes with its comment in a merge.
+interface's read of what waits for the person, holds no close, ends with its
+item's close, and goes with its comment in a merge.
 
 An agent writes through `mcp_surface.call_tool` with a proved session, a person
 through the HTTP boundary as the browser binds it, and each write is committed as
@@ -42,8 +42,8 @@ SUMMARY = {"done": "Found five places", "next": "The owner ticks what to take on
 ON_A_REPLY = "a list stands on a root, and this is a reply"
 SHAPE = "list requires label and options and takes nothing else"
 CLOSING = (
-    "transition: a list on an item this call closes could never be answered;"
-    " send it to review, or leave the list out"
+    "transition: a list on an item this call closes would end unticked in the"
+    " same write: write it in a call that leaves the item open"
 )
 
 
@@ -250,7 +250,12 @@ class WritingTests(Harness):
             "apply_work_item_changes",
             id=self.ref,
             comment={"body": "Findings", "list": LIST},
-            transition={"state": "review", "force": True, "acceptance": "assignment"},
+            transition={
+                "state": "review",
+                "force": True,
+                "acceptance": "assignment",
+                "to_check": "The findings",
+            },
         )
         self.assertEqual("review", moved["state"]["key"], "review keeps it open, and the list")
 
@@ -325,7 +330,9 @@ class WaitsForNobodyTests(Harness):
         asked = self.ask()
         self.assertEqual([asked], [row["request_id"] for row in questions.open_rows(self.conn)])
 
-    def test_closing_the_item_passes_freezes_the_list_and_reopening_thaws_it(self) -> None:
+    def test_closing_the_item_passes_and_ends_the_list_which_reopening_leaves_ended(
+        self,
+    ) -> None:
         listed = self.listed()["list_request_id"]
         closed = self.agent(
             "apply_work_item_changes",
@@ -334,15 +341,35 @@ class WaitsForNobodyTests(Harness):
             transition={"state": "cancelled", "force": True},
         )
         self.assertEqual("cancelled", closed["state"]["key"])
-        frozen = self.request(listed)
-        self.assertEqual(("expired", "task_closed"), (frozen["status"], frozen["expired_reason"]))
         stored = self.conn.execute(
-            "SELECT status FROM work_item_requests WHERE request_id = ?", (listed,)
-        ).fetchone()[0]
-        self.assertEqual("pending", stored, "nothing is written: it reads expired")
+            "SELECT status, expired_reason FROM work_item_requests WHERE request_id = ?",
+            (listed,),
+        ).fetchone()
+        self.assertEqual(("expired", "item_cancelled"), tuple(stored), "the close writes it")
+        self.assertEqual(
+            1,
+            self.conn.execute(
+                "SELECT COUNT(*) FROM work_item_events"
+                " WHERE action = 'request_expired' AND detail = ?",
+                (listed,),
+            ).fetchone()[0],
+        )
         self.move("ready")
-        thawed = self.request(listed)
-        self.assertEqual(("pending", None), (thawed["status"], thawed["expired_reason"]))
+        reopened = self.request(listed)
+        self.assertEqual(
+            ("expired", "item_cancelled"), (reopened["status"], reopened["expired_reason"])
+        )
+
+    def test_a_list_ends_as_completed_when_its_item_is_done_and_stays_so_reopened(self) -> None:
+        listed = self.listed()["list_request_id"]
+        self.move("done")
+        done = self.request(listed)
+        self.assertEqual(("expired", "item_completed"), (done["status"], done["expired_reason"]))
+        self.move("ready")
+        reopened = self.request(listed)
+        self.assertEqual(
+            ("expired", "item_completed"), (reopened["status"], reopened["expired_reason"])
+        )
 
     def test_an_answered_list_on_a_closed_item_cannot_be_changed(self) -> None:
         listed = self.request(self.listed()["list_request_id"])
@@ -354,7 +381,7 @@ class WaitsForNobodyTests(Harness):
         )
         self.assertEqual({"items": ["a"]}, answered["answers"])
         self.move("cancelled")
-        with self.assertRaisesRegex(model.WorkflowGuardError, r"\[task_closed\]"):
+        with self.assertRaisesRegex(model.WorkflowGuardError, r"^\[item_closed\] "):
             self.person(
                 "/api/planning/request/change",
                 id=listed["request_id"],

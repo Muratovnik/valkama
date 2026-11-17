@@ -17,7 +17,8 @@ decides what a goal whose work was all cancelled is for. Children with one open 
 `in_progress` once anything under it started, and `not_started` until then.
 
 A container records no start of its own: it started when the first thing under it
-did. A record also says which open items block it, `waits_for`, by reference.
+did. A record also says which open items block it, `waits_for`, by reference, and
+which cancelled ones are still linked to block it, `cancelled_blockers`.
 
 A tree also holds what the take-next queue asks of an item and the items over it
 (`queue.withheld`): each item's category, what blocks each, and which items an open
@@ -67,13 +68,16 @@ _OVER = (
     " UNION SELECT w.parent_id FROM over o JOIN work_items w ON w.work_item_id = o.id"
     " WHERE w.parent_id IS NOT NULL)" + _FACTS + " JOIN over o ON o.id = i.work_item_id"
 )
-#: The open items that block each item named: its open blockers, by reference.
+#: The items that block each item named and are open or cancelled, by reference, and
+#: whether each is open: the open ones are what it waits for, the cancelled ones what
+#: its `cancelled_blockers` names.
 _WAITS = (
-    "SELECT l.to_id, p.key, b.number FROM work_item_links l"
+    "SELECT l.to_id, p.key, b.number, bs.is_terminal = 0 FROM work_item_links l"
     " JOIN work_items b ON b.work_item_id = l.from_id"
     " JOIN workflow_states bs ON bs.state_id = b.state_id"
     " JOIN planning_spaces p ON p.planning_space_id = b.planning_space_id"
-    " WHERE l.kind = 'blocks' AND bs.is_terminal = 0 AND l.to_id IN ({targets})"
+    " WHERE l.kind = 'blocks' AND (bs.is_terminal = 0 OR bs.category = 'cancelled')"
+    " AND l.to_id IN ({targets})"
     " ORDER BY l.to_id, p.key, b.number"
 )
 _WAITS_IN_SPACES = _WAITS.format(
@@ -115,8 +119,12 @@ class Tree:
     """The loaded facts of some items, and the rule that reads them."""
 
     nodes: Mapping[str, _Node]
+    #: The open items that block each item, by reference.
     waits: Mapping[str, tuple[str, ...]]
     children: Mapping[str, tuple[str, ...]] = field(init=False)
+    #: The cancelled items that block each item, by reference: a link that stands to
+    #: work that will not be done.
+    cancelled: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     #: The items over the ones loaded with what is under them: one task's record loads
     #: its own row and these, and nothing here derives what they derive.
     over: Mapping[str, _Node] = field(default_factory=dict)
@@ -161,6 +169,18 @@ class Tree:
         if node is not None and node.closed:
             return []
         return list(self.waits.get(identity, ()))
+
+    def cancelled_blockers(self, identity: str) -> list[str]:
+        """The cancelled items still linked `blocks` to this open one, by reference.
+
+        `waits_for` no longer names them, and this says why the wait ended: the work it
+        waited for will not be done. It lasts while the link stands; a closed item has none.
+        """
+
+        node = self.nodes.get(identity)
+        if node is not None and node.closed:
+            return []
+        return list(self.cancelled.get(identity, ()))
 
     def startable(self, identity: str) -> bool | None:
         """Whether a claim can start the item where it stands; None when it was not loaded."""
@@ -222,11 +242,18 @@ def _node(row: sqlite3.Row | tuple[object, ...]) -> _Node:
     )
 
 
-def _waits(rows: Iterable[sqlite3.Row]) -> dict[str, tuple[str, ...]]:
-    found: dict[str, list[str]] = {}
-    for target, key, number in rows:
-        found.setdefault(str(target), []).append(model.human_id(str(key), int(number)))
-    return {target: tuple(references) for target, references in found.items()}
+def _waits(rows: Iterable[sqlite3.Row]) -> dict[str, dict[str, tuple[str, ...]]]:
+    """The blockers of each item, by reference, as `Tree` takes them: `waits` the open
+    ones, `cancelled` the cancelled ones."""
+
+    found: dict[str, dict[str, list[str]]] = {"waits": {}, "cancelled": {}}
+    for target, key, number, blocking in rows:
+        side = found["waits" if blocking else "cancelled"]
+        side.setdefault(str(target), []).append(model.human_id(str(key), int(number)))
+    return {
+        name: {target: tuple(references) for target, references in side.items()}
+        for name, side in found.items()
+    }
 
 
 def of_spaces(conn: sqlite3.Connection, space_ids: Iterable[str]) -> Tree:
@@ -234,9 +261,11 @@ def of_spaces(conn: sqlite3.Connection, space_ids: Iterable[str]) -> Tree:
 
     named = sorted(set(space_ids))
     spaces = json.dumps(named)
+    blockers = _waits(conn.execute(_WAITS_IN_SPACES, (spaces,)))
     return Tree(
         nodes={str(row[0]): _node(row) for row in conn.execute(_facts(conn, _SPACES), (spaces,))},
-        waits=_waits(conn.execute(_WAITS_IN_SPACES, (spaces,))),
+        waits=blockers["waits"],
+        cancelled=blockers["cancelled"],
         asked=questions.asked(conn, spaces=named),
     )
 
@@ -252,10 +281,9 @@ def below(conn: sqlite3.Connection, identities: Iterable[str]) -> Tree:
     if not unique:
         return Tree(nodes={}, waits={})
     named = json.dumps(unique)
-    return Tree(
-        nodes={str(row[0]): _node(row) for row in conn.execute(_facts(conn, _BELOW), (named,))},
-        waits=_waits(conn.execute(_WAITS_ON_ITEMS, (named,))),
-    )
+    nodes = {str(row[0]): _node(row) for row in conn.execute(_facts(conn, _BELOW), (named,))}
+    blockers = _waits(conn.execute(_WAITS_ON_ITEMS, (named,)))
+    return Tree(nodes=nodes, waits=blockers["waits"], cancelled=blockers["cancelled"])
 
 
 #: An item and every item over it, nearest first: its id, its kind and its state's
@@ -283,6 +311,28 @@ def above(conn: sqlite3.Connection, identity: str) -> list[tuple[str, str, str]]
     return [
         (str(row[0]), str(row[1]), str(row[2]))
         for row in conn.execute(_ABOVE, (identity, identity))
+    ]
+
+
+#: The open items under one, at any depth, by reference in number order: open as the
+#: rule reads it, in a state of any category but completed and cancelled.
+_OPEN_UNDER = (
+    "WITH RECURSIVE under(id) AS (SELECT work_item_id FROM work_items WHERE parent_id = ?"
+    " UNION SELECT w.work_item_id FROM under u JOIN work_items w ON w.parent_id = u.id)"
+    " SELECT p.key, i.number FROM under u JOIN work_items i ON i.work_item_id = u.id"
+    " JOIN workflow_states s ON s.state_id = i.state_id"
+    " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
+    " WHERE s.category NOT IN ('completed', 'cancelled')"
+    " ORDER BY i.number"
+)
+
+
+def open_under(conn: sqlite3.Connection, identity: str) -> list[str]:
+    """Every open item under `identity`, at any depth, by reference: what keeps it from closing."""
+
+    return [
+        model.human_id(str(key), int(number))
+        for key, number in conn.execute(_OPEN_UNDER, (identity,))
     ]
 
 
@@ -324,9 +374,11 @@ def of_item(conn: sqlite3.Connection, row: sqlite3.Row, category: str) -> Tree:
     node = _node((identity, row["parent_id"], row["kind"], started, category, 0))
     query = _OVER.format(started="i.started_at" if recorded else "NULL")
     over = {str(found[0]): _node(found) for found in conn.execute(query, (identity,))}
+    blockers = _waits(conn.execute(_WAITS_ON_ITEMS, (json.dumps([identity, *over]),)))
     return Tree(
         nodes={identity: node},
-        waits=_waits(conn.execute(_WAITS_ON_ITEMS, (json.dumps([identity, *over]),))),
+        waits=blockers["waits"],
+        cancelled=blockers["cancelled"],
         over=over,
         asked=frozenset() if node.closed else questions.asked(conn, items=[identity]),
     )

@@ -1,10 +1,17 @@
 /**
  * What a work item record holds to across its fields, and the take-next queue's
- * reasons it carries: the rules a strict reader checks beyond each field's own shape.
+ * reasons, lapsed claim and put-off condition it carries: the rules a strict reader checks
+ * beyond each field's own shape.
  */
 
-import type { z } from '@/shared/api/contract.ts'
-import { boundedText, strictObject, uniqueList } from '@/shared/api/contract.ts'
+import {
+  blankable,
+  boundedText,
+  positiveInt,
+  strictObject,
+  uniqueList,
+  z,
+} from '@/shared/api/contract.ts'
 import { enumField, ISO } from '@/shared/api/platformApiGuards.ts'
 
 /**
@@ -44,6 +51,47 @@ export const lapsedClaimField = () =>
     reason: enumField(LAPSE_REASONS),
     at: boundedText(ISO, 96),
   }).nullable()
+
+const REFERENCE = () => boundedText(/^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u, 20)
+
+/**
+ * The condition of an item put off, only while it stands in a deferred state: the moment
+ * or the item it waits on, one of the two; why, since when and who put it off; and when
+ * the condition came while the owner is asked whether to take it up again.
+ */
+export const deferredField = () =>
+  strictObject({
+    until: boundedText(ISO, 96).nullable(),
+    until_item: REFERENCE().nullable(),
+    reason: blankable(400),
+    since: boundedText(ISO, 96),
+    by: strictObject({ author: blankable(128).nullable(), session_id: blankable(200).nullable() }),
+    reached_at: boundedText(ISO, 96).nullable(),
+  }).refine((found) => (found.until === null) !== (found.until_item === null), {
+    message: 'expected a moment or an item to wait on',
+  })
+
+/** Why an item in triage came back from being put off: the day, or what became of the item. */
+const RETURN_CAUSES = ['date', 'completed', 'cancelled', 'deleted'] as const
+
+/** Why and when an item came back, only while its newest move is the return. */
+export const returnedField = () =>
+  strictObject({
+    because: enumField(RETURN_CAUSES),
+    item: REFERENCE().nullable(),
+    at: boundedText(ISO, 96),
+  })
+
+/**
+ * What became of steps no longer on the item as they were, only when its history says so:
+ * the texts taken off or reworded, each cut to 120 characters, and the items that took
+ * steps away with their work. The history keeps them all, so neither list is bounded.
+ */
+export const conditionsChangedField = () =>
+  strictObject({
+    removed: z.array(blankable(120)),
+    moved: z.array(strictObject({ to: REFERENCE(), count: positiveInt(true) })),
+  })
 
 /**
  * A work item record, strict: it stands in a state or derives one as an accepted open

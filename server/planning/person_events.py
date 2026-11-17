@@ -56,6 +56,9 @@ if TYPE_CHECKING:
 #: What `execution_events.identity_source` says about a call; `calls` publishes these.
 BROWSER = "browser"
 VALKAMA = "valkama"
+#: A launch's claim (`calls.launch`): its session is proved by the launch, not by the
+#: client, so it is no agent speaking, as it was not while it rode the interface's call.
+LAUNCH = "launch"
 #: What `execution_events.kind` says about a Planning write call.
 KIND = "planning_write"
 
@@ -91,6 +94,15 @@ KINDS = {
     "request_changed": "question_changed",
     # A person's words about this item, written on another one in a comment's `mentions`.
     "mentioned": "mentioned",
+    # Nothing under a goal or stage is open any more: it waits for its confirmation.
+    "awaiting_confirmation": "awaiting_confirmation",
+    # A task made a goal or stage, or back: a change of what it is, not of where it
+    # stands, which the `opened` or `transitioned` beside it tells as `status`.
+    "converted": "converted",
+    # A step taken off, or the wording a rewritten one had: an edit of the steps.
+    "checklist_removed": "steps_edited",
+    # Steps that left with a part split off: they left the item, as an edit takes them.
+    "split_off": "steps_edited",
 }
 #: The kinds that say where the work stands: its state changed, it got its summary, it
 #: was left without a holder or changed holders, it came to wait for the owner or
@@ -105,15 +117,37 @@ WORK_KINDS = frozenset(
 #: person's edit of the labels, which is told as the edit its call row names.
 #: `accepted`: the basis of an acceptance, beside the write that accepted the item.
 #: `child_left`: a child's move out of this container, told on the child itself.
+#: `returned`: why put-off work came back, beside the move that brought it, which is told.
+#: `split_from`: a part's origin, which says no more than its creation does.
 NOT_TOLD = frozenset(
-    {"created", "execution_attached", "overridden", "labels_changed", "accepted", "child_left"}
+    {
+        "created",
+        "execution_attached",
+        "overridden",
+        "labels_changed",
+        "accepted",
+        "child_left",
+        "returned",
+        "split_from",
+    }
+)
+#: What a goal or stage put off is told with, after the move's own words: the work
+#: under it is not put off with it.
+DEFERRED_WORK = (
+    "Work under it stays with whoever holds it; the queue hands out none of it until it comes back."
+)
+#: Whether a move went into a deferred state of a goal's or stage's workflow, by the
+#: key its detail opens with.
+_DEFERRED_CONTAINER = (
+    "SELECT 1 FROM work_items i JOIN workflow_states s ON s.workflow_id = i.workflow_id"
+    " WHERE i.work_item_id = ? AND i.kind = 'container' AND s.category = 'deferred'"
+    " AND s.key = ?"
 )
 #: The kinds of Valkama's own records that ask for a session: one wakes it, as a person's
 #: act does, and waits on a goal or stage nobody works on for the next session that takes
-#: work there (`waiting`). Empty: a lease that ran out, the one record Valkama makes on
-#: its own today, is told at the next tool call. A stage that adds a record which must
-#: wake names its kind here.
-SERVER_ASKS: frozenset[str] = frozenset()
+#: work there (`waiting`). A goal or stage awaiting its confirmation asks to be confirmed,
+#: which is the point of saying so; a lease that ran out is told at the next tool call.
+SERVER_ASKS: frozenset[str] = frozenset({"awaiting_confirmation"})
 
 #: The call that edits an item's fields, and those fields' columns by the name
 #: `calls.call_id` records. The one place a name read back from a row meets SQL.
@@ -135,12 +169,12 @@ _ITEM_FIELDS = (
 _LAST_AGENT_EVENT = (
     "SELECT MAX(c.id) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
     " WHERE e.work_item_id = ? AND c.work_item_id = ?"
-    " AND c.identity_source NOT IN (?,?) AND c.id <> ?"
+    " AND c.identity_source NOT IN (?,?,?) AND c.id <> ?"
 )
 _LAST_AGENT_COMMENT = (
     "SELECT MAX(c.id) FROM work_item_comments m JOIN execution_events c ON c.id = m.call_id"
     " WHERE m.work_item_id = ? AND c.work_item_id = ?"
-    " AND c.identity_source NOT IN (?,?) AND c.id <> ?"
+    " AND c.identity_source NOT IN (?,?,?) AND c.id <> ?"
 )
 #: A person's writes come through Planning's own paths, under both of its mounts: the
 #: interface answers a question through the module surface (`interactions.WRITE_PATHS`)
@@ -231,13 +265,13 @@ _AGENT_COMMENTS = (
     " m.created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?) FROM work_item_comments m"
     " JOIN execution_events c ON c.id = m.call_id"
     " WHERE m.work_item_id = ? AND m.call_id > ? AND c.identity_state = 'confirmed'"
-    " AND c.identity_source NOT IN (?,?) AND c.session_id IS NOT NULL ORDER BY m.id"
+    " AND c.identity_source NOT IN (?,?,?) AND c.session_id IS NOT NULL ORDER BY m.id"
 )
 _AGENT_EVENTS = (
     "SELECT e.id, e.action, e.detail, e.created_at, e.call_id, c.session_id, c.agent_id"
     " FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
     " WHERE e.work_item_id = ? AND e.call_id > ? AND c.identity_state = 'confirmed'"
-    " AND c.identity_source NOT IN (?,?) AND c.session_id IS NOT NULL ORDER BY e.id"
+    " AND c.identity_source NOT IN (?,?,?) AND c.session_id IS NOT NULL ORDER BY e.id"
 )
 
 
@@ -256,7 +290,7 @@ def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> lis
     """
 
     found: list[tuple[tuple[int, int, int], dict]] = []
-    bound = (work_item_id, after, BROWSER, VALKAMA)
+    bound = (work_item_id, after, BROWSER, VALKAMA, LAUNCH)
     reports: set[int] = set()
     for row in conn.execute(_AGENT_COMMENTS, (ASKS_FOR, *bound)).fetchall():
         if row[2]:
@@ -497,6 +531,8 @@ def _feed_speaker(source: object, state: object, tool: object, session: object) 
         return BROWSER if isinstance(tool, str) and tool.startswith(_PERSON_TOOLS) else None
     if source == VALKAMA:
         return VALKAMA
+    if source == LAUNCH:
+        return None
     if state != "confirmed" or session is None:
         return None
     return str(session)
@@ -607,7 +643,10 @@ def _answers(row: tuple, session_id: str) -> bool:
         tool = str(row[5] or "")
         return tool.startswith(("/api/planning/", "/api/modules/planning/"))
     return (
-        row[3] == "confirmed" and row[4] != VALKAMA and row[6] is not None and row[6] != session_id
+        row[3] == "confirmed"
+        and row[4] not in (VALKAMA, LAUNCH)
+        and row[6] is not None
+        and row[6] != session_id
     )
 
 
@@ -650,8 +689,10 @@ def blocker_changes(
     transition undid included. Each has the blocker's reference as `blocker`, the
     state that transition reached as `state` and the blocker's title as the text. A
     person's transition through Planning's own paths is a person's act
-    (`via: "interface"`); another agent's says who, as `agents_since` does.
-    Valkama's own write, a launch and an unproved call name nobody, and are not told.
+    (`via: "interface"`); another agent's says who, as `agents_since` does. What
+    Valkama moved in a call of its own, work put off coming back among it, is
+    Valkama's record (`via: "valkama"`), told as `valkama_since` tells one on the
+    item itself. A launch and an unproved call name nobody, and are not told.
     """
 
     found = []
@@ -667,7 +708,9 @@ def blocker_changes(
         if source == BROWSER:
             if str(row[8] or "").startswith(("/api/planning/", "/api/modules/planning/")):
                 found.append((int(row[5]), entry))
-        elif row[6] == "confirmed" and source != VALKAMA and row[9] is not None:
+        elif source == VALKAMA:
+            found.append((int(row[5]), _by_valkama(entry)))
+        elif row[6] == "confirmed" and source != LAUNCH and row[9] is not None:
             found.append((int(row[5]), _spoken(entry, row[9], row[10])))
     return found
 
@@ -736,7 +779,7 @@ def _boundary_and_edits(
     """
 
     excluded = -1 if own_call is None else own_call
-    bound = (work_item_id, work_item_id, BROWSER, VALKAMA, excluded)
+    bound = (work_item_id, work_item_id, BROWSER, VALKAMA, LAUNCH, excluded)
     boundary = 0
     for query in (_LAST_AGENT_EVENT, _LAST_AGENT_COMMENT):
         boundary = max(boundary, conn.execute(query, bound).fetchone()[0] or 0)
@@ -756,7 +799,7 @@ def _boundary_and_edits(
         if source == BROWSER:
             if row[2] == _EDIT_TOOL and row[3]:
                 edits.append(row)
-        elif source != VALKAMA:
+        elif source not in (VALKAMA, LAUNCH):
             boundary = int(row[0])
             edits.clear()
     return boundary, edits
@@ -809,7 +852,16 @@ def _event_entry(conn: sqlite3.Connection, row: tuple, work_item_id: str) -> dic
     if action == "opened":
         # The detail is a reason, if one was named, and never a state.
         return _entry(kind, at, text=f"{OPENED}: {detail}" if detail else OPENED)
+    if action == "transitioned" and _deferred_container(conn, work_item_id, detail):
+        return _entry(kind, at, text=f"{detail.rstrip('.')}. {DEFERRED_WORK}")
     return _entry(kind, at, text=detail)
+
+
+def _deferred_container(conn: sqlite3.Connection, work_item_id: str, detail: str) -> bool:
+    """Whether a move's detail took a goal or stage into a deferred state."""
+
+    key = detail.split(": ", 1)[0]
+    return conn.execute(_DEFERRED_CONTAINER, (work_item_id, key)).fetchone() is not None
 
 
 _MENTIONING = (

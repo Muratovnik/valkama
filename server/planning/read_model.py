@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 
 from . import (
     acknowledgements,
     calls,
+    deferral,
     item_projects,
     item_tree,
     leases,
@@ -33,6 +35,7 @@ from . import (
     states,
     subscriptions,
 )
+from . import closing as closing_rules
 
 
 @contextlib.contextmanager
@@ -222,7 +225,7 @@ def other_space_ends(conn: sqlite3.Connection, identities: Iterable[str]) -> lis
             "work_item_id": str(row["work_item_id"]),
             "reference": model.human_id(str(row["space_key"]), int(row["number"])),
             "title": row["title"],
-            "kind": outward_kind(row["kind"], row["parent_id"]),
+            "kind": model.outward_kind(row["kind"], row["parent_id"]),
             "state": states.public_state(row) if row["category"] is not None else None,
             "space": {"key": row["space_key"], "name": row["space_name"]},
         }
@@ -243,17 +246,6 @@ def blocked(conn: sqlite3.Connection, work_item_id: str) -> bool:
         ).fetchone()
         is not None
     )
-
-
-def outward_kind(kind: object, parent_id: object) -> str:
-    """The kind a reader sees: a container is a goal, or a stage under a parent.
-
-    Every place a kind leaves the server from a row reads it through this.
-    """
-
-    if kind == model.CONTAINER_KIND:
-        return "stage" if parent_id else "goal"
-    return str(kind)
 
 
 def acceptance(row: sqlite3.Row) -> dict | None:
@@ -907,7 +899,78 @@ def present(
     record["mentions"], record["mentions_total"] = mentions_of(conn, identity, HTTP_MENTIONS)
     # Who follows it without holding it, for the card to name.
     record["subscribers"] = subscriptions.subscribers(conn, identity)
+    # What its confirmer checks, only while it awaits confirmation.
+    if record["container_state"] == closing_rules.AWAITING:
+        record["confirmation"] = closing_rules.confirmation(conn, row)
+    record.update(_put_off(conn, identity, record["state"]))
+    changed = conditions_changed(conn, identity)
+    if changed is not None:
+        record["conditions_changed"] = changed
     return record
+
+
+#: The history that says an item's steps changed under it: a step taken off or reworded,
+#: a part split off with some, and a conversion that left its work in a new task.
+_CONDITIONS_CHANGED = (
+    "SELECT action, detail FROM work_item_events WHERE work_item_id = ?"
+    " AND action IN ('checklist_removed', 'split_off', 'converted') ORDER BY id"
+)
+#: How a `split_off` detail names the part and how many steps it took.
+_SPLIT_OFF = re.compile(r"^(?P<to>\S+): (?P<count>\d+) steps$")
+#: How a `converted` detail names the task it left and how many steps went there
+#: (`split.convert`).
+_LEFTOVER = re.compile(r"; leftover (?P<to>[A-Z][A-Z0-9]*-\d+): (?P<count>\d+) steps")
+
+
+def conditions_changed(conn: sqlite3.Connection, identity: str) -> dict | None:
+    """What became of steps that are no longer on the item as they were, or None.
+
+    `removed` holds the text of each step an edit took off and the former text of each
+    step reworded by its id (`checklist_removed`, cut to 120 characters); `moved` each
+    item that took steps away with their work: a part split off it (`split_off`) and the
+    task a conversion left (`converted`), each with how many steps went, as its history
+    recorded it then. None when nothing of the
+    kind is in the history, which counts from this build on. The full record carries
+    it, and the answers of entering review and of completing name it; the card does not.
+    """
+
+    removed: list[str] = []
+    moved: list[dict] = []
+    for action, detail in conn.execute(_CONDITIONS_CHANGED, (identity,)):
+        text = str(detail)
+        if action == "checklist_removed":
+            removed.append(text)
+            continue
+        if action == "split_off":
+            found = _SPLIT_OFF.match(text)
+            if found is not None:
+                moved.append({"to": found["to"], "count": int(found["count"])})
+            continue
+        left = _LEFTOVER.search(text)
+        if left is not None:
+            moved.append({"to": left["to"], "count": int(left["count"])})
+    if not removed and not moved:
+        return None
+    return {"removed": removed, "moved": moved}
+
+
+def _put_off(conn: sqlite3.Connection, identity: str, state: Mapping | None) -> dict:
+    """`deferred`, the condition of an item put off, or `returned`, why one in triage came
+    back; each only while it holds, and neither of any other item.
+
+    Read from the condition's row and the history, so a full record and the card carry
+    them, never a brief record. Reading writes nothing: a condition that has come stands
+    until a write brings the item back.
+    """
+
+    category = None if state is None else state["category"]
+    if category == "deferred":
+        found = deferral.record(conn, identity)
+        return {} if found is None else {"deferred": found}
+    if category == "triage":
+        came = deferral.returned(conn, identity)
+        return {} if came is None else {"returned": came}
+    return {}
 
 
 def _record(
@@ -937,7 +1000,7 @@ def _record(
         "reference": reference(conn, row),
         "number": int(row["number"]),
         "title": row["title"],
-        "kind": outward_kind(row["kind"], row["parent_id"]),
+        "kind": model.outward_kind(row["kind"], row["parent_id"]),
         "priority": row["priority"],
         "state": None if shown is None else {"state_id": state["state_id"], **shown},
         "open": not state["is_terminal"],
@@ -986,6 +1049,10 @@ def _record(
     record["container_state"] = facts.container_state(identity)
     record["started_at"] = facts.started_at(identity)
     record["waits_for"] = facts.waits_for(identity)
+    # Only when there is one: a cancelled item it was linked to wait for.
+    cancelled_blockers = facts.cancelled_blockers(identity)
+    if cancelled_blockers:
+        record["cancelled_blockers"] = cancelled_blockers
     # The take-next queue's own rule (`queue.withheld`): the queue gives exactly
     # what reads workable, and the codes say why anything else is not given.
     record["withheld"] = queue.withheld(conn, row, facts, read_space=read_space)
@@ -1003,7 +1070,9 @@ def _record(
 #: The parts an item is read by, in the order its table of contents names them.
 #: `card` is the item itself; every other part is the field of that name in its
 #: full record, but `sections`, which divides the description, and `participants`,
-#: which only a goal or a stage has.
+#: which only a goal or a stage has. `confirmation` is a goal's or stage's only while
+#: it awaits confirmation (`closing.confirmation`), and the table names it then even
+#: with nothing cancelled or moved out under it: the wait itself is what to read.
 PARTS = (
     "card",
     "comments",
@@ -1018,6 +1087,7 @@ PARTS = (
     "claim",
     "sections",
     "participants",
+    "confirmation",
 )
 #: The card's fields, in the order it carries them. A card carries each one its
 #: record has, so a field the record gains reaches the card once it is named here.
@@ -1032,6 +1102,9 @@ CARD_FIELDS = (
     "acceptance",
     "started_at",
     "waits_for",
+    "cancelled_blockers",
+    "deferred",
+    "returned",
     "workable",
     "withheld",
     "projects",
@@ -1057,9 +1130,12 @@ CARD_STEP_MARKS = ("claimed_by", "done_by", "by_previous_holder")
 #: The state's fields on the card; whether work is over in it is `open`.
 CARD_STATE = ("key", "name", "category")
 #: What the full record holds that is neither on the card nor a part: the ids the
-#: card's `reference` and `parent` stand for, the summary's comment, and the counts
-#: and marks of a cut history, which the table of contents and the parts carry.
+#: card's `reference` and `parent` stand for, the summary's comment, the counts
+#: and marks of a cut history, which the table of contents and the parts carry, and
+#: what became of steps no longer on the item as they were (`conditions_changed`),
+#: which entering review and completing answer with.
 OFF_CARD = (
+    "conditions_changed",
     "work_item_id",
     "planning_space_id",
     "number",
@@ -1122,15 +1198,31 @@ def card(
         "checklist": [card_step(step) for step in record["checklist"]],
         "summary": model.summary(row["summary"], required=False),
     }
+    put_off = _put_off(conn, str(row["work_item_id"]), state)
+    if "deferred" in put_off:
+        # Why and who put it off are read with the events part, so the card stays short.
+        put_off["deferred"] = deferral.card(put_off["deferred"])
+    found.update(put_off)
     shown = {name: found[name] for name in CARD_FIELDS if name in found}
     if shown["summary"] is None:
         del shown["summary"]
+    awaiting = record["container_state"] == closing_rules.AWAITING
     shown["parts"] = table_of_contents(
         {
             **part_counts(conn, str(row["work_item_id"]), lease),
             "sections": {"count": sections.card_count(str(row["description"]))},
             **(counted or {}),
-        }
+            **(
+                {
+                    "confirmation": {
+                        "count": closing_rules.counted(closing_rules.confirmation(conn, row))
+                    }
+                }
+                if awaiting
+                else {}
+            ),
+        },
+        standing=("confirmation",) if awaiting else (),
     )
     return shown
 
@@ -1159,20 +1251,24 @@ def _parent_reference(conn: sqlite3.Connection, parent_id: object) -> str | None
     return model.human_id(str(found[0]), int(found[1]))
 
 
-def table_of_contents(counts: Mapping[str, Mapping[str, int]]) -> dict:
+def table_of_contents(
+    counts: Mapping[str, Mapping[str, int]], *, standing: Iterable[str] = ()
+) -> dict:
     """Every part an item has but the card, in the order of `PARTS`, each with its counts.
 
-    A part with nothing in it is left out, so the card names only what there is to read.
-    The questions part has something in it when only a request asked of an agent
-    session is open, which its `count` of the owner's questions leaves out.
+    A part with nothing in it is left out, so the card names only what there is to read,
+    but a part named `standing`, which is there to read whatever it counts. The
+    questions part has something in it when only a request asked of an agent session is
+    open, which its `count` of the owner's questions leaves out.
     """
 
+    kept = frozenset(standing)
     return {
         name: dict(counts[name])
         for name in PARTS
         if name != "card"
         and name in counts
-        and any(int(value) > 0 for value in counts[name].values())
+        and (name in kept or any(int(value) > 0 for value in counts[name].values()))
     }
 
 

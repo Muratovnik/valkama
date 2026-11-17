@@ -43,11 +43,12 @@ T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [f"M{number}" for number in range(14)]
+STEP_NAMES = [*(f"M{number}" for number in range(16)), "deferred-items", "history-actions"]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(1, 16)),
-    *(f"P{number}" for number in range(18, 27)),
+    *(f"P{number}" for number in range(18, 31)),
+    "deferred-items",
     "second-run",
     "recovery-point",
 ]
@@ -792,7 +793,9 @@ class MigratedStoreTests(StoreCase):
         self,
     ) -> None:
         columns = [row[1] for row in self.read("PRAGMA table_info(work_item_requests)")]
-        self.assertEqual("addressee", columns[-1], "appended last, as a fresh store declares it")
+        self.assertEqual(
+            ["addressee", "purpose"], columns[-2:], "in the order a fresh store declares them"
+        )
         [index] = self.read(
             "SELECT sql FROM sqlite_master WHERE name = 'work_item_requests_addressee'"
         )
@@ -841,10 +844,41 @@ class MigratedStoreTests(StoreCase):
             {
                 "no-old-waiting": {"rows": 0},
                 "request-shapes": {"refused": ["scope 'other'", "delivered_call without delivered_at"]},
-                "fresh-tables": {"added": ["work_item_waiting_notices"]},
+                "fresh-tables": {"added": ["work_item_deferrals", "work_item_waiting_notices"]},
             },
             details,
         )
+
+    def test_m15_gives_a_row_to_each_goal_or_stage_awaiting_confirmation(self) -> None:
+        """Every child of WM-18 is done: it awaits, since the migration, with no call."""
+
+        rows = self.read(
+            "SELECT work_item_id, since, call_id, request_id, left_at FROM work_item_confirmations"
+        )
+        self.assertEqual(
+            [(self.ids["WM-18"], None, None, None)],
+            [(row[0], row[2], row[3], row[4]) for row in rows],
+        )
+        # The moment every record of the migration carries.
+        [(moment,)] = self.read(
+            "SELECT DISTINCT created_at FROM work_item_events WHERE author = ?",
+            (migration.AUTHOR,),
+        )
+        self.assertEqual(moment, rows[0][1])
+        self.assertEqual([], self.events("WM-18", "awaiting_confirmation"), "no event, no call")
+        [follows] = self.read("SELECT COUNT(*) FROM work_item_subscriptions")
+        self.assertEqual(0, follows[0], "no session follows it")
+        steps = {step["name"]: step for step in self.report["steps"]}
+        self.assertEqual(
+            (True, {"table_created": True, "awaiting": ["WM-18"]}),
+            (steps["confirmations"]["needed"], steps["confirmations"]["result"]),
+        )
+        # `items` widened the CHECK with every action this build declares.
+        self.assertFalse(steps["history-actions"]["needed"])
+        [p30] = [entry for entry in self.report["postconditions"] if entry["name"] == "awaiting-rows"]
+        self.assertEqual({"rows": 1}, p30["detail"])
+        [p26] = [entry for entry in self.report["postconditions"] if entry["name"] == "fresh-tables"]
+        self.assertNotIn("work_item_confirmations", p26["detail"]["added"])
 
     def test_m8_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
         self,
@@ -924,6 +958,35 @@ class MigratedStoreTests(StoreCase):
         # WM-1 waits on a ready task nobody started; WM-6, WM-15 and WM-16 have work
         # started under them; every child of WM-18 is done.
         self.assertEqual({"awaiting_confirmation": 1, "in_progress": 3, "not_started": 1}, derived)
+
+    def test_deferred_items_creates_the_conditions_empty_as_a_fresh_store_has_them(
+        self,
+    ) -> None:
+        """No 2.9 state was deferred: the table comes empty, and its postcondition holds."""
+
+        names = {
+            str(row[0])
+            for row in self.read(
+                "SELECT name FROM sqlite_master WHERE tbl_name = 'work_item_deferrals'"
+            )
+        }
+        self.assertEqual(
+            {
+                "work_item_deferrals",
+                "work_item_deferrals_until_at",
+                "work_item_deferrals_until_item",
+                "sqlite_autoindex_work_item_deferrals_1",
+            },
+            names,
+        )
+        [(rows,)] = self.read("SELECT COUNT(*) FROM work_item_deferrals")
+        self.assertEqual(0, rows)
+        [step] = [step for step in self.report["steps"] if step["name"] == "deferred-items"]
+        self.assertEqual((True, {"table_created": True}), (step["needed"], step["result"]))
+        [found] = [
+            entry for entry in self.report["postconditions"] if entry["name"] == "deferred-items"
+        ]
+        self.assertEqual((True, {"rows": 0, "deferred": 0}), (found["passed"], found["detail"]))
 
     def test_a_second_run_changes_nothing_and_says_the_migration_ran(self) -> None:
         backups = sorted(os.listdir(os.path.join(self.directory.name, "backups")))
@@ -1106,6 +1169,215 @@ class LastRouteTests(StoreCase):
 
 
 KEPT_STEPS = {"WM-7": ("Wire it", "agent-c"), "WM-8": ("Try it", "agent-f")}
+
+
+#: Requests a 2.9 store holds on items of the fixture, as (id, item, kind, status,
+#: stored reason): what 2.9 read `task_closed` and left pending, one it stored so, and
+#: the ones `ended-requests` leaves as they are.
+CLOSED_ITEM_REQUESTS = (
+    ("on-done", "WM-5", "question", "pending", None),
+    ("on-cancelled", "WM-10", "decision", "pending", None),
+    ("stored-closed", "WM-11", "question", "expired", "task_closed"),
+    ("answered-on-done", "WM-12", "question", "answered", None),
+    ("on-open", "WM-8", "question", "pending", None),
+)
+
+
+def add_requests(path: str, ids: dict[str, str], rows: tuple = CLOSED_ITEM_REQUESTS) -> None:
+    conn = sqlite3.connect(path)
+    try:
+        for request_id, item, kind, status, reason in rows:
+            conn.execute(
+                "INSERT INTO work_item_requests(request_id,work_item_id,kind,prompt,fields_json,"
+                "author,status,created_at,expired_reason,resolved_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (
+                    request_id,
+                    ids[item],
+                    kind,
+                    "Which way?",
+                    "[]",
+                    "agent-a",
+                    status,
+                    T1,
+                    reason,
+                    T2 if status != "pending" else None,
+                ),
+            )
+        with schema17.words_as_2_9():
+            words.bring_current(conn)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+class ClosedItemRequestsTests(StoreCase):
+    """`ended-requests`: a request a close left pending ends as its item closed, done or cancelled.
+
+    The requests are rebuilt from the fresh declaration; a stored `task_closed` and
+    a request pending on a closed item end `expired` with the reason of the item's
+    category, with no event; every other row keeps its item, kind and status
+    (`requests-kept`), none waits on a closed item (`no-closed-waits`), and the
+    ones ended are those foreseen (`requests-ended`).
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        add_requests(self.path, self.ids)
+
+    def requests(self) -> dict[str, tuple]:
+        return {
+            str(row[0]): (str(row[1]), row[2], str(row[3]))
+            for row in self.read(
+                "SELECT request_id, status, expired_reason, revision FROM work_item_requests"
+            )
+        }
+
+    def test_m14_ends_the_requests_a_close_left_waiting_by_the_items_category(self) -> None:
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(
+            [(name, True) for name in POSTCONDITION_NAMES],
+            [(entry["name"], entry["passed"]) for entry in report["postconditions"]],
+        )
+        held = self.requests()
+        self.assertEqual(("expired", "item_completed", "1"), held["on-done"])
+        self.assertEqual(("expired", "item_cancelled", "1"), held["on-cancelled"])
+        self.assertEqual(("expired", "item_cancelled", "1"), held["stored-closed"])
+        self.assertEqual(("answered", None, "0"), held["answered-on-done"])
+        self.assertEqual(("pending", None, "0"), held["on-open"])
+        self.assertEqual(("pending", None, "0"), held["kept-request"])
+        [ended] = self.read(
+            "SELECT answered_by, resolved_at FROM work_item_requests WHERE request_id = 'on-done'"
+        )
+        self.assertEqual(migration.AUTHOR, ended[0])
+        self.assertIsNotNone(ended[1])
+        [kept] = self.read(
+            "SELECT resolved_at FROM work_item_requests WHERE request_id = 'stored-closed'"
+        )
+        self.assertEqual(T2, kept[0], "a close already ended it then")
+        self.assertEqual(
+            0,
+            self.read("SELECT COUNT(*) FROM work_item_events WHERE action = 'request_expired'")[0][
+                0
+            ],
+        )
+        [step] = [step for step in report["steps"] if step["name"] == "ended-requests"]
+        self.assertTrue(step["needed"])
+        self.assertEqual({"item_cancelled": 2, "item_completed": 1}, step["result"]["ended"])
+        details = {
+            entry["name"]: entry["detail"]
+            for entry in report["postconditions"]
+            if entry["name"] in ("requests-kept", "no-closed-waits", "requests-ended")
+        }
+        self.assertEqual(
+            {
+                "requests-kept": {"requests": 6},
+                "no-closed-waits": {"pending_on_closed": 0},
+                "requests-ended": {
+                    "ended": {"item_cancelled": 2, "item_completed": 1},
+                    "lapsed": {},
+                },
+            },
+            details,
+        )
+        again = self.migrate()
+        self.assertEqual("current", again["status"])
+
+    def test_a_reason_task_closed_is_refused_by_the_migrated_store(self) -> None:
+        self.migrate()
+        conn = sqlite3.connect(self.path)
+        try:
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK constraint failed"):
+                conn.execute(
+                    "UPDATE work_item_requests SET expired_reason = 'task_closed'"
+                    " WHERE request_id = 'on-done'"
+                )
+            conn.execute(
+                "UPDATE work_item_requests SET purpose = 'review' WHERE request_id = 'on-open'"
+            )
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK constraint failed"):
+                conn.execute(
+                    "UPDATE work_item_requests SET purpose = 'acceptance'"
+                    " WHERE request_id = 'on-open'"
+                )
+        finally:
+            conn.rollback()
+            conn.close()
+
+    def test_ended_requests_ends_a_request_that_had_lapsed_on_a_closed_item_as_it_lapsed(
+        self,
+    ) -> None:
+        """A pending request past its deadline, or on a run that ended, on a closed item
+        ends `deadline` or `execution_closed`, resolved when it lapsed, not as the close."""
+
+        conn = sqlite3.connect(self.path)
+        try:
+            conn.execute(
+                "INSERT INTO executions(execution_id, work_item_id, client_family, role,"
+                " environment, expected_effect, status, ended_at)"
+                " VALUES ('run-1', ?, 'claude', 'r', 'e', 'x', 'complete', ?)",
+                (self.ids["WM-10"], T2),
+            )
+            conn.execute(
+                "INSERT INTO work_item_requests(request_id,work_item_id,kind,prompt,fields_json,"
+                "author,status,created_at,expires_at) VALUES"
+                " ('overdue', ?, 'question', 'By noon?', '[]', 'agent-a', 'pending', ?, ?)",
+                (self.ids["WM-5"], T1, T2),
+            )
+            conn.execute(
+                "INSERT INTO work_item_requests(request_id,work_item_id,kind,prompt,fields_json,"
+                "author,status,created_at,execution_id) VALUES"
+                " ('run-bound', ?, 'question', 'During the run?', '[]', 'agent-a', 'pending', ?,"
+                " 'run-1')",
+                (self.ids["WM-10"], T1),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        add_requests(self.path, self.ids, ())
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        self.assertTrue(all(entry["passed"] for entry in report["postconditions"]))
+        [step] = [step for step in report["steps"] if step["name"] == "ended-requests"]
+        self.assertEqual(
+            {"deadline": 1, "execution_closed": 1, "item_cancelled": 2, "item_completed": 1},
+            step["result"]["ended"],
+        )
+        [post_requests_ended] = [
+            entry for entry in report["postconditions"] if entry["name"] == "requests-ended"
+        ]
+        self.assertEqual(
+            {
+                "ended": {"item_cancelled": 2, "item_completed": 1},
+                "lapsed": {"deadline": 1, "execution_closed": 1},
+            },
+            post_requests_ended["detail"],
+        )
+        held = {
+            str(row[0]): (row[1], row[2], row[3], row[4])
+            for row in self.read(
+                "SELECT request_id, status, expired_reason, resolved_at, answered_by"
+                " FROM work_item_requests WHERE request_id IN ('overdue', 'run-bound', 'on-done')"
+            )
+        }
+        self.assertEqual(("expired", "deadline", T2), held["overdue"][:3])
+        self.assertEqual(("expired", "execution_closed", T2), held["run-bound"][:3])
+        self.assertNotEqual(migration.AUTHOR, held["overdue"][3], "no close ended it")
+        self.assertEqual(("expired", "item_completed"), held["on-done"][:2])
+        self.assertEqual("current", self.migrate()["status"])
+
+    def test_a_stored_task_closed_on_an_item_open_again_is_refused_and_nothing_written(
+        self,
+    ) -> None:
+        add_requests(
+            self.path, self.ids, (("reopened", "WM-8", "question", "expired", "task_closed"),)
+        )
+        before, digest = identity(self.path), file_digest(self.path)
+        with self.assertRaises(store_steps.RunFailedError) as raised:
+            self.migrate()
+        self.assertEqual(["ended-requests"], raised.exception.report["failed"])
+        self.assertIn("reopened", raised.exception.report["steps"][-1]["error"])
+        self.assertEqual((before, digest), (identity(self.path), file_digest(self.path)))
 
 
 class KeptStepClaimTests(StoreCase):
@@ -1315,7 +1587,22 @@ FAULTS = (
         lambda ids: (ids["WM-1"],),
     ),
     fault("request-shapes", "DROP INDEX work_item_waiting_notices_delivered"),
+    fault(
+        "requests-kept",
+        "UPDATE work_item_requests SET status = 'declined' WHERE request_id = 'kept-request'",
+    ),
+    fault(
+        "no-closed-waits",
+        "UPDATE work_item_requests SET work_item_id = ? WHERE request_id = 'kept-request'",
+        lambda ids: (ids["WM-5"],),
+    ),
+    fault(
+        "requests-ended",
+        "UPDATE work_item_requests SET status = 'expired', expired_reason = 'item_cancelled'"
+        " WHERE request_id = 'kept-request'",
+    ),
     fault("fresh-tables", "CREATE TABLE stray_rows(id INTEGER PRIMARY KEY)"),
+    fault("awaiting-rows", "UPDATE work_item_confirmations SET left_at = since"),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
     fault(
@@ -1417,7 +1704,8 @@ def emptied(half: str) -> Callable[[sqlite3.Connection, store_steps.Context], No
 
 
 #: For each `fresh-shape` probe, a store that passes the pragmas and fails the probe alone: the
-#: fault, and what `fresh-shape` says of it.
+#: fault, and what `fresh-shape` says of it. A narrowed events CHECK is `history-actions`'s to widen again, so a
+#: second run would take it (`second-run`).
 P1_FAULTS = (
     (
         "the update half of the trigger refuses nothing",
@@ -1433,6 +1721,7 @@ P1_FAULTS = (
         "the events table refuses an action a fresh store takes",
         rebuilt("work_item_events", "'accepted',", ""),
         "with {'action': 'accepted'} is refused (CHECK constraint failed",
+        ["fresh-shape", "second-run"],
     ),
     (
         "the states table takes a category the work model retired",
@@ -1720,11 +2009,16 @@ class RollbackTests(StoreCase):
         entry = next(entry for entry in report["postconditions"] if entry["name"] == name)
         self.assertIn(says, entry["error"])
 
-    def test_p1_probes_each_check_and_both_halves_of_the_trigger(self) -> None:
-        for title, write, says in P1_FAULTS:
+    def test_fresh_shape_probes_each_check_and_both_halves_of_the_trigger(self) -> None:
+        for title, write, says, *failed in FRESH_SHAPE_FAULTS:
             with self.subTest(fault=title):
                 self.own_store()
-                self.assert_only(once(title, write), ["fresh-shape"], "fresh-shape", says)
+                self.assert_only(
+                    once(title, write),
+                    failed[0] if failed else ["fresh-shape"],
+                    "fresh-shape",
+                    says,
+                )
 
     def test_each_clause_refuses_a_store_only_it_sees_broken(self) -> None:
         for name, says, statements, failed in CLAUSE_FAULTS:

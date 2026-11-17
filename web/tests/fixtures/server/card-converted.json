@@ -1,0 +1,244 @@
+{
+  "interface_version": "valkama-planning-work-item",
+  "scope": {
+    "kind": "space",
+    "space_ref": {
+      "data_scope_id": "00000000-0000-4000-8000-000000000004",
+      "space_key": "MAIN"
+    }
+  },
+  "work_item_ref": {
+    "space_ref": {
+      "data_scope_id": "00000000-0000-4000-8000-000000000004",
+      "space_key": "MAIN"
+    },
+    "reference": "MAIN-23"
+  },
+  "state": {
+    "interface_version": "valkama-ui-state",
+    "status": "ready",
+    "payload": {
+      "work_item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000052",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-23",
+        "number": 23,
+        "title": "Converted card",
+        "kind": "goal",
+        "priority": "medium",
+        "state": null,
+        "open": true,
+        "container_state": "in_progress",
+        "acceptance": {
+          "basis": "assignment",
+          "at": "2026-01-02T03:04:05Z"
+        },
+        "started_at": "2026-01-02T03:04:05Z",
+        "waits_for": [],
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [
+          "bug"
+        ],
+        "projects": [],
+        "source": "",
+        "checklist": [
+          {
+            "id": "00000000-0000-4000-8000-000000000053",
+            "text": "Found",
+            "done": true,
+            "claimed_by": "",
+            "done_by": "agent",
+            "by_previous_holder": false,
+            "executor": {
+              "session": null,
+              "agent": null,
+              "opened_in": "",
+              "opened_host": "",
+              "family": "",
+              "state": "none"
+            }
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000054",
+            "text": "Fix",
+            "done": false,
+            "claimed_by": "",
+            "done_by": "",
+            "by_previous_holder": false,
+            "executor": {
+              "session": null,
+              "agent": null,
+              "opened_in": "",
+              "opened_host": "",
+              "family": "",
+              "state": "none"
+            }
+          }
+        ],
+        "revision": 3,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "last_claim_ref": null,
+        "withheld": [
+          "goal_or_stage"
+        ],
+        "workable": false,
+        "lapsed_claim": null,
+        "claim": null,
+        "description": "",
+        "summary": null,
+        "summary_comment_id": null,
+        "links": [],
+        "refs": [],
+        "comments": [],
+        "events": [
+          {
+            "action": "created",
+            "detail": "triage",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "claimed",
+            "detail": "",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "accepted",
+            "detail": "assignment",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "transitioned",
+            "detail": "dev: claimed",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "checklist_replaced",
+            "detail": "2",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "checklist_completed",
+            "detail": "Found",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "released",
+            "detail": "agent",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "labels_changed",
+            "detail": "{\"from\":[],\"to\":[\"bug\"]}",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "opened",
+            "detail": "converted from a bug",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "converted",
+            "detail": "bug -> goal; leftover MAIN-24: 0 steps",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          }
+        ],
+        "mentions": [],
+        "mentions_total": 0,
+        "subscribers": [],
+        "conditions_changed": {
+          "removed": [],
+          "moved": [
+            {
+              "to": "MAIN-24",
+              "count": 0
+            }
+          ]
+        },
+        "agents": [],
+        "last_claim_executor": {
+          "session": null,
+          "agent": null,
+          "opened_in": "",
+          "opened_host": "",
+          "family": "",
+          "state": "none"
+        },
+        "participants": []
+      }
+    }
+  }
+}

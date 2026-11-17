@@ -22,7 +22,7 @@ hold other work at any depth and are never claimed; there are eight categories;
 work is accepted on a recorded basis; and an accepted open goal or stage shows
 what it derives from the work under it instead of a state. The order work is
 taken in was set by hand, a `rank` stored as the item's `position`; in 3.0 it is
-computed from the work model. The store moves to schema 18 through
+computed from the work model. The store moves to schema 19 through
 `valkama migrate work-model`.
 
 Several of the old names would mean something else under the new model. A
@@ -61,6 +61,61 @@ and no compatibility layer.
    - in a read of one space, an item of another space that names one of its
      projects carries `outside_space` in `withheld`: that space's queue does
      not give it;
+   - a close ends the requests pending on its item in the same write: a request
+     record's `expired_reason` takes `item_completed` and `item_cancelled`
+     where it read `task_closed`, reopening brings none back, a change of an
+     answer on a closed item is refused with `[item_closed]`, and the record
+     carries `purpose`;
+   - a new item is never created in a state of the categories `review`,
+     `blocked`, `completed` or `cancelled`: a creation that names one is refused
+     with `new_item`, which `force` does not carry;
+   - a move into `blocked` needs a stated reason: an open item linked `blocks`
+     no longer stands for one (`blocker`);
+   - a move into a `review` state from a state of another category asks what a
+     completed close asks, every checklist step ticked (`checklist`) and a
+     summary (`summary`), and `to_check` in the `transition` group, without
+     which it is refused with `review_question`, which `force` does not carry;
+   - an agent's move that completes an item, or that takes it out of `review`
+     to anything but a cancelled state, is refused with `question` while a
+     question to the owner is open on the item, other than the one that asks to
+     confirm the goal or stage being completed, and `force` does not carry it;
+   - a question with a `purpose` carries its answer out in the write that gives
+     it: an answer by anyone but a person in Valkama is refused with
+     `owner_only`, a withdrawal by anyone but the session that asked it with
+     `not_asker`, and declining it, changing its answer or answering it with an
+     own variant with `[purpose]`; withdrawing the question of review returns
+     its item to `ready`;
+   - a goal or stage is refused a move to `completed` while an item under it,
+     at any depth, is open (`children`), and `force` does not carry it;
+   - the ending of a launch moves its item nowhere: an outcome `complete` or
+     `expected_no_change` no longer moves it from its active state to `review`;
+   - a cancel of a goal or stage with open work under it, which used to pass, is
+     refused with `cancel_list` and the list of what would close, and the
+     `transition` group and its HTTP write take `cancels`, that list's token,
+     which cancels the work under it in the same write; that answer's
+     `released` is then a list of `{reference, holder}`;
+   - an edit's `parent: ""`, which cleared the parent, is refused with
+     `[parent]`: an item leaves its goal or stage by the new `move_out` group and
+     its HTTP write, with a reason, which the goal or stage records in
+     `child_left` as `MAIN-12: <reason>`, as a move under another records
+     `MAIN-12: moved under MAIN-7` where it recorded the reference alone;
+   - an edit's `parent` refuses an accepted open item under a goal or stage that,
+     or one over which, stands in `triage` or `deferred` (`[parent]`), and moves
+     an item in `triage` put under goals and stages all accepted to `ready`, or a
+     goal or stage to its service state, accepted with them;
+   - work is put off by the new `defer` group and its HTTP write, with `until`
+     (a day, a time with its zone, or the open item it waits on) and a
+     `reason`; a `transition` into a `deferred` state is refused naming it. The
+     item's full record and card carry `deferred`, its condition, while it is
+     put off, and `returned`, why it came back, while it stands in `triage`
+     after that; the history takes the action `returned`, and a cancel list's
+     entries take `how: deferred`. When its day comes or that item closes, a
+     sweep step brings it back to `triage`, or, under goals and stages all
+     accepted, asks the owner with a question of `purpose` `return`; while that
+     question is open an agent's claim of the item, and its move anywhere but a
+     cancelled state, is refused with `acceptance_question`, which `force` does
+     not carry. A close, a delete or a merge that brings work back answers
+     with `returned`;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -128,6 +183,20 @@ and no compatibility layer.
 | one project binds a space | each binding says `default`; a space has one default project |
 | `create_planning_space` with `project_id` | `{name, key}`; `valkama projects bind` joins a project |
 | scope `project` | scope `space`, the project an optional refinement |
+| `expired_reason: "task_closed"`, read until the item reopens | `"item_completed"` or `"item_cancelled"`, written by the close |
+| `[task_closed]` on an answer change | `[item_closed]` |
+| `create_work_item` with a `state` in `review`, `blocked`, `completed` or `cancelled` | create it, then move it there with `transition` |
+| a `blocks` link to enter `blocked` | a stated `reason`; work that waits on an item stays where it is, linked `blocks` |
+| `{"state": "review"}` with open steps or no summary | every step ticked, a `summary`, and `to_check`: what the owner is to check |
+| an agent completing an item, or taking it out of `review`, over an open question to the owner | wait for the owner's answer, or withdraw a question you asked |
+| an agent answering, declining or changing the answer of any question to the owner | leave a question with a `purpose` to the owner; only the session that asked withdraws it |
+| completing a goal or stage with open work under it | close, cancel or move out what is open under it; completing it then is the confirmation |
+| a launch that ends `complete` moves its item to `review` | the launched agent moves it to `review` with `to_check` |
+| cancelling a goal or stage with open work under it in one move | the move, refused with `cancel_list`; then the same move with `cancels` set to its `list_token` |
+| `update` with `parent: ""` | `move_out` with the `reason` the item leaves its goal or stage for |
+| moving accepted work under a goal or stage in triage or deferred | accept that goal or stage first, or move the item out |
+| `transition` into a deferred state | `defer` with `until` and `reason`; the work comes back by itself |
+| an agent claiming or moving work the owner is asked to take up again | wait for the owner's answer; only a cancel moves it before then |
 
 ## Consequences
 

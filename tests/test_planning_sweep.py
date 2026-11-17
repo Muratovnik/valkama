@@ -22,7 +22,8 @@ from unittest import mock
 
 from server import housekeeping, http_surface, mcp_surface, store
 from server.ops import tray
-from server.planning import calls, leases, service, sweep
+from server.planning import calls, closing, leases, service, sweep
+from tests import test_planning_closing as closing_tests
 from tests.test_planning_leases import (
     ONE,
     ONE_UNCONFIRMED,
@@ -157,7 +158,17 @@ class LeaseStepTests(PassTestCase):
         self.lapse_after_ticks()
         done = self.run_pass(deadline=time.monotonic() - 1)
         self.assertEqual(
-            ([sweep.LEASES, sweep.WAITING, sweep.SUBSCRIPTIONS], {}), (done.left, done.changed)
+            (
+                [
+                    sweep.LEASES,
+                    sweep.WAITING,
+                    sweep.SUBSCRIPTIONS,
+                    sweep.RETURNS,
+                    sweep.CONFIRMATIONS,
+                ],
+                {},
+            ),
+            (done.left, done.changed),
         )
         self.assertEqual(held(ONE), self.read()["claim_ref"])
 
@@ -209,6 +220,71 @@ class LimitTests(PassTestCase):
         self.assertEqual({sweep.LEASES: 1}, self.run_pass().changed)
         self.assertEqual([], self.held())
         self.assertEqual({}, self.run_pass().changed)
+
+
+class ConfirmationsStepTests(closing_tests.Tree):
+    """The `confirmations` step held to the step contract, on goals nobody works on."""
+
+    def awaiting_goals(self, count: int) -> list[str]:
+        """Goals that each came to wait when a person closed the one task under it."""
+
+        goals = []
+        for index in range(count):
+            goal = self.made(f"Goal {index}", "goal")
+            task = self.made(f"Task {index}", parent=goal)
+            self.person(
+                closing_tests.APPLY,
+                id=task,
+                summary=closing_tests.DONE,
+                transition={"state": "done"},
+            )
+            goals.append(goal)
+        return goals
+
+    def asked(self) -> list[int]:
+        return [
+            int(row[0])
+            for row in self.conn.execute(
+                "SELECT i.number FROM work_item_requests r"
+                " JOIN work_items i ON i.work_item_id = r.work_item_id"
+                " WHERE r.purpose = 'confirm' ORDER BY i.number"
+            )
+        ]
+
+    def test_at_most_limit_items_a_pass_then_the_rest_then_nothing(self) -> None:
+        goals = self.awaiting_goals(3)
+        # Two of them came to wait in a write that went around the marks.
+        self.conn.execute(
+            "DELETE FROM work_item_confirmations WHERE work_item_id IN (?, ?)",
+            (self.identity(goals[0]), self.identity(goals[2])),
+        )
+        self.conn.commit()
+        numbers = [int(goal.rsplit("-", 1)[1]) for goal in goals]
+        with mock.patch.object(sweep, "LIMIT", 2):
+            self.assertEqual({sweep.CONFIRMATIONS: 2}, sweep.run_pass(self.conn).changed)
+            self.assertEqual([numbers[0], numbers[2]], self.asked(), "recorded, then asked")
+            self.assertEqual({sweep.CONFIRMATIONS: 1}, sweep.run_pass(self.conn).changed)
+            self.assertEqual(numbers, self.asked())
+            written = self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+            self.assertEqual({}, sweep.run_pass(self.conn).changed)
+            self.assertEqual(
+                written, self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+            )
+        self.holds()
+
+    def test_its_writes_are_valkamas_own_calls_under_their_names(self) -> None:
+        [goal] = self.awaiting_goals(1)
+        self.conn.execute("DELETE FROM work_item_confirmations")
+        self.conn.commit()
+        sweep.run_pass(self.conn)
+        [*_before, recorded] = self.events(goal, "awaiting_confirmation")
+        [asked] = self.events(goal, "request_created")
+        self.assertEqual(
+            ("valkama", "valkama", sweep.CONFIRMATIONS), (recorded[1], recorded[3], recorded[4])
+        )
+        self.assertEqual(
+            ("valkama", "valkama", closing.QUESTION_TOOL), (asked[1], asked[3], asked[4])
+        )
 
 
 class _Serving:

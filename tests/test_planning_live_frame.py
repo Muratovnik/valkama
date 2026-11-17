@@ -265,7 +265,14 @@ class RowTests(FrameCase):
         epic, idle_epic = self.epic(), self.epic()
         task, idle = self.child(epic), self.child(idle_epic)
         service.set_summary(self.conn, epic, {"done": "Dropped", "next": "Nothing"})
-        service.transition_work_item(self.conn, epic, "cancelled")
+        # A goal cancelled over open work under it, as a store an earlier build wrote
+        # holds one: a cancel now takes the open work under it along.
+        self.conn.execute(
+            "UPDATE work_items SET state_id = (SELECT s.state_id FROM workflow_states s"
+            " WHERE s.workflow_id = work_items.workflow_id AND s.category = 'cancelled'"
+            " ORDER BY s.position LIMIT 1) WHERE work_item_id = ?",
+            (service.get_work_item(self.conn, epic)["work_item_id"],),
+        )
         self.working(task)
         rows = self.rows()
         self.assertEqual({epic, task}, set(rows), (idle, idle_epic))

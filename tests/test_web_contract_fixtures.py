@@ -307,6 +307,52 @@ class _Scenario:
             conn.close()
         return self.http(f"/api/modules/planning/request?{self.scope(id=request['request_id'])}")
 
+    def put_off(self) -> dict[str, dict]:
+        """A card put off until another item, and one that came back when the item it
+        waited on was deleted."""
+
+        made = [
+            str(self.tool("create_work_item", space=SPACE, title=title)["reference"])
+            for title in ("Put off card", "Awaited card", "Came back card", "Dropped card")
+        ]
+        waiting, awaited, back, dropped = made
+        for ref, until in ((waiting, awaited), (back, dropped)):
+            self.http(
+                "/api/planning/work-item/apply",
+                {"id": ref, "defer": {"until": until, "reason": "Waits for the other card."}},
+            )
+        self.http("/api/planning/work-item/delete", {"id": dropped})
+        return {
+            "card-deferred": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=waiting)}"
+            ),
+            "card-returned": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=back)}"
+            ),
+        }
+
+    def converted(self) -> dict[str, dict]:
+        """A bug at work converted into a goal, read as the card reads the goal it became.
+
+        The goal keeps the bug's steps and its kind as a label, and the work under way
+        goes on in the task it left under it.
+        """
+
+        bug = str(
+            self.tool(
+                "create_work_item", space=SPACE, title="Converted card", kind="bug", claim=True
+            )["reference"]
+        )
+        self.tool(
+            "apply_work_item_changes", id=bug, checklist=[{"text": "Found", "done": True}, "Fix"]
+        )
+        self.tool("apply_work_item_changes", id=bug, convert={"to": "goal"})
+        return {
+            "card-converted": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=bug)}"
+            )
+        }
+
     def executor_card(self) -> dict:
         """A card whose claim, steps and agents each name an executor."""
 
@@ -901,6 +947,8 @@ class _Scenario:
             # Last, so the references the answers above name stay theirs.
             **self.tree(),
             "request-session-gone": self.session_gone(),
+            **self.put_off(),
+            **self.converted(),
         }
 
 

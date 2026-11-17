@@ -140,9 +140,75 @@ class WhatCountsTests(Harness):
         )
         self.assertLessEqual(person_events.WORK_KINDS, set(person_events.KINDS.values()))
 
+    def test_the_one_record_of_valkamas_that_asks_for_a_session_is_a_wait_for_confirmation(
+        self,
+    ) -> None:
+        """A goal or stage left with nothing open under it wakes whoever closed its last item."""
+
+        self.assertEqual({"awaiting_confirmation"}, set(person_events.SERVER_ASKS))
+        self.assertEqual("awaiting_confirmation", person_events.KINDS["awaiting_confirmation"])
+        self.assertNotIn("awaiting_confirmation", person_events.WORK_KINDS)
+
+    def test_a_conversion_is_told_as_its_own_kind_beside_the_move_it_made(self) -> None:
+        """A person converting the task an agent holds: the holder hears its claim end, the
+        item come to stand open as a goal, and what it became, in that order."""
+
+        self.agent("claim_work_item", id=self.ref)
+        self.person("/api/planning/work-item/convert", id=self.ref, to="goal", force=True)
+
+        told = self.window()
+        self.assertEqual(["released", "status", "converted"], [event["kind"] for event in told])
+        leftover = service.get_work_item(self.conn, self.ref)["reference"]
+        self.assertRegex(told[-1]["text"], r"^task -> goal; leftover [A-Z]+-\d+: 0 steps$")
+        self.assertNotIn(leftover, told[-1]["text"])
+        self.assertEqual("converted", person_events.KINDS["converted"])
+        self.assertNotIn("converted", person_events.WORK_KINDS)
+        self.assertNotIn("converted", person_events.SERVER_ASKS)
+
+    def test_a_step_taken_off_or_reworded_is_told_as_an_edit_of_the_steps_with_its_text(
+        self,
+    ) -> None:
+        """A reworded step as the holder hears it: the edit, then each wording that went."""
+
+        self.agent("claim_work_item", id=self.ref)
+        self.agent("apply_work_item_changes", id=self.ref, checklist=["X", "Y"])
+        kept = service.get_work_item(self.conn, self.ref)["checklist"][1]
+        self.person(
+            "/api/planning/work-item/checklist",
+            id=self.ref,
+            items=[{"id": kept["id"], "text": "Y2"}],
+        )
+
+        told = self.window()
+        self.assertEqual(["steps_edited"] * 3, [event["kind"] for event in told])
+        self.assertEqual(["1 steps", "X", "Y"], [event["text"] for event in told])
+        self.assertEqual("steps_edited", person_events.KINDS["checklist_removed"])
+        self.assertNotIn("checklist_removed", person_events.WORK_KINDS)
+        self.assertNotIn("checklist_removed", person_events.SERVER_ASKS)
+
+    def test_a_part_split_off_is_told_on_the_task_as_an_edit_of_its_steps(self) -> None:
+        """The holder hears its steps leave with the part; the part's own origin is not told."""
+
+        self.agent("claim_work_item", id=self.ref)
+        self.agent("apply_work_item_changes", id=self.ref, checklist=["one", "two"])
+        two = service.get_work_item(self.conn, self.ref)["checklist"][1]["id"]
+        part = self.person(
+            "/api/planning/work-items",
+            split_from=self.ref,
+            steps=[two],
+            title="The rest",
+            force=True,
+        )
+
+        told = self.window()
+        self.assertEqual(["steps_edited"], [event["kind"] for event in told])
+        self.assertEqual(f"{part['reference']}: 1 steps", told[0]["text"])
+        self.assertIn("split_from", person_events.NOT_TOLD)
+
     def test_the_browser_and_kind_spellings_are_the_call_rows_own(self) -> None:
         self.assertEqual(calls.BROWSER, person_events.BROWSER)
         self.assertEqual(calls.VALKAMA, person_events.VALKAMA)
+        self.assertEqual(calls.LAUNCH, person_events.LAUNCH)
         self.assertEqual(calls.KIND, person_events.KIND)
 
     def test_a_comment_says_what_it_said_and_where_it_came_from(self) -> None:
@@ -464,6 +530,16 @@ class WhoCountsTests(Harness):
         self.conn.commit()
         self.assertEqual([], self.window())
 
+    def test_a_launch_claiming_for_its_session_is_no_agent_speaking(self) -> None:
+        # The launch proves the session it starts, and the claim is that session's lease;
+        # but the launched agent wrote nothing, so the person's words still wait for it.
+        self.says()
+        with calls.bind(calls.launch("launched-session", "claude"), "launch_work_item"):
+            service.claim_work_item(self.conn, self.ref, author="claude:executor")
+        self.conn.commit()
+        self.assertEqual(["comment"], self.kinds())
+        self.assertEqual([], person_events.agents_since(self.conn, self.id, 0))
+
     def test_a_lapsed_claim_released_by_valkama_does_not_end_the_window(self) -> None:
         self.says()
         with calls.bind(calls.valkama(), leases.EXPIRY_TOOL):
@@ -511,9 +587,9 @@ class TheWindowTests(Harness):
         self.agent("claim_work_item", id=self.ref)
         self.says("One")
         self.person("/api/planning/work-item/update", id=self.ref, title="Two")
-        self.person("/api/planning/work-item/transition", id=self.ref, state="review", force=True)
+        self.person("/api/planning/work-item/transition", id=self.ref, state="ready", force=True)
         self.says("Three")
-        # The move to review let the agent's claim go, and that is told too.
+        # The move back to ready let the agent's claim go, and that is told too.
         self.assertEqual(["comment", "edited", "status", "released", "comment"], self.kinds())
 
     def test_an_agents_write_that_logs_no_event_moves_it_too(self) -> None:
@@ -768,7 +844,11 @@ class CloseGuardTests(Harness):
                 "apply_work_item_changes", id=self.ref, transition={"state": "cancelled"}
             ),
         )
-        answer = self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
+        answer = self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            transition={"state": "review", "to_check": "The library chosen"},
+        )
         self.assertEqual("review", answer["state"]["key"])
 
     def test_force_carries_it_and_records_the_override(self) -> None:

@@ -1,8 +1,9 @@
 """What a launch from Valkama owes the owner when it ends: the listener's reaper tells them.
 
 No agent's call is bound here, because the listener's own thread writes, so this is
-the one way a move to review or a failure reaches the owner. A launch runs against
-the harness's client that never runs, and the executor is replaced.
+the one way a failed launch reaches the owner. A launch that delivered moves nothing:
+the agent it ran moves its work into review, and that move raises its own toast. A
+launch runs against the harness's client that never runs, and the executor is replaced.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import http_surface, runner, watchers
-from server.alerts import emit, messages
+from server.alerts import emit
 from server.alerts import settings as alert_settings
 from server.executions import lifecycle as executions
 from server.ops import toast
@@ -83,77 +84,24 @@ class ReaperHarness(test_executions.LaunchHarness):
         return str(planning.get_work_item(self.conn, reference)["state"]["key"])
 
 
-class ReviewAfterALaunchTests(ReaperHarness):
-    def test_a_launch_that_moved_its_item_to_review_is_one_toast(self) -> None:
+class ADeliveredLaunchTests(ReaperHarness):
+    def test_a_launch_that_delivered_moves_nothing_and_is_nothing(self) -> None:
+        # The launched agent moves its work into review, with what the owner is to
+        # check; the launch's end moves nothing and owes no review toast.
         reference = self.launch()
         self.finish(reference)
         self.reap()
-
-        self.assertEqual("review", self.state(reference))
-        (message,) = self.shown
-        self.assertEqual(reference, message["tag"])
-        self.assertIn("ready for review", message["xml"])
-        self.assertIn(f'"valkama://open/{reference}"', message["xml"])
-        item_id = str(planning.get_work_item(self.conn, reference)["work_item_id"])
-        self.assertEqual([(item_id, False)], self.asked, "only its card silences a review")
-
-    def test_a_second_pass_over_the_same_launch_is_nothing(self) -> None:
-        reference = self.launch()
-        self.finish(reference)
-        self.reap()
-        self.shown.clear()
-        self.reap()
-        self.assertEqual([], self.shown)
-
-    def test_a_launch_that_changed_nothing_is_nothing(self) -> None:
-        reference = self.launch()
-        self.finish(reference, delivered=False)
-        self.reap()
-        self.assertEqual("dev", self.state(reference), "the item did not move")
-        self.assertEqual([], self.shown)
-
-    def test_an_item_already_moved_out_of_active_is_nothing(self) -> None:
-        reference = self.launch()
-        planning.transition_work_item(
-            self.conn, reference, "review", author="agent", acceptance="assignment"
-        )
-        self.conn.commit()
-        self.finish(reference)
-        self.reap()
-        self.assertEqual([], self.shown, "whoever moved it was the one to raise it")
-
-    def test_a_guard_that_refuses_the_move_is_nothing(self) -> None:
-        reference = self.launch()
-        self.finish(reference)
-        with mock.patch.object(
-            executions.planning_service,
-            "transition_work_item",
-            side_effect=executions.planning_model.WorkflowGuardError("no"),
-        ):
-            self.reap()
         self.assertEqual("dev", self.state(reference))
         self.assertEqual([], self.shown)
 
-    def test_review_turned_off_is_nothing(self) -> None:
-        alert_settings.write(self.conn, {"events": {"review": False}})
+    def test_a_delivery_is_nothing_with_every_alert_turned_on(self) -> None:
+        alert_settings.write(
+            self.conn, {"locale": "en", "events": {"review": True, "launchFailed": True}}
+        )
         reference = self.launch()
         self.finish(reference)
         self.reap()
-        self.assertEqual("review", self.state(reference), "the move itself still happened")
         self.assertEqual([], self.shown)
-
-    def test_two_launches_ending_in_one_pass_are_one_summary(self) -> None:
-        first, second = self.launch("first"), self.launch("second")
-        self.finish(first)
-        self.finish(second)
-        self.reap()
-        self.assertEqual(["review", "review"], [self.state(first), self.state(second)])
-        (message,) = self.shown
-        self.assertEqual(messages.SUMMARY_TAG, message["tag"])
-        self.assertIn(first, message["xml"])
-        self.assertIn(second, message["xml"])
-        self.assertIn(f"valkama://open/{second}", message["xml"], "no question: the newest")
-        self.assertNotIn("<header", message["xml"])
 
 
 class AFailedLaunchTests(ReaperHarness):
@@ -206,18 +154,24 @@ class TheLoopTests(ReaperHarness):
             registry.run(interval=0, **options)
 
     def test_the_loop_tells_the_owner_about_the_launch_it_reaped(self) -> None:
+        alert_settings.write(self.conn, {"locale": "en", "events": {"launchFailed": True}})
         reference = self.launch()
-        self.finish(reference)
+        self.finish(reference, delivered=False, code=1)
         self.run_loop(watchers.Watchers(), cycles=5)
         emit.EMITTER.flush(5)
         self.assertEqual([reference], [message["tag"] for message in self.shown])
 
     def test_a_second_listener_tells_nobody(self) -> None:
+        alert_settings.write(self.conn, {"locale": "en", "events": {"launchFailed": True}})
         reference = self.launch()
-        self.finish(reference)
+        self.finish(reference, delivered=False, code=1)
         self.run_loop(watchers.Watchers(), cycles=5, alerts=False)
         emit.EMITTER.flush(5)
-        self.assertEqual("review", self.state(reference), "it still reaps")
+        self.assertIn(
+            "outcome=",
+            planning.get_work_item(self.conn, reference)["comments"][-1]["body"],
+            "it still reaps",
+        )
         self.assertEqual([], self.shown)
 
     def test_a_failing_alert_does_not_stop_the_loop_or_the_streams(self) -> None:

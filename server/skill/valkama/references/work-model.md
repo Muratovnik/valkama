@@ -65,6 +65,71 @@ progress within what can be verified and merged: a change counts once it is
 integrated, and every further open item adds coordination and delays the
 feedback on the others [DORA, Claude Code teams].
 
+## Goals and stages
+
+A goal or stage is done when nothing under it is open, at any depth; completing
+it before then is refused (`children`). When the last open item under it closes,
+moves out or is deleted, it awaits confirmation: the write that did it answers
+with `awaiting_confirmation`, the top-level session of the agent that wrote it
+follows the goal or stage, and Valkama records the wait there, which wakes the
+sessions working on it.
+
+Confirming is completing it. Read its `confirmation` part: what was cancelled and
+what moved out under it, each with its reason, and how many steps it has. Check
+its steps, or its description when it has none, against what was done, tick
+them, write the summary and complete it. When something is missing, file a task
+under it instead: the goal or stage goes back to work.
+
+When no live session works on it, or none has confirmed it a day after its wait
+began, Valkama asks the owner, once in that wait. Only the owner answers:
+`confirm` completes it with its steps ticked, `leave` leaves it to the next
+session that takes work in the space, which hears it as words left for it. A
+session that confirms it meanwhile ends the question.
+
+Work that does not belong to its goal or stage leaves it with the reason
+(`move_out`): it goes to the top level and to triage, keeps that it started,
+and loses its claims and its basis; the goal or stage records the reason, and a
+confirmer reads it. A goal or stage moved out takes its work along and becomes
+a goal. An edit does not clear a parent (`[parent]`), so the reason is never
+skipped. Moving an item under another goal or stage is an edit of `parent`, and
+the one it left records `moved under` it. Accepted work does not move under a
+goal or stage that is not accepted (`[parent]`): accept that one first, or move
+the item out. Work in triage moved under goals and stages all accepted is
+accepted with them, as if filed there.
+
+A task that turns out to be several is converted into a goal or stage
+(`convert`, `to: stage` under a parent, `to: goal` without one), and an
+edit of its kind or a child filed under it is refused naming that word. It
+keeps its number, text, discussion, history, links, questions, subscribers,
+refs and steps with their ticks; a bug or improvement keeps its kind as a
+label. A goal or stage is held by nobody, so a held task leaves its work at
+hand in a new task under it: the same holder, every claimed step with its
+claim, the steps `leftover.steps` names, started as it was and with its
+projects, and each holder's top-level session follows the new goal or stage.
+A goal or stage with nothing under it becomes a task again with `to: task`.
+An agent does not convert an item while a question to the owner on it is open.
+
+A task of which only a part is to go elsewhere, later or to another holder,
+splits that part off: `create_work_item` with `split_from` and the `steps` it
+takes. The part stands beside the task under the same parent, accepted as the
+task is, and its steps keep their ids and ticks. When the task enters review or
+completes, its answer names where its steps went and which were taken off or
+reworded (`conditions_changed`), so the close says what it stands for.
+
+Work that is to wait is put off with `defer`, never by a move into a deferred
+state: `until` names the day (`2026-12-01`, from 00:00 UTC), a time with its zone,
+or the open item whose close it waits on, and `reason` says why, which the owner
+reads when it comes back. It loses its claims and its basis, and the queue gives
+none of it, nor of the work under a goal or stage put off; whoever holds work under
+one keeps it and hears that it was put off and that it came back. When the day
+comes, or that item completes, is cancelled or deleted, the work comes back to
+triage by itself (the record's `returned` says why); an item merged away passes the
+wait to the one it merged into. Under goals and stages all accepted it stays put
+off and the owner is asked instead: do it, later or drop it. Until the owner
+answers, you can neither claim it nor move it anywhere but cancelled
+(`acceptance_question`): wait for the answer. A claim, or any move out of
+deferred, ends the wait.
+
 ## Sources
 
 Read on 2026-11-01.

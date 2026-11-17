@@ -18,7 +18,7 @@ from unittest import mock
 
 from server import store
 from server.planning import api, model, service
-from tests.planning_fixtures import basis_for
+from tests.planning_fixtures import standing_in
 
 
 class ClaimMoveTestCase(unittest.TestCase):
@@ -37,10 +37,7 @@ class ClaimMoveTestCase(unittest.TestCase):
         self.workflow_id = str(self.space["workflow"]["workflow_id"])
 
     def item(self, state: str | None = None, **kwargs: object) -> str:
-        kwargs = {**basis_for(state), **kwargs}
-        return service.create_work_item(
-            self.conn, space=self.key, title="Work", state=state, **kwargs
-        )["reference"]
+        return standing_in(self.conn, state, space=self.key, title="Work", **kwargs)["reference"]
 
     def claim(self, reference: str, **kwargs: object) -> dict:
         return service.claim_work_item(self.conn, reference, author="agent", **kwargs)
@@ -208,14 +205,30 @@ class ClaimStartsWorkTests(ClaimMoveTestCase):
         status, answer = api.handle_post(  # type: ignore[misc]
             self.conn,
             "/api/planning/work-item/apply",
-            {"id": reference, "author": "agent", "claim": True, "transition": {"state": "review"}},
+            {
+                "id": reference,
+                "author": "agent",
+                "claim": True,
+                "summary": {"done": "it", "next": "nothing"},
+                "transition": {"state": "review", "to_check": "it"},
+            },
         )
         self.assertEqual(200, status)
         self.assertEqual({"from": "triage", "to": "dev"}, answer["started"])
         self.assertEqual("review", answer["state"]["key"])
-        # Review takes the holder away in the move that puts the task there.
+        # Review takes the holder away in the move that puts the task there, and asks
+        # the owner what to check.
         self.assertEqual(
-            ["created", "claimed", "accepted", "transitioned", "transitioned", "released"],
+            [
+                "created",
+                "claimed",
+                "accepted",
+                "transitioned",
+                "summarized",
+                "transitioned",
+                "released",
+                "request_created",
+            ],
             [e[0] for e in self.events(reference)],
         )
 

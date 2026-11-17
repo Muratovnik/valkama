@@ -150,9 +150,20 @@ class VerificationTests(unittest.TestCase):
                 ({}, HOOK, None),
                 ({}, None, None),
             )
-        } | {calls.browser()}
+        } | {calls.browser(), calls.valkama(), calls.launch(SESSION, "claude")}
         self.assertLessEqual({identity.state for identity in produced}, set(calls.STATES))
         self.assertLessEqual({identity.source for identity in produced}, set(calls.SOURCES))
+
+    def test_a_launch_proves_its_session_but_is_no_agent_writing(self) -> None:
+        # What a person left waiting is handed only to an agent that hears the answer:
+        # the launched agent never sees the answer to its launch's claim.
+        launched = calls.launch(SESSION, "claude")
+        self.assertEqual((calls.CONFIRMED, calls.LAUNCH), (launched.state, launched.source))
+        with calls.bind(launched, "launch_work_item"):
+            self.assertEqual(SESSION, calls.confirmed_session())
+            self.assertFalse(calls.from_agent())
+            self.assertFalse(calls.by_person())
+            self.assertEqual("claude:executor", calls.holder("claude:executor"))
 
     def test_a_write_outside_any_call_points_at_nothing(self) -> None:
         conn = mock.Mock()

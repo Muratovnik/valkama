@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 import uuid
 
-from server.planning import model, service
+from server.planning import model, service, states
 
 
 def bulk_items(
@@ -83,3 +83,40 @@ def basis_for(state: object) -> dict[str, str]:
     """What an agent names to file work in `state`: an assignment where work stands accepted."""
 
     return {"acceptance": model.NAMED_BASIS} if state in ACCEPTED_PLACES else {}
+
+
+#: Where work is moved, never created: the default workflow's keys and the categories.
+MOVED_ONLY = frozenset({"review", "blocked", "done", "completed", "cancelled"})
+
+
+def standing_in(conn: sqlite3.Connection, state: str | None = None, **fields: object) -> dict:
+    """An item standing in `state`, for a test that reads it there.
+
+    A state a new item may stand in is named at creation. Review, blocked and the
+    closed states are reached only by a move, which records a transition and the
+    time it closed the item; a test of what reads such an item wants it standing
+    there with nothing but its creation in its history, as rows an earlier build
+    wrote stand. So it is filed in ready, or in triage when it is not accepted
+    work, and set in that state in the store, started where work in it has been.
+    """
+
+    fields = {**basis_for(state), **fields}
+    if state not in MOVED_ONLY:
+        return service.create_work_item(conn, state=state, **fields)
+    first = "ready" if fields.get("acceptance") else None
+    item = service.create_work_item(conn, state=first, **fields)
+    row = conn.execute(
+        "SELECT workflow_id FROM work_items WHERE work_item_id = ?", (item["work_item_id"],)
+    ).fetchone()
+    target = states.resolve(conn, str(row[0]), state)
+    conn.execute(
+        "UPDATE work_items SET state_id = ?, started_at = CASE WHEN ? AND kind <> ?"
+        " THEN COALESCE(started_at, created_at) ELSE started_at END WHERE work_item_id = ?",
+        (
+            str(target["state_id"]),
+            target["category"] in model.STARTING_CATEGORIES,
+            model.CONTAINER_KIND,
+            str(item["work_item_id"]),
+        ),
+    )
+    return service.get_work_item(conn, str(item["work_item_id"]))

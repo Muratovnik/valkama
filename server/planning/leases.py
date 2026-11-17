@@ -40,6 +40,13 @@ A lease is the session's, not the record's: a step held by a session lapses with
 that session, read from its newest confirmed call (`of_step`), because a step
 records no call of its own and its holder label names the session.
 
+A launch's claim is read by the same rule. The launch proves the session it
+starts (`calls.launch`), so that claim is the session's lease: live while the
+launched agent runs, held through `ENDED_GRACE` after it ends, then released. For
+a client that announces its own identity once it runs, that session is the
+launch's own, opened and ended under the launch's id; the identity the client
+announces is not the claim's session.
+
 A claim or a step that no session proved has no session to go quiet, so it ages
 with its item instead: it lapses `QUIET_PERIOD` after the item's last history
 event, the owner's own claim from the browser included. It still reads
