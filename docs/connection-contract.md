@@ -618,6 +618,7 @@ it. It carries, in this order:
 | `reference`, `title`, `kind`, `priority` | as [The work model](#the-work-model) names them |
 | `state` | `key`, `name` and `category`; `null` for an accepted open goal or stage. `open` says whether the work is over |
 | `open`, `container_state`, `acceptance`, `started_at`, `waits_for`, `workable` | as [The work model](#the-work-model) says |
+| `projects` | the projects the item changes, each with its `project_id`, `display_name` and `source`, as [The projects an item changes](#the-projects-an-item-changes) says |
 | `claim_ref`, `claim_state`, `last_claim_ref`, `closed_at` | who holds it and how the lease stands; who held it last and when it closed, `null` while it is open |
 | `labels`, `source`, `revision`, `created_at`, `updated_at` | as in the full record |
 | `url` | the item's [address](#the-address-of-a-work-item) |

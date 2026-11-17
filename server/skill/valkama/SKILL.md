@@ -244,9 +244,10 @@ already has. An edit that changes the set leaves a `labels_changed` event in the
 history with the set before and after, so who changed the labels and from what
 can be read back.
 
-**Reading.** `get_work_item` answers with the card: the fields, the description,
-the checklist with each condition's id, the summary, and `parts`, which lists
-every other part the item has with its count and size. Read a part by name in
+**Reading.** `get_work_item` answers with the card: the fields, `projects` (the
+projects the item changes) among them, the description, the checklist with each
+condition's id, the summary, and `parts`, which lists every other part the item
+has with its count and size. Read a part by name in
 `parts` when the work needs it: `comments` for the discussion, `events` for who
 did what, `claim` for the lease and when it lapses, `links`, `refs`,
 `questions`, `mentions`, `sessions`, `images`, `subscribers`. `unresolved`,
@@ -254,7 +255,7 @@ did what, `claim` for the lease and when it lapses, `links`, `refs`,
 newest n events. To refresh part of a long description, read `parts: sections`
 for its keys and sizes, then `section` with the keys you need. After a resume or
 a compaction the session start may bring a Valkama note: what you hold, each
-item's state and its next condition.
+item's state, its next condition and the root of its project.
 
 In the comments part each root carries `replies` and `last_reply`, so a reply
 in an old thread lifts it into the default read; while `truncated` is true, read
@@ -408,16 +409,10 @@ option refused; `status` tells a list not sent yet (`pending`) from one sent emp
 
 When two items turn out to be one change — the same finding filed twice, one
 cause found from two places — `merge_work_items` folds them into the item that
-survives (`id`), with `items` the ones that fold in and a `reason`. The
-survivor takes their steps (ids, ticks and step claims kept), discussion
-threads whole, questions with their replies, refs, links and projects (a project
-more than one of them names keeps the strongest source: named, then commits, then
-migrated); a report's thread stays on the merged item with the report. A list goes
-with the comment it stands under, so a report's list stays with the report. Each merged item is linked
-`duplicates` to it, gets a summary naming it and closes in its cancelled state. It is refused, writing nothing,
-for an item another session holds (unless `force`), a closed item, an item in
-another space, a goal or stage with a task, or a merged item with children. Merge before handing the work to
-anyone.
+survives (`id`), with `items` the ones that fold in and a `reason`. Each merged
+item is linked `duplicates` to it and closes in its cancelled state; what moves,
+what stays and when it is refused is in [the tool reference](references/tools.md#merging).
+Merge before handing the work to anyone.
 
 ## Close
 
