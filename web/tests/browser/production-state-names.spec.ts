@@ -8,99 +8,11 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-
 import { installBackend } from './backend.ts'
 import { boardRoute } from './boardPage.ts'
-import { planningReadModel, spaceRef, workItem } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
-import { briefAnswer } from './previewPage.ts'
+import { cardOf, finderAnswer, SPACE, WORKFLOW } from './served/stateNames.ts'
 import { test } from './test.ts'
-
-const identity = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
-
-/** The workflow a new space is given, with Review renamed. */
-const STATES = [
-  ['triage', 'Triage', 'triage', false],
-  ['deferred', 'Deferred', 'deferred', false],
-  ['ready', 'Ready', 'ready', false],
-  ['dev', 'Dev', 'active', false],
-  ['review', 'Code review', 'review', false],
-  ['done', 'Done', 'completed', true],
-  ['blocked', 'Blocked', 'blocked', false],
-  ['cancelled', 'Cancelled', 'cancelled', true],
-] as const
-
-/** Each state as an item holds it: the workflow's declaration without its place. */
-const held = STATES.map(([key, name, category, terminal], index) => ({
-  state_id: identity(950 + index),
-  key,
-  name,
-  category,
-  is_terminal: terminal,
-}))
-const states = held.map((state, index) => ({ ...state, position: index }))
-
-const WORKFLOW = {
-  ...planningReadModel.workflow,
-  initial_state_id: states[0].state_id,
-  states,
-  transitions: states.slice(1).map((state, index) => ({
-    from: states[index].state_id,
-    to: state.state_id,
-  })),
-}
-
-type Brief = (typeof planningReadModel.work_items)[number]
-const stateOf = (key: string) => held.find((entry) => entry.key === key) ?? held[0]
-
-const brief = (number: number, key: string) =>
-  ({
-    ...planningReadModel.work_items[1],
-    work_item_id: identity(number),
-    reference: `MAIN-${number}`,
-    number,
-    title: `Work in ${key}`,
-    state: stateOf(key),
-    open: !stateOf(key).is_terminal,
-    workable: false,
-    claim_ref: '',
-    claim_state: null,
-    parent_id: null,
-  }) as Brief
-
-const SPACE = [brief(11, 'ready'), brief(12, 'dev'), brief(13, 'review'), brief(14, 'done')]
-
-/** What the finder answers: an item in Dev and one in the renamed state, with their marks. */
-function finderAnswer() {
-  const row = (item: Brief) => ({
-    target: {
-      space_ref: spaceRef,
-      reference: item.reference,
-      writable: true,
-    },
-    item: {
-      work_item_id: item.work_item_id,
-      planning_space_id: workItem.planning_space_id,
-      reference: item.reference,
-      title: item.title,
-      kind: item.kind,
-      priority: item.priority,
-      state: { name: item.state?.name, category: item.state?.category, is_terminal: false },
-      open: true,
-      container_state: null,
-      claim_ref: '',
-    },
-  })
-  return {
-    interface_version: 'valkama-planning-search',
-    query: 'Work',
-    limit: 50,
-    has_more: false,
-    items: [row(SPACE[1] as Brief), row(SPACE[2] as Brief)],
-    coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
-  }
-}
 
 async function serveSpace(page: Page) {
   await installBackend(page)
@@ -119,11 +31,8 @@ async function serveSpace(page: Page) {
     })
   })
   await page.route('**/api/modules/planning/work-item?*', async (route) => {
-    const wanted = new URL(route.request().url()).searchParams.get('reference')
-    const found = SPACE.find((item) => item.reference === wanted) ?? (SPACE[1] as Brief)
-    await route.fulfill(
-      briefAnswer({ ...workItem, ...found, links: [] } as unknown as WorkItemBrief as never),
-    )
+    const query = new URL(route.request().url()).searchParams
+    await route.fulfill(cardOf(query.get('reference'), query.get('brief') === 'true'))
   })
   await page.route('**/api/modules/planning/search?*', (route) =>
     route.fulfill({ json: finderAnswer() }),
