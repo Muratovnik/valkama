@@ -292,10 +292,10 @@ def end(
 
 def log_event(
     conn: sqlite3.Connection, work_item_id: str, action: str, request_id: str, author: str | None
-) -> None:
-    """Record one event of a request on its item, by the call in progress."""
+) -> int:
+    """Record one event of a request on its item, by the call in progress; answer its id."""
 
-    conn.execute(
+    cursor = conn.execute(
         "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id) VALUES(?,?,?,?,?)",
         (
             work_item_id,
@@ -305,3 +305,4 @@ def log_event(
             calls.call_id(conn, work_item_id),
         ),
     )
+    return int(cursor.lastrowid or 0)

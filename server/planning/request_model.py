@@ -587,6 +587,69 @@ def answers(
     return result
 
 
+#: The note on a decision answered by its recommendation, where the owner's setting
+#: leaves the choice to the agent that asked.
+RECOMMENDED_NOTE = (
+    "Decided by its recommendation: the owner's setting leaves this choice to the agent."
+)
+
+
+def recommendation(field: dict) -> object:
+    """What a field recommends answering: a verdict's `recommended`, the option a choice
+    recommends, the options a multi_choice recommends; None when it recommends nothing,
+    as a text or a boolean never does."""
+
+    if field["type"] == "verdict":
+        return field.get("recommended")
+    picked = [option["id"] for option in field["options"] if option.get("recommended")]
+    if not picked:
+        return None
+    return picked if field["type"] == "multi_choice" else picked[0]
+
+
+def recommends_every_required(descriptors: list[dict]) -> None:
+    """Refuse a decision with a required field that recommends no answer, naming each."""
+
+    missing = [
+        field["id"] for field in descriptors if field["required"] and recommendation(field) is None
+    ]
+    if missing:
+        raise model.PlanningError(
+            "[decision] a decision recommends an answer in every required field:"
+            f" {', '.join(missing)}; ask a question when there is nothing to recommend"
+        )
+
+
+def recommended_answers(descriptors: list[dict]) -> dict:
+    """The answer a decision's recommendations give: each field shown by the answers
+    before it that recommends one; a field that recommends nothing stays unanswered."""
+
+    given: dict = {}
+    for field in descriptors:
+        value = recommendation(field)
+        if value is not None and shown(field, given):
+            given[field["id"]] = value
+    return answers(given, descriptors)
+
+
+def chosen_labels(descriptors: list[dict], given: dict) -> list[str]:
+    """What an answer chose, as the person reads it: each option's label, and a verdict
+    with the label of its field."""
+
+    chosen: list[str] = []
+    for field in descriptors:
+        if field["id"] not in given:
+            continue
+        value = given[field["id"]]
+        if field["type"] == "verdict":
+            chosen.append(f"{field['label']}: {value}")
+            continue
+        labels = {option["id"]: option["label"] for option in field["options"]}
+        values = value if isinstance(value, list) else [value]
+        chosen.extend(str(labels.get(entry, entry)) for entry in values)
+    return chosen
+
+
 def same_answer(descriptors: list[dict], given: dict, stored: dict) -> bool:
     """Whether two answers as `answers_json` holds them say the same.
 

@@ -1301,8 +1301,9 @@ TOOLS.extend(
             "Ask for a human answer",
             "Create a typed question or decision on an item. The fields of one question fit in"
             " 64 KiB as stored. A review is a verdict field per proposal, its steps or ways in"
-            " a field under it, and a group per area. Does not change workflow or execution"
-            " lifecycle. addressees asks other agent sessions instead of the person: up to"
+            " a field under it, and a group per area. A decision recommends an answer in every"
+            " required field. It may come back answered by that recommendation: then act on"
+            " the answer. Does not change workflow or execution lifecycle. addressees asks other agent sessions instead of the person: up to"
             f" {requests.MOST_ADDRESSEES} top-level session ids, as participants, subscribers"
             " and holders name them. Each gets its own request, which wakes it; its answer"
             f" wakes you. A session is asked at most {requests.MOST_ASKS_PER_HOUR} times an"

@@ -33,8 +33,9 @@ is complete on its own.
   only, `checklist`, `summary` and `review_question` entering review,
   `question`, `children`), a question with a purpose (`owner_only`,
   `not_asker`, `[purpose]`; withdrawing review's returns its item to `ready`),
-  a launch that no longer moves its item to review, a cancel of a goal or stage
-  with open work under it (`cancel_list`, `cancels`), a parent cleared only by
+  a decision that recommends an answer in every required field and may come
+  back answered by it (`[decision]`), a launch that no longer moves its item
+  to review, a cancel of a goal or stage with open work under it (`cancel_list`, `cancels`), a parent cleared only by
   `move_out` and never under an unaccepted goal (`[parent]`), work put off
   only by `defer` and brought back by itself (`deferred`, `returned`,
   `acceptance_question`), the step's text alone as the detail of an expired

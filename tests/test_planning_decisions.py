@@ -17,7 +17,17 @@ from pathlib import Path
 from unittest import mock
 
 from server import store
-from server.planning import api, calls, decisions, item_projects, service
+from server.planning import (
+    api,
+    calls,
+    decisions,
+    item_projects,
+    model,
+    participation,
+    questions,
+    service,
+    tools,
+)
 from server.planning import store as planning_store
 
 PATH = "/api/planning/decisions"
@@ -317,6 +327,179 @@ class MarkTests(Harness):
         [(_event, _point, what)] = self.marks()
         self.assertEqual(300, len(what))
         self.assertEqual("removed step " + "x" * 286 + "…", what)
+
+
+#: A decision with a recommendation in every required field: a choice, a verdict, an
+#: optional multi_choice that recommends two of its options, an optional text that
+#: recommends nothing, and an optional choice under the option not recommended.
+DECISION = [
+    {
+        "id": "scope",
+        "label": "Scope",
+        "type": "choice",
+        "required": True,
+        "options": [
+            {"id": "small", "label": "Small"},
+            {"id": "full", "label": "One table for both scopes", "recommended": True},
+        ],
+    },
+    {
+        "id": "check",
+        "label": "The migration check",
+        "type": "verdict",
+        "required": True,
+        "options": [],
+        "recommended": "accept",
+    },
+    {
+        "id": "extras",
+        "label": "Extras",
+        "type": "multi_choice",
+        "required": False,
+        "options": [
+            {"id": "docs", "label": "Docs", "recommended": True},
+            {"id": "bench", "label": "Bench"},
+            {"id": "probe", "label": "Probe", "recommended": True},
+        ],
+    },
+    {"id": "remark", "label": "Remark", "type": "text", "required": False, "options": []},
+    {
+        "id": "size",
+        "label": "Size",
+        "type": "choice",
+        "required": False,
+        "options": [{"id": "s", "label": "S", "recommended": True}, {"id": "m", "label": "M"}],
+        "under": {"field": "scope", "option": "small"},
+    },
+]
+#: What the recommendations answer: every field shown that recommends something.
+RECOMMENDED = {"scope": "full", "check": "accept", "extras": ["docs", "probe"]}
+NOTE = "Decided by its recommendation: the owner's setting leaves this choice to the agent."
+CHOSE = "chose «One table for both scopes», «The migration check: accept», «Docs», «Probe»"
+
+
+class DecisionRowTests(Harness):
+    """An agent's decision for the owner: answered by its recommendation where the owner's
+    setting leaves decisions to the agent, waiting for the owner where it does not, and
+    refused at any setting while a required field recommends nothing."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.space = service.space_identity(self.conn, "ALPHA")
+        self.reference = self.item("ALPHA", "One table for both scopes", ["app"])
+
+    def at(self, name: str) -> None:
+        participation.write_set(self.conn, self.space, name)
+        self.conn.commit()
+
+    def tool(self, name: str, **arguments: object) -> dict:
+        try:
+            with calls.bind(AGENT, name):
+                answer = tools.OPS[name](self.conn, arguments)
+        except BaseException:
+            self.conn.rollback()
+            raise
+        self.conn.commit()
+        assert isinstance(answer, dict)
+        return answer
+
+    def decide(self, fields: list[dict] = DECISION, kind: str = "decision") -> dict:
+        return self.tool(
+            "create_work_item_request",
+            id=self.reference,
+            kind=kind,
+            prompt="How far does the change go?",
+            fields=fields,
+        )
+
+    def owners_list(self) -> list[str]:
+        return [str(row["request_id"]) for row in questions.open_rows(self.conn)]
+
+    def decided(self) -> list[tuple[str, str, str]]:
+        return [
+            (entry["point"], entry["item"]["reference"], entry["what"])
+            for entry in decisions.page(self.conn, space=self.space)["items"]
+        ]
+
+    def counts(self) -> tuple[int, int, int]:
+        return tuple(  # type: ignore[return-value]
+            int(self.conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            for table in ("work_item_requests", "work_item_events", "agent_decisions")
+        )
+
+    def test_a_decision_the_agent_may_take_is_answered_by_its_recommendation(self) -> None:
+        self.at(participation.MINIMAL)
+        record = self.decide()
+        self.assertEqual(
+            ("answered", RECOMMENDED, NOTE, SESSION, 1),
+            tuple(
+                record[name]
+                for name in ("status", "answers", "note", "answered_by", "answer_version")
+            ),
+        )
+        self.assertEqual([], self.owners_list())
+        self.assertEqual([("decision", self.reference, CHOSE)], self.decided())
+        # The mark stands on the event that recorded the answer, in the agent's call.
+        [entry] = decisions.page(self.conn, space=self.space)["items"]
+        marked = self.conn.execute(
+            "SELECT action, detail FROM work_item_events WHERE id = ?", (entry["event_id"],)
+        ).fetchone()
+        self.assertEqual(("request_answered", record["request_id"]), tuple(marked))
+        self.assertEqual(SESSION, entry["session"])
+        # Asked in a batch, it comes back answered in the batch's questions too.
+        answer = self.tool(
+            "apply_work_item_changes",
+            id=self.reference,
+            questions=[{"kind": "decision", "prompt": "And the second?", "fields": DECISION}],
+        )
+        [asked] = answer["applied"]["questions"]
+        self.assertEqual(
+            ("answered", RECOMMENDED, NOTE),
+            (asked["status"], asked["answers"], asked["note"]),
+        )
+        self.assertEqual([], self.owners_list())
+        self.assertEqual(2, len(self.decided()))
+
+    def test_a_decision_waits_for_the_owner_by_default(self) -> None:
+        record = self.decide()
+        self.assertEqual(
+            ("pending", None, None), (record["status"], record["answers"], record["note"])
+        )
+        self.assertEqual([record["request_id"]], self.owners_list())
+        self.assertEqual([], self.decided())
+        answer = self.tool(
+            "apply_work_item_changes",
+            id=self.reference,
+            questions=[{"kind": "decision", "prompt": "And the second?", "fields": DECISION}],
+        )
+        [asked] = answer["applied"]["questions"]
+        self.assertEqual({"request_id", "revision"}, set(asked))
+        self.assertEqual(2, len(self.owners_list()))
+
+    def test_a_decision_without_a_recommendation_is_refused_at_any_setting(self) -> None:
+        unrecommended = [
+            {"id": "ship", "label": "Ship it", "type": "boolean", "required": True, "options": []},
+            DECISION[0],
+            {**DECISION[0], "id": "road", "options": [{"id": "a", "label": "A"}]},
+            {**DECISION[1], "id": "verdict"},
+        ]
+        del unrecommended[3]["recommended"]
+        for name in (participation.MINIMAL, participation.DEFAULT):
+            self.at(name)
+            before = self.counts()
+            with self.subTest(set=name):
+                with self.assertRaises(model.PlanningError) as refused:
+                    self.decide(unrecommended)
+                status, body = api.error_response(refused.exception)
+                self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
+                self.assertEqual(
+                    "[decision] a decision recommends an answer in every required field:"
+                    " ship, road, verdict; ask a question when there is nothing to recommend",
+                    body["error"]["message"],
+                )
+                self.assertEqual(before, self.counts())
+        # The rule is the decision's: a question with the same fields is asked.
+        self.assertEqual("pending", self.decide(unrecommended, kind="question")["status"])
 
 
 def web_points(path: Path) -> set[str]:

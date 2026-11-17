@@ -129,6 +129,16 @@ and no compatibility layer.
      reads, where 2.9 wrote `<reason>: <step text>`; the reason is recorded only
      in the `released` of a claim released with it and in a move back to the
      queue;
+   - a request of kind `decision`, from `create_work_item_request`, the
+     `questions` group or asked of sessions, recommends an answer in every
+     required field: an option with `recommended` in a `choice` or a
+     `multi_choice`, a `verdict`'s `recommended`. One with a required field that
+     recommends nothing, a required `text` or `boolean` among them, is refused
+     with `[decision]` naming the fields. Where the owner's setting leaves
+     decisions to the agent, an agent's decision to the owner comes back
+     `answered` by those recommendations, with its `answers` and a `note` that
+     says so, where it came back `pending`; the batch's `questions` entry then
+     names its `status`, `answers` and `note` beside its `request_id`;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -215,6 +225,7 @@ and no compatibility layer.
 | a card's commits among its `refs` | its `commits` |
 | `GET /api/ref?kind=commit&value=…&space=…` | `GET /api/commit?repository=<project id>&hash=…` |
 | the reason before the step's text in an expired step's `checklist_released` | the step's text alone; the reason in a `released` or a move back that went with it |
+| a `decision` with a required field that recommends nothing | a `question`; a decision recommends an answer in every required field, and when it comes back `answered` by that recommendation, act on the answer |
 
 ## Consequences
 
