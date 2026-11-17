@@ -1165,6 +1165,25 @@ class ThroughTheCommandTests(Workspace):
         for name, content in files.items():
             self.assertEqual(content, (registry / name).read_bytes(), name)
 
+    def test_a_store_copy_brings_the_registry_of_the_environment_it_is_given(self) -> None:
+        caller, given = self.root / "caller", self.root / "given"
+        for directory, content in ((caller, b'{"projects": ["caller"]}'), (given, b"{}")):
+            (directory / "Valkama").mkdir(parents=True)
+            (directory / "Valkama" / "projects.json").write_bytes(content)
+
+        with mock.patch.dict(os.environ, {"LOCALAPPDATA": str(caller)}):
+            self.served(
+                *quietly(
+                    isolated.start,
+                    self.out,
+                    self.source_store(),
+                    {**os.environ, "LOCALAPPDATA": str(given)},
+                )
+            )
+
+        copied = self.home / "AppData" / "Local" / "Valkama" / "projects.json"
+        self.assertEqual(b"{}", copied.read_bytes())
+
     def test_serve_reports_a_store_it_cannot_copy(self) -> None:
         self.addCleanup(self.stop)
         code, said = quietly(
