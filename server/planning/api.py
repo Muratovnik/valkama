@@ -524,6 +524,19 @@ def _request(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> d
     }
 
 
+def _unattached(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """The commits on no card of a space's projects or of one project, newest first."""
+
+    limit = _count(parameters, "limit")
+    return commits.unattached(
+        conn,
+        space=_first(parameters, "space"),
+        project=_first(parameters, "project"),
+        since=_first(parameters, "since"),
+        limit=commits.UNATTACHED_LIMIT if limit is None else limit,
+    )
+
+
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
     "/api/planning": _read_model,
     "/api/planning/spaces": _spaces,
@@ -541,6 +554,7 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/requests": _requests,
     "/api/planning/request": _request,
     "/api/planning/held": _held,
+    "/api/planning/commits/unattached": _unattached,
 }
 
 
@@ -1059,6 +1073,40 @@ def _commit(conn: sqlite3.Connection, payload: Mapping[str, object]) -> tuple[st
     )
 
 
+def _attach_commit(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """A commit attached from the list of those on no card, or detached with `remove`.
+
+    It is the `commits` group's entry, written by whoever calls: from the interface,
+    the person. The answer names the commit as the item's record lists it, as it is
+    attached now or, once detached, as it was (null for one a rewrite replaced, which
+    the record does not list), and whether the write changed anything.
+    """
+
+    _request_fields(payload, {"reference", "repository", "hash", "remove"})
+    reference = _text(payload, "reference")
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    identity = str(read_model.item_row(conn, reference)["work_item_id"])
+    before = read_model.commits(conn, identity)
+    entry = {name: payload[name] for name in ("repository", "hash", "remove") if name in payload}
+    outcome, pair = _commit(conn, {"id": reference, **entry})
+    shown = next(
+        (
+            listed
+            for listed in (*read_model.commits(conn, identity), *before)
+            if (listed["repository"], listed["hash"]) == (pair["repository"], pair["hash"])
+        ),
+        None,
+    )
+    row = read_model.item_by_id(conn, identity)
+    return {
+        "reference": read_model.reference(conn, row),
+        "revision": int(row["revision"]),
+        "commit": shown,
+        "changed": outcome != commits.UNCHANGED,
+    }
+
+
 def _space(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     created = service.create_planning_space(
         conn, name=_text(payload, "name"), key=_optional_text(payload, "key")
@@ -1467,6 +1515,7 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/report": _report,
     "/api/planning/work-item/summary/select": _select_summary,
     "/api/planning/work-item/ref": _ref,
+    "/api/planning/work-item/commit": _attach_commit,
     "/api/planning/work-item/apply": _apply,
     "/api/planning/work-item/request": _create_request,
     "/api/planning/request/answer": _answer_request,

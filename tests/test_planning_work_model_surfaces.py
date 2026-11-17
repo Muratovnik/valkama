@@ -240,6 +240,10 @@ HTTP_READS: dict[str, list[Args]] = {
     "/api/planning/requests": [_none],
     "/api/planning/request": [_q(lambda case: {"id": case.pending})],
     "/api/planning/held": [_q(lambda _case: {"session": SESSION})],
+    "/api/planning/commits/unattached": [
+        _q(lambda _case: {"space": KEY}),
+        _q(lambda _case: {"project": PROJECT}),
+    ],
 }
 HTTP_WRITES: dict[str, list[Args]] = {
     "/api/planning/spaces": [lambda _case: {"name": "Other", "key": "OX"}],
@@ -310,6 +314,10 @@ HTTP_WRITES: dict[str, list[Args]] = {
     ],
     "/api/planning/work-item/ref": [
         _with(_ids(id="S"), kind="url", value="https://example.invalid/stage")
+    ],
+    "/api/planning/work-item/commit": [
+        _with(_ids(reference="S"), repository=PROJECT, hash=lambda case: case.commits["b"]),
+        _with(_ids(reference="G"), repository=PROJECT, hash=lambda case: case.commits["G"]),
     ],
     "/api/planning/work-item/apply": [
         _with(_ids(id="G"), comment={"body": "A note"}, summary=SUMMARY),
@@ -475,6 +483,7 @@ class Surfaces(unittest.TestCase):
     report: int
     revision: int
     data_scope_id: str
+    commits: dict[str, str]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -545,6 +554,7 @@ class Surfaces(unittest.TestCase):
                 " VALUES (?, ?, 'manual')",
                 (tree.ids[name], commit_id),
             )
+        cls.commits = commits
         # The live frame shows what holds live work and what is pinned, and no session
         # holds anything here: pinned, the goal and its stages are its rows.
         for name in ("G", "S", "S2"):

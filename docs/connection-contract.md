@@ -851,6 +851,75 @@ preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
 refused with 400; an unknown item is 404 and a space that is not there is 409,
 as for the full read.
 
+### Commits on no card
+
+**Since 3.0.** A commit a session made that no item holds waits on a list until
+someone attaches it: the hook answer names it to the agent, and the interface
+shows the list to the person. A commit is on it while it has a session, no item
+holds it, and no rewrite replaced it. A commit migrated from a ref or attached by
+hand never has a session, so it is never on the list; a session's commit
+detached from its last item is on it again.
+
+`GET /api/planning/commits/unattached` reads it by one scope:
+
+- `space=<key>` — the commits of the projects the registry binds to the space,
+  its default project among them;
+- `project=<id>` — the commits of one registered project, bound to a space or
+  not.
+
+```json
+{"total": 2,
+ "items": [{"repository": "valkama", "display_name": "Valkama", "hash": "3f2a9c1…",
+            "subject": "fix(hooks): read the record once",
+            "committed_at": "2026-11-20T10:31:02+03:00", "session": "019a…",
+            "agent": null, "client": "claude", "reported_at": "2026-11-20T07:31:04.120Z"}]}
+```
+
+`items` is newest first, by the committer time, with its offset as Git gives it;
+`reported_at` is when Valkama learned of the commit. `repository`, `display_name`,
+`hash`, `subject`, `committed_at`, `session` and `agent` mean what they mean in
+[the commits part](#the-commits-part); `client` is `claude` or `codex`, the
+client whose hook reported it.
+
+- `since=<time>`, an ISO time with its offset or `Z`, keeps the commits made at
+  that time or later.
+- `limit` is how many items the answer lists: 100 when it is left out, 0 to 500.
+- `total` counts every commit the scope and `since` keep, however many `limit`
+  lists.
+
+Each refusal is `invalid_request` (400): neither scope or both
+(`[commit] the commits on no card are read by a space or by a project: name one`),
+a project the registry does not record
+(`[commit] <id> is not a registered project: <ids>`), a space the store does not
+have (`no planning space named <key>`), a registry that cannot be read, a `since`
+without its offset or that is no time, and a `limit` above 500 or below 0.
+
+`POST /api/planning/work-item/commit` attaches one of them, or with
+`"remove": true` detaches a commit, as one entry of the `commits` group of
+[Several changes in one call](#several-changes-in-one-call) does, and is
+refused as that entry is, by the same `[commit]` texts:
+
+```json
+{"reference": "MAIN-12", "repository": "valkama", "hash": "3f2a9c1"}
+```
+
+It takes no other field. Written from the interface, it is the person's write:
+the attachment is `manual`, and it and its `commit_attached` or
+`commit_detached` event are signed by the person. The answer names the item and
+the revision it is at, the commit as the item's record lists it (as it is
+attached now, or once detached as it was; `null` for a commit a rewrite
+replaced, which the record does not list) and whether the write changed
+anything; attaching a commit the item holds already changes nothing.
+
+```json
+{"reference": "MAIN-12", "revision": 7,
+ "commit": {"repository": "valkama", "display_name": "Valkama", "hash": "3f2a9c1…",
+            "subject": "fix(hooks): read the record once",
+            "committed_at": "2026-11-20T10:31:02+03:00", "session": "019a…",
+            "agent": null, "attached_by": "manual", "label": ""},
+ "changed": true}
+```
+
 ### Pictures on an item
 
 A picture pasted into an item's text in the web
