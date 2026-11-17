@@ -191,6 +191,18 @@ test('a list with no room on the right puts the hint on the left', () => {
   })
 })
 
+test('in a chart’s legend a hint stands under the legend from its entry’s start, letting the pointer through', () => {
+  // Whatever its kind and whatever room beside the entry: under, never beside or over an entry.
+  for (const kind of ['detail', 'name'] as const)
+    for (const aside of [box(0, 260), box(1200, 1300)])
+      assert.deepEqual(placeHint(setting({ aside, kind, list: 'legend' })), {
+        align: 'start',
+        aside: true,
+        side: 'bottom',
+        through: true,
+      })
+})
+
 /** A chart's mark drawn as `drawn`, a box with a height whose hint stands level with its top. */
 const bar = (drawn: Box) => ({ mark: { box: drawn, drawn: 'box' as const } })
 
@@ -201,6 +213,7 @@ test('a chart’s mark has its hint beside it, level with its top, on the right 
     align: 'start',
     aside: true,
     mark: true,
+    through: true,
     side: 'right',
   })
   // Whatever list its element stands in, and whatever its kind: the mark decides.
@@ -208,6 +221,7 @@ test('a chart’s mark has its hint beside it, level with its top, on the right 
     align: 'start',
     aside: true,
     mark: true,
+    through: true,
     side: 'right',
   })
 })
@@ -247,6 +261,7 @@ test('a chart’s frame narrower than the window leaves less room beside a mark'
     align: 'start',
     aside: true,
     mark: true,
+    through: true,
     side: 'left',
   })
 })
@@ -261,6 +276,7 @@ test('a hint wider than either side of a mark is drawn narrower on the roomier o
     align: 'start',
     aside: true,
     mark: true,
+    through: true,
     side: 'right',
     widest: 236,
   })
@@ -269,6 +285,7 @@ test('a hint wider than either side of a mark is drawn narrower on the roomier o
     align: 'start',
     aside: true,
     mark: true,
+    through: true,
     side: 'left',
     widest: 286,
   })
@@ -291,6 +308,7 @@ test('with no room on either side for 12rem a hint stands above its element, or 
     align: 'center',
     aside: false,
     mark: true,
+    through: true,
     side: 'top',
   })
 })
@@ -314,6 +332,7 @@ test('a point’s hint stands at its mark’s top right, else top left, else ove
     aside: true,
     corner: 'right',
     mark: true,
+    through: true,
     side: 'top',
   })
   // 700 - 606 - 6 = 88 on the right, 594 - 6 - 100 = 488 on the left: the left, mirrored.
@@ -322,6 +341,7 @@ test('a point’s hint stands at its mark’s top right, else top left, else ove
     aside: true,
     corner: 'left',
     mark: true,
+    through: true,
     side: 'top',
   })
   // Asked by its own width: 88px hold a hint 80px wide on the right.
@@ -334,6 +354,7 @@ test('a point’s hint stands at its mark’s top right, else top left, else ove
     aside: true,
     corner: 'left',
     mark: true,
+    through: true,
     side: 'top',
   })
   // A frame with room on neither side, 88px each: the window's roomier side, as beside a row,
@@ -347,7 +368,7 @@ test('a point’s hint stands at its mark’s top right, else top left, else ove
       width: 400,
       window: 390,
     }),
-    { align: 'center', aside: false, mark: true, side: 'top' },
+    { align: 'center', aside: false, mark: true, side: 'top', through: true },
   )
   // A registered exception's side wins over the point.
   const asked = { align: 'center', side: 'bottom' } as const

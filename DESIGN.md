@@ -979,7 +979,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   room on neither side gives the roomier side of the window. A point asks by its own hint's
   width; a column of nothing asks as its neighbours do. A mark's hint lets the pointer through to what it covers, which may be the next mark
   or a neighbouring small chart, and covers no part of its own mark. A legend entry names a
-  series rather than standing for a value: its hint is a detail, under it.
+  series rather than standing for a value: its hint stands under the whole legend at the entry's
+  start, clear of every entry, and lets the pointer through to the plot it covers.
   A hint keeps 8px from the window's edge. `check:ui-system` refuses a side written at a
   call site, save an exception its register names with the reason. Every hint states its kind, and the kind says when it shows: `name` is
   the words of an element that shows only a glyph, shown whenever it is pointed at;

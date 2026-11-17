@@ -37,9 +37,12 @@
  *   hint stood past the ranking's edge, far from a short bar; a small chart's column's at the top
  *   left corner of that chart's frame, over the column pointed at; a day of two days had its hint
  *   at the plot's top some 300px from its stack; a reading's stood under the plot over the moments
- *   named there; a sector's under the ring's box, far from where the pointer was. A legend entry
- *   is no plot mark: it names a series rather than standing for a value, so its hint is a detail
- *   under it, clear of the entries beside it that it is read against.
+ *   named there; a sector's under the ring's box, far from where the pointer was.
+ * - A chart's legend (`data-hint-list="legend"`) runs its entries across in lines. An entry is no
+ *   plot mark: it names a series rather than standing for a value, so its hint stands under the
+ *   whole legend, its start at the entry's start, clear of every entry it is read against, and
+ *   lets the pointer through to the plot it covers. Under the entry itself, a hint of a grid's
+ *   lines covered the entries of the lines below and held the pointer on its way to them.
  * - In a list, every other hint stands aside of it: a list of rows down (`data-hint-list="rows"`:
  *   the rail, the Analytics rail and the list view's table) puts it past the list's own edge,
  *   clear of every row, its top level with its row's.
@@ -68,10 +71,10 @@ export type HintSide = 'top' | 'right' | 'bottom' | 'left'
 export type HintAlign = 'center' | 'start' | 'end'
 
 /**
- * How a list's rows run, as its container declares in `data-hint-list`: down, or down and wide
- * enough to hold a hint beside each element.
+ * How a list's rows run, as its container declares in `data-hint-list`: down, down and wide
+ * enough to hold a hint beside each element, or across in lines, as a chart's legend.
  */
-export type HintList = 'rows' | 'wide-rows'
+export type HintList = 'rows' | 'wide-rows' | 'legend'
 
 /**
  * The widest a hint is drawn, and the narrowest it is drawn beside a list or a mark, in rem; in a
@@ -134,8 +137,10 @@ export interface HintPlace {
   side: HintSide
   /** The side of its point's mark the hint stands over, at its corner. */
   corner?: 'left' | 'right'
-  /** The hint stands at a chart's mark, and lets the pointer through to what it covers. */
+  /** The hint stands at a chart's mark. */
   mark?: boolean
+  /** The hint lets the pointer through to what it covers: at a chart's mark, or a legend's. */
+  through?: boolean
   /** How wide the hint is drawn at most where it stands, in px, where not `WIDEST`. */
   widest?: number
 }
@@ -148,6 +153,7 @@ export function placeHint(setting: HintSetting): HintPlace {
   if (asked?.side === 'top' || asked?.side === 'bottom') return { ...asked, aside: false }
   if (asked) return { ...beside(setting, asked.side, asked.align), aside: false }
   if (setting.mark) return atMark(setting.mark, setting)
+  if (list === 'legend') return { align: 'start', aside: true, side: 'bottom', through: true }
   if (list === 'wide-rows') return inRow(setting)
   if (list) return beside(setting, 'right', 'start')
   return { align: kind === 'name' ? 'center' : 'start', aside: false, side: 'bottom' }
@@ -164,7 +170,7 @@ export function placeHint(setting: HintSetting): HintPlace {
 function atMark({ box, drawn }: HintMark, setting: HintSetting): HintPlace {
   const need = drawn === 'point' ? undefined : WIDEST * setting.rem
   const place = beside({ ...setting, aside: box, list: null }, 'right', 'start', need)
-  if (!place.aside || drawn === 'box') return { ...place, mark: true }
+  if (!place.aside || drawn === 'box') return { ...place, mark: true, through: true }
   const corner = place.side === 'left' ? 'left' : 'right'
   return {
     ...place,
@@ -172,6 +178,7 @@ function atMark({ box, drawn }: HintMark, setting: HintSetting): HintPlace {
     corner,
     mark: true,
     side: 'top',
+    through: true,
   }
 }
 
@@ -275,7 +282,7 @@ function beside(
     : ABOVE
 }
 
-const LISTS: readonly HintList[] = ['rows', 'wide-rows']
+const LISTS: readonly HintList[] = ['rows', 'wide-rows', 'legend']
 
 /** The frame of the nearest `data-hint-frame` around `element`, across. */
 function frameAround(element: Element): HintSetting['frame'] {
@@ -328,10 +335,15 @@ export interface HintReference {
 }
 
 /**
- * The box a hint aside of `element`'s list stands against: past the list's edge or, in a list of
- * wide rows, beside the element inside its row.
+ * The box a hint aside of `element`'s list stands against: past the list's edge, in a list of
+ * wide rows beside the element inside its row, and in a legend the element's own span across
+ * down to the legend's foot.
  */
 function asideBox(element: HTMLElement, container: HTMLElement, list: HintList): DOMRect {
+  if (list === 'legend') {
+    const { left, top, width } = element.getBoundingClientRect()
+    return new DOMRect(left, top, width, container.getBoundingClientRect().bottom - top)
+  }
   const own = hintRowOf(element, container).getBoundingClientRect()
   const across =
     list === 'rows' ? container.getBoundingClientRect() : element.getBoundingClientRect()

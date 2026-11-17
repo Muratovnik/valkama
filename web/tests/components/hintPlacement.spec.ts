@@ -119,6 +119,31 @@ describe('a hint aside of a list', () => {
     }
   })
 
+  it('stands under the whole of a chart’s legend from its entry’s start, whatever line it is on', () => {
+    // A legend of three entries in two lines over a plot: two on the first line, one on the next.
+    document.body.innerHTML = `
+      <ul class="legend" data-hint-list="legend">
+        <li><span class="key a">A</span></li><li><span class="key b">B</span></li>
+        <li><span class="key c">C</span></li>
+      </ul>`
+    at(one('.legend'), [500, 200, 600, 48])
+    at(one('.a'), [500, 200, 240, 20])
+    at(one('.b'), [760, 200, 200, 20])
+    at(one('.c'), [500, 228, 300, 20])
+    const under = (selector: string) => {
+      const place = hintPlaceOf(one<HTMLElement>(selector), { kind: 'detail' }, 200)
+      expect(place).toMatchObject({ align: 'start', aside: true, side: 'bottom', through: true })
+      const { left, right, top, bottom } = (
+        place.reference as { getBoundingClientRect: () => DOMRect }
+      ).getBoundingClientRect()
+      return { left, right, top, bottom }
+    }
+    // Each from its own start across its own span, its foot the legend's: under the second line.
+    expect(under('.a')).toEqual({ left: 500, right: 740, top: 200, bottom: 248 })
+    expect(under('.b')).toEqual({ left: 760, right: 960, top: 200, bottom: 248 })
+    expect(under('.c')).toEqual({ left: 500, right: 800, top: 228, bottom: 248 })
+  })
+
   it('stands beside the mark its element declares, or the one its area holds, level with its top', () => {
     document.body.innerHTML = `
       <div class="bars">
@@ -161,6 +186,7 @@ describe('a hint aside of a list', () => {
       aside: true,
       corner: 'right',
       mark: true,
+      through: true,
       reference: undefined,
       side: 'top',
     })
@@ -191,6 +217,7 @@ describe('a hint aside of a list', () => {
         aside: true,
         corner: 'right',
         mark: true,
+        through: true,
         reference: undefined,
         side: 'top',
       },
@@ -203,6 +230,7 @@ describe('a hint aside of a list', () => {
         aside: true,
         corner: 'left',
         mark: true,
+        through: true,
         reference: undefined,
         side: 'top',
       },

@@ -99,12 +99,14 @@ const place = shallowRef<ReturnType<typeof hintPlaceOf> | null>(null)
  * stands over every control the keyboard reaches, and one at a chart's mark (`hintPlacement.ts`)
  * follows the pointer along the chart, standing over the marks beside its own: the periods that
  * come next, the rows under a ranked row, the steps of the readings after a reading, a
- * neighbouring small chart. Every other hint the pointer raised can be entered.
+ * neighbouring small chart; and so does one of a legend's entry, over the plot under the legend.
+ * Every other hint the pointer raised can be entered.
  */
 const passedThrough = computed(() => {
   const now = mine.value
   return (
-    now !== null && (now.by === 'focus' || inTooltipArea(now.anchor) || place.value?.mark === true)
+    now !== null &&
+    (now.by === 'focus' || inTooltipArea(now.anchor) || place.value?.through === true)
   )
 })
 /** The shown element's own words are cut, so its hint says them first. */

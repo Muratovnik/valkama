@@ -6,8 +6,8 @@
  * The oracle is the one rule (`hintPlacement.ts`): the hint's start stands 6 pixels past the mark's
  * right edge, level with its top, or at the top right of a point; mirrored on the left where there
  * is no room on the right, under the mark where there is none over it, over it centred where
- * neither side has room; a legend entry's, a detail, under it from its start. So one corner of the
- * hint, or the middle of its edge over a mark it stands centred on, stands within 6 pixels and the
+ * neither side has room; a legend entry's under the whole legend from the entry's start, clear of
+ * every entry, so its mark is the legend from there. So one corner of the hint, or the middle of its edge over a mark it stands centred on, stands within 6 pixels and the
  * 2 of a border and rounding from a corner, or the middle of the top or bottom edge, of the mark;
  * one the window's edge holds in, as a day's hint of twenty series at 390 pixels is lifted, stands
  * against that edge 6 pixels from the mark across it. It covers no part of the mark, keeps inside
@@ -85,8 +85,8 @@ const gapBetween = (from: number, to: number, otherFrom: number, otherTo: number
 /**
  * Whether a hint the window's edge holds in stands at its mark all the same: against the edge it
  * was pushed to, `OFFSET` from the mark across that edge and over the mark's span along it, as a
- * hint taller than the room under a mark's top is lifted, or one under a legend entry at the
- * window's side is moved in.
+ * hint taller than the room under a mark's top is lifted, or one under a legend at the window's
+ * side is moved in.
  */
 /** Whether a gap is the hint's `OFFSET`, give or take a border and rounding. */
 const near = (gap: number) => Math.abs(gap - OFFSET) <= SLACK
@@ -246,13 +246,32 @@ const column: Finder = (hinted) => {
   }
 }
 
-/** A small chart's name, or a legend entry: the element itself, rested on near each end. */
+/** A small chart's name: the element itself, rested on near each end. */
 const own: Finder = (hinted) => {
   const box = hinted.getBoundingClientRect()
   const words = hinted.lastElementChild?.getBoundingClientRect() ?? box
   const y = (box.top + box.bottom) / 2
   return {
     mark: { bottom: box.bottom, left: box.left, right: box.right, top: box.top },
+    spots: [
+      { x: box.left + 3, y },
+      { x: Math.min(words.right, box.right) - 3, y },
+    ],
+  }
+}
+
+/**
+ * A legend entry, rested on near each end. Its hint stands under the whole legend from the entry's
+ * start, clear of the entries on the lines under it, so its mark is the legend from there.
+ */
+const entry: Finder = (hinted) => {
+  const box = hinted.getBoundingClientRect()
+  const words = hinted.lastElementChild?.getBoundingClientRect() ?? box
+  const legend = hinted.closest('[data-hint-list="legend"]')?.getBoundingClientRect()
+  if (!legend) return null
+  const y = (box.top + box.bottom) / 2
+  return {
+    mark: { bottom: legend.bottom, left: box.left, right: legend.right, top: legend.top },
     spots: [
       { x: box.left + 3, y },
       { x: Math.min(words.right, box.right) - 3, y },
@@ -365,7 +384,7 @@ for (const width of [1440, 390]) {
     const measured = [
       ...(await measure(page, { name: 'day', hinted: days, find: day }, [0, 1, -1])),
       ...(await measure(page, { name: 'ranked row', hinted: rows, find: row }, [0, 1, 2, -1])),
-      ...(await measure(page, { name: 'legend entry', hinted: keys, find: own }, [0, -1])),
+      ...(await measure(page, { name: 'legend entry', hinted: keys, find: entry }, [0, -1])),
     ]
     await expectAtMarks(info, `marks-${width}`, measured)
   })

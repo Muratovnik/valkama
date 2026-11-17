@@ -13,8 +13,9 @@
  * An entry is a mark of its chart: its hint says what the name does not (`hints`, by series key,
  * `outline` for the mark of the period compared with), under its name beside its swatch where the
  * caller draws it so (`markHints.ts`). It names a series rather than standing for a value, so it
- * is no plot mark: its hint is a detail under it, clear of the entries beside it that a reader
- * reads it against (`hintPlacement.ts`). A series that acts (`MarkAction`) is
+ * is no plot mark: the legend declares itself (`data-hint-list="legend"`), and the hint stands
+ * under the whole legend at the entry's start, clear of every entry a reader reads it against,
+ * letting the pointer through to the plot (`hintPlacement.ts`). A series that acts (`MarkAction`) is
  * pressed here as on its segments: a link sent out as `follow` with the press, a button as
  * `select` with its key. The rest only show. An entry named by what it does is described by its
  * whole name where that names a part of it, as a pair's names its first value. The pointer
@@ -81,6 +82,7 @@ const figureOf = (key: string) => props.figures?.get(key)
 <template>
   <ul
     class="chart-legend"
+    data-hint-list="legend"
     :class="{ 'chart-legend-figures': figures }"
   >
     <li
