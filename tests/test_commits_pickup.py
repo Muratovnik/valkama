@@ -290,7 +290,7 @@ class CostTests(PickupCase):
 
 
 class RuleCase(PickupCase):
-    """A space WRK whose default project is `beta`, with `alpha` (R) bound to it too and
+    """A space MAIN whose default project is `beta`, with `alpha` (R) bound to it too and
     `gamma` bound nowhere; the session's holds taken as Codex takes them, by `_meta`."""
 
     def setUp(self) -> None:
@@ -298,12 +298,12 @@ class RuleCase(PickupCase):
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
         self.registry(DEFAULT)
-        service.create_planning_space(self.conn, name="Work", key="WRK")
+        service.create_planning_space(self.conn, name="Work", key="MAIN")
         self.conn.commit()
 
     def registry(self, default: str) -> None:
         scope = str(read_store_metadata(self.conn)["data_scope_id"])
-        space = planning_space_entity({"data_scope_id": scope, "space_key": "WRK"})
+        space = planning_space_entity({"data_scope_id": scope, "space_key": "MAIN"})
         entries = []
         for project, root, bound in (
             (PROJECT, self.place.repository, True),
@@ -319,7 +319,7 @@ class RuleCase(PickupCase):
 
     def task(self, title: str, *projects: str) -> str:
         made = service.create_work_item(
-            self.conn, space="WRK", title=title, projects=list(projects) or None
+            self.conn, space="MAIN", title=title, projects=list(projects) or None
         )
         self.conn.commit()
         return str(made["reference"])
