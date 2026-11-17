@@ -1275,17 +1275,27 @@ def table_of_contents(
     }
 
 
-#: Which calls name a session behind the writes to item `:id`; `sessions` lists them.
-_SESSION_CALLS = (
-    " FROM execution_events WHERE kind = :kind AND work_item_id = :id"
+#: Which calls name a session behind the writes to the items `{items}` names.
+_SESSION_CALLS_OF = (
+    " FROM execution_events WHERE kind = :kind AND work_item_id {items}"
     " AND identity_state = :confirmed AND COALESCE(session_id, '') != ''"
+)
+#: Which calls name a session behind the writes to item `:id`; `sessions` lists them.
+_SESSION_CALLS = _SESSION_CALLS_OF.format(items="= :id")
+#: The pairs of item and session behind the items `:ids`: the calls above, and the usage
+#: rows that spent on them; `session_ids` reads them.
+_SESSIONS_OF_ITEMS = (
+    "SELECT work_item_id, session_id"  # noqa: S608 - fixed clauses
+    + _SESSION_CALLS_OF.format(items="IN (SELECT value FROM json_each(:ids))")
+    + " UNION SELECT work_item_id, session_id FROM usage_segments"
+    " WHERE work_item_id IN (SELECT value FROM json_each(:ids)) AND session_id != ''"
 )
 
 
-def _session_calls(identity: str) -> dict[str, str]:
-    """The values `_SESSION_CALLS` names."""
+def _session_calls(identity: str, name: str = "id") -> dict[str, str]:
+    """The values `_SESSION_CALLS_OF` names, the items as `name`."""
 
-    return {"id": identity, "kind": calls.KIND, "confirmed": calls.CONFIRMED}
+    return {name: identity, "kind": calls.KIND, "confirmed": calls.CONFIRMED}
 
 
 def part_counts(
@@ -1632,6 +1642,24 @@ def sessions(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
         }
         for entry in found.values()
     ]
+
+
+def session_ids(conn: sqlite3.Connection, ids: Iterable[str]) -> dict[str, set[str]]:
+    """The sessions behind each of these items, in one read: the ones that wrote to it by
+    the rule of `sessions`, and the ones whose usage rows spent on it, a subagent's under
+    its session. An item with neither is absent.
+
+    A count of sessions over several items is the size of the union of theirs, never the
+    sum of their counts: one session on two items is one session.
+    """
+
+    found: dict[str, set[str]] = {}
+    for item, session in conn.execute(
+        _SESSIONS_OF_ITEMS,
+        _session_calls(json.dumps(sorted(set(ids))), "ids"),
+    ):
+        found.setdefault(str(item), set()).add(str(session))
+    return found
 
 
 def _identity(event: sqlite3.Row) -> dict:

@@ -6,7 +6,8 @@ import datetime as dt
 import unittest
 
 from server.planning import api, ladder, model, usage
-from tests.usage_fixtures import HOUR, Case
+from server.quota import samples, shares
+from tests.usage_fixtures import HOUR, Case, stamp
 from tests.usage_fixtures import usage as spent
 
 
@@ -160,6 +161,196 @@ class ItemReadTests(Case):
                 self.assertRaises((api.PlanningHttpError, model.PlanningError)),
             ):
                 api.handle_get(self.reader, ITEM, parameters)
+
+
+#: Two accounts' weeks: each seat names its week's reset.
+SEAT, WEEK_ENDS = "week:2030-03-08T09:00Z", "2030-03-08T09:00:00Z"
+OTHER_SEAT, OTHER_WEEK_ENDS = "week:2030-03-08T19:00Z", "2030-03-08T19:00:00Z"
+#: A later week of the first organization, which a session of its own names.
+LATER_SEAT, LATER_WEEK_ENDS = "week:2030-03-09T09:00Z", "2030-03-09T09:00:00Z"
+#: Later than every sample, so none is refused as ahead of its clock.
+NOW = dt.datetime(2030, 3, 20, tzinfo=dt.UTC)
+
+
+class ItemSessionsAndQuotaTests(Case):
+    """The sessions of an item and the share of each account's week its rows took.
+
+    The rows are written as the collector leaves them, by hand, so each case's costs,
+    organizations and times are what it says; the seat of a row is joined from the quota
+    samples at read time.
+    """
+
+    def segment(
+        self,
+        session: str,
+        item: str | None,
+        start: float,
+        end: float,
+        cost: float | None,
+        *,
+        organization: str | None = None,
+        agent: str = "",
+    ) -> None:
+        run = self.conn.execute(
+            "SELECT id FROM usage_runs WHERE session_id = ? AND agent_id = ?", (session, agent)
+        ).fetchone()
+        run_id = (
+            run[0]
+            if run is not None
+            else self.conn.execute(
+                "INSERT INTO usage_runs(session_id, agent_id, client, path) VALUES (?, ?, ?, ?)",
+                (session, agent, "claude", f"{session}-{agent}.jsonl"),
+            ).lastrowid
+        )
+        self.conn.execute(
+            "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at, ended_at,"
+            " seconds, work_item_id, input_tokens, estimated_api_cost_usd, quality, organization)"
+            " VALUES (?, ?, ?, 'claude-opus-5-5', ?, ?, ?, ?, 10, ?, 'observed', ?)",
+            (
+                run_id,
+                session,
+                agent,
+                stamp(start),
+                stamp(end),
+                end - start,
+                item,
+                cost,
+                organization,
+            ),
+        )
+        self.conn.commit()
+
+    def week_sample(
+        self,
+        start: float,
+        seat: str,
+        resets_at: str,
+        percent: float,
+        *,
+        organization: str | None = None,
+        session: str | None = None,
+        account: str | None = None,
+    ) -> None:
+        """A week's percent as a poll of `organization` or a session's status line read it."""
+
+        reading = samples.Reading(
+            "poll" if session is None else "mod",
+            stamp(start),
+            (samples.Window("week", percent, resets_at),),
+            seat,
+            organization=organization,
+            session_id=session,
+            account_uuid=account,
+        )
+        self.assertEqual(1, samples.record(self.conn, reading, now=NOW))
+        self.conn.commit()
+
+    def test_sessions_count_spending_and_writing_sessions_once(self) -> None:
+        reference, identity = self.item()
+        self.segment("sess-1", identity, 0, 600, 0.1)
+        self.segment("sess-1", identity, 600, 900, 0.1, agent="worker")
+        self.segment("sess-2", identity, 1000, 1200, 0.1)
+        self.segment("sess-4", None, 1300, 1400, 0.1)
+        self.write("sess-1", reference, 100)
+        self.write("sess-3", reference, 2000)
+        read = usage.for_item(self.reader, reference)
+        # Spent: sess-1, its subagent under it, and sess-2; wrote: sess-1 again and sess-3.
+        self.assertEqual(3, read["sessions"])
+
+    def test_a_tree_counts_a_session_on_two_of_its_cards_once(self) -> None:
+        goal, goal_id = self.item("Goal", kind="goal")
+        task, task_id = self.item("Task", parent=goal)
+        self.segment("sess-1", goal_id, 0, 600, 0.1)
+        self.segment("sess-1", task_id, 600, 900, 0.1)
+        self.write("sess-2", task, 1000)
+        self.assertEqual(1, usage.for_item(self.reader, goal)["sessions"])
+        self.assertEqual(2, usage.for_item(self.reader, goal, "tree")["sessions"])
+
+    def accounts(self) -> None:
+        """Two accounts' weeks: the first organization's at 30 % and then 40 %, the second's at
+        70 %, each as its poll read it, and a session of the first on a later week of its own."""
+
+        self.week_sample(-3600, SEAT, WEEK_ENDS, 30, organization="org-1", account="account-a")
+        self.week_sample(-1800, SEAT, WEEK_ENDS, 40, organization="org-1", account="account-a")
+        self.week_sample(
+            -1800, OTHER_SEAT, OTHER_WEEK_ENDS, 70, organization="org-2", account="account-b"
+        )
+        # Its own feed names its seat, so its work there is not on the first week.
+        self.segment("sess-9", None, 3600, 4800, 1.0, organization="org-1")
+        self.week_sample(3900, LATER_SEAT, LATER_WEEK_ENDS, 10, session="sess-9")
+
+    def test_quota_is_the_cards_share_of_its_seats_week(self) -> None:
+        reference, identity = self.item()
+        self.accounts()
+        self.segment("sess-1", identity, 0, 600, 0.3, organization="org-1")
+        self.segment("sess-1", identity, 1200, 1800, 0.1, organization="org-1")
+        self.segment("sess-1", identity, 1800, 2100, 0.1)
+        self.segment("sess-2", None, 2400, 3000, 0.6, organization="org-1")
+        self.segment("sess-3", identity, 0, 600, 0.5, organization="org-2")
+        quota = usage.for_item(self.reader, reference, quota=shares.of_segments)["quota"]
+        # Newest first. The first week: the card's 0.4 of the 1.0 its seat cost, at the
+        # latest 40 %; the second: all its seat cost, at 70 %. The row on no organization is
+        # 0.1 of the card's 1.0.
+        self.assertEqual(
+            {
+                "weeks": [
+                    {
+                        "account": {"organization": "org-2", "account_uuid": "account-b"},
+                        "seat": OTHER_SEAT,
+                        "week_ends_at": "2030-03-08T19:00:00.000Z",
+                        "share": 1.0,
+                        "week_used_percent": 70.0,
+                        "percent": 70.0,
+                    },
+                    {
+                        "account": {"organization": "org-1", "account_uuid": "account-a"},
+                        "seat": SEAT,
+                        "week_ends_at": "2030-03-08T09:00:00.000Z",
+                        "share": 0.4,
+                        "week_used_percent": 40.0,
+                        "percent": 16.0,
+                    },
+                ],
+                "unknown_share": 0.1,
+            },
+            quota,
+        )
+
+    def test_a_trees_quota_is_the_quota_of_all_its_cards(self) -> None:
+        goal, goal_id = self.item("Goal", kind="goal")
+        _, task_id = self.item("Task", parent=goal)
+        self.accounts()
+        self.segment("sess-1", goal_id, 0, 600, 0.1, organization="org-1")
+        self.segment("sess-1", task_id, 600, 1200, 0.4, organization="org-1")
+        self.segment("sess-2", None, 1200, 1800, 0.5, organization="org-1")
+        for scope, share, percent in (("item", 0.1, 4.0), ("tree", 0.5, 20.0)):
+            with self.subTest(scope):
+                quota = usage.for_item(self.reader, goal, scope, quota=shares.of_segments)["quota"]
+                (week,) = quota["weeks"]
+                self.assertEqual((share, percent), (week["share"], week["percent"]))
+                self.assertEqual(0.0, quota["unknown_share"])
+
+    def test_without_a_reader_the_read_has_no_quota(self) -> None:
+        reference, identity = self.item()
+        self.accounts()
+        self.segment("sess-1", identity, 0, 600, 0.3, organization="org-1")
+        self.assertNotIn("quota", usage.for_item(self.reader, reference))
+        self.assertNotIn("quota", get(self.reader, ITEM, id=reference))
+        status, body = api.handle_get(
+            self.reader, ITEM, {"id": [reference]}, item_quota=shares.of_segments
+        )
+        self.assertEqual((200, 40.0), (status, body["usage"]["quota"]["weeks"][0]["percent"]))
+
+    def test_a_card_whose_rows_have_no_price_took_no_share(self) -> None:
+        reference, identity = self.item()
+        self.accounts()
+        self.segment("sess-1", identity, 0, 600, None, organization="org-1")
+        self.segment("sess-2", None, 600, 1200, 0.5, organization="org-1")
+        quota = usage.for_item(self.reader, reference, quota=shares.of_segments)["quota"]
+        # Nothing to divide: no part of its cost is on no seat, and none is on one.
+        self.assertIsNone(quota["unknown_share"])
+        (week,) = quota["weeks"]
+        self.assertEqual((0.0, 0.0), (week["share"], week["percent"]))
 
 
 class SessionReadTests(Case):
