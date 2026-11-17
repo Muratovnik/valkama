@@ -178,7 +178,7 @@ test('at 1440 pixels the ranked list and the small charts beside it are titled i
         part,
         text: heading.textContent.trim(),
         lines: Math.round(height / line),
-        header: Math.round(heading.parentElement?.getBoundingClientRect().height ?? 0),
+        header: Math.round(heading.closest('.level-head')?.getBoundingClientRect().height ?? 0),
       }
     }),
   )
