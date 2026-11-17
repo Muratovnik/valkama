@@ -198,8 +198,9 @@ the tray and `listener status` or `stop` it is an ordinary managed listener;
   starts a listener only if one was running or autostart is on. A plain `serve` and
   a foreign listener are left alone. A waiting listener that `install` could not
   reach hands over to the pinned release at its next bind attempt or connection.
-- **`launcher uninstall`.** It removes a value naming this shim and stops a listener
-  held on demand. Another program's value stays.
+- **`launcher uninstall`.** It takes Valkama's three Git commit hooks out of the global
+  Git configuration, removes a value naming this shim and stops a listener held on
+  demand. Another program's value and hook stay.
 
 The log records how long each load took, as `serving after N s`. The desktop app
 gives a managed listener about 2.5 seconds to answer. If the first load takes longer
