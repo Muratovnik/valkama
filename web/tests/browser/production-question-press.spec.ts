@@ -20,6 +20,7 @@ import {
   pair,
   pause,
   press,
+  settledWrites,
   under,
   UPPER,
   writesTo,
@@ -60,7 +61,7 @@ for (const [upper, lower] of [
       await Promise.all([pause(gap), expect(top.locator('.request-state')).toBeVisible()])
       await expect.poll(() => under(page, at)).toBe(LOWER_SEND)
       await press(page, at, 2)
-      await pause(150)
+      await settledWrites(page)
       expect(writesTo(requests)).toEqual([UPPER])
       await expect(next.getByRole('radio')).toHaveCount(lower)
       // Nor did it take the keyboard away from how the upper question ended.
@@ -73,13 +74,21 @@ test('a slow write gives a second press no way through, past the double click in
   page,
 }) => {
   const { at, next, requests, top } = await aboutToDecline(page)
-  requests.holdWrites(pause(900))
+  // The write is answered once it is seen waiting, so the next press comes after it ends, as one
+  // past the double click interval does: the browser counts that press a first one.
+  const gate: { open?: () => void } = {}
+  requests.holdWrites(
+    new Promise<void>((done) => {
+      gate.open = done
+    }),
+  )
   await press(page, at)
-  await pause(950)
+  await expect.poll(() => writesTo(requests)).toEqual([UPPER])
+  gate.open?.()
   await expect(top.locator('.request-state')).toBeVisible()
   await expect.poll(() => under(page, at)).toBe(LOWER_SEND)
   await press(page, at)
-  await pause(150)
+  await settledWrites(page)
   expect(writesTo(requests)).toEqual([UPPER])
   await expect(held(next)).toBeChecked()
 })
@@ -92,7 +101,7 @@ test('a press stays withheld however often it comes, until the pointer has moved
   await press(page, at, 2)
   await press(page, at, 3)
   await press(page, { x: at.x + 3, y: at.y })
-  await pause(150)
+  await settledWrites(page)
   expect(writesTo(requests)).toEqual([UPPER])
   await press(page, { x: at.x + 4, y: at.y })
   await expect(next.locator('.request-state')).toContainText('You answered')
@@ -119,7 +128,7 @@ test('a second press on Send opens nothing and sends nothing, in this question o
   await press(page, at)
   await expect(top.locator('.request-state')).toBeVisible()
   await press(page, at, 2)
-  await pause(150)
+  await settledWrites(page)
   expect(writesTo(requests)).toEqual([UPPER])
   await expect(held(next)).toBeChecked()
   await expect(top.getByRole('radio')).toHaveCount(0)
@@ -191,7 +200,7 @@ test('in the list of everything waiting a second press selects nothing of the ne
   // An option row of the next question stands where the press was, whichever of them it is.
   await expect.poll(() => under(page, at)).toMatch(/^The lower question: Choice/u)
   await press(page, at, 2)
-  await pause(150)
+  await settledWrites(page)
   expect(writesTo(opened.requests)).toEqual([UPPER])
   await expect(next.getByRole('radio', { checked: true })).toHaveCount(0)
 })
