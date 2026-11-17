@@ -4,8 +4,8 @@
  * split the tokens, as a ring (`DonutChart`) or as ranked bars (`RankedBars`), beside a small
  * chart of the period for each on one scale (`SmallMultiples`), and under them the table of each
  * kind beside the period before (`TokenKindsTable`). Every chart is drawn or read as its table, as
- * every chart of the page is (`ChartSection`); the split opens on its ring, as `firstSplitView`
- * says of a few parts, and its table ranks the kinds (`RankedBarsTable`).
+ * every chart of the page is (`ChartSection`); the split opens on its ring, as a split named by
+ * identifiers does (`splitView.ts`), and its table ranks the kinds (`RankedBarsTable`).
  *
  * The kinds the tokens figure counts — input, the cache writes, output — are the ring's sectors
  * and the ranked bars, each in its own hue (`KIND_SLOTS`), and add up to the «Tokens» figure of
@@ -30,7 +30,6 @@ import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { firstSplitView } from '@/pages/analytics/utils/splitView.ts'
 import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
 import { countedTotal, KIND_SLOTS, kindLines } from '@/pages/analytics/utils/tokenKinds.ts'
 
@@ -63,9 +62,8 @@ const root = ref<HTMLElement | null>(null)
 const narrow = useNarrowCharts(root)
 
 const barsTitle = computed(() => t('analytics.kinds.bars'))
-/** The kinds are no dimension's values, and a few: the split opens as the rule says of a few. */
+/** The kinds are a few, named by identifiers: the split opens on its ring, the first offered. */
 const views: readonly SplitView[] = ['ring', 'bars']
-const first = firstSplitView(null)
 const bars = computed<RankedRow[]>(() =>
   lines.value.map((line) => ({
     key: line.kind,
@@ -148,7 +146,6 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
           :title="barsTitle"
           :narrow="narrow"
           :views="views"
-          :first="first"
         >
           <template #chart="{ view }">
             <DonutChart

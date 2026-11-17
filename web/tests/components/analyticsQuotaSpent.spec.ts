@@ -3,8 +3,9 @@
  * oracle is the requirement: under each window that has a start, the work Valkama recorded on that
  * account from the window's start to the answer's moment, ranked by its API price estimate with
  * each item's share of that estimate, by task first and by project or model on choice; the first
- * five items and one line for the rest, or a ring of every item, opening on the bars by task and
- * on the ring by project or model; a heading that names the period it covers, and the
+ * five items and one line for the rest, or by project or model a ring of every item, which it
+ * opens on, while the tasks, named by free text, are a list only, the rest and work on no task
+ * apart after the five; a heading that names the period it covers, and the
  * section's «ⓘ» that says once it is the API price estimate and not quota points, and that
  * claude.ai and the desktop app are not in it. Another
  * account's work is never in it, and its organization's work with no account known is said apart
@@ -123,7 +124,7 @@ describe('where a window went', () => {
     )
   })
 
-  it('ranks the account’s tasks by their estimate with their shares, the first five and the rest in one line', async () => {
+  it('ranks the account’s tasks by their estimate with their shares, the first five, then the rest in one line and work on no task apart', async () => {
     stubAnalyticsReads(usage, quota)
     const page = await openFiveHours()
     const block = blockOf(page, 'Work')
@@ -132,11 +133,14 @@ describe('where a window went', () => {
     expect(lines(block)).toEqual([
       ['MAIN-1 Answer a review', '≈ $6.00 · 46%'],
       ['MAIN-2 Fix the import', '≈ $3.00 · 23%'],
-      ['No task', '≈ $1.00 · 8%'],
       ['MAIN-3 Small step 3', '≈ $0.50 · 4%'],
       ['MAIN-4 Small step 4', '≈ $0.50 · 4%'],
       ['Other, 4 more', '≈ $2.00 · 15%'],
+      ['No task', '≈ $1.00 · 8%'],
     ])
+    expect(
+      block.findAll('.ranked-rest .ranked-row').map((row) => row.attributes('data-kind')),
+    ).toEqual(['other', 'none'])
     expect(block.text()).not.toMatch(/\$(20|26|100|106|126)\./u)
     // Its organization's work with no account known is said apart and not counted.
     expect(plain(block.get('[data-note="unplaced"]').text())).toBe(
@@ -179,13 +183,17 @@ describe('where a window went', () => {
     ])
   })
 
-  it('draws the items as a ring by project, with the bars’ figures in its legend, and the tasks as bars', async () => {
+  it('draws the items as a ring by project, with the bars’ figures in its legend, and the tasks as a list only', async () => {
     stubAnalyticsReads(usage, quota)
     const page = await openFiveHours()
     const block = () => blockOf(page, 'Work')
-    // By task it opens on the bars, a ring of tasks folding most of them into its rest.
-    expect(radio(block(), 'Bars').attributes('aria-checked')).toBe('true')
+    // By task it is a list only: no ring and no switch to one.
     expect(block().find('.donut-chart').exists()).toBe(false)
+    expect(
+      block()
+        .findAll('[role="radio"]')
+        .map((one) => one.text()),
+    ).toEqual(['Tasks', 'Projects', 'Models'])
 
     await radio(block(), 'Projects').trigger('click')
     await flushPromises()

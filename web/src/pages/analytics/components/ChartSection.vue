@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * A chart of the page under its title, drawn or as its table: the same numbers either way. A
- * chart of one whole split into parts is drawn two ways, as a ring or as ranked bars (`views`),
- * and opens on the one its host names (`first`, by `firstSplitView`); any other chart has one
- * drawing. A narrow page starts on the table, which a phone reads where a plot of columns does
+ * chart of one whole split into parts named by identifiers is drawn two ways, as a ring or as
+ * ranked bars (`views`, `splitView.ts`), and opens on the first it offers; any other chart has
+ * one drawing. A narrow page starts on the table, which a phone reads where a plot of columns does
  * not; a person's own choice stands until the page is left, and where the chart stops offering
  * the drawing chosen, as a split section does the ring, it opens on its first again. Why a press
  * in it did nothing stands under its title, said to a screen reader as it comes (`notice`).
@@ -33,8 +33,6 @@ const props = withDefaults(
     title: string
     /** The caveats of the whole section, said in the «ⓘ» of its heading. */
     about?: readonly string[]
-    /** The drawing it opens on, of `views`; the first of them where it names none they hold. */
-    first?: Drawn
     level?: 'section' | 'block'
     /** A list's name, when what the chart holds is a list: the quota's accounts. */
     listLabel?: string
@@ -50,7 +48,6 @@ const props = withDefaults(
     level: 'block',
     listLabel: undefined,
     about: () => [],
-    first: undefined,
     titles: () => [],
     views: () => ['chart'],
   },
@@ -60,9 +57,7 @@ defineSlots<{ chart: (props: { view: Drawn }) => unknown; table: () => unknown }
 const { t } = useI18n()
 
 const offered = computed<Shown[]>(() => [...props.views, 'table'])
-const opening = computed<Drawn>(() =>
-  props.first && props.views.includes(props.first) ? props.first : (props.views[0] ?? 'chart'),
-)
+const opening = computed<Drawn>(() => props.views[0] ?? 'chart')
 const chosen = ref<Shown | null>(null)
 const shown = computed<Shown>(() => {
   if (chosen.value && offered.value.includes(chosen.value)) return chosen.value

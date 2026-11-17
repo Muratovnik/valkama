@@ -1,11 +1,12 @@
 /**
  * The charts of one whole split into parts, in the real app over the browser double: each is drawn
- * as a ring or as ranked bars, switched with its table, and opens on what the owner's rule gives —
- * the ring, but the bars where the parts are as many as the tasks. The oracle is that rule and the
- * charts' contracts: a section by account opens on its ring, one by task on its bars, one split by
- * a second dimension offers the bars alone, the tokens by kind open on their ring, a quota
- * window's block opens on its bars by task and on its ring by project; the overview's cards of
- * first values are no split and offer no switch; and every view of a chart reads the same figures.
+ * as the owner's rule gives — named by identifiers, a ring or ranked bars switched with its table,
+ * opening on the ring; named by free text, the tasks and the sessions, a list only. The oracle is
+ * that rule and the charts' contracts: a section by account opens on its ring, one by task or by
+ * session is a list switched with its table alone, one split by a second dimension offers the bars
+ * alone, the tokens by kind open on their ring, a quota window's block is a list by task and opens
+ * on its ring by project; the overview's cards of first values are no split and offer no switch;
+ * and every view of a chart reads the same figures.
  *
  * A ring writes nothing on its sectors: its legend gives each part its figure and share at the end
  * of its line, the figures of the legend and of the rows apart under it ending at one edge, each
@@ -73,9 +74,12 @@ test('each split opens on its own drawing, switches, and reads the same figures 
     await expect(accounts.locator('tbody tr', { hasText: name })).toContainText(figure)
   await record(info, 'split by account', { ring, bars })
 
-  await openReport(page, 1440, pageAt({ by: 'work_item' }))
-  expect(await views(section(page))).toEqual({ offered: ['Ring', 'Bars', 'Table'], shown: 'Bars' })
-  await expect(section(page).locator('.ranked-bars')).toBeVisible()
+  for (const by of ['work_item', 'executor']) {
+    await openReport(page, 1440, pageAt({ by }))
+    expect(await views(section(page))).toEqual({ offered: ['Chart', 'Table'], shown: 'Chart' })
+    await expect(section(page).locator('.ranked-bars.ranked-free')).toBeVisible()
+    await expect(section(page).locator('.donut-chart')).toHaveCount(0)
+  }
 
   await openReport(page, 1440, pageAt({ by: 'model', across: 'effort' }))
   expect(await views(section(page))).toEqual({ offered: ['Bars', 'Table'], shown: 'Bars' })
@@ -89,7 +93,7 @@ test('each split opens on its own drawing, switches, and reads the same figures 
   await expect(page.locator('.overview-top [role="radio"]')).toHaveCount(0)
 })
 
-test('a quota window’s block opens on its bars by task and on its ring by project, with the same figures', async ({
+test('a quota window’s block is a list by task and opens on its ring by project, with the same figures', async ({
   page,
 }, info) => {
   await serve(page, SPENT_WORLD)
@@ -99,8 +103,9 @@ test('a quota window’s block opens on its bars by task and on its ring by proj
     .locator('.quota-account')
     .filter({ has: page.locator('.quota-account-name', { hasText: /^Work$/u }) })
     .locator('.quota-window[data-window="five_hour"] .window-spend')
-  await expect(work.locator('.ranked-bars')).toBeVisible()
-  await expect(work.getByRole('radio', { name: 'Bars', exact: true })).toBeChecked()
+  await expect(work.locator('.ranked-bars.ranked-free')).toBeVisible()
+  await expect(work.getByRole('radio', { name: 'Bars', exact: true })).toHaveCount(0)
+  await expect(work.getByRole('radio', { name: 'Ring', exact: true })).toHaveCount(0)
 
   await work.getByRole('radio', { name: 'Projects' }).click()
   await expect(work.getByRole('radio', { name: 'Ring', exact: true })).toBeChecked()

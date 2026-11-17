@@ -7,6 +7,10 @@
  * (`SpendingTable`). A value has one hue in the bars, the small charts and the day chart
  * (`valueSlots`), and its name beside it.
  *
+ * Values named by free text, tasks and sessions, on either side of a pair (`namedByText`), have no
+ * small charts: their list takes the whole width of the charts, which names that run to a sentence
+ * need, where beside the small charts it had less than half.
+ *
  * «Split by» in the section's heading chooses a second dimension, or none, and the address keeps
  * it (`across`). Split, the section is read by both (`useCrossRead`), and the ranked bars, the
  * small charts, the day chart and the table read its pairs, «claude-opus-5-5 · high», each a value
@@ -50,6 +54,7 @@ import type { OwnPeriod } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { valueSlots } from '@/pages/analytics/utils/dayMultiples.ts'
 import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
+import { namedByText } from '@/pages/analytics/utils/splitView.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import { pageDimensionOf } from '@/shared/api/analyticsApi.ts'
@@ -142,6 +147,9 @@ const ranked = computed(() =>
     : { usage: props.usage, across: null, slots: slots.value },
 )
 
+/** Whether the charts' values are named by free text, which draws no small charts. */
+const listOnly = computed(() => namedByText(by.value, ranked.value.across))
+
 /** «Split by»: none, or any dimension of the page but the section's own. */
 const NONE = 'none'
 const splitOptions = computed(() => [
@@ -220,7 +228,10 @@ const showTable = () => table.value?.reveal()
         >
           {{ t('analytics.panel.table.toTable') }}
         </SpendingTableLink>
-        <div class="dimension-pair">
+        <div
+          class="dimension-pair"
+          :class="{ 'dimension-alone': listOnly }"
+        >
           <SpendingBars
             :by="by"
             :across="ranked.across"
@@ -233,6 +244,7 @@ const showTable = () => table.value?.reveal()
             @more="showTable"
           />
           <SpendingMultiples
+            v-if="!listOnly"
             :by="by"
             :across="ranked.across"
             :measure="measure"
@@ -283,7 +295,8 @@ const showTable = () => table.value?.reveal()
 }
 
 /* The charts, top to bottom: the line to the table, then the ranked list and the small charts
-   side by side where both read well, the list first, then the day chart. The air at the sides
+   side by side where both read well, the list first, or the list alone across the width where its
+   names are free text, then the day chart. The air at the sides
    holds what a chart reaches past its column (a focus ring, a pressed fill), so nothing in it
    stands wider than its box. */
 .dimension-charts {
@@ -314,7 +327,7 @@ const showTable = () => table.value?.reveal()
 }
 
 @container (width >= 48rem) {
-  .dimension-pair {
+  .dimension-pair:not(.dimension-alone) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }

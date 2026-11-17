@@ -3,7 +3,8 @@
  * The period's measure broken down by the chosen dimension, largest first (`rankedLines`): work
  * with no task and work nobody can place stand among the values where their figures put them, with
  * a bar on the same scale in the neutral hue and their names in the quiet ink, since work on no
- * task can be the largest share of a period. Each bar is passed its amount in the measure's own
+ * task can be the largest share of a period; a list of free text, below, sets them apart with that
+ * bar instead. Each bar is passed its amount in the measure's own
  * units, hours and not a share. A bar takes its value's hue on the page (`slots`), the neutral for
  * a value the day chart folds away. A value named by the start of its id, an account, carries the
  * whole id as its detail.
@@ -18,10 +19,15 @@
  *
  * The values split one whole, so a person can draw them as a ring instead (`DonutChart`): each
  * value a sector in its hue, named while its hue stays apart from the others' and the smaller
- * folded into one rest, which leaves no value to the table. Which drawing the section opens on is
- * `firstSplitView`'s: the ring, but the bars by task. Split by a second dimension, its pairs are
- * ranked bars alone, since a ring of a pair each would tell the pairs of one value apart by hue
- * alone.
+ * folded into one rest, which leaves no value to the table. The section opens on its ring. Split
+ * by a second dimension, its pairs are ranked bars alone, since a ring of a pair each would tell
+ * the pairs of one value apart by hue alone.
+ *
+ * Values named by free text, tasks and sessions, on either side of a pair (`namedByText`), are a
+ * list only, switched with the table alone: the bars of a list of free text (`RankedBars`'s
+ * `freeText`), each name on lines of its own, the strip of the whole over them. It lists the first
+ * ten values, folds the rest into one row, and closes with it and work with no value under a rule,
+ * each with its bar; the line under it still says how many more the table holds.
  *
  * A bar acts as its value does (`useRankedLines`): by task, a task's bar is a link to it; a value
  * the read can filter by — work with no task, or any value of another dimension it can — is a
@@ -35,9 +41,13 @@ import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import SpendingTableLink from '@/pages/analytics/components/SpendingTableLink.vue'
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { firstSplitView } from '@/pages/analytics/utils/splitView.ts'
-import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
-import { breakdownOf, measureOf, rankedLines } from '@/pages/analytics/utils/usageFigures.ts'
+import { namedByText } from '@/pages/analytics/utils/splitView.ts'
+import {
+  breakdownOf,
+  measureOf,
+  rankedLines,
+  spendingLines,
+} from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -65,6 +75,8 @@ const emit = defineEmits<{ more: []; narrow: [value: string | null, label: strin
 
 /** How many values the list names before it leaves the rest to the table. */
 const LISTED = 12
+/** How many values a list of free text names before it folds the rest into one row. */
+const LISTED_TEXT = 10
 
 const { t } = useI18n()
 const words = useSpendingWords()
@@ -75,23 +87,33 @@ const titles = computed(() =>
   MEASURES.map((each) => words.chartTitle(each, props.by, props.across)),
 )
 
-const all = computed(() =>
-  rankedLines(
-    props.rows,
-    breakdownOf(props.by, props.across),
-    props.measure,
-    Number.POSITIVE_INFINITY,
-  ),
-)
-/** The drawings offered: a ring or the bars, and the bars alone for pairs. */
-const views = computed<SplitView[]>(() => (props.across ? ['bars'] : ['ring', 'bars']))
-const first = computed(() => firstSplitView(props.by))
+/** Whether the values are named by free text, which is a list only. */
+const listOnly = computed(() => namedByText(props.by, props.across))
+/**
+ * Every value ranked, none folded; for a list of free text the first ten, the rest folded into
+ * one row, and work with no value and unknown work each a row apart.
+ */
+const all = computed(() => {
+  const breakdown = breakdownOf(props.by, props.across)
+  return listOnly.value
+    ? spendingLines(props.rows, breakdown, props.measure, LISTED_TEXT)
+    : rankedLines(props.rows, breakdown, props.measure, Number.POSITIVE_INFINITY)
+})
+/** The drawings offered: a ring or the bars, the bars alone for pairs, one list for free text. */
+const views = computed(() => {
+  if (listOnly.value) return ['chart'] as const
+  return props.across ? (['bars'] as const) : (['ring', 'bars'] as const)
+})
 /** What every value adds up to, listed or not: what each bar's hint says its share of. */
 const whole = computed(() =>
   all.value.reduce((sum, line) => sum + (measureOf(props.measure, line.spent) ?? 0), 0),
 )
 /** How many values the list and its table leave to the section's table. */
-const unlisted = computed(() => Math.max(0, all.value.length - LISTED))
+const unlisted = computed(() =>
+  listOnly.value
+    ? (all.value.find((line) => line.kind === 'other')?.folded ?? 0)
+    : Math.max(0, all.value.length - LISTED),
+)
 const moreWords = computed(() =>
   t('analytics.panel.bars.more', { count: unlisted.value }, unlisted.value),
 )
@@ -108,7 +130,7 @@ const ranked = useRankedLines({
 const { follow, select } = ranked
 /** The ring folds its own rest, so it is handed every value; the list and its table the first. */
 const parts = computed(() => ranked.rows.value)
-const bars = computed(() => parts.value.slice(0, LISTED))
+const bars = computed(() => (listOnly.value ? parts.value : parts.value.slice(0, LISTED)))
 
 /** A breakdown with no row is a period that spent nothing, in whatever measure it is drawn. */
 const barWords = computed(() => ({
@@ -131,7 +153,6 @@ const formatValue = (amount: number) => words.scale(props.measure, amount)
     :narrow="narrow"
     :notice="notice"
     :views="views"
-    :first="first"
   >
     <template #chart="{ view }">
       <DonutChart
@@ -152,7 +173,8 @@ const formatValue = (amount: number) => words.scale(props.measure, amount)
         :words="barWords"
         :whole="whole"
         :format-share="words.markShare"
-        rank-all
+        :rank-all="!listOnly"
+        :free-text="listOnly"
         @follow="follow"
         @select="select"
       />
@@ -169,7 +191,7 @@ const formatValue = (amount: number) => words.scale(props.measure, amount)
         :label="title"
         :rows="bars"
         :words="barWords"
-        rank-all
+        :rank-all="!listOnly"
         @follow="follow"
         @select="select"
       />
