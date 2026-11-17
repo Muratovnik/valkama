@@ -83,8 +83,8 @@ holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started` |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
-| `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
+| `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `commits`, `links`, `projects`) |
 
 `claim_ready_work_item` takes the first workable task in the order of work —
 urgent, started, a goal or stage under way, priority, age — which a list row
@@ -197,7 +197,7 @@ new step. Leaving out a claimed or completed step needs `force`.
 
 `apply_work_item_changes` takes `id`, `author`, `expected_revision`, `verbose`
 and any of these groups, applied in this order. It is the one tool that edits
-an item's fields, sets and ticks its steps, attaches refs, links it, writes and
+an item's fields, sets and ticks its steps, attaches refs and commits, links it, writes and
 resolves its discussion, records its summary and moves its state:
 
 | Group | Shape | Does |
@@ -208,6 +208,7 @@ resolves its discussion, records its summary and moves its state:
 | `checklist` | `["…", {"text": "…", "done": true}]`, or `{"items": [...], "force": true}` to carry a refusal through | sets the steps |
 | `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | completes or reopens steps |
 | `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | attaches pointers |
+| `commits` | `[{"repository": "alpha", "hash": "3f2a9c1", "label": "…", "remove": false}]` | attaches commits by hand, or detaches them |
 | `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | adds or removes links |
 | `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…", "list": {"label": "…", "options": [...]}, "mentions": ["MAIN-14"]}` | writes one comment |
 | `comments` | `[{"body": "…"}, {"body": "…", "reply_to": 12}]`, not with `comment` | writes comments, in order |
@@ -227,6 +228,19 @@ carry `list_request_id` when they wrote a list, and `applied.comment` and each
 entry of `applied.comments` carry `mentions` when they named other items. A refusal
 writes nothing and answers with the step:
 `{"error": {"code": "…", "message": "transition: …", "step": {"group": "transition", "index": 0}}}`.
+
+Valkama attaches each commit your session makes to the task you hold, and its
+hook answer says where it went; `commits` is for the rest. When the answer names
+several tasks, attach the commit to the right one with the call the answer gives.
+Send `remove: true` on the item that has a commit by mistake, then attach it
+where it belongs. `repository` is the registered project's id and `hash` a whole
+hash or its first 7 or more hex digits, which the project's repository expands
+on this machine; without its root here, only a whole hash is taken. A goal or
+stage takes a commit too; a task also gains the commit's project, and loses it
+again with its last commit unless it names the project. A refusal starts with
+`[commit]` and says what to send: the registered ids for an unknown project, more
+digits for an ambiguous start, the full hash where there is no root, and that the
+item has no such commit for a `remove`.
 
 A typical close, in one call:
 
@@ -274,8 +288,9 @@ owner. Read it with the item's questions, where it carries `comment_id`.
 ## Reading an item
 
 `get_work_item` takes `id` and reads an item by parts. `parts` names them, one
-name or a list: `card`, `comments`, `events`, `links`, `refs`, `questions`,
-`mentions`, `sessions`, `images`, `subscribers`, `claim` and `sections`. The
+name or a list: `card`, `comments`, `events`, `links`, `refs`, `commits`,
+`questions`, `mentions`, `sessions`, `images`, `subscribers`, `claim` and
+`sections`. The
 answer carries `reference`, `revision` and the fields of each part named, the
 card's among them when `card` is. Without `parts` it reads the card, and a mode
 without `parts` reads only the part it cuts: `unresolved`, `thread` and
@@ -309,6 +324,7 @@ is left out.
 | `mentions` | `count` | `mentions`, the 50 newest texts on other items that named this one, oldest first, each with `in` (`comment`, `report`, `summary` or `description`), `from`, `quote`, `author`, `by_person` and `at`; `mentions_total` |
 | `claim` | `count`, 1 while it is held | `claim`, the lease: `holder`, `state`, `session_id`, `agent_id`, `source`, `acquired_at`, `last_seen` and `expires_at`, the time it lapses unless the session shows a sign of life; null while nobody holds it |
 | `sections` | `count`, for a description longer than 2,000 characters | `sections`, as below |
+| `commits` | `count`, the commits attached now | `commits`, the newest first, each with `repository`, `display_name`, `hash`, `subject`, `committed_at`, `session`, `agent`, `attached_by` (`server`, `manual` or `migrated`) and `label` |
 | `links`, `refs`, `sessions`, `images`, `subscribers` | `count` | the list of that name |
 
 The comments part takes one of these modes:
@@ -578,8 +594,8 @@ the fourth is refused with `ask_limit`. The batch's `questions` take `addressees
 `merge_work_items` takes `id` (the survivor), `items` (1 to 20), and optionally
 `reason`, `force`, `expected_revision` (the survivor's) and `author`. What
 moves: steps (their ids, ticks and step claims kept), discussion threads whole,
-questions with their replies, refs the survivor lacks, links in their own
-direction, and projects (a project more than one of them names keeps the
+questions with their replies, refs and attached commits the survivor lacks,
+links in their own direction, and projects (a project more than one of them names keeps the
 strongest source: named, then commits, then migrated); `moved.comments` counts
 the comment rows, replies included. A list goes with the comment it stands
 under. What stays on a merged item: its history, reports with their threads and

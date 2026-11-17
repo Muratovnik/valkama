@@ -2096,6 +2096,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "checklist",
                 "checklist_ticks",
                 "refs",
+                "commits",
                 "links",
                 "comment",
                 "comments",
@@ -2649,7 +2650,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
             (
                 {"parts": "history"},
                 "unknown part 'history'; parts are card, comments, events, links, refs,"
-                " questions, mentions, sessions, images, subscribers, claim, sections,"
+                " commits, questions, mentions, sessions, images, subscribers, claim, sections,"
                 " participants",
             ),
             (

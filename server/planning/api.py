@@ -23,6 +23,7 @@ from .. import query_params
 from . import (
     calls,
     chain,
+    commits,
     held,
     images,
     item_projects,
@@ -346,6 +347,7 @@ def _part_names(parameters: Mapping[str, list[str]]) -> list[str] | None:
 _PART_READERS: dict[str, Callable[[sqlite3.Connection, sqlite3.Row], dict]] = {
     "links": lambda conn, row: {"links": read_model.links(conn, str(row["work_item_id"]))},
     "refs": lambda conn, row: {"refs": read_model.refs(conn, str(row["work_item_id"]))},
+    "commits": lambda conn, row: {"commits": read_model.commits(conn, str(row["work_item_id"]))},
     "questions": lambda conn, row: {
         "questions": requests.item_questions(conn, str(row["work_item_id"]))
     },
@@ -1040,6 +1042,23 @@ def _ref(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     )
 
 
+def _commit(conn: sqlite3.Connection, payload: Mapping[str, object]) -> tuple[str, dict]:
+    """One commit attached to the item by hand, or detached with `remove`: what it did."""
+
+    reference, repository = _text(payload, "id"), _text(payload, "repository")
+    hash_text = _text(payload, "hash")
+    if _flag(payload, "remove"):
+        return commits.detach(conn, reference, repository, hash_text, author=_author(payload))
+    return commits.attach(
+        conn,
+        reference,
+        repository,
+        hash_text,
+        label=_optional_text(payload, "label") or "",
+        author=_author(payload),
+    )
+
+
 def _space(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     created = service.create_planning_space(
         conn, name=_text(payload, "name"), key=_optional_text(payload, "key")
@@ -1094,6 +1113,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("checklist", frozenset({"items", "force"})),
     ("checklist_ticks", frozenset({"item_id", "done", "force"})),
     ("refs", frozenset({"kind", "value", "label"})),
+    ("commits", frozenset({"repository", "hash", "label", "remove"})),
     ("links", frozenset({"other", "kind", "remove"})),
     ("comment", _COMMENT_FIELDS),
     ("comments", _COMMENT_FIELDS),
@@ -1124,7 +1144,7 @@ CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
 )
 #: The groups that are lists of entries rather than one object.
 _APPLY_LISTS = frozenset(
-    {"checklist_ticks", "refs", "links", "comments", "resolutions", "questions"}
+    {"checklist_ticks", "refs", "commits", "links", "comments", "resolutions", "questions"}
 )
 #: The list groups whose answer says what each entry left rather than how many.
 _APPLY_LISTED = frozenset({"checklist_ticks", "comments", "resolutions", "questions"})
@@ -1251,6 +1271,8 @@ def _apply_step(
     if group == "refs":
         _ref(conn, {**entry, **base})
         return {}, 1
+    if group == "commits":
+        return {}, _commit(conn, {**entry, **base})
     if group == "links":
         _link(conn, {**entry, **base})
         return {}, 1
@@ -1413,7 +1435,9 @@ def _run_steps(
         }
         findings.update(extra)
         findings.update({name: values for name, values in joined.items() if values})
-        if group in _APPLY_LISTED:
+        if group == "commits" and isinstance(change, tuple):
+            applied[group] = commits.tally(applied.get(group), *change)
+        elif group in _APPLY_LISTED:
             applied.setdefault(group, []).append(change)
         elif group in _APPLY_LISTS:
             applied[group] = applied.get(group, 0) + 1

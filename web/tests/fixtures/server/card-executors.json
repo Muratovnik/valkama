@@ -131,6 +131,7 @@
         "summary_comment_id": null,
         "links": [],
         "refs": [],
+        "commits": [],
         "comments": [
           {
             "id": 8,

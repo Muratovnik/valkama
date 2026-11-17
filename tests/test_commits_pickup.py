@@ -463,6 +463,14 @@ class HeldTaskTests(RuleCase):
         )
         self.assertEqual([], self.attached())
         self.assertEqual([(PROJECT, commit)], [row[:2] for row in self.waiting()])
+        # The call the line names, as it names it, attaches the commit by hand.
+        self.tool(
+            "apply_work_item_changes",
+            id=t2,
+            commits=[{"repository": PROJECT, "hash": commit[:9]}],
+        )
+        self.assertEqual([(t2, commit, "manual", "agent")], self.attached())
+        self.assertEqual([], self.waiting(), "on a card now")
 
     def test_no_matching_task_names_every_held_task(self) -> None:
         t1, t2 = self.task("Beta", DEFAULT), self.task("Gamma", UNBOUND)

@@ -31,17 +31,28 @@ An attachment gives the task the commit's project with the source `commits`
 (`item_projects.put_from_commit`) and one `commit_attached` event, both signed
 `valkama`: Valkama attaches it, whoever made the commit, whose session and agent
 the commit's row carries.
+
+By hand. `attach` and `detach` are the `commits` group of a batch: whoever calls
+attaches a commit to any item, a goal or stage too, signed `manual`. A hash
+prefix is expanded by the project's own repository; a commit Valkama did not
+know is recorded without a session. A goal or stage holds no projects, so a
+commit gives one only to a task, and detaching the last commit of a project a
+task holds by its commits takes that project away (the projects rule).
 """
 
 from __future__ import annotations
 
 import json
+import os
+import re
 import sqlite3
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
+from .. import git_worktrees
 from ..projects import project_registry
-from . import calls, held, item_projects, model
+from . import calls, held, item_projects, model, read_model
 
 #: The tool a client hook's own call is bound under (`calls.bind`): what it writes is
 #: Valkama's, and the session and agent of the commit live on the commit's row.
@@ -337,20 +348,273 @@ def _attach(conn: sqlite3.Connection, commit: _Commit, task: _Task) -> None:
     if cursor.rowcount <= 0:
         return
     item_projects.put_from_commit(conn, task.work_item_id, commit.project_id)
-    conn.execute(
-        "INSERT INTO work_item_events(work_item_id, action, detail, author, call_id)"
-        " VALUES (?,?,?,?,?)",
-        (
-            task.work_item_id,
-            model.event_action("commit_attached"),
-            f"{commit.project_id} {commit.hash}",
-            AUTHOR,
-            call,
-        ),
-    )
+    pair = {"repository": commit.project_id, "hash": commit.hash}
+    _commit_event(conn, task.work_item_id, "commit_attached", pair, AUTHOR, call)
 
 
 def _listed(references: Sequence[str]) -> str:
     if len(references) == 1:
         return references[0]
     return ", ".join(references[:-1]) + " and " + references[-1]
+
+
+# -- by hand -------------------------------------------------------------------
+
+#: A hash or its start: at least seven hex digits, as a commit row holds one.
+_HASH = re.compile(r"[0-9a-f]{7,64}")
+#: The lengths of a whole SHA-1 and SHA-256 hash.
+_WHOLE = (40, 64)
+#: How long the project's repository may take to answer one question.
+_GIT_SECONDS = 10.0
+#: What one entry of the group did, as `applied.commits` lists it.
+ATTACHED = "attached"
+REMOVED = "removed"
+UNCHANGED = "unchanged"
+
+
+def attach(
+    conn: sqlite3.Connection,
+    reference: str,
+    repository: str,
+    hash_text: str,
+    *,
+    label: str = "",
+    author: str | None = None,
+) -> tuple[str, dict]:
+    """Attach one commit to an item by hand: `attached`, or `unchanged` when it was there.
+
+    `repository` is a registered project's id and `hash_text` a whole hash or a
+    start of at least seven digits, which the project's root expands. A commit
+    Valkama did not know is recorded here, with no session.
+    """
+
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    row = read_model.item_row(conn, reference)
+    identity = str(row["work_item_id"])
+    project = _registered(repository)
+    whole = _resolved(project, _hash(hash_text, repository))
+    commit_id = _commit_id(conn, project, whole)
+    call = calls.call_id(conn, identity)
+    actor = model.actor(author)
+    cursor = conn.execute(
+        "INSERT OR IGNORE INTO work_item_commits(work_item_id, commit_id, attached_by, label,"
+        " author, call_id) VALUES (?,?,'manual',?,?,?)",
+        (
+            identity,
+            commit_id,
+            model.text_field(label, "commits.label", limit=200, required=False),
+            actor,
+            call,
+        ),
+    )
+    pair = {"repository": repository, "hash": whole}
+    if cursor.rowcount <= 0:
+        return UNCHANGED, pair
+    if str(row["kind"]) != model.CONTAINER_KIND:
+        item_projects.put_from_commit(conn, identity, repository)
+    _commit_event(conn, identity, "commit_attached", pair, actor, call)
+    return ATTACHED, pair
+
+
+def detach(
+    conn: sqlite3.Connection,
+    reference: str,
+    repository: str,
+    hash_text: str,
+    *,
+    author: str | None = None,
+) -> tuple[str, dict]:
+    """Take one commit off an item: `removed`. The commit stays, and a session's commit
+    attached nowhere else is on no card again.
+
+    The hash, whole or a start, names one of the commits attached to the item, so
+    no repository is asked. The task loses the commit's project when it held it
+    by its commits alone and no other attached commit is of that project.
+    """
+
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    row = read_model.item_row(conn, reference)
+    identity = str(row["work_item_id"])
+    wanted = _hash(hash_text, repository)
+    found = conn.execute(
+        "SELECT c.commit_id, c.hash FROM work_item_commits a"
+        " JOIN commits c ON c.commit_id = a.commit_id"
+        " WHERE a.work_item_id = ? AND c.project_id = ? AND substr(c.hash, 1, ?) = ?",
+        (identity, repository, len(wanted), wanted),
+    ).fetchall()
+    if not found:
+        raise model.PlanningError(
+            f"[commit] {repository} {wanted} is not attached to {read_model.reference(conn, row)}"
+        )
+    if len(found) > 1:
+        raise model.PlanningError(
+            f"[commit] {wanted} is ambiguous in {repository}: send more digits"
+        )
+    commit_id, whole = int(found[0][0]), str(found[0][1])
+    conn.execute(
+        "DELETE FROM work_item_commits WHERE work_item_id = ? AND commit_id = ?",
+        (identity, commit_id),
+    )
+    if str(row["kind"]) != model.CONTAINER_KIND:
+        _drop_project(conn, identity, repository)
+    pair = {"repository": repository, "hash": whole}
+    _commit_event(
+        conn, identity, "commit_detached", pair, model.actor(author), calls.call_id(conn, identity)
+    )
+    return REMOVED, pair
+
+
+def tally(done: dict[str, Any] | None, outcome: str, pair: dict) -> dict[str, Any]:
+    """What the group's entries did so far, with one more: `applied.commits`."""
+
+    found: dict[str, Any] = done if done is not None else {ATTACHED: [], REMOVED: [], UNCHANGED: 0}
+    if outcome == UNCHANGED:
+        found[UNCHANGED] += 1
+    else:
+        found[outcome].append(pair)
+    return found
+
+
+def _hash(text: str, repository: str) -> str:
+    """The hash as a row holds it, in lower case; refused when it cannot be one."""
+
+    value = text.strip().lower()
+    if not _HASH.fullmatch(value):
+        raise model.PlanningError(f"[commit] {text} is not a commit in {repository}")
+    return value
+
+
+def _registered(repository: str) -> dict[str, str]:
+    """The project's id and root from the registry, refused with the ids when it has none."""
+
+    listing = project_registry.read_registry()
+    if listing["status"] != "available":
+        raise model.PlanningError(item_projects.REGISTRY_UNREADABLE)
+    roots = {
+        str(entry["project_id"]): str(entry["canonical_root"]) for entry in listing["projects"]
+    }
+    if repository not in roots:
+        raise model.PlanningError(
+            f"[commit] {repository} is not a registered project: {', '.join(sorted(roots))}"
+        )
+    return {"project_id": repository, "root": roots[repository]}
+
+
+def _rooted(project: dict[str, str]) -> bool:
+    """Whether the project's root is a repository on this machine.
+
+    A root without a `.git` of its own is not: Git would answer from the
+    repository around it. A linked worktree's `.git` is a file, and it is one.
+    """
+
+    return os.path.exists(os.path.join(project["root"], ".git"))
+
+
+def _resolved(project: dict[str, str], wanted: str) -> str:
+    """The whole hash of the commit `wanted` starts, as the project's repository has it.
+
+    A project whose root this machine lacks takes a whole hash as it is and
+    cannot expand a start of one.
+    """
+
+    repository, root = project["project_id"], project["root"]
+    if not _rooted(project):
+        if len(wanted) in _WHOLE:
+            return wanted
+        raise model.PlanningError(
+            f"[commit] {repository} has no root on this machine, so the short hash {wanted}"
+            " cannot be resolved: send the full hash"
+        )
+    found = git_worktrees.git_text(
+        root, "rev-parse", "--verify", "--quiet", f"{wanted}^{{commit}}", timeout=_GIT_SECONDS
+    )
+    whole = found.stdout.strip()
+    # A branch or a tag named like a hash resolves too, to a commit its digits do not name.
+    if found.returncode == 0 and whole.startswith(wanted):
+        return whole
+    candidates = git_worktrees.git_text(
+        root, "rev-parse", f"--disambiguate={wanted}", timeout=_GIT_SECONDS
+    )
+    if candidates.returncode == 0 and len(candidates.stdout.split()) > 1:
+        raise model.PlanningError(
+            f"[commit] {wanted} is ambiguous in {repository}: send more digits"
+        )
+    raise model.PlanningError(f"[commit] {wanted} is not a commit in {repository}")
+
+
+def _described(project: dict[str, str], whole: str) -> tuple[str, str | None]:
+    """The commit's subject and committer time, or nothing known without its root."""
+
+    if not _rooted(project):
+        return "", None
+    logged = git_worktrees.git_text(
+        project["root"],
+        "-c",
+        "i18n.logOutputEncoding=UTF-8",
+        "log",
+        "--no-walk",
+        "--format=%cI%x00%s",
+        whole,
+        timeout=_GIT_SECONDS,
+        # Shown to a person: the hash that decides where the commit goes was read strictly.
+        errors="replace",
+    )
+    committed_at, _, subject = logged.stdout.rstrip("\n").partition("\x00")
+    if logged.returncode != 0 or not committed_at:
+        return "", None
+    return subject, committed_at
+
+
+def _commit_id(conn: sqlite3.Connection, project: dict[str, str], whole: str) -> int:
+    """The row of the pair, recorded now without a session when Valkama did not know it."""
+
+    found = conn.execute(
+        "SELECT commit_id FROM commits WHERE COALESCE(project_id, '') = ? AND hash = ?",
+        (project["project_id"], whole),
+    ).fetchone()
+    if found is not None:
+        return int(found[0])
+    subject, committed_at = _described(project, whole)
+    cursor = conn.execute(
+        "INSERT INTO commits(project_id, hash, subject, committed_at, reported_at)"
+        " VALUES (?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        (project["project_id"], whole, subject, committed_at),
+    )
+    if cursor.lastrowid is None:
+        raise model.PlanningError("the commit could not be recorded")
+    return int(cursor.lastrowid)
+
+
+def _drop_project(conn: sqlite3.Connection, identity: str, project_id: str) -> None:
+    """Take off a project the task holds by its commits alone once none attached is of it."""
+
+    conn.execute(
+        "DELETE FROM work_item_projects WHERE work_item_id = :item AND project_id = :project"
+        " AND source = :source AND NOT EXISTS (SELECT 1 FROM work_item_commits a"
+        " JOIN commits c ON c.commit_id = a.commit_id WHERE a.work_item_id = :item"
+        " AND c.project_id = :project AND c.rewritten_to IS NULL)",
+        {"item": identity, "project": project_id, "source": item_projects.COMMITS},
+    )
+
+
+def _commit_event(
+    conn: sqlite3.Connection,
+    identity: str,
+    action: str,
+    pair: dict,
+    author: str,
+    call: int | None,
+) -> None:
+    conn.execute(
+        "INSERT INTO work_item_events(work_item_id, action, detail, author, call_id)"
+        " VALUES (?,?,?,?,?)",
+        (
+            identity,
+            model.event_action(action),
+            f"{pair['repository']} {pair['hash']}",
+            author,
+            call,
+        ),
+    )

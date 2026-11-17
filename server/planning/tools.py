@@ -743,7 +743,7 @@ TOOLS = [
         "Fold items that are one change — one cause, one fix — into the item that"
         " survives (id), all or nothing. Their checklist steps, keeping ids, ticks"
         " and step claims, their discussion threads whole, questions with their"
-        " replies, refs, links and projects move to it; each merged item is linked"
+        " replies, refs, commits, links and projects move to it; each merged item is linked"
         " duplicates to it, gets a summary naming it, is released and closes in its"
         " cancelled state. A project more than one of them names keeps the strongest"
         " source: named, then commits, then migrated. Their history, reports with their threads, description and parent"
@@ -786,7 +786,7 @@ TOOLS = [
         "Apply several changes to a work item",
         "Several writes to one item in one call, all or nothing. The groups apply"
         " in this order: claim,"
-        " subscribe, update, checklist, checklist_ticks, refs, links, comment or comments,"
+        " subscribe, update, checklist, checklist_ticks, refs, commits, links, comment or comments,"
         " resolutions, questions, summary, transition — so a claim and its steps"
         " take one call, and a closing"
         " transition sees the ticks and the summary sent with it, and a transition"
@@ -899,6 +899,26 @@ TOOLS = [
                         "label": _STR,
                     },
                     "required": ["kind", "value"],
+                },
+            },
+            "commits": {
+                "type": "array",
+                "maxItems": api.MAX_APPLY_ENTRIES,
+                "description": "Commits to attach to this item, or with remove: true to"
+                " detach. Valkama attaches the commits a session makes and says so in its"
+                " hook answer; use this for a commit it could not place, one made outside a"
+                " session, or to move one to the right item. repository is the registered"
+                " project id; hash is a full hash or a prefix of at least 7 hex digits that"
+                " the repository resolves.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "repository": _STR,
+                        "hash": _STR,
+                        "label": _STR,
+                        "remove": _BOOL,
+                    },
+                    "required": ["repository", "hash"],
                 },
             },
             "links": {

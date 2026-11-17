@@ -119,6 +119,16 @@ class FullItemCase(CardCase):
             ],
         )
         images.store(self.conn, self.ref, png(1))
+        # A commit attached to it, as a migrated one is: no registry or repository is needed.
+        commit = self.conn.execute(
+            "INSERT INTO commits(project_id, hash, subject, reported_at)"
+            " VALUES ('alpha', ?, 'fix: one', '2026-11-17T09:00:00.000Z')",
+            ("abc1234" + "0" * 33,),
+        ).lastrowid
+        self.conn.execute(
+            "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by) VALUES (?,?,?)",
+            (service.get_work_item(self.conn, self.ref)["work_item_id"], commit, "migrated"),
+        )
         self.conn.commit()
 
     def full(self) -> dict:
@@ -333,7 +343,8 @@ class SizeTests(unittest.TestCase):
         counts["claim"] = {"count": 1}
         contents = read_model.table_of_contents(counts)
         self.assertEqual(list(read_model.PARTS[1:]), list(contents))
-        self.assertLessEqual(len(compact(contents)), 490)
+        # Thirteen parts with the commits: 482 for twelve, and 30 for `"commits":{"count":…}`.
+        self.assertLessEqual(len(compact(contents)), 520)
         step = {
             "id": str(uuid.uuid4()),
             "text": "",
