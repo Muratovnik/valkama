@@ -731,7 +731,7 @@ def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict
 
     _refuse_retired_fields(payload)
     reference, author = _text(payload, "id"), _author(payload)
-    before = commits.before_transition(conn, reference, author)
+    before = commits.before_transition(conn, reference)
     answer = service.transition_work_item(
         conn,
         reference,
