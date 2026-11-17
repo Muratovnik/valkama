@@ -15,8 +15,8 @@
  *
  * One axis, of percents from 0, its top written once over the plot: 100, or the highest reading
  * where one ran past it. The two lines are told apart by their drawing — the readings a heavier
- * line in the chart's hue, the pace a hairline in the quiet ink — and a legend names both, so
- * neither is told by a hue alone, in grayscale too. The two ends of the span shown are named under
+ * line in the chart's hue, the pace a hairline in the quiet ink — and a legend names both in the
+ * line's head with the switch (`StepLineHead`). The two ends of the span shown are named under
  * the plot (`moment`).
  *
  * At rest no reading paints its mark: a mark at each reading made a busy window a chain of dots
@@ -42,7 +42,7 @@ import { computed, nextTick, ref } from 'vue'
 
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { readingHint } from '@/shared/ui/markHints.ts'
-import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
+import StepLineHead from '@/shared/ui/StepLineHead.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { FRAME_KEYS, useAxisFrame, useKeyFrame } from '@/shared/ui/useAxisFrame.ts'
 import { useStepSpan } from '@/shared/ui/useStepSpan.ts'
@@ -207,28 +207,15 @@ function stand(index: number) {
     :aria-label="label"
     data-hint-frame
   >
-    <div class="step-head">
-      <SegmentedControl
-        v-if="span.switched.value"
-        class="step-views"
-        size="compact"
-        :label="words.views"
-        :model-value="span.chosen.value"
-        :options="span.options.value"
-        @update:model-value="span.choose"
-      />
-      <span
-        class="step-legend"
-        aria-hidden="true"
-      >
-        <span class="step-key"><span class="step-swatch swatch-line" />{{ legend.line }}</span>
-        <span
-          v-if="even && legend.even"
-          class="step-key"
-          ><span class="step-swatch swatch-even" />{{ legend.even }}</span
-        >
-      </span>
-    </div>
+    <StepLineHead
+      :chosen="span.chosen.value"
+      :options="span.options.value"
+      :switched="span.switched.value"
+      :views="words.views"
+      :legend="legend"
+      :even="even"
+      @choose="span.choose"
+    />
     <div class="step-plot">
       <span
         class="step-top"
@@ -331,54 +318,6 @@ function stand(index: number) {
   margin: 0;
   font: var(--font-count);
   font-variant-numeric: tabular-nums;
-}
-
-/* The switch of the span at the line's start and the legend over its end, on one row as tall as
-   the switch whether it stands there or not, so the plot never moves when it comes or goes. */
-.step-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  align-items: center;
-  min-inline-size: 0;
-  min-block-size: var(--size-control-height-compact);
-  color: var(--color-text-muted);
-}
-
-.step-legend {
-  display: flex;
-  flex: none;
-  gap: var(--space-3);
-  margin-inline-start: auto;
-  white-space: nowrap;
-}
-
-.step-key {
-  display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
-}
-
-/* Each key drawn as its line is: the readings heavier in the hue, the pace a hairline. */
-.step-swatch {
-  display: inline-block;
-  inline-size: var(--space-3);
-  border-radius: 999px;
-
-  &.swatch-line {
-    block-size: var(--space-half);
-    background: var(--color-series-1);
-  }
-
-  &.swatch-even {
-    block-size: var(--space-hair);
-    background: var(--color-text-tertiary);
-  }
-
-  @media (forced-colors: active) {
-    background: CanvasText;
-    forced-color-adjust: none;
-  }
 }
 
 /* The top's figure stands in a band of its own above the drawing, so a line at the top runs

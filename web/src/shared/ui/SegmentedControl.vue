@@ -30,6 +30,12 @@
  * A host that gives the row a line of its own makes it its line's width with a class on the
  * tag, and shares that width among the segments by `--segmented-option-grow`.
  *
+ * A segment's words stay on one line: a host that scrolls the row, as a card's sections, or that
+ * lays its bar out by the row's whole width, as the Analytics periods, reads that width. A row
+ * that nothing scrolls and that must stand inside what holds it, as a chart's head in a phone's
+ * column, says so (`fit`): its words wrap where they do not fit and the track grows taller.
+ * Wrapped for every row, the card's sections stopped overrunning the phone they scroll across.
+ *
  * A segment may say more than its label: the `option` slot draws what it holds, and `tile`
  * makes each a block of its own, its words at rest in the page's type, the row as many tiles
  * to a line as fit — the Analytics figures, each the measure its charts show. The segment's
@@ -54,6 +60,8 @@ const props = withDefaults(
     }[]
     /** Whether the arrows show a tab's panel as they reach it, or Enter does. */
     activation?: 'automatic' | 'manual'
+    /** The row stands inside what holds it, its words wrapping where they do not fit. */
+    fit?: boolean
     /**
      * `inline` rides a row of icon buttons: an editor's toolbar, at their 28px. `tile` draws
      * each segment as a block of the `option` slot's content.
@@ -62,7 +70,7 @@ const props = withDefaults(
     /** The ids that make the row a tab list over the panel it shows. */
     tabs?: TabIds | null
   }>(),
-  { size: 'default', tabs: null, activation: 'automatic' },
+  { size: 'default', tabs: null, activation: 'automatic', fit: false },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
@@ -153,7 +161,7 @@ function move(event: KeyboardEvent) {
   <div
     class="segmented"
     :role="groupRole"
-    :class="`size-${size}`"
+    :class="[`size-${size}`, { fit }]"
     :aria-label="label"
   >
     <button
@@ -188,18 +196,12 @@ function move(event: KeyboardEvent) {
    to be the other way round — a 44px segment inside a 2px inset — so the track
    stood 48px next to a 44px button and the two never lined up in any toolbar
    they shared. A control that wraps another control cannot size the inner one
-   and stay the same height as its neighbours.
-
-   It is never wider than what holds it: where its words do not fit on one line, as a
-   window's «To now and the forecast | Whole window» in a phone's column, a segment's
-   words wrap and the track grows taller. Kept on one line, they ran 35px past the
-   window's edge and the last segment was cut. */
+   and stay the same height as its neighbours. */
 .segmented {
   display: inline-flex;
   flex: 0 0 auto;
   gap: var(--space-half);
   min-height: var(--size-control-height);
-  max-inline-size: 100%;
   padding: var(--space-half);
   background: var(--color-surface-muted);
   border-radius: var(--radius-control);
@@ -217,13 +219,12 @@ function move(event: KeyboardEvent) {
    so a track keeps its exact declared height whichever it is. */
 .segmented-option {
   flex-grow: var(--segmented-option-grow, 0);
-  min-width: 0;
   min-height: calc(var(--size-control-height) - 2 * var(--space-half));
-  padding: var(--space-1) var(--space-5);
+  padding: 0 var(--space-5);
   border: 0;
   color: var(--color-text-muted);
   font: var(--font-control);
-  text-wrap: balance;
+  white-space: nowrap;
   background: transparent;
 
   /* A corner drawn inside another corner is the outer one less the space
@@ -277,6 +278,21 @@ function move(event: KeyboardEvent) {
      nothing on one: a tile not pressed takes the hovered ground instead, and nothing moves. */
   .segmented-option:hover:not(:disabled, .active) {
     background: var(--color-surface-hover);
+  }
+}
+
+/* A row that must stand inside what holds it (`fit`) is never wider than that: its words wrap
+   where they do not fit on one line and the track grows taller. On one line, a quota window's
+   «To now and the forecast | Whole window» ran 35px past a phone's column and its last segment
+   was cut. */
+.segmented.fit {
+  max-inline-size: 100%;
+
+  .segmented-option {
+    min-width: 0;
+    padding-block: var(--space-half);
+    text-wrap: balance;
+    white-space: normal;
   }
 }
 
