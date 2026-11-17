@@ -1,4 +1,38 @@
+import { readFileSync } from 'node:fs'
+
+import { uncommented } from '../../scripts/ui-system/comments.mjs'
 import { styleBlocks } from '../../scripts/ui-system/sfc.mjs'
+
+/**
+ * A file under `src/` as code, every comment taken out as its language writes one.
+ *
+ * A source-text check that reads the raw file is satisfied by the text in a comment
+ * after the code it was about is gone, and a negative one fails on a comment that
+ * names what it forbids.
+ */
+export function sourceCode(path: string): string {
+  return uncommented(path, readFileSync(new URL(`../../src/${path}`, import.meta.url), 'utf8'))
+}
+
+/**
+ * Every declaration the stylesheet gives `selector` itself, as `compactCss` writes them.
+ *
+ * The selector is matched whole, so `.segmented` is not found in `.x.segmented` or
+ * `.segmented-option`, and the declarations are a set, so their order is not a rule.
+ */
+export function declarationsOf(css: string, selector: string): string[] {
+  const compact = compactCss(css)
+  // In a component only its style blocks are CSS.
+  const sheets = compact.includes('<style')
+    ? [...compact.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(([, sheet]) => sheet)
+    : [compact]
+  const wanted = selector.replaceAll(/\s+/g, '')
+  const found: string[] = []
+  for (const sheet of sheets)
+    for (const [, selectors, body] of sheet.matchAll(/(?<=^|[{};])([^{};]+)\{([^{}]*)\}/g))
+      if (selectors.split(',').includes(wanted)) found.push(...body.split(';').filter(Boolean))
+  return found
+}
 
 /**
  * Source-text assertions describe intent, not formatting. Compacting the style
