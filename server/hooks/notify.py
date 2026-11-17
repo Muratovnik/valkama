@@ -6,8 +6,9 @@ the session runs in, so the hook is where the person's words are handed over:
 
 - `deliver` answers a `PostToolUse`, `UserPromptSubmit` or `Stop` hook with
   `additionalContext` naming what is new since this agent was last told, and, to
-  a Claude Code orchestrator, with a `systemMessage` the person sees, a line per
-  item saying whose news the agent was handed there;
+  an orchestrator, with a `systemMessage` the person sees, a line per item saying
+  whose news the agent was handed there. Codex is answered at `PostToolUse` and
+  `UserPromptSubmit` only, and never for a subagent: see `DELIVERY_EVENTS`;
 - `watch` is the one background hook per session, started by Claude Code's
   `asyncRewake`, that wakes an idle orchestrator by exiting 2 with the same
   notice on stderr.
@@ -83,7 +84,7 @@ with the C scanner `json` itself is built on, opens the store read-only, and
 when nothing changed on the session's items answers after two indexed queries.
 `person_events` and the configuration module load only when something changed
 or a configuration file exists, and the alert settings, for the language of the
-line the person sees, only when a Claude Code orchestrator has news to be told.
+line the person sees, only when an orchestrator has news to be told.
 Who wrote a thread's root is read only for an item that changed, and only for
 what it has to tell or address. The items the
 recipient follows join the first query through the subscriptions' index by
@@ -107,7 +108,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
 #: The hook events that answer with a notice, per client. Codex reads
-#: `additionalContext` from both of its events the same way Claude Code does.
+#: `additionalContext` from both of its events the same way Claude Code does. A
+#: Codex subagent's hook carries its parent's `session_id`, so only `agent_id` tells
+#: it apart: an input that has one is answered with nothing and moves no place
+#: (`deliver`). Its `Stop` input has no `agent_id` at all, and a notice there would
+#: continue a subagent's turn with its orchestrator's news, so `Stop` is not answered.
 DELIVERY_EVENTS = {
     "claude": {
         "post-tool-use": "PostToolUse",
@@ -254,8 +259,9 @@ def _quoted(text: str) -> str:
 def output(hook_event: str, text: str, message: str | None = None) -> bytes:
     """The hook answer that adds `text` to the model's context.
 
-    With `message`, the answer also carries Claude Code's `systemMessage`, which
-    the client shows the person and does not send to the model.
+    With `message`, the answer also carries `systemMessage`, a field of both
+    clients' hook output that is shown to the person and not sent to the model:
+    Claude Code prints it in the chat, Codex surfaces it as a warning.
     """
 
     return (
@@ -2149,14 +2155,19 @@ def deliver(
     marks the session busy and a `Stop` that tells nothing marks it idle, which is
     how the watcher knows it may wake the session at once.
 
-    Claude Code's orchestrator also gets the lines of `shown`, in the owner's alert
-    language, read from the connection already open and only when there is news.
+    An orchestrator also gets the lines of `shown`, in the owner's alert language,
+    read from the connection already open and only when there is news. A Codex
+    input with any `agent_id` is a subagent's and gets nothing, read or moved.
     """
 
     hook_event = DELIVERY_EVENTS.get(client, {}).get(event)
     session_id = _text(payload.get("session_id"))
     named = payload.get("hook_event_name")
     if hook_event is None or session_id is None or named not in (None, hook_event):
+        return None
+    if client == "codex" and payload.get("agent_id") not in (None, ""):
+        # Even one too long to be a name: taken for the orchestrator, it would be
+        # handed the session's news and move the session's places past it.
         return None
     agent_id = _text(payload.get("agent_id"))
     store, enabled = settings(environ)
@@ -2187,9 +2198,9 @@ def deliver(
                     agents=not stop,
                     wake=stop and agent_id is None,
                 )
-                # Claude Code shows an orchestrator's `systemMessage` in the person's chat;
-                # a subagent's never reaches it, and Codex has no such field.
-                if news and client == "claude" and agent_id is None:
+                # Claude Code shows an orchestrator's `systemMessage` in the person's chat
+                # and Codex as a warning; a subagent's never reaches the person.
+                if news and agent_id is None:
                     language = shown_language(conn)
             finally:
                 conn.close()

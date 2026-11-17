@@ -592,13 +592,21 @@ class WhenTests(Harness):
         self.assertIsNone(self.hook(hook_event_name="PreToolUse"))
         self.assertIsNotNone(self.hook(hook_event_name="PostToolUse"))
 
-    def test_codex_is_told_on_its_prompt_and_tool_hooks(self) -> None:
+    def test_codex_is_told_on_its_prompt_and_tool_hooks_and_never_through_a_subagent(self) -> None:
+        """A Codex subagent's hook carries its parent's session: only `agent_id` tells it apart."""
+
         self.claim_with_a_step_for_the_subagent()
-        self.says("For Codex")
-        self.assertIsNotNone(self.hook(event="user-prompt-submit", client="codex"))
-        self.says("Again")
-        self.assertIsNotNone(self.hook(event="post-tool-use", client="codex"))
+        for event in ("user-prompt-submit", "post-tool-use"):
+            with self.subTest(event=event):
+                self.says(f"For Codex at {event}")
+                self.assertIsNone(
+                    self.hook(CHILD, event=event, client="codex"), "the step's holder hears nothing"
+                )
+                self.assertIsNone(self.hook("x" * 200, event=event, client="codex"), "nor any id")
+                self.assertIn(f"at {event}", self.hook(event=event, client="codex") or "")
+        self.says("At the end of a turn")
         self.assertIsNone(self.hook(event="stop", client="codex"), "Codex stop is not answered")
+        self.assertIn("end of a turn", self.hook(event="user-prompt-submit", client="codex") or "")
 
 
 class TextTests(Harness):
@@ -848,15 +856,22 @@ class ShownToThePersonTests(Harness):
             shown.add(match.group(1))
         self.assertEqual(told, shown)
 
-    def test_codex_answers_carry_no_line_for_the_person(self) -> None:
+    def test_codex_answers_carry_the_line_for_the_person(self) -> None:
+        """Codex surfaces `systemMessage` as a warning, so its orchestrator's answer has it."""
+
+        self.language("en")
         self.claim_with_a_step_for_the_subagent()
         for event in ("post-tool-use", "user-prompt-submit"):
             with self.subTest(event=event):
                 self.says(f"For Codex at {event}")
                 answer = self.answer(event=event, client="codex")
                 assert answer is not None
-                self.assertEqual({"hookSpecificOutput"}, set(answer))
+                self.assertEqual({"hookSpecificOutput", "systemMessage"}, set(answer))
                 self.assertIn(event, answer["hookSpecificOutput"]["additionalContext"])
+                self.assertEqual(
+                    f"Valkama told the agent what you did on {self.ref} «Do the work»",
+                    answer["systemMessage"],
+                )
 
     def test_a_subagents_answer_carries_no_line_for_the_person(self) -> None:
         self.claim_with_a_step_for_the_subagent()

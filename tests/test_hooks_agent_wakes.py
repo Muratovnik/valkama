@@ -298,15 +298,22 @@ class AskerTests(Wakes):
         self.assertIn("marker O-1", text)
         self.assertIn(f"in thread #{root} of agent {A_CHILD}", text)
 
-    def test_codex_is_told_at_its_next_tool_call_and_has_no_wake(self) -> None:
-        root = self.ask()
+    def test_codex_is_told_at_its_next_prompt_and_has_no_wake(self) -> None:
+        """The reply A's subagent awaited: never at Codex `Stop`, never at the subagent's hook."""
+
+        root = self.ask(AS_A_CHILD)
         self.hook(session=A)
         self.reply(AS_B, root, "X-1")
-        self.assertIsNone(notify.deliver("codex", "stop", {"session_id": A}, self.environ))
-        answer = notify.deliver("codex", "post-tool-use", {"session_id": A}, self.environ)
+        for payload in ({"session_id": A}, {"session_id": A, "stop_hook_active": False}):
+            self.assertIsNone(notify.deliver("codex", "stop", payload, self.environ))
+        child = {"session_id": A, "agent_id": A_CHILD}
+        for event in ("user-prompt-submit", "post-tool-use"):
+            self.assertIsNone(notify.deliver("codex", event, child, self.environ), event)
+        answer = notify.deliver("codex", "user-prompt-submit", {"session_id": A}, self.environ)
         assert answer is not None
-        told = json.loads(answer)["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("marker X-1", told)
+        parsed = json.loads(answer)
+        self.assertIn("marker X-1", parsed["hookSpecificOutput"]["additionalContext"])
+        self.assertIn(self.held, parsed["systemMessage"], "with the line for the person")
 
 
 class AddresseeTests(Wakes):
