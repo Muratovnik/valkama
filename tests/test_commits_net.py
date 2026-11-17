@@ -266,10 +266,15 @@ class WindowTests(NetCase):
         answer = self.close(t1, "done")
         self.assertEqual([c], self.named(answer), "the window opens at the session's claim")
 
-    def test_a_step_holder_starts_at_its_step_claim(self) -> None:
-        t2 = self.task("Stepped", PROJECT)
-        listed = self.tool("apply_work_item_changes", id=t2, checklist=["the step"])
-        step = listed["applied"]["checklist"][0]["item_id"]
+    def add_step(self, reference: str, text: str = "the step") -> str:
+        """Add one step to the card; its item_id."""
+
+        listed = self.tool("apply_work_item_changes", id=reference, checklist=[text])
+        return str(listed["applied"]["checklist"][0]["item_id"])
+
+    def test_a_step_ticked_in_the_closing_call_starts_at_its_claim(self) -> None:
+        t2 = self.task("Ticked in the close", PROJECT)
+        step = self.add_step(t2)
         self.tool("claim_work_item_checklist_item", id=t2, item_id=step)
         self.dated(t2, "checklist_claimed", 60)
         self.made("before", 50)
@@ -278,9 +283,33 @@ class WindowTests(NetCase):
             "SELECT claim_ref FROM work_items WHERE work_item_id = ?", (self.identity(t2),)
         )
         self.assertEqual("", row.fetchone()[0], "the item itself is not claimed")
-        # The step stays open and held: a close of an item with an open step is forced,
-        # and a step ticked in the closing call no longer counts as held.
-        self.assertEqual([d], self.named(self.close(t2, force=True)))
+        answer = self.close(t2, checklist_ticks=[{"item_id": step}])
+        self.assertEqual([d], self.named(answer), "the step's claim opens the window")
+
+    def test_a_step_ticked_before_the_close_starts_at_its_claim(self) -> None:
+        t2 = self.task("Ticked before the close", PROJECT)
+        step = self.add_step(t2)
+        self.tool("claim_work_item_checklist_item", id=t2, item_id=step)
+        self.dated(t2, "checklist_claimed", 60)
+        self.made("before", 50)
+        d = self.made("d", 70)
+        self.tool("apply_work_item_changes", id=t2, checklist_ticks=[{"item_id": step}])
+        self.assertEqual([d], self.named(self.close(t2)), "the step's claim opens the window")
+
+    def test_the_window_starts_at_the_session_s_earliest_take(self) -> None:
+        t4 = self.task("Earliest take", PROJECT)
+        self.claim(t4)
+        self.dated(t4, "claimed", 10)
+        self.made("before", 5)
+        e = self.made("e", 20)
+        # The card's claim ends while the work goes on: a release, which the server allows
+        # without force, and which requeues the card because no step is held.
+        self.tool("claim_work_item", id=t4, release=True)
+        step = self.add_step(t4)
+        self.tool("claim_work_item_checklist_item", id=t4, item_id=step)
+        self.dated(t4, "checklist_claimed", 40)
+        answer = self.close(t4, checklist_ticks=[{"item_id": step}])
+        self.assertEqual([e], self.named(answer), "the card's earlier claim is the earliest take")
 
     def test_an_item_the_session_never_held_has_no_window(self) -> None:
         t3 = self.task("Never", PROJECT)

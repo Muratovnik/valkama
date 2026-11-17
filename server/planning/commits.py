@@ -791,9 +791,7 @@ def closes() -> Iterator[list[Window]]:
         _WINDOWS.reset(token)
 
 
-def before_transition(
-    conn: sqlite3.Connection, reference: str, author: str | None
-) -> Before | None:
+def before_transition(conn: sqlite3.Connection, reference: str) -> Before | None:
     """What the net needs of an item before a transition ends its claim and steps.
 
     Read under the write's own lock, so nothing lands between it and the move.
@@ -808,7 +806,7 @@ def before_transition(
     return Before(
         str(row["work_item_id"]),
         str(row["state_id"]),
-        window_start(conn, row, author),
+        window_start(conn, row),
         calls.confirmed_session(),
     )
 
@@ -824,15 +822,15 @@ def after_transition(before: Before | None, answer: Mapping[str, Any]) -> None:
         found.append(Window(before.work_item_id, before.since, before.session))
 
 
-def window_start(conn: sqlite3.Connection, row: sqlite3.Row, author: str | None) -> int | None:
+def window_start(conn: sqlite3.Connection, row: sqlite3.Row) -> int | None:
     """The second the work a close ends began, by the first rule that holds; None for none.
 
     1. The item's claim: when the call that took it was received.
-    2. Else the caller's holder holds a step: the newest claim or takeover of that
-       step by a call of its session; the earliest such start when it holds several.
-    3. Else the newest claim or takeover of the item by a call of the closing
-       session, as at a close from review, whose entry ended the claim.
-    4. Else no window: a session that never held the item made nothing for it.
+    2. Else the earliest take of the closing session: its newest claim or takeover of the
+       item, and of each step, by a confirmed call of that session. Whether the session
+       still holds a step does not matter: a step ticked in the closing call, or before
+       it, has no claim left to read, and the take is what the session made.
+    3. Else no window: a session that took neither the item nor a step made nothing for it.
     """
 
     # A store an earlier build wrote, read as it is, has no `claim_call_id` (`leases`);
@@ -846,20 +844,17 @@ def window_start(conn: sqlite3.Connection, row: sqlite3.Row, author: str | None)
     session = calls.confirmed_session()
     if session is None:
         return None
-    holder = calls.holder(author)
-    taken = [
+    takes = [
+        conn.execute(_ITEM_TAKEN, (row["work_item_id"], session, calls.CONFIRMED)).fetchone()[0]
+    ]
+    takes += [
         conn.execute(
             _STEP_TAKEN, (row["work_item_id"], step["text"][:120], session, calls.CONFIRMED)
         ).fetchone()[0]
         for step in model.checklist(row["checklist"])
-        if not step["done"] and step["claimed_by"] == holder
     ]
-    starts = [moment for moment in map(leases.moment, taken) if moment is not None]
-    if not row["claim_ref"] and starts:
-        return int(min(starts).timestamp())
-    last = conn.execute(_ITEM_TAKEN, (row["work_item_id"], session, calls.CONFIRMED)).fetchone()
-    found = leases.moment(last[0]) if last is not None else None
-    return int(found.timestamp()) if found is not None else None
+    starts = [moment for moment in map(leases.moment, takes) if moment is not None]
+    return int(min(starts).timestamp()) if starts else None
 
 
 def with_unreported(conn: sqlite3.Connection, windows: Sequence[Window], answer: _T) -> _T:
