@@ -661,7 +661,8 @@ which carries a store of any earlier schema forward under its own snapshots as t
 release describes, and then come back.
 
 To carry a 2.9 store to the work model, first upgrade the project registry
-(`projects upgrade`), register and bind the projects its spaces hold (`projects add`,
+(`projects upgrade`, which writes an empty one on a machine with no registry),
+register and bind the projects its spaces hold (`projects add`,
 `projects bind`), and write the file that gives each work item its projects:
 
 ```powershell
