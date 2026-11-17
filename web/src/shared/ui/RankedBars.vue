@@ -5,7 +5,9 @@
  * categories — the folded tail, work with no task, work nobody can place — close the chart in a
  * list of their own, under names that say what they are, with their figures and no bar: they are
  * never ranked among the categories and never set their scale, except in a list of free text,
- * below, where each draws its bar.
+ * below, where each draws its bar. Each row says which it is (`data-kind`: `category`, or `other`,
+ * `none` and `unknown` for the rows apart), so a reader counts the categories without reading the
+ * layout that sets them apart.
  * `RankedBarsTable` is the same rows as a table.
  *
  * Presentational: rows and words come in, a press on a row that opens something goes out as
