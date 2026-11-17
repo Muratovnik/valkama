@@ -7,6 +7,11 @@ withdraws it. A session that ended or went quiet past its lease answers nothing:
 requests read expired with `session_gone` while it stays so, and wait again when it
 resumes. That reason is read, never stored, as `deadline` is. Closing the item ends
 every request still pending on it, stored as done or cancelled (`questions.end`).
+
+A question with a purpose, such as the one a move into review asks, is the owner's
+to answer, in Valkama; its answer is carried out in the write that gives it
+(`carry_out`), so it is never declined or changed, and only the session that asked
+it withdraws it.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ import json
 import sqlite3
 from collections.abc import Iterator
 
-from . import calls, leases, model, questions, read_model, request_model, service, words
+from . import calls, leases, model, questions, read_model, request_model, service, states, words
 
 #: How many questions a read of one item carries; `questions.total` says the rest.
 ITEM_QUESTIONS = 5
@@ -866,6 +871,9 @@ def resolve(
     """Close a pending request: answer it, decline it or withdraw it, once.
 
     The first answer is version 1 of the answer; declining or withdrawing gives none.
+    A question with a purpose carries its answer, or its withdrawal, out in the same
+    write (`carry_out`), and the record says what it did as `carried_out`; a refusal
+    of that writes neither.
     """
 
     expected_revision = model.count_field(expected_revision, "expected_revision")
@@ -876,6 +884,7 @@ def resolve(
         if row["revision"] != expected_revision:
             raise model.RevisionConflictError(expected_revision, row["revision"])
         _check_closer(conn, row, status)
+        _check_purpose(conn, row, status)
         at = request_model.now()
         if row["status"] != "pending" or _expired(conn, row, at):
             raise model.WorkflowGuardError("request is no longer pending")
@@ -896,8 +905,98 @@ def resolve(
         if changed.rowcount != 1:
             raise model.WorkflowGuardError("request is no longer pending")
         questions.log_event(conn, row["work_item_id"], f"request_{status}", identity, author)
+        carried = carry_out(conn, row, parsed, said, author)
     words.bring_current(conn)
-    return get(conn, identity)
+    record = get(conn, identity)
+    if carried is not None:
+        record["carried_out"] = carried
+    return record
+
+
+def _purpose(row: sqlite3.Row) -> str | None:
+    """What a request row's answer carries out; None for any other, as on a store from before."""
+
+    # `in` on a row reads its values, so its column names are asked for by name.
+    columns = row.keys()
+    purpose: str | None = row["purpose"] if "purpose" in columns else None
+    return purpose
+
+
+def _check_purpose(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> None:
+    """Refuse a caller who may not close a question with a purpose this way.
+
+    Its answer is carried out as it is given, so it is never declined. It decides
+    what the owner decides, so only the owner answers it, from Valkama's
+    interface; an agent that answered it would accept its own work. Only the
+    session that asked it withdraws it, from any of its agents: one Valkama asked
+    ends only with the write that ends it, and a question withdrawn by anyone else
+    would take work out of review, or leave the owner without the question that
+    was to reach them.
+    """
+
+    purpose = _purpose(row)
+    if purpose is None:
+        return
+    if status == "declined":
+        raise model.PlanningError(
+            f"[purpose] this question carries out its answer ({purpose}): it is answered or"
+            " withdrawn, never declined"
+        )
+    if status == "answered":
+        if not calls.by_person():
+            raise model.OwnerOnlyError("this is the owner's to answer, in Valkama")
+        return
+    identity = calls.current()
+    proved = (
+        identity.session_id if identity is not None and identity.state == calls.CONFIRMED else None
+    )
+    if proved is None or proved != _asker(conn, str(row["request_id"])):
+        raise model.NotAskerError("only the session that asked this question withdraws it")
+
+
+def carry_out(
+    conn: sqlite3.Connection, row: sqlite3.Row, answers: dict | None, note: str, author: str | None
+) -> str | None:
+    """What the answer to a question with a purpose does, in the write that gives it.
+
+    `answers` is the answer as stored, None for a withdrawal. Review's answer
+    `accept` moves the work to its first completed state, `return` to its first
+    ready state, started as it was, and so does its asker's withdrawal. The move is
+    the answerer's, held to its guards, so a refusal refuses the answer with it.
+    The owner's note is the move's reason when it fits the event that records the
+    move; the answer keeps it whole either way. Answers what the move did: the
+    category it reached; None for a question with no purpose.
+    """
+
+    if _purpose(row) != "review":
+        return None
+    given = None if answers is None else answers.get(request_model.REVIEW_ANSWER)
+    if answers is not None and given not in (
+        request_model.REVIEW_ACCEPT,
+        request_model.REVIEW_RETURN,
+    ):
+        raise model.PlanningError(
+            f"[purpose] answer is {request_model.REVIEW_ACCEPT} or {request_model.REVIEW_RETURN}:"
+            " an own variant carries nothing out; say more in note"
+        )
+    category = "completed" if given == request_model.REVIEW_ACCEPT else "ready"
+    item = read_model.item_by_id(conn, str(row["work_item_id"]))
+    target = states.first_state(conn, str(item["workflow_id"]), category)
+    if target is None:
+        raise model.WorkflowGuardError(
+            f"[transition] {read_model.reference(conn, item)} has no {category} state in its"
+            " workflow for this answer to move it to"
+        )
+    key = str(target["key"])
+    reason = note if answers is not None else "review withdrawn"
+    try:
+        reason = service.transition_reason(reason, key)
+    except model.PlanningError:
+        reason = ""
+    service.transition_work_item(
+        conn, read_model.reference(conn, item), key, reason=reason, author=author
+    )
+    return category
 
 
 def change(
@@ -913,7 +1012,8 @@ def change(
 ) -> dict:
     """Replace the answer to an answered question, keeping the replaced one as a version.
 
-    Held to the rules of a first answer. Refused for a question that is not
+    Held to the rules of a first answer. Refused for a question with a purpose,
+    whose answer was carried out as it was given (`[purpose]`), for one that is not
     answered, on a closed item (`[item_closed]`: nobody is left to act on the
     change, and a goal or stage is closed as a task is), when nothing
     differs from the current answer, and past `MAX_ANSWER_VERSIONS`. The current
@@ -929,6 +1029,12 @@ def change(
         if row["revision"] != expected_revision:
             raise model.RevisionConflictError(expected_revision, row["revision"])
         _check_closer(conn, row, "answered")
+        purpose = _purpose(row)
+        if purpose is not None:
+            raise model.PlanningError(
+                f"[purpose] this question carried out its answer ({purpose}) when it was"
+                " given: that answer is not changed"
+            )
         if row["status"] != "answered":
             raise model.WorkflowGuardError("only an answered question's answer can be changed")
         item = read_model.item_by_id(conn, row["work_item_id"])

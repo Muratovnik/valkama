@@ -218,13 +218,17 @@ _COMMENT_FORM = (
 )
 #: What a batch's transition takes, and the guards it meets.
 _TRANSITION_FORM = (
-    'An object, never a bare state name: {"state": "done"}, with reason or force'
-    " when they apply. The one path a state changes by. The workflow's guards apply:"
-    " an active state needs a holder after the write (executor), a terminal state needs"
-    " every checklist step ticked and a closing summary, entering review or a completed"
-    " state is refused while a step stands ticked by a holder whose claim lapsed"
-    " (previous_holder): tick it again, a blocked state needs a stated reason, for a"
-    " cause outside Valkama. An item with no basis, in triage, deferred or cancelled out"
+    'An object, never a bare state name: {"state": "done"}, with reason, force,'
+    " acceptance or to_check when they apply. The one path a state changes by. The"
+    " workflow's guards apply: an active state needs a holder after the write"
+    " (executor); review and a completed state need every checklist step ticked and a"
+    " closing summary, and are refused while a step stands ticked by a holder whose"
+    " claim lapsed (previous_holder): tick it again; review also needs to_check, what"
+    " the owner is to check, which becomes the owner's question on the item"
+    " (review_question); a blocked state needs a stated reason, for a cause outside"
+    " Valkama. An agent cannot complete an item or move it out of review while a"
+    " question to the owner on it is open (question). An item with no basis, in"
+    " triage, deferred or cancelled out"
     " of triage, moved to ready, active, review, blocked or completed needs one"
     " (acceptance): inherited under goals and stages that are all accepted and open,"
     " else the acceptance you send. A move to triage takes the basis away. A goal or"
@@ -238,8 +242,8 @@ _TRANSITION_FORM = (
     " it is the confirmation. Entering deferred is refused."
     " A cancelled state needs only the summary, saying why the work stopped; its undone"
     " steps stay open. force carries a refusal through and records it, except executor,"
-    " acceptance, deferred, children and the refusals that keep a goal or stage out of"
-    " work. Any"
+    " acceptance, deferred, children, question, review_question and the refusals that"
+    " keep a goal or stage out of work. Any"
     " state but an active or blocked one"
     " also ends the item's claim and any step claim, whoever holds them; the answer"
     " names the holder as released, and last_claim_ref keeps reading it. A close also"
@@ -1034,6 +1038,14 @@ TOOLS = [
                     "reason": _STR,
                     "force": _FORCE,
                     "acceptance": _ACCEPTANCE,
+                    "to_check": {
+                        "type": "string",
+                        "maxLength": 8000,
+                        "description": "With a move into review only: what the owner is to"
+                        " check, asked as the owner's question on the item. The owner's"
+                        " answer completes the item or returns it to work; the answer names"
+                        " the question as review_request_id.",
+                    },
                 },
                 "required": ["state"],
             },
@@ -1235,7 +1247,10 @@ TOOLS.extend(
             " Does not resume an execution. A request asked of a session (its addressee) is"
             " answered only by that session, its conversation or any of its subagents; any other"
             " caller, the interface included, is refused with not_addressed. A request whose"
-            " addressee ended or went quiet reads expired with session_gone.",
+            " addressee ended or went quiet reads expired with session_gone. A question with a"
+            " purpose (review, confirm, return) carries its answer out in the same write, and"
+            " is never declined or changed. Only the owner answers it, in Valkama (owner_only),"
+            " and only the session that asked withdraws it (not_asker).",
             WRITES,
             {
                 "id": _STR,
@@ -1275,8 +1290,9 @@ TOOLS.extend(
             "expire_work_item_request",
             "Withdraw a human request",
             "Explicitly withdraw a pending request, retaining its record. A request asked of a"
-            " session is withdrawn only by the session that asked, from any of its agents; others"
-            " are refused with not_asker.",
+            " session, and a question with a purpose, are withdrawn only by the session that"
+            " asked, from any of its agents; others are refused with not_asker. Withdrawing the"
+            " question of review returns its item to ready, started as it was.",
             WRITES,
             {"id": _STR, "expected_revision": _EXPECTED_REVISION, "author": _AUTHOR},
             ["id", "expected_revision"],

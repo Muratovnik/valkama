@@ -1014,7 +1014,7 @@ def list_pins(conn: sqlite3.Connection, spaces: list[str]) -> list[dict]:
 EVENT_DETAIL_LIMIT = 512
 
 
-def _transition_reason(reason: str, state_key: str) -> str:
+def transition_reason(reason: str, state_key: str) -> str:
     """The reason a transition records, sized to the event it is written into.
 
     The event's detail reads `<state key>: <reason>`, so the reason may use only
@@ -1038,6 +1038,7 @@ def transition_work_item(
     expected_revision: int | None = None,
     author: str | None = None,
     acceptance: object = None,
+    to_check: object = None,
 ) -> dict:
     """Move an item to a state; the order of work places it there (`queue.list_key`).
 
@@ -1057,6 +1058,12 @@ def transition_work_item(
     state, and accepted from triage or deferred it takes the work waiting in
     triage under it along (`_cascade`). The refusals of `transitions.UNFORCED`
     hold against `force`.
+
+    A move into review asks the owner, in the same write, the question `to_check`
+    words: what to check, answered by accepting the work or returning it
+    (`requests.carry_out`); the answer names it as `review_request_id`. The question
+    lasts while the item stays in review: any other way out ends it, a close as a
+    close ends every request and any other move as withdrawn.
     """
 
     return _transition(
@@ -1068,6 +1075,7 @@ def transition_work_item(
         expected_revision=expected_revision,
         author=author,
         acceptance=acceptance,
+        to_check=to_check,
     )
 
 
@@ -1118,6 +1126,7 @@ def _transition(
     author: str | None = None,
     acceptance: object = None,
     spared: frozenset[str] = frozenset(),
+    to_check: object = None,
 ) -> dict:
     """`transition_work_item`, sparing the refusals named in `spared`."""
 
@@ -1131,10 +1140,17 @@ def _transition(
         answer = read_model.present(conn, row, full=True)
         answer["warnings"] = [f"{read_model.reference(conn, row)} is accepted and open already"]
         return answer
-    note = _transition_reason(reason, str(target["key"]))
+    into_review = (
+        target["category"] == transitions.REVIEW and current["category"] != transitions.REVIEW
+    )
+    out_of_review = (
+        current["category"] == transitions.REVIEW and target["category"] != transitions.REVIEW
+    )
+    check = _to_check(to_check, into_review, target)
+    note = transition_reason(reason, str(target["key"]))
     gives = _basis(conn, row, target, named)
     refusals, warnings = transitions.findings(
-        conn, row, target, reason=reason, basis=row["acceptance"] or gives
+        conn, row, target, reason=reason, basis=row["acceptance"] or gives, to_check=check
     )
     refusals = [finding for finding in refusals if finding[0] not in spared]
     transitions.refuse(refusals, force)
@@ -1182,6 +1198,21 @@ def _transition(
         # A close ends what still waits on the item, saying how it closed; reopening
         # brings none of it back.
         questions.end(conn, identity, questions.closed_reason(str(target["category"])), author)
+    elif out_of_review:
+        # The question of review is about the work as it stood there: a move that takes
+        # the item elsewhere takes it back.
+        questions.end(conn, identity, "withdrawn", author, purpose=transitions.REVIEW)
+    asked = None
+    if into_review:
+        asked = questions.ask(
+            conn,
+            identity,
+            kind="question",
+            prompt=check,
+            fields=request_model.fields(list(request_model.REVIEW_FIELDS)),
+            author=author,
+            purpose=transitions.REVIEW,
+        )
     # Out of triage or deferred the item had no basis, so the move that accepts it gave one.
     if opened and gives is not None and current["category"] in model.UNACCEPTED_CATEGORIES:
         # The order of bases for what is under it, read with the item now accepted.
@@ -1194,7 +1225,30 @@ def _transition(
         answer["released"] = held
     if overridden:
         answer["overridden"] = overridden
+    if asked is not None:
+        answer["review_request_id"] = asked
     return answer
+
+
+def _to_check(value: object, into_review: bool, target: sqlite3.Row) -> str:
+    """What the owner is to check, as a move into review asks it; refused on any other move.
+
+    Sent with a move that does not enter review it would ask nothing, so it is refused
+    rather than dropped: the caller meant a question that would never be asked.
+    """
+
+    if value is None:
+        return ""
+    if not into_review:
+        raise model.PlanningError(
+            f"to_check goes with a move into review, which asks it; a move to {target['name']}"
+            " asks nothing: leave it out"
+        )
+    return model.multiline_field(value, "to_check", limit=_TO_CHECK_LIMIT)
+
+
+#: The most characters `to_check` holds: as many as any question's prompt.
+_TO_CHECK_LIMIT = 8000
 
 
 def _destination(

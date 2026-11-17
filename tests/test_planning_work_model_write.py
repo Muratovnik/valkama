@@ -35,6 +35,8 @@ from tests.planning_tree import Tree, oracle
 #: The tables a write changes: a refusal leaves each as it was.
 WRITTEN = ("planning_spaces", "work_items", "work_item_events", "work_item_links")
 AGENT = "agent-one"
+SUMMARY = {"done": "The step.", "next": "Nothing."}
+TO_CHECK = "The step holds."
 
 #: Each write by the MCP tool and the HTTP route that make it.
 MCP_TOOLS = {
@@ -198,6 +200,12 @@ class WriteCase(unittest.TestCase):
         service.set_checklist(self.conn, self.ref(name), [{"text": f"The step of {name}"}])
         self.conn.commit()
 
+    def summarize(self, name: str) -> None:
+        """The summary a move into review needs, written before the move."""
+
+        service.set_summary(self.conn, self.ref(name), SUMMARY, author="tester")
+        self.conn.commit()
+
     # -- trees ------------------------------------------------------------------
 
     def accepted_goal(self, stage: bool = True) -> None:
@@ -276,20 +284,24 @@ class ThroughMcpTests(WriteCase):
         self.assertIsNotNone(self.stored("a", "started_at"))
         self.assertIsNotNone(self.stored("a", "accepted_at"))
 
-    def test_a_task_moved_to_review_is_released_by_the_move(self) -> None:
+    def test_a_task_entering_review_is_released_by_the_move(self) -> None:
         self.tree.add("a", state="ready")
         self.give_step("a")
         self.claim("a")
         self.claim_step("a")
+        self.summarize("a")
         holder, steps = self.holders("a")
         mark = self.mark()
-        self.transition("a", "review")
+        # A held step is an open one, and only force carries an open step into review.
+        self.transition("a", "review", force=True, to_check=TO_CHECK)
         self.assertEqual(("review", ("", [""])), (self.category("a"), self.holders("a")))
         self.assertEqual(
             [
                 ("transitioned", "review"),
                 ("released", holder),
                 ("checklist_released", "The step of a"),
+                ("request_created", mock.ANY),  # the owner's review question
+                ("overridden", "checklist"),
             ],
             self.actions("a", mark),
         )
@@ -590,11 +602,14 @@ class ThroughMcpTests(WriteCase):
             for force in (False, True):
                 with self.subTest(force=force):
                     self.refused(
-                        lambda force=force: self.transition("a", "review", force=force),
+                        lambda force=force: self.transition(
+                            "a", "review", force=force, to_check=TO_CHECK
+                        ),
                         "[acceptance]",
                     )
         else:
-            self.transition("a", "review")
+            self.summarize("a")
+            self.transition("a", "review", to_check=TO_CHECK)
             self.assertEqual(("review", "owner"), (self.category("a"), self.basis("a")))
 
     def test_a_goal_cancelled_unaccepted_is_opened_again_with_a_basis(self) -> None:
@@ -761,7 +776,8 @@ class ThroughMcpTests(WriteCase):
             {
                 "id": self.ref("a"),
                 "checklist_ticks": [{"item_id": self.step("a")}],
-                "transition": {"state": "review"},
+                "summary": SUMMARY,
+                "transition": {"state": "review", "to_check": TO_CHECK},
             },
         )
         # The batch is one write: work went to review, not to ready and on from there.

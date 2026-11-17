@@ -18,6 +18,9 @@ from server import mcp_surface, store
 from server.planning import model, service
 from tests.planning_fixtures import basis_for, standing_in
 
+#: The summary a move into review needs, as a close does.
+SUMMARY = {"done": "it", "next": "nothing"}
+
 
 class StateNameTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -66,8 +69,9 @@ class StateNameTests(unittest.TestCase):
         created = self.item(state="ready")
         self.assertEqual("ready", created["state"]["key"])
         service.claim_work_item(self.conn, created["reference"], author="tester")
+        service.set_summary(self.conn, created["reference"], SUMMARY, author="tester")
         moved = service.transition_work_item(
-            self.conn, created["reference"], "review", acceptance="assignment"
+            self.conn, created["reference"], "review", acceptance="assignment", to_check="it"
         )
         self.assertEqual("review", moved["state"]["key"])
         blocked = service.transition_work_item(
@@ -88,7 +92,10 @@ class StateNameTests(unittest.TestCase):
         # a key, and the key is the more specific name.
         self.add_state("qa", "review")
         created = self.item(state="ready")
-        moved = service.transition_work_item(self.conn, created["reference"], "review")
+        service.set_summary(self.conn, created["reference"], SUMMARY, author="tester")
+        moved = service.transition_work_item(
+            self.conn, created["reference"], "review", to_check="it"
+        )
         self.assertEqual("review", moved["state"]["key"])
 
     def test_a_category_two_states_share_is_refused_naming_both(self) -> None:

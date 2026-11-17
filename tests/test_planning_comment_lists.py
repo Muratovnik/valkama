@@ -250,7 +250,12 @@ class WritingTests(Harness):
             "apply_work_item_changes",
             id=self.ref,
             comment={"body": "Findings", "list": LIST},
-            transition={"state": "review", "force": True, "acceptance": "assignment"},
+            transition={
+                "state": "review",
+                "force": True,
+                "acceptance": "assignment",
+                "to_check": "The findings",
+            },
         )
         self.assertEqual("review", moved["state"]["key"], "review keeps it open, and the list")
 

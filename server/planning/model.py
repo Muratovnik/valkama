@@ -301,7 +301,16 @@ class NotAddressedError(PlanningError):
 
 class NotAskerError(PlanningError):
     """A request asked of an agent session, withdrawn by neither the session that asked
-    nor Valkama."""
+    nor Valkama; or a question with a purpose withdrawn by any session but the one that
+    asked it."""
+
+
+class OwnerOnlyError(PlanningError):
+    """A question with a purpose, answered by anyone but the owner in Valkama.
+
+    Its own code: the answer may be right, but it decides what the owner decides —
+    accepting work, confirming a goal, taking up work that came back.
+    """
 
 
 class RevisionConflictError(PlanningError):

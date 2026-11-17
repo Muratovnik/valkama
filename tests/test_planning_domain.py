@@ -261,9 +261,7 @@ class PlanningDomainTests(unittest.TestCase):
 
     def test_review_warns_without_evidence_instead_of_refusing(self) -> None:
         created = self.item("Land the planning domain")
-        moved = service.transition_work_item(
-            self.conn, created["reference"], "review", acceptance="assignment"
-        )
+        moved = self.reviewed(created["reference"])
         self.assertEqual(["QA-1 enters Review with no session or commit ref"], moved["warnings"])
         service.attach_ref(self.conn, created["reference"], "commit", "abc1234", author="tester")
         again = service.transition_work_item(
@@ -277,18 +275,22 @@ class PlanningDomainTests(unittest.TestCase):
             service.comment_work_item(
                 self.conn, unconfirmed["reference"], "started", author="tester"
             )
-        warned = service.transition_work_item(
-            self.conn, unconfirmed["reference"], "review", acceptance="assignment"
-        )
+        warned = self.reviewed(unconfirmed["reference"])
         self.assertEqual(1, len(warned["warnings"]))
 
         confirmed = self.item("Written by a confirmed session")
         with calls.bind(calls.Identity("confirmed", "claude-hook", session_id="s-2"), "comment"):
             service.comment_work_item(self.conn, confirmed["reference"], "started", author="tester")
-        moved = service.transition_work_item(
-            self.conn, confirmed["reference"], "review", acceptance="assignment"
-        )
+        moved = self.reviewed(confirmed["reference"])
         self.assertEqual([], moved["warnings"])
+
+    def reviewed(self, reference: str) -> dict:
+        """The move into review of an item with nothing left open, which asks what to check."""
+
+        service.set_summary(self.conn, reference, {"done": "it", "next": "none"}, author="tester")
+        return service.transition_work_item(
+            self.conn, reference, "review", acceptance="assignment", to_check="it"
+        )
 
     def test_force_carries_a_refusal_through_and_records_the_override(self) -> None:
         created = self.item("Land the planning domain")

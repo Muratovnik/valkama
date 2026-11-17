@@ -18,6 +18,24 @@ EXPIRED_REASONS = ("deadline", "withdrawn", "execution_closed", "item_completed"
 #: that came back to be taken up again. Null on any other request. Declared here,
 #: beside the statuses, because the store's CHECK reads it.
 PURPOSES = ("review", "confirm", "return")
+#: The field of the question a move into review asks, by what its answer carries out:
+#: `accept` completes the work, `return` sends it back to work. The question's note
+#: is the owner's comment on either.
+REVIEW_ANSWER = "answer"
+REVIEW_ACCEPT = "accept"
+REVIEW_RETURN = "return"
+REVIEW_FIELDS = (
+    {
+        "id": REVIEW_ANSWER,
+        "label": "Answer",
+        "type": "choice",
+        "required": True,
+        "options": [
+            {"id": REVIEW_ACCEPT, "label": "Accept it"},
+            {"id": REVIEW_RETURN, "label": "Return it to work"},
+        ],
+    },
+)
 MAX_NOTE = 8000
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each

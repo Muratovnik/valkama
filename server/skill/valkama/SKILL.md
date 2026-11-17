@@ -411,10 +411,12 @@ cause found from two places — fold them into one with `merge_work_items`, as
    `why` only when the choice is not obvious. When your instructions ask a
    closing summary for flow friction, give it in `friction` (`none`, or a line
    per hindrance), never at the end of `done` or `why`, in the `summary` group.
-3. Transition to the completed state, or to review when someone must check the
-   result first. A state is named by its key or by a category that one state
-   has (`completed`, `review`, `cancelled`); a name the workflow lacks is
-   refused listing its states.
+3. Transition to the completed state, or to review when the owner must check the
+   result first. Review needs the same ticks and summary and `to_check`, what the
+   owner is to check; the owner's answer completes the item or returns it to work.
+   A state is named by its key or by a category that one state has (`completed`,
+   `review`, `cancelled`); a name the workflow lacks is refused listing its
+   states.
 
 Steps 1 to 3 go in one `apply_work_item_changes` call, often with the last
 commit as a ref. The transition to a completed or cancelled state also ends

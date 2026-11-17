@@ -353,7 +353,8 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 | active, review or blocked, for a goal or stage | refused: a goal or stage is accepted (ready), completed or cancelled |
 | a triage state, for an accepted open goal or stage | refused: an accepted goal or stage is completed or cancelled |
 | a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
-| a completed state | every step done and a summary |
+| a review or completed state | every step done and a summary |
+| a review state, from outside review | `to_check`, what the owner is to check, which `force` does not carry (`review_question`); the move asks it of the owner |
 | a review or completed state | no step marked `by_previous_holder`: tick it again to confirm it, or reopen it (`previous_holder`) |
 | a cancelled state | a summary; open steps stay open |
 | a blocked state | a `reason`, for a cause outside Valkama; work that waits on an item is linked `blocks` and stays where it is |
@@ -364,7 +365,9 @@ A move to review without a session or commit ref warns but is not refused.
 An agent's move to a completed or cancelled state is also refused with
 `person_spoke` while a person acted on the item since an agent last wrote to it;
 the refusal names what they did. A `comment` sent in the same
-`apply_work_item_changes` call does not lift it.
+`apply_work_item_changes` call does not lift it. An agent's move that completes an
+item or takes it out of review is refused with `question` while a question to the
+owner is open on it, `force` or not; cancelling is not.
 `force: true` carries a refusal through and records an `overridden` event.
 
 ## When a call is refused
@@ -378,6 +381,10 @@ the refusal names what they did. A `comment` sent in the same
 | `workflow_guard` with `[checklist]` or `[summary]` | Tick what was done, move undone work to an item of its own, record the summary, then close. |
 | `workflow_guard` with `[blocker]` | Give the reason: blocking by hand is for a cause outside Valkama; link `blocks` for work that waits on an item. |
 | `workflow_guard` with `[new_item]` | Create the item, then move it. |
+| `workflow_guard` with `[review_question]` | Send `to_check`, what the owner is to check. |
+| `workflow_guard` with `[question]` | Wait for the owner's answer, or withdraw a question you asked. |
+| `owner_only` | The owner answers this question in Valkama: leave it. |
+| `[purpose]` | The review question takes one of its two answers, and its answer is not changed or declined. |
 | `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
 | `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |
@@ -468,7 +475,10 @@ lists the open requests asked of your own session; answer each with
 `answer_work_item_request`, from your conversation or a subagent. A request asked of
 a session is answered only by that session (`not_addressed` refuses anyone else)
 and withdrawn only by the session that asked (`not_asker`); while the session asked
-has ended or gone quiet, it reads expired with `session_gone`. With `answered_after` the oldest answer comes first, and a page runs
+has ended or gone quiet, it reads expired with `session_gone`. The question a move
+into review asks is the owner's to answer (`owner_only` refuses an agent); the
+answer completes the item or returns it to ready, and withdrawing it, which only the
+asking session does, returns it to ready too. With `answered_after` the oldest answer comes first, and a page runs
 past `limit` rather than part two answers of one time. Both give a compact form
 unless `full` is true:
 

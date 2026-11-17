@@ -520,9 +520,9 @@ class TheWindowTests(Harness):
         self.agent("claim_work_item", id=self.ref)
         self.says("One")
         self.person("/api/planning/work-item/update", id=self.ref, title="Two")
-        self.person("/api/planning/work-item/transition", id=self.ref, state="review", force=True)
+        self.person("/api/planning/work-item/transition", id=self.ref, state="ready", force=True)
         self.says("Three")
-        # The move to review let the agent's claim go, and that is told too.
+        # The move back to ready let the agent's claim go, and that is told too.
         self.assertEqual(["comment", "edited", "status", "released", "comment"], self.kinds())
 
     def test_an_agents_write_that_logs_no_event_moves_it_too(self) -> None:
@@ -777,7 +777,11 @@ class CloseGuardTests(Harness):
                 "apply_work_item_changes", id=self.ref, transition={"state": "cancelled"}
             ),
         )
-        answer = self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
+        answer = self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            transition={"state": "review", "to_check": "The library chosen"},
+        )
         self.assertEqual("review", answer["state"]["key"])
 
     def test_force_carries_it_and_records_the_override(self) -> None:

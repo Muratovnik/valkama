@@ -15,15 +15,17 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping
 
-from . import calls, item_tree, leases, model, person_events
+from . import calls, item_tree, leases, model, person_events, questions
 
 Finding = tuple[str, str]
 
 #: The guards `force` does not carry: past them the store would hold what the work
 #: model has no place for — a container at work, accepted work with no basis, a
-#: task at work with nobody holding it, a deferral with no condition to end it,
-#: a new item standing where only a move with its reason or summary leads, or open
-#: work under a goal or stage that is done.
+#: task at work with nobody holding it, a deferral with no condition to end it, a
+#: new item standing where only a move with its reason or summary leads, open work
+#: under a goal or stage that is done, or work in review with nothing for the owner
+#: to answer — or an agent would go over the owner's open question, where
+#: withdrawing its own question is its way out.
 UNFORCED = frozenset(
     {
         "goal_or_stage",
@@ -33,10 +35,14 @@ UNFORCED = frozenset(
         "executor",
         "new_item",
         "children",
+        "question",
+        "review_question",
     }
 )
 #: How many of the open items under a goal or stage its `children` refusal names.
 NAMED_OPEN = 5
+#: The category whose entry asks the owner what to check, and which the answer leaves.
+REVIEW = "review"
 
 #: Where a new item is never created: the move there carries what entering asks for
 #: — what the owner is to check, the reason, the summary — and a creation has none.
@@ -133,12 +139,15 @@ def findings(
     reason: str = "",
     basis: object = None,
     held: bool | None = None,
+    to_check: str = "",
 ) -> tuple[list[Finding], list[str]]:
     """Hard refusals and soft warnings for moving `item` to `target` state.
 
     `basis` is the acceptance the item has or the move gives it. `held` says
     whether a holder stands on the item after the write, for a write that takes
-    the claim itself; left out, it is read from the item.
+    the claim itself; left out, it is read from the item. `to_check` is what the
+    owner is to check, which a move into review needs: it becomes the owner's
+    question there, and review asks what a close asks besides.
     """
 
     current = conn.execute(
@@ -214,7 +223,12 @@ def findings(
         unconfirmed = previous_holder(reference, checklist)
         if unconfirmed:
             refusals.append(("previous_holder", unconfirmed))
-    if target["is_terminal"] and entering:
+    closing = bool(target["is_terminal"]) and entering
+    # Work offered for the owner's check is offered as done: review asks what a
+    # completed close asks, and what the owner is to check besides.
+    into_review = target["category"] == REVIEW and current["category"] != REVIEW
+    if closing or into_review:
+        doing = "closing it" if closing else f"moving it to {target['name']}"
         # Cancelled work closes with the steps it never did still open: ticking
         # them would claim work that did not happen. The summary still has to
         # say why it stopped.
@@ -224,7 +238,7 @@ def findings(
                 (
                     "checklist",
                     f"{reference} has {len(open_steps)} open checklist step(s); tick or"
-                    " reopen them honestly before closing it",
+                    f" reopen them honestly before {doing}",
                 )
             )
         if not item["summary"]:
@@ -232,9 +246,22 @@ def findings(
                 (
                     "summary",
                     f"{reference} has no closing summary; record what was done and what"
-                    " comes next before closing it",
+                    f" comes next before {doing}",
                 )
             )
+    if into_review and not to_check.strip():
+        refusals.append(
+            (
+                "review_question",
+                f"{reference} enters {target['name']} only with to_check, what the owner is to"
+                " check: it becomes the owner's question on the item, whose answer completes"
+                " it or returns it to work",
+            )
+        )
+    asked = owner_question(conn, item, current, target, reference)
+    if asked:
+        refusals.append(("question", asked))
+    if closing:
         spoke = person_spoke(conn, item, reference)
         if spoke:
             refusals.append(("person_spoke", spoke))
@@ -289,6 +316,43 @@ def previous_holder(reference: str, checklist: list[dict]) -> str:
     return (
         f"{reference} has {flagged} step(s) ticked by a holder whose lease lapsed:"
         " tick them again to confirm them, or reopen them"
+    )
+
+
+def owner_question(
+    conn: sqlite3.Connection,
+    item: sqlite3.Row,
+    current: sqlite3.Row,
+    target: sqlite3.Row,
+    reference: str,
+) -> str:
+    """What stops an agent's move over a question to the owner still open on the item.
+
+    An agent does not complete an item, or take it out of review anywhere but a
+    cancel, while the owner has a question on it to answer: the answer is the
+    owner's decision, and moving past it decides for them. A cancel stays open and
+    ends the questions as it closes. A person is not held to it: closing an item
+    they were asked about is their answer. The question that a goal or stage awaits
+    its confirmation by does not stop that confirmation, which completes it.
+    """
+
+    category = str(target["category"])
+    completing = category == "completed" and current["category"] != "completed"
+    leaving = current["category"] == REVIEW and category not in (REVIEW, "cancelled")
+    if not (completing or leaving) or not calls.from_agent():
+        return ""
+    spared = {"confirm"} if completing else set()
+    found = [
+        row
+        for row in questions.open_rows(conn, str(item["work_item_id"]))
+        if row["purpose"] not in spared
+    ]
+    if not found:
+        return ""
+    doing = "complete it" if completing else f"move it out of {current['name']}"
+    return (
+        f"{reference} has {len(found)} open question(s) to the owner, and an agent does not"
+        f" {doing} over them: wait for the owner's answer, or withdraw a question you asked"
     )
 
 

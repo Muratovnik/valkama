@@ -150,6 +150,8 @@ def error_response(error: BaseException) -> tuple[int, dict]:
         return 403, {"error": {"code": "not_addressed", "message": str(error)}}
     if isinstance(error, model.NotAskerError):
         return 403, {"error": {"code": "not_asker", "message": str(error)}}
+    if isinstance(error, model.OwnerOnlyError):
+        return 403, {"error": {"code": "owner_only", "message": str(error)}}
     if isinstance(error, model.StoreSchemaError):
         return 409, {"error": {"code": model.STORE_SCHEMA_MISMATCH, "message": str(error)}}
     if isinstance(error, model.PlanningError):
@@ -677,6 +679,7 @@ def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
         acceptance=payload.get("acceptance"),
+        to_check=payload.get("to_check"),
     )
 
 
@@ -1118,7 +1121,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         ),
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
-    ("transition", frozenset({"state", "reason", "force", "acceptance"})),
+    ("transition", frozenset({"state", "reason", "force", "acceptance", "to_check"})),
 )
 #: What a creation may do to the item it just made, after making it and in this
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
@@ -1292,6 +1295,8 @@ def _apply_step(
         moved["container_state"] = answer["container_state"]
     if answer.get("released"):
         moved["released"] = answer["released"]
+    if answer.get("review_request_id"):
+        moved["review_request_id"] = answer["review_request_id"]
     return found, moved
 
 
