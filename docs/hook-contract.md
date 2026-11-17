@@ -754,8 +754,9 @@ meanwhile (see [where each agent's place is kept](#where-each-agents-place-is-ke
 
 ### When another session's news wakes
 
-**Since 2.6**, three kinds of another session's news ask for a session, and wake
-its orchestrator once when it idles, or continue its turn once at `Stop`:
+These kinds of another session's news ask for a session (the first three since 2.6,
+the others since the release their row names), and wake its orchestrator once when
+it idles, or continue its turn once at `Stop`:
 
 | What | Wakes | For how long |
 | --- | --- | --- |
