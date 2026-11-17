@@ -198,8 +198,8 @@ for (const width of [1440, 1024, 390]) {
     // The stretch nobody recorded the organization of is the plain neutral, as its swatch in the
     // list beside «Unknown organization» is: never hatched, since a hatch says a figure not final.
     const paints = await accounts.evaluate((root) =>
-      [...root.querySelectorAll('.account-part, .account-swatch')].map((mark) => ({
-        slot: mark.getAttribute('data-slot'),
+      [...root.querySelectorAll<HTMLElement>('.account-part, .account-swatch')].map((mark) => ({
+        slot: mark.dataset.slot,
         paint: getComputedStyle(mark).backgroundColor,
         mask: getComputedStyle(mark).maskImage,
       })),
