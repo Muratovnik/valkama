@@ -38,6 +38,14 @@ checkouts are therefore distinguishable even at the same version.
   reads one scope with the set it stands at; `POST` writes a value, one of the sets
   `minimal`, `default`, `maximal` and `manual`, or a label's rule, and refuses an
   agent with `owner_only`.
+- **The decisions an agent takes on its own can be read back.** A decision an agent
+  took without asking, at a point where the owner's setting let it go ahead, is
+  marked on the history event that recorded it, with its point and a short line of
+  what was decided; the mark goes with its event. `GET /api/planning/decisions` lists
+  the marks newest first, by `space`, `project`, `point` (repeatable), `from` and
+  `to` (a UTC day or a timestamp, both ends included), in pages of up to 200
+  (`limit`, `offset`), each with its item, session and time. In an item's full
+  record a marked event carries its `point`. A migrated store starts with no marks.
 
 ### Changed
 
