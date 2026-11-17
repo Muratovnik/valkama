@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from . import (
     calls,
     closing,
+    consent,
     decisions,
     deferral,
     leases,
@@ -1034,6 +1035,8 @@ def resolve(
         at = request_model.now()
         if row["status"] != "pending" or _expired(conn, row, at):
             raise model.WorkflowGuardError("request is no longer pending")
+        if status == "answered" and _purpose(row) == pending.CONSENT:
+            consent.check_answer(conn, row, answers, own)
         parsed = _stored(row, answers, own, field_notes, said) if status == "answered" else None
         _close(conn, row, status, parsed, answered_by=model.actor(author), author=author, at=at)
         carried = carry_out(conn, row, parsed, said, author)
@@ -1058,8 +1061,9 @@ def _check_purpose(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> N
 
     Its answer is carried out as it is given, so it is never declined. It decides
     what the owner decides, so only the owner answers it, from Valkama's
-    interface; an agent that answered it would accept its own work. Only the
-    session that asked it withdraws it, from any of its agents: one Valkama asked
+    interface; an agent that answered it would accept its own work. The one
+    exception is a session's consent to a cancel of its work, which that session
+    answers. Only the session that asked it withdraws it, from any of its agents: one Valkama asked
     ends only with the write that ends it, and a question withdrawn by anyone else
     would take work out of review, or leave the owner without the question that
     was to reach them.
@@ -1074,7 +1078,8 @@ def _check_purpose(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> N
             " withdrawn, never declined"
         )
     if status == "answered":
-        if not calls.by_person():
+        # A session asked about a cancel of its work answers for itself (`_check_closer`).
+        if purpose != pending.CONSENT and not calls.by_person():
             raise model.OwnerOnlyError("this is the owner's to answer, in Valkama")
         return
     identity = calls.current()
@@ -1163,7 +1168,9 @@ def _carry_action(
     """The answer to a question about a write that waits for the owner, or its withdrawal.
 
     A withdrawal withdraws the action, and every other question and request of it
-    ends with it. An answer to a request asked of a session carries nothing out here.
+    ends with it. An answer to a request asked of a session carries nothing out here,
+    but a session's answer about a cancel of its work may settle that cancel
+    (`consent.settle`).
     The owner's answer to an action that no longer applies drops it (`pending.inapplicable`),
     the answer standing as given; to one that still does, the action ends with the
     outcome its carrier gives the choice, and then the carrier does what the choice
@@ -1176,6 +1183,9 @@ def _carry_action(
         pending.end(conn, action, pending.WITHDRAWN, author=author)
         return pending.WITHDRAWN
     if _addressee(row) is not None:
+        # A session's answer about a cancel of its work may be the one that decides it.
+        if action.point == "cancel_shared":
+            consent.settle(conn, action)
         return None
     carrier = CARRIERS.get(action.point)
     given = answers.get(request_model.REVIEW_ANSWER)
@@ -1467,7 +1477,8 @@ def _cancel(
     _note: str,
     author: str | None,
 ) -> None:
-    """The owner's answer about an agent's cancel of an item filed outside its work.
+    """The owner's answer about an agent's cancel of an item filed outside its work, or
+    of work other sessions do; the owner's answer ends what the sessions were asked.
 
     `cancel` makes the cancel the agent asked for, to the state and with the reason it
     named, as the owner's: a goal or stage with open work under it by the cancel list,
@@ -1498,7 +1509,7 @@ def _cancel(
     )
 
 
-CARRIERS["cancel_outside"] = Carrier(
+CARRIERS["cancel_outside"] = CARRIERS["cancel_shared"] = Carrier(
     {
         request_model.CANCEL_CANCEL: pending.CARRIED_OUT,
         request_model.CANCEL_KEEP: pending.DECLINED,

@@ -887,6 +887,7 @@ class StartUpTests(unittest.TestCase):
                 f"planning sweep returns: {later}",
                 f"planning sweep commits: {later}",
                 f"planning sweep confirmations: {later}",
+                f"planning sweep consent: {later}",
                 "quota retention: no time left; it runs at the next start",
             ],
             report.failures,

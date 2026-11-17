@@ -885,7 +885,8 @@ TOOLS = [
         " transition's person_spoke refusal. Some writes are the owner's to make, by a"
         " setting only the server reads: such a write is not made, the answer names it in"
         " waits_for_owner with the question the owner answers, and the server makes it"
-        " then if it still applies. transition.following names the owner's answer a"
+        " then if it still applies. A cancel of work other sessions hold may wait for them"
+        " instead (waits_for_sessions). transition.following names the owner's answer a"
         " cancel follows. While the owner has not answered whether an item is to be done,"
         " only a cancel moves it out of triage (acceptance_question).",
         WRITES,
@@ -1411,7 +1412,8 @@ TOOLS.extend(
             " addressee ended or went quiet reads expired with session_gone. A question with a"
             " purpose (review, confirm, return) carries its answer out in the same write, and"
             " is never declined or changed. Only the owner answers it, in Valkama (owner_only),"
-            " and only the session that asked withdraws it (not_asker).",
+            " and only the session that asked withdraws it (not_asker). A consent request is"
+            " answered once, by the session it asks.",
             WRITES,
             {
                 "id": _STR,

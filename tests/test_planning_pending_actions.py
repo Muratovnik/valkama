@@ -447,17 +447,13 @@ class CarryOutTests(Harness):
         self.assertEqual("answer answer does not match its field", str(refused.exception))
         self.assertEqual(before, self.counts())
         self.assertEqual((None, False, False), self.ended(waiting))
+        # The review of findings asks at its own point, which nothing here carries out.
         task = self.filed("Nothing carries this point")
         other = self.ask(
             task,
-            pending.Proposal(
-                "transition",
-                {"state": "cancelled"},
-                f"cancel {task}",
-                seen=pending.cancel_seen(self.conn, self.row(task)),
-            ),
-            point="cancel_shared",
-            purpose="cancel",
+            pending.Proposal("group", {"items": [self.id(task)]}, f"accept {task}"),
+            point="finding",
+            purpose="triage",
         )
         before = self.counts()
         with self.assertRaises(model.PlanningError) as nothing:
@@ -466,7 +462,7 @@ class CarryOutTests(Harness):
         self.assertIsNone(self.action(other.action)["outcome"])
         self.assertTrue(
             str(nothing.exception).startswith(
-                "[purpose] this build carries out no answer on cancel_shared"
+                "[purpose] this build carries out no answer on finding"
             )
         )
         self.assertEqual("pending", self.request(other.question)["status"])

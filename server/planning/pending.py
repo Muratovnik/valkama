@@ -20,6 +20,10 @@ the action is what was asked of it.
   kind of write (`KINDS`), its `params`, what the asker `seen` of the item, the line
   the summary of decisions would carry once it is done (`what`), the asker's reason,
   and what it `proposed` as the question shows it.
+- **The round of consent** (`ask_sessions`). A cancel of work other live sessions do
+  asks each of them too, by a call of Valkama's own, for `SILENCE`; their answers stand
+  in the action's `consent` (`part`), and the cancel waits on them (`Round`) where the
+  owner left it to the agent.
 - **Ending** (`end`). An action ends once, with its outcome and the call that ended it;
   its questions still open end with it. A dropped one leaves `action_dropped` on its
   item, `<point>: <why>`. A close or a merge of the item drops every action open on
@@ -37,8 +41,9 @@ import json
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import timedelta
 
-from . import calls, closing, model, questions, request_model, subscriptions
+from . import calls, closing, leases, model, questions, request_model, subscriptions
 from . import store as planning_store
 
 #: The points an action waits at, and how one ends.
@@ -161,12 +166,30 @@ def ask(
     refused, and so is a call that is none (an action names the call that asked).
     """
 
+    action, fresh = hold(conn, work_item_id, point, proposal)
+    if not fresh:
+        return Waiting(action.id, point, owner_question(conn, action), action.what)
+    question = ask_owner(conn, action, purpose=purpose, prompt=prompt, fields=fields, author=author)
+    return Waiting(action.id, point, question, action.what)
+
+
+def hold(
+    conn: sqlite3.Connection, work_item_id: str, point: str, proposal: Proposal
+) -> tuple[Action, bool]:
+    """Keep `proposal` back on the item, asking nobody yet: the action, and whether this
+    call wrote it.
+
+    The same action of a point that already waits is that action, written by nobody
+    now; another one is refused, and so is a call that is none (an action names the
+    call that asked). The asker's session follows the item (`_follow`).
+    """
+
     model.enum_field(point, frozenset(POINTS), "point")
     model.enum_field(proposal.kind, frozenset(KINDS), "kind")
     params = json.loads(model.dumps(dict(proposal.params)))
     for found in open_on(conn, work_item_id, point):
         if found.kind == proposal.kind and found.params == params:
-            return Waiting(found.id, point, _owner_question(conn, found), found.what)
+            return found, False
         raise model.PlanningError(
             f"[participation] {_reference(conn, work_item_id)} already waits for the owner on"
             f" {point}: withdraw that question first"
@@ -188,18 +211,117 @@ def ask(
         "created_at) VALUES(?,?,?,?,?,?)",
         (identity, work_item_id, point, model.dumps(stored), asked, request_model.now()),
     )
-    question = questions.ask(
+    _follow(conn, work_item_id)
+    return get(conn, identity), True
+
+
+def ask_owner(
+    conn: sqlite3.Connection,
+    action: Action,
+    *,
+    purpose: str,
+    prompt: str,
+    fields: list[dict],
+    author: str | None,
+) -> str:
+    """Ask the owner the question an action waits on, by the call in progress; its id."""
+
+    return questions.ask(
         conn,
-        work_item_id,
+        action.work_item_id,
         kind="question",
         prompt=prompt,
         fields=fields,
         author=author,
         purpose=purpose,
-        action_id=identity,
+        action_id=action.id,
     )
-    _follow(conn, work_item_id)
-    return Waiting(identity, point, question, proposal.what)
+
+
+# -- the round of consent ---------------------------------------------------------
+
+#: How long the sessions asked about a cancel of their work have to answer: past it, the
+#: owner decides.
+SILENCE = timedelta(days=1)
+#: The call Valkama asks the sessions in, so that the asker is the server and not a
+#: session, which may not ask itself.
+ROUND_TOOL = "consent-round"
+CONSENT = "consent"
+
+
+@dataclass(frozen=True)
+class Round:
+    """A cancel that waits for the sessions whose work it ends: what its call answers."""
+
+    action: str
+    point: str
+    sessions: list[str]
+    until: str | None
+
+    def answer(self) -> dict[str, object]:
+        """The `waits_for_sessions` of the write's answer."""
+
+        return {
+            "action": self.action,
+            "point": self.point,
+            "sessions": self.sessions,
+            "until": self.until,
+        }
+
+
+def ask_sessions(
+    conn: sqlite3.Connection,
+    action: Action,
+    sessions: list[str],
+    *,
+    prompt: str,
+    author: str | None,
+) -> None:
+    """Ask each session whose work the action's cancel ends whether it agrees, by a call of
+    Valkama's own, each request open for `SILENCE` by the clock of the sweep."""
+
+    until = request_model.stamp(leases.utc_now() + SILENCE)
+    fields = request_model.fields(request_model.consent_fields())
+    with calls.bind(calls.valkama(), ROUND_TOOL):
+        for session in sessions:
+            questions.ask(
+                conn,
+                action.work_item_id,
+                kind="question",
+                prompt=prompt,
+                fields=fields,
+                author=author,
+                purpose=CONSENT,
+                expires_at=until,
+                addressee=session,
+                action_id=action.id,
+            )
+
+
+def consent_rows(conn: sqlite3.Connection, action: Action) -> list[sqlite3.Row]:
+    """The requests an action asked of sessions, oldest first, with each session's client."""
+
+    return conn.execute(
+        "SELECT r.*, s.client FROM work_item_requests r LEFT JOIN sessions s ON s.id = r.addressee"
+        " WHERE r.work_item_id = ? AND r.action_id = ? AND r.addressee IS NOT NULL"
+        # The order they were asked in: their ids are random, and one write asks them all.
+        " ORDER BY r.created_at, r.rowid",
+        (action.work_item_id, action.id),
+    ).fetchall()
+
+
+def session_label(row: sqlite3.Row) -> str:
+    """How a request asked of a session names that session."""
+
+    return calls.holder_label(str(row["client"] or "agent"), str(row["addressee"]))
+
+
+def round_of(conn: sqlite3.Connection, action: Action) -> Round:
+    """The round an action waits on: the sessions it asked and until when."""
+
+    rows = consent_rows(conn, action)
+    until = rows[0]["expires_at"] if rows else None
+    return Round(action.id, action.point, [session_label(row) for row in rows], until)
 
 
 def _follow(conn: sqlite3.Connection, work_item_id: str) -> None:
@@ -455,27 +577,21 @@ def _consent(conn: sqlite3.Connection, action: Action) -> list[dict]:
     """What each session the action asked answered: its answer, its reason and when."""
 
     found = []
-    for row in conn.execute(
-        "SELECT r.addressee, r.status, r.answers_json, r.resolved_at, s.client"
-        " FROM work_item_requests r LEFT JOIN sessions s ON s.id = r.addressee"
-        " WHERE r.work_item_id = ? AND r.action_id = ? AND r.addressee IS NOT NULL"
-        " ORDER BY r.created_at, r.request_id",
-        (action.work_item_id, action.id),
-    ):
+    for row in consent_rows(conn, action):
         answers = json.loads(row["answers_json"]) if row["answers_json"] else {}
         answered = row["status"] == "answered"
         found.append(
             {
-                "session": calls.holder_label(str(row["client"] or "agent"), str(row["addressee"])),
+                "session": session_label(row),
                 "answer": answers.get(request_model.REVIEW_ANSWER) if answered else None,
-                "reason": answers.get("reason") if answered else None,
+                "reason": answers.get(request_model.CONSENT_REASON) if answered else None,
                 "at": row["resolved_at"] if answered else None,
             }
         )
     return found
 
 
-def _owner_question(conn: sqlite3.Connection, action: Action) -> str:
+def owner_question(conn: sqlite3.Connection, action: Action) -> str:
     """The question to the owner an action asked."""
 
     row = conn.execute(

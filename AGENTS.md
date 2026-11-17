@@ -39,6 +39,9 @@ is complete on its own.
   `move_out` and never under an unaccepted goal (`[parent]`), work put off
   only by `defer` and brought back by itself (`deferred`, `returned`), work
   the owner is asked whether to do or take up again (`acceptance_question`),
+  a cancel of work outside the agent's own or that other sessions do, which
+  waits for the owner or for those sessions (`waits_for_owner`,
+  `waits_for_sessions`, `consent`, `[consent]`),
   the step's text alone as the detail of an expired step's
   `checklist_released`, and the retired words
   refused on input — for spaces and projects — the registry formats 2 and 4, a
