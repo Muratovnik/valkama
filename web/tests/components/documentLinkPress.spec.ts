@@ -350,7 +350,13 @@ describe('a path in an option of a question', () => {
       render: () => h(RequestCard, { entry: question(false), draft: EMPTY_DRAFT }),
     })
     await flushPromises()
-    for (const label of wrapper.findAll('label'))
+    // One label per option, its path among the label's words and no control inside it.
+    const labels = wrapper.findAll('label')
+    expect(labels.map((label) => label.text())).toEqual([
+      'KeepThe plan is docs/a.md',
+      'MergeSee the merge plan',
+    ])
+    for (const label of labels)
       expect(label.find('button, a, [role="button"]').exists(), label.text()).toBe(false)
     const toggles = wrapper.findAll('button.request-option-toggle')
     expect(toggles).toHaveLength(2)

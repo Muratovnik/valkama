@@ -51,6 +51,16 @@ function card(props: Record<string, unknown> & { node: PlacedNode }) {
   })
 }
 
+/** A tone read as present, so two missing tones never pass as one. */
+function toneOf(wrapper: ReturnType<typeof card>, selector: string) {
+  const tone = wrapper.get(selector).attributes('data-tone')
+  expect(tone, selector).toBeTruthy()
+  return tone
+}
+const chainTone = (wrapper: ReturnType<typeof card>) => toneOf(wrapper, '.flow-node-chain')
+const dotTone = (wrapper: ReturnType<typeof card>) =>
+  toneOf(wrapper, '.flow-node-state .semantic-state')
+
 describe('a graph node', () => {
   it('says workable quietly, in place of its state, and in no heavier ink', () => {
     const wrapper = card({ node: node('backlog', { ready: true }), ready: true })
@@ -110,9 +120,7 @@ describe('a graph node', () => {
       // Not workable, so the state itself is what the node says.
       const item = node(state, { ready: false })
       const wrapper = card({ node: item, chainGroup: chainGroup(item) })
-      expect(wrapper.get('.flow-node-chain').attributes('data-tone'), state).toBe(
-        wrapper.get('.flow-node-state .semantic-state').attributes('data-tone'),
-      )
+      expect(chainTone(wrapper), state).toBe(dotTone(wrapper))
     }
     const review = node('dev', {
       state: { ...boardState('dev'), key: 'review', name: 'Review', category: 'review' },
@@ -122,9 +130,7 @@ describe('a graph node', () => {
     })
     for (const item of [review, blocked]) {
       const wrapper = card({ node: item, chainGroup: chainGroup(item) })
-      expect(wrapper.get('.flow-node-chain').attributes('data-tone')).toBe(
-        wrapper.get('.flow-node-state .semantic-state').attributes('data-tone'),
-      )
+      expect(chainTone(wrapper), item.state.key).toBe(dotTone(wrapper))
     }
   })
 })
