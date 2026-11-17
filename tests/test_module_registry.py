@@ -190,12 +190,12 @@ class ModuleRegistryTests(unittest.TestCase):
         )
 
     def test_every_surface_answers_the_one_list_this_build_declares(self) -> None:
-        """The four modules, enabled and fixed, the same from every door."""
+        """The five modules, enabled and fixed, the same from every door."""
 
         payload = platform_modules.modules_payload()
         self.assertEqual("valkama-modules", payload["interface_version"])
         self.assertEqual(
-            ["analytics", "memory", "planning", "settings"],
+            ["analytics", "decisions", "memory", "planning", "settings"],
             [item["manifest"]["module_id"] for item in payload["modules"]],
         )
         for item in payload["modules"]:
