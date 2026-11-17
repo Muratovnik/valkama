@@ -11,11 +11,12 @@
  * forecast's line leads with the hatch's key, «Forecast ·», with a swatch where a tail is drawn.
  * Each step line past its readings points at «now» and, where a forecast has a share to draw to,
  * runs its corridor to the reset and points at its end: the corridor inside the plot, each
- * place's hint at its mark and clear of the line's head, nothing moving while pointed at. A window
- * past its reset draws neither. Each run attaches what it measured.
+ * place's hint at its mark and clear of the line's head, nothing moving while pointed at; the
+ * latest reading keeps its own dot, however close to «now» it was read. A window past its reset
+ * draws neither. Each run attaches what it measured.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { messages } from '@/shared/i18n/index.ts'
 
@@ -239,6 +240,36 @@ async function pointAtPlaces(page: Page, lines: LineAhead[]) {
   return strays
 }
 
+/** Whether a mark is painted as pointed at or focused. */
+const shown = (mark: Locator) => mark.evaluate((node) => node.classList.contains('step-shown'))
+
+/**
+ * Points at the latest reading's dot on each line «now» follows, however close to now it was
+ * read, and says where the pointer went instead of it: there the reading paints its own dot and
+ * says its own hint, and «now» stays unpainted.
+ */
+async function pointAtLatest(page: Page, lines: LineAhead[]) {
+  const strays: string[] = []
+  for (const [at, line] of lines.entries()) {
+    if (!line.places.some(({ kind }) => kind === 'now')) continue
+    const figure = page.locator('.quota-window .step-line').nth(at)
+    await figure.evaluate((node) => node.scrollIntoView({ block: 'center' }))
+    const dot = figure.locator('.step-reach').last().locator('.step-mark')
+    const box = await dot.boundingBox()
+    if (!box) {
+      strays.push(`line ${at}: no latest reading`)
+      continue
+    }
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await expect(page.getByRole('tooltip')).toBeVisible()
+    if (!(await shown(dot))) strays.push(`line ${at}: the latest reading's dot unpainted`)
+    if (await shown(figure.locator('[data-target="now"] .step-target-mark')))
+      strays.push(`line ${at}: «now» took the latest reading's dot`)
+    await page.mouse.move(1, 1)
+  }
+  return strays
+}
+
 /** A window's state at the end of its lead: «fresh», or «silent» and for how long. */
 const stateWords = (lang: 'en' | 'ru') => {
   const { states } = messages[lang].analytics.quota
@@ -307,6 +338,7 @@ for (const lang of ['en', 'ru'] as const)
         for (const [index, line] of lines.entries())
           expect(cornersOutside(line), `line ${index}: corners outside its plot`).toEqual([])
         expect(await pointAtPlaces(page, lines), `${section}: places pointed at`).toEqual([])
+        expect(await pointAtLatest(page, lines), `${section}: latest readings`).toEqual([])
       }
       await record(info, `forecast ${width} ${lang}`, measured)
     })
@@ -327,6 +359,9 @@ test('a window past its reset draws no tail, no corridor and no place past its r
     ['a1b2c3d4 five_hour', [], false, false],
   ])
   expect(lines.map(({ places }) => places)).toEqual([[], [], []])
+  // No forecast is said either, the reset in its place.
+  expect(windows.map(({ forecast }) => forecast)).toEqual(['', '', ''])
+  await expect(page.locator('.quota-window [data-fact="reset"]')).toHaveCount(3)
   // The line is the whole window alone, with nothing to switch to.
   await expect(page.locator('.quota-window .step-views')).toHaveCount(0)
 })
