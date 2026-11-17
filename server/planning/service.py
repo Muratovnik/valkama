@@ -2436,7 +2436,7 @@ def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
 
 
 @contextlib.contextmanager
-def marking(conn: sqlite3.Connection) -> Iterator[list[str]]:
+def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> Iterator[list[str]]:
     """The container marks of one write (`closing.frame`), without the holder rule's wait.
 
     Every write route opens it, and so does every write here that changes the work
@@ -2444,10 +2444,18 @@ def marking(conn: sqlite3.Connection) -> Iterator[list[str]]:
     the end of the outermost the marked containers enter or leave the wait for their
     confirmation, the words left on one that stopped waiting go (`waiting.drop`), and
     the list this yields names the references of those that came to wait.
+
+    `person` is where the history stood before a person's write, which the route
+    passes to the frame it opens: what that write told nobody is left for the next
+    session (`waiting.after_person`) after the wait is settled, so what entering it
+    recorded counts, and before the words on a container that stopped waiting go, so
+    a person's act that ended the wait leaves no words behind it.
     """
 
     with closing.frame(conn) as settled:
         yield settled.entered
+    if person is not None:
+        waiting.after_person(conn, person)
     for identity in settled.left:
         waiting.drop(conn, identity)
 

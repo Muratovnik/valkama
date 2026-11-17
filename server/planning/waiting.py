@@ -176,7 +176,9 @@ def after_person(conn: sqlite3.Connection, before: Place) -> int:
     such as a drag in its column, leaves nothing. Nor does filing a goal or a stage,
     though it opens one accepted: an item a person filed says what it says, in the
     description an agent reads when it takes work there. How many rows stand open
-    for it is the answer.
+    for it is the answer. The write's marks run it (`service.marking`) after the wait
+    is settled and before a container that stopped awaiting confirmation drops its
+    words (`drop`), so an act that ended the wait leaves none on it.
     """
 
     call = calls.written(conn)

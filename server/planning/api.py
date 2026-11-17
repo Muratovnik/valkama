@@ -568,21 +568,21 @@ def handle_post(
     if not isinstance(payload, Mapping):
         raise PlanningHttpError(400, "invalid_request", "request body must be a JSON object")
     # A person's act on a goal or stage that nobody hears waits for the next
-    # session, in the same transaction as the act (`waiting.after_person`).
+    # session, in the same transaction as the act (`waiting.after_person`), which
+    # the end of the write's marks leaves before a container that stopped awaiting
+    # its confirmation drops its words.
     before = waiting.place(conn) if calls.by_person() else None
     # One write, however many of the service's writes it takes: the goals and stages it
     # changed the work under come to await confirmation, or stop, once, at its end.
-    with service.marking(conn) as entered:
+    with service.marking(conn, person=before) as entered:
         answer = writer(conn, payload)
+        # Every write call has its row, including one that logged nothing — an edit,
+        # a claim that found itself already held, a take-next with nothing to take.
+        # Inside a bound call this finds the row a write already inserted; outside
+        # one it does nothing. The person's words are left by that row.
+        calls.call_id(conn, calls.acted_on(answer))
     if entered:
         answer["awaiting_confirmation"] = entered
-    # Every write call has its row, including one that logged nothing — an edit,
-    # a claim that found itself already held, a take-next with nothing to take.
-    # Inside a bound call this finds the row a write already inserted; outside
-    # one it does nothing.
-    calls.call_id(conn, calls.acted_on(answer))
-    if before is not None:
-        waiting.after_person(conn, before)
     return 200, answer
 
 
