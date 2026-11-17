@@ -33,6 +33,7 @@ from server.planning import service as planning_service
 from server.planning import store as planning_store
 from server.planning import words
 from server.planning import work_model_migration as migration
+from server.projects import registry_owner
 from server.store_identity.refs import planning_space_entity
 from tests import registry_fixtures, schema9, schema17
 
@@ -1450,8 +1451,11 @@ class NeverPlannedStoreTests(StoreCase):
         self.addCleanup(self.directory.cleanup)
         self.path = os.path.join(self.directory.name, "valkama.sqlite3")
         schema17.build_2_9(self.path)
-        registry(self, self.directory.name, bound={})
+        self.set_registry()
         self.file = item_projects_file(self.path, self.directory.name)
+
+    def set_registry(self) -> None:
+        registry(self, self.directory.name, bound={})
 
     def assert_never_planned(self) -> None:
         self.assertEqual(
@@ -1509,6 +1513,24 @@ class NeverPlannedStoreTests(StoreCase):
                 "container",
             },
             {str(row[0]) for row in self.read("SELECT category FROM workflow_states")},
+        )
+
+
+class NoRegistryStoreTests(NeverPlannedStoreTests):
+    """The same store on a machine that never registered a project: no inventory and no
+    projection. `projects upgrade` writes the empty registry, and the migration reads it
+    as it reads one of a store that never had a space."""
+
+    def set_registry(self) -> None:
+        folder = os.path.join(self.directory.name, "localappdata")
+        os.makedirs(os.path.join(folder, "Valkama"))
+        patcher = mock.patch.dict(os.environ, {"LOCALAPPDATA": folder})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.assertTrue(
+            registry_owner.upgrade(
+                registry_owner.inventory_path(), registry_owner.projection_path()
+            )
         )
 
 
