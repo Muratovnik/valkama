@@ -2129,6 +2129,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "questions",
                 "summary",
                 "transition",
+                "move_out",
                 "expected_revision",
                 "author",
                 "verbose",

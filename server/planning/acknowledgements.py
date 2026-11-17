@@ -74,12 +74,20 @@ def _moved(item: dict) -> dict:
     whose claim a move into a terminal state ended; `warnings` what the move's
     guards had to say, or why an item that should have moved did not;
     `awaiting_confirmation` the goals and stages the write left with nothing open
-    under them, which now wait for their confirmation.
+    under them, which now wait for their confirmation; `moved_out` the goal or stage
+    a move out took the item out of, with the reason.
     """
 
     return {
         name: item[name]
-        for name in ("started", "requeued", "released", "warnings", "awaiting_confirmation")
+        for name in (
+            "started",
+            "requeued",
+            "released",
+            "warnings",
+            "awaiting_confirmation",
+            "moved_out",
+        )
         if item.get(name)
     }
 

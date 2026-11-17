@@ -48,11 +48,17 @@ class BatchCase(ThreadTestCase):
     def apply(self, **groups: object) -> dict:
         return self.agent(BATCH, id=self.ref, **groups)
 
-    def goal(self, title: str) -> str:
+    def goal(self, title: str, *, accepted: bool = False) -> str:
         """A goal: what an item stands under, a task holding no children."""
 
         return str(
-            service.create_work_item(self.conn, space="TALK", title=title, kind="goal")["reference"]
+            service.create_work_item(
+                self.conn,
+                space="TALK",
+                title=title,
+                kind="goal",
+                acceptance=model.NAMED_BASIS if accepted else None,
+            )["reference"]
         )
 
     def refused(self, name: str, **arguments: object) -> dict:
@@ -152,14 +158,30 @@ class UpdateGroupTests(BatchCase):
             self.assertEqual(alone[name], row[name], name)
         self.assertEqual((calls.CONFIRMED, SESSION), (row["identity_state"], row["session_id"]))
 
-    def test_an_edit_names_only_what_was_sent_and_a_cleared_parent_is_sent(self) -> None:
+    def test_an_edit_names_only_what_was_sent_and_a_new_parent_is_sent(self) -> None:
+        parent = self.goal("An epic")
+        other = self.goal("Another epic")
+        service.update_work_item(self.conn, self.ref, parent=parent)
+        self.conn.commit()
+        answer = self.apply(update={"title": "Renamed", "parent": other, "kind": None})
+        self.assertEqual(["title", "parent"], answer["applied"]["update"])
+        record = self.record()
+        self.assertEqual(
+            ("Renamed", self.record(other)["work_item_id"]), (record["title"], record["parent_id"])
+        )
+
+    def test_an_edit_that_clears_the_parent_is_refused_naming_move_out(self) -> None:
         parent = self.goal("An epic")
         service.update_work_item(self.conn, self.ref, parent=parent)
         self.conn.commit()
-        answer = self.apply(update={"title": "Renamed", "parent": "", "kind": None})
-        self.assertEqual(["title", "parent"], answer["applied"]["update"])
-        record = self.record()
-        self.assertEqual(("Renamed", None), (record["title"], record["parent_id"]))
+        before = self.untouched()
+        error = self.refused_batch(update={"title": "Renamed", "parent": ""})
+        self.assertEqual({"group": "update", "index": 0}, error["step"])
+        self.assertEqual("invalid_request", error["code"])
+        self.assertIn("[parent]", error["message"])
+        self.assertIn("move_out", error["message"])
+        self.assertEqual(before, self.untouched())
+        self.assertEqual(self.record(parent)["work_item_id"], self.record()["parent_id"])
 
     def test_an_edit_of_nothing_names_nothing_and_writes_nothing(self) -> None:
         before = self.record()["revision"]
@@ -541,7 +563,8 @@ class AskingAndClosingTests(BatchCase):
 
 class EditingAndClosingTests(BatchCase):
     def test_a_new_parent_and_kind_land_with_the_close_that_follows_them(self) -> None:
-        parent = self.goal("An epic")
+        # The claim accepts the item, and accepted work moves only under accepted goals.
+        parent = self.goal("An epic", accepted=True)
         self.conn.commit()
         answer = self.apply(
             claim=True,
@@ -737,6 +760,7 @@ class OrderTests(BatchCase):
                 "questions",
                 "summary",
                 "transition",
+                "move_out",
             ),
             tuple(group for group, _fields in api.APPLY_GROUPS),
         )
@@ -943,7 +967,7 @@ class PublishedSchemaTests(unittest.TestCase):
         tool = next(entry for entry in tools.TOOLS if entry["name"] == BATCH)
         self.assertIn(
             "claim, subscribe, update, checklist, checklist_ticks, refs, links, comment or"
-            " comments, resolutions, questions, summary, transition",
+            " comments, resolutions, questions, summary, then transition or move_out",
             tool["description"],
         )
 

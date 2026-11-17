@@ -442,7 +442,7 @@ class ThroughMcpTests(WriteCase):
         # With nothing open under it, the stage enters the wait in a call of Valkama's own.
         self.assertEqual(
             [
-                ("child_left", self.ref("a")),
+                ("child_left", f"{self.ref('a')}: moved under {self.ref('G')}"),
                 (
                     "awaiting_confirmation",
                     f"moved out {self.ref('a')}; no steps: check it against its description",

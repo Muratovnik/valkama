@@ -8,7 +8,7 @@ from unittest import mock
 
 from server import mcp_surface, store
 from server.planning import api as planning_api
-from server.planning import calls, model, service, views
+from server.planning import calls, model, service, split, views
 from server.planning import store as planning_store
 from tests.planning_fixtures import standing_in
 
@@ -738,7 +738,7 @@ class PlanningDomainTests(unittest.TestCase):
             service.update_work_item(self.conn, second["reference"], parent=first["reference"])
         self.assertIsNone(service.get_work_item(self.conn, second["reference"])["parent_id"])
 
-    def test_a_reparent_and_a_detach_are_allowed(self) -> None:
+    def test_a_reparent_is_an_edit_and_a_detach_is_a_move_out(self) -> None:
         first_epic = self.item("First epic", kind="goal")
         second_epic = self.item("Second epic", kind="goal")
         child = self.item("The child", parent=first_epic["reference"])
@@ -746,7 +746,14 @@ class PlanningDomainTests(unittest.TestCase):
             self.conn, child["reference"], parent=second_epic["reference"]
         )
         self.assertEqual(second_epic["work_item_id"], moved["parent_id"])
-        detached = service.update_work_item(self.conn, child["reference"], parent="")
+        # Clearing the parent by an edit would skip the reason a move out records.
+        with self.assertRaisesRegex(model.PlanningError, r"^\[parent\] .*move_out"):
+            service.update_work_item(self.conn, child["reference"], parent="")
+        self.assertEqual(
+            second_epic["work_item_id"],
+            service.get_work_item(self.conn, child["reference"])["parent_id"],
+        )
+        detached = split.move_out(self.conn, child["reference"], reason="It stands alone")
         self.assertIsNone(detached["parent_id"])
 
     def test_an_epic_with_children_is_not_deleted_by_accident(self) -> None:
