@@ -1169,18 +1169,39 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   bar where steady use from the window's start would stand now, and the share and the state in
   words beside it where no line over it says them; and `StepLine`, the window's readings as
   steps from its start, flat until the next reading and never a slope between two, with steady
-  use as a thin diagonal in the text ink. A reading draws no dot at rest, the line alone, and no
+  use as a thin diagonal in the text ink. The share spent is a reading, final however old, so
+  its fill is solid whether the window is fresh or silent, and a silent one says how long in
+  words. What the window's forecast says it reaches by the reset is not final, so both draw it
+  in the one hatch of a forecast (`forecastHatch.css`): the series hue in 135° stripes of the
+  whole hue and two fifths of it, a mask that adds no colour. On the bar it is a tail inside the
+  track from the share spent to the forecast's share at the reset, 2px of ground past the fill: a
+  week's range as two parts parted by the same 2px where its slower pace ends, since both paces
+  spend at least that much and only the faster spends the rest; five hours that run out to the
+  track's end; from the track's start at 0 %; and no tail where the forecast names no share to
+  draw to — five hours that last, a window too new for a forecast, one spent or read past 100 %,
+  whose fill stops at the track's end. A reading draws no dot at rest, the line alone, and no
   end marker either: the line holds to now past its last reading, so a dot there stood hours
   before now on a silent window. The reading pointed at or focused draws its dot and says its
   moment, its share and its source in its hint, as every mark does; the one a key stands on
-  keeps its dot whatever the pointer does, and Tab lands on the latest. A step line opens on «To
-  now and the forecast», from the window's start to now and the forecast past it, with a switch
-  to the whole window up to its reset: drawn to the reset, a running week left its readings the
-  first third of the plot. A window no
-  longer fresh is hatched, a 0 % has no fill, and a window with no figure draws
-  the track alone; the fill stands apart from the ground and the track by lightness, so both read
-  in grayscale and under a forced palette in its inks. Their table twins are `WindowBarTable`
-  and `StepLineTable`.
+  keeps its dot whatever the pointer does, and Tab lands on the latest. Past the readings the
+  line has two places of its own, each with its hint and painted only while pointed at or
+  focused, a ring rather than a reading's dot: «now» where the line ends, its share, when the
+  latest reading was and how long the window has been silent, which takes the pointer from the
+  line's end on and leaves the latest reading its own dot; and, while the window stands and its
+  forecast has a share to draw to, the end of the forecast's corridor at the reset, its share
+  there, what that leaves out and when the reset is. The corridor runs from now to the reset in
+  the readings' hue under the same hatch, a band between the slower and the faster pace for a
+  week and a ribbon to 100 % at the run-out and flat on for five hours, and the legend names it
+  «Forecast». The arrows walk the readings, then «now», then the forecast. A step line opens on
+  «To now and the forecast», from the window's start to now and the forecast past it, with a
+  switch to the whole window up to its reset: drawn to the reset, a running week left its
+  readings the first third of the plot. Where the span ends before the reset the corridor runs
+  to the plot's edge, and the forecast's hint says the reset stands past it. A window past its
+  reset draws neither the corridor nor the places. A 0 % has no fill, and a window with no
+  figure draws the track alone; the fill stands apart from the ground and the track by
+  lightness, so both read in grayscale and under a forced palette in its inks, where the hatch
+  and the rings take its ink too. Their table twins are `WindowBarTable` and `StepLineTable`,
+  each holding the forecast as well.
   A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a
   day — and its name beside it.
   A table that is the subject of its panel, as a dimension's breakdown, is held to about the
@@ -2596,30 +2617,37 @@ filter changes, and read it again on the live interval whatever the period; that
 the filters do not reach it, and that its shares do not add up, the section's «ⓘ» says once.
 Each tile names the tightest window of its kind across accounts — the most spent of those whose
 reset is still ahead, a fresh one before a silent one at the same share — by its account's
-name, with its share, its state in words beside the section's name and a thin `WindowBar`. A
-tile with no window to name says why: no source read the work, the windows reset since they
-were read, or no reading. The panel has a group per account on a surface of its own, by the
-name its owner gave it or the start of its id, the whole id in its hint, its windows side by
-side where the width allows. Every window, the five hours, the week and a model's week, has the
-same three parts 12px apart: what stands now, the `StepLine` of its readings and what used it.
+name, with its share, its state in words beside the section's name and a thin `WindowBar` with
+its forecast's tail, which the bar's words and hint name «Forecast ·», since a tile has no room
+for a key. A tile with no window to name says why: no source read the work, the windows reset
+since they were read, or no reading. The panel has a group per account on a surface of its
+own, by the name its owner gave it or the start of its id, the whole id in its hint, its
+windows side by side where the width allows. Every window, the five hours, the week and a
+model's week, has the same three parts 12px apart: what stands now, the `StepLine` of its
+readings and what used it.
 What stands now leads with one line, the share as the window's figure and its state beside it,
-«41% used · fresh», over its bar; then its forecast in the text's ink — the five hours a point,
-lasting to the reset or running out at a time; a week a range, said as a range and never past
-100 %, which a quota cannot pass: a low end there says the week runs out before its reset and
-about when its slower pace spends it, a high end there that it may, and ends said alike one
-value — and when it resets in absolute and relative time, quieter, each line 4px from the next.
-Where steady use would stand is drawn — the bar's tick, the line's diagonal — and said in their
-hints, the bar's with how old the latest reading is and who read it, which its words for a
-screen reader say too. As a table, where no hint shows, the window says its latest reading in
-words under its reset, and that it has no pace where it has none. A window's step line is on no
-period of the page, so its scale is its own: it opens on «To now and the forecast» with a
-switch to the whole window (Charts), and a frame dragged along it narrows that line alone. An
-account no source read says so and draws no window; a silent window is hatched and says since
-when it has not changed in its bar's hint; a fresh 0 % draws an empty track and says «0% used ·
-fresh». A window of money past a limit is a line of its name and its state, its age and its
-source in the line's hint as a window of a share keeps them in its bar's and in words as a
-table, with no figure. No share is added to another, of two windows or two accounts, and no
-dollar stands beside one.
+«41% used · fresh», «13% used · silent 5 h», over its bar, its share solid and its forecast a
+hatched tail; then its forecast in the text's ink after the key of that hatch, a swatch where a
+tail is drawn and «Forecast ·» — the five hours a point, lasting to the reset or running out at
+a time; a week a range, said as a range and never past 100 %, which a quota cannot pass: a low
+end there says the week runs out before its reset and about when its slower pace spends it, a
+high end there that it may, and ends said alike one value — and when it resets in absolute and
+relative time, quieter, each line 4px from the next. The bar's tail, the tile's and the step
+line's corridor are drawn from one mapping of the forecast (`forecastCourses`), so none of them
+and none of their words disagree. Where steady use would stand is drawn — the bar's tick, the
+line's diagonal — and said in their hints, the bar's with how old the latest reading is and who
+read it, which its words for a screen reader say too, with the forecast. As a table, where no
+hint shows, the account's table holds each window's forecast, the readings' table ends with
+it, and the window says its latest reading in words under its reset, and that it has no pace
+where it has none. A window's step line is on no period of the page, so its scale is its own:
+it opens on «To now and the forecast» with a switch to the whole window (Charts), points at
+«now» and at its forecast by the reset past its readings, and a frame dragged along it narrows
+that line alone. An account no source read says so and draws no window; a silent window is as
+solid as a fresh one, says how long it has been silent and, in its bar's hint, since when it
+has not changed; a fresh 0 % draws an empty track and says «0% used · fresh». A window of money
+past a limit is a line of its name and its state, its age and its source in the line's hint as
+a window of a share keeps them in its bar's and in words as a table, with no figure. No share
+is added to another, of two windows or two accounts, and no dollar stands beside one.
 
 Under each window that names its start stands «Where the window went»: the work Valkama
 recorded on that account from the window's start to the answer's moment, held to the last five
