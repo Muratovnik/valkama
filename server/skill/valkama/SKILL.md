@@ -329,38 +329,9 @@ Whenever you recommend an option or a verdict, give `why` beside it: markdown on
 why that one, which the owner reads by pointing at the recommendation. It is
 taken only beside `recommended` (true on an option).
 
-**A review of many points** is one `verdict` field per proposal: the owner
-accepts it, puts it off or rejects it, and may comment on it or give an own
-variant. The steps or the ways of a point are a field `under` it,
-`{"field": "p4", "option": "accept"}`, which stands right after it and is shown
-and answered only while the point is accepted; a `group` per area replaces a
-field per executor. Everything the owner chooses from is an option: never a step
-in a label or a description, never `p4a` in a field shared by several points.
-Put `recommended`, with its `why`, wherever you have one: a button drafts from it.
-Two points, one with its steps and one with its way:
-
-```json
-[{"id": "p4", "label": "P4 Checks: false alarms", "type": "verdict", "required": false,
-  "options": [], "group": "Checks", "recommended": "accept",
-  "why": "All fourteen false alarms came from one rule."},
- {"id": "p4-steps", "label": "Steps", "type": "multi_choice", "required": true,
-  "under": {"field": "p4", "option": "accept"},
-  "options": [{"id": "p4a", "label": "Mark the refusals, then narrow the rule", "recommended": true,
-               "why": "The marks show which cases the narrower rule must keep."},
-              {"id": "p4b", "label": "Skip the check on an intermediate stop"}]},
- {"id": "p13", "label": "P13 A 400-line limit for .vue files", "type": "verdict",
-  "required": false, "options": [], "group": "Web code", "recommended": "accept",
-  "why": "Six files passed 400 lines this month."},
- {"id": "p13-way", "label": "How", "type": "choice", "required": true,
-  "under": {"field": "p13", "option": "accept"},
-  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true,
-               "why": "The rule already exists; no file moves."},
-              {"id": "split_first", "label": "Split the files first"}]}]
-```
-
-A field under another names an earlier `verdict`, `choice` or `multi_choice`
-field that is under nothing itself, and an option it has (`accept`, `later` or
-`reject` under a verdict). A refusal names the field and how to put it right.
+**A review of many points** is one `verdict` field per proposal, the steps or ways
+of a point a field `under` it and a `group` per area; how to write one, with an
+example, is in [the tool reference](references/tools.md#a-review-of-many-points).
 
 The owner answers it in Valkama. In a field with options the answer is an option
 or an own variant (`own`): in a `choice` or `boolean` instead of an option, in a
