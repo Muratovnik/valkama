@@ -103,15 +103,24 @@ const shown = (owner: Element, [rows, scroll]: [string, boolean]) => {
   return box.left >= -0.5 && box.right <= document.documentElement.clientWidth + 0.5
 }
 
-/** What a printed name sits in: the row the surface lays it on. */
+/**
+ * What a printed name sits in: the row the surface lays it on. A name on none of them is a
+ * fault of its own, since a row read from the name's ancestors would be any box.
+ */
 const ROWS = [
   '.column-head',
+  '.lanes-state',
   '.lane-head',
+  'tr',
   '[role="row"]',
   '.card-row',
   '.relations li',
+  '.branch-key-entry',
+  '.chain-group-title',
+  '.chain-done-toggle',
   '.chain-row',
-  '.flow-node',
+  '.graph-legend',
+  '.flow-node-line',
   '.graph-frame-line',
   '[role="option"]',
   '.nav-row',
@@ -153,7 +162,8 @@ const cutFaults = (owner: Element) => {
  * the page.
  */
 const meetFaults = (owner: Element, rows: string) => {
-  const row = owner.closest(rows) ?? owner.parentElement?.parentElement ?? owner
+  const row = owner.closest(rows)
+  if (!row) return ['stands on no row this check reads']
   const range = document.createRange()
   const drawn = (element: Element, rects: Iterable<DOMRect>) => {
     const clips = getComputedStyle(element).overflowX !== 'visible'
@@ -212,7 +222,8 @@ const meetFaults = (owner: Element, rows: string) => {
 
 /** The state's dot and the glyphs on the name's row, against the size each is drawn at. In the page. */
 const signFaults = (owner: Element, rows: string) => {
-  const row = (owner.closest(rows) ?? owner.parentElement ?? owner) as HTMLElement
+  const row = owner.closest(rows)
+  if (!row) return []
   // The graph's camera scales what it draws; nothing else here is scaled.
   const pane = row.closest('.vue-flow__transformationpane')
   const scale = pane ? new DOMMatrix(getComputedStyle(pane).transform).a : 1
@@ -354,6 +365,9 @@ async function readSurface(page: Page, surface: Surface, naming: Naming, locale:
     const facts = await check(drawer.locator('.card-facts'), naming, locale, 'card')
     await showTab(page, locale, 'relations')
     const links = await check(drawer.locator('.relations'), naming, locale, 'relations')
+    // The card prints the state in its facts and the link's in Relations: each has to be read.
+    expect(facts.printed, 'state names printed in the facts').toBeGreaterThan(0)
+    expect(links.printed, 'state names printed in Relations').toBeGreaterThan(0)
     return { found: [...facts.found, ...links.found], printed: facts.printed + links.printed }
   }
   if (surface === 'chain') {

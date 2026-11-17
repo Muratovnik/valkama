@@ -127,6 +127,7 @@ for (const locale of LOCALES)
       // A block of one question offers the field's comment alone; the head keeps the room of
       // the icon that opened the change, so that the time beside it does not move.
       await expect(card.locator('.entry-head .request-change.is-away')).toHaveCount(1)
+      await expect(card.locator('.request-note-toggle').first()).toBeVisible()
       await expect(row.locator('.request-note-toggle')).toHaveCount(0)
       const { members } = await expectRow(row, `${at} changing`)
       const centres = members.map((member) => centre(member))

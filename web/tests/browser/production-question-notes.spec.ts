@@ -76,7 +76,9 @@ for (const [width, target, finger] of [
     const question = await box(onQuestion)
     const head = await box(card.locator('.request-meta'))
     expect(Math.abs(middle(question) - middle(head))).toBeLessThanOrEqual(1)
+    await expect(onQuestion).toHaveClass(/request-note-toggle/u)
     await expect(card.locator('.request-foot .request-note-toggle')).toHaveCount(0)
+    // Closed, the block's comment has no field; the next test opens it there.
     await expect(card.locator('.request-fields > .request-note')).toHaveCount(0)
   })
 
@@ -91,6 +93,7 @@ for (const [width, target, finger] of [
     await onQuestion.click()
     const text = named(card, 'textbox', ON_QUESTION)
     await expect(text).toBeFocused()
+    await expect(card.locator('.request-fields > .request-note')).toHaveCount(1)
     await settledBox(card)
     const after = await box(send(card))
     expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1)

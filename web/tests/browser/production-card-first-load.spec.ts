@@ -83,7 +83,8 @@ test('a card loaded from its address reads each of its parts once', async ({ pag
   // The server's frame comes once it has read the space, after the card has asked.
   await stream.deliver(firstFrame())
   await settle(page, reads)
-  // The frame has been taken: the space is live, and a live connection says nothing.
+  // The frame has been taken: the space is live, and a live connection says nothing. A dropped
+  // one shows `.nav-refresh`: `production-connection.spec.ts`.
   await expect(page.locator('.nav-refresh')).toHaveCount(0)
   for (const path of [
     '/api/modules/planning/work-item',

@@ -74,6 +74,7 @@ for (const width of [1280, 390] as const) {
       exact: true,
     })
     await expect(press).toHaveAttribute('data-tooltip', 'Comment on the block of questions')
+    await expect(press).toHaveClass(/request-note-toggle/u)
     await expect(dialog.locator('.request-foot .request-note-toggle')).toHaveCount(0)
     // The number in the head is the way to the task; no button says it again.
     await expect(head.getByRole('link', { name: /MAIN-264/u })).toBeVisible()

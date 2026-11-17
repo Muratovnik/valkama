@@ -148,6 +148,7 @@ for (const width of [1280, 390] as const)
       await expect(reportLine.locator('.meta-who')).toContainText(locale === 'en' ? 'you' : 'вы')
       await expect(reportLine.locator('.mention-quote')).toHaveText('Shipped the export.')
       // Who and when are one unit, as on a comment's head.
+      await expect(lines.locator('.mention-head')).toHaveCount(3)
       const heads = await lines.locator('.mention-head').all()
       for (const [index, head] of heads.entries())
         await expectUnitHeld(head, `Mention ${index} at ${width}px, ${locale}`)

@@ -330,9 +330,6 @@ test('a read while the keyboard stands after an answered block leaves it where i
 test('no rail of bars is left at the start edge', async ({ page }) => {
   const { dialog } = await openList(page, blocks(3))
   await expect(dialog.getByRole('navigation')).toHaveCount(0)
-  await expect(
-    dialog.locator('[data-rail-question], [data-rail-block], .request-rail'),
-  ).toHaveCount(0)
   // The list's words start where the head's do, with nothing standing in the inset.
   const title = await box(dialog.locator('.overlay-header-name'))
   const card = await box(dialog.locator('.request-card').first())

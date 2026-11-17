@@ -171,9 +171,19 @@ async function readStates(page: Page, head: Locator, hover: boolean) {
 }
 
 /**
+ * The lanes of the wide board, each with its heading: MAIN-401, MAIN-410, MAIN-420 and the two
+ * epics `serveWide` adds, MAIN-491 and MAIN-493, and the work under no epic.
+ */
+const LANES = 6
+
+/** The open lanes among them that stand an epic's actions: MAIN-401, MAIN-491 and MAIN-493. */
+const ACTING = 3
+
+/**
  * Every heading at `width`, with the board at its first states and scrolled to its middle ones,
  * and what is wrong with each, against itself at rest and against the base: at rest only, or
- * under the pointer and the keyboard too where `every`.
+ * under the pointer and the keyboard too where `every`. It says how many headings it read at
+ * each scroll, since a sweep that read none would find nothing wrong.
  */
 async function readWidth(
   page: Page,
@@ -183,6 +193,7 @@ async function readWidth(
   await page.setViewportSize({ width, height: 900 })
   const board = page.locator('.work-item-lanes')
   const found: string[] = []
+  const read: number[] = []
   for (const scroll of ['start', 'middle'] as const) {
     await page.mouse.move(0, 0)
     await board.evaluate((node: HTMLElement, where) => {
@@ -191,6 +202,7 @@ async function readWidth(
     }, scroll)
     await settle(board)
     const heads = page.locator('.lane-head')
+    read.push(await heads.count())
     for (let index = 0; index < (await heads.count()); index += 1) {
       const head = heads.nth(index)
       const name = (await head.locator('.lane-reference, .lane-title').first().textContent()) ?? ''
@@ -211,14 +223,19 @@ async function readWidth(
       found.push(...lost.map((one) => `${where}: ${one}`))
     }
   }
-  return found
+  return { found, read }
 }
 
-/** Every heading at `width` where only a finger presses, and at `TOUCHED` its focus and reach. */
+/**
+ * Every heading at `width` where only a finger presses, and at `TOUCHED` its focus and reach:
+ * what is wrong, the headings read at each scroll, and the headings whose reach was read.
+ */
 async function readTouch(page: Page, width: number, locale: string) {
   const every = TOUCHED.has(width)
-  const found = await readWidth(page, width, { every, hover: false, locale })
-  return every ? [...found, ...(await readReach(page, width))] : found
+  const { found, read } = await readWidth(page, width, { every, hover: false, locale })
+  if (!every) return { found, read, reached: null }
+  const reach = await readReach(page, width)
+  return { found: [...found, ...reach.found], read, reached: reach.read }
 }
 
 /**
@@ -244,6 +261,7 @@ const reaches = (head: Element) =>
 /**
  * Every open epic lane's heading at `width`: its actions up and each reaching a finger's width.
  * A folded lane ends at its heading, and the next lane is drawn over the 4px of reach below it.
+ * It says how many headings it read.
  */
 async function readReach(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 })
@@ -255,7 +273,8 @@ async function readReach(page: Page, width: number) {
   await settle(board)
   const heads = page.locator('.board-lane.open .lane-head', { has: page.locator('.lane-actions') })
   const found: string[] = []
-  for (let index = 0; index < (await heads.count()); index += 1) {
+  const read = await heads.count()
+  for (let index = 0; index < read; index += 1) {
     const head = heads.nth(index)
     // Where a press lands is asked of the page in view.
     await head.evaluate((node) => {
@@ -267,7 +286,7 @@ async function readReach(page: Page, width: number) {
     const misses = await head.evaluate(reaches)
     found.push(...misses.map((one) => `${width}px heading ${index}: ${one}`))
   }
-  return found
+  return { found, read }
 }
 
 for (const locale of ['en-US', 'ru-RU']) {
@@ -280,10 +299,19 @@ for (const locale of ['en-US', 'ru-RU']) {
       test.setTimeout(900_000)
       await openWide(page, 1280)
       const found: string[] = []
-      for (const width of SWEEP)
-        found.push(
-          ...(await readWidth(page, width, { every: WIDTHS.includes(width), hover: true, locale })),
-        )
+      const read: number[][] = []
+      for (const width of SWEEP) {
+        const one = await readWidth(page, width, {
+          every: WIDTHS.includes(width),
+          hover: true,
+          locale,
+        })
+        found.push(...one.found)
+        read.push(one.read)
+      }
+      expect(read, 'the headings read at each width, at the start and the middle').toEqual(
+        SWEEP.map(() => [LANES, LANES]),
+      )
       expect(found).toEqual([])
     })
   })
@@ -298,7 +326,20 @@ for (const locale of ['en-US', 'ru-RU']) {
       await openWide(page, 390)
       await expect.poll(() => page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true)
       const found: string[] = []
-      for (const width of SWEEP) found.push(...(await readTouch(page, width, locale)))
+      const read: number[][] = []
+      const reached: (number | null)[] = []
+      for (const width of SWEEP) {
+        const one = await readTouch(page, width, locale)
+        found.push(...one.found)
+        read.push(one.read)
+        reached.push(one.reached)
+      }
+      expect(read, 'the headings read at each width, at the start and the middle').toEqual(
+        SWEEP.map(() => [LANES, LANES]),
+      )
+      expect(reached, 'the headings whose reach was read, at the widths that read it').toEqual(
+        SWEEP.map((width) => (TOUCHED.has(width) ? ACTING : null)),
+      )
       expect(found).toEqual([])
     })
   })
