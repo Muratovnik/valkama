@@ -536,7 +536,29 @@ class CarriedCommitRefsTests(CommitRefsCase):
             {"commit_refs": 10, "dropped": 1, "commits": 5, "attachments": 6, "url_refs": 1},
             m15["result"],
         )
-        p2 = next(entry for entry in report["postconditions"] if entry["name"] == "row-counts")
+        # The refs are rebuilt to take no commit once `commit-refs` has left none, keeping the rest.
+        rebuilt = next(step for step in report["steps"] if step["name"] == "refs-without-commits")
+        self.assertTrue(rebuilt["needed"])
+        self.assertEqual(
+            (["commit", "memory", "session", "url"], ["memory", "session", "url"], refs_before - 9),
+            (
+                rebuilt["result"]["kinds_before"],
+                rebuilt["result"]["kinds"],
+                rebuilt["result"]["refs"],
+            ),
+        )
+        conn = sqlite3.connect(self.path)
+        try:
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK constraint failed"):
+                conn.execute(
+                    "INSERT INTO work_item_refs(work_item_id, kind, value) VALUES(?, 'commit', ?)",
+                    (self.ids["WM-1"], self.a),
+                )
+        finally:
+            conn.close()
+        post_row_counts = next(
+            entry for entry in report["postconditions"] if entry["name"] == "row-counts"
+        )
         # Ten commit refs leave, one url ref comes; the other was there already.
         self.assertEqual(
             (refs_before - 10 + 1, 5, 6),
@@ -596,7 +618,8 @@ class CarriedCommitRefsTests(CommitRefsCase):
             },
             refs,
         )
-        # A second run finds the store current and changes nothing.
+        # A second run finds the store current and changes nothing, the refs' CHECK
+        # among it.
         before = identity(self.path)
         self.assertEqual("current", self.migrate()["status"])
         self.assertEqual(before, identity(self.path))

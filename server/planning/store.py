@@ -217,10 +217,24 @@ _WORK_ITEMS = f"""(
     started_at TEXT,
     UNIQUE(planning_space_id, number)
 )"""
+#: An item's pointers: a session, a memory record or a url (`model.REF_KINDS`). The
+#: work-model migration rebuilds the table of a store that still takes `commit`.
+_WORK_ITEM_REFS = f"""(
+    id INTEGER PRIMARY KEY,
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK(kind IN ({_REF_SQL})),
+    value TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    author TEXT NOT NULL DEFAULT 'agent',
+    created_at TEXT NOT NULL DEFAULT {_NOW},
+    call_id INTEGER REFERENCES execution_events(id),
+    UNIQUE(work_item_id, kind, value)
+)"""
 _REBUILT = {
     "planning_spaces": _PLANNING_SPACES,
     "workflow_states": _WORKFLOW_STATES,
     "work_items": _WORK_ITEMS,
+    "work_item_refs": _WORK_ITEM_REFS,
 }
 #: The items of one state of one space, which every read of a state's items takes.
 #: Declared apart because the 3.0 migration creates it anew rather than from the
@@ -338,17 +352,7 @@ CREATE TABLE IF NOT EXISTS work_item_comments(
     call_id INTEGER REFERENCES execution_events(id){_appended("work_item_comments")}
 );
 CREATE INDEX IF NOT EXISTS work_item_comments_item ON work_item_comments(work_item_id, id);
-CREATE TABLE IF NOT EXISTS work_item_refs(
-    id INTEGER PRIMARY KEY,
-    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK(kind IN ({_REF_SQL})),
-    value TEXT NOT NULL,
-    label TEXT NOT NULL DEFAULT '',
-    author TEXT NOT NULL DEFAULT 'agent',
-    created_at TEXT NOT NULL DEFAULT {_NOW},
-    call_id INTEGER REFERENCES execution_events(id),
-    UNIQUE(work_item_id, kind, value)
-);
+CREATE TABLE IF NOT EXISTS work_item_refs{_WORK_ITEM_REFS};
 CREATE TABLE IF NOT EXISTS work_item_events(
     id INTEGER PRIMARY KEY,
     work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,

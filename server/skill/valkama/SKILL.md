@@ -125,9 +125,8 @@ hook": see [the tool reference](references/tools.md#claude-codes-auto-mode).
 **Commits and refs.** Valkama attaches each commit your session makes to the
 task you hold and says so in the hook answer after the command; when it cannot
 tell which task, the answer names the candidates. Attach or move one with the
-`commits` group. The `refs` group records a `commit`, a `memory` record id
-materially used, or a `url`. Your own session needs no ref: Valkama records
-every write's.
+`commits` group. The `refs` group records a `memory` record id materially
+used, or a `url`. Your own session needs no ref: Valkama records every write's.
 
 **What a person said.** A write's answer carries `from_person` when the owner
 did something on the item in Valkama since an agent last wrote there: a comment,
@@ -425,8 +424,8 @@ Merge before handing the work to anyone.
    has (`completed`, `review`, `cancelled`); a name the workflow lacks is
    refused listing its states.
 
-Steps 1 to 3 go in one `apply_work_item_changes` call, often with the last
-commit as a ref. The transition to a completed or cancelled state also ends
+Steps 1 to 3 go in one `apply_work_item_changes` call. The transition to a
+completed or cancelled state also ends
 your claim and any step claims in that write, so the item stops reading as
 held; `applied.transition.released` names the holder, and the item's
 `last_claim_ref` keeps it. Reopening the item restores no claim: claim it again
@@ -437,12 +436,9 @@ you did about it (a comment is enough), then close; a comment in the same call
 as the close does not count. `force: true` carries a refusal through and records
 it as `overridden`: use it only when the record would still be true.
 
-**Closing a release.** Before closing the release's goal, run
-`valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It
-lists the open items whose commit refs went into that range, including a change
-that arrived under another hash, and it changes nothing. Check each one and close
-what is finished: partly released work shows as well, a `changed-patch` or
-`subject` match is weak, and an item with no commit ref cannot show.
+**Closing a release.** Before closing the release's goal, check its open items
+with `valkama released`, as
+[the tool reference](references/tools.md#closing-a-release) says.
 
 **Not done.** Work that is not needed, duplicated or superseded closes in the
 cancelled state. It needs the summary, which starts with why (`Not needed:`,
@@ -466,7 +462,8 @@ the delegating agent to record:
 
 - the item reference it worked on and the steps it finished, by `item_id` or
   text;
-- the commits it made and anything else worth a ref;
+- the commits it made, which Valkama attaches to the item its session holds,
+  and anything else worth a ref;
 - each finding with its evidence (command, error text, versions), its cause,
   and where it belongs: a step of this item, a new item linked
   `discovered-from` this one, or the same change as an existing item;

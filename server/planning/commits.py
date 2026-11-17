@@ -593,8 +593,8 @@ def attach(
         conn.execute("BEGIN IMMEDIATE")
     row = read_model.item_row(conn, reference)
     identity = str(row["work_item_id"])
-    project = _registered(repository)
-    whole = _resolved(project, _hash(hash_text, repository))
+    project = registered(repository)
+    whole = _resolved(project, stored_hash(hash_text, repository))
     commit_id = _commit_id(conn, project, whole)
     call = calls.call_id(conn, identity)
     actor = model.actor(author)
@@ -638,7 +638,7 @@ def detach(
         conn.execute("BEGIN IMMEDIATE")
     row = read_model.item_row(conn, reference)
     identity = str(row["work_item_id"])
-    wanted = _hash(hash_text, repository)
+    wanted = stored_hash(hash_text, repository)
     found = conn.execute(
         "SELECT c.commit_id, c.hash FROM work_item_commits a"
         " JOIN commits c ON c.commit_id = a.commit_id"
@@ -678,7 +678,7 @@ def tally(done: dict[str, Any] | None, outcome: str, pair: dict) -> dict[str, An
     return found
 
 
-def _hash(text: str, repository: str) -> str:
+def stored_hash(text: str, repository: str) -> str:
     """The hash as a row holds it, in lower case; refused when it cannot be one."""
 
     value = text.strip().lower()
@@ -687,7 +687,7 @@ def _hash(text: str, repository: str) -> str:
     return value
 
 
-def _registered(repository: str) -> dict[str, str]:
+def registered(repository: str) -> dict[str, str]:
     """The project's id and root from the registry, refused with the ids when it has none."""
 
     listing = project_registry.read_registry()
@@ -703,7 +703,7 @@ def _registered(repository: str) -> dict[str, str]:
     return {"project_id": repository, "root": roots[repository]}
 
 
-def _rooted(project: dict[str, str]) -> bool:
+def rooted(project: dict[str, str]) -> bool:
     """Whether the project's root is a repository on this machine.
 
     A root without a `.git` of its own is not: Git would answer from the
@@ -721,7 +721,7 @@ def _resolved(project: dict[str, str], wanted: str) -> str:
     """
 
     repository, root = project["project_id"], project["root"]
-    if not _rooted(project):
+    if not rooted(project):
         if len(wanted) in _WHOLE:
             return wanted
         raise model.PlanningError(
@@ -748,7 +748,7 @@ def _resolved(project: dict[str, str], wanted: str) -> str:
 def _described(project: dict[str, str], whole: str) -> tuple[str, str | None]:
     """The commit's subject and committer time, or nothing known without its root."""
 
-    if not _rooted(project):
+    if not rooted(project):
         return "", None
     logged = git_worktrees.git_text(
         project["root"],

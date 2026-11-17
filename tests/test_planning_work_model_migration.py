@@ -43,7 +43,7 @@ T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [f"M{number}" for number in range(16)]
+STEP_NAMES = [*(f"M{number}" for number in range(16)), "refs-without-commits"]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(1, 16)),
@@ -876,6 +876,27 @@ class MigratedStoreTests(StoreCase):
         self.assertEqual(0, details["row-counts"]["tables"]["work_item_commits"])
         self.assertNotIn("commits", details["fresh-tables"]["added"])
 
+    def test_the_refs_are_rebuilt_to_take_no_commit_as_a_fresh_store(self) -> None:
+        [step] = [step for step in self.report["steps"] if step["name"] == "refs-without-commits"]
+        self.assertTrue(step["needed"])
+        self.assertEqual(
+            (["commit", "memory", "session", "url"], ["memory", "session", "url"]),
+            (step["result"]["kinds_before"], step["result"]["kinds"]),
+        )
+        details = {entry["name"]: entry["detail"] for entry in self.report["postconditions"]}
+        self.assertEqual(
+            {"commit_refs_left": 0, "kinds": ["memory", "session", "url"]}, details["no-commit-refs"]
+        )
+        conn = sqlite3.connect(self.path)
+        try:
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK constraint failed"):
+                conn.execute(
+                    "INSERT INTO work_item_refs(work_item_id, kind, value) VALUES(?, 'commit', ?)",
+                    (self.ids["WM-1"], "abcdef0"),
+                )
+        finally:
+            conn.close()
+
     def test_m8_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
         self,
     ) -> None:
@@ -1160,7 +1181,7 @@ class KeptStepClaimTests(StoreCase):
             conn.close()
         self.checklists = {reference: self.item(reference)["checklist"] for reference in KEPT_STEPS}
 
-    def test_a_claimed_step_on_a_task_at_work_is_kept_and_identities_holds(self) -> None:
+    def test_a_claimed_step_on_a_task_at_work_is_kept_and_p14_holds(self) -> None:
         report = self.migrate()
         self.assertEqual("migrated", report["status"])
         self.assertEqual(
@@ -1350,11 +1371,6 @@ FAULTS = (
         "row-counts",
         "INSERT INTO commits(project_id, hash, reported_at)"
         " VALUES('alpha', 'abcdef0', '2026-01-02T03:04:05Z')",
-    ),
-    fault(
-        "no-commit-refs",
-        "INSERT INTO work_item_refs(work_item_id, kind, value) VALUES(?, 'commit', 'abcdef0')",
-        lambda ids: (ids["WM-9"],),
     ),
     fault(
         "other-refs",
@@ -1824,7 +1840,29 @@ class RollbackTests(StoreCase):
                 self.own_store()
                 self.assert_only(once(says, several(statements, self.ids)), failed, name, says)
 
-    def test_p16_refuses_a_step_a_second_run_would_take_again(self) -> None:
+    def test_no_commit_refs_refuses_refs_that_take_a_commit_again_and_hold_one(self) -> None:
+        widened = rebuilt("work_item_refs", "'memory',", "'commit','memory',")
+
+        def write(conn: sqlite3.Connection, context: store_steps.Context) -> None:
+            widened(conn, context)
+            conn.execute(
+                "INSERT INTO work_item_refs(work_item_id, kind, value) VALUES(?, 'commit', ?)",
+                (self.ids["WM-9"], "abcdef0"),
+            )
+
+        report = self.refused(once("the refs take a commit again", write))
+        # `fresh-shape` probes the retired kind, `row-counts` counts the row, `other-refs` finds it on its item and
+        # `second-run` sees the rebuild needed again.
+        self.assertEqual(["fresh-shape", "row-counts", "no-commit-refs", "other-refs", "second-run"], report["failed"])
+        entry = next(entry for entry in report["postconditions"] if entry["name"] == "no-commit-refs")
+        self.assertIn("1 refs of the kind commit are left", entry["error"])
+        self.assertIn(
+            "work_item_refs takes the kinds ['commit', 'memory', 'session', 'url'],"
+            " a fresh store ['memory', 'session', 'url']",
+            entry["error"],
+        )
+
+    def test_second_run_refuses_a_step_a_second_run_would_take_again(self) -> None:
         step = store_steps.Step("again", "always", again)
         self.assertIn("second-run", self.refused(step)["failed"])
 

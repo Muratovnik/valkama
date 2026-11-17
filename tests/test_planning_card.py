@@ -96,7 +96,7 @@ class FullItemCase(CardCase):
             id=self.ref,
             claim=True,
             checklist=["first", "second"],
-            refs=[{"kind": "commit", "value": "abc1234"}],
+            refs=[{"kind": "memory", "value": "abc1234"}],
             links=[{"other": other, "kind": "relates-to"}],
             comment={"body": "a root"},
             summary={"done": "half", "next": "the rest"},

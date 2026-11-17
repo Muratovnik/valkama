@@ -253,7 +253,7 @@ python valkama.py <command> [options]
 | `launcher autostart enable\|disable\|status [--port 8642] [--force]` | on Windows, keep an on-demand listener on the port from login; off until enabled, see [`SERVICE.md`](SERVICE.md#holding-the-port-from-login) |
 | `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files and this launcher's autostart value |
 | `summary [--space KEY]` | a short Planning-space report, meant for session hooks |
-| `released --space KEY --repo PATH --range A..B [--json]` | list the open work items whose commit refs went into a release range, and how each was found: `hash` (the commit is in the range), `patch-id` (the same change arrived under another hash), or one of two weak matches: `changed-patch` (the commit is outside the range and not in the history before it, and a commit in the range has its subject with another patch) and `subject` (the object is gone and the ref's label has the subject of a commit in the range). A hint to check by hand when closing a release: partly released work shows too, an item with no commit ref cannot, and it changes neither the store nor the repository |
+| `released --space KEY --repo PATH --range A..B [--json]` | list the open work items whose attached commits went into a release range, and how each was found: `hash` (the commit is in the range), `patch-id` (the same change arrived under another hash), or one of two weak matches: `changed-patch` (the commit is outside the range and not in the history before it, and a commit in the range has its subject with another patch) and `subject` (the object is gone and the subject recorded for it is that of a commit in the range). Only the commits of the project registered at `--repo` are compared, and those attached with no repository by their hash. A hint to check by hand when closing a release: partly released work shows too, an item with no attached commit cannot, and it changes neither the store nor the repository |
 | `hook CLIENT EVENT` | record one client hook event from stdin without a running server; see [Client hooks](#client-hooks) |
 | `runtime` | print this checkout's backend and static identity |
 | `projects list\|add\|update\|remove\|bind\|check\|apply\|doctor\|rollback\|upgrade\|downgrade\|import` | manage the local project inventory and its projection; see [Project registry](#project-registry) |
@@ -518,7 +518,7 @@ goal or stage stands in no state of its own: it shows what it derives from the w
 under it, Not started, In progress or Awaiting confirmation. The exact rules are in
 [the connection contract](docs/connection-contract.md#the-work-model).
 
-Three things make a card honest about its own progress:
+What makes a card honest about its own progress:
 
 - **A checklist with stable ids.** Agents claim a step with
   `claim_work_item_checklist_item` and complete it by id in the
@@ -526,11 +526,17 @@ Three things make a card honest about its own progress:
   two agents splitting a work item each hold their own step.
   A comment accepts an optional `checklist_item_id`: the saved comment
   keeps a quote of that step even after it is renamed or removed.
-- **Typed refs** — commit hashes, memory entry ids, urls — attached in the
-  `refs` of `apply_work_item_changes`, so the next agent reads pointers instead of doing
+- **Typed refs** — memory entry ids and urls — attached in the `refs` of
+  `apply_work_item_changes`, so the next agent reads pointers instead of doing
   archaeology. An agent's own session needs no ref: Valkama records the
   confirmed session behind every write, and the `sessions` part of
   `get_work_item` lists those sessions.
+- **Commits.** Valkama attaches each commit an agent's session makes to the
+  task it holds; the `commits` group of `apply_work_item_changes` attaches or
+  moves one by hand, as a registered project and a hash. The card lists them
+  as its `commits`, and `GET /api/commit?repository=<id>&hash=<hash>` shows
+  one from its project's repository. A commit is not a ref: `refs` refuses
+  the kind `commit`.
 - **An activity trace.** Creations, moves, claims, takeovers, releases,
   completions and link changes are all recorded with an author. The `events`
   part of `get_work_item` returns the newest of it, up to a thousand events at a
@@ -715,7 +721,8 @@ Among its steps, the migration attaches each commit a record carries to the ref'
 item, marked as carried over, and adds the `url` refs; several refs of one item
 naming one commit give one attachment, with the label, author and time of the first
 of them that has a label. A label gets the ref's text after it when that text is an
-address or a note rather than a hash. Every commit ref then leaves the store.
+address or a note rather than a hash. Every commit ref then leaves the store, and
+the refs table is rebuilt to refuse the kind `commit`, as a fresh store's does.
 
 `--dry-run` migrates a copy instead and only reads the store: `--into <directory>`
 keeps the copy and its snapshot there, and without it the copy goes when the run
@@ -937,11 +944,11 @@ of an operating-system error.
 
 `GET /api/documents/resolve?space=<id>&path=<p>&path=<p>...` takes up to 64 paths
 and only asks the file system whether each exists; it opens no file. `space` is
-the planning space's exact identity, the same value `GET /api/ref` takes, and is
-only the base of a relative path. Inside a document the page shows, the base is
-that document's project instead: `project=<id>` in place of `space`, the id
-`resolve` answered with. Its root is the one the registry gives that id, a
-project registered inside it is asked after it, as from a space, and the boundary
+the planning space's exact identity and only the base of a relative path. Inside
+a document the page shows, the base is that document's project instead:
+`project=<id>` in place of `space`, the id `resolve` answered with. Its root is
+the one the registry gives that id, a project registered inside it is asked
+after it, as from a space, and the boundary
 stays every registered root. The page has already read a link in the document
 from the document's folder into a path from the project's root, so no folder is
 sent, and it adds `exact=1` for those links: a project registered inside the root

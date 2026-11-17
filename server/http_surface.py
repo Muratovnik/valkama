@@ -63,7 +63,7 @@ from .projects import scopes
 from .quota import names as quota_names
 from .quota import poll as quota_poll
 from .quota import settings as quota_settings
-from .refs import resolve_ref
+from .refs import resolve_ref, show_commit
 from .sessions import op_ingest_session_event, session_context
 from .static_assets import DIST_DIR, SOURCE_ROOT
 from .store import STORE_SCHEMA_VERSION, connect, connect_for_read, db_path, open_read_only
@@ -1353,16 +1353,26 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 kind = _first_value(parameters, "kind") or ""
                 value = _first_value(parameters, "value") or ""
-                # The card's planning space, by its exact identity: a commit is
-                # looked for in the repository the registry binds it to as well.
-                space = _first_value(parameters, "space")
                 conn = connect()
                 try:
                     # Keep the same connection-aware resolver used by MCP and
                     # retain its bounded Claude transcript fallback.
-                    answer = resolve_ref(kind, value, conn=conn, space=space)
+                    answer = resolve_ref(kind, value, conn=conn)
                 finally:
                     conn.close()
+                body = json.dumps(answer, ensure_ascii=False)
+                self._send(200, body.encode("utf-8"), "application/json")
+            except ValueError as error:
+                self._send(400, str(error).encode("utf-8"), "text/plain")
+        elif url.path == "/api/commit":
+            # An attached commit, by its registered project and its hash: the
+            # project's root is the only repository asked.
+            parameters = parse_qs(url.query)
+            try:
+                answer = show_commit(
+                    _first_value(parameters, "repository") or "",
+                    _first_value(parameters, "hash") or "",
+                )
                 body = json.dumps(answer, ensure_ascii=False)
                 self._send(200, body.encode("utf-8"), "application/json")
             except ValueError as error:

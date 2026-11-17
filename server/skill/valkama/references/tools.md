@@ -207,7 +207,7 @@ resolves its discussion, records its summary and moves its state:
 | `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | edits the fields a transition does not own |
 | `checklist` | `["…", {"text": "…", "done": true}]`, or `{"items": [...], "force": true}` to carry a refusal through | sets the steps |
 | `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | completes or reopens steps |
-| `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | attaches pointers |
+| `refs` | `[{"kind": "memory", "value": "…", "label": "…"}]` | attaches pointers: a `memory` record id or a `url` |
 | `commits` | `[{"repository": "alpha", "hash": "3f2a9c1", "label": "…", "remove": false}]` | attaches commits by hand, or detaches them |
 | `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | adds or removes links |
 | `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…", "list": {"label": "…", "options": [...]}, "mentions": ["MAIN-14"]}` | writes one comment |
@@ -240,14 +240,14 @@ stage takes a commit too; a task also gains the commit's project, and loses it
 again with its last commit unless it names the project. A refusal starts with
 `[commit]` and says what to send: the registered ids for an unknown project, more
 digits for an ambiguous start, the full hash where there is no root, and that the
-item has no such commit for a `remove`.
+item has no such commit for a `remove`. A commit is never a ref: `refs` refuses
+the kind `commit` and names the `commits` group.
 
 A typical close, in one call:
 
 ```json
 {"id": "MAIN-12", "expected_revision": 7,
  "checklist_ticks": [{"item_id": "…"}],
- "refs": [{"kind": "commit", "value": "3f2a9c1"}],
  "summary": {"done": "Parser accepts empty input; regression test added.",
              "next": "Nothing; MAIN-14 covers the CLI message.",
              "friction": "none"},
@@ -375,12 +375,24 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 | a blocked state | an unfinished item linked `blocks` to it, or a `reason` |
 | any state | a transition the workflow allows from where the item stands |
 
-A move to review without a session or commit ref warns but is not refused.
+A move to review warns, and is not refused, when the item has no `session` ref,
+no attached commit and no write a confirmed session made.
 An agent's move to a completed or cancelled state is also refused with
 `person_spoke` while a person acted on the item since an agent last wrote to it;
 the refusal names what they did. A `comment` sent in the same
 `apply_work_item_changes` call does not lift it.
 `force: true` carries a refusal through and records an `overridden` event.
+
+## Closing a release
+
+Before closing the release's goal, run
+`valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It
+lists the open items whose attached commits went into that range, including a
+change that arrived under another hash, and it changes nothing. `--repo` is the
+checkout of a registered project: its attached commits are compared, and those
+attached with no repository by their hash. Check each item and close what is
+finished: partly released work shows as well, a `changed-patch` or `subject`
+match is weak, and an item with no attached commit cannot show.
 
 ## When a call is refused
 

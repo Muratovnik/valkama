@@ -691,23 +691,8 @@ def of_item(conn: sqlite3.Connection, row: sqlite3.Row) -> list[dict]:
 
 # -- the project of a commit ---------------------------------------------------
 
-# A recorded commit value may name its repository before the revision, as
-# `repo@abc1234` or `repo abc1234`: a name that starts with a letter or digit,
-# then `@` or spaces, then one word that is not git's own `@{...}` syntax.
-# Anything else is the revision as written. The web's `sameCommit` reads a
-# value by this same rule, and both test suites hold the same examples.
-_NAMED_COMMIT = re.compile(r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?:@(?!\{)| +)(?P<rev>\S+)")
 #: How long one repository may take to answer for every hash at once.
 _GIT_TIMEOUT = 120
-
-
-def split_commit_value(value: str) -> tuple[str | None, str]:
-    """The repository name a commit value carries, if any, and its revision."""
-
-    named = _NAMED_COMMIT.fullmatch(value)
-    if named is None:
-        return None, value
-    return named["name"], named["rev"]
 
 
 def _held_commits(root: str, hashes: Sequence[str]) -> dict[str, str]:
