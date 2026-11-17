@@ -27,7 +27,7 @@ import { messages } from '@/shared/i18n/index.ts'
 import { quotaAt, quotaOfEdges } from '../fixtures/quota.ts'
 import { NOW, openPanel, pageAt, record, serve, serveQuota } from './analyticsPage.ts'
 import { drawLined } from './drawnViews.ts'
-import { aheadOfLines, cornersOutside } from './stepAhead.ts'
+import { aheadOfLines, cornersOutside, hintAtDot, latestHint } from './stepAhead.ts'
 import type { LineAhead } from './stepAhead.ts'
 import { test } from './test.ts'
 
@@ -263,7 +263,7 @@ const painted = (mark: Locator) =>
 /**
  * Points at the latest reading's dot on each line «now» follows, however close to now it was
  * read, and says where the pointer went instead of it: there the reading paints its own dot and
- * says its own hint, and «now» stays unpainted.
+ * says its own hint, which stands at the dot as a point's does, and «now» stays unpainted.
  */
 async function pointAtLatest(page: Page, lines: LineAhead[]) {
   const strays: string[] = []
@@ -282,6 +282,9 @@ async function pointAtLatest(page: Page, lines: LineAhead[]) {
     if (!(await painted(dot))) strays.push(`line ${at}: the latest reading's dot unpainted`)
     if (await painted(figure.locator('[data-target="now"] [data-mark="place"]')))
       strays.push(`line ${at}: «now» took the latest reading's dot`)
+    const hint = await page.evaluate(latestHint, { lines: LINES, line: at })
+    if (!hintAtDot(hint))
+      strays.push(`line ${at}: the latest reading's hint off its dot ${JSON.stringify(hint)}`)
     await page.mouse.move(1, 1)
   }
   return strays
@@ -365,6 +368,76 @@ for (const lang of ['en', 'ru'] as const)
       }
       await record(info, `forecast ${width} ${lang}`, measured)
     })
+
+/**
+ * How the forecast's keys are painted against what they name, as the browser resolves them: the
+ * swatch at the head of a window's forecast line (`QuotaWindow`) and the forecast's key in its
+ * step line's head (`StepLineHead`), each against the first part of the window's tail; whether
+ * each is hatched, as the tail is and the fill never is; and the palette's text ink.
+ */
+const forecastKeys = (page: Page, window: string) =>
+  page
+    .locator(`[data-window="${window}"]`)
+    .first()
+    .evaluate((found) => {
+      const probe = document.createElement('i')
+      document.body.append(probe)
+      probe.style.color = 'CanvasText'
+      const ink = getComputedStyle(probe).color
+      probe.remove()
+      const drawn = (selector: string) => {
+        const element = found.querySelector(selector)
+        if (!element) return null
+        const style = getComputedStyle(element)
+        return {
+          paint: style.backgroundColor,
+          hatched: style.maskImage.includes('repeating-linear-gradient'),
+        }
+      }
+      return {
+        ink,
+        tail: drawn('[data-mark="ahead"]'),
+        fill: drawn('[data-mark="fill"]'),
+        swatch: drawn('[data-fact="forecast"] [data-mark="hatch"]'),
+        legend: drawn('[data-chart="steps"] [data-key="ahead"] [data-mark="hatch"]'),
+      }
+    })
+
+/** The two palettes: the page's own, and a forced one, which draws the tail in its text ink. */
+const PALETTES = [
+  { forcedColors: 'none', name: '', ink: false },
+  { forcedColors: 'active', name: 'in a forced palette ', ink: true },
+] as const
+
+for (const { forcedColors, name, ink } of PALETTES)
+  test(`${name}the forecast's keys are hatched and painted as its tail is, the fill not hatched`, async ({
+    page,
+  }, info) => {
+    await page.emulateMedia({ forcedColors })
+    await serve(page)
+    await serveQuota(page, quotaOfEdges(NOW))
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await openDrawn(page, 'quota_five_hour')
+    // «Work»'s five hours: a fill, a tail to the track's end, its swatch and its corridor named.
+    const keys = await forecastKeys(page, 'five_hour')
+    await record(info, `forecast keys ${forcedColors}`, keys)
+    const tail = keys.tail?.paint ?? 'no tail'
+    expect(
+      {
+        tail: keys.tail?.hatched,
+        fill: keys.fill?.hatched,
+        swatch: keys.swatch,
+        legend: keys.legend,
+      },
+      'what is hatched, and the keys painted as the tail',
+    ).toEqual({
+      tail: true,
+      fill: false,
+      swatch: { paint: tail, hatched: true },
+      legend: { paint: tail, hatched: true },
+    })
+    expect(tail === keys.ink, 'the tail in the text ink').toBe(ink)
+  })
 
 test('a window past its reset draws no tail, no corridor and no place past its readings', async ({
   page,

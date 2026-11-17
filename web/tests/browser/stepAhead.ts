@@ -105,3 +105,49 @@ export function cornersOutside(line: LineAhead) {
       )
     : line.corners
 }
+
+/** The room between a hint and the point it stands at (`OFFSET` in `hintPlacement.ts`). */
+const OFFSET = 6
+
+/**
+ * Runs in the page: where the hint shown stands against the latest reading's dot of the `line`th
+ * step line `lines` finds, both as drawn while pointed at: the side and the level of its corner
+ * nearest the dot, and how far across and up or down that corner stands from the dot's
+ * (`hintPlacement.ts`: a point's hint stands at its top right, its bottom left corner `OFFSET`
+ * past it and over it, mirrored or under where the room asks), and whether it stands inside the
+ * window. Null where no hint or no reading is drawn.
+ */
+export function latestHint({ lines, line }: { line: number; lines: string }) {
+  const hint = document.querySelector('[data-hint-surface]')?.getBoundingClientRect()
+  const one = document.querySelectorAll(lines)[line]
+  const dot = [...(one?.querySelectorAll('[data-reading]') ?? [])]
+    .at(-1)
+    ?.querySelector('[data-mark="reading"]')
+    ?.getBoundingClientRect()
+  if (!hint || !dot) return null
+  let side = 'neither'
+  if (hint.left >= dot.right - 0.5) side = 'right'
+  else if (hint.right <= dot.left + 0.5) side = 'left'
+  let level = 'neither'
+  if (hint.bottom <= dot.top + 0.5) level = 'over'
+  else if (hint.top >= dot.bottom - 0.5) level = 'under'
+  return {
+    side,
+    level,
+    across: side === 'right' ? hint.left - dot.right : dot.left - hint.right,
+    down: level === 'over' ? dot.top - hint.bottom : hint.top - dot.bottom,
+    inside: hint.left >= 0 && hint.right <= window.innerWidth,
+  }
+}
+
+/** Whether a hint `latestHint` read stands at its dot as a point's hint does, inside the window. */
+export function hintAtDot(hint: ReturnType<typeof latestHint>) {
+  return (
+    hint !== null &&
+    hint.side !== 'neither' &&
+    hint.level !== 'neither' &&
+    Math.abs(hint.across - OFFSET) < 1 &&
+    Math.abs(hint.down - OFFSET) < 1 &&
+    hint.inside
+  )
+}

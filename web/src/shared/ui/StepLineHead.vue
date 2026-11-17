@@ -11,7 +11,7 @@
  * rather than run past the window's edge, and so do the legend's keys, each whole, rather than
  * run past the plot. A span chosen is sent out as `choose`; the line owns which span it shows
  * (`useStepSpan`). The row is the line's `data-region="head"`; the forecast's key is
- * `data-key="ahead"`.
+ * `data-key="ahead"`, its swatch of the hatch `data-mark="hatch"`.
  */
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import type { StepScope } from '@/shared/ui/useStepSpan.ts'
@@ -64,7 +64,10 @@ const emit = defineEmits<{ choose: [scope: StepScope] }>()
         v-if="ahead && legend.ahead"
         class="step-key"
         data-key="ahead"
-        ><span class="step-swatch swatch-ahead hatched" />{{ legend.ahead }}</span
+        ><span
+          class="step-swatch swatch-ahead hatched"
+          data-mark="hatch"
+        />{{ legend.ahead }}</span
       >
     </span>
   </div>
