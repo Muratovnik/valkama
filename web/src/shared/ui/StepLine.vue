@@ -61,8 +61,8 @@
  * the lines, the hatch and the marks in its inks.
  *
  * What a reader of the page selects it by: the figure is `data-chart="steps"`; its regions are
- * `data-region` — `head` (`StepLineHead`), `plot`, the `field` the marks stand in, the `drawing`
- * of its lines and the `axis`, whose two ends are `data-moment` `from` and `to`; its marks are
+ * `data-region` — `head` (`StepLineHead`), `plot`, the `scale`'s figure at its top, the `field`
+ * the marks stand in, the `drawing` of its lines and the `axis`, whose two ends are `data-moment` `from` and `to`; its marks are
  * `data-mark` — the readings' `line`, each `reading`'s dot inside its stretch (`data-reading`,
  * its order), each `place`'s ring inside its stretch (`data-target`, `now` or `reset`) and the
  * forecast's `corridor`.
@@ -301,6 +301,7 @@ function stand(index: number) {
       <span
         class="step-top"
         aria-hidden="true"
+        data-region="scale"
         >{{ words.top }}</span
       >
       <div

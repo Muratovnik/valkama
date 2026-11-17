@@ -52,6 +52,14 @@
  * an arrow, covers whole periods (`usePeriodFrame`), and goes out as `span` with the keys of its
  * first and last period once the pointer or Shift lets it go. A press that does not drag stays
  * the press of what it landed on, and Escape lets a frame go.
+ *
+ * What a reader of the page selects it by: the figure is `data-chart="periods"`, and its legend
+ * the list `ChartLegend` declares (`data-hint-list="legend"`); its regions are `data-region` —
+ * the `frame` the plot scrolls in, the `plot`, its `scale` up the side, the `field` the periods
+ * stand in and the `axis` under it. A period is its slot (`data-tooltip-area`, its key
+ * `data-key`) and its stack the mark its hint speaks for (`data-hint-mark`); a segment carries its
+ * series (`data-series`). The marks drawn up the plot are `data-mark` — a `change` at a period's
+ * start and the tick of the period compared with, `before`.
  */
 import { computed, ref } from 'vue'
 
@@ -283,6 +291,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
 <template>
   <figure
     class="period-columns"
+    data-chart="periods"
     :aria-label="label"
   >
     <DataEmptyState
@@ -305,6 +314,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
       <div
         ref="frame"
         class="period-frame"
+        data-region="frame"
         :class="{ 'period-acting': acting }"
         :style="{ '--period-gutter': gutter }"
         v-bind="hiddenEdges"
@@ -313,6 +323,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
         <div
           ref="plot"
           class="period-plot"
+          data-region="plot"
           :style="{
             '--period-count': columns.length,
             '--period-column': `${columnWidth(columns.length, width)}px`,
@@ -325,12 +336,14 @@ function focus(event: FocusEvent, index: number, at: number | null) {
           />
           <ChartTicks
             class="period-scale"
+            data-region="scale"
             along="block"
             :ticks="scale"
           />
           <div
             ref="field"
             class="period-field"
+            data-region="field"
           >
             <span
               v-for="tick in chart.ticks"
@@ -392,12 +405,14 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                   v-if="one.column.before"
                   class="period-before"
                   aria-hidden="true"
+                  data-mark="before"
                   :style="levelOf(one.column.before ?? 0)"
                 />
                 <span
                   v-if="one.marks.length"
                   class="period-mark"
                   aria-hidden="true"
+                  data-mark="change"
                 />
               </div>
             </div>
@@ -414,6 +429,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
           </div>
           <ChartTicks
             class="period-axis"
+            data-region="axis"
             along="inline"
             :ticks="days"
           />

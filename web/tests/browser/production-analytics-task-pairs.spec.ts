@@ -24,7 +24,7 @@ import type { UsageGroupValue } from '@/shared/api/analyticsApi.ts'
 
 import { noTask, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { LEGEND_NAMES, LEGEND_SERIES, openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { LINED } from './drawnViews.ts'
 import { pairNames } from './pairNames.ts'
 import { test } from './test.ts'
@@ -76,7 +76,8 @@ const PAIRS = WORLD.length
 const PLACES = {
   bars: '.spending-bars .ranked-label',
   multiples: '.spending-multiples .multiple-name',
-  legend: '.spending-days .chart-key-name',
+  // The legend's pairs: its series but the folded rest, «Other», which is no pair (`SpendingDays`).
+  legend: `.spending-days ${LEGEND_SERIES}:not([data-series="other"]) [data-part="name"]`,
   table: '.spending-table tbody th .table-name',
 } as const
 
@@ -109,9 +110,6 @@ async function openTasks(
   )
 }
 
-/** The folded tail's name, in each language. */
-const OTHER = { en: 'Other', ru: 'Остальное' }
-
 /** A model's name as the end of a pair. */
 const MODEL_END = / · claude-(?:opus|sonnet|fable)-5-\d$/u
 
@@ -129,9 +127,7 @@ for (const locale of ['en', 'ru'] as const)
         table: await pairNames(page, PLACES.table),
       }
       await record(info, `task pairs ${locale} ${width}`, measured)
-      for (const [where, all] of Object.entries(measured)) {
-        // The legend folds its tail into «Other», which is no pair.
-        const found = all.filter((one) => one.words !== OTHER[locale])
+      for (const [where, found] of Object.entries(measured)) {
         expect(found.length, where).toBeGreaterThan(0)
         for (const one of found) {
           // Every name is a pair whose end is a model's name...
@@ -164,7 +160,7 @@ async function rowsOf(page: Page, name: string, row: string) {
       >()
       for (const element of document.querySelectorAll<HTMLElement>(nameSelector)) {
         const around = element.closest(rowSelector)
-        if (!around) continue
+        if (!around) throw new Error(`${nameSelector} stands in no ${rowSelector}`)
         const line = Math.round(around.getBoundingClientRect().top)
         const range = document.createRange()
         range.selectNodeContents(element)
@@ -211,7 +207,12 @@ for (const split of [false, true])
         page,
       }, info) => {
         await openTasks(page, locale, width, { split })
-        const legend = await rowsOf(page, '.spending-days .chart-key-name', '.chart-entry')
+        // A legend's line is the line its item of the list stands on.
+        const legend = await rowsOf(
+          page,
+          `.spending-days ${LEGEND_NAMES}`,
+          '[data-hint-list="legend"] li',
+        )
         await openTasks(page, locale, width, { by: 'model' })
         const multiples = await rowsOf(page, '.spending-multiples .multiple-name', '.multiple')
         await record(info, `names in rows ${locale} ${width} ${split}`, { multiples, legend })
@@ -225,5 +226,6 @@ for (const split of [false, true])
         expect(presses.length).toBeGreaterThan(0)
         expect(presses.filter((one) => (one.press ?? 0) < 24)).toEqual([])
         // In each line of the legend too, the words stand at one height.
+        expect(legend.flat().length, 'legend: names').toBeGreaterThan(0)
         expect(uneven(legend, 'words'), 'legend: words').toEqual([])
       })

@@ -6,7 +6,8 @@
  * pressed, and marked by a check beside its name as well as by its ground. The tokens say what
  * they count — what was processed anew, by kind — and the cache reads they leave apart. The
  * change and each note keep one line, so the three tiles stand one height at every width; a line
- * cut short says itself whole over its own place (`clipped`), as every cut text does.
+ * cut short says itself whole over its own place (`clipped`), as every cut text does. Each tile's
+ * figure names its measure (`data-measure`), and so tells the tiles apart from any other radio.
  *
  * Beside each figure its measure stands step by step over the period the main chart draws — its
  * days, the hours of a single day, the minutes of the live hour — as a small trend

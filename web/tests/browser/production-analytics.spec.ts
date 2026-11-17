@@ -72,15 +72,23 @@ for (const width of [1440, 1024, 390]) {
     // 1024px the panel beside the rail would have left the report under 560px, so the section
     // has the page to itself instead, and its charts their room.
     const narrow = width < 1024
-    for (const section of await analytics.locator('.chart-section').all())
+    // The tasks' bars and their days: the tasks, named by free text, draw no small charts.
+    const sections = analytics.locator('[data-shown]')
+    await expect(sections).toHaveCount(2)
+    for (const section of await sections.all())
       await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : LINED_SHOWN)
 
     // The day not over yet and the change of accounts are each said where their day is read, in
     // its row of the table or in its day's hint on the chart; no word stands under a name.
     await expect.poll(() => daysSaying(analytics, 'running')).toBe(1)
-    await expect(analytics.locator('.spending-days .period-axis:has-text("running")')).toHaveCount(
-      0,
-    )
+    // The axis the chart draws, where it is drawn rather than its table, names its days, and none
+    // of them with a word under it.
+    const axis = analytics.locator('.spending-days [data-chart="periods"] [data-region="axis"]')
+    await expect(axis).toHaveCount(narrow ? 0 : 1)
+    for (const drawn of await axis.all()) {
+      await expect(drawn).toContainText(/\d/u)
+      await expect(drawn).not.toContainText('running')
+    }
     await expect
       .poll(() => daysSaying(analytics, 'Account change: 5b0c7e21 → 5b0c7e21, d4e8a1f0'))
       .toBe(1)
@@ -217,7 +225,7 @@ for (const ru of [false, true])
           const measured = await measure(page)
           const unread = await boxes(page, '.spending-unread')
           const [words] = await boxes(page, '.spending-unread-words')
-          const [retry] = await boxes(page, '.spending-unread .button')
+          const [retry] = await boxes(page, '.spending-unread button')
           await record(info, `analytics ${ru ? 'ru ' : ''}${name} ${width}`, {
             ...measured,
             unread,
@@ -228,11 +236,13 @@ for (const ru of [false, true])
               .allTextContents(),
           })
           expectWhole(measured)
+          // Only the period before that could not be read says so, with a retry after its words.
+          expect(unread, 'the notice of the period before').toHaveLength(failWeekBefore ? 1 : 0)
           for (const box of unread) {
             expect(Math.abs(box.x - (measured.page?.x ?? 0))).toBeLessThanOrEqual(1)
             expect(box.x + box.width).toBeLessThanOrEqual(width)
+            expectBesideOrUnder(words, retry)
           }
-          expectBesideOrUnder(words, retry)
           await expectNoSilentClipping(
             page,
             `analytics ${ru ? 'ru ' : ''}${name} at ${width}px`,
@@ -298,6 +308,9 @@ for (const width of [1440, 390])
       await page.screenshot(shot(info, `analytics-${name}-${width}.png`))
     })
 
+/** The width a day's field keeps: its 8.25rem at the root's 16px (`AnalyticsOwnPeriod`). */
+const DAY_FIELD = 8.25 * 16
+
 test('a custom period shows its two date fields whole at 390px', async ({ page }, info) => {
   await serve(page)
   await openReport(page, 390, pageAt({ period: 'custom', from: '2026-11-02', to: '2026-11-11' }))
@@ -315,9 +328,10 @@ test('a custom period shows its two date fields whole at 390px', async ({ page }
   for (const field of measured.dateInputs) {
     expect(field.x).toBeGreaterThanOrEqual(0)
     expect(field.x + field.width).toBeLessThanOrEqual(390)
-    // A date field leaves its date and its picker room: «28.08.2026», of the widest figures, ran
-    // under the picker's icon at 124px and stood whole beside it at 132px.
-    expect(field.width).toBeGreaterThanOrEqual(132)
+    // A date field leaves its date and its picker room, and a day is never cut: it is as wide
+    // as «28.08.2026», of the widest figures, needs beside the picker (`AnalyticsOwnPeriod`).
+    // At 124px that date ran under the picker's icon.
+    expect(field.width).toBeGreaterThanOrEqual(DAY_FIELD)
   }
   expect(measured.days).toBe(10)
   await expectNoSilentClipping(page, 'analytics custom period at 390px', '.analytics-page')

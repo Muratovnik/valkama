@@ -160,7 +160,7 @@ function legendLayout(page: Page) {
     return {
       height: Math.round(bounds.height),
       within: bounds.left >= chart.left - 0.5 && bounds.right <= chart.right + 0.5,
-      entries: [...legend.querySelectorAll('.chart-key-name')].map((name) => {
+      entries: [...legend.querySelectorAll('[data-series] [data-part="name"]')].map((name) => {
         const lineHeight = Number.parseFloat(getComputedStyle(name).lineHeight)
         const text = name.textContent ?? ''
         const reference = /^MAIN-\d+/u.exec(text)?.[0] ?? ''

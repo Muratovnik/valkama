@@ -19,6 +19,7 @@ import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record, serve, serveTask } from './analyticsPage.ts'
 import { openOverview, worked, WORLD } from './overviewPage.ts'
 import { workItem, workItemRef } from './planningFixtures.ts'
+import { expectNoLineOverPlot } from './plotWords.ts'
 import { test } from './test.ts'
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
@@ -63,7 +64,8 @@ test('a segment, a ranked row and a day the keyboard stands on each say themselv
   await page.setViewportSize({ width: 1440, height: 900 })
   const days = analytics.locator('.spending-days')
   await expect(days).toHaveAttribute('data-shown', 'chart')
-  await expect(page.locator('.period-readout, .step-readout')).toHaveCount(0)
+  // No line of words stands over the plot: each mark says itself in its hint.
+  await expectNoLineOverPlot(page, '.spending-days [data-chart="periods"]')
 
   // A segment: its series, its value and its share of the day.
   const segment = days.locator('.period-segment').first()
@@ -120,10 +122,14 @@ const reach = (page: Page) =>
     }
   })
 
-/** The name of the row the world ranks first, cut on its row, then a space and its share. */
-const NAMED_SHARE = /^MAIN-1 Rework the import of planning documents, part 1 \d+% of the total/u
+/**
+ * What the row the world ranks first says: its share alone. A task's name takes a line of its own
+ * and wraps to two before it is cut (`RankedBars`), so this one stands whole on its row, and a
+ * hint never repeats the words its element shows.
+ */
+const SHARE = /^\d+% of the total$/u
 
-test('a ranked row the panel scrolls to reach says itself, its cut name apart from its share, and nothing moves', async ({
+test('a ranked row the panel scrolls to reach says its share, and nothing moves', async ({
   page,
 }, info) => {
   await serve(page, WORLD)
@@ -146,7 +152,7 @@ test('a ranked row the panel scrolls to reach says itself, its cut name apart fr
   expect(after.scrolled, 'pointing at the row scrolled the panel').toBeGreaterThan(0)
   const seen = await shownAndGone(page)
   await record(info, 'a ranked row reached by the scroll', { before, after, ...seen })
-  expect(seen.says).toMatch(NAMED_SHARE)
+  expect(seen.says).toMatch(SHARE)
   expect(seen.now, 'the hint moved nothing').toEqual(seen.gone)
 })
 

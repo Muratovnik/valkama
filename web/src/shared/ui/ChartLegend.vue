@@ -33,6 +33,12 @@
  * whole name where that names a part of it, as a pair's names its first value. The pointer
  * or the keyboard standing on an entry is sent out as `point` with its key, and leaving it as
  * `point` with none, so the chart can lift the entry's marks.
+ *
+ * What a reader of the page selects it by: the list declares itself (`data-hint-list="legend"`),
+ * and each line is an item of it. A series' key carries the series' key (`data-series`), its
+ * swatch the slot of its hue (`data-slot`); a mark's key carries its mark (`data-mark`, `hatch` or
+ * `outline`). In either, the name is `data-part="name"`, and the figure at a line's end
+ * `data-part="figure"`.
  */
 import { useId } from 'vue'
 
@@ -135,6 +141,7 @@ const figureOf = (key: string) => props.figures?.get(key)
         <span
           :id="nameId(one)"
           class="chart-key-name one-line"
+          data-part="name"
           ><PairName
             :name="one.label"
             :end="one.labelEnd"
@@ -143,6 +150,7 @@ const figureOf = (key: string) => props.figures?.get(key)
       <span
         v-if="figureOf(one.key)"
         class="chart-figure"
+        data-part="figure"
         >{{ figureOf(one.key) }}</span
       >
     </li>
@@ -159,7 +167,11 @@ const figureOf = (key: string) => props.figures?.get(key)
           class="chart-hatch hatched"
           aria-hidden="true"
         />
-        <span class="chart-mark-name one-line">{{ hatch }}</span>
+        <span
+          class="chart-mark-name one-line"
+          data-part="name"
+          >{{ hatch }}</span
+        >
       </span>
     </li>
     <li
@@ -175,7 +187,11 @@ const figureOf = (key: string) => props.figures?.get(key)
           class="chart-outline"
           aria-hidden="true"
         />
-        <span class="chart-mark-name one-line">{{ outline }}</span>
+        <span
+          class="chart-mark-name one-line"
+          data-part="name"
+          >{{ outline }}</span
+        >
       </span>
     </li>
   </ul>

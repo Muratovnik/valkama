@@ -23,12 +23,26 @@ import { shot } from './boardPage.ts'
 import { brokenWords } from './brokenWords.ts'
 import { test } from './test.ts'
 
-/** Whether each part of the charts and of the table stands whole, above the next one. */
-async function parts(page: Page) {
-  return page.evaluate(() => {
+/** The areas a section's panel draws its parts in: a dimension's charts, and its table. */
+const DIMENSION = ['.dimension-charts', '.dimension-panel', '.spending-table']
+/**
+ * The areas the tokens by kind stack their parts in, and their table. Their pair of charts stands
+ * side by side on a wide panel (`TokenKindsPanel`), so it is no stack to hold to this.
+ */
+const KINDS = ['.kinds-panel', '.kinds-table']
+
+/**
+ * Whether each part of the charts and of the table stands whole, above the next one, in each of
+ * the `areas` the panel draws; an area not drawn is refused, since nothing in it could be found
+ * spilling.
+ */
+async function parts(page: Page, areas: readonly string[] = DIMENSION) {
+  return page.evaluate((drawn) => {
     const spilled: string[] = []
-    for (const area of ['.dimension-charts', '.dimension-panel', '.spending-table']) {
-      const children = [...(document.querySelector(area)?.children ?? [])] as HTMLElement[]
+    for (const area of drawn) {
+      const found = document.querySelector(area)
+      if (!found) throw new Error(`${area} is not drawn`)
+      const children = [...found.children] as HTMLElement[]
       for (const [index, child] of children.entries()) {
         const name = `${area} > ${child.className || child.tagName}`
         // A scroller is meant to hold more than it shows; anything else shows all it holds.
@@ -40,7 +54,7 @@ async function parts(page: Page) {
       }
     }
     return spilled
-  })
+  }, areas)
 }
 
 /** Puts the pointer over an element, `down` pixels below its top or at its middle. */
@@ -293,7 +307,7 @@ test.describe('in Russian', () => {
     const analytics = await openReport(page, 390)
     await expect(analytics.locator('.spending-days table')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
-    const broken = await brokenWords(page, '.analytics-panel .chart-cell')
+    const broken = await brokenWords(page, '.analytics-panel :is(th, td)')
     const days = await analytics.locator('.spending-days tbody th').allInnerTexts()
     await record(info, 'analytics panel words 390 ru', { broken, days })
     expect(days.some((day) => day.startsWith('понедельник'))).toBe(true)
@@ -450,16 +464,14 @@ test('the tokens by kind are a panel whose counted kinds add up to the «Tokens�
   // A ring of the counted kinds, named by its legend; beside it, no part of it, the two the
   // figure leaves out.
   const ring = panel.locator('.kinds-bars .donut-chart')
-  await expect(ring.locator('.chart-key-name')).toHaveText([
-    'Input',
-    'Output',
-    'Cache write, 5 min',
-  ])
+  await expect(
+    ring.locator('[data-hint-list="legend"] [data-series] [data-part="name"]'),
+  ).toHaveText(['Input', 'Output', 'Cache write, 5 min'])
   await expect(ring.locator('.donut-sector')).toHaveCount(3)
   await expect(ring.locator('.donut-note-name')).toHaveText(['Cache read', 'Reasoning'])
   // A small chart of each counted kind on one scale, the cache reads apart by their figure.
   await expect(panel.locator('.kinds-multiples h3')).toHaveText('Per day, by kind')
-  expect(await parts(page), 'parts that spill or overlap').toEqual([])
+  expect(await parts(page, KINDS), 'parts that spill or overlap').toEqual([])
 
   // The address gives the section back.
   await page.reload()

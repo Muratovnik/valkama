@@ -116,11 +116,14 @@ const focusedColumn = (page: Page) =>
 
 /**
  * The two panels whose days act: the overview, at the plain address, and a dimension's section,
- * held beside the rail to the panel's height with its charts scrolling on their own.
+ * held beside the rail to the panel's height with its charts scrolling on their own. `before` is
+ * how many ticks of the period before its days draw: the overview gives its days the steps of the
+ * week before, which spent on its Monday alone; a section gives none, and its days mark none
+ * without them (`SpendingDays`).
  */
-const PANELS: { key: string; name: string; state: Record<string, string> }[] = [
-  { key: 'overview', name: 'the overview', state: {} },
-  { key: 'task', name: 'the task section', state: { by: 'work_item' } },
+const PANELS: { before: number; key: string; name: string; state: Record<string, string> }[] = [
+  { key: 'overview', name: 'the overview', state: {}, before: 1 },
+  { key: 'task', name: 'the task section', state: { by: 'work_item' }, before: 0 },
 ]
 
 for (const panel of PANELS)
@@ -342,8 +345,8 @@ const plotFit = (page: Page) =>
       },
     )
     const before = slots.flatMap((slot) => {
-      const mark = slot.querySelector('.period-before')?.getBoundingClientRect()
-      const stack = slot.querySelector('.period-stack')?.getBoundingClientRect()
+      const mark = slot.querySelector('[data-mark="before"]')?.getBoundingClientRect()
+      const stack = slot.querySelector('[data-hint-mark]')?.getBoundingClientRect()
       return mark && stack
         ? [{ height: mark.height, width: mark.width, column: stack.width, top: mark.top }]
         : []
@@ -404,6 +407,7 @@ for (const panel of PANELS)
       // The period before is a tick at its height, never a box up the plot: no narrower than its
       // column and no more than 4px past each side of it (`production-analytics-period-marks`
       // measures the overhang itself).
+      expect(fit.before, 'the ticks of the period before').toHaveLength(panel.before)
       for (const mark of fit.before) {
         expect(mark.height, 'the mark of the period before').toBeLessThanOrEqual(3)
         expect(mark.width, 'the mark of the period before').toBeGreaterThanOrEqual(

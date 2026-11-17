@@ -266,6 +266,9 @@ const OWN = {
   moments: { period: 'custom', from: '2026-11-11T12:00', to: '2026-11-11T14:00' },
 } as const
 
+/** The fields of its days each own period stands as: its first and last day, or none. */
+const FIELDS: Record<keyof typeof OWN, number> = { days: 2, moments: 0 }
+
 /** The youngest and the oldest age of the same hour: the freshness keeps one width for both. */
 const SPREAD = [5000, 59 * 60_000] as const
 
@@ -360,7 +363,12 @@ async function openSection(page: Page, width: number, address: Record<string, st
  * then the ends at the second row's start and the read again at its end, the bar as high as the
  * week's and «Now»'s, and the panel where it was.
  */
-function expectTwoRows(name: string, own: Rows, week: Rows, now: Rows) {
+function expectTwoRows(
+  name: string,
+  own: Rows,
+  { now, week }: { now: Rows; week: Rows },
+  fields: number,
+) {
   expect(own.bar, `${name}: the bar's height against the week's`).toBe(week.bar)
   expect(own.bar, `${name}: the bar's height against «Now»'s`).toBe(now.bar)
   expect(own.panel, `${name}: the panel's top`).toBe(week.panel)
@@ -387,9 +395,12 @@ function expectTwoRows(name: string, own: Rows, week: Rows, now: Rows) {
     Math.abs((own.refresh?.right ?? Number.NaN) - line.right),
     `${name}: the read again's end against the line's`,
   ).toBeLessThanOrEqual(0.5)
-  // Each day as wide as a date of the widest figures needs beside its picker, and inside the line.
+  // Each day as wide as a date of the widest figures needs beside its picker, its 8.25rem at the
+  // root's 16px (`AnalyticsOwnPeriod`), and inside the line: the two days of a span of days, none
+  // of a span between two moments, which its name stands for.
+  expect(own.days, `${name}: the days' fields`).toHaveLength(fields)
   for (const day of own.days) {
-    expect(day.right - day.left, `${name}: a day's field`).toBeGreaterThanOrEqual(132)
+    expect(day.right - day.left, `${name}: a day's field`).toBeGreaterThanOrEqual(8.25 * 16)
     expect(day.left, `${name}: a day before the line`).toBeGreaterThanOrEqual(line.left - 0.5)
     expect(day.right, `${name}: a day past the line`).toBeLessThanOrEqual(line.right + 0.5)
   }
@@ -423,7 +434,7 @@ for (const lang of ['en', 'ru'] as const)
             seen[name] = { week, now, rows, age: drawn }
             expectOnLine(name, parts)
             expectWholeAge(drawn)
-            expectTwoRows(name, rows, week, now)
+            expectTwoRows(name, rows, { week, now }, FIELDS[own as keyof typeof OWN])
             at.push(parts)
           }
           const [young, old] = at

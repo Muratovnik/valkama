@@ -34,7 +34,15 @@ import type { Locator, Page } from '@playwright/test'
 
 import { value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { NOW, openReport, pageAt, record, serve } from './analyticsPage.ts'
+import {
+  LEGEND_NAMES,
+  LEGEND_SERIES,
+  NOW,
+  openReport,
+  pageAt,
+  record,
+  serve,
+} from './analyticsPage.ts'
 import { drawLined } from './drawnViews.ts'
 import { hint as hintUp } from './hintFramesPage.ts'
 import { pairNames } from './pairNames.ts'
@@ -74,7 +82,7 @@ const SPLIT = pageAt({ by: 'model', across: 'effort' })
 const PLACES = {
   bars: '.spending-bars .ranked-label',
   multiples: '.spending-multiples .multiple-name',
-  legend: '.spending-days .chart-key-name',
+  legend: `.spending-days ${LEGEND_NAMES}`,
   table: '.spending-table tbody th .table-name',
 } as const
 
@@ -101,7 +109,6 @@ async function openPairs(
   await serve(page, WORLD)
   await openReport(page, size.width, SPLIT)
   await page.setViewportSize(size)
-  await expect(page.locator(PLACES.legend)).toHaveCount(PAIRS.length)
   await expect(page.locator(PLACES.bars).first()).toHaveText(PAIRS[0] ?? '')
   await page.evaluate(() => document.fonts.ready)
   await (held
@@ -188,7 +195,7 @@ for (const locale of ['en', 'ru'] as const)
 const CONTROLS = {
   bars: '.spending-bars .ranked-line:is(button, a)',
   multiples: '.spending-multiples .multiple-name:is(button, a)',
-  legend: '.spending-days .chart-key:is(button, a)',
+  legend: `.spending-days ${LEGEND_SERIES}:is(button, a)`,
 } as const
 
 /** What a control that narrows the view to a model is called, in each language. */
@@ -296,6 +303,8 @@ for (const locale of ['en', 'ru'] as const)
     }, info) => {
       await openPairs(page, locale, size, true)
       const found = await pairNames(page, PLACES.table)
+      // A row of the table for every pair.
+      expect(found, 'the names of the table').toHaveLength(PAIRS.length)
       const hints: boolean[] = []
       for (const index of found.keys()) hints.push(await hintShows(page, index))
       const seen = found.map((one, index) => ({

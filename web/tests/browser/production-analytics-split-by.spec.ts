@@ -16,7 +16,7 @@ import { messages } from '@/shared/i18n/index.ts'
 import { value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { hues } from './analyticsHues.ts'
-import { openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { LEGEND_SERIES, openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { test } from './test.ts'
 
 type Locale = 'en' | 'ru'
@@ -138,7 +138,7 @@ for (const locale of ['en', 'ru'] as const) {
     await expect.poll(() => path(page)).toBe(SPLIT)
     await expect(page.locator('.spending-bars .ranked-label').first()).toHaveText(PAIRS[0] ?? '')
 
-    await expect(page.locator('.spending-days .chart-key[data-series]')).toHaveCount(PAIRS.length)
+    await expect(page.locator(`.spending-days ${LEGEND_SERIES}`)).toHaveCount(PAIRS.length)
     const split = await shown(page, locale)
     const drawn = await hues(page, 'model')
     await record(info, `analytics split by ${locale}`, { ...split, hues: drawn })
@@ -170,9 +170,11 @@ for (const locale of ['en', 'ru'] as const) {
     // Back takes the split away: the section's own values again, a whole its ring draws.
     await page.goBack()
     await expect.poll(() => path(page)).toBe(MODEL)
-    await expect(page.locator('.spending-bars .chart-key-name').first()).toHaveText(
-      'claude-opus-5-5',
-    )
+    await expect(
+      page
+        .locator('.spending-bars [data-hint-list="legend"] [data-series] [data-part="name"]')
+        .first(),
+    ).toHaveText('claude-opus-5-5')
     const back = await page.locator('.spending-table tbody th').allInnerTexts()
     expect(back.some((name) => name.includes(' · '))).toBe(false)
   })

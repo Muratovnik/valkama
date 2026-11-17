@@ -41,6 +41,8 @@ interface Placed {
    * over another row, in a list of wide rows.
    */
   listCovered: boolean
+  /** The element's list, or the mark its holder draws, was not found around it. */
+  missing: boolean
   /** The hint stands over its own element. */
   ownCovered: boolean
 }
@@ -65,7 +67,12 @@ interface List {
 }
 
 const RAIL: List = { across: false, holder: '.app-nav-shell' }
-const PERIODS: List = { across: true, holder: '.period-slot', drawn: '.period-stack' }
+// A period is its slot and its stack the mark its hint speaks for (`PeriodColumns`).
+const PERIODS: List = {
+  across: true,
+  holder: '[data-tooltip-area]',
+  drawn: '[data-hint-mark]',
+}
 const RANKING: List = { across: true, holder: '.ranked-row', drawn: '.ranked-bar' }
 const STEPS: List = { across: false, holder: '.checklist', row: '.step-row' }
 const SETTINGS: List = { across: false, holder: '.settings-general-sheet', row: '.settings-row' }
@@ -92,6 +99,9 @@ function placedAt([[x, y], list]: [[number, number], List | null]): Placed | nul
     Math.min(shown.bottom, box.bottom) - Math.max(shown.top, box.top) > 1
   const holder = list ? anchor.closest(list.holder) : null
   const drawn = list?.drawn ? (holder?.querySelector(list.drawn) ?? null) : null
+  // An element of a list stands in its list, and a mark's holder draws the mark: where either is
+  // not found, nothing could be found covered, so that is said rather than passed.
+  const missing = Boolean(list && (!holder || (list.drawn && !drawn)))
   const against = drawn ?? holder
   const own = list?.row ? anchor.closest(list.row) : null
   const others = list?.row && holder ? [...holder.querySelectorAll(list.row)] : []
@@ -101,6 +111,7 @@ function placedAt([[x, y], list]: [[number, number], List | null]): Placed | nul
       ? others.some((row) => row !== own && covers(row.getBoundingClientRect()))
       : against !== null && covers(against.getBoundingClientRect()),
     ownCovered: covers((drawn ?? anchor).getBoundingClientRect()),
+    missing,
   }
 }
 
@@ -132,6 +143,7 @@ async function sweep(page: Page, where: Locator, list: List | null = null) {
     placed.push(shown)
     if (shown.ownCovered) covered.push(`${shown.element}: over its own element`)
     if (shown.listCovered) covered.push(`${shown.element}: over ${overWhat(list)}`)
+    if (shown.missing) covered.push(`${shown.element}: no ${list?.holder ?? ''} around it to hold`)
   }
   return { covered, placed }
 }
@@ -220,7 +232,7 @@ for (const width of [1440, 1024]) {
 
     test('no hint of the Analytics day chart covers its own stack', async ({ page }) => {
       const days = await openDays(page, width)
-      const chart = await sweep(page, days.locator('.period-bars'), PERIODS)
+      const chart = await sweep(page, days.locator('[data-region="field"]'), PERIODS)
       expect(chart.placed.length).toBeGreaterThan(2)
       expect(chart.covered).toEqual([])
     })

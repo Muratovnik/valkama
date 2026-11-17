@@ -81,17 +81,20 @@ async function legendKeys(page: Page) {
     // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
     const hundredth = (figure: number) => Math.round(figure * 100) / 100
     return [
-      ...document.querySelectorAll<HTMLElement>('.spending-days :is(.chart-key, .chart-mark)'),
+      ...document.querySelectorAll<HTMLElement>(
+        '.spending-days [data-hint-list="legend"] :is([data-series], [data-mark])',
+      ),
     ].map((key) => {
       const box = key.getBoundingClientRect()
       const after = getComputedStyle(key, '::after')
       const reach = (side: string) =>
         after.content === 'none' ? 0 : Math.max(0, -Number.parseFloat(side) || 0)
-      const words = key.querySelector(':is(.chart-key-name, .chart-mark-name)') ?? key
+      const words = key.querySelector('[data-part="name"]') ?? key
       const range = document.createRange()
       range.selectNodeContents(words)
       const said = range.getBoundingClientRect()
-      const entry = (key.closest('.chart-entry') ?? key).getBoundingClientRect()
+      // The line it stands on: its item of the legend's list.
+      const entry = (key.closest('[data-hint-list="legend"] li') ?? key).getBoundingClientRect()
       return {
         text: words.textContent.trim(),
         acts: key.matches('a[href], button'),
@@ -140,7 +143,7 @@ for (const legend of LEGENDS)
         // A panel too narrow for the charts opens each as its table; it is chosen back.
         const tables = page.getByRole('radio', { name: CHART[locale], checked: false })
         while ((await tables.count()) > 0) await tables.first().click()
-        const chartLegend = page.locator('.spending-days .chart-legend')
+        const chartLegend = page.locator('.spending-days [data-hint-list="legend"]')
         await expect(chartLegend).toBeVisible()
         await page.evaluate(() => document.fonts.ready)
         await frames(chartLegend)

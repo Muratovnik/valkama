@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * The period day by day: a column per day of the chosen measure, stacked by the largest values
- * of the dimension and «other» for the rest; work with no value there and unknown work stack
+ * of the dimension and «other» for the rest, the series `other` wherever a series' key is read
+ * (`data-series`); work with no value there and unknown work stack
  * apart, as in the bars, and never inside «other». The day not over yet is hatched, its hint
  * says it is running and the legend names the hatch, «in progress», so its short column does not
  * read as a fall; a line stands where the known accounts

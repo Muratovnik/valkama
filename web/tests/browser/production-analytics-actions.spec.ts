@@ -131,7 +131,7 @@ const focusRing = (target: Locator) =>
     const byRow = whole ? row : (ringed[0] ?? null)
     const rowRing = Number.parseFloat(style.getPropertyValue('--size-focus-ring'))
     const drawn = (byRow ?? element).getBoundingClientRect()
-    const frame = byRow?.closest('.chart-table-frame')?.getBoundingClientRect()
+    const frame = byRow?.closest('[data-region="table-frame"]')?.getBoundingClientRect()
     const x = frame ? Math.max(drawn.left, frame.left) : drawn.left
     const width = (frame ? Math.min(drawn.right, frame.right) : drawn.right) - x
     const { y, height } = drawn
@@ -207,7 +207,7 @@ for (const lang of ['en', 'ru'] as const)
           const measured = await measure(page)
           const names = await scrolledNames(page)
           const [download] = await boxes(page, '.spending-download')
-          const [frame] = await boxes(page, '.spending-table .chart-table-frame')
+          const [frame] = await boxes(page, '.spending-table [data-region="table-frame"]')
           const label = `analytics table ${lang} ${name} ${width}`
           await record(info, label, {
             pageScroll: measured.pageScroll,

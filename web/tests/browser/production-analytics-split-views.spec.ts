@@ -35,11 +35,11 @@ async function views(where: Locator) {
 /** Each legend line of a ring: its name and the figure before its share. */
 const legendFigures = (chart: Locator) =>
   chart
-    .locator('.chart-entry')
+    .locator('[data-hint-list="legend"] li')
     .evaluateAll((entries) =>
       entries.map((entry) => [
-        entry.querySelector('.chart-key-name')?.textContent ?? '',
-        (entry.querySelector('.chart-figure')?.textContent ?? '').split(' · ')[0] ?? '',
+        entry.querySelector('[data-part="name"]')?.textContent ?? '',
+        (entry.querySelector('[data-part="figure"]')?.textContent ?? '').split(' · ')[0] ?? '',
       ]),
     )
 
@@ -132,12 +132,14 @@ function legendLayout(chart: Locator) {
     const box = (element: Element | null) => element?.getBoundingClientRect() ?? new DOMRect()
     const column = box(figure)
     const ring = box(figure.querySelector('.donut-ring'))
-    const legend = box(figure.querySelector('.chart-legend'))
-    const lines = [...figure.querySelectorAll('.chart-entry')].map((entry) => {
-      const name = box(entry.querySelector('.chart-key-name'))
-      const value = box(entry.querySelector('.chart-figure'))
+    // The legend's lines are the items of its list, each a name and its figure (`ChartLegend`).
+    const list = figure.querySelector('[data-hint-list="legend"]')
+    const legend = box(list)
+    const lines = [...(list?.querySelectorAll('li') ?? [])].map((entry) => {
+      const name = box(entry.querySelector('[data-part="name"]'))
+      const value = box(entry.querySelector('[data-part="figure"]'))
       const lineHeight = Number.parseFloat(
-        getComputedStyle(entry.querySelector('.chart-figure') ?? entry).lineHeight,
+        getComputedStyle(entry.querySelector('[data-part="figure"]') ?? entry).lineHeight,
       )
       return {
         middleOff: Math.abs(name.top + name.height / 2 - (value.top + value.height / 2)),
@@ -250,6 +252,7 @@ for (const width of [1440, 390])
       allOneLine: true,
       sectorText: '',
     })
+    expect(seen.lines, 'the legend’s lines').toBeGreaterThan(1)
     expect(seen.endsSpread).toBeLessThanOrEqual(1)
     expect(seen.worstMiddleOff).toBeLessThanOrEqual(1)
     await work.screenshot(shot(info, `ring-quota-window-${width}.png`))

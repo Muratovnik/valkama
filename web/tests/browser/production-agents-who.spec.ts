@@ -282,15 +282,14 @@ for (const width of [1440, 1024, 390]) {
     const section = await openAgents(page)
     const link = section.getByRole('link', { name: 'Open the epic’s own work in Analytics' })
     await link.scrollIntoViewIfNeeded()
-    const { box, list, size } = await link.evaluate((element) => {
-      const lists = element.closest('.work-usage')?.querySelector('.work-usage-grid')
-      if (!lists) throw new Error('the tab has no list')
-      return {
-        box: element.getBoundingClientRect().toJSON() as Box,
-        list: lists.getBoundingClientRect().toJSON() as Box,
-        size: Number.parseFloat(getComputedStyle(element).fontSize),
-      }
-    })
+    // The list of who did the work, by its name (`AgentsUsageSummary`).
+    const list = await section
+      .getByRole('list', { name: 'Who did the work' })
+      .evaluate((element) => element.getBoundingClientRect().toJSON() as Box)
+    const { box, size } = await link.evaluate((element) => ({
+      box: element.getBoundingClientRect().toJSON() as Box,
+      size: Number.parseFloat(getComputedStyle(element).fontSize),
+    }))
     expect(Math.abs(box.left - list.left)).toBeLessThanOrEqual(1)
     expect(box.right).toBeLessThanOrEqual(list.right + 0.5)
     const lines = Math.round((box.bottom - box.top) / (size * 1.25))

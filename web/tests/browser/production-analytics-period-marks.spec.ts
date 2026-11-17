@@ -269,7 +269,7 @@ for (const [locale, word] of [
     await page.goto(pageAt({ period: 'custom', from: '2026-11-02', to: '2026-11-04' }))
     await expect(days.locator('.period-column')).toHaveCount(3)
     await expect(days.locator('.period-incomplete')).toHaveCount(0)
-    await expect(legend.locator('.chart-key').first()).toBeVisible()
+    await expect(legend.locator('[data-series]').first()).toBeVisible()
     const past = await hatchKey(page)
     await record(info, `hatch key ${locale}`, { running, past })
     expect(past).toBeNull()

@@ -93,7 +93,9 @@ function layout(section: Locator) {
     const own = box(column)
     const ringBox = box(column.querySelector('.donut-ring'))
     const legend = box(column.querySelector('.chart-legend'))
-    const entries = [...column.querySelectorAll('.chart-entry')].map((one) => box(one))
+    const entries = [...column.querySelectorAll('[data-hint-list="legend"] li')].map((one) =>
+      box(one),
+    )
     return {
       ringSize: Math.round(ringBox.right - ringBox.left),
       ringInColumn: inside(ringBox, own),
@@ -128,7 +130,9 @@ test('agent time by effort is a ring of five sectors at most, with a legend, a h
 
   // Four efforts by name and the two smallest, no effort and max, folded into one rest.
   const names = ['high', 'medium', 'low', 'xhigh', 'Other, 2 more']
-  await expect(chart.locator('.chart-key-name')).toHaveText(names)
+  await expect(
+    chart.locator('[data-hint-list="legend"] [data-series] [data-part="name"]'),
+  ).toHaveText(names)
   await expect(chart.locator('.donut-sector')).toHaveCount(5)
   await expect(chart.locator('.donut-sector').last()).toHaveAttribute('data-slot', 'other')
 
@@ -196,7 +200,9 @@ test('agent time by environment is a ring whose sector narrows the view to its v
   const section = await openRing(page, { by: 'environment' }, 1440)
   const chart = ring(page)
   await expect(section.locator('h3')).toHaveText('Agent time by environment')
-  await expect(chart.locator('.chart-key-name')).toHaveText(['local', 'cloud'])
+  await expect(
+    chart.locator('[data-hint-list="legend"] [data-series] [data-part="name"]'),
+  ).toHaveText(['local', 'cloud'])
   await record(info, 'ring environment 1440', await layout(section))
 
   const address = page.url()

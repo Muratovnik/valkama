@@ -12,6 +12,9 @@
  * the quota's is (`PanelLevel`), whose caveats its heading's «ⓘ» says (`about`). A title that
  * names the page's measure keeps the room of its title under every measure (`titles`), so
  * choosing one moves nothing beside or under it.
+ *
+ * The section says which of its views is shown (`data-shown`: `chart`, a split's drawing or
+ * `table`), for a reader of the page to find the sections and the view each stands in.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

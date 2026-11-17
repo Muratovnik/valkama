@@ -37,14 +37,6 @@ const REPAIRED_BY_FIX = "check of a class removed from the product; repaired by 
  * repair removes whole lines. An entry whose use is gone is refused as stale: the list only shrinks.
  */
 const DEAD_USES = new Map<string, string>([
-  ['browser/production-analytics-changes.spec.ts .period-markers', REPAIRED_BY_FIX],
-  ['browser/production-analytics-changes.spec.ts .period-notes', REPAIRED_BY_FIX],
-  ['browser/production-analytics-changes.spec.ts .period-readout', REPAIRED_BY_FIX],
-  ['browser/production-analytics-marks.spec.ts .period-readout', REPAIRED_BY_FIX],
-  ['browser/production-analytics-marks.spec.ts .step-readout', REPAIRED_BY_FIX],
-  ['browser/production-analytics-steady.spec.ts .period-readout', REPAIRED_BY_FIX],
-  ['browser/ui-charts.spec.ts .period-readout', REPAIRED_BY_FIX],
-  ['browser/ui-charts.spec.ts .step-readout', REPAIRED_BY_FIX],
 ])
 
 /** Where the classes a library writes at runtime begin; no source of this app names them. */

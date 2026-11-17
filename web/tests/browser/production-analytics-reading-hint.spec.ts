@@ -199,9 +199,14 @@ test('every part of a mark takes the pointer for its reading, and the marks stan
   const missed: string[] = []
   const outside: string[] = []
   const floors: { floor: number; lowest: number }[] = []
-  for (const line of await page.locator('.quota-window .step-line').all()) {
+  // The three windows of five hours that have readings, each a step line (`StepLine`).
+  const lines = page.locator('[data-window] [data-chart="steps"]')
+  await expect(lines).toHaveCount(3)
+  const readings: number[] = []
+  for (const line of await lines.all()) {
     await line.evaluate((figure) => figure.scrollIntoView({ block: 'center' }))
-    const count = await line.locator('.step-reach').count()
+    const count = await line.locator('[data-reading]').count()
+    readings.push(count)
     for (let index = 0; index < count; index += 1) {
       const reading = await reachOf(page, line, index)
       outside.push(...reading.outside)
@@ -210,13 +215,19 @@ test('every part of a mark takes the pointer for its reading, and the marks stan
     // The line's lowest point and the floor it stands on, in the window.
     floors.push(
       await line.evaluate((figure) => {
-        const floor = figure.querySelector('.step-floor')?.getBoundingClientRect()
-        const path = figure.querySelector('.step-path')?.getBoundingClientRect()
-        return { floor: floor?.top ?? 0, lowest: path?.bottom ?? 0 }
+        // The floor is the drawing's foot, where 0 % stands; the line is its readings' path.
+        const floor = figure.querySelector('[data-region="drawing"]')?.getBoundingClientRect()
+        const path = figure.querySelector('[data-mark="line"]')?.getBoundingClientRect()
+        return { floor: floor?.bottom ?? 0, lowest: path?.bottom ?? 0 }
       }),
     )
   }
-  await record(info, 'reading-reach', { missed, outside, floors })
+  await record(info, 'reading-reach', { missed, outside, floors, readings })
+  // Every line has its readings to point at.
+  expect(
+    readings.filter((count) => count === 0),
+    'a line with no readings',
+  ).toEqual([])
   expect(missed, 'a part of a mark that shows no hint of its reading').toEqual([])
   expect(outside, 'a mark out of the plot').toEqual([])
   for (const { floor, lowest } of floors)

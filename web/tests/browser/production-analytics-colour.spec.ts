@@ -11,7 +11,7 @@ import type { Page } from '@playwright/test'
 
 import { noTask, task } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { openReport, record, serve } from './analyticsPage.ts'
+import { LEGEND_SERIES, openReport, record, serve } from './analyticsPage.ts'
 import { test } from './test.ts'
 
 const HOUR = 3600
@@ -41,7 +41,7 @@ const colours = async (page: Page, key: string) => {
     [
       `[data-section="work_item"] .mini-share-part[data-key="${key}"]`,
       `.analytics-panel .ranked-line[data-key="${key}"] .ranked-bar`,
-      `.spending-days [data-series="${key}"] .chart-swatch`,
+      `.spending-days [data-series="${key}"] [data-slot]`,
     ],
   )
   return { tile, bar, legend }
@@ -98,11 +98,11 @@ const FOLDED: TimedStretch[] = [
 /** The day chart's legend, in its order: each key and its swatch's fill. */
 const legendKeys = (page: Page) =>
   page
-    .locator('.spending-days .chart-key:has(.chart-swatch)')
+    .locator(`.spending-days ${LEGEND_SERIES}`)
     .evaluateAll((keys) =>
       keys.map((key) => [
         (key as HTMLElement).dataset.series ?? '',
-        getComputedStyle(key.querySelector('.chart-swatch') ?? key).backgroundColor,
+        getComputedStyle(key.querySelector('[data-slot]') ?? key).backgroundColor,
       ]),
     )
 

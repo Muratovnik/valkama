@@ -32,6 +32,12 @@ export async function hues(page: Page, section: string) {
     tile: await fillsBy(page, `[data-section="${section}"] .mini-share-part`, '', 'key'),
     bars: await fillsBy(page, '.spending-bars .ranked-line', '.ranked-bar', 'key'),
     multiples: await fillsBy(page, '.spending-multiples .multiple', '.multiple-column', 'key'),
-    days: await fillsBy(page, '.spending-days .chart-key', '.chart-swatch', 'series'),
+    // The legend's keys of its series and their swatches (`ChartLegend`).
+    days: await fillsBy(
+      page,
+      '.spending-days [data-hint-list="legend"] [data-series]',
+      '[data-slot]',
+      'series',
+    ),
   }
 }
