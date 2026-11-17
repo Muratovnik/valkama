@@ -259,6 +259,7 @@ HTTP_READS: dict[str, list[Args]] = {
     "/api/planning/request": [_q(lambda case: {"id": case.pending})],
     "/api/planning/held": [_q(lambda _case: {"session": SESSION})],
     "/api/planning/participation": [_none, _q(lambda _case: {"space": KEY})],
+    "/api/planning/decisions": [_none, _q(lambda _case: {"space": KEY, "point": "decision"})],
 }
 HTTP_WRITES: dict[str, list[Args]] = {
     "/api/planning/spaces": [lambda _case: {"name": "Other", "key": "OX"}],

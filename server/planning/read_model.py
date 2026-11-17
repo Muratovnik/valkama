@@ -1505,28 +1505,46 @@ def _cut_comments(
     return flat, None, None
 
 
-def _events(conn: sqlite3.Connection, identity: str, limit: int | None) -> list[dict]:
-    """An item's history, oldest first: every event, or only the newest `limit`."""
+_EVENT_ROWS = (
+    "SELECT e.id, e.action, e.detail, e.author, e.created_at,"
+    " c.identity_state, c.identity_source, c.session_id, c.agent_id, {point} AS point"
+    " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id{marks}"
+    " WHERE e.work_item_id = ?"
+)
+#: Each event with the point an agent's own decision marked it at (`planning.decisions`).
+_MARKED_EVENTS = _EVENT_ROWS.format(
+    point="d.point", marks=" LEFT JOIN agent_decisions d ON d.event_id = e.id"
+)
+#: The same for an attached store an earlier build wrote, which marks nothing.
+_UNMARKED_EVENTS = _EVENT_ROWS.format(point="NULL", marks="")
 
-    return [
-        {
+
+def _events(conn: sqlite3.Connection, identity: str, limit: int | None) -> list[dict]:
+    """An item's history, oldest first: every event, or only the newest `limit`.
+
+    An event an agent's own decision marked carries the mark's `point`; any other
+    has no such key.
+    """
+
+    try:
+        rows = _newest(conn, _MARKED_EVENTS, "e.id", (identity,), limit)
+    except sqlite3.OperationalError as error:
+        if str(error) != "no such table: agent_decisions":
+            raise
+        rows = _newest(conn, _UNMARKED_EVENTS, "e.id", (identity,), limit)
+    found = []
+    for event in rows:
+        shown = {
             "action": event["action"],
             "detail": event["detail"],
             "author": event["author"],
             "at": event["created_at"],
             "identity": _identity(event),
         }
-        for event in _newest(
-            conn,
-            "SELECT e.id, e.action, e.detail, e.author, e.created_at,"
-            " c.identity_state, c.identity_source, c.session_id, c.agent_id"
-            " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
-            " WHERE e.work_item_id = ?",
-            "e.id",
-            (identity,),
-            limit,
-        )
-    ]
+        if event["point"] is not None:
+            shown["point"] = event["point"]
+        found.append(shown)
+    return found
 
 
 def _events_total(conn: sqlite3.Connection, identity: str) -> int:

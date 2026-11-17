@@ -46,6 +46,7 @@ class PlanningApiTests(unittest.TestCase):
             (
                 "/api/planning",
                 "/api/planning/activity",
+                "/api/planning/decisions",
                 "/api/planning/graph",
                 "/api/planning/held",
                 "/api/planning/participation",

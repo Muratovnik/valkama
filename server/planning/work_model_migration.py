@@ -70,6 +70,9 @@ otherwise cascade into them:
   labels (`participation_settings`, `label_settings`) and their indexes, empty: with no
   row every space reads the default set. Its postcondition of the same name holds both
   empty and every space at that set.
+- **agent-decisions** creates the summary of the decisions agents took on their own
+  (`agent_decisions`), empty: the 2.9 history knew no points, so no earlier decision
+  can be marked. Its postcondition of the same name holds it empty.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -1967,6 +1970,48 @@ def _participation_default(conn: sqlite3.Connection, context: Context) -> Mappin
     return {"set": participation.DEFAULT}
 
 
+# -- agent-decisions: the summary of agent decisions, empty --------------------------
+
+#: The step and the postcondition that give the store the summary of agent decisions.
+AGENT_DECISIONS = "agent-decisions"
+
+
+def _decisions_missing(conn: sqlite3.Connection) -> bool:
+    found = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'agent_decisions'"
+    ).fetchone()
+    return found is None
+
+
+def _decisions_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return _decisions_missing(conn)
+
+
+def _create_decisions(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table, empty: no decision an agent took before it can be told by its point."""
+
+    del context
+    missing = _decisions_missing(conn)
+    conn.execute(planning_store.AGENT_DECISIONS)
+    return {"tables_created": ["agent_decisions"] if missing else []}
+
+
+def _check_decisions(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    if _decisions_missing(conn):
+        raise UnmetError("agent_decisions missing")
+
+
+def _decisions_empty(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The summary holds no decision: the history this store kept marked none."""
+
+    del context
+    rows = int(conn.execute("SELECT COUNT(*) FROM agent_decisions").fetchone()[0])
+    _unmet([f"agent_decisions holds {rows} rows, not 0"] if rows else [], "the summary")
+    return {"rows": rows}
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -2033,6 +2078,13 @@ STEPS = (
         _create_participation,
         _participation_needed,
         _check_participation,
+    ),
+    Step(
+        AGENT_DECISIONS,
+        "the summary of agent decisions",
+        _create_decisions,
+        _decisions_needed,
+        _check_decisions,
     ),
 )
 
@@ -2904,6 +2956,7 @@ POSTCONDITIONS = (
     Postcondition(
         PARTICIPATION, "no setting stored; every space at the default set", _participation_default
     ),
+    Postcondition(AGENT_DECISIONS, "no decision marked", _decisions_empty),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 

@@ -28,8 +28,8 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import cli, store, store_backups, store_steps
+from server.planning import decisions, participation, words
 from server.planning import images as planning_images
-from server.planning import participation, words
 from server.planning import service as planning_service
 from server.planning import store as planning_store
 from server.planning import work_model_migration as migration
@@ -44,13 +44,20 @@ T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [*(f"M{number}" for number in range(16)), "deferred-items", "history-actions", "participation"]
+STEP_NAMES = [
+    *(f"M{number}" for number in range(16)),
+    "deferred-items",
+    "history-actions",
+    "participation",
+    "agent-decisions",
+]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(1, 16)),
     *(f"P{number}" for number in range(18, 31)),
     "deferred-items",
     "participation",
+    "agent-decisions",
     "second-run",
     "recovery-point",
 ]
@@ -850,6 +857,7 @@ class MigratedStoreTests(StoreCase):
                 },
                 "fresh-tables": {
                     "added": [
+                        "agent_decisions",
                         "label_settings",
                         "participation_settings",
                         "work_item_deferrals",
@@ -1061,6 +1069,45 @@ class MigratedStoreTests(StoreCase):
         }
         self.assertTrue(held["fresh-shape"][0])
         self.assertEqual((True, {"steps_needed_again": []}), held["second-run"])
+
+    def test_agent_decisions_start_empty(self) -> None:
+        """The summary comes empty and declared as a fresh store declares it: no decision
+        an agent took before the migration is marked."""
+
+        declared = [
+            (str(row[0]), str(row[1]))
+            for row in self.read(
+                "SELECT type, name FROM sqlite_master WHERE tbl_name = 'agent_decisions'"
+                " AND sql IS NOT NULL"
+            )
+        ]
+        self.assertEqual([("table", "agent_decisions")], declared)
+        self.assertEqual(0, self.read("SELECT COUNT(*) FROM agent_decisions")[0][0])
+        steps = {step["name"]: step for step in self.report["steps"]}
+        self.assertEqual(
+            (True, {"tables_created": ["agent_decisions"]}),
+            (steps["agent-decisions"]["needed"], steps["agent-decisions"]["result"]),
+        )
+        held = {
+            entry["name"]: (entry["passed"], entry["detail"])
+            for entry in self.report["postconditions"]
+            if entry["name"] in ("agent-decisions", "fresh-shape", "second-run")
+        }
+        self.assertEqual((True, {"rows": 0}), held["agent-decisions"])
+        # `fresh-shape` held it to a fresh store's declaration, and a second run takes no step.
+        self.assertTrue(held["fresh-shape"][0])
+        self.assertEqual((True, {"steps_needed_again": []}), held["second-run"])
+        # A mark goes with the event it marks, in the migrated store as in a fresh one.
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        event = conn.execute(
+            "SELECT e.id, e.work_item_id FROM work_item_events e"
+            " WHERE e.action = 'transitioned' ORDER BY e.id LIMIT 1"
+        ).fetchone()
+        decisions.mark(conn, int(event[0]), "goal_close", "closed the goal")
+        conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (event[1],))
+        self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM agent_decisions").fetchone()[0])
+        conn.rollback()
 
     def test_a_second_run_changes_nothing_and_says_the_migration_ran(self) -> None:
         backups = sorted(os.listdir(os.path.join(self.directory.name, "backups")))
@@ -1756,6 +1803,11 @@ FAULTS = (
         "participation",
         "INSERT INTO participation_settings(planning_space_id, key, value, updated_at)"
         " SELECT planning_space_id, 'finding', 'agent', 'x' FROM planning_spaces WHERE key = 'WM'",
+    ),
+    fault(
+        "agent-decisions",
+        "INSERT INTO agent_decisions(event_id, point, what)"
+        " SELECT MAX(id), 'goal_close', 'closed' FROM work_item_events",
     ),
     fault("awaiting-rows", "UPDATE work_item_confirmations SET left_at = since"),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
