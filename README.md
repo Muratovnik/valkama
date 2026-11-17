@@ -258,7 +258,7 @@ python valkama.py <command> [options]
 | `launcher status [--directory DIR]` | verify launcher ownership and hashes |
 | `launcher listener status\|stop [--port 8642]` | inspect or stop only the Windows listener proven to run through the managed shim |
 | `launcher autostart enable\|disable\|status [--port 8642] [--force]` | on Windows, keep an on-demand listener on the port from login; off until enabled, see [`SERVICE.md`](SERVICE.md#holding-the-port-from-login) |
-| `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files and this launcher's autostart value |
+| `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files, this launcher's autostart value and Valkama's three Git hooks (see [The Git commit hook](#the-git-commit-hook)) |
 | `summary [--space KEY]` | a short Planning-space report, meant for session hooks |
 | `released --space KEY --repo PATH --range A..B [--json]` | list the open work items whose attached commits went into a release range, and how each was found: `hash` (the commit is in the range), `patch-id` (the same change arrived under another hash), or one of two weak matches: `changed-patch` (the commit is outside the range and not in the history before it, and a commit in the range has its subject with another patch) and `subject` (the object is gone and the subject recorded for it is that of a commit in the range). Only the commits of the project registered at `--repo` are compared, and those attached with no repository by their hash. A hint to check by hand when closing a release: partly released work shows too, an item with no attached commit cannot, and it changes neither the store nor the repository |
 | `hook CLIENT EVENT` | record one client hook event from stdin without a running server; see [Client hooks](#client-hooks) |
@@ -1252,8 +1252,10 @@ fails, its answer names the failure in `git_hook_error` and the launcher stays
 installed. Nothing else in the file is read for a decision or changed: not
 `core.hooksPath`, not the hook directory, not another program's hooks.
 `uninstall` removes the three sections whole, which leaves the file as it was
-before the install when nothing else changed it. Remove the hooks before
-`launcher uninstall`, or they keep running a shim that is gone.
+before the install when nothing else changed it. `launcher uninstall` takes the
+same three out before it removes the launcher, so they never run a shim that is
+gone; if that removal fails, its answer names the failure in `git_hook_error`
+and the launcher is removed all the same.
 
 Git runs these hooks in addition to the hook directory's scripts. Each command
 first checks that the environment names a Claude Code or Codex session, so a

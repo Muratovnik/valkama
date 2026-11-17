@@ -74,12 +74,13 @@ hooks.
 - A Git that does not run hooks from its configuration reads as
   `unsupported`, and Valkama then learns of commits only from the check when a
   task closes and from manual attachment.
-- `valkama launcher uninstall` leaves the hooks in place, and they then run a
-  shim that is gone: `doctor` reports them `stale`. Run `git-hook uninstall`
-  before removing the launcher.
+- `valkama launcher uninstall` removes the three hooks first, as `git-hook
+  uninstall` does, so no hook runs a shim that is gone. A failure there is
+  named in `git_hook_error` and does not keep the launcher from being removed.
 - Additions only: a new command, a new `doctor` group with two checks, a new
   `setup` finding, and the `git_hook` and `git_hook_error` fields of
-  `launcher install`. No existing answer changes meaning.
+  `launcher install` and `launcher uninstall`. No existing answer changes
+  meaning.
 - Rejected: a script in the hook directory (it belongs to whoever set
   `core.hooksPath`, and Valkama would have to install into another tool's
   directory or ask it to delegate); hooks in each repository's local
