@@ -696,6 +696,18 @@ def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict
     )
 
 
+def _defer(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    return service.defer_work_item(
+        conn,
+        _text(payload, "id"),
+        until=payload.get("until"),
+        reason=payload.get("reason"),
+        force=_flag(payload, "force"),
+        expected_revision=_optional_int(payload, "expected_revision"),
+        author=_author(payload),
+    )
+
+
 def _move_out(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return split.move_out(
         conn,
@@ -1146,10 +1158,11 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
     ("transition", frozenset({"state", "reason", "force", "acceptance", "to_check", "cancels"})),
+    ("defer", frozenset({"until", "reason", "force"})),
     ("move_out", frozenset({"reason", "force"})),
 )
 #: The groups that each change the state: a batch names at most one of them.
-_STATE_CHANGES = ("transition", "move_out")
+_STATE_CHANGES = ("transition", "defer", "move_out")
 #: What a creation may do to the item it just made, after making it and in this
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
 CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
@@ -1324,6 +1337,8 @@ def _apply_step(
         return {}, written
     if group == "move_out":
         return _moved_out(conn, {**entry, **base})
+    if group == "defer":
+        return _deferred(conn, {**entry, **base})
     answer = _transition(conn, {**entry, **base})
     found = {name: answer[name] for name in ("warnings", "overridden") if answer.get(name)}
     # An accepted open goal or stage stands in no state a caller names: it shows what it derives.
@@ -1331,10 +1346,22 @@ def _apply_step(
     if answer["container_state"] is not None:
         moved["container_state"] = answer["container_state"]
     # What the move closed and let go: the work a cancel took with it, the claims it
-    # ended and the work it left with nothing open blocking it.
-    for name in ("cancelled", "released", "freed", "review_request_id"):
+    # ended, the work it left with nothing open blocking it and the put-off work it
+    # brought back.
+    for name in ("cancelled", "released", "freed", "returned", "review_request_id"):
         if answer.get(name):
             moved[name] = answer[name]
+    return found, moved
+
+
+def _deferred(conn: sqlite3.Connection, payload: Mapping[str, object]) -> tuple[dict, object]:
+    """A batch's put-off: where it went, whose claim it ended, and the condition."""
+
+    answer = _defer(conn, payload)
+    found = {name: answer[name] for name in ("warnings", "overridden") if answer.get(name)}
+    moved: dict[str, object] = {"state": answer["state"]["key"], "deferred": answer["deferred"]}
+    if answer.get("released"):
+        moved["released"] = answer["released"]
     return found, moved
 
 
@@ -1491,6 +1518,7 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/update": _update,
     "/api/planning/work-item/delete": _delete,
     "/api/planning/work-item/transition": _transition,
+    "/api/planning/work-item/defer": _defer,
     "/api/planning/work-item/move-out": _move_out,
     "/api/planning/work-item/claim": _claim,
     "/api/planning/work-item/claim-ready": _claim_ready,

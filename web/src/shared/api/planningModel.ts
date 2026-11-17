@@ -26,7 +26,13 @@ import {
   EVENT_DETAIL_MAX,
   LABELS_DETAIL_MAX,
 } from '@/shared/api/planningEventActions.ts'
-import { lapsedClaimField, recordObject, withheldField } from '@/shared/api/planningRecordRules.ts'
+import {
+  deferredField,
+  lapsedClaimField,
+  recordObject,
+  returnedField,
+  withheldField,
+} from '@/shared/api/planningRecordRules.ts'
 import {
   otherSpaceSchema,
   spaceBriefSchema,
@@ -437,6 +443,9 @@ const workItemSchema = recordObject({
   participants: boundedList(participantSchema, 50).optional(),
   // What a goal's or stage's confirmer checks, only while it awaits confirmation.
   confirmation: confirmationSchema.optional(),
+  // Why it waits while put off, and why it came back while it stands in triage after that.
+  deferred: deferredField().optional(),
+  returned: returnedField().optional(),
   // A transition answers with these; a plain read does not.
   warnings: z.array(serverText()).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),

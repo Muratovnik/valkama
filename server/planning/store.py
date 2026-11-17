@@ -122,6 +122,33 @@ CONFIRMATIONS = """CREATE TABLE IF NOT EXISTS work_item_confirmations(
     request_id TEXT REFERENCES work_item_requests(request_id),
     left_at TEXT
 )"""
+#: The condition put-off work comes back on (`planning.deferral`), one row for exactly
+#: as long as its item stands in a deferred state: a moment, or another item's close,
+#: never both. The item it waits on is held without an action on delete, so a delete
+#: that went around the return fails rather than leaving the condition unmet forever.
+#: `call_id` is the call that set it -- the put-off, or the owner's answer to put it
+#: off again -- which a failed launch's put-back keeps, null for a write made outside
+#: any call; `reached_at` is when it came and the owner was asked instead. It goes
+#: with the item.
+DEFERRALS = """CREATE TABLE IF NOT EXISTS work_item_deferrals(
+    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    until_at TEXT,
+    until_item_id TEXT REFERENCES work_items(work_item_id),
+    reason TEXT NOT NULL,
+    call_id INTEGER REFERENCES execution_events(id),
+    since TEXT NOT NULL,
+    reached_at TEXT,
+    CHECK((until_at IS NULL) <> (until_item_id IS NULL))
+)"""
+#: What comes due by the clock, and who waits on one item, each read by its own column.
+DEFERRALS_UNTIL_AT_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_item_deferrals_until_at"
+    " ON work_item_deferrals(until_at) WHERE until_at IS NOT NULL"
+)
+DEFERRALS_UNTIL_ITEM_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_item_deferrals_until_item"
+    " ON work_item_deferrals(until_item_id) WHERE until_item_id IS NOT NULL"
+)
 
 
 _ACCEPTED_SQL = ",".join(f"'{category}'" for category in model.ACCEPTED_CATEGORIES)
@@ -423,6 +450,9 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {WAITING_OPEN_INDEX};
 {WAITING_DELIVERED_INDEX};
 {CONFIRMATIONS};
+{DEFERRALS};
+{DEFERRALS_UNTIL_AT_INDEX};
+{DEFERRALS_UNTIL_ITEM_INDEX};
 
 {_ITEM_PROJECTS}
 """
@@ -841,6 +871,7 @@ SCHEMA_TABLES = (
     "work_item_images",
     "work_item_waiting_notices",
     "work_item_confirmations",
+    "work_item_deferrals",
     "work_item_projects",
 )
 

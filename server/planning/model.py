@@ -222,6 +222,9 @@ EVENT_ACTIONS = (
     # A goal or stage that came to await confirmation, recorded by Valkama in a call
     # of its own: what was cancelled and moved out under it as the detail.
     "awaiting_confirmation",
+    # Put-off work that came back, recorded by Valkama beside the move that returned
+    # it, in the same call: why, as `date 2026-12-01` or `completed MAIN-12`.
+    "returned",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 #: The actions that say which state an item came to stand in: `created` and

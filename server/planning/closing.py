@@ -71,7 +71,17 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from . import calls, item_tree, leases, model, participants, questions, request_model, subscriptions
+from . import (
+    calls,
+    deferral,
+    item_tree,
+    leases,
+    model,
+    participants,
+    questions,
+    request_model,
+    subscriptions,
+)
 
 #: What a container derives while nothing under it is open.
 AWAITING = "awaiting_confirmation"
@@ -548,8 +558,10 @@ def _in_order(conn: sqlite3.Connection, identities: set[str]) -> list[str]:
 CANCEL_LIST = "cancel_list"
 #: How many hexadecimal digits of the list's SHA-256 its token keeps.
 TOKEN_DIGITS = 16
-#: How a dependent waits on what the cancel closes: linked `blocks` to it.
+#: How a dependent waits on what the cancel closes: linked `blocks` to it, or put off
+#: until it.
 BLOCKS = "blocks"
+DEFERRED = "deferred"
 
 #: Every item under one, at any depth, with what its row of the list and its place in
 #: the tree need. `UNION` keeps each once, so a cycle in a damaged store ends.
@@ -636,9 +648,9 @@ class CancelList:
 def cancel_list(conn: sqlite3.Connection, row: sqlite3.Row) -> CancelList | None:
     """What cancelling the goal or stage `row` would close; None with nothing open under it.
 
-    At most five statements, however much is under it: the items under it, the goal's
+    At most six statements, however much is under it: the items under it, the goal's
     or stage's reference, the tree that says what each goal or stage under it derives,
-    and what the list blocks.
+    what the list blocks and what was put off until one of it.
     """
 
     identity = str(row["work_item_id"])
@@ -742,7 +754,8 @@ def _depths(root: str, under: list[sqlite3.Row]) -> dict[str, int]:
 
 
 def _dependents(conn: sqlite3.Connection, closing: set[str]) -> list[dict]:
-    """The open items outside `closing` that a member of it blocks, one row per blocker."""
+    """The open items outside `closing` that a member of it blocks, one row per blocker,
+    and those put off until a member of it, which come back when it closes."""
 
     found = []
     for identity, title, kind, parent_id, key, number, blocker_key, blocker in conn.execute(
@@ -757,6 +770,20 @@ def _dependents(conn: sqlite3.Connection, closing: set[str]) -> list[dict]:
                 "kind": model.outward_kind(kind, parent_id),
                 "waits_on": model.human_id(str(blocker_key), int(blocker)),
                 "how": BLOCKS,
+            }
+        )
+    for identity, title, kind, parent_id, key, number, until_key, until in deferral.dependents(
+        conn, closing
+    ):
+        if str(identity) in closing:
+            continue
+        found.append(
+            {
+                "reference": model.human_id(str(key), int(number)),
+                "title": title,
+                "kind": model.outward_kind(kind, parent_id),
+                "waits_on": model.human_id(str(until_key), int(until)),
+                "how": DEFERRED,
             }
         )
     return sorted(found, key=lambda entry: (entry["reference"], entry["waits_on"]))

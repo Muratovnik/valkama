@@ -479,8 +479,9 @@ class NoStepsTests(Tree):
 class CancelListTests(Tree):
     """Cancelling a goal or stage with open work under it, in two calls.
 
-    The tree of row 8: under G, S1 holds a (at work, held by A), b (ready) and d (done),
-    and S2, which holds c (triage); x, outside G, waits on b by a `blocks` link. The
+    The tree: under G, S1 holds a (at work, held by A), b (ready) and d (done),
+    and S2, which holds c (triage); x, outside G, waits on b by a `blocks` link, and y,
+    outside G too, is put off until a. The
     list and its token are what the work model's rule for a cancel says, read here from
     the store and the answer: the token's projection is built in this test from the
     contract's definition, not taken from the server.
@@ -500,6 +501,8 @@ class CancelListTests(Tree):
         )
         self.x = self.made("x")
         self.person(APPLY, id=self.b, links=[{"other": self.x, "kind": "blocks"}])
+        self.y = self.made("y")
+        self.person(APPLY, id=self.y, defer={"until": self.a, "reason": "after a"})
         self.close(AS_B, self.d)
         self.agent("claim_work_item", AS_A, id=self.a)
         self.holder = str(service.get_work_item(self.conn, self.a)["claim_ref"])
@@ -563,9 +566,6 @@ class CancelListTests(Tree):
         return hashlib.sha256(text.encode("ascii")).hexdigest()[:16]
 
     def test_the_first_call_is_refused_with_the_list_and_writes_nothing(self) -> None:
-        """The item put off until a, which the case names among the dependents, is not
-        here: no write puts work off yet."""
-
         before = self.written()
         error = self.refused()
         self.assertEqual(before, self.written(), "the refused call wrote nothing")
@@ -592,15 +592,25 @@ class CancelListTests(Tree):
         self.assertEqual([self.holder], by[self.a]["holder"])
         self.assertEqual([], by[self.b]["holder"])
         self.assertEqual(
-            [
-                {
-                    "reference": self.x,
-                    "title": "x",
-                    "kind": "task",
-                    "waits_on": self.b,
-                    "how": "blocks",
-                }
-            ],
+            sorted(
+                [
+                    {
+                        "reference": self.x,
+                        "title": "x",
+                        "kind": "task",
+                        "waits_on": self.b,
+                        "how": "blocks",
+                    },
+                    {
+                        "reference": self.y,
+                        "title": "y",
+                        "kind": "task",
+                        "waits_on": self.a,
+                        "how": "deferred",
+                    },
+                ],
+                key=lambda entry: entry["reference"],
+            ),
             error["dependents"],
         )
         self.assertEqual(self.expected_token(cancels, error["dependents"]), error["list_token"])
@@ -617,14 +627,13 @@ class CancelListTests(Tree):
         self.assertEqual(before, self.written())
 
     def test_the_second_call_with_the_token_cancels_the_list(self) -> None:
-        """The list but for the item put off until a, which no write puts off yet."""
-
         token = self.refused()["list_token"]
         answer = self.cancel_goal(cancels=token)
         moved = answer["applied"]["transition"]
         self.assertEqual([self.s1, self.s2, self.a, self.b, self.c], moved["cancelled"])
         self.assertEqual([{"reference": self.a, "holder": self.holder}], moved["released"])
         self.assertEqual([self.x], moved["freed"])
+        self.assertEqual([self.y], moved["returned"])
         for reference in (self.goal, self.s1, self.s2, self.a, self.b, self.c):
             with self.subTest(item=reference):
                 self.assertEqual("cancelled", self.state(reference))
@@ -651,6 +660,12 @@ class CancelListTests(Tree):
         x = service.get_work_item(self.conn, self.x)
         self.assertEqual(([self.b], []), (x["cancelled_blockers"], x["waits_for"]))
         self.assertTrue(x["open"])
+        y = service.get_work_item(self.conn, self.y)
+        self.assertEqual("triage", y["state"]["category"])
+        self.assertEqual(
+            {"because": "cancelled", "item": self.a},
+            {name: y["returned"][name] for name in ("because", "item")},
+        )
 
     def test_the_deepest_go_first_so_each_stage_closes_with_nothing_open_under_it(self) -> None:
         self.cancel_goal(cancels=self.refused()["list_token"])

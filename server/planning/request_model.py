@@ -53,6 +53,44 @@ CONFIRM_FIELDS = (
         ],
     },
 )
+#: The fields of the question put-off work asks when its condition came under goals
+#: and stages all accepted: `do` takes it up, `later` puts it off again until `until`
+#: (a day or an item's reference, as `defer` reads it), and `drop` cancels it, with
+#: `cancels` the list token a goal or stage with open work under it is cancelled by.
+RETURN_DO = "do"
+RETURN_LATER = "later"
+RETURN_DROP = "drop"
+RETURN_UNTIL = "until"
+RETURN_CANCELS = "cancels"
+RETURN_FIELDS = (
+    {
+        "id": REVIEW_ANSWER,
+        "label": "Answer",
+        "type": "choice",
+        "required": True,
+        "options": [
+            {"id": RETURN_DO, "label": "Do it"},
+            {"id": RETURN_LATER, "label": "Put it off again"},
+            {"id": RETURN_DROP, "label": "Drop it"},
+        ],
+    },
+    {
+        "id": RETURN_UNTIL,
+        "label": "Until: a day YYYY-MM-DD or the item it waits on",
+        "type": "text",
+        "required": True,
+        "options": [],
+        "under": {"field": REVIEW_ANSWER, "option": RETURN_LATER},
+    },
+    {
+        "id": RETURN_CANCELS,
+        "label": "The list token, for a goal or stage with open work under it",
+        "type": "text",
+        "required": False,
+        "options": [],
+        "under": {"field": REVIEW_ANSWER, "option": RETURN_DROP},
+    },
+)
 MAX_NOTE = 8000
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each

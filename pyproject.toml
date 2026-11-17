@@ -328,6 +328,7 @@ name = "Planning's rules below the service never reach it"
 type = "forbidden"
 source_modules = [
   "server.planning.closing",
+  "server.planning.deferral",
   "server.planning.item_tree",
   "server.planning.leases",
   "server.planning.questions",

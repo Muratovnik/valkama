@@ -24,6 +24,7 @@ from collections.abc import Iterator
 from . import (
     calls,
     closing,
+    deferral,
     leases,
     model,
     questions,
@@ -977,13 +978,16 @@ def carry_out(
     the answerer's, held to its guards, so a refusal refuses the answer with it.
     The owner's note is the move's reason when it fits the event that records the
     move; the answer keeps it whole either way. The answer to confirm a goal or
-    stage is carried out by `_confirmed`. Answers what the move did: the category
-    it reached, or `left_for_next_session`; None for a question with no purpose.
+    stage is carried out by `_confirmed`, and the answer about put-off work that came
+    back by `_returned`. Answers what the move did: the category it reached,
+    `deferred` or `left_for_next_session`; None for a question with no purpose.
     """
 
     purpose = _purpose(row)
     if purpose == closing.CONFIRM:
         return _confirmed(conn, row, answers, note, author)
+    if purpose == deferral.RETURN:
+        return _returned(conn, row, answers, note, author)
     if purpose != "review":
         return None
     given = None if answers is None else answers.get(request_model.REVIEW_ANSWER)
@@ -998,11 +1002,7 @@ def carry_out(
     category = "completed" if given == request_model.REVIEW_ACCEPT else "ready"
     item = read_model.item_by_id(conn, str(row["work_item_id"]))
     key = _first_state(conn, item, category)
-    reason = note if answers is not None else "review withdrawn"
-    try:
-        reason = service.transition_reason(reason, key)
-    except model.PlanningError:
-        reason = ""
+    reason = _said(note if answers is not None else "review withdrawn", key)
     service.transition_work_item(
         conn, read_model.reference(conn, item), key, reason=reason, author=author
     )
@@ -1050,6 +1050,71 @@ def _confirmed(
     key = _first_state(conn, item, "completed")
     service.transition_work_item(conn, reference, key, author=author)
     return "completed"
+
+
+#: What a summary the owner's drop of put-off work writes says comes next.
+DROPPED_NEXT = "Nothing: the owner dropped it when it came back."
+
+
+def _returned(
+    conn: sqlite3.Connection, row: sqlite3.Row, answers: dict | None, note: str, author: str | None
+) -> str | None:
+    """The owner's answer about put-off work whose condition came under accepted goals.
+
+    `do` moves it to its workflow's first ready state, accepted as a move there is;
+    `later` puts it off again until the answer's `until` (`service.defer_again`);
+    `drop` cancels it, with the answer's `cancels` for a goal or stage with open work
+    under it, writing a summary that keeps what it says was done. Valkama asked it,
+    so nobody withdraws it: the write that takes the item out of deferred ends it.
+    """
+
+    if answers is None:
+        return None
+    given = answers.get(request_model.REVIEW_ANSWER)
+    choices = (request_model.RETURN_DO, request_model.RETURN_LATER, request_model.RETURN_DROP)
+    if given not in choices:
+        raise model.PlanningError(
+            f"[purpose] answer is {choices[0]}, {choices[1]} or {choices[2]}: an own variant"
+            " carries nothing out; say more in note"
+        )
+    identity = str(row["work_item_id"])
+    item = read_model.item_by_id(conn, identity)
+    reference = read_model.reference(conn, item)
+    if given == request_model.RETURN_LATER:
+        service.defer_again(conn, identity, answers.get(request_model.RETURN_UNTIL))
+        return "deferred"
+    if given == request_model.RETURN_DO:
+        key = _first_state(conn, item, "ready")
+        service.transition_work_item(conn, reference, key, reason=_said(note, key), author=author)
+        return "ready"
+    said = model.summary(item["summary"], required=False)
+    done = "" if said is None else str(said.get("done") or "").strip()
+    summary = {
+        "done": done or "Nothing: it was put off, and dropped when it came back.",
+        "next": DROPPED_NEXT,
+    }
+    if note:
+        summary["why"] = note[: model.SUMMARY_LIMIT]
+    service.set_summary(conn, reference, summary, author=author)
+    key = _first_state(conn, item, "cancelled")
+    service.transition_work_item(
+        conn,
+        reference,
+        key,
+        reason=_said(note, key),
+        author=author,
+        cancels=answers.get(request_model.RETURN_CANCELS) or None,
+    )
+    return "cancelled"
+
+
+def _said(note: str, key: str) -> str:
+    """The owner's note as a move's reason, when it fits the event that records the move."""
+
+    try:
+        return service.transition_reason(note, key)
+    except model.PlanningError:
+        return ""
 
 
 def _first_state(conn: sqlite3.Connection, item: sqlite3.Row, category: str) -> str:

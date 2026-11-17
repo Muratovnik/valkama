@@ -2188,7 +2188,8 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?, addressees?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
 | `transition` | `{state, reason?, force?, acceptance?, to_check?, cancels?}` | `/transition` |
-| `move_out` | `{reason, force?}`; not with `transition` | `/move-out`, see [Moving work out of a goal or stage](#moving-work-out-of-a-goal-or-stage) |
+| `defer` | `{until, reason, force?}`; not with `transition` or `move_out` | `/defer`, see [Putting work off](#putting-work-off) |
+| `move_out` | `{reason, force?}`; not with `transition` or `defer` | `/move-out`, see [Moving work out of a goal or stage](#moving-work-out-of-a-goal-or-stage) |
 
 Each path in the last column is under `POST /api/planning/work-item`.
 
@@ -2238,8 +2239,9 @@ null is left alone, and an edit writes no history event. It is applied after
 the claim. `parent` moves the item under another goal or stage; `parent: ""`,
 which cleared the parent, is refused with `[parent]`, `invalid_request`, naming
 `move_out`: an item leaves its goal or stage only with the reason that group
-records. `transition` and `move_out` each change the state, and a call that
-names both is refused with `invalid_request` before anything is written.
+records. `transition`, `defer` and `move_out` each change the state, and a call
+that names two of them is refused with `invalid_request` before anything is
+written.
 
 `comments` writes up to 100 comments in the order sent, each as `comment`
 writes one. The older `comment` group, one comment, still
@@ -2769,6 +2771,7 @@ A pass runs its steps in order, each in a transaction of its own:
 | `leases` | releases every lapsed claim and claimed step, as [above](#who-holds-a-claim-or-a-step), and marks the lapsed holder's ticks |
 | `waiting` | leaves [words waiting](#words-that-wait-for-a-session) on a goal or stage that a session stopped working on while its claim, step or subscription still stands -- it ended, or went quiet past the lease -- once no live session works there; the words are what a person did there after that session's last call, and they wait under a call of `valkama` with the tool `waiting-recovery` |
 | `subscriptions` | removes every [subscription](#subscriptions) and mute whose session lapsed |
+| `returns` | brings back [work put off](#putting-work-off) whose day or time passed, or whose item closed by a path that did not bring it back, one call of `valkama` under the tool `deferral-return` per item |
 | `confirmations` | asks the owner to confirm a goal or stage that awaits confirmation with no live session working there, or unconfirmed a day after its wait began, once in a period of waiting, under the tool `confirmation-question`; and records the wait, with its event, of one a write left unrecorded (see [Completing a goal or stage](#completing-a-goal-or-stage)) |
 
 Every step keeps the same contract:
@@ -3024,7 +3027,7 @@ does not carry it, and a person meets it as an agent does. Its body carries, bes
 | Field | What it holds |
 | --- | --- |
 | `cancels` | the open items under it, at any depth, in number order: `reference`, `title`, `kind`, `state` (`{key, name, category}`, `null` for an accepted open goal or stage) with `container_state`, and `holder`, who holds the item or one of its steps, empty when nobody does |
-| `dependents` | the open items outside that list that wait on one of its items or on the goal or stage itself: `reference`, `title`, `kind`, `waits_on` and `how`, `blocks` for a `blocks` link; one row for each item waited on |
+| `dependents` | the open items outside that list that wait on one of its items or on the goal or stage itself: `reference`, `title`, `kind`, `waits_on` and `how`, `blocks` for a `blocks` link and `deferred` for work [put off](#putting-work-off) until it; one row for each item waited on |
 | `list_token` | 16 hexadecimal digits that fingerprint the list |
 
 The second call is the same move with `cancels` set to `list_token`. The server
@@ -3107,6 +3110,73 @@ parent meets the rules of a creation's, and two more:
   off stays put off.
 
 A parent in another space is refused as before.
+
+### Putting work off
+
+Work that is to wait is put off by the `defer` group of `apply_work_item_changes`
+or `POST /api/planning/work-item/defer` with `{id, until, reason, force?,
+expected_revision?, author?}`. A `transition` into a `deferred` state is refused,
+naming `defer`. `until` is one of:
+
+- a day, `2026-12-01`, which comes at 00:00 UTC;
+- a time with its zone, such as `2026-12-01T09:00:00Z` or `2026-12-01T12:00:00+03:00`;
+- the reference or `work_item_id` of the open item whose close it waits on: not
+  the item itself, and not a goal or stage it stands under, which closes only
+  once nothing under it is open.
+
+`reason`, at most 400 characters, says why the work waits; the owner reads it when
+it comes back. In one write the item moves to the first `deferred` state its
+workflow reaches, with the `transitioned` detail `deferred: until 2026-12-01:
+<reason>`; its basis goes and its claims and step claims end (`released`), as on
+every move there. An item put off already stays where it is and takes the new
+condition. The answer adds `deferred`, and `applied.defer` of a batch says `state`,
+`deferred` and `released`. It is refused with `invalid_request`, nothing written,
+without `until` or `reason`, for an `until` that is no day, time or open item it
+may wait on or a moment already past, and for a closed item (`[deferral]`); and for one another session holds: `MAIN-12 is
+held by …; pass force to put it off anyway`. `force` carries the last through and
+records `overridden` with `claim`.
+
+The full record and the card of an item put off carry `deferred`:
+
+| Field | What it says |
+| --- | --- |
+| `until`, `until_item` | the moment it comes back, or the reference of the item it waits on; one of them is `null` |
+| `reason`, `since`, `by` | why, when and who put it off: `by` is `{author, session_id}` of that call; the card leaves these to the history |
+| `reached_at` | when its condition came while the owner is asked whether to take it up; otherwise `null` |
+
+**Coming back.** The work comes back when its day or time passes, read by the
+sweep's `returns` step and by `claim_ready_work_item` for its space before it reads
+the queue, and in the write that completes, cancels or deletes the item it waits
+on. An item merged away passes the wait to the item it merged into. It comes back
+to the first `triage` state its workflow reaches, with the `transitioned` detail
+`triage: returned, date 2026-12-01` and a `returned` event whose detail is `date
+2026-12-01`, `completed MAIN-12`, `cancelled MAIN-12` or `deleted MAIN-12`. While
+that move is its newest, its record carries `returned`: `because` (`date`,
+`completed`, `cancelled` or `deleted`), the `item`, `null` for a date, and `at`. A
+close or a delete that brought work back answers with `returned`, the references
+it brought back.
+
+Under goals and stages all accepted and open, or when its workflow reaches no
+`triage` state, the item stays put off with `reached_at` set, and Valkama asks the
+owner a question of purpose `return`: `MAIN-12 was put off until 2026-12-01; that
+has come. Do it, put it off again, or drop it.` Its one required choice, `answer`,
+takes `do`, `later` with the text `until`, or `drop` with the optional text
+`cancels`, a cancel list's token. As with [review](#review-asks-the-owner), only a
+person answers it, and the answer is carried out in the same write: `do` moves the
+item to its first `ready` state (`carried_out: ready`), `later` puts it off until
+the new condition (`deferred`), `drop` cancels it with a summary saying the owner
+dropped it (`cancelled`). While the question is open an agent's claim of the item,
+and its move anywhere but a cancelled state, is refused with
+`acceptance_question`, which `force` does not carry.
+
+A claim, or any move out of `deferred`, a cancel included, ends the condition and
+withdraws its question; moving the item under another parent keeps them. A read
+writes nothing: a condition that came stands until a write brings the work back.
+
+**A goal or stage put off** keeps the work under it with whoever holds it, and the
+queue gives none of it (`ancestor_deferred`) until it comes back. The sessions
+working under it hear that it was put off and that it came back, once each; an
+agent's write wakes none of them, a person's wakes them all.
 
 ### Review asks the owner
 

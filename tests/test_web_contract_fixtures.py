@@ -307,6 +307,30 @@ class _Scenario:
             conn.close()
         return self.http(f"/api/modules/planning/request?{self.scope(id=request['request_id'])}")
 
+    def put_off(self) -> dict[str, dict]:
+        """A card put off until another item, and one that came back when the item it
+        waited on was deleted."""
+
+        made = [
+            str(self.tool("create_work_item", space=SPACE, title=title)["reference"])
+            for title in ("Put off card", "Awaited card", "Came back card", "Dropped card")
+        ]
+        waiting, awaited, back, dropped = made
+        for ref, until in ((waiting, awaited), (back, dropped)):
+            self.http(
+                "/api/planning/work-item/apply",
+                {"id": ref, "defer": {"until": until, "reason": "Waits for the other card."}},
+            )
+        self.http("/api/planning/work-item/delete", {"id": dropped})
+        return {
+            "card-deferred": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=waiting)}"
+            ),
+            "card-returned": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=back)}"
+            ),
+        }
+
     def executor_card(self) -> dict:
         """A card whose claim, steps and agents each name an executor."""
 
@@ -901,6 +925,7 @@ class _Scenario:
             # Last, so the references the answers above name stay theirs.
             **self.tree(),
             "request-session-gone": self.session_gone(),
+            **self.put_off(),
         }
 
 

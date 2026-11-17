@@ -61,6 +61,9 @@ otherwise cascade into them:
   the steps above, has nothing open under it: the wait begins at the migration, with
   no call, no question and no event, and no session follows it. The service's first
   write under such a container, or its confirmation, takes it from there.
+- **deferred-items** creates the table of the conditions put-off work comes back on
+  (`work_item_deferrals`) and its two indexes, empty: no 2.9 state was deferred. Its
+  postcondition of the same name holds a condition to each item in a deferred state.
 - **history-actions** gives the events table the CHECK of every action this build declares, when
   `items` left one out: `items` widens it already, so on a 2.9 store the step has nothing to do.
 
@@ -1807,6 +1810,56 @@ def _check_confirmations(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError(f"{_CONFIRMATIONS} does not hold one row for each container that awaits")
 
 
+# -- deferred-items: the conditions put-off work comes back on ----------------------
+
+_DEFERRALS = "work_item_deferrals"
+#: The step and the postcondition that hold put-off work to its conditions, named by
+#: what they do rather than numbered.
+DEFERRED_ITEMS = "deferred-items"
+#: How many items stand in a deferred state, and how many conditions there are.
+_DEFERRED_COUNT = (
+    "SELECT COUNT(*) FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
+    " WHERE s.category = 'deferred'"
+)
+
+
+def _deferrals_present(conn: sqlite3.Connection) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (_DEFERRALS,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _deferrals_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return not _deferrals_present(conn)
+
+
+def _create_deferrals(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table of the conditions put-off work returns on, and its two indexes, empty.
+
+    No 2.9 state was deferred, so no item stands there after the steps above and none
+    has a condition to carry.
+    """
+
+    del context
+    created = not _deferrals_present(conn)
+    for statement in (
+        planning_store.DEFERRALS,
+        planning_store.DEFERRALS_UNTIL_AT_INDEX,
+        planning_store.DEFERRALS_UNTIL_ITEM_INDEX,
+    ):
+        conn.execute(statement)
+    return {"table_created": created}
+
+
+def _check_deferrals(conn: sqlite3.Connection, context: Context) -> None:
+    if _deferrals_needed(conn, context):
+        raise UnmetError(f"{_DEFERRALS} is missing")
+
+
 # -- `history-actions`: the actions the history takes --------------------------------------------
 
 
@@ -1890,6 +1943,13 @@ STEPS = (
         _create_confirmations,
         _confirmations_needed,
         _check_confirmations,
+    ),
+    Step(
+        DEFERRED_ITEMS,
+        "the conditions put-off work comes back on",
+        _create_deferrals,
+        _deferrals_needed,
+        _check_deferrals,
     ),
     Step("history-actions", "the actions the history takes", _widen_actions, _actions_needed, _check_actions),
 )
@@ -2689,6 +2749,29 @@ def _holds_awaiting_rows(conn: sqlite3.Connection, context: Context) -> Mapping[
     return {"rows": len(held)}
 
 
+def _deferred_items(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """A condition stands for each item in a deferred state and for no other: as many
+    rows as such items, every one of them an item that stands there."""
+
+    del context
+    rows = int(conn.execute(f"SELECT COUNT(*) FROM {_DEFERRALS}").fetchone()[0])  # noqa: S608 - constant name
+    deferred = int(conn.execute(_DEFERRED_COUNT).fetchone()[0])
+    stray = int(
+        conn.execute(
+            f"SELECT COUNT(*) FROM {_DEFERRALS} d JOIN work_items i"  # noqa: S608 - constant name
+            " ON i.work_item_id = d.work_item_id JOIN workflow_states s ON s.state_id = i.state_id"
+            " WHERE s.category <> 'deferred'"
+        ).fetchone()[0]
+    )
+    found = []
+    if rows != deferred:
+        found.append(f"{rows} conditions for {deferred} items in a deferred state")
+    if stray:
+        found.append(f"{stray} conditions on items that are not deferred")
+    _unmet(found, "conditions of put-off work")
+    return {"rows": rows, "deferred": deferred}
+
+
 def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
@@ -2726,6 +2809,9 @@ POSTCONDITIONS = (
     Postcondition("no-closed-waits", "no request waits on a closed item or says task_closed", _p28),
     Postcondition("requests-ended", "a close ended the requests foreseen, each by its item's category", _p29),
     Postcondition("awaiting-rows", "a row for each goal or stage awaiting confirmation", _p30),
+    Postcondition(
+        DEFERRED_ITEMS, "a condition for each item put off, and for no other", _deferred_items
+    ),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 
