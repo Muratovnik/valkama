@@ -1436,5 +1436,35 @@ class CancelOutsideTests(SettingHarness):
         self.assertIn("[participation] following names the owner's answer", str(moved.exception))
 
 
+#: A decision that recommends an answer in its one required field.
+DECISION = [{**FIELDS[0], "options": [{**FIELDS[0]["options"][0], "recommended": True}]}]
+
+
+class OpenDecisionTests(SettingHarness):
+    def test_closing_a_task_with_an_open_question_is_refused(self) -> None:
+        task = self.filed("The owner's task", by=calls.browser())
+        self.tool("claim_work_item", id=task)
+        asked = self.tool(
+            "create_work_item_request", id=task, kind="decision", prompt="Which?", fields=DECISION
+        )
+        self.assertEqual([asked["request_id"]], self.owners_list())
+        before = (self.counts(), self.card(task)["revision"])
+        for force in (False, True):
+            with self.subTest(force=force):
+                with self.assertRaises(REFUSED) as refused:
+                    self.tool(
+                        "apply_work_item_changes",
+                        id=task,
+                        summary=SUMMARY,
+                        transition={"state": "completed", "force": force},
+                    )
+                status, body = api.error_response(refused.exception)
+                self.assertEqual((409, "workflow_guard"), (status, body["error"]["code"]))
+                self.assertIn("[question]", body["error"]["message"])
+                self.assertEqual(before, (self.counts(), self.card(task)["revision"]))
+        self.assertEqual("active", self.card(task)["state"]["category"])
+        self.assertEqual("pending", self.request(asked["request_id"])["status"])
+
+
 if __name__ == "__main__":
     unittest.main()

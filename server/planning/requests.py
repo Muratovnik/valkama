@@ -13,6 +13,10 @@ to answer, in Valkama; its answer is carried out in the write that gives it
 (`carry_out`), so it is never declined or changed, and only the session that asked
 it withdraws it. A question about a write that waits for the owner (`pending`) carries
 that write out, declines it or drops it, by its point (`CARRIERS`).
+
+A decision recommends an answer in every required field. Where the owner's setting
+leaves decisions to the agent, an agent's decision to the owner is answered by those
+recommendations in the write that asks it (`create`).
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ from dataclasses import dataclass
 from . import (
     calls,
     closing,
+    decisions,
     deferral,
     leases,
     model,
@@ -614,11 +619,15 @@ def create(
     session_id: object = None,
     expires_at: object = None,
 ) -> dict:
-    parsed_kind = model.enum_field(kind, frozenset({"question", "decision"}), "kind")
-    parsed_prompt = model.multiline_field(prompt, "prompt", limit=8000)
-    if not parsed_prompt:
-        raise model.PlanningError("prompt is required")
-    parsed_fields = request_model.fields(fields)
+    """Ask the owner a question or a decision on an item.
+
+    A decision recommends an answer in every required field. Where the owner's
+    setting of the item's space leaves decisions to the agent (`decision`), an
+    agent's decision is answered in the same write by its recommendations, in the
+    asker's name, and the summary of decisions marks the answer.
+    """
+
+    parsed_kind, parsed_prompt, parsed_fields = _request_parts(kind, prompt, fields)
     deadline = request_model.timestamp(expires_at)
     live = "a request requires a live work item, live execution and future deadline"
     with _transaction(conn):
@@ -636,10 +645,94 @@ def create(
             session_id=session,
             expires_at=deadline,
         )
-        if _expired(conn, _row(conn, identity), request_model.now()):
+        row = _row(conn, identity)
+        if _expired(conn, row, request_model.now()):
             raise model.PlanningError(live)
+        if parsed_kind == "decision" and _agent_decides(conn, item):
+            _decide_by_recommendation(conn, row, parsed_fields, author)
     words.bring_current(conn)
     return get(conn, identity)
+
+
+def _request_parts(kind: object, prompt: object, fields: object) -> tuple[str, str, list[dict]]:
+    """The kind, prompt and fields of a request as given, checked; a decision's fields
+    recommend an answer in every required field."""
+
+    parsed_kind = model.enum_field(kind, frozenset({"question", "decision"}), "kind")
+    parsed_prompt = model.multiline_field(prompt, "prompt", limit=8000)
+    if not parsed_prompt:
+        raise model.PlanningError("prompt is required")
+    parsed_fields = request_model.fields(fields)
+    if parsed_kind == "decision":
+        request_model.recommends_every_required(parsed_fields)
+    return parsed_kind, parsed_prompt, parsed_fields
+
+
+def _agent_decides(conn: sqlite3.Connection, item: sqlite3.Row) -> bool:
+    """Whether an agent's decision on this item is the agent's to take, by the owner's
+    setting of its space; the owner's and Valkama's own requests ask as they always did."""
+
+    if not calls.from_agent():
+        return False
+    mode = participation.load(conn).mode(str(item["planning_space_id"]), "decision")
+    return mode == participation.AGENT
+
+
+def _decide_by_recommendation(
+    conn: sqlite3.Connection, row: sqlite3.Row, fields: list[dict], author: str | None
+) -> None:
+    """Answer a decision just asked by its recommendations, as the session that asked it,
+    and mark the answer in the summary of decisions with what it chose."""
+
+    given = request_model.recommended_answers(fields)
+    stored = request_model.stored_answers(given, request_model.RECOMMENDED_NOTE)
+    event = _close(
+        conn,
+        row,
+        "answered",
+        stored,
+        answered_by=calls.holder(author),
+        author=author,
+        at=request_model.now(),
+    )
+    chosen = ", ".join(f"«{label}»" for label in request_model.chosen_labels(fields, given))
+    decisions.mark(conn, event, "decision", f"chose {chosen}")
+
+
+def _close(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    status: str,
+    stored: dict | None,
+    *,
+    answered_by: str,
+    author: str | None,
+    at: str,
+) -> int:
+    """Close a pending request at its revision as `status`, with its answer as stored
+    when it is answered, and record the event; answer the event's id.
+
+    Refused when the request is no longer pending or it changed meanwhile.
+    """
+
+    changed = conn.execute(
+        "UPDATE work_item_requests SET status=?,answers_json=?,answered_by=?,resolved_at=?,expired_reason=?,answer_version=?,revision=revision+1 WHERE request_id=? AND revision=? AND status='pending' AND (expires_at IS NULL OR julianday(expires_at)>julianday('now'))",
+        (
+            status,
+            model.dumps(stored) if stored is not None else None,
+            answered_by,
+            at,
+            "withdrawn" if status == "expired" else None,
+            1 if stored is not None else 0,
+            row["request_id"],
+            row["revision"],
+        ),
+    )
+    if changed.rowcount != 1:
+        raise model.WorkflowGuardError("request is no longer pending")
+    return questions.log_event(
+        conn, row["work_item_id"], f"request_{status}", str(row["request_id"]), author
+    )
 
 
 def _refuse_closed(conn: sqlite3.Connection, item: sqlite3.Row, message: str) -> None:
@@ -669,14 +762,12 @@ def ask_sessions(
     is the caller's own, is a subagent's rather than a top-level one, or is named
     twice; and when none is named. An agent session that asked one session
     `MOST_ASKS_PER_HOUR` times in the last hour is refused with `AskLimitError`;
-    Valkama's own asking counts toward no hour. A refusal writes nothing.
+    Valkama's own asking counts toward no hour. A refusal writes nothing. A decision
+    recommends an answer in every required field, as one asked of the owner does,
+    and waits for the session's answer at any setting.
     """
 
-    parsed_kind = model.enum_field(kind, frozenset({"question", "decision"}), "kind")
-    parsed_prompt = model.multiline_field(prompt, "prompt", limit=8000)
-    if not parsed_prompt:
-        raise model.PlanningError("prompt is required")
-    parsed_fields = request_model.fields(fields)
+    parsed_kind, parsed_prompt, parsed_fields = _request_parts(kind, prompt, fields)
     deadline = request_model.timestamp(expires_at)
     identities: list[str] = []
     with _transaction(conn):
@@ -944,22 +1035,7 @@ def resolve(
         if row["status"] != "pending" or _expired(conn, row, at):
             raise model.WorkflowGuardError("request is no longer pending")
         parsed = _stored(row, answers, own, field_notes, said) if status == "answered" else None
-        changed = conn.execute(
-            "UPDATE work_item_requests SET status=?,answers_json=?,answered_by=?,resolved_at=?,expired_reason=?,answer_version=?,revision=revision+1 WHERE request_id=? AND revision=? AND status='pending' AND (expires_at IS NULL OR julianday(expires_at)>julianday('now'))",
-            (
-                status,
-                model.dumps(parsed) if parsed is not None else None,
-                model.actor(author),
-                at,
-                "withdrawn" if status == "expired" else None,
-                1 if parsed is not None else 0,
-                identity,
-                expected_revision,
-            ),
-        )
-        if changed.rowcount != 1:
-            raise model.WorkflowGuardError("request is no longer pending")
-        questions.log_event(conn, row["work_item_id"], f"request_{status}", identity, author)
+        _close(conn, row, status, parsed, answered_by=model.actor(author), author=author, at=at)
         carried = carry_out(conn, row, parsed, said, author)
     words.bring_current(conn)
     record = get(conn, identity)

@@ -1524,7 +1524,12 @@ def _apply_step(
         asked = _create_request(conn, {**entry, **base})
         # An entry asked of sessions answers as the single write does: its requests,
         # each with its addressee.
-        names = ("requests",) if "addressees" in entry else ("request_id", "revision")
+        names: tuple[str, ...] = (
+            ("requests",) if "addressees" in entry else ("request_id", "revision")
+        )
+        # A decision its recommendation answered at once names its answer as well.
+        if asked.get("status") == "answered":
+            names += ("status", "answers", "note")
         return {}, {name: asked[name] for name in names}
     if group == "summary":
         beside = {name: entry[name] for name in ("list", "mentions") if name in entry}

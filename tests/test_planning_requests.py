@@ -638,10 +638,10 @@ class ClosingEndsQuestionsTests(unittest.TestCase):
         asked = self.ask()
         other = str(service.create_work_item(self.conn, space="CLO", title="c")["reference"])
         elsewhere = requests.create(
-            self.conn, other, kind="decision", prompt="Keep it?", fields=[field()]
+            self.conn, other, kind="decision", prompt="Keep it?", fields=[field(required=False)]
         )["request_id"]
         decided = requests.create(
-            self.conn, self.ref, kind="decision", prompt="Ship?", fields=[field()]
+            self.conn, self.ref, kind="decision", prompt="Ship?", fields=[field(required=False)]
         )["request_id"]
         self.conn.commit()
         self.person(

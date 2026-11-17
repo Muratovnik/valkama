@@ -381,10 +381,19 @@ class AgentAskTests(Harness):
         self.assertEqual([], requests.list_page(self.conn, reference=self.t3)["requests"])
 
     def test_a_decision_asks_as_a_question_does(self) -> None:
-        made = self.post(ASK, self.asking(B, E, kind="decision"), A, A1)
+        # A decision recommends an answer in every required field, whoever it asks.
+        refused = self.post(ASK, self.asking(B, E, kind="decision"), A, A1)
+        self.assertEqual((400, "invalid_request"), (refused["http"], refused["code"]))
+        self.assertIn("[decision] a decision recommends an answer", refused["message"])
+        recommended = {
+            **CHOICE,
+            "options": [{**CHOICE["options"][0], "recommended": True}, CHOICE["options"][1]],
+        }
+        made = self.post(ASK, self.asking(B, E, kind="decision", fields=[recommended]), A, A1)
         self.assertEqual([B, E], [entry["addressee"] for entry in made["requests"]])
         for entry in made["requests"]:
-            self.assertEqual("decision", requests.get(self.conn, entry["request_id"])["kind"])
+            asked = requests.get(self.conn, entry["request_id"])
+            self.assertEqual(("decision", "pending"), (asked["kind"], asked["status"]))
 
     def test_an_agent_ask_refused_names_why(self) -> None:
         """O19: A and B live, D ended, C quiet past its lease."""
