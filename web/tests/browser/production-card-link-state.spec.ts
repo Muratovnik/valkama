@@ -16,32 +16,11 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
+import { LINKS } from './served/cardParts.ts'
 import { test } from './test.ts'
 
 /** Under a pixel: two places a reader sees as one. */
 const ONE_PLACE = 0.5
-
-const SHORT = 'Ask the vendor'
-const LONG =
-  'Move the store integrity check into a build stage of its own, describe how it is rolled back and what a failed check leaves for the next run to find'
-
-/** Two groups, each with a short and a long title, and four state words of different lengths. */
-const LINKS = [
-  ['discovered-from', 'MAIN-777', SHORT, 'Dev', 'active'],
-  ['discovered-from', 'MAIN-778', LONG, 'Done', 'completed'],
-  ['relates-to', 'MAIN-779', LONG, 'Backlog', 'triage'],
-  ['relates-to', 'MAIN-780', SHORT, 'Review', 'review'],
-].map(([kind, reference, title, name, category], index) => ({
-  kind,
-  direction: 'outgoing',
-  work_item_id: `00000000-0000-4000-8000-00000000077${index}`,
-  reference,
-  title,
-  state_name: name,
-  state_category: category,
-  is_terminal: category === 'completed',
-  state_unavailable: null,
-}))
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',

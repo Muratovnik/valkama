@@ -22,18 +22,23 @@ import type { Served } from './browser/servedContracts.ts'
 import { backendReads, backendRoutes } from './browser/servedRoutes.ts'
 import type { DrivenRoutes } from './browser/servedRoutes.ts'
 
-/** What a driven route table answers the page's reads with, each found answer a record. */
-async function drive({ install, name, reads }: DrivenRoutes): Promise<Served[]> {
+/**
+ * What a driven route table answers the page's reads with, each answer a record. A read
+ * it leaves unanswered, or answers with a refusal, is not a pass: it is named as missed.
+ */
+async function drive({ install, name, reads }: DrivenRoutes) {
   const { page, ask } = routedPage()
   await install(page)
   const served: Served[] = []
+  const missed: string[] = []
   for (const read of reads) {
     const { url, method = 'GET', body } = typeof read === 'string' ? { url: read } : read
     const answer = await ask(url, { method, body })
     if (answer && answer.status >= 200 && answer.status < 300)
       served.push({ name, method, url, body: answer.body })
+    else missed.push(`${name}: ${method} ${url} answered ${answer?.status ?? 'nothing'}`)
   }
-  return served
+  return { missed, served }
 }
 
 /** What each served answer's contract says of it, one line for each that it refuses. */
@@ -51,15 +56,17 @@ describe('the records the browser specs serve', () => {
     '%s serves only records its contracts take',
     async (_, module) => {
       const driven = await Promise.all((module.routes ?? []).map((routes) => drive(routes)))
-      const served = [...(module.served ?? []), ...driven.flat()]
+      const served = [...(module.served ?? []), ...driven.flatMap((table) => table.served)]
       expect(served.length).toBeGreaterThan(0)
+      expect(driven.flatMap((table) => table.missed)).toStrictEqual([])
       expect(failuresOf(served)).toStrictEqual([])
     },
   )
 
   it('the backend double answers every strict read it serves with a valid record', async () => {
-    const served = await drive(backendRoutes('default'))
+    const { missed, served } = await drive(backendRoutes('default'))
     // Every read is answered: a route the double stopped answering is not a pass.
+    expect(missed).toStrictEqual([])
     expect(served).toHaveLength(backendReads().length)
     expect(failuresOf(served)).toStrictEqual([])
   })

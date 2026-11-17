@@ -125,6 +125,8 @@ const PLANS: Record<string, object> = {
     ],
   }),
 }
+/** The sessions the plans above answer for. */
+export const PLANNED_SESSIONS = () => Object.keys(PLANS)
 
 /** What `GET /api/open-plan` answers, with "always open in" as the page asked for it. */
 export function openPlanFor(query: URLSearchParams): object {
