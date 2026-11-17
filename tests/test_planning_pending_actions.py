@@ -456,7 +456,7 @@ class CarryOutTests(Harness):
                 f"cancel {task}",
                 seen=pending.cancel_seen(self.conn, self.row(task)),
             ),
-            point="cancel_outside",
+            point="cancel_shared",
             purpose="cancel",
         )
         before = self.counts()
@@ -466,7 +466,7 @@ class CarryOutTests(Harness):
         self.assertIsNone(self.action(other.action)["outcome"])
         self.assertTrue(
             str(nothing.exception).startswith(
-                "[purpose] this build carries out no answer on cancel_outside"
+                "[purpose] this build carries out no answer on cancel_shared"
             )
         )
         self.assertEqual("pending", self.request(other.question)["status"])
@@ -1140,6 +1140,300 @@ class TaskInGoalTests(SettingHarness):
         )
         self.assertEqual([], self.owners_list())
         self.assertEqual([], self.decided())
+
+
+#: The batch an agent cancels an item with: its summary, and the move with its reason.
+SUMMARY = {"done": "Nothing: another item covers it.", "next": "Nothing."}
+REASON = "covered by another item"
+#: How a refusal reaches a caller: a single write's, or a batch's naming its step.
+REFUSED = (model.PlanningError, api.PlanningHttpError)
+
+
+class CancelOutsideTests(SettingHarness):
+    """An agent's cancel of an item its own work did not file: by the owner's setting of
+    its space it is made and marked `cancel_outside` in the summary of decisions, or it
+    waits on the owner's question `cancel`, whose answers `cancel` and `keep` make it or
+    leave the item. A cancel that follows an owner's answer asks nothing. The task lies
+    under the owner's accepted goal, filed there by the session `session-b`, which holds
+    nothing and is no live session."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.goal = self.filed("The owner's goal", kind="goal", by=calls.browser())
+        self.task = self.filed("Filed by another session", parent=self.goal, by=OTHER)
+
+    def cancel(self, reference: str, **transition: object) -> dict:
+        return self.tool(
+            "apply_work_item_changes",
+            id=reference,
+            summary=SUMMARY,
+            transition={"state": "cancelled", "reason": REASON, **transition},
+        )
+
+    def category(self, reference: str) -> str:
+        return str(self.card(reference)["state"]["category"])
+
+    def waits_at_maximal(self) -> dict:
+        """At the maximal set the agent's cancel of the task waits; its `waits_for_owner`."""
+
+        self.at(participation.MAXIMAL)
+        return self.cancel(self.task)["waits_for_owner"]
+
+    def decided(self) -> list[tuple[str, str, str]]:
+        """The cancels in the summary of decisions; filing the task in the goal is there too."""
+
+        return [entry for entry in super().decided() if entry[0] == "cancel_outside"]
+
+    def told(self, reference: str) -> set[str]:
+        return {
+            entry["kind"]
+            for entry in person_events.since_last_agent_write(self.conn, self.id(reference))
+        }
+
+    # -- the setting ------------------------------------------------------------------
+
+    def test_cancelling_another_sessions_item_by_the_default(self) -> None:
+        answer = self.cancel(self.task)
+        self.assertNotIn("waits_for_owner", answer)
+        self.assertEqual("cancelled", self.category(self.task))
+        self.assertEqual(([], []), (self.waiting_on(self.task), self.owners_list()))
+        self.assertEqual([("cancel_outside", self.task, f"cancel {self.task}")], self.decided())
+        [entry] = decisions.page(self.conn, space=self.space, points=["cancel_outside"])["items"]
+        marked = self.conn.execute(
+            "SELECT action, detail FROM work_item_events WHERE id = ?", (entry["event_id"],)
+        ).fetchone()
+        self.assertEqual(("transitioned", f"cancelled: {REASON}"), tuple(marked))
+
+    def test_cancelling_another_sessions_item_waits_at_maximal(self) -> None:
+        before = self.card(self.task)
+        waits = self.waits_at_maximal()
+        card = self.card(self.task)
+        self.assertEqual(
+            (before["state"]["key"], "Nothing: another item covers it."),
+            (card["state"]["key"], card["summary"]["done"]),
+        )
+        [action] = self.waiting_on(self.task)
+        self.assertEqual(
+            {
+                "action": action.id,
+                "point": "cancel_outside",
+                "question": waits["question"],
+                "what": f"cancel {self.task}",
+            },
+            waits,
+        )
+        self.assertEqual(
+            ("transition", {"state": "cancelled", "reason": REASON}, REASON),
+            (action.kind, action.params, action.reason),
+        )
+        question = self.request(waits["question"])
+        self.assertEqual(
+            ("cancel", action.id, None, "pending"),
+            (question["purpose"], question["action_id"], question["addressee"], question["status"]),
+        )
+        self.assertIn(REASON, question["prompt"])
+        [choice, cancels] = json.loads(question["fields_json"])
+        self.assertEqual(
+            [("cancel", True), ("keep", False)],
+            [(option["id"], bool(option.get("recommended"))) for option in choice["options"]],
+        )
+        self.assertEqual(("cancels", "cancel"), (cancels["id"], cancels["under"]["option"]))
+        self.assertEqual([waits["question"]], self.owners_list())
+        self.assertIn(("session-a", "", 1), self.followers(self.task))
+        record = requests.get(self.conn, waits["question"])
+        self.assertEqual(
+            ("cancel_outside", {"state": "cancelled"}, REASON),
+            tuple(record["action"][name] for name in ("point", "proposed", "reason")),
+        )
+        self.assertEqual([], self.decided())
+        # The same cancel sent again answers the same wait and asks nothing more.
+        asked = self.counts()[:2]
+        again = self.tool(
+            "apply_work_item_changes",
+            id=self.task,
+            transition={"state": "cancelled", "reason": REASON},
+        )
+        self.assertEqual(waits, again["waits_for_owner"])
+        self.assertEqual(asked, self.counts()[:2])
+
+    def test_an_item_of_the_current_work_is_cancelled_freely(self) -> None:
+        self.at(participation.MANUAL)
+        # Filed by a subagent of the session: the session's own work.
+        own = self.filed("Filed by the agent's own work", by=SUBAGENT)
+        answer = self.cancel(own)
+        self.assertNotIn("waits_for_owner", answer)
+        self.assertEqual("cancelled", self.category(own))
+        self.assertEqual(([], [], []), (self.waiting_on(own), self.owners_list(), self.decided()))
+
+    def test_a_persons_cancel_meets_no_gate(self) -> None:
+        self.at(participation.MANUAL)
+        self.person(
+            "/api/planning/work-item/apply",
+            id=self.task,
+            summary=SUMMARY,
+            transition={"state": "cancelled", "reason": REASON},
+        )
+        self.assertEqual("cancelled", self.category(self.task))
+        self.assertEqual(([], []), (self.owners_list(), self.decided()))
+
+    # -- the owner's answers ----------------------------------------------------------
+
+    def test_the_owner_answers_a_cancel(self) -> None:
+        waits = self.waits_at_maximal()
+        record = self.answer(waits["question"], "cancel")
+        self.assertEqual("carried_out", record["carried_out"])
+        self.assertEqual("cancelled", self.category(self.task))
+        self.assertEqual(f"cancelled: {REASON}", self.events(self.task, "transitioned")[-1])
+        self.assertEqual("carried_out", self.action(waits["action"])["outcome"])
+        # The asker follows the task and hears the answer and the cancel.
+        self.assertLessEqual({"question_answered", "status"}, self.told(self.task))
+        self.assertIn(("session-a", "", 1), self.followers(self.task))
+        # The owner made it: nothing goes into the summary of agent decisions.
+        self.assertEqual([], self.decided())
+        # In another run the owner keeps the item.
+        kept = self.filed("Another filed by another session", parent=self.goal, by=OTHER)
+        question = self.cancel(kept)["waits_for_owner"]["question"]
+        before = self.card(kept)["state"]
+        record = self.answer(question, "keep")
+        self.assertEqual("declined", record["carried_out"])
+        self.assertEqual(before, self.card(kept)["state"])
+        self.assertEqual(([], []), (self.waiting_on(kept), self.owners_list()))
+
+    def test_an_action_that_no_longer_applies_is_dropped(self) -> None:
+        waits = self.waits_at_maximal()
+        with calls.bind(OTHER, "claim_work_item"):
+            service.claim_work_item(self.conn, self.task, author="claude")
+        self.conn.commit()
+        record = self.answer(waits["question"], "cancel")
+        self.assertEqual("dropped", record["carried_out"])
+        stored = self.request(waits["question"])
+        self.assertEqual(
+            ("answered", "cancel"),
+            (stored["status"], json.loads(stored["answers_json"])["answer"]),
+        )
+        self.assertEqual("dropped", self.action(waits["action"])["outcome"])
+        self.assertEqual(
+            ["cancel_outside: the item changed since"], self.events(self.task, "action_dropped")
+        )
+        card = self.card(self.task)
+        self.assertEqual("active", card["state"]["category"])
+        self.assertIn("session-b", card["claim_ref"])
+
+    def test_a_changed_list_is_the_owners_to_confirm(self) -> None:
+        # The owner's goal, with the task under it. A goal another live session filed is
+        # followed by it, and a cancel of work a live session follows is that session's
+        # to hear first.
+        self.at(participation.MAXIMAL)
+        goal, first = self.goal, self.task
+        with self.assertRaises(REFUSED) as listed:
+            self.cancel(goal)
+        token = api.error_response(listed.exception)[1]["error"]["list_token"]
+        question = self.cancel(goal, cancels=token)["waits_for_owner"]["question"]
+        # Work filed under it meanwhile: the answer is refused with the list as it stands.
+        second = self.filed("Filed under it meanwhile", parent=goal, by=OTHER)
+        before = self.counts()
+        with self.assertRaises(REFUSED) as changed:
+            self.answer(question, "cancel")
+        status, body = api.error_response(changed.exception)
+        self.assertEqual((409, "cancel_list"), (status, body["error"]["code"]))
+        self.assertEqual(
+            [first, second], [entry["reference"] for entry in body["error"]["cancels"]]
+        )
+        self.assertEqual(before, self.counts())
+        # The owner confirms the list as it stands, by the token the question reads.
+        token = requests.get(self.conn, question)["action"]["cancel_list"]["list_token"]
+        self.assertEqual(body["error"]["list_token"], token)
+        record = self.answer(question, "cancel", cancels=token)
+        self.assertEqual("carried_out", record["carried_out"])
+        self.assertEqual(
+            ["cancelled"] * 3, [self.category(reference) for reference in (goal, first, second)]
+        )
+
+    def test_a_list_that_stands_needs_no_token(self) -> None:
+        self.at(participation.MAXIMAL)
+        with self.assertRaises(REFUSED) as listed:
+            self.cancel(self.goal)
+        token = api.error_response(listed.exception)[1]["error"]["list_token"]
+        question = self.cancel(self.goal, cancels=token)["waits_for_owner"]["question"]
+        record = self.answer(question, "cancel")
+        self.assertEqual("carried_out", record["carried_out"])
+        self.assertEqual(
+            ["cancelled", "cancelled"],
+            [self.category(reference) for reference in (self.goal, self.task)],
+        )
+
+    # -- a cancel that follows the owner's answer -------------------------------------
+
+    def owners_question(self, on: str, by: calls.Identity | None = None) -> str:
+        """A question on `on`, answered by `by`, a person when not given; its id."""
+
+        with calls.bind(AGENT, "create_work_item_request"):
+            question = str(
+                requests.create(
+                    self.conn, on, kind="question", prompt="Which road?", fields=FIELDS
+                )["request_id"]
+            )
+        self.conn.commit()
+        if by is None:
+            self.answer(question, "drop")
+            return question
+        with calls.bind(by, "answer_work_item_request"):
+            requests.resolve(
+                self.conn,
+                question,
+                status="answered",
+                expected_revision=int(self.request(question)["revision"]),
+                answers={"answer": "drop"},
+                author="claude",
+            )
+        self.conn.commit()
+        return question
+
+    def test_a_cancel_following_the_owners_answer_skips_the_question(self) -> None:
+        self.at(participation.MAXIMAL)
+        question = self.owners_question(self.goal)
+        answer = self.cancel(self.task, following=question)
+        self.assertNotIn("waits_for_owner", answer)
+        self.assertEqual("cancelled", self.category(self.task))
+        self.assertEqual(([], []), (self.waiting_on(self.task), self.owners_list()))
+        self.assertEqual(
+            [("cancel_outside", self.task, f"cancel {self.task} following question {question}")],
+            self.decided(),
+        )
+
+    def test_following_needs_an_answer_the_owner_gave(self) -> None:
+        self.at(participation.MAXIMAL)
+        by_agent = self.owners_question(self.goal, by=OTHER)
+        with calls.bind(AGENT, "create_work_item_request"):
+            still_open = str(
+                requests.create(
+                    self.conn, self.goal, kind="question", prompt="Which road?", fields=FIELDS
+                )["request_id"]
+            )
+        self.conn.commit()
+        other_goal = self.filed("Another goal", kind="goal", by=calls.browser())
+        elsewhere = self.owners_question(other_goal)
+        before = (self.counts(), self.card(self.task)["revision"])
+        for named in (by_agent, still_open, elsewhere):
+            with self.subTest(named=named):
+                with self.assertRaises(REFUSED) as refused:
+                    self.cancel(self.task, following=named)
+                status, body = api.error_response(refused.exception)
+                self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
+                self.assertEqual(
+                    "transition: [participation] following names no answered question of the"
+                    " owner on this item or above it",
+                    body["error"]["message"],
+                )
+                self.assertEqual(before, (self.counts(), self.card(self.task)["revision"]))
+        # Sent with any other move, it is refused as well.
+        with self.assertRaises(REFUSED) as moved:
+            self.tool(
+                "apply_work_item_changes",
+                id=self.task,
+                transition={"state": "ready", "following": by_agent},
+            )
+        self.assertIn("[participation] following names the owner's answer", str(moved.exception))
 
 
 if __name__ == "__main__":

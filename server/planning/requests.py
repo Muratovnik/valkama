@@ -1062,11 +1062,14 @@ class Carrier:
     for the choice that makes the write, `declined` for one that leaves it unmade.
     `run` does what the choice says, as the person who answered, held to the guards
     of the write it makes: a refusal refuses the answer with it. It gets the question,
-    the action, the answer as stored and its note.
+    the action, the answer as stored and its note. `by_list` is the choice whose write
+    is a cancel by its list: a cancel list that changed since it was asked does not drop
+    the action on that choice, and the list's token decides instead (`cancel_list`).
     """
 
     outcomes: Mapping[str, str]
     run: Callable[[sqlite3.Connection, sqlite3.Row, pending.Action, dict, str, str | None], object]
+    by_list: str | None = None
 
 
 #: The carrier of each point, by the point; a point its gate does not keep back yet has none.
@@ -1088,7 +1091,9 @@ def _carry_action(
     The owner's answer to an action that no longer applies drops it (`pending.inapplicable`),
     the answer standing as given; to one that still does, the action ends with the
     outcome its carrier gives the choice, and then the carrier does what the choice
-    says, so the write it makes finds the action already ended. Answers the outcome.
+    says, so the write it makes finds the action already ended. A cancel whose list
+    alone changed is the owner's to confirm on the list as it stands (`Carrier.by_list`).
+    Answers the outcome.
     """
 
     if answers is None:
@@ -1096,16 +1101,18 @@ def _carry_action(
         return pending.WITHDRAWN
     if _addressee(row) is not None:
         return None
+    carrier = CARRIERS.get(action.point)
+    given = answers.get(request_model.REVIEW_ANSWER)
     why = pending.inapplicable(conn, action)
+    if why == pending.LIST_CHANGED and carrier is not None and given == carrier.by_list:
+        why = None
     if why is not None:
         pending.end(conn, action, pending.DROPPED, author=author, why=why)
         return pending.DROPPED
-    carrier = CARRIERS.get(action.point)
     if carrier is None:
         raise model.PlanningError(
             f"[purpose] this build carries out no answer on {action.point}; withdraw the question"
         )
-    given = answers.get(request_model.REVIEW_ANSWER)
     outcome = carrier.outcomes.get(str(given)) if given is not None else None
     if outcome is None:
         choices = ", ".join(carrier.outcomes)
@@ -1373,6 +1380,55 @@ CARRIERS["task_in_goal"] = Carrier(
         request_model.RETURN_DROP: pending.DECLINED,
     },
     _task,
+)
+
+
+def _cancel(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    _note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about an agent's cancel of an item filed outside its work.
+
+    `cancel` makes the cancel the agent asked for, to the state and with the reason it
+    named, as the owner's: a goal or stage with open work under it by the cancel list,
+    whose token is the answer's `cancels`, or, sent without one, the list as it stands
+    while nothing new or changed came into it since the agent asked. A list that did
+    change refuses the answer with the list as it stands now (`cancel_list`), for the
+    owner to confirm it. `keep` leaves the item as it is.
+    """
+
+    if answers.get(request_model.REVIEW_ANSWER) != request_model.CANCEL_CANCEL:
+        return
+    item = read_model.item_by_id(conn, action.work_item_id)
+    cancels = answers.get(request_model.RETURN_CANCELS) or None
+    if (
+        cancels is None
+        and item["kind"] == model.CONTAINER_KIND
+        and not pending.list_changed(conn, action)
+    ):
+        listing = closing.cancel_list(conn, item)
+        cancels = None if listing is None else listing.token
+    service.transition_work_item(
+        conn,
+        read_model.reference(conn, item),
+        str(action.params["state"]),
+        reason=str(action.params.get("reason") or ""),
+        author=author,
+        cancels=cancels,
+    )
+
+
+CARRIERS["cancel_outside"] = Carrier(
+    {
+        request_model.CANCEL_CANCEL: pending.CARRIED_OUT,
+        request_model.CANCEL_KEEP: pending.DECLINED,
+    },
+    _cancel,
+    by_list=request_model.CANCEL_CANCEL,
 )
 
 

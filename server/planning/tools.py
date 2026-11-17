@@ -883,7 +883,8 @@ TOOLS = [
         " transition's person_spoke refusal. Some writes are the owner's to make, by a"
         " setting only the server reads: such a write is not made, the answer names it in"
         " waits_for_owner with the question the owner answers, and the server makes it"
-        " then if it still applies.",
+        " then if it still applies. transition.following names the owner's answer a"
+        " cancel follows.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -1147,6 +1148,13 @@ TOOLS = [
                         " under it is cancelled in the same write, and the answer names it"
                         " as cancelled, the claims that ended as released and the work"
                         " nothing blocks any more as freed.",
+                    },
+                    "following": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "With a cancel only: the request_id of the owner's"
+                        " answered question, on this item or a goal or stage over it, that"
+                        " the cancel follows from. Such a cancel asks the owner nothing.",
                     },
                 },
                 "required": ["state"],
