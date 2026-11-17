@@ -73,7 +73,8 @@ module.
 ## References and project membership
 
 A work item's references are Planning's own records: a typed pointer (`memory`,
-`session`, `commit` or `url`) with a stored label. A memory reference stays
+`session` or `url`) with a stored label. A commit is no reference: it is attached
+to the item as a registered project and a hash. A memory reference stays
 readable when its provider is unavailable, and removing a provider does not
 rewrite or delete the pointers that name it.
 

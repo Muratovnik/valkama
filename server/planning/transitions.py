@@ -166,12 +166,15 @@ def findings(
             warnings.append(warning)
     if target["category"] == "review" and entering:
         # A confirmed write names its session as well as a session ref does, and
-        # agents no longer attach one by hand now that Valkama records it.
+        # agents no longer attach one by hand now that Valkama records it. A commit
+        # counts while it is attached as the card shows it, not rewritten.
         evidence = (
             conn.execute(
-                "SELECT 1 FROM work_item_refs WHERE work_item_id = ?"
-                " AND kind IN ('session','commit') LIMIT 1",
-                (item["work_item_id"],),
+                "SELECT 1 FROM work_item_refs WHERE work_item_id = ? AND kind = 'session'"
+                " UNION ALL SELECT 1 FROM work_item_commits a"
+                " JOIN commits c ON c.commit_id = a.commit_id"
+                " WHERE a.work_item_id = ? AND c.rewritten_to IS NULL LIMIT 1",
+                (item["work_item_id"], item["work_item_id"]),
             ).fetchone()
             or conn.execute(
                 "SELECT 1 FROM execution_events WHERE work_item_id = ? AND kind = 'planning_write'"
@@ -180,7 +183,9 @@ def findings(
             ).fetchone()
         )
         if evidence is None:
-            warnings.append(f"{reference} enters {target['name']} with no session or commit ref")
+            warnings.append(
+                f"{reference} enters {target['name']} with no session ref or attached commit"
+            )
     if target["category"] in ("review", "completed") and entering:
         unconfirmed = previous_holder(reference, checklist)
         if unconfirmed:

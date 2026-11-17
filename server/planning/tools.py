@@ -885,8 +885,8 @@ TOOLS = [
             "refs": {
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
-                "description": "Structured pointers to attach: a commit, an AgentMemory"
-                " record id or a url. Attach every memory record materially used for"
+                "description": "Structured pointers to attach: an AgentMemory record id"
+                " or a url. Attach every memory record materially used for"
                 " this work as kind=memory with its stable id; this is a one-way"
                 " pointer and never writes back. Your own session needs no ref:"
                 " Valkama records the confirmed session of every write itself. Raw"
@@ -1313,7 +1313,7 @@ REMOVED_TOOLS: dict[str, str] = {
     "link_work_items": 'apply_work_item_changes with links: {"id": "MAIN-12",'
     ' "links": [{"other": "MAIN-14", "kind": "blocks"}]}',
     "attach_work_item_ref": 'apply_work_item_changes with refs: {"id": "MAIN-12",'
-    ' "refs": [{"kind": "commit", "value": "…"}]}',
+    ' "refs": [{"kind": "memory", "value": "…"}]}',
     "set_work_item_summary": 'apply_work_item_changes with summary: {"id": "MAIN-12",'
     ' "summary": {"done": "…", "next": "…"}}',
     "report_work_item": "apply_work_item_changes with summary, which records the outcome:"

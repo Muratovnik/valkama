@@ -55,6 +55,9 @@ otherwise cascade into them:
   of a record not dropped becomes a commit, attached to the ref's item `migrated`,
   each record that is a url a `url` ref; then every commit ref leaves. Several refs
   of one item naming one commit give one attachment.
+- **refs-without-commits** rebuilds `work_item_refs` when its CHECK still takes the
+  kind `commit`, as a store before 3.0 declared it: a commit is attached now, never a
+  ref, and `commit-refs` has left none.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -1783,6 +1786,41 @@ def _check_commit_refs(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError("a ref of the kind commit is left")
 
 
+# -- refs-without-commits: the refs stop taking a commit ------------------------------
+
+
+def _ref_kinds_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return _ref_kinds(conn) != sorted(model.REF_KINDS)
+
+
+def _rebuild_refs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`work_item_refs` as a fresh store declares it, taking only `model.REF_KINDS`.
+
+    It comes after `commit-refs`, which left no ref of the kind `commit`, so every row is
+    kept as it was; one left would make the rebuild fail rather than vanish.
+    """
+
+    del context
+    before = _ref_kinds(conn)
+    recreated = planning_store.rebuild_table(
+        conn,
+        "work_item_refs",
+        planning_store.table_definition(
+            "work_item_refs", f"work_item_refs{planning_store.REPLACEMENT}"
+        ),
+        "SELECT id, work_item_id, kind, value, label, author, created_at, call_id"
+        " FROM work_item_refs",
+    )
+    refs = int(conn.execute("SELECT COUNT(*) FROM work_item_refs").fetchone()[0])
+    return {"kinds_before": before, "kinds": _ref_kinds(conn), "refs": refs, "recreated": recreated}
+
+
+def _check_ref_kinds(conn: sqlite3.Connection, context: Context) -> None:
+    if _ref_kinds_needed(conn, context):
+        raise UnmetError(f"work_item_refs takes the kinds {_ref_kinds(conn)}")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1806,6 +1844,13 @@ STEPS = (
     Step("waiting-words", "words that wait for a session", _create_waiting, _waiting_needed, _check_waiting),
     Step("commits", "commits", _create_commits, _commits_needed, _check_commits),
     Step("commit-refs", "commit refs", _carry_commit_refs, _commit_refs_needed, _check_commit_refs),
+    Step(
+        "refs-without-commits",
+        "refs without the kind commit",
+        _rebuild_refs,
+        _ref_kinds_needed,
+        _check_ref_kinds,
+    ),
 )
 
 

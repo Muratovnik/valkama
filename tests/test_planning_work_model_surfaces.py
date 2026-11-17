@@ -420,7 +420,7 @@ PLACES: tuple[tuple[str, str, str, str], ...] = (
     ("builds", "server.planning.live_frame", "_item", "states.public_state("),
     ("builds", "server.planning.live_frame", "_Item", "accepted_open"),
     ("builds", "server.planning.live_frame", "_row", "container_state"),
-    ("builds", "server.released", "_open_commit_refs", "s.key, s.name, s.category, s.is_terminal"),
+    ("builds", "server.released", "_open_commits", "s.key, s.name, s.category, s.is_terminal"),
     ("builds", "server.released", "released_items", "states.public_state("),
     ("builds", "server.released", "render", "item['state']"),
     ("builds", "server.planning.views", "stale_claims", "states.public_state("),
@@ -534,7 +534,17 @@ class Surfaces(unittest.TestCase):
         for name in ("G", "S2", "H", "b"):
             cls._git("commit", "--allow-empty", "-m", f"feat: the work of {name}")
             commits[name] = cls._git("rev-parse", "HEAD")
-            service.attach_ref(conn, tree.refs[name], "commit", commits[name][:12])
+            # Attached as the project the registry places at the repository.
+            commit_id = conn.execute(
+                "INSERT INTO commits(project_id, hash, subject, reported_at)"
+                " VALUES (?, ?, ?, '2026-01-02T03:04:05Z')",
+                (PROJECT, commits[name], f"feat: the work of {name}"),
+            ).lastrowid
+            conn.execute(
+                "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+                " VALUES (?, ?, 'manual')",
+                (tree.ids[name], commit_id),
+            )
         # The live frame shows what holds live work and what is pinned, and no session
         # holds anything here: pinned, the goal and its stages are its rows.
         for name in ("G", "S", "S2"):

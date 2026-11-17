@@ -2205,7 +2205,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, kind?, parent?, source?, mentions?}` | `/update` |
 | `checklist` | the steps' list, or `{items, force?}`; each step text or `{text, done?}` | `/checklist` |
 | `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `/checklist/tick` |
-| `refs` | list of `{kind, value, label?}` | `/ref` |
+| `refs` | list of `{kind, value, label?}`, `kind` one of `memory`, `session`, `url`; `commit` is refused, naming the `commits` group | `/ref` |
 | `commits` | list of `{repository, hash, label?, remove?}` | only here |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `/link` |
 | `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `/comment` |

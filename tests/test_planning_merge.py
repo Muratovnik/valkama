@@ -120,7 +120,7 @@ class MergeMovesTests(MergeTestCase):
             checklist_item_id=self.bisect["id"],
         )
         service.report_work_item(self.conn, self.first, {"done": "looked", "next": "fix"})
-        service.attach_ref(self.conn, self.first, "commit", "abc123", author="one")
+        service.attach_ref(self.conn, self.first, "memory", "abc123", author="one")
         service.attach_ref(self.conn, self.first, "url", "https://example.test/1", author="one")
         service.attach_ref(self.conn, self.survivor, "url", "https://example.test/1")
         self.waiting = self.item("Waits on the fix")
@@ -171,7 +171,7 @@ class MergeMovesTests(MergeTestCase):
 
     def test_refs_move_unless_the_survivor_has_them(self) -> None:
         survivor = {(ref["kind"], ref["value"]) for ref in self.get(self.survivor)["refs"]}
-        self.assertEqual({("commit", "abc123"), ("url", "https://example.test/1")}, survivor)
+        self.assertEqual({("memory", "abc123"), ("url", "https://example.test/1")}, survivor)
         left = [(ref["kind"], ref["value"]) for ref in self.get(self.first)["refs"]]
         self.assertEqual([("url", "https://example.test/1")], left)
 

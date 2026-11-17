@@ -61,6 +61,14 @@ and no compatibility layer.
    - in a read of one space, an item of another space that names one of its
      projects carries `outside_space` in `withheld`: that space's queue does
      not give it;
+   - a commit is attached to an item rather than written as a ref: the `refs`
+     group and `POST /api/planning/work-item/ref` refuse the kind `commit`,
+     naming the `commits` group, an item record's `refs` holds no commit, and
+     `GET /api/ref` refuses `kind=commit` and no longer reads `space`, which
+     only chose the repositories a commit was looked for in;
+     `GET /api/commit?repository=<id>&hash=<hash>` shows an attached commit
+     from its project's repository instead, and the handshake says that
+     Valkama attaches the commits a session makes;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -128,6 +136,9 @@ and no compatibility layer.
 | one project binds a space | each binding says `default`; a space has one default project |
 | `create_planning_space` with `project_id` | `{name, key}`; `valkama projects bind` joins a project |
 | scope `project` | scope `space`, the project an optional refinement |
+| `refs: [{"kind": "commit", "value": "…"}]` | `commits: [{"repository": "<project id>", "hash": "…"}]` |
+| a card's commits among its `refs` | its `commits` |
+| `GET /api/ref?kind=commit&value=…&space=…` | `GET /api/commit?repository=<project id>&hash=…` |
 
 ## Consequences
 
