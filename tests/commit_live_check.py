@@ -44,6 +44,7 @@ sys.path.insert(0, str(ROOT))
 
 from server import store
 from server.hooks import git_hook
+from tests import CALLER_LOCAL_APP_DATA
 from tests.registry_fixtures import project_entry, registry_bytes
 
 PROJECT = "live-check"
@@ -98,11 +99,21 @@ def _sha256(path: str) -> str:
 
 
 def _clean_environment() -> dict[str, str]:
-    return {
+    """The caller's environment for a client or Git, as the caller started this process.
+
+    Importing the `tests` package moved `LOCALAPPDATA` into the suite's directory, which
+    goes when this process ends; a client keeps the caller's. Its hooks are given the
+    set's own registry explicitly.
+    """
+
+    environment = {
         name: value
         for name, value in os.environ.items()
         if not name.upper().startswith(DROPPED_PREFIXES) and name.upper() != "GIT_CONFIG_GLOBAL"
     }
+    if CALLER_LOCAL_APP_DATA is not None:
+        environment["LOCALAPPDATA"] = CALLER_LOCAL_APP_DATA
+    return environment
 
 
 def real_global_file() -> str:
@@ -139,7 +150,7 @@ def prepare(set_dir: Path, python: str) -> dict:
     for folder in (paths["repository"], paths["store"].parent, paths["local"] / "Valkama"):
         folder.mkdir(parents=True)
     real_global = real_global_file()
-    real_local = os.environ.get("LOCALAPPDATA", "")
+    real_local = CALLER_LOCAL_APP_DATA or ""
     state = {
         "python": python,
         "checkout": str(ROOT),
