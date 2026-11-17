@@ -1,9 +1,11 @@
 /**
  * Which span of its window a step line shows. A running window opens on its start to now and the
  * forecast past it (`aheadSpan`), and its switch offers the whole window up to its reset; a window
- * past its reset has the whole window alone. A frame narrows the line to the moments it covers,
- * and either span chosen on the switch takes the frame back. The span is the line's own: nothing
- * else on the page reads it, and it outlasts a new answer for the same window.
+ * past its reset has the whole window alone, as has one its host says has reset since it was read
+ * (`ended`), though its last reading holds only to the moment it was read. A frame narrows the
+ * line to the moments it covers, and either span chosen on the switch takes the frame back. The
+ * span is the line's own: nothing else on the page reads it, and it outlasts a new answer for the
+ * same window.
  */
 import { computed, ref } from 'vue'
 
@@ -14,11 +16,11 @@ import type { StepSpan } from '@/shared/ui/windowGeometry.ts'
 export type StepScope = 'ahead' | 'whole'
 
 export function useStepSpan(
-  window: () => { end: number; from: number; to: number },
+  window: () => { end: number; from: number; to: number; ended?: boolean },
   words: () => { ahead: string; whole: string },
 ) {
   /** Whether the window still runs, so it has a span to now and the forecast besides the whole. */
-  const running = computed(() => window().end < window().to)
+  const running = computed(() => !window().ended && window().end < window().to)
   const scope = ref<StepScope>('ahead')
   /** The moments a frame narrowed the line to, until the switch takes it back. */
   const framed = ref<StepSpan | null>(null)

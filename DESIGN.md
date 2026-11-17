@@ -1197,11 +1197,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   switch to the whole window up to its reset: drawn to the reset, a running week left its
   readings the first third of the plot. Where the span ends before the reset the corridor runs
   to the plot's edge, and the forecast's hint says the reset stands past it. A window past its
-  reset draws neither the corridor nor the places. A 0 % has no fill, and a window with no
-  figure draws the track alone; the fill stands apart from the ground and the track by
-  lightness, so both read in grayscale and under a forced palette in its inks, where the hatch
-  and the rings take its ink too. Their table twins are `WindowBarTable` and `StepLineTable`,
-  each holding the forecast as well.
+  reset by the page's clock, even one read before it, draws neither the corridor nor the places
+  and shows its whole window alone, its line held to the moment it was read. A 0 % has no fill,
+  and a window with no figure draws the track alone; the fill stands apart from the ground and
+  the track by lightness, so both read in grayscale and under a forced palette in its inks,
+  where the hatch and the rings take its ink too. Their table twins are `WindowBarTable` and
+  `StepLineTable`, each holding the forecast as well.
   A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a
   day — and its name beside it.
   A table that is the subject of its panel, as a dimension's breakdown, is held to about the

@@ -24,7 +24,8 @@
  * old: it says «silent» and for how long, and its hint when its reading last changed; a fresh 0 %
  * is a bar with no fill that says «0% used» and «fresh». While the window stands, its step line
  * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`); a
- * window past its reset has neither.
+ * window past its reset by the panel's moment has neither and shows its whole window alone, even
+ * where its answer was read before the reset.
  *
  * What used the window is the work Valkama recorded on the account since the window's start, by
  * its API price estimate, on an axis of its own. A window that names no start has no span to read
@@ -62,14 +63,15 @@ const { t } = useI18n()
 const words = useQuotaWords()
 
 const name = computed(() => words.windowName(props.window))
+/** Whether the window has reset by the panel's moment, though its answer was read before that. */
+const ended = computed(() => !stands(props.window, props.now))
 /**
  * The window's forecast as its drawings take it, from the answer's moment to the reset, while the
  * window stands at the panel's moment: a window past its reset forecasts nothing more.
  */
-const courses = computed(() => {
-  const { window, now, today } = props
-  return stands(window, now) ? forecastCourses(window, Date.parse(today)) : null
-})
+const courses = computed(() =>
+  ended.value ? null : forecastCourses(props.window, Date.parse(props.today)),
+)
 /**
  * The window's lead and its bar: the share and the state the line says, the forecast's share at
  * the reset its tail draws, and what the bar's hint adds. A silent window says how long it has
@@ -165,7 +167,7 @@ const legend = computed(() => ({
  */
 const ahead = computed<StepAhead | null>(() => {
   const { window, now, today } = props
-  if (!stands(window, now) || !window.readings.length) return null
+  if (ended.value || !window.readings.length) return null
   const found = courses.value
   const ends = forecastEnds(found)
   return {
@@ -242,6 +244,7 @@ const readingsCaption = computed(() =>
         :even="paced"
         :legend="legend"
         :ahead="ahead"
+        :ended="ended"
       />
       <StepLineTable
         v-else

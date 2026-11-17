@@ -50,7 +50,12 @@ const WORDS: StepWords = {
 const moment = (at: number) => `h${(at - START) / HOUR}`
 
 /** A window of five hours, read three hours in, as it opens: to now and the forecast. */
-function openLine(points: StepPoint[], end = START + 3 * HOUR, ahead: StepAhead | null = null) {
+function openLine(
+  points: StepPoint[],
+  end = START + 3 * HOUR,
+  ahead: StepAhead | null = null,
+  ended = false,
+) {
   return mount(StepLine, {
     attachTo: document.body,
     props: {
@@ -64,6 +69,7 @@ function openLine(points: StepPoint[], end = START + 3 * HOUR, ahead: StepAhead 
       even: true,
       legend: { line: 'Used', even: 'Steady pace', ahead: 'Forecast' },
       ahead,
+      ended,
     },
   })
 }
@@ -197,6 +203,16 @@ describe('the step line', () => {
     line.unmount()
   })
 
+  it('opens a window reset since it was read on the whole window, its line held to the reading', () => {
+    // Read three hours in, and reset by the page's moment.
+    const line = openLine([point('12:00', 1, 20)], START + 3 * HOUR, null, true)
+    expect(line.find('[role="radiogroup"]').exists()).toBe(false)
+    expect(line.findAll('.step-axis span').map((one) => one.text())).toEqual(['h0', 'h5'])
+    // Five hours across 300: the line holds to three hours in, 180, not to the reset.
+    expect(line.get('.step-path').attributes('d')).toBe('M60.00,80.00 H180.00')
+    line.unmount()
+  })
+
   it('narrows to the readings a frame stretched with Shift covers, and switches back', async () => {
     const line = openLine([point('12:00', 1, 20), point('12:30', 1.5, 50), point('13:00', 2, 60)])
     const first = line.get('[data-reading="0"]')
@@ -277,8 +293,11 @@ describe('the step line past its readings', () => {
         shown: false,
       },
     ])
-    // The readings keep their own stretches and are still the first places.
-    expect(line.findAll('.step-reach')).toHaveLength(2)
+    // The readings keep their own stretches and are still the first places; the last holds only
+    // its own step, since «now» takes the pointer from the line's end on.
+    expect(
+      line.findAll('.step-reach').map((one) => style(one).includes('min-inline-size: 0')),
+    ).toEqual([false, true])
     await line.get('[data-target="reset"]').trigger('pointerenter')
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, true])
     expect(line.findAll('.step-mark').map((one) => one.classes('step-shown'))).toEqual([
@@ -373,6 +392,10 @@ describe('the step line past its readings', () => {
     const line = openLine(READ, START + 5 * HOUR)
     expect(line.findAll('.step-target')).toHaveLength(0)
     expect(line.find('.step-ahead').exists()).toBe(false)
+    // With no «now» after it, the last reading is as wide as a pointer can hit, as every other.
+    expect(line.findAll('.step-reach').some((one) => style(one).includes('min-inline-size'))).toBe(
+      false,
+    )
     line.unmount()
   })
 })

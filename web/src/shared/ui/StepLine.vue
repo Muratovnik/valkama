@@ -97,6 +97,8 @@ const props = defineProps<{
   words: StepWords
   /** What the line draws past its last reading, the window now and its forecast; none past the reset. */
   ahead?: StepAhead | null
+  /** Whether the window has reset since it was read: the whole window is then its one span. */
+  ended?: boolean
   /** Whether to draw where steady use would stand: from 0 at `from` to 100 at `to`. */
   even?: boolean
   /** A moment as the axis names an end of the span shown, «14:05». */
@@ -134,20 +136,28 @@ function stepEnd(index: number) {
   return next ? next.at : Math.max(props.end, point.at)
 }
 
-/** The step a reading holds, from its moment to the next reading's, or to `end` for the last. */
+/** The corridor past the readings, whether the span shows it and the places past them. */
+const { clip: corridorClip, drawn: corridorShown, targets } = useStepAhead(() => props, frame)
+/** Whether «now» stands where the last reading's step ends, and takes the pointer from there on. */
+const nowFollows = computed(() => targets.value.some(({ kind }) => kind === 'now'))
+
+/**
+ * The step a reading holds, from its moment to the next reading's, or to `end` for the last; at
+ * least as wide as a pointer can hit, but for the last reading where «now» follows it: «now»
+ * takes the pointer from the line's end on, and that reading keeps its own step and its dot.
+ */
 function stepStyle(index: number) {
   const point = readings.value.inside[index]
   if (!point) return {}
   const start = stepX(frame.value, point.at)
   const stop = stepX(frame.value, stepEnd(index))
+  const last = !props.points[props.points.indexOf(point) + 1]
   return {
     insetInlineStart: stepAcross(frame.value, point.at),
     inlineSize: `${(Math.max(0, stop - start) / STEP_WIDTH) * 100}%`,
+    minInlineSize: last && nowFollows.value ? '0' : undefined,
   }
 }
-
-/** The corridor past the readings, whether the span shows it and the places past them. */
-const { clip: corridorClip, drawn: corridorShown, targets } = useStepAhead(() => props, frame)
 /** The stretch a place past the readings takes the pointer along, as its style. */
 const reachStyle = ({ reach }: StepTargetPlace) => ({
   insetInlineStart: reach.start ?? 'auto',
