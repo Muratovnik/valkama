@@ -689,8 +689,10 @@ def blocker_changes(
     transition undid included. Each has the blocker's reference as `blocker`, the
     state that transition reached as `state` and the blocker's title as the text. A
     person's transition through Planning's own paths is a person's act
-    (`via: "interface"`); another agent's says who, as `agents_since` does.
-    Valkama's own write, a launch and an unproved call name nobody, and are not told.
+    (`via: "interface"`); another agent's says who, as `agents_since` does. What
+    Valkama moved in a call of its own, work put off coming back among it, is
+    Valkama's record (`via: "valkama"`), told as `valkama_since` tells one on the
+    item itself. A launch and an unproved call name nobody, and are not told.
     """
 
     found = []
@@ -706,7 +708,9 @@ def blocker_changes(
         if source == BROWSER:
             if str(row[8] or "").startswith(("/api/planning/", "/api/modules/planning/")):
                 found.append((int(row[5]), entry))
-        elif row[6] == "confirmed" and source not in (VALKAMA, LAUNCH) and row[9] is not None:
+        elif source == VALKAMA:
+            found.append((int(row[5]), _by_valkama(entry)))
+        elif row[6] == "confirmed" and source != LAUNCH and row[9] is not None:
             found.append((int(row[5]), _spoken(entry, row[9], row[10])))
     return found
 

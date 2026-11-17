@@ -537,6 +537,33 @@ class BlockerTests(Wakes):
             reopened, rf"- blocker_changed at \S+ by session {A}, on {self.blocker}, now Triage"
         )
 
+    def test_a_blocker_valkama_brings_back_is_valkamas_news_and_waits_for_the_next_call(
+        self,
+    ) -> None:
+        awaited = self.item("The vendor's reply")
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=self.blocker,
+            defer={"until": awaited, "reason": "waits for the vendor"},
+        )
+        self.hook(session=B)
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=awaited,
+            transition={"state": "cancelled", "force": True},
+        )
+        self.assertIsNone(self.stop(B), "a blocker brought back continues no turn")
+        self.assertEqual((0, ""), self.watch_as(B), "nor wakes")
+        told = self.hook(session=B)
+        assert told is not None, "told at the next tool call"
+        self.assertTrue(told.startswith(FROM_AGENTS), told)
+        self.assertRegex(
+            told, rf"- blocker_changed at \S+ by Valkama, on {self.blocker}, now Triage"
+        )
+        self.assertIsNone(self.hook(session=B), "once")
+
     def test_a_persons_change_short_of_a_close_waits_for_the_next_call(self) -> None:
         self.person(TRANSITION, id=self.blocker, state="triage", force=True)
         self.assertIsNone(self.stop(B), "a person's change of a blocker continues no turn")
