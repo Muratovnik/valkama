@@ -13,13 +13,16 @@ import io
 import json
 import os
 import re
+import shutil
 import signal
+import socket
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import threading
 import unittest
+import urllib.parse
 from pathlib import Path
 from unittest import mock
 
@@ -80,6 +83,24 @@ Path(sys.argv[1]).write_text(json.dumps(report), encoding="utf-8")
 
 def files_under(directory: Path) -> list[Path]:
     return sorted(path for path in directory.rglob("*") if path.is_file())
+
+
+def assert_read_only(case: unittest.TestCase, spy: mock.Mock, source: Path) -> None:
+    """The spy on `sqlite3.connect` saw `source` opened, and every opening read-only.
+
+    The copy is written by `VACUUM INTO`, which opens no connection of its own, so
+    a connection that could write is one to the source.
+    """
+
+    targets = [str(call.args[0]) for call in spy.call_args_list]
+    case.assertTrue(any(source.name in target for target in targets), targets)
+    for call in spy.call_args_list:
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(str(call.args[0])).query)
+        case.assertTrue(call.kwargs.get("uri"), call)
+        case.assertEqual(["ro"], query.get("mode"), call)
+    case.assertEqual(
+        [], [path.name for path in source.parent.iterdir() if path.name.endswith(("-wal", "-shm"))]
+    )
 
 
 def quietly(function, *arguments) -> tuple[int, str]:
@@ -945,14 +966,12 @@ class SupervisorTests(Workspace):
 
     def test_the_copy_is_taken_through_a_read_only_connection(self) -> None:
         source = self.source_store()
-        target = self.root / "copy.sqlite3"
         real_connect = sqlite3.connect
         with mock.patch.object(sqlite3, "connect", side_effect=real_connect) as spy:
-            isolated.copy_store(source, target)
+            isolated.copy_store(source, self.home)
 
-        arguments = spy.call_args_list[0]
-        self.assertTrue(arguments.args[0].endswith("?mode=ro"), arguments)
-        self.assertTrue(arguments.kwargs["uri"], arguments)
+        assert_read_only(self, spy, source)
+        self.assertTrue(isolated.store_path(self.home).is_file())
 
     def test_a_residue_is_reported_rather_than_called_clean(self) -> None:
         with mock.patch.object(isolated, "remove_tree", side_effect=[True, False]):
@@ -1193,6 +1212,232 @@ class ThroughTheCommandTests(Workspace):
         self.assertFalse(self.home.exists())
         with self.assertRaises(OSError):
             self.get(served["port"], "/api/modules")
+
+
+#: What a rehearsal profile's child must have set.
+PROFILE_SETTINGS = (
+    "HOME",
+    "USERPROFILE",
+    "LOCALAPPDATA",
+    "APPDATA",
+    "VALKAMA_DB",
+    "VALKAMA_PROTECTED_STORE",
+    "VALKAMA_NO_TRAY",
+    "VALKAMA_NO_ALERTS",
+    "GIT_CONFIG_GLOBAL",
+    "VALKAMA_PORT",
+)
+
+
+class ProfileTests(Workspace):
+    """`profile` against a fake home of the caller's, with a link out of it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.profile = self.root / "rehearsal's profile"
+        self.outside = self.root / "outside"
+        self.outside.mkdir()
+        (self.outside / "kept.txt").write_text("outside", encoding="utf-8")
+        runtime = self.real / ".agent-host-runtime"
+        (runtime / "current").mkdir(parents=True)
+        (runtime / "current" / "release.txt").write_text("release", encoding="utf-8")
+        link_directory(runtime / "linked", self.outside)
+        (self.real / ".claude").mkdir()
+        (self.real / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+        (self.real / ".gitconfig").write_text("[user]\n\tname = Fixture\n", encoding="utf-8")
+        registry = self.real / "local" / "Valkama"
+        registry.mkdir()
+        (registry / "projects.json").write_text('{"projects": []}', encoding="utf-8")
+        (registry / "project-registry.toml").write_text("# inventory", encoding="utf-8")
+        self.source = self.root / "source" / "valkama.sqlite3"
+        self.source.parent.mkdir()
+        with contextlib.closing(sqlite3.connect(self.source)) as connection:
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("CREATE TABLE personal (value TEXT)")
+            connection.execute("INSERT INTO personal VALUES ('private')")
+            connection.commit()
+
+    @property
+    def profile_home(self) -> Path:
+        return self.profile / isolated.HOME
+
+    def make(self, *arguments: str) -> tuple[int, str]:
+        command = ["profile", "--out", str(self.profile), "--store-copy", str(self.source)]
+        return quietly(isolated.main, [*command, *arguments])
+
+    def made(self, *arguments: str) -> str:
+        code, said = self.make(*arguments)
+        self.assertEqual(0, code, said)
+        self.addCleanup(quietly, isolated.main, ["stop", "--out", str(self.profile)])
+        return said
+
+    def environment(self) -> dict:
+        return json.loads((self.profile / isolated.PROFILE_ENV).read_text(encoding="utf-8"))
+
+    def test_a_profile_holds_the_store_the_registry_host_runtime_and_each_named_path(
+        self,
+    ) -> None:
+        self.made("--copy", ".claude")
+
+        copy = isolated.store_path(self.profile_home)
+        with contextlib.closing(sqlite3.connect(f"{copy.as_uri()}?mode=ro", uri=True)) as held:
+            self.assertEqual([("private",)], held.execute("SELECT value FROM personal").fetchall())
+        expected = {
+            "AppData/Local/Valkama/projects.json": '{"projects": []}',
+            "AppData/Local/Valkama/project-registry.toml": "# inventory",
+            ".agent-host-runtime/current/release.txt": "release",
+            ".claude/settings.json": "{}",
+            ".gitconfig": "[user]\n\tname = Fixture\n",
+        }
+        for relative, content in expected.items():
+            self.assertEqual(content, (self.profile_home / relative).read_text("utf-8"), relative)
+
+    def test_a_link_under_a_copied_path_is_neither_entered_nor_copied_but_named(self) -> None:
+        said = self.made()
+
+        self.assertFalse(os.path.lexists(self.profile_home / ".agent-host-runtime" / "linked"))
+        self.assertEqual([], [p for p in files_under(self.profile) if p.name == "kept.txt"])
+        self.assertIn(f"not copied, a link: {self.real / '.agent-host-runtime' / 'linked'}", said)
+
+    def test_a_named_path_that_is_or_passes_a_link_is_refused_and_nothing_is_left(self) -> None:
+        for named in (".agent-host-runtime/linked", ".agent-host-runtime/linked/kept.txt"):
+            with self.subTest(named):
+                code, said = self.make("--copy", named)
+
+                self.assertEqual(1, code, said)
+                self.assertIn("is a link", said)
+                self.assertFalse(os.path.lexists(self.profile))
+
+    def test_a_named_path_outside_the_home_or_missing_is_refused(self) -> None:
+        for named, refusal in (
+            ("../outside", "inside the home"),
+            (str(self.outside), "inside the home"),
+            (".nothing-here", "does not exist"),
+        ):
+            with self.subTest(named):
+                code, said = self.make("--copy", named)
+
+                self.assertEqual(1, code, said)
+                self.assertIn(refusal, said)
+                self.assertFalse(os.path.lexists(self.profile))
+
+    def test_the_environment_sets_the_rehearsal_variables_and_removes_the_client_homes(
+        self,
+    ) -> None:
+        with mock.patch.dict(
+            os.environ, {"CLAUDE_CONFIG_DIR": str(self.real), "CODEX_HOME": str(self.real)}
+        ):
+            self.made()
+        home = self.profile_home
+
+        settings, removed = self.environment()["set"], self.environment()["unset"]
+        expected = {
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+            "LOCALAPPDATA": str(home / "AppData" / "Local"),
+            "APPDATA": str(home / "AppData" / "Roaming"),
+            "VALKAMA_DB": str(home / ".valkama" / "valkama.sqlite3"),
+            "VALKAMA_PROTECTED_STORE": str(self.real / ".valkama" / "valkama.sqlite3"),
+            "VALKAMA_NO_TRAY": "1",
+            "VALKAMA_NO_ALERTS": "1",
+            "GIT_CONFIG_GLOBAL": str(home / ".gitconfig"),
+        }
+        self.assertEqual(expected, {name: settings[name] for name in expected})
+        self.assertEqual(sorted(PROFILE_SETTINGS), sorted(set(PROFILE_SETTINGS) & set(settings)))
+        port = int(settings["VALKAMA_PORT"])
+        self.assertNotEqual(8642, port)
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", port))
+        for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "VALKAMA_AUTHOR", "VALKAMA_CUTOVER"):
+            self.assertIn(name, removed)
+        self.assertEqual([], [name for name in removed if name in settings])
+
+    @unittest.skipUnless(shutil.which("pwsh"), "env.ps1 is for pwsh")
+    def test_env_ps1_gives_a_pwsh_the_environment_env_json_names(self) -> None:
+        self.made()
+        settings, removed = self.environment()["set"], self.environment()["unset"]
+
+        def quoted(text: object) -> str:
+            return "'" + str(text).replace("'", "''") + "'"
+
+        names = ", ".join(quoted(name) for name in [*settings, *removed])
+        script = (
+            f". {quoted(self.profile / isolated.PROFILE_SCRIPT)}; $found = @{{}}; "
+            f"foreach ($name in @({names})) {{ "
+            "$found[$name] = [Environment]::GetEnvironmentVariable($name) }; "
+            "$found | ConvertTo-Json -Compress"
+        )
+        loaded = subprocess.run(
+            ["pwsh", "-NoProfile", "-NonInteractive", "-Command", script],
+            env={**os.environ, "CLAUDE_CONFIG_DIR": "set", "CODEX_HOME": "set"},
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+
+        self.assertEqual(0, loaded.returncode, loaded.stderr.decode("utf-8", "replace"))
+        found = json.loads(loaded.stdout.decode("utf-8"))
+        self.assertEqual(settings, {name: found[name] for name in settings})
+        self.assertEqual(dict.fromkeys(removed), {name: found[name] for name in removed})
+
+    def test_the_source_store_is_opened_only_read_only_and_left_without_a_journal(self) -> None:
+        before = self.source.read_bytes()
+        real_connect = sqlite3.connect
+        with mock.patch.object(sqlite3, "connect", side_effect=real_connect) as spy:
+            self.made()
+
+        assert_read_only(self, spy, self.source)
+        self.assertEqual(before, self.source.read_bytes())
+
+    def test_an_existing_directory_is_refused_and_left_as_it_was(self) -> None:
+        for content in ({}, {"own.txt": "the owner's"}):
+            with self.subTest(content=content):
+                self.profile.mkdir()
+                for name, text in content.items():
+                    (self.profile / name).write_text(text, encoding="utf-8")
+
+                code, said = self.make()
+
+                self.assertEqual(1, code, said)
+                self.assertIn("already exists", said)
+                self.assertEqual(
+                    content,
+                    {p.name: p.read_text("utf-8") for p in self.profile.iterdir()},
+                )
+                (self.profile / "own.txt").unlink(missing_ok=True)
+                self.profile.rmdir()
+
+    def test_a_store_that_cannot_be_copied_leaves_no_profile(self) -> None:
+        self.source = self.root / "missing.sqlite3"
+
+        code, said = self.make()
+
+        self.assertEqual(1, code, said)
+        self.assertIn("profile failed", said)
+        self.assertFalse(os.path.lexists(self.profile))
+        self.assertFalse(self.source.exists())
+
+    def test_stop_removes_the_profile_without_entering_a_link_in_it(self) -> None:
+        self.made()
+        link_directory(self.profile_home / "into-outside", self.outside)
+
+        code, said = quietly(isolated.main, ["stop", "--out", str(self.profile)])
+
+        self.assertEqual(0, code, said)
+        self.assertFalse(os.path.lexists(self.profile))
+        self.assertEqual("outside", (self.outside / "kept.txt").read_text("utf-8"))
+
+    def test_gates_and_serve_refuse_a_directory_holding_a_profile(self) -> None:
+        self.made()
+
+        with mock.patch.object(subprocess, "Popen") as started:
+            code, said = quietly(isolated.start, self.profile, None)
+        self.assertEqual((1, True), (code, "a profile is in" in said), said)
+        started.assert_not_called()
+        code, said = quietly(isolated.gates, [], self.profile)
+        self.assertEqual((1, True), (code, "a profile is in" in said), said)
+        self.assertTrue(isolated.store_path(self.profile_home).is_file())
 
 
 class RecordedProcessTests(Workspace):
