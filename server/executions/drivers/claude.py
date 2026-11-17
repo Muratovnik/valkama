@@ -47,6 +47,8 @@ _CAPABILITIES = DriverCapabilities(
     mechanical_executor=True,
     result_transport="stdout",
     telemetry_configuration="environment",
+    # `--add-dir` on a fresh run and with `--resume` alike.
+    added_dirs="fresh_and_resume",
 )
 
 
@@ -59,7 +61,8 @@ def argv(request: CommandRequest) -> list[str]:
 
     `--json-schema` carries the schema inline rather than by path: this client
     takes the document itself, and passing a path would hand the model a string
-    it would try to read as a schema.
+    it would try to read as a schema. `--add-dir` takes several values, so each
+    directory gets its own and the option after it ends the list.
     """
 
     if request.effort and request.effort not in EFFORTS:
@@ -77,6 +80,8 @@ def argv(request: CommandRequest) -> list[str]:
         command += ["--model", request.model]
     if request.effort:
         command += ["--effort", request.effort]
+    for directory in request.added_dirs:
+        command += ["--add-dir", directory]
     if request.no_delegation:
         command += ["--disallowedTools", "Agent"]
     return command

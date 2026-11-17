@@ -23,7 +23,8 @@ says what they mean together.
 
 A description, a comment, a report, a summary, a question or an option's
 description names a file or folder of the project as a Markdown link to its path
-from the root of the space's project, with a label that says what it is:
+from the root of the item's space (its default project's root), with a label that
+says what it is:
 `docs/plan.md#kb:a7f3`, `src/parse.ts:42`, `docs/plans/`.
 
 - **Where it opens.** Valkama opens a Markdown file in its own viewer at the
@@ -71,7 +72,7 @@ opens the item), `work_item_id`, `revision`, `state` (`key`, `name`,
 alone says what it derives), `open` (whether its work is over), `claim_ref` (the
 holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
 `container_state` where the item has one and what the call changed. Pass
-`verbose: true` for the full item instead; it carries `url` too.
+`verbose: true` for the item's card instead; it carries `url` too.
 
 | Tool | Also answers |
 | --- | --- |
@@ -81,8 +82,8 @@ holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
 | `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
-`claim_ready_work_item` answers with the item it took, or nothing when no task
-is workable. A comment in `applied` has `comment_id`, and `reply_to` and
+`claim_ready_work_item` answers with the card of the item it took as
+`work_item`, null when no task is workable. A comment in `applied` has `comment_id`, and `reply_to` and
 `reply_to_request`: the root a reply joined, both null for a new root, and
 `list_request_id` when it carried a `list`, as the summary does. A comment or a
 summary that named other items in `mentions` adds `mentions`: per item its
@@ -96,8 +97,8 @@ otherwise. Each entry has `kind` (`comment`, `report`, `status`, `edited`,
 `question_answered`, `mentioned` and the rest), `via: "interface"`, `at`,
 `comment_id`, `request_id` or `fields` when it has one, `from` for `mentioned` (the
 item whose comment told this one), and `text`, whole up to 1500 characters. A
-longer one is cut there and says `cut: true`, and `get_work_item` has the rest.
-It lists the newest 20, and
+longer one is cut there and says `cut: true`, and the `comments` part of
+`get_work_item` has the rest. It lists the newest 20, and
 `from_person_omitted` counts the earlier ones. Each event is told once, to
 whichever agent writes to the item next.
 
@@ -110,11 +111,39 @@ same way, with `via: "valkama"`. The claim takes them: the next one under that g
 nothing until a person acts there again with nobody working. No key when nothing
 waited.
 
+An answer where a claim began or held the item -- `claim_work_item`,
+`claim_ready_work_item`, and `create_work_item` or `apply_work_item_changes` with
+`claim: true` -- carries `project_roots`: for each project the task changes, or
+its space's default project when it names none, `project_id`, `display_name`,
+`root` and `status`: `mapped`, `missing` (no directory at the root),
+`unregistered` (the registry no longer records it) or `unavailable` (the registry
+was not read, so `root` and `display_name` are null). The projects of the item's
+space come first, its default one before the others, then the rest, each part by
+id. The claim does not depend on them.
+
+## Claude Code's auto mode
+
+Valkama calls may share a response with any other
+tool. Valkama's hook records which session makes each call and leaves the call as
+you wrote it, so auto mode reviews every call in the response. An older Valkama
+release added your session to the input of each Valkama call instead, and a call
+beside it that needed the review then got no verdict: it failed with "another call
+in this response was changed by a hook", which says nothing about the failed call.
+If you see that failure, the older release is still installed: issue the failed
+call again exactly as it was, and for the rest of the session send Valkama calls in
+a response of their own, with the other tools in the next one. Another client or
+permission mode needs no such care.
+
 ## Creating an item
 
-`create_work_item` takes `space`, `title`, and optionally `description`,
-`kind`, `priority`, `labels`, `source`, `parent`, `state` and `author`. Three
-more arguments act on the new item in the same call, all or nothing:
+`create_work_item` takes `title`, and optionally `space`, `projects`,
+`description`, `kind`, `priority`, `labels`, `source`, `parent`, `state` and
+`author`. Without `space` the item lies under its parent's space, else in the
+home space of its projects, else in your session's space; projects of two
+spaces need `space`, one of them. A named `space` must be the parent's space,
+or one of the projects' home spaces when they have one; a `[placement]` refusal
+names the candidates. Three more arguments act on the
+new item in the same call, all or nothing:
 
 | Argument | Shape |
 | --- | --- |
@@ -219,28 +248,70 @@ comment on another item or none at all (`not_found`), a decision of two lines, a
 
 ## Reading an item
 
-`get_work_item` takes `id` and at most one of `full`, `comments_after` and
-`thread`, or `unresolved` with or without `comments_after`:
+`get_work_item` takes `id` and reads an item by parts. `parts` names them, one
+name or a list: `card`, `comments`, `events`, `links`, `refs`, `questions`,
+`mentions`, `sessions`, `images`, `subscribers`, `claim` and `sections`. The
+answer carries `reference`, `revision` and the fields of each part named, the
+card's among them when `card` is. Without `parts` it reads the card, and a mode
+without `parts` reads only the part it cuts: `unresolved`, `thread` and
+`comments_after` the comments, `events` the events, `section` the sections.
+Refused with `invalid_request`: an unknown part, a mode beside a `parts` that
+leaves its part out (`thread reads the comments part: add comments to parts or
+leave parts out`), `thread` with `comments_after` or `unresolved`, and `events`
+outside 1 to 1000.
+
+**The card** is what a write with `verbose: true` and `claim_ready_work_item`
+answer with too: `reference`, `title`, `kind`, `priority`, `state` (`key`,
+`name`, `category`; null for an accepted open goal or stage), `open`,
+`container_state`, `acceptance`, `started_at`, `waits_for`, `workable`,
+`claim_ref`, `claim_state`, `last_claim_ref`, `closed_at`, `labels`, `source`,
+`revision`, `created_at`, `updated_at`, `url`, `parent` (a reference or null),
+`description` whole, `checklist` (each step's `id`, `text` and `done`, and
+`claimed_by` and `done_by` when they are set), `summary` when there is one, and
+`parts`: each other part the item has, with its size. A part with nothing in it
+is left out.
+
+| Part | On the card | Read, it answers with |
+| --- | --- | --- |
+| `comments` | `count`, `threads`, `unresolved`, `chars` | `comments` as the table below says, `comments_total` (every row), `threads_total` (the roots), `unresolved_total` (the roots without the mark) and `truncated` |
+| `events` | `count`, `chars` | `events`, the 10 newest oldest first, or the newest `events: <n>`; `events_total` and `events_truncated` |
+| `questions` | `count`, `open` | `questions` as [Requests](#requests) says |
+| `mentions` | `count` | `mentions`, the 50 newest texts on other items that named this one, oldest first, each with `in` (`comment`, `report`, `summary` or `description`), `from`, `quote`, `author`, `by_person` and `at`; `mentions_total` |
+| `claim` | `count`, 1 while it is held | `claim`, the lease: `holder`, `state`, `session_id`, `agent_id`, `source`, `acquired_at`, `last_seen` and `expires_at`, the time it lapses unless the session shows a sign of life; null while nobody holds it |
+| `sections` | `count`, for a description longer than 2,000 characters | `sections`, as below |
+| `links`, `refs`, `sessions`, `images`, `subscribers` | `count` | the list of that name |
+
+The comments part takes one of these modes:
 
 | Read | `comments` holds |
 | --- | --- |
-| none of them | the roots of the 5 threads with the newest activity, the most recent last; a thread's activity is its newest row, so a new reply lifts an old thread |
+| no mode | the roots of the 5 threads with the newest activity, the most recent last; a thread's activity is its newest row, so a new reply lifts an old thread, and `truncated` says older threads are left out |
 | `thread: <id>` | one thread, the root and every reply oldest first; a reply's id reads its root's thread, and a reply to a question is refused |
 | `unresolved: true` | the roots without the resolved mark, oldest first, at most 20, each with `replies` and `last_reply`; while `truncated` is true, read on with `comments_after` set to the last root's id |
-| `comments_after: <id>` | every comment after that id, roots and replies flat, oldest first |
-| `full: true` | every comment, flat |
+| `comments_after: <id>` | at most 50 comments after that id, roots and replies flat, oldest first; `0` starts from the first, and while `truncated` is true the next page starts after the last id read |
 
 Every comment has `id`, `kind` (`comment` or `report`), `report`,
 `checklist_item_id`, `checklist_item_text`, `author`, `body`, `at`,
 `reply_to` and `reply_to_request` (both null on a root), `by_person`: true
 when the interface wrote it, false for another call, null for a row written
-with no call, and `resolution`: a root's resolved mark as `at`, `by`,
-`by_person` and `text`, or null, and always null on a reply. In the default read and `unresolved` each root adds `replies`, how many it has,
-and `last_reply`, its newest reply as `id`, `author`, `by_person`, `at` and
-`body`, the body cut at 500 characters with `clipped: true`, or null. All but
-`full` add `comments_total` (every row), `threads_total` (the roots),
-`unresolved_total` (the roots without the mark), `events_total` and `history_truncated`, true when fewer threads, comments or
-events are shown than there are.
+with no call, `resolution`: a root's resolved mark as `at`, `by`, `by_person`
+and `text`, or null, and always null on a reply, and `mentions`, the items it
+told. With no mode and with `unresolved` each root adds `replies`, how many it
+has, and `last_reply`, its newest reply as `id`, `author`, `by_person`, `at` and
+`body`, the body cut at 500 characters with `clipped: true`, or null.
+
+**Sections.** A line that starts with one to six `#` and a space, outside a
+fenced code block, opens a section, which runs to the next heading of its level
+or a higher one and so holds its subsections; the text before the first heading
+is `(start)`. `parts: sections` lists them as `{key, level, chars}`. A
+description without a heading is divided into paragraphs, listed as
+`{key, chars, starts}`, `starts` being its first 60 characters. A heading's key
+is its text with the spaces run together, compared without case; a paragraph's
+is `p` and eight hex digits of its text's hash. A key repeated in one
+description takes ` (2)`, ` (3)` in order. `section`, one key or a list of them,
+reads those sections with their `text`, in the description's order. A key the
+description no longer has is refused, naming the keys it has: a renamed heading
+and an edited paragraph get new keys, so a stale key never reads other text.
 
 ## Placement
 
@@ -352,7 +423,7 @@ A request is `pending` until it is answered, declined or expires; it expires
 when its item closes or its deadline (`expires_at`) passes. A comment over an
 open question changes nothing about it.
 
-`get_work_item` answers with `questions`:
+The `questions` part of `get_work_item` is
 `{"total": 6, "open": 2, "items": […], "truncated": true, "addressed_open": 0}`, at
 most 5 items, the open ones first and then the newest closed; a request asked of an
 agent session stays out of them, and `addressed_open` counts the open ones.

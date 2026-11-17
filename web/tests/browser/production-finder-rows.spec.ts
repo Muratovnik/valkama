@@ -5,11 +5,10 @@
  */
 import { expect } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { projectId, projectScope, spaceRef, workItem } from './planningFixtures.ts'
+import { spaceRef, spaceScope, workItem } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const LONG_TITLE =
@@ -18,7 +17,6 @@ const LONG_TITLE =
 /** Three results: two long titles around a short one. */
 const rows = [LONG_TITLE, 'Follow-up', `Attached copy: ${LONG_TITLE}`].map((title, index) => ({
   target: {
-    project_id: projectId,
     space_ref: spaceRef,
     reference: `MAIN-${41 + index}`,
     writable: true,
@@ -54,17 +52,14 @@ for (const { width, titleBeside } of [
           limit: 50,
           has_more: false,
           items: rows,
-          coverage: [
-            { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
-          ],
+          coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
         },
       }),
     )
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',
-        scope: projectScope,
-        entity: planningSpaceEntity(spaceRef),
+        scope: spaceScope,
       }),
     )
     await expect(page.locator('.work-item-board')).toBeVisible()

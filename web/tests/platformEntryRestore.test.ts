@@ -10,7 +10,7 @@ import {
 } from '@/app/composables/usePlatformEntryRestore.ts'
 
 import { savePlatformUiPrefs } from '@/shared/api/platformApi.ts'
-import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { moduleRegistrations } from './support/moduleRegistrations.ts'
 
@@ -23,7 +23,7 @@ type ContextReady = NonNullable<EntryInputs['contextReady']['value']>
 
 const preferred = {
   ui_prefs: { module_id: 'settings', scope: { kind: 'global' } },
-  projects: [],
+  spaces: [],
 } as unknown as ContextReady
 
 async function restoreInOrder(first: 'context' | 'modules'): Promise<PlatformRoute[]> {
@@ -151,34 +151,27 @@ test('clean entry waits when modules resolve before context', async () => {
   assert.deepEqual(await restoreInOrder('modules'), [preferred.ui_prefs])
 })
 
-function restoredProjectResource(mappedResourceId: string) {
-  const scope = { kind: 'project' as const, project_ref: { project_id: 'project-alpha' } }
-  const preferredResource = { kind: 'planning-space' as const, resource_id: 'opaque-resource-1' }
+const alpha = { data_scope_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', space_key: 'ALPHA' }
+const beta = { data_scope_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', space_key: 'BETA' }
+const listed = (space: typeof alpha, projects: string[]) => ({
+  ...space,
+  name: space.space_key,
+  default_project: projects[0] ?? null,
+  projects: projects.map((project_id) => ({ project_id, display_name: project_id })),
+  other_space_projects: [{ project_id: 'foreign', display_name: 'Foreign', space_key: 'ROVER' }],
+})
+
+/** Where a clean entry lands, with this preference and these spaces listed. */
+function restored(scope: OperatingScope | null, spaces: ReturnType<typeof listed>[]) {
   const context = {
-    primary: { data_scope_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', is_writable: true },
-    projects: [
-      {
-        binding_state: 'mapped',
-        project_id: 'project-alpha',
-        resources: [
-          {
-            resource_ref: { kind: 'planning-space', resource_id: mappedResourceId },
-            state: 'mapped',
-          },
-        ],
-        title: 'Alpha',
-      },
-    ],
-    ui_prefs: { module_id: 'planning', resource_ref: preferredResource, scope },
-  } as unknown as ContextReady
+    primary: { data_scope_id: alpha.data_scope_id, is_writable: true },
+    spaces,
+    ui_prefs: scope && { module_id: 'planning', scope },
+  } as ContextReady
   return usePlatformEntryRestore({
     blocked: ref(true),
     contextReady: ref(context),
-    contextState: ref({
-      interface_version: 'valkama-ui-state',
-      status: 'ready',
-      payload: context,
-    }),
+    contextState: ref({ interface_version: 'valkama-ui-state', status: 'ready', payload: context }),
     defaultRoute: { module_id: 'planning', scope: { kind: 'global' } },
     entryRestorePending: ref(false),
     modules: ref(moduleRegistrations().map((item) => item.manifest)),
@@ -188,25 +181,40 @@ function restoredProjectResource(mappedResourceId: string) {
   }).restoredEntryRoute()
 }
 
-test('entry restore treats a mapped resource id as opaque neutral identity', () => {
-  assert.deepEqual(restoredProjectResource('opaque-resource-1'), {
+test('entry restore comes back to the space and the project it left', () => {
+  for (const project_id of ['one', 'foreign']) {
+    const scope = { kind: 'space' as const, space_ref: alpha, project_ref: { project_id } }
+    assert.deepEqual(restored(scope, [listed(alpha, ['one']), listed(beta, [])]), {
+      module_id: 'planning',
+      scope,
+    })
+  }
+})
+
+test('entry restore opens the whole space when it no longer lists the project', () => {
+  const scope = { kind: 'space' as const, space_ref: alpha, project_ref: { project_id: 'gone' } }
+  assert.deepEqual(restored(scope, [listed(alpha, ['one']), listed(beta, [])]), {
     module_id: 'planning',
-    scope: { kind: 'project', project_ref: { project_id: 'project-alpha' } },
-    entity: { kind: 'planning-space', resource_id: 'opaque-resource-1' },
+    scope: { kind: 'space', space_ref: alpha },
   })
 })
 
-test('entry restore drops a resource preference that is no longer mapped', () => {
-  assert.deepEqual(restoredProjectResource('different-resource'), {
+test('a space that went away falls back to the only space, else to every space', () => {
+  const gone = { kind: 'space' as const, space_ref: { ...alpha, space_key: 'GONE' } }
+  assert.deepEqual(restored(gone, [listed(beta, [])]), {
     module_id: 'planning',
-    scope: { kind: 'project', project_ref: { project_id: 'project-alpha' } },
+    scope: { kind: 'space', space_ref: beta },
+  })
+  assert.deepEqual(restored(null, [listed(alpha, []), listed(beta, [])]), {
+    module_id: 'planning',
+    scope: { kind: 'global' },
   })
 })
 
 test('entry restore removes an entity the authoritative module cannot consume', () => {
   const context = {
     primary: { data_scope_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', is_writable: true },
-    projects: [],
+    spaces: [],
     ui_prefs: null,
   } as ContextReady
   assert.deepEqual(

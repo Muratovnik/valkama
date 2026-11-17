@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from unittest import mock
 
 from server import sessions, store
-from server.planning import api, calls, held, model, requests, service
+from server.planning import api, calls, held, model, requests, service, tools
 
 A = "a0000000-0000-4000-8000-00000000000a"
 B = "b0000000-0000-4000-8000-00000000000b"
@@ -43,9 +43,7 @@ class Harness(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        self.space = str(
-            service.create_planning_space(self.conn, project_id="p", name="Crew")["key"]
-        )
+        self.space = str(service.create_planning_space(self.conn, name="Crew")["key"])
         self.conn.commit()
         self.goal = self.item("G", "goal")
         s1 = self.item("S1", "stage", self.goal)
@@ -358,6 +356,16 @@ class OwnerTests(Harness):
             ),
             "E has ended, so only B's request is still open",
         )
+        self.assertEqual(
+            {"count": 1, "open": 1, "addressed_open": 1},
+            requests.question_counts(self.conn, self.work_item_id(self.t2)),
+            "the card counts what the questions part reads",
+        )
+
+    def test_a_card_with_only_a_request_asked_of_a_session_names_its_questions(self) -> None:
+        card = tools.OPS["get_work_item"](self.conn, {"id": self.t2})
+        assert isinstance(card, dict)
+        self.assertEqual({"count": 0, "open": 0, "addressed_open": 2}, card["parts"]["questions"])
 
     def test_a_session_lists_the_open_requests_asked_of_it(self) -> None:
         [to_b, _to_e] = self.asked

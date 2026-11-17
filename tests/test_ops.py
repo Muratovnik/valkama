@@ -27,6 +27,9 @@ from server.executions import service as execution_service
 from server.hooks import pairs, spool
 from server.ops import configuration, doctor, setup, toast
 from server.planning import service as planning
+from server.projects import project_registry, registry_owner
+from server.store_identity import metadata as store_metadata
+from server.store_identity.refs import planning_space_entity
 from tests import SUITE_STORE
 
 
@@ -327,7 +330,7 @@ class DoctorStoreTests(unittest.TestCase):
         os.environ["VALKAMA_DB"] = os.path.join(self._dir.name, "test.sqlite3")
         self.addCleanup(lambda: os.environ.__setitem__("VALKAMA_DB", SUITE_STORE))
         self.conn = store.connect()
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         self.conn.commit()
 
     def tearDown(self) -> None:
@@ -359,6 +362,69 @@ class DoctorStoreTests(unittest.TestCase):
 
     def test_a_store_with_no_open_attempt_passes(self) -> None:
         self.assertEqual("ok", doctor._open_execution_check()["status"])
+
+
+class DoctorProjectTests(unittest.TestCase):
+    """The Projects level: the registry's advice and the store each planning binding names."""
+
+    FOREIGN = "9b1c3f0e-6d2a-4e8b-8f57-2c4a1d0e7b93"
+
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self._dir.cleanup)
+        os.environ["VALKAMA_DB"] = os.path.join(self._dir.name, "test.sqlite3")
+        self.addCleanup(lambda: os.environ.__setitem__("VALKAMA_DB", SUITE_STORE))
+        conn = store.connect()
+        try:
+            planning.create_planning_space(conn, name="Test", key="TST")
+            conn.commit()
+            self.main = store_metadata.read_store_metadata(conn)["data_scope_id"]
+        finally:
+            conn.close()
+
+    def projection(self, bindings: dict[str, tuple[str, str]]) -> bytes:
+        projects = []
+        for project_id, (scope, key) in bindings.items():
+            root = os.path.join(self._dir.name, project_id)
+            os.makedirs(root, exist_ok=True)
+            binding = planning_space_entity({"data_scope_id": scope, "space_key": key})
+            projects.append(
+                {
+                    "project_id": project_id,
+                    "display_name": project_id.title(),
+                    "canonical_root": root,
+                    "planning_binding": {**binding, "default": True},
+                }
+            )
+        return registry_owner.render_projection(projects)
+
+    def checks_of(self, raw: bytes) -> dict[str, dict]:
+        with mock.patch.object(project_registry, "_read_registry_bytes", return_value=raw):
+            return {check["id"]: check for check in doctor._project_checks()}
+
+    def test_a_binding_to_a_store_that_is_not_attached_is_named(self) -> None:
+        raw = self.projection({"example": (self.main, "EX"), "stray": (self.FOREIGN, "ZZ")})
+        found = self.checks_of(raw)["planning-stores"]
+        self.assertEqual("warn", found["status"])
+        self.assertEqual("planning-stores-foreign", found["presentation"]["code"])
+        self.assertIn(f"stray (ZZ in {self.FOREIGN})", found["detail"])
+        self.assertIn("valkama projects bind", found["fix"])
+        self.assertNotIn("example (", found["detail"])
+
+    def test_bindings_to_the_main_store_pass(self) -> None:
+        raw = self.projection({"example": (self.main, "EX")})
+        found = self.checks_of(raw)["planning-stores"]
+        self.assertEqual("ok", found["status"])
+        self.assertEqual("planning-stores-available", found["presentation"]["code"])
+
+    def test_the_registry_advice_names_valkama_projects(self) -> None:
+        with mock.patch.object(
+            project_registry, "_read_registry_bytes", side_effect=FileNotFoundError
+        ):
+            found = {check["id"]: check for check in doctor._project_checks()}["registry"]
+        self.assertEqual("warn", found["status"])
+        self.assertIn("valkama projects", found["fix"])
+        self.assertNotIn("workflow tooling", found["fix"])
 
 
 class DoctorHookTests(unittest.TestCase):

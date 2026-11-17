@@ -2,7 +2,7 @@
 
 A commit written on a card belongs to the repository of the card's project far
 more often than to a document root the owner happened to offer, so the lookup
-asks the project the registry binds the card's space to as well. The space is
+asks the projects the registry binds the card's space to as well. The space is
 named by its exact identity; the path comes from the registry alone, so a value
 from the request never becomes a directory git runs in.
 """
@@ -201,6 +201,32 @@ class CommitRefRootTests(unittest.TestCase):
         )
         for call in run.call_args_list:
             self.assertEqual(documents.REF_RESOLVE_TIMEOUT, call.kwargs["timeout"])
+
+    def test_every_project_of_the_space_is_asked_the_default_one_first(self) -> None:
+        alpha = self.repository("alpha")
+        zeta = self.repository("zeta")
+        commit = self.git(alpha, "rev-parse", "HEAD")
+        os.environ[documents.DOC_ROOTS_VAR] = self.docs
+        entity = {"kind": "planning-space", "resource_id": self.space()}
+        entries = [
+            project_entry("test", self.project, bindings=[project_binding("test", entity)]),
+            project_entry("zeta", zeta),
+            project_entry("alpha", alpha),
+        ]
+        # Bound beside the default, and so after it, whatever their ids say.
+        for entry in entries[1:]:
+            entry["planning_binding"] = {**entries[0]["planning_binding"], "default": False}
+        with (
+            mock.patch.object(
+                project_registry, "_read_registry_bytes", return_value=registry_bytes(entries)
+            ),
+            mock.patch.object(processes, "run_text", wraps=processes.run_text) as run,
+        ):
+            answer = refs.resolve_ref("commit", commit, space=self.space())
+        self.assertEqual(alpha, answer["repository"])
+        self.assertEqual(
+            [("cat-file", self.project), ("cat-file", alpha), ("show", alpha)], self.asked(run)
+        )
 
     def test_a_value_that_names_its_repository_is_looked_up_there_first(self) -> None:
         # By the project's id or by its directory's name, in any case; the

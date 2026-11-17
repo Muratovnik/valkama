@@ -88,7 +88,7 @@ class Harness(unittest.TestCase):
             self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="p", name="Crew", key="MAIN")
+        service.create_planning_space(self.conn, name="Crew", key="MAIN")
         self.space = "MAIN"
         self.conn.commit()
         self.goal = self.made("oracle goal", "goal")

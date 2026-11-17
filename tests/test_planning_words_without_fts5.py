@@ -48,7 +48,7 @@ class WithoutFtsFiveTests(unittest.TestCase):
     def seed(self, conn: sqlite3.Connection) -> tuple[str, str]:
         """Two items, the second found by a word of its description."""
 
-        service.create_planning_space(conn, project_id="keep", name="Keep", key="KEEP")
+        service.create_planning_space(conn, name="Keep", key="KEEP")
         held = service.create_work_item(conn, space="KEEP", title="Held for a while")
         linked = service.create_work_item(
             conn, space="KEEP", title="Linked", description="Quarterly reconciliation"

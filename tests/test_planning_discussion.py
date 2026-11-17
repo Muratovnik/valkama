@@ -21,7 +21,7 @@ class PlanningDiscussionTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="test", name="Discussion", key="DISC")
+        service.create_planning_space(self.conn, name="Discussion", key="DISC")
         self.item = service.create_work_item(self.conn, space="DISC", title="A shared outcome")
         self.conn.commit()
 
@@ -203,9 +203,7 @@ class PlanningDiscussionTests(unittest.TestCase):
 
     def test_search_finds_report_history_and_real_references_with_space_scope(self) -> None:
         self.publish()
-        other_space = service.create_planning_space(
-            self.conn, project_id="other", name="Other", key="OTHER"
-        )
+        other_space = service.create_planning_space(self.conn, name="Other", key="OTHER")
         service.create_work_item(self.conn, space=other_space["key"], title="Another item")
         self.assertEqual(
             [self.item["reference"]],

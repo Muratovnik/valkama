@@ -8,6 +8,7 @@
  */
 
 import {
+  blankable,
   boundedList,
   boundedText,
   parseContract,
@@ -17,14 +18,23 @@ import {
   z,
 } from '@/shared/api/contract.ts'
 import { executorSchema } from '@/shared/api/executorModel.ts'
+import { itemProjectsField } from '@/shared/api/itemProjectsModel.ts'
 import { liveWorkMapSchema } from '@/shared/api/liveWorkModel.ts'
 import {
   EVENT_ACTIONS,
   EVENT_DETAIL_MAX,
   LABELS_DETAIL_MAX,
 } from '@/shared/api/planningEventActions.ts'
-import { actor, blankable, callField, holderField, serverText } from '@/shared/api/planningText.ts'
-import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
+import {
+  otherSpaceSchema,
+  spaceBriefSchema,
+  spaceIdentitySchema,
+  TITLE,
+} from '@/shared/api/planningSpaceModel.ts'
+import { actor, callField, holderField, serverText } from '@/shared/api/planningText.ts'
+import { enumField, ID, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
+
+export { SPACE_KEY, TITLE } from '@/shared/api/planningSpaceModel.ts'
 
 export const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
 const PLANNING_API = 'valkama-planning-api' as const
@@ -54,17 +64,16 @@ const REF_KINDS = ['commit', 'memory', 'session', 'url'] as const
 
 /** `MAIN-142`: what a person types and what a URL carries. */
 export const WORK_ITEM_REFERENCE = /^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u
-export const SPACE_KEY = /^[A-Z][A-Z0-9]{1,7}$/u
 export const STATE_KEY = /^[a-z][a-z0-9-]{0,31}$/u
-export const TITLE = /^[^\u{0}]{1,200}$/u
 
-const stateShape = {
-  state_id: boundedText(UUID, 36),
+/** A state as it reads outside its workflow: no id, which only that workflow resolves. */
+const publicStateShape = {
   key: boundedText(STATE_KEY, 32),
   name: boundedText(TITLE, 200),
   category: enumField(STATE_CATEGORIES),
   is_terminal: z.boolean(),
 }
+const stateShape = { state_id: boundedText(UUID, 36), ...publicStateShape }
 const stateSchema = strictObject(stateShape)
 const workflowStateSchema = strictObject({ ...stateShape, position: positiveInt(true) })
 
@@ -112,6 +121,13 @@ const workItemBriefShape = {
   claim_state: claimStateField(),
   parent_id: boundedText(UUID, 36).nullable(),
   labels: boundedList(boundedText(/^[^\u{0}]{1,64}$/u, 64), 32),
+  /** The projects it changes; a goal or stage reads its tasks'. */
+  projects: itemProjectsField(),
+  /**
+   * In a space's read, the space an item of another space lies in, which names one
+   * of this space's projects; null for the space's own. Absent outside such a read.
+   */
+  other_space: otherSpaceSchema.nullable().optional(),
   source: blankable(512),
   checklist: boundedList(checklistStepSchema, 100),
   revision: positiveInt(true),
@@ -417,23 +433,6 @@ const workItemSchema = strictObject({
   released: holderField().optional(),
 }).refine(...stateOrDerived)
 
-const spaceIdentityShape = {
-  planning_space_id: boundedText(UUID, 36),
-  project_id: boundedText(PROJECT_ID, 160),
-  name: boundedText(TITLE, 200),
-  key: boundedText(SPACE_KEY, 8),
-  provider_kind: enumField(['local'] as const),
-}
-const spaceIdentitySchema = strictObject(spaceIdentityShape)
-const spaceBriefSchema = strictObject({
-  ...spaceIdentityShape,
-  work_items: positiveInt(true),
-  open: positiveInt(true),
-  active: positiveInt(true),
-  completed: positiveInt(true),
-  updated_at: boundedText(ISO, 96),
-})
-
 const workflowSchema = strictObject({
   workflow_id: boundedText(UUID, 36),
   name: boundedText(TITLE, 200),
@@ -476,6 +475,17 @@ const staleClaimSchema = strictObject({
   quiet_days: positiveInt(true),
 })
 
+/** The end of a link the read holds no item for, which may lie in another space. */
+const otherSpaceEndSchema = strictObject({
+  work_item_id: boundedText(UUID, 36),
+  reference: boundedText(WORK_ITEM_REFERENCE, 20),
+  title: boundedText(TITLE, 200),
+  kind: enumField(WORK_ITEM_KINDS),
+  // Null for an accepted open goal or stage, and for a state the store cannot resolve.
+  state: strictObject(publicStateShape).nullable(),
+  space: otherSpaceSchema,
+})
+
 const readModelSchema = strictObject({
   interface_version: z.literal(PLANNING_READ_MODEL, {
     message: `expected ${PLANNING_READ_MODEL}`,
@@ -488,6 +498,8 @@ const readModelSchema = strictObject({
   workflow: workflowSchema.nullable(),
   work_items: z.array(workItemBriefSchema),
   links: z.array(edgeSchema),
+  // The ends of those links the read holds no item for; optional, as an older server sends none.
+  other_space_ends: z.array(otherSpaceEndSchema).optional(),
   stale_claims: z.array(staleClaimSchema),
   // Only the items with live work, by id; optional, as a server older than it sends none.
   live_work: liveWorkMapSchema.optional(),
@@ -500,6 +512,8 @@ const readModelSchema = strictObject({
       payload.work_items.every(
         (item) =>
           item.state === null ||
+          // Another space's item stands in a state of its own space's workflow.
+          (item.other_space ?? null) !== null ||
           payload.workflow?.states.some((state) => state.state_id === item.state?.state_id),
       ),
     { message: 'every item names a state its workflow declares' },

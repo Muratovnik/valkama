@@ -17,9 +17,9 @@ import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPrese
 import { installBackend } from './backend.ts'
 import { watchLoading } from './loadingWatch.ts'
 import type { LoadingWatch } from './loadingWatch.ts'
-import { projectScope, workItem } from './planningFixtures.ts'
+import { spaceScope, workItem } from './planningFixtures.ts'
 import { test } from './test.ts'
-import { firstProject, inSecond, SECOND_TITLE, serveTwoProjects } from './twoProjects.ts'
+import { firstSpace, inSecond, SECOND_TITLE, serveTwoSpaces } from './twoSpaces.ts'
 
 /** A read that answers well inside the delay: a board of two megabytes reads in about this. */
 const QUICK_READ_MS = 150
@@ -33,8 +33,8 @@ const pause = (ms: number) => new Promise((done) => setTimeout(done, ms))
 
 /** Switch from the first project's board to the second's, whose read takes `readMs`. */
 async function switchBoard(page: Page, readMs: number): Promise<LoadingWatch> {
-  await serveTwoProjects(page, () => pause(readMs))
-  await page.goto(firstProject())
+  await serveTwoSpaces(page, () => pause(readMs))
+  await page.goto(firstSpace())
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
   await page.locator('.operating-scope [role="combobox"]').click()
   const watched = await watchLoading(page)
@@ -55,7 +55,7 @@ async function openCard(page: Page, readMs: number): Promise<LoadingWatch> {
     await pause(readMs)
     await route.fallback()
   })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   const tile = page.locator('.work-item-tile').filter({ hasText: workItem.title }).first()
   await expect(tile).toBeVisible()
   const watched = await watchLoading(page)
@@ -121,13 +121,13 @@ for (const { name, act, where } of surfaces) {
 
 /** Open the page on the first project's board, with its space read taking `readMs`. */
 async function loadCold(page: Page, readMs: number): Promise<LoadingWatch> {
-  await serveTwoProjects(page)
+  await serveTwoSpaces(page)
   await page.route('**/api/planning?*', async (route) => {
     await pause(readMs)
     await route.fallback()
   })
   const watched = await watchLoading(page, { fromLoad: true })
-  await page.goto(firstProject())
+  await page.goto(firstSpace())
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
   return watched()
 }

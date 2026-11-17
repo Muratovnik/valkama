@@ -1,358 +1,57 @@
 {
-  "work_item_id": "00000000-0000-4000-8000-000000000005",
-  "planning_space_id": "00000000-0000-4000-8000-000000000002",
   "reference": "MAIN-1",
-  "number": 1,
+  "revision": 0,
   "title": "Contract card",
   "kind": "task",
   "priority": "medium",
   "state": {
-    "state_id": "00000000-0000-4000-8000-000000000003",
     "key": "triage",
     "name": "Triage",
-    "category": "triage",
-    "is_terminal": false
+    "category": "triage"
   },
   "open": true,
   "container_state": null,
   "acceptance": null,
   "started_at": null,
   "waits_for": [],
+  "workable": true,
+  "projects": [],
   "claim_ref": "",
   "claim_state": null,
-  "parent_id": null,
+  "last_claim_ref": null,
+  "closed_at": null,
   "labels": [],
   "source": "",
-  "checklist": [],
-  "revision": 0,
   "created_at": "2026-01-02T03:04:05Z",
   "updated_at": "2026-01-02T03:04:05Z",
-  "closed_at": null,
-  "last_claim_ref": null,
-  "workable": true,
-  "claim": null,
+  "url": "http://127.0.0.1:8642/open/MAIN-1",
+  "parent": null,
   "description": "",
-  "summary": null,
-  "summary_comment_id": null,
-  "links": [],
-  "refs": [],
-  "comments": [
-    {
-      "id": 1,
-      "kind": "comment",
-      "report": null,
-      "checklist_item_id": null,
-      "checklist_item_text": null,
-      "author": "agent",
-      "body": "The export leaves out claims.",
-      "at": "2026-01-02T03:04:05Z",
-      "reply_to": null,
-      "reply_to_request": null,
-      "by_person": false,
-      "resolution": null,
-      "mentions": [],
-      "awaits_reply": true,
-      "answered": true,
-      "replies": 2,
-      "last_reply": {
-        "id": 3,
-        "author": "agent",
-        "by_person": false,
-        "at": "2026-01-02T03:04:05Z",
-        "body": "Then the claims go in next."
-      }
+  "checklist": [],
+  "parts": {
+    "comments": {
+      "count": 7,
+      "threads": 3,
+      "unresolved": 2,
+      "chars": 217
     },
-    {
-      "id": 4,
-      "kind": "comment",
-      "report": null,
-      "checklist_item_id": null,
-      "checklist_item_text": null,
-      "author": "user",
-      "body": "Is the old route still served?",
-      "at": "2026-01-02T03:04:05Z",
-      "reply_to": null,
-      "reply_to_request": null,
-      "by_person": true,
-      "resolution": {
-        "at": "2026-01-02T03:04:05.000000Z",
-        "by": "user",
-        "by_person": true,
-        "text": "Moved to MAIN-14"
-      },
-      "mentions": [],
-      "replies": 0,
-      "last_reply": null
+    "events": {
+      "count": 9,
+      "chars": 254
     },
-    {
-      "id": 7,
-      "kind": "comment",
-      "report": null,
-      "checklist_item_id": null,
-      "checklist_item_text": null,
-      "author": "agent",
-      "body": "Two places misfire.",
-      "at": "2026-01-02T03:04:05Z",
-      "reply_to": null,
-      "reply_to_request": null,
-      "by_person": false,
-      "resolution": null,
-      "mentions": [],
-      "replies": 0,
-      "last_reply": null
+    "questions": {
+      "count": 3,
+      "open": 2,
+      "addressed_open": 0
+    },
+    "mentions": {
+      "count": 2
+    },
+    "sessions": {
+      "count": 1
+    },
+    "subscribers": {
+      "count": 1
     }
-  ],
-  "events": [
-    {
-      "action": "created",
-      "detail": "triage",
-      "author": "agent",
-      "at": "2026-01-02T03:04:05Z",
-      "identity": {
-        "state": "unconfirmed",
-        "source": null,
-        "session_id": null,
-        "agent_id": null
-      }
-    },
-    {
-      "action": "mentioned",
-      "detail": "description:00000000-0000-4000-8000-000000000001",
-      "author": "user",
-      "at": "2026-01-02T03:04:05Z",
-      "identity": {
-        "state": "confirmed",
-        "source": "browser",
-        "session_id": null,
-        "agent_id": null
-      }
-    },
-    {
-      "action": "comment_resolved",
-      "detail": "4: Moved to MAIN-14",
-      "author": "user",
-      "at": "2026-01-02T03:04:05Z",
-      "identity": {
-        "state": "confirmed",
-        "source": "browser",
-        "session_id": null,
-        "agent_id": null
-      }
-    },
-    {
-      "action": "request_created",
-      "detail": "00000000-0000-4000-8000-000000000006",
-      "author": "asking-agent",
-      "at": "2026-01-02T03:04:05Z",
-      "identity": {
-        "state": "unconfirmed",
-        "source": "mcp",
-        "session_id": null,
-        "agent_id": null
-      }
-    },
-    {
-      "action": "request_answered",
-      "detail": "00000000-0000-4000-8000-000000000006",
-      "author": "user",
-      "at": "2026-01-02T03:04:05Z",
-      "identity": {
-        "state": "confirmed",
-        "source": "browser",
-        "session_id": null,
-        "agent_id": null
-      }
-    },
-    {
-      "action": "request_changed",
-      "detail": "00000000-0000-4000-8000-000000000006",
-      "author": "codex",
-      "at": "2026-01-02T03:04:05Z",
-      "identity": {
-        "state": "unconfirmed",
-        "source": "mcp",
-        "session_id": null,
-        "agent_id": null
-      }
-    },
-    {
-      "action": "request_created",
-      "detail": "00000000-0000-4000-8000-000000000007",
-      "author": "asking-agent",
-      "at": "2026-01-02T03:04:05Z",
-      "identity": {
-        "state": "unconfirmed",
-        "source": "mcp",
-        "session_id": null,
-        "agent_id": null
-      }
-    },
-    {
-      "action": "request_created",
-      "detail": "00000000-0000-4000-8000-000000000008",
-      "author": "agent",
-      "at": "2026-01-02T03:04:05Z",
-      "identity": {
-        "state": "unconfirmed",
-        "source": "mcp",
-        "session_id": null,
-        "agent_id": null
-      }
-    },
-    {
-      "action": "mentioned",
-      "detail": "9",
-      "author": "user",
-      "at": "2026-01-02T03:04:05Z",
-      "identity": {
-        "state": "confirmed",
-        "source": "browser",
-        "session_id": null,
-        "agent_id": null
-      }
-    }
-  ],
-  "comments_total": 7,
-  "threads_total": 3,
-  "unresolved_total": 2,
-  "events_total": 9,
-  "history_truncated": false,
-  "mentions": [
-    {
-      "in": "description",
-      "comment_id": null,
-      "from": "MAIN-2",
-      "at": "2026-01-02T03:04:05Z",
-      "by_person": true,
-      "author": "user",
-      "quote": "Waits on MAIN-1 first."
-    },
-    {
-      "in": "comment",
-      "comment_id": 9,
-      "from": "MAIN-3",
-      "at": "2026-01-02T03:04:05Z",
-      "by_person": true,
-      "author": "user",
-      "quote": "Decided to keep the old route; the contract card can drop it."
-    }
-  ],
-  "mentions_total": 2,
-  "subscribers": [
-    {
-      "session": "00000000-0000-4000-8000-000000000009",
-      "client": "codex",
-      "agent": "c6f4e0a3b2d1c519",
-      "label": "codex agent c6f4e0a3b2d1c519 (session 00000000-0000-4000-8000-000000000009)",
-      "since": "2026-01-02T03:04:05Z"
-    }
-  ],
-  "sessions": [
-    {
-      "session_id": "00000000-0000-4000-8000-000000000009",
-      "client": "codex",
-      "identity_source": "codex-meta",
-      "first_at": "2026-01-02T03:04:05.000Z",
-      "last_at": "2026-01-02T03:04:05.000Z",
-      "writes": 1
-    }
-  ],
-  "questions": {
-    "total": 3,
-    "open": 2,
-    "items": [
-      {
-        "id": "00000000-0000-4000-8000-000000000008",
-        "status": "pending",
-        "question": "What to take on",
-        "comment_id": 7,
-        "undecided": [
-          "items"
-        ],
-        "answer": [],
-        "note": null,
-        "answered_by": null,
-        "by_person": null,
-        "answered_at": null,
-        "answer_version": 0,
-        "replies": 0,
-        "last_reply": null
-      },
-      {
-        "id": "00000000-0000-4000-8000-000000000007",
-        "status": "pending",
-        "question": "Why does the card read flat?",
-        "answer": [],
-        "note": null,
-        "answered_by": null,
-        "by_person": null,
-        "answered_at": null,
-        "answer_version": 0,
-        "replies": 0,
-        "last_reply": null
-      },
-      {
-        "id": "00000000-0000-4000-8000-000000000006",
-        "status": "answered",
-        "question": "Which path do the comments take?",
-        "answer": [
-          {
-            "field": "path",
-            "value": "keep",
-            "label": "Keep it",
-            "note": "It costs nothing now"
-          },
-          {
-            "field": "areas",
-            "value": [
-              "api",
-              "web"
-            ],
-            "label": "The API, The web"
-          },
-          {
-            "field": "sure",
-            "value": null,
-            "label": null,
-            "own": "Once the export carries them"
-          }
-        ],
-        "note": "The owner asked for the change.",
-        "answered_by": "codex",
-        "by_person": false,
-        "answered_at": "2026-01-02T03:04:05.000000Z",
-        "answer_version": 2,
-        "replies": 2,
-        "last_reply": {
-          "id": 6,
-          "author": "user",
-          "by_person": true,
-          "at": "2026-01-02T03:04:05Z",
-          "body": "Yes, the docs too."
-        },
-        "previous": {
-          "answer": [
-            {
-              "field": "path",
-              "value": "drop",
-              "label": "Drop it"
-            },
-            {
-              "field": "areas",
-              "value": [
-                "api"
-              ],
-              "label": "The API"
-            }
-          ],
-          "note": "For now.",
-          "answered_at": "2026-01-02T03:04:05.000000Z"
-        }
-      }
-    ],
-    "truncated": false,
-    "addressed_open": 0
-  },
-  "images": [],
-  "url": "http://127.0.0.1:8642/open/MAIN-1"
+  }
 }

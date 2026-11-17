@@ -8,9 +8,7 @@
  * its parent, the labels a label is attached from — comes from one read of that space beside it,
  * into places the card already holds for them, as it does on the board.
  *
- * The page names no project for the card, so the card's project is the one that maps its space:
- * the page's own where it does, else the first that does, as a reference press found it. A space
- * no project maps opens nothing, as it would open nothing on the board.
+ * The card opens in its own space whatever the page stands in, as a reference press found it.
  *
  * A space that cannot be read is said as the board says it, in the board's words, and the card
  * stays: it reads and writes its own record without the space, so a field such as the priority
@@ -29,6 +27,8 @@ import { usePlanningReferenceLinks } from '@/pages/planning/composables/usePlann
 import PlanningCardPanel from '@/pages/planning/PlanningCardPanel.vue'
 import type { PlanningCardProps } from '@/pages/planning/PlanningCardPanel.vue'
 
+import { provideDefaultProject } from '@/widgets/work-item-inspector/utils/memorySource.ts'
+
 import { CutoverPendingError, fetchPlanning } from '@/shared/api/planningApi.ts'
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
@@ -38,6 +38,7 @@ import {
   planningSpaceEntity,
   planningWorkItemEntity,
   resolvePlanningRouteSelection,
+  sameSpace,
 } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
@@ -64,27 +65,29 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-/** The card the entity names, in the project that maps its space. */
+/**
+ * The card the entity names, and the project its Memory is asked in: the page's own where the
+ * page stands in the card's space and narrows to a project, else the space's default one.
+ */
 const bound = computed(() => {
-  if (props.entity?.kind !== 'work-item') return null
-  const projects = props.context?.projects ?? []
-  const scope = props.scope
-  const own = scope.kind === 'project' ? scope.project_ref.project_id : null
-  const ordered = [
-    ...projects.filter((project) => project.project_id === own),
-    ...projects.filter((project) => project.project_id !== own),
-  ]
-  for (const project of ordered) {
-    const mapped = project.resources
-      .filter((resource) => resource.state === 'mapped')
-      .map((resource) => resource.resource_ref)
-    const selection = resolvePlanningRouteSelection(props.entity, mapped, true)
-    if (selection.status === 'ready' && selection.work_item_ref)
-      return { projectId: project.project_id, item: selection.work_item_ref }
+  const selection = resolvePlanningRouteSelection(props.entity)
+  if (props.entity?.kind !== 'work-item' || selection.status !== 'ready') return null
+  const item = selection.work_item_ref
+  if (!item) return null
+  const { scope } = props
+  const own =
+    scope.kind === 'space' && sameSpace(scope.space_ref, item.space_ref)
+      ? scope.project_ref?.project_id
+      : undefined
+  const listed = props.context?.spaces.find((space) => sameSpace(space, item.space_ref))
+  return {
+    projectId: own ?? listed?.default_project ?? '',
+    defaultProject: own === undefined,
+    item,
   }
-  return null
 })
 
+provideDefaultProject(() => bound.value?.defaultProject ?? false)
 const open = computed(() => bound.value?.item.reference ?? null)
 const space = computed(() => bound.value?.item.space_ref)
 const resourceRef = computed(() => (space.value ? planningSpaceEntity(space.value) : undefined))
@@ -102,9 +105,7 @@ const writable = computed(
 /** The card's space, read once per space it opens in and again after the card changed it. */
 const model = shallowRef<PlanningReadModel | null>(null)
 const reading = ref(false)
-const spaceKey = computed(() =>
-  bound.value ? JSON.stringify([bound.value.projectId, bound.value.item.space_ref]) : '',
-)
+const spaceKey = computed(() => (bound.value ? JSON.stringify(bound.value.item.space_ref) : ''))
 let generation = 0
 async function readSpace() {
   generation += 1
@@ -117,7 +118,7 @@ async function readSpace() {
   }
   reading.value = true
   try {
-    const next = await fetchPlanning({ project: target.projectId, ...target.item.space_ref })
+    const next = await fetchPlanning(target.item.space_ref)
     if (asked !== generation) return
     model.value = next.planning_space ? next : null
     if (!next.planning_space) emit('notice', t('workItem.noSpace'))
@@ -168,15 +169,14 @@ usePlanningReferenceLinks(space, model, (reference) => {
   if (!panel.value?.openFrom(reference)) trail.openItem(reference)
 })
 
-/** The chain on the board's graph, in the card's project: the overlay has no graph of its own. */
+/** The chain on the board's graph, in the card's space: the overlay has no graph of its own. */
 function showChain(chain: WorkItemChain, branch: string | null) {
   const target = bound.value
   if (!target) return
   const state = withChain(undefined, { reference: chain.root.reference, scope: chain.scope })
   emit('go', {
     module_id: 'planning',
-    scope: { kind: 'project', project_ref: { project_id: target.projectId } },
-    entity: planningSpaceEntity(target.item.space_ref),
+    scope: { kind: 'space', space_ref: target.item.space_ref },
     state: { ...withBranch(state, branch), view: 'graph' },
   })
 }

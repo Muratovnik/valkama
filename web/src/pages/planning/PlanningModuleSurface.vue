@@ -2,9 +2,9 @@
 /**
  * The Planning module's own surface: which space is open, and what is in it.
  *
- * Two boundaries meet here and neither owns the other. The Kernel answers which
- * project this is, which resource it is bound to, and who may write — that is
- * scope and ownership. Planning's own boundary answers what is in the space.
+ * Two boundaries meet here and neither owns the other. The scope answers which
+ * space this is and whether it narrows to one project, and the Kernel who may
+ * write — that is scope and ownership. Planning's own boundary answers what is in the space.
  * Keeping the second out of the Kernel projection is what let Kanban stop being
  * the model: `/api/planning` returns the workflow, the items and the links, and
  * each view projects what it needs from that one answer.
@@ -58,6 +58,8 @@ import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { readingModel } from '@/pages/planning/utils/readingModel.ts'
 import { withoutUnreadValues } from '@/pages/planning/utils/savedViewReads.ts'
 
+import { provideDefaultProject } from '@/widgets/work-item-inspector/utils/memorySource.ts'
+
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
@@ -67,7 +69,8 @@ import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
-import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { planningWorkItemEntity, sameSpace } from '@/shared/api/platformPlanningRefs.ts'
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { uiError, uiLoading, uiUnavailable } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
@@ -100,7 +103,7 @@ const emit = defineEmits<{
   /** Search every project for this text: the finder is the app's, not the module's. */
   'find': [text: string]
   'notice': [message: string]
-  'open-project': [projectId: string]
+  'open-space': [space: PlanningSpaceRef]
   'question-taken': []
   'state': [state: Record<string, string | number | boolean>]
 }>()
@@ -115,19 +118,25 @@ const {
   space: boundSpace,
   spaceResourceRef: boundSpaceResourceRef,
 } = usePlanningRouteSelection({
-  context: () => props.context,
   route: () => props.route,
   scope: () => props.scope,
 })
 
+/** The space the scope names as this workstation lists it; undefined at the top or when absent. */
+const listedSpace = computed(() => {
+  const space = boundSpace.value
+  return space && props.context?.spaces.find((item) => sameSpace(item, space))
+})
+
 /**
- * The project as a string, for a child that takes one.
- *
- * The inspector's Memory section searches a project's own knowledge, and a
- * global scope has no project to search: an empty string is what it renders as
- * "open this inside its project", where `undefined` would be a missing prop.
+ * The project the card's Memory searches: the one the scope narrows to, else the space's
+ * default one. A space with no project has none to search, and an empty string is what the
+ * card renders as that, where `undefined` would be a missing prop.
  */
-const inspectorProjectId = computed(() => projectId.value ?? '')
+const inspectorProjectId = computed(
+  () => projectId.value ?? listedSpace.value?.default_project ?? '',
+)
+provideDefaultProject(() => projectId.value === undefined)
 
 const view = computed<PlanningViewMode>(() => viewOf(props.route.state))
 const grouping = computed(() => groupingOf(props.route.state))
@@ -137,24 +146,22 @@ const viewPlace = computed(() =>
 )
 
 /**
- * The project the address names, when this workstation has no such project.
- * Its space can never load, so the page offers the projects that do exist.
+ * The key of the space the address names, when this workstation has no such space.
+ * It can never load, so the page offers the spaces that do exist.
  */
-const missingProject = computed(() => {
+const missingSpace = computed(() => {
   const scope = props.scope
-  if (scope.kind !== 'project' || props.context === null) return null
-  const id = scope.project_ref.project_id
-  return props.context.projects.some((project) => project.project_id === id) ? null : id
+  return scope.kind !== 'space' || props.context === null || listedSpace.value
+    ? null
+    : scope.space_ref.space_key
 })
-const portfolioShown = computed(
-  () => props.scope.kind === 'global' || missingProject.value !== null,
-)
+const portfolioShown = computed(() => props.scope.kind === 'global' || missingSpace.value !== null)
 
 const {
   state: portfolio,
   load: loadPortfolio,
   invalidate: invalidatePortfolio,
-} = usePlanningPortfolio(() => (missingProject.value ? { kind: 'global' } : props.scope))
+} = usePlanningPortfolio()
 /**
  * Planning's own read model, held beside its status rather than inside one.
  *
@@ -200,7 +207,7 @@ const planningKey = computed(() =>
  */
 const primaryStore = computed(
   () =>
-    props.scope.kind === 'project' && props.primaryWriteScopeId === boundSpace.value?.data_scope_id,
+    props.scope.kind === 'space' && props.primaryWriteScopeId === boundSpace.value?.data_scope_id,
 )
 
 const {
@@ -220,7 +227,9 @@ const {
   state: () => props.route.state,
   open: () => open.value,
   close: () => closeItem(),
-  space: () => (boundSpace.value === undefined ? '' : planningKey.value),
+  // The address names the space before the context says which store is the primary, and a
+  // chain asked for then would be refused for a store not yet known: it waits for both.
+  space: () => (boundSpace.value === undefined || props.context === null ? '' : planningKey.value),
   primary: () => primaryStore.value,
   spaceItems: () => model.value?.work_items ?? null,
   version: () => version.value,
@@ -287,11 +296,17 @@ const spaceRead = computed(() => {
   const read = resource.value
   return read.key === planningKey.value || (read.status === 'error' && read.pendingKey === null)
 })
-const streamTarget = computed(() =>
-  projectId.value === undefined || boundSpace.value === undefined
-    ? null
-    : { project: projectId.value, ...boundSpace.value },
-)
+/**
+ * The space and, where the scope narrows, its project: what the views show of it. Nothing
+ * is read before the spaces are: the list says whether the space is there at all, and a read
+ * started before it was read the space again once it came. A space this workstation does
+ * not list is neither read nor streamed: it can never answer.
+ */
+const streamTarget = computed(() => {
+  const space = boundSpace.value
+  if (space === undefined || props.context === null || missingSpace.value !== null) return null
+  return projectId.value === undefined ? { ...space } : { project: projectId.value, ...space }
+})
 /**
  * The space's stream counts as connecting while it waits for the read, so the shell
  * opens no stream of its own for the live-work frame in the meantime.
@@ -323,23 +338,20 @@ watch(
 )
 
 async function loadPlanning() {
-  const project = projectId.value
-  const space = boundSpace.value
+  // Until the spaces are read the page stays as it starts, loading: see `streamTarget`.
+  if (props.context === null) return
+  const target = streamTarget.value
   const key = planningKey.value
   resource.value = beginResource(resource.value, key)
   const generation = resource.value.generation
-  if (
-    routeSelection.value.status === 'unavailable' ||
-    project === undefined ||
-    space === undefined
-  ) {
+  if (routeSelection.value.status === 'unavailable' || target === null) {
     resource.value = { ...cancelResource(resource.value), data: null }
-    planning.value = uiUnavailable(t('platform.planning.bindingRequired'))
+    planning.value = uiUnavailable(t('platform.planning.otherSpace'))
     return
   }
   if (model.value === null) planning.value = uiLoading()
   try {
-    const next = await fetchPlanning({ project, ...space })
+    const next = await fetchPlanning(target)
     if (generation !== resource.value.generation) return
     spaceAnswered(model.value !== null)
     if (next.planning_space === null) {
@@ -375,7 +387,7 @@ async function loadPlanning() {
  * the space would answer.
  */
 const readKey = computed(() =>
-  JSON.stringify([props.scope, boundSpace.value, props.context?.projects]),
+  JSON.stringify([props.scope, boundSpace.value, props.context?.spaces]),
 )
 
 watch(
@@ -404,15 +416,13 @@ onBeforeUnmount(() => {
   resource.value = cancelResource(resource.value)
 })
 
-/** Route to one item of the bound space, or back to the space itself. */
+/** Route to one item of the bound space, or back to the space itself, which names no entity. */
 function show(reference: string | null) {
   const space = boundSpace.value
   if (space === undefined) return
   emit(
     'entity',
-    reference === null
-      ? planningSpaceEntity(space)
-      : planningWorkItemEntity({ space_ref: space, reference }),
+    reference === null ? undefined : planningWorkItemEntity({ space_ref: space, reference }),
   )
 }
 
@@ -471,9 +481,9 @@ defineExpose({ refresh, selectedId })
   <PlanningPortfolioFrame
     v-if="portfolioShown"
     :portfolio="portfolio"
-    :missing-project="missingProject"
+    :missing-space="missingSpace"
     @retry="loadPortfolio"
-    @open-project="(id) => emit('open-project', id)"
+    @open-space="(space) => emit('open-space', space)"
   />
 
   <div

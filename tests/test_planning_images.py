@@ -79,7 +79,7 @@ class StoreCase(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="pics", name="Pics", key="PIC")
+        service.create_planning_space(self.conn, name="Pics", key="PIC")
         self.first = self.item("Shows a screenshot")
         self.second = self.item("Shows the same one")
         self.conn.commit()
@@ -446,7 +446,7 @@ class SharedDirectoryTests(StoreCase):
     def test_the_other_store_keeps_no_picture_in_a_folder_it_does_not_own(self) -> None:
         images.store(self.conn, self.first, png(62))
         other = self.open_other()
-        service.create_planning_space(other, project_id="else", name="Else", key="ELS")
+        service.create_planning_space(other, name="Else", key="ELS")
         item = str(service.create_work_item(other, space="ELS", title="Elsewhere")["reference"])
         other.commit()
         with self.assertRaises(images.ImageRefusedError) as refused:
@@ -637,7 +637,7 @@ class AgentTests(StoreCase):
     def test_an_agent_reads_the_item_s_pictures_and_sees_one(self) -> None:
         data = png(40)
         images.store(self.conn, self.first, data)
-        read = self.converse("get_work_item", {"id": self.first})
+        read = self.converse("get_work_item", {"id": self.first, "parts": "images"})
         item = json.loads(read["content"][0]["text"])
         self.assertEqual(
             [{"sha256": sha(data), "media_type": "image/png", "size": len(data)}],

@@ -30,15 +30,25 @@ def validate_project_ref(value):
 
 
 def validate_operating_scope(value):
-    obj = _object(value, ("kind",), optional=("project_ref",), where="operating_scope")
+    """Where a module works: everywhere, or one planning space, which a project may narrow.
+
+    A space is named by its store and key, since a key alone is unique only within its
+    store. The project need not be one of the space's own: an item of the space may name
+    a project of another space, and the space's work is then read for that project.
+    """
+
+    obj = _object(value, ("kind",), optional=("space_ref", "project_ref"), where="operating_scope")
     kind = _enum(obj["kind"], SCOPE_KINDS, "operating_scope.kind")
     if kind == "global":
         if set(obj) != {"kind"}:
-            raise UnknownFieldError("global operating_scope cannot carry project_ref")
+            raise UnknownFieldError("global operating_scope cannot carry space_ref or project_ref")
         return {"kind": "global"}
-    if set(obj) != {"kind", "project_ref"}:
-        raise MissingFieldError("project operating_scope requires exactly project_ref")
-    return {"kind": "project", "project_ref": validate_project_ref(obj["project_ref"])}
+    if "space_ref" not in obj:
+        raise MissingFieldError("space operating_scope requires space_ref")
+    scope = {"kind": "space", "space_ref": validate_planning_space_ref(obj["space_ref"])}
+    if "project_ref" in obj:
+        scope["project_ref"] = validate_project_ref(obj["project_ref"])
+    return scope
 
 
 def validate_data_scope_id(value):

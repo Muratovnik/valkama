@@ -37,9 +37,7 @@ class Harness(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        self.space = str(
-            service.create_planning_space(self.conn, project_id="p", name="Crew")["key"]
-        )
+        self.space = str(service.create_planning_space(self.conn, name="Crew")["key"])
         self.conn.commit()
 
     def person(self, path: str, **payload: object) -> dict:

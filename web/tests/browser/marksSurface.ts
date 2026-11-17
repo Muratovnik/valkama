@@ -46,6 +46,7 @@ const ITEMS = [
     priority: 'urgent',
     workable: false,
     labels: ['agent-packets', 'coordinator', 'decision-review', 'ui'],
+    projects: [],
     claim_ref: 'claude (session 5937aa01-1234-4c00)',
     claim_state: 'stale',
     parent_id: '00000000-0000-4000-8000-000000000994',

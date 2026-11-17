@@ -17,7 +17,11 @@ import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 const board: PlatformRoute = {
   module_id: 'planning',
-  scope: { kind: 'project', project_ref: { project_id: 'sample' } },
+  scope: {
+    kind: 'space',
+    space_ref: { data_scope_id: '123e4567-e89b-42d3-a456-426614174000', space_key: 'MAIN' },
+    project_ref: { project_id: 'sample' },
+  },
 }
 const BOARD_PATH = serializePlatformRoute(board)
 

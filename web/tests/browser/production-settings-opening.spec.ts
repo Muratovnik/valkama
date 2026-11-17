@@ -6,10 +6,10 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installAlerts } from './alertsFixtures.ts'
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: projectScope })
+const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: spaceScope })
 
 const section = (page: Page, title: string) =>
   page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: title }) })

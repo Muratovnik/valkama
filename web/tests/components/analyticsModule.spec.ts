@@ -40,7 +40,11 @@ const drawable: readonly ModuleManifest[] = OFFLINE_MODULE_FALLBACK.filter((modu
   hasModuleRenderer(module.module_id),
 )
 
-const PROJECT = { kind: 'project' as const, project_ref: { project_id: 'sample' } }
+const PROJECT = {
+  kind: 'space' as const,
+  space_ref: { data_scope_id: '123e4567-e89b-42d3-a456-426614174000', space_key: 'MAIN' },
+  project_ref: { project_id: 'sample' },
+}
 
 const ITEM = task(12, 'Answer a review in one form')
 

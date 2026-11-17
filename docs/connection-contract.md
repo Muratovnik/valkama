@@ -113,11 +113,21 @@ changed. `url` is described in [The address of a work item](#the-address-of-a-wo
 
 | Tool | Also carries |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
-| `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
+| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
+| `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)); `project_roots` unless it released |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items |
+| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim` |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
+
+`project_roots` is the root of each project the claimed task changes, or of its
+space's default project when it names none: a list of `{project_id, display_name,
+root, status}`, `status` one of `mapped`, `missing` (no directory at the root),
+`unregistered` (the registry no longer records the project) and `unavailable` (the
+registry was not read; `root` and `display_name` are then null, and a task that
+names no project has an empty list). The projects of the task's space come first,
+its default project before the others, then every other project, each part by
+`project_id`; with an unread registry all come by `project_id`. The claim does not
+check them. `claim_ready_work_item` carries it beside the `work_item` it took.
 
 A comment the batch wrote is named in `applied` by its `comment_id`, and the
 `reply_to` and `reply_to_request` of the root a reply landed under; a resolved
@@ -139,9 +149,10 @@ A `verbose` answer carries both too. `delete_work_item` and `create_planning_spa
 never do.
 
 Each of these tools takes an optional boolean `verbose`, false by default. With
-`verbose: true` the answer is the full item with its whole history, as
-`get_work_item` returns it with `full: true` but without `sessions`. The
-reads, `claim_ready_work_item` (the agent needs the item it just took),
+`verbose: true` the answer is the item's card, as `get_work_item` returns it
+without `parts` (see [The card](#the-card)), with what the write reports beside
+it. `claim_ready_work_item` always answers with the item it took, since the agent
+needs it, and its `work_item` is the card too. The reads,
 `create_planning_space`, `delete_work_item` and the question tools are
 unchanged, and so is every refusal. The HTTP API is unchanged: it always
 answers with the full item.
@@ -153,9 +164,14 @@ reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
 stage has `state` `null` and adds its `container_state` (see
 [The work model](#the-work-model)). Without a `limit` they return at most 50 rows.
 A search reads its query as words: an item matches when its title, description,
-labels, source, summary, comments, decisions or questions hold every word, in
-any order and across fields, each word matched by its first five letters as a
-prefix. Words such as `the` or `and` are left out of a query that has others.
+labels, source, the ids of its projects (see
+[The projects an item changes](#the-projects-an-item-changes)), summary,
+comments, decisions or questions hold every word, in any order and across
+fields, each word matched by its first five letters as a prefix. A project id
+is split into words as any text is, so `relay` and `service` each find an item
+that names `event-relay-service`; a project's display name is not searched, and
+a goal or stage, which names no projects, is not found by those of its tasks.
+Words such as `the` or `and` are left out of a query that has others.
 The best match comes first, the title weighing three times the rest, and a tie
 goes to the most recently changed item. `comment_hit`, `question_hit` and
 `summary_hit` then name the newest comment, decision or question holding every
@@ -166,11 +182,22 @@ every other match keeps its order, most recently changed first. A query that is
 a number alone -- `12` -- does the same for the item numbered 12: in a search
 scoped to a space that is one item, and without a space it is each space's item
 12. A store whose word index cannot be read -- a SQLite without FTS5, or an
-attached store an earlier build wrote -- reads every query as one phrase.
+attached store an earlier build wrote -- reads every query as one phrase, and a
+phrase finds an item when it stands in the id of one of its projects as well.
 `list_work_items` also takes `parent`, a work item by reference or id, and then
 lists only that item's children; the HTTP read `GET /api/planning/work-items`
 takes the same `parent` parameter. An unknown `parent` is refused with
-`not_found`.
+`not_found`. With `space`, `list_work_items` and `GET /api/planning/work-items`
+read that space: its items, and the items of other spaces that name one of the
+projects the registry binds to it. Each item of such a read carries
+`other_space`, the `{key, name}` of the space it lies in, or `null` for the
+space's own; a compact row carries it only for another space's item. They take
+`project` too, a project id: the list keeps the items that name that project,
+in every space unless `space` is given. With `space`, it keeps that space's
+items that name it, and other spaces' items that name it when it is one of the
+space's projects. A goal or stage stores no projects and names those of every
+task under it, at any depth, so it is kept when one of them names the project;
+a project no item names lists nothing.
 
 Each answer is one page. `truncated` is true when more items match than the page
 holds, and `next_offset` is then the offset of the next page; on the last page
@@ -197,9 +224,9 @@ batch, which keeps its `step`. A reference that does not read as one -- not
 malformed, not about an item that is missing, and a caller tells a person
 something different about each.
 
-With `verbose: true` they answer with the full items, at the limits they had
-before (200 for a list, 50 for a search), and with the same `truncated` and
-`next_offset`. The HTTP reads `GET /api/planning/work-items` and
+With `verbose: true` they answer with each item's list record, the brief record
+the HTTP list carries, at the limits they had before (200 for a list, 50 for a
+search), and with the same `truncated` and `next_offset`. The HTTP reads `GET /api/planning/work-items` and
 `GET /api/planning/search` take the same `offset` parameter and carry the same
 two fields.
 
@@ -267,9 +294,10 @@ refused. An edit changes a kind only among `task`, `bug` and `improvement`.
 | `blocked` | waiting on something else |
 | `cancelled` | not to be done |
 
-The whole record of an item -- the answer of `get_work_item` and of
-`GET /api/planning/work-item`, an item of `GET /api/planning/work-items`, and the
-HTTP answer of a write to an item -- carries these fields of the model:
+The whole record of an item -- the answer of `GET /api/planning/work-item`, an
+item of `GET /api/planning/work-items`, and the HTTP answer of a write to an
+item -- and the card `get_work_item` answers with carry these fields of the
+model; the card's `state` has no `is_terminal`:
 
 | Field | What it holds |
 | --- | --- |
@@ -280,6 +308,7 @@ HTTP answer of a write to an item -- carries these fields of the model:
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
 | `workable` | whether it may be taken now: a task, held by nobody, in `triage` or `ready` in a workflow that leads from there to an active state, with nothing unfinished blocking it. It is the rule `claim_ready_work_item` takes work by |
+| `projects` | the projects it changes, by `project_id`: each with the registry's `display_name` (`null` while the registry does not record it) and its `source`, `named`, `commits` or `migrated` (see [The projects an item changes](#the-projects-an-item-changes)). A goal's or stage's are those of every task under it |
 
 Four other answers carry only some of these fields:
 
@@ -352,6 +381,63 @@ replaces the word; none is read as its replacement.
 | `category` of a list, and `state` wherever it is named | `backlog`, `queued` | `backlog is now triage` or `queued is now ready`, then what the input takes: the categories, or the workflow's states as an unknown name lists them |
 | `state` wherever it is named | `todo` | what an unknown state name gets, listing the workflow's states |
 | `category` of a list, and `state` wherever it is named | `container` | `container is not a category: an accepted goal or stage shows container_state; accept one with ready` |
+
+### The projects an item changes
+
+A task names the projects it changes, at most 20 and each once, by their ids in
+the [project registry](../README.md#project-registry); the space it lies in does
+not change with them. `create_work_item` takes them as `projects`, and the
+`update` group of `apply_work_item_changes` (and `POST
+/api/planning/work-item/update`) replaces the whole set with `projects`, each
+project it names then `named`. That edit is guarded by `expected_revision` and
+bumps the revision once, records no history event, and writes nothing when the
+set and its sources are what the item has. Each project has one `source`: `named`
+by whoever filed or edited the item, `commits` derived from the repositories of
+its commits, or `migrated`, its space's former project when the migration found
+nothing else. A project that comes by two ways keeps the strongest, in that
+order.
+
+A goal or stage names no projects. Its `projects` are those of every task under
+it at any depth, each project once with the strongest source any of them gives
+it. Refused with `invalid_request` and the code `[project]`, before anything is
+written:
+
+- a project the registry does not record: `project X is not registered:
+  registered projects are …`;
+- any project while the registry cannot be read: `the project registry cannot be
+  read, so projects cannot be named now`. A write that names no projects passes;
+- projects on a goal or stage: `a goal or stage names no projects: the tasks
+  under it do`.
+
+### Where a new item lies
+
+`space` is optional on `create_work_item` and on `POST /api/planning/work-items`.
+The server places the new item:
+
+1. under a `parent`, in the parent's space;
+2. else, with `projects`, in their home space, the space of this store the
+   registry binds each to: one home is where the item lies; between several,
+   `space` must name one of them; projects without a home need `space`;
+3. else in the space it names, and without one in the space of the calling
+   session, the space whose project root holds the session's folder. The same
+   space is `session_space` in the answer of `list_planning_spaces`, `null`
+   when the call proved no session or its folder lies in no space; the HTTP
+   list has no session and no such field.
+
+A later edit of `projects` does not move the item: its number stays. Refused
+with `invalid_request` and the code `[placement]`, naming the candidates where
+there are any, before anything is written:
+
+- projects of two spaces without `space`: `projects A and B live in ALPHA and
+  ROVER: name one of them as space`;
+- a `space` that is not one of the projects' homes: `space TEST is none of the
+  spaces of the item's projects: ALPHA, ROVER`;
+- a `space` that is not the parent's: `the parent lies in ALPHA: an item lies in
+  its parent's space`;
+- projects without a home and no `space`: `project X lives in no space of this
+  store: name the space`;
+- no parent, projects, space or session space: `name the space, or the projects
+  the item changes`.
 
 ### Naming a state
 
@@ -476,37 +562,127 @@ makes it next; an urgent item nobody placed waits its turn.
 
 ### Reading one work item
 
-`get_work_item` answers with every current field of the item -- state,
-checklist, links, refs, summary, the lease -- but only the newest part of its
-history: the 5 most recent comments and the 10 most recent history events,
-oldest first. Beside them it carries `comments_total`, `events_total` and
-`history_truncated`, which is true when either list left something out. With
-the optional boolean `full: true` it answers with every comment and every
-event, and without the three counting fields.
+**Since 3.0.** `get_work_item` reads an item by parts: by default its card, and
+any other part by name. Why this broke the earlier read, which answered with the
+whole record and took `full`, is in
+[ADR 0014](decisions/0014-work-model-breaks-the-planning-schemas.md).
 
-With the optional integer `comments_after` it answers with every comment whose
-id is greater than that one, oldest first, however many there are, and the
-events and the three counting fields as usual; `history_truncated` stays true
-when older comments were left out. This is how a reader that keeps the id of the
-last comment it read takes only what came since. Comment ids run across items,
-so the id need not belong to this item. With `full: true` it is refused.
+| Argument | Type | What it reads |
+| --- | --- | --- |
+| `id` | a work item | required: the item |
+| `parts` | a part name, or a list of them | those parts, each once in the order named |
+| `unresolved` | boolean | a page of the roots without the resolved mark |
+| `thread` | integer, at least 1 | one thread |
+| `comments_after` | integer, at least 0 | a flat page of comments after that id; beside `unresolved`, where the next page of roots starts |
+| `events` | integer, 1 to 1000 | that many of the newest history events |
+| `section` | a section key, or a list of them | those sections of the description, with their text |
 
-**Since 2.5.** Comments form threads (see
-[Threads and the resolved mark](#threads-and-the-resolved-mark)), and the read
-takes one of five modes:
+The parts are `card`, `comments`, `events`, `links`, `refs`, `questions`,
+`mentions`, `sessions`, `images`, `subscribers`, `claim`, `sections` and
+`participants`. Without `parts` and without a mode the read is `["card"]`. A
+mode without `parts` reads only the part it cuts: `unresolved`, `thread` and
+`comments_after` the comments, `events` the events, `section` the sections, and
+several modes read each of their parts. Each of these is refused with
+`invalid_request`:
+
+| Call | Refusal |
+| --- | --- |
+| a part no item has | `unknown part 'history'; parts are card, comments, events, links, refs, questions, mentions, sessions, images, subscribers, claim, sections, participants` |
+| a mode beside a `parts` without its part | `thread reads the comments part: add comments to parts or leave parts out`, and the same for `unresolved` and `comments_after`; `events reads the events part: …`; `section reads the sections part: …` |
+| `events` outside its bounds | `events must be between 1 and 1000` |
+| `thread` with `comments_after` or `unresolved` | `thread and comments_after exclude each other`, or `thread and unresolved …` |
+| `parts` that is neither a name nor a list of names | `parts must be a part name or a list of them` |
+| `section` that is neither a key nor a list of keys | `section must be a section key or a list of them` |
+| a key the description does not have | see [Sections of the description](#sections-of-the-description) |
+| `full`, the argument 3.0 removed | `get_work_item: unknown argument 'full'; expected 'id' (required), 'parts', …` |
+
+The answer carries `reference` and `revision`, the revision every part was read
+at, and beside them the fields of each part named:
+
+| Part | Fields |
+| --- | --- |
+| `card` | the card's fields below, with `parts` |
+| `comments` | `comments`, `comments_total` (every row), `threads_total` (the roots), `unresolved_total` (the roots without the resolved mark) and `truncated` |
+| `events` | `events`, the newest 10 or the newest `events`, oldest first; `events_total` and `events_truncated`, true when some are left out. The flag has its own name because both parts may come in one answer |
+| `mentions` | `mentions`, the newest 50, oldest first, and `mentions_total`; see [Mentions](#mentions) |
+| `sections` | `sections`, as [Sections of the description](#sections-of-the-description) says |
+| `claim` | `claim`, the lease as [Claims are leases](#claims-are-leases) shows it, `null` while nobody holds the item |
+| `links`, `refs`, `questions`, `sessions`, `images`, `subscribers` | the field of that name, as described below and in [Reading a question](#reading-a-question) |
+| `participants` | on a goal or a stage, the field of that name, as [Participants](#participants) shows it; a task has no such part, and naming it is refused with `unknown part 'participants'; a task's parts are card, comments, …` |
+
+#### The card
+
+The card is how an agent meets an item: `get_work_item` without `parts`, a write
+with `verbose: true` and the `work_item` of `claim_ready_work_item` answer with
+it. It carries, in this order:
+
+| Field | What it holds |
+| --- | --- |
+| `reference`, `title`, `kind`, `priority` | as [The work model](#the-work-model) names them |
+| `state` | `key`, `name` and `category`; `null` for an accepted open goal or stage. `open` says whether the work is over |
+| `open`, `container_state`, `acceptance`, `started_at`, `waits_for`, `workable` | as [The work model](#the-work-model) says |
+| `claim_ref`, `claim_state`, `last_claim_ref`, `closed_at` | who holds it and how the lease stands; who held it last and when it closed, `null` while it is open |
+| `labels`, `source`, `revision`, `created_at`, `updated_at` | as in the full record |
+| `url` | the item's [address](#the-address-of-a-work-item) |
+| `parent` | the parent's reference, or `null` |
+| `description` | the whole text |
+| `checklist` | each step as `id`, `text` and `done`, plus `claimed_by` and `done_by` only when they are set |
+| `summary` | the closing summary, only when there is one |
+| `parts` | every other part the item has, with its size |
+
+The card leaves out what its reference and parts stand for: `work_item_id`,
+`planning_space_id`, `number`, `parent_id`, `summary_comment_id`,
+`comment_count`, the `state_id` and `is_terminal` of the state, the lease (the
+`claim` part) and every list of the history. A write's answer keeps, beside the
+card, what the write itself reports, such as `applied`, `started`, `requeued`,
+`released`, `merged`, `similar`, `warnings`, `overridden` and `from_person`.
+
+`parts` names each other part with what it holds, and leaves out a part with
+nothing in it:
+
+| Part | Its entry |
+| --- | --- |
+| `comments` | `count`, `threads` (the roots), `unresolved` (the roots without the mark) and `chars`, the length of every body and report |
+| `events` | `count` and `chars`, the length of every `detail` |
+| `questions` | `count` and `open`, the questions to the owner, and `addressed_open`, the open requests asked of agent sessions; it stands while any of them is above 0 |
+| `sections` | `count`, and only for a description longer than 2,000 characters; a shorter one is cheaper to read whole |
+| `claim` | `count`, 1 while somebody holds the item |
+| `links`, `refs`, `mentions`, `sessions`, `images`, `subscribers`, `participants` | `count` |
+
+```json
+{"reference": "MAIN-12", "revision": 14, "title": "Widen the check", "kind": "task",
+ "priority": "medium", "state": {"key": "dev", "name": "Dev", "category": "active"},
+ "open": true, "container_state": null,
+ "acceptance": {"basis": "assignment", "at": "2026-11-06T10:00:00Z"},
+ "started_at": "2026-11-06T10:00:00Z", "waits_for": [], "workable": false,
+ "claim_ref": "claude (session 019a…)", "claim_state": "live", "last_claim_ref": null,
+ "closed_at": null, "labels": ["hooks"], "source": "",
+ "created_at": "2026-11-06T09:58:00Z", "updated_at": "2026-11-06T11:20:00Z",
+ "url": "http://127.0.0.1:8642/open/MAIN-12", "parent": "MAIN-3", "description": "…",
+ "checklist": [{"id": "…", "text": "Inventory", "done": true, "done_by": "claude (session 019a…)"},
+               {"id": "…", "text": "Tests", "done": false}],
+ "parts": {"comments": {"count": 9, "threads": 4, "unresolved": 4, "chars": 5210},
+           "events": {"count": 22, "chars": 1830}, "refs": {"count": 3},
+           "sessions": {"count": 2}, "claim": {"count": 1}}}
+```
+
+#### The comments part
+
+Comments form threads (see
+[Threads and the resolved mark](#threads-and-the-resolved-mark)), and the
+comments part takes one of four modes:
 
 | Mode | `comments` holds |
 | --- | --- |
-| default | the 5 threads with the latest activity -- a thread's activity is the greatest id in it -- oldest first; each root carries `replies` and `last_reply` |
+| none | the 5 threads with the latest activity -- a thread's activity is the greatest id in it -- oldest first; each root carries `replies` and `last_reply`. `truncated` says older threads are left out |
 | `thread: <id>` | that thread: its root and every reply, oldest first. The id of a reply reads the thread of its root. The replies under a question are read with `get_work_item_request` |
 | `unresolved: true` | the unresolved roots, oldest first, at most 20, each with `replies` and `last_reply`; `truncated` says more remain, and the next page is read with `comments_after` set to the id of the last root read |
-| `comments_after: <id>` | every row with a greater id, roots and replies alike, including replies under questions, flat and oldest first |
-| `full: true` | every row, flat and oldest first |
+| `comments_after: <id>` | at most 50 rows with a greater id, roots and replies alike, including replies under questions, flat and oldest first; `truncated` says more follow, and the next page starts after the last id read. `0` reads from the first |
 
-`full`, `comments_after` and `thread` exclude one another, and `unresolved`
-combines only with `comments_after`; any other pair is refused with
-`invalid_request`. A reply to an old thread moves that thread up in the default
-read, so news is not lost behind five newer roots.
+A reply to an old thread moves that thread up in the read without a mode, so
+news is not lost behind five newer roots. Comment ids run across items, so the
+id `comments_after` names need not belong to this item: a reader that keeps the
+id of the last comment it read takes only what came since.
 
 `replies` counts the thread's replies. `last_reply` is the newest of them, or
 `null` with none:
@@ -518,14 +694,10 @@ read, so news is not lost behind five newer roots.
 
 Its `body` is cut at 500 characters, and a cut one carries `clipped: true`.
 
-Every mode carries `comments_total` (every row, as before), `threads_total`
-(the roots), `unresolved_total` (the roots without the resolved mark) and
-`events_total`, except `full: true`, which carries none of them.
-`history_truncated` is true when fewer threads, rows or events are shown than
-exist.
+#### The sessions part
 
-Both forms carry `sessions`: the agent sessions whose confirmed calls wrote to
-the item, in the order each first wrote there.
+`sessions` lists the agent sessions whose confirmed calls wrote to the item, in
+the order each first wrote there.
 
 ```json
 {"session_id": "019a…", "client": "codex", "identity_source": "codex-meta",
@@ -539,14 +711,98 @@ counts its calls. A call is counted on the item it acted on first: a link counts
 for its source item, not its target. Because Valkama records this itself, a
 caller does not attach its own session id as a ref.
 
-The read also carries `mentions`, the texts on other items that named this
-one; see [Mentions](#mentions).
+#### Sections of the description
+
+**Since 3.0.** A card carries its description whole; an agent that wants to
+refresh one piece of a long one reads that piece by its key.
+
+- A line that starts in its first column with one to six `#` and a space, and
+  carries text, outside a fenced code block (```` ``` ```` or `~~~`), is a
+  heading. Its section is the exact span of the description from that line to
+  the next heading of the same or a higher level, blank lines included, so it
+  holds its subsections. The text before the first heading is the section
+  `(start)`, of level 0, and exists only when that text is not empty.
+- A description without a heading is divided into paragraphs: the text between
+  blank lines outside a fenced block, without its last line break.
+- A heading's key is its text without the opening `#` marks and any closing run
+  of `#`, with its spaces run together. A paragraph's key is `p` and the first 8 hex
+  digits of the SHA-256 of its text with the spaces run together. A key repeated
+  in one description takes ` (2)`, ` (3)` in order, and so does a heading that
+  reads `(start)`. Keys compare without case.
+- Nothing is stored: each read derives the keys from the text. A heading's key
+  changes only when that heading is renamed or headings of the same text are
+  reordered; a paragraph's only with its own text. The answer carries
+  `revision`, so a reader sees whether the item changed.
+
+`parts: ["sections"]` lists them: `[{key, level, chars}]` for a description
+with headings, `[{key, chars, starts}]` for one of paragraphs, `starts` being the
+paragraph with its spaces run together, cut at 60 characters with no ellipsis.
+`section` with a key or a list of keys answers with those sections and their
+text, `[{key, level, chars, text}]` (no `level` for a paragraph), in the
+description's order; a key named twice is read once.
+
+```json
+{"reference": "MAIN-12", "revision": 14,
+ "sections": [{"key": "Steps", "level": 2, "chars": 1012, "text": "## Steps\n\n…\n\n"}]}
+```
+
+A key the description does not have, a stale one included, is refused with
+`invalid_request` rather than answered with another text:
+`unknown section 'Nope'; sections are Goal, Steps, Notes`. The refusal names at
+most 20 keys in order and counts the rest as `and N more`; a description with
+no section says `sections are none`.
+
+#### The full record over HTTP
+
+The HTTP read `GET /api/planning/work-item` takes the same parts: `parts` as a
+comma-separated list of part names, and `section`, which may repeat because a
+heading may hold a comma. With either it answers with what the tool answers,
+inside `work_item`, and reads `unresolved`, `thread`, `comments_after` and
+`events` as the tool's modes. Without either it answers with the item's full
+record, as before 3.0, and the parameters below are the cuts of that record.
+
+The full record carries every current field of the item -- state, checklist,
+links, refs, summary, the lease as `claim`, its followers as `subscribers` --
+with every comment and every history event, oldest first, and `mentions` with
+`mentions_total`, the texts on other items that named this one (see
+[Mentions](#mentions)). A cut adds `comments_total`, `threads_total`,
+`unresolved_total`, `events_total` and `history_truncated`, true when fewer
+threads, rows or events are shown than exist.
+
+The full record carries no `sessions` and no `images`. It takes these cuts as
+opt-in parameters:
+`comments` and `events` (non-negative integers, each keeping that many of the
+newest entries), `comments_after` and `sessions=true`. With both `comments` and
+`comments_after` it keeps that many of the newest comments after the id. A count
+that is not a non-negative integer
+and a `sessions` other than `true` or `false` are refused with
+`invalid_request`; an unknown item is `not_found` (404).
+
+**Since 2.5.** The HTTP read stays flat: comments are rows in id order, each
+with its `reply_to` and `reply_to_request`, and a reader groups them into
+threads itself. Neither it nor the card's read through the exact space scope
+(`GET /api/modules/planning/work-item`) caps how many comments or events it
+returns: the web interface draws an item from the whole record, however long its
+discussion and history are, and a client must not refuse a record for its length.
+Without `parts` the same read takes the comment modes as cuts of the full record:
+`unresolved=true` with
+`comments_after`, `thread=<id>`, and `threads=<count>` for that many threads with
+the latest activity. `unresolved` other than `true` or `false` is `invalid_request`.
+
+**Since 2.5.** The card's read through the exact space scope also takes
+`brief=true`, which answers in the same envelope with the brief record a space's
+list carries instead of the full one: state, title, holder, steps and dates,
+with `comment_count` in place of the comments and no history, links, refs or
+agents. Its size does not grow with the item's history, and it is what a
+preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
+refused with 400; an unknown item is 404 and a space that is not there is 409,
+as for the full read.
 
 ### Pictures on an item
 
 A picture pasted into an item's text in the web
 interface is kept for that item, and the text names it as
-`![name](</api/images/<sha256>>)`. The MCP read of an item carries `images`, every
+`![name](</api/images/<sha256>>)`. The `images` part of `get_work_item` lists every
 picture the item keeps, oldest first:
 
 ```json
@@ -559,45 +815,17 @@ with two content blocks: `{"type": "image", "data": <base64>, "mimeType": <type>
 and a text block with `sha256`, `media_type` and `size`. A hash the item does not
 keep is `not_found`, even when another item keeps it. `media_type` is one of
 `image/png`, `image/jpeg`, `image/webp` and `image/gif`, decided by the file's first
-bytes, and a picture is at most 10 MB. The HTTP read of the item does not carry
-`images`.
+bytes, and a picture is at most 10 MB. The full record of the HTTP read does not
+carry `images`; an HTTP read that names the part does.
 
 Reading a picture hands its bytes to the agent's client, which passes them to its
 model provider with the rest of the conversation: a screenshot leaves the machine
-the moment an agent reads it. `get_work_item` lists only what each picture is, so
+the moment an agent reads it. The `images` part lists only what each picture is, so
 an agent calls `read_work_item_image` only when its task needs what the picture
 shows.
 
 Deleting an item deletes every picture no other item keeps; a merge carries the
 pictures of the merged item to the survivor.
-
-The HTTP read `GET /api/planning/work-item` answers with the complete record and
-no `sessions`, as before. It takes the same cut as opt-in parameters:
-`comments` and `events` (non-negative integers, each keeping that many of the
-newest entries), `comments_after` and `sessions=true`. With both `comments` and
-`comments_after` it keeps that many of the newest comments after the id. A count
-that is not a non-negative integer
-and a `sessions` other than `true` or `false` are refused with
-`invalid_request`; an unknown item is `not_found` (404).
-
-**Since 2.5.** The HTTP read stays flat: comments are rows in id order, each
-with its `reply_to` and `reply_to_request`, and a reader groups them into
-threads itself. Neither it nor the card's read through the exact project scope
-(`GET /api/modules/planning/work-item`) caps how many comments or events it
-returns: a card is drawn from the whole record, however long its discussion and
-history are, and a client must not refuse a record for its length. The same read
-takes the agent's reads as opt-in parameters: `unresolved=true` with
-`comments_after`, `thread=<id>`, and `threads=<count>` for that many threads with
-the latest activity. `unresolved` other than `true` or `false` is `invalid_request`.
-
-**Since 2.5.** The card's read through the exact project scope also takes
-`brief=true`, which answers in the same envelope with the brief record a space's
-list carries instead of the full one: state, title, holder, steps and dates,
-with `comment_count` in place of the comments and no history, links, refs or
-agents. Its size does not grow with the item's history, and it is what a
-preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
-refused with 400; an unknown item is 404 and a binding that no longer resolves
-is 409, as for the full read.
 
 ### Threads and the resolved mark
 
@@ -729,7 +957,7 @@ with the answer, each once, is in the
 `GET /open/<reference>` opens one work item in the web UI, so that an agent can
 hand a person a link built from nothing but a number. A client does not turn a
 bare number into a link, and the address of a card itself cannot be written from a
-number: it names the project and the store.
+number: it names the store and the space.
 
 The reference is read as a search reads one, so `main-12` is `MAIN-12`, and its
 prefix names the space. The route is a loopback address under the same `Host` rule
@@ -737,8 +965,8 @@ as every other, and it answers:
 
 | The address | Answer |
 | --- | --- |
-| names an item in a space a project binds, followed by a person, with the desktop app installed | `200` and a small page, after starting the app on the card; see below |
-| names an item in a space a project binds, in any other case | `302` to `/modules/planning/project/<project>?entity=<entity>`, the route the card has when it is opened any other way, with `Cache-Control: no-store` |
+| names an item, followed by a person, with the desktop app installed | `200` and a small page, after starting the app on the card; see below |
+| names an item, in any other case | `302` to `/modules/planning/space/<data_scope_id>/<KEY>?entity=<entity>`, the route the card has when it is opened any other way, with `Cache-Control: no-store` |
 | is exactly `/open/questions` | as for an item, but the panel of open questions in place of a card; see [The panel of open questions](#the-panel-of-open-questions) |
 | names anything else | the app page with `404`, which says what is wrong and offers the next step |
 | reaches a store or a project registry that cannot be read | the app page with `503`, which offers another try |
@@ -749,11 +977,14 @@ redirect but a reference the grammar accepted and a store confirmed, and the
 surface checks the result against the one shape a card route has: `/open//evil`,
 `/open/https:%2F%2Fevil` and the like get the app page, never a `Location`. Primary
 and attached stores can each keep a space with one key; the primary answers first.
-A space no project binds has no card route, so the page says there is no such space.
+Every space has a card route, whether or not a project is bound to it. The shell
+also opens on the project route a card had before 3.0,
+`/modules/planning/project/<project>`, so a kept bookmark lands in the app rather
+than on an error; what it shows there is the shell's to say.
 
 The page reads why from `GET /api/modules/planning/search`, whose coverage names
-each source it read and each it could not: a number nobody filed, a key no project
-binds, and a store that did not answer read differently, and an item is never
+each source it read and each it could not: a number nobody filed, a key no store
+here holds, and a store that did not answer read differently, and an item is never
 called missing while a store that may hold it stayed silent.
 
 An agent client's chat keeps a link only for ordinary schemes and opens it in the
@@ -790,7 +1021,7 @@ If the app cannot be started the answer is the `302`. A child that starts and th
 fails is not seen, and a Desktop build older than the listener opens without moving to
 the card.
 
-A work item's full record in an MCP answer (`get_work_item`, a `verbose` write,
+A work item's card in an MCP answer (`get_work_item`, a `verbose` write,
 `claim_ready_work_item`) and every write acknowledgement carry the address as
 `url`:
 
@@ -917,15 +1148,22 @@ while its blocker is unfinished, and that blocker may live in another space,
 under another workflow. So a link names that end's state itself, and nobody has
 to read the other item to know.
 
-- In a work item's full record (`get_work_item`, `GET /api/planning/work-item`),
-  each link, in either direction, names its other end: `state_name`,
+- In a work item's full record (`GET /api/planning/work-item`) and its `links`
+  part, each link, in either direction, names its other end: `state_name`,
   `state_category`, `is_terminal` and `state_unavailable`.
 - In a space's view (`links` in `GET /api/planning` and
-  `/api/events?view=planning`, `edges` in `GET /api/planning/graph`), the links
-  leaving the space come with every `blocks` link into it from another space,
-  so `from` can name an item the view does not hold. Each link names its source
-  end, `from`: its `reference` and the same four state fields. A graph's
-  `parent` edges carry none of them.
+  `/api/events?view=planning`, `edges` in `GET /api/planning/graph`), the view
+  holds the space's items and other spaces' items that name one of its
+  projects, as a list with `space` does, and every link with an end among them,
+  in either direction and of every kind. So `from` or `to` can name an item the
+  view does not hold, and `other_space_ends` names each such end: its
+  `work_item_id`, `reference`, `title`, `kind`, `state` (`key`, `name`,
+  `category`, `is_terminal`, or `null` for an accepted open goal or stage and
+  for a state the store cannot resolve) and `space` as `{key, name}`. Each link
+  names its source end, `from`: its `reference` and the same four state fields.
+  A graph's `parent` edges carry none of them, and its nodes carry `other_space`
+  as the items do. `project` beside `space` narrows the view as it narrows that
+  list; without `space` it is refused.
 - A chain's `edges` name their source the same way; see
   [Reading a chain of work](#reading-a-chain-of-work).
 
@@ -935,7 +1173,7 @@ otherwise `state_unavailable` is `null`. An end whose state is unknown is not
 open, and as a blocker it blocks nothing. A reader of an older server finds no
 such fields and looks the end up among the items it holds.
 
-The cross-project search, `GET /api/modules/planning/search`, marks each result
+The search across spaces, `GET /api/modules/planning/search`, marks each result
 the same way: `item` carries `kind` and `priority`, and `item.state` carries
 `category` and `is_terminal` beside its name.
 
@@ -1153,7 +1391,7 @@ MCP tool reads it, for the same reason as above.
 | `utc_offset` | the caller's offset from UTC in minutes, from `-840` to `840`; `0` by default. A day, an hour or a minute of the series starts at the caller's midnight, full hour or full minute. The server has no time-zone database: a period across a change of daylight saving time is cut at one offset, so a caller that minds asks for it in two |
 | `group_by` | none, one or two dimensions, separated by a comma: `account`, `project`, `work_item`, `executor`, `role`, `launch_class`, `model`, `effort`, `environment`, `seat` |
 | a dimension's name | a filter: the values admitted, separated by a comma, up to 100 of 1 to 512 characters; `role` takes only `main`, `subagent` and `advisor`. A work item is named by its `work_item_id`, an executor by its session id, a project by its `project_id`, a seat by its `id` |
-| `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, a session's own run for `launch_class`, an unknown value for the rest. `none=launch_class` does not admit a subagent's run whose launch class is unknown, and `none=role` admits nothing, since every stretch has a role. Alone it keeps only the work with no value there |
+| `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, a session's own run for `launch_class`, work on an item that names no project for `project`, an unknown value for the rest. `none=launch_class` does not admit a subagent's run whose launch class is unknown, `none=project` does not admit work whose project is unknown, and `none=role` admits nothing, since every stretch has a role. Alone it keeps only the work with no value there |
 | `compare` | `true` adds the preceding period of the same length; `false` by default |
 
 A filter admits a stretch of work when its value is among those named, and every filter
@@ -1235,13 +1473,14 @@ millionth of a dollar per stretch, and the rounding of each read's own sum.
 
 A value in `group` carries `id` and `unknown`, which is `true` when the store does not
 hold the value; such a value is its own group and no string stands in for it. Work on no
-item, and for `launch_class` a session's own run, are groups of their own too, with an
-`id` of `null` and `unknown` `false`: there is nothing to know.
+item, for `launch_class` a session's own run, and for `project` work on an item that names
+no project or several, are groups of their own too, with an `id` of `null` and `unknown`
+`false`: there is nothing to know.
 
 | Dimension | Value | Beside `id` |
 | --- | --- | --- |
 | `account` | the organization the work was billed to, as the usage rows hold it; unknown until the reader fills it | — |
-| `project` | the project whose planning space holds the item; for work on no item, the project whose registered root holds the session's working directory. Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null` |
+| `project` | the project the item names (see [The projects an item changes](#the-projects-an-item-changes)), in whichever space the item lies; a goal or stage names the projects of the tasks under it. An item that names several is one group of its own, `id` `null` and `unknown` `false`, rather than a share in each, so the groups still add up to the total; an item that names none is its own group too, with `combinations` `null`. A filter admits an item by any project it names, so a project's row in a breakdown is smaller than the filter on it by the work on items naming several, and `none=project` admits the items that name none. For work on no item, the project whose registered root holds the session's folder, the folder that places it in the live-work frame (see [The live-work frame](#the-live-work-frame)). Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null`; `combinations`, on the group of several, every set of projects the work in that group names, each a list of `{"id", "name"}` by id, the sets ordered by their ids; `null` on every other value |
 | `work_item` | the item the work is counted to | `reference` and `title`, `null` for an item since deleted |
 | `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in` and `opened_host`, as a card's executor gives them, and `title`, the name its client gave the session, as the live work beside the board names it, or `null` when there is none to read. Not its live `state`, which changes while the period's figures do not |
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |
@@ -1628,7 +1867,9 @@ it changes only when a state does: with a write to the store, with a client writ
 transcript or falling silent, and with a session's title. Attached stores are not read.
 
 ```json
-{"spaces": [{"key": "MAIN", "name": "Main", "project_id": "example-project",
+{"spaces": [{"key": "MAIN", "name": "Main",
+   "projects": [{"project_id": "example-project", "display_name": "Example project"}],
+   "default_project": "example-project",
    "rows": [
      {"reference": "MAIN-4", "title": "Structured answers", "kind": "goal", "parent": null,
       "state": null, "agents": 0, "long": false, "asks": false, "since": null,
@@ -1679,7 +1920,9 @@ transcript or falling silent, and with a session's title. Attached stores are no
 
 | Field | What it holds |
 | --- | --- |
-| `key`, `name`, `project_id` | the space, and the project that binds it; `project_id` is `null` when none does |
+| `key`, `name` | the space |
+| `projects` | the projects the registry binds to the space, each with its `project_id` and `display_name`, the default one first and the others by id; empty when none is bound, and `null` when the registry could not be read |
+| `default_project` | the `project_id` of the space's default project, `null` when no project is bound or the registry could not be read |
 | `rows` | the space's rows, in the order they are drawn |
 | `sessions` | the sessions under this space that work or wait on no row, freshest first |
 | `elsewhere` | the same list for sessions whose folder lies under no space |
@@ -1703,7 +1946,7 @@ A session of `sessions` or `elsewhere`:
 | --- | --- |
 | `session` | the session's id, which a click opens (see [What a click opens](#what-a-click-opens)) |
 | `title` | the name its client shows for it, or `null` when there is none to read |
-| `folder` | the last part of the folder it was opened in, or empty |
+| `folder` | the last part of the folder that places it (see below), or empty |
 | `state` | `working` while a turn of its own runs or it has a live subagent, else `waiting` |
 | `long` | for a `waiting` session, whether it has been silent for more than 4 hours |
 | `asks` | for a `waiting` session, whether it stopped in the middle of a turn to ask a person |
@@ -1742,12 +1985,19 @@ is already in order, and a client that lists it as it came does not sort it. The
 interface's side panel draws its own order from it: the rows at work, freshest
 `updated_at` first; the rest folded or apart (see `DESIGN.md`).
 
-**`sessions` and `elsewhere`.** A session's space is the space bound to the
-project whose root is the longest one that contains the session's
-`opened_folder`, or else its `cwd`. A session whose folder lies under no root, or
-under a project that binds no space, is listed in `elsewhere`. This places a row
-and nothing more: nothing is written, nothing is routed, and no binding is ever
-inferred from a folder.
+**`sessions` and `elsewhere`.** A session is placed by its first folder that is
+not empty: for Claude Code the folder its transcript names, then its
+`opened_folder`, then its `cwd`; for Codex its `opened_folder`, then its `cwd`. The
+project whose root is the longest one that contains that folder holds it, compared
+as the platform compares paths (on Windows without regard to case) and without
+following links, and the session's space is the space that project is bound to in
+this store. A shorter root does not stand in: a session under a project that binds
+no space here is in no space, even inside the root of one that does. Such a
+session, and one whose folder lies under no root, is listed in `elsewhere`.
+Analytics counts a session's work on no item to the project of the same place (see
+[What agent work spent in a period](#what-agent-work-spent-in-a-period)). This
+places a row and nothing more: nothing is written, nothing is routed, and no
+binding is ever inferred from a folder.
 
 **How it arrives.** There is no route to poll. A stream opened with
 `GET /api/events?view=planning`, with or without an exact scope, carries the frame
@@ -1834,8 +2084,9 @@ gives the survivor the subscriptions of the items merged into it, keeping the
 survivor's own where both have one, and a carried one hears the survivor from the
 merge on; a deleted item takes them with it.
 
-Every full record of an item, `get_work_item` and the card's read alike, lists the
-sessions that follow it now, oldest first; a mute and a lapsed one are not listed:
+Every full record of an item, the HTTP item read and the web card's read alike,
+and the `subscribers` part of `get_work_item` list the sessions that follow it
+now, oldest first; a mute and a lapsed one are not listed:
 
 ```json
 "subscribers": [{"session": "019a…", "client": "codex", "agent": null,
@@ -1868,8 +2119,10 @@ stands. Nothing is stored: every read derives them from the holders and the
 subscriptions.
 
 The card's read (`/api/modules/planning/work-item`) and the HTTP read of one item
-(`/api/planning/work-item`) carry them on a goal or a stage; `get_work_item`, every
-answer of a write and the brief records of a list do not, and a task has none:
+(`/api/planning/work-item`) carry them on a goal or a stage, and `get_work_item`
+reads them as its `participants` part, which the card counts; its card, every
+answer of a write and the brief records of a list do not carry them, and a task has
+none:
 
 ```json
 "participants": [{"session": "019a…", "client": "claude-code",
@@ -2084,12 +2337,15 @@ What moves to the survivor:
   same merge stays on the merged item, because moved it would tie the survivor
   to itself. A `blocks` link that arrives can make the survivor block work it
   did not block before, and one into it can make it wait.
+- the [projects](#the-projects-an-item-changes), a project more than one of them
+  names keeping the strongest source: `named`, then `commits`, then `migrated`.
+  `moved.projects` counts the merged item's projects.
 
 Each merged item is then linked `duplicates` to the survivor, gets a summary
-naming it ("Merged into MAIN-12, which now holds its 2 steps, 1 comment, 0 refs
-and 1 link.", `next` "Continue in MAIN-12.", `why` the reason), loses its claim
-and closes in the first `cancelled` state its workflow reaches from where it
-stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
+naming it ("Merged into MAIN-12, which now holds its 2 steps, 1 comment, 0 refs,
+1 link and 0 projects.", `next` "Continue in MAIN-12.", `why` the reason), loses
+its claim and closes in the first `cancelled` state its workflow reaches from
+where it stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
 saying what came in. What describes the merged item itself stays with it: its
 history, the [mentions](#mentions) of it, its reports, its description, labels and
 parent. The
@@ -2141,7 +2397,7 @@ nothing below the MCP surface reads them.
 A Planning tool refuses an argument its schema does not have, and a required
 argument that is missing, naming the tool, the argument and the arguments the
 tool takes, for example
-`get_work_item: unknown argument 'item'; expected 'id' (required), 'full'`.
+`get_work_item: unknown argument 'item'; expected 'id' (required), 'parts', 'unresolved', 'thread', 'comments_after', 'events', 'section'`.
 
 Prompts and resources are deliberately not offered. Planning tools manage work;
 project context belongs elsewhere.
@@ -2199,8 +2455,8 @@ When the client opened with `initialize`, the `clientInfo` name and version it
 sent are recorded with each call; otherwise the client is named after the
 identity channel (`codex`, `claude`). Nothing else from `_meta` is stored.
 
-Every history event that `get_work_item` or a write with `verbose: true`
-answers with carries its call's identity:
+Every history event that the `events` part of `get_work_item` or the HTTP item
+read answers with carries its call's identity:
 
 ```json
 {"action": "claimed", "detail": "", "author": "codex", "at": "2026-10-31T09:00:00Z",
@@ -2272,8 +2528,9 @@ confirmed call from that session within the grace makes the lease `live` again,
 with no write to the item. A session with no `ended_at` has no grace, and neither
 has a `failed` one, which only a session start reopens.
 
-`get_work_item`, a `verbose` write and the HTTP item read carry the lease as
-`claim`:
+The `claim` part of `get_work_item` and the full record of the HTTP item read
+carry the lease as `claim`; the card carries only `claim_ref` and `claim_state`,
+and its `parts` counts the lease:
 
 ```json
 {"holder": "codex (session 019a…)", "state": "live", "session_id": "019a…", "agent_id": null,
@@ -2288,7 +2545,7 @@ otherwise. It answers how long a session that shows no sign of life keeps a live
 lease, and promises nothing about a session that ends: from that moment the lease
 is `stale`, `expires_at` is `null`, and the grace above applies. `claim` is
 `null` when nobody holds the item. `claim_state` stands beside `claim_ref` in the
-full record, an item of an HTTP list, a compact row of `list_work_items` and
+card, the full record, an item of an HTTP list, a compact row of `list_work_items` and
 `search_work_items`, an HTTP chain member, a row of `open_members`, a row of
 `stale_claims` in `GET /api/planning` and a write acknowledgement; `claim_ref`
 means what it meant. Three projections carry
@@ -2475,7 +2732,7 @@ closing it, and still does.
 The history records the release beside the transition, with the same author
 and call: `transitioned` (`done`), then `released` with the holder's
 `claim_ref` as its detail. The answer names that holder as `released`, in the
-acknowledgement, the `verbose` record and the HTTP answer, and in
+acknowledgement, the `verbose` card and the HTTP answer, and in
 `applied.transition` of a batch: `{"state": "done", "released": "codex (session 019a…)"}`.
 A close of an item nobody holds releases nothing and carries no `released`. A
 move to `ready`, `triage` or `review` releases the same way; a move among the
@@ -2491,8 +2748,8 @@ worked by their former holders.
 Reopening a closed item -- a transition back to an open state -- restores no
 claim. Whoever takes the work again claims it.
 
-Who held the item is still on the record. The full record (`get_work_item`, a
-`verbose` answer, `GET /api/planning/work-item`) and the briefs of the HTTP
+Who held the item is still on the record. The card (`get_work_item`, a
+`verbose` answer), the full record (`GET /api/planning/work-item`) and the briefs of the HTTP
 reads (`GET /api/planning`, `GET /api/planning/work-items`) and the nodes of
 `GET /api/planning/graph` carry two fields
 that are `null` for open work; the compact rows of `list_work_items` and
@@ -2739,11 +2996,11 @@ item's own `mentions` are the records described below. A batch's
 the same `mentions`; an `update`'s stand beside `applied`.
 
 **Reading.** Every comment, in every read, carries `mentions`, the references it
-named, `[]` when it named none. `get_work_item` carries `mentions`, the 5 newest
-texts that named this item, oldest first, and `mentions_total`; with
-`full: true` it carries all of them and no total. The HTTP item read carries the
-newest 50 and the total, and so does every answer that is the whole item: the
-HTTP writes and a tool's `verbose` answer.
+named, `[]` when it named none. The `mentions` part of `get_work_item` is the 50
+newest texts that named this item, oldest first, with `mentions_total`; the card
+only counts them in its `parts`, and so a tool's `verbose` answer carries none.
+The HTTP item read carries the newest 50 and the total, and so does every HTTP
+answer that is the whole item, the HTTP writes among them.
 
 ```json
 {"in": "comment", "comment_id": 61, "from": "MAIN-12",
@@ -2958,7 +3215,7 @@ the neutral boundary). The body is the answer's, with the request's
 `expected_revision` required:
 
 ```json
-{"project_id": "example-project", "data_scope_id": "…", "space_key": "MAIN",
+{"data_scope_id": "…", "space_key": "MAIN",
  "id": "7d1c2a9e-3f4b-4c5d-8e6f-0a1b2c3d4e5f", "expected_revision": 2,
  "author": "user", "answers": {"route": "threads"},
  "field_notes": {"route": "Threads serve the digest too"}}
@@ -3027,11 +3284,13 @@ changed: p10-steps +lock −glob; p12 later→accept; p15 comment: Frozen until 
 
 An agent reads a question three ways:
 
-- `get_work_item`, the tool, answers with `questions`:
+- The `questions` part of `get_work_item`, which the card counts in its `parts`
+  as `count`, `open` and `addressed_open`:
   `{"total": 6, "open": 2, "items": […], "truncated": true, "addressed_open": 0}`.
   At most 5 items, the open ones first and then the newest closed. A request asked
   of an agent session is none of them and counts in none of the numbers but
-  `addressed_open`, the open ones. The HTTP read of a card has no such key.
+  `addressed_open`, the open ones. The full record of the HTTP read has no such
+  key; an HTTP read that names the part does.
 - `list_work_item_requests` takes `space`, `id` (one item), `status`,
   `answered_after`, `limit`, `offset` and `addressed`, and answers in the compact
   form below, or whole with `full: true`. It leaves out every request asked of an
@@ -3200,18 +3459,23 @@ An export carries every question in `planning.requests`, whole. Since 2.5 a sear
 also reads own variants and field comments, and the decision of a resolved mark
 with the comments.
 
-The browser's mapped search and request endpoints return exact project and
-Planning-space identities. Their list envelopes include source coverage and a
-truncation flag. A source that was not read says why in `reason`, as one stable
-code: `store_not_attached` (the project's space lives in a store this server
-neither owns nor has attached), `store_unreadable` (an attached store could not
-be opened), `attached_list_unreadable` (the list of attached stores could not be
-read), `space_missing` (the bound store holds no such space), `binding_conflict`
-(the space is bound to another project), `search_failed` (the store opened but
-the search failed there) or `requests_unavailable` (an attached store predates
-human requests). The mapped search answers the item a reference query names
-first, the primary store's ahead of an attached store's, before it cuts the
-page; a query that is a number alone answers each source's item of that number
+The browser's mapped search and request endpoints read every space of the
+primary store and of each attached store, and every space the registry binds a
+project to that cannot be read; a space with no project is read like any other.
+Each result names its exact Planning space in `target.space_ref`, and each source
+of the coverage is one space, by `space_ref`. Their list envelopes include source
+coverage and a truncation flag. A source that was not read says why in `reason`,
+as one stable code: `store_not_attached` (a project's space lives in a store this
+server neither owns nor has attached), `store_unreadable` (an attached store could
+not be opened), `attached_list_unreadable` (the list of attached stores could not
+be read), `space_missing` (the store holds no such space), `search_failed` (the
+store opened but the search failed there) or `requests_unavailable` (an attached
+store predates human requests). The exact reads and writes name one space by
+`scope_kind=space` with `data_scope_id` and `space_key`; a read may narrow it with
+`project_id`, a project of the space or one its items name: a project the
+registry does not hold is 404, and a registered one that is neither is 409. The
+mapped search answers the item a reference query names first, the primary
+store's ahead of an attached store's, before it cuts the page; a query that is a number alone answers each source's item of that number
 first the same way. A request detail or mutation returns the confirmed request with
 its target; attached stores remain read-only. Existing Planning searches and
 the complete space read model keep their existing scope and limits.

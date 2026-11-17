@@ -53,7 +53,7 @@ class LaunchHarness(unittest.TestCase):
         os.environ["VALKAMA_DB"] = os.path.join(self._dir.name, "test.sqlite3")
         os.environ["VALKAMA_CLAUDE_BIN"] = sys.executable
         self.conn = store.connect()
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         self.conn.commit()
         self.repo = os.path.join(self._dir.name, "repo")
         os.makedirs(self.repo)
@@ -899,7 +899,7 @@ class ExecutionApiTests(LaunchHarness):
                 {"work_item": [reference]},
             )
         self.assertEqual("", refused["repository"])
-        self.assertEqual("missing", refused["repository_status"])
+        self.assertEqual("unbound", refused["repository_status"])
 
     def test_history_answers_with_the_attempts_of_one_item(self) -> None:
         reference = self.item("history")

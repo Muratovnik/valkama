@@ -4,7 +4,7 @@ import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputReq
 
 import { requestEntry, requestList } from '../support/inputRequests.ts'
 import { openCard } from './editorPage.ts'
-import { projectId, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceRef, workItem, workItemRef } from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
 
 type Request = InputRequestEntry['request']
@@ -28,7 +28,6 @@ export function question(request: Partial<Request> = {}): InputRequestEntry {
   const base = requestEntry().request
   return {
     target: {
-      project_id: projectId,
       space_ref: spaceRef,
       reference: workItemRef.reference,
       writable: true,
@@ -164,9 +163,7 @@ export async function installQuestions(page: Page, entries: InputRequestEntry[])
           json: {
             ...requestList(structuredClone(items.slice(0, READ_LIMIT))),
             has_more: items.length > READ_LIMIT,
-            coverage: [
-              { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
-            ],
+            coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
           },
         })
       }

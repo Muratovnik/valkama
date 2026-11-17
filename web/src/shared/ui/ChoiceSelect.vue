@@ -103,6 +103,9 @@ function updateOpen(value: boolean) {
   }
   if (props.searchable) void nextTick(() => searchInput.value?.focus())
 }
+
+/** Opens the list, for a host whose own action asks for this choice to be made. */
+defineExpose({ show: () => updateOpen(true) })
 </script>
 
 <template>

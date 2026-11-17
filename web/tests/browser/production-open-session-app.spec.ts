@@ -12,12 +12,12 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import desktopPlan from '../fixtures/server/open-plan-session-desktop.json' with { type: 'json' }
 import { installBackend } from './backend.ts'
 import { heldCard, IN_VSCODE, openPlanFor } from './openSessionFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

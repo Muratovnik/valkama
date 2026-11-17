@@ -12,7 +12,7 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 import { installBackend } from './backend.ts'
 import { boardRoute } from './boardPage.ts'
-import { planningReadModel, projectId, spaceRef, workItem } from './planningFixtures.ts'
+import { planningReadModel, spaceRef, workItem } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { briefAnswer } from './previewPage.ts'
 import { test } from './test.ts'
@@ -75,7 +75,6 @@ const SPACE = [brief(11, 'ready'), brief(12, 'dev'), brief(13, 'review'), brief(
 function finderAnswer() {
   const row = (item: Brief) => ({
     target: {
-      project_id: projectId,
       space_ref: spaceRef,
       reference: item.reference,
       writable: true,
@@ -99,7 +98,7 @@ function finderAnswer() {
     limit: 50,
     has_more: false,
     items: [row(SPACE[1] as Brief), row(SPACE[2] as Brief)],
-    coverage: [{ project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null }],
+    coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
   }
 }
 

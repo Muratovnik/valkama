@@ -357,7 +357,7 @@ class RetentionTests(ArchiveCase):
         self.conn.execute("UPDATE sessions SET last_seen = ? WHERE id = ?", (LAST_SEEN, SESSION))
         self.conn.commit()
         (self.archive,) = self.files()
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         self.conn.commit()
 
     def item(self, state: str = "dev") -> str:
@@ -658,7 +658,7 @@ class PurgeOnRequestTests(ArchiveCase):
         return transcripts.purge_on_request(self.conn, root=self.root, **options)
 
     def open_item(self) -> None:
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         reference = planning.create_work_item(self.conn, space="TST", title="open")["reference"]
         planning.attach_ref(self.conn, reference, "session", SESSION)
         self.conn.commit()

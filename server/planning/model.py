@@ -75,6 +75,13 @@ _CONTAINER_WORDS = frozenset({"goal", "stage"})
 #: Why accepted work was accepted: the basis an acceptance records. `migrated` is
 #: the work-model migration's alone: no tool and no HTTP write takes it.
 ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "migrated")
+#: How a project came to an item (`item_projects`), strongest first: named by whoever
+#: filed or edited it, derived from its commits, or its space's former project.
+PROJECT_SOURCES = ("named", "commits", "migrated")
+#: Where an agent launched from a card works, a setting of its space: the root of the
+#: space's default project, or the root of a project the card names. The first is
+#: what every space starts with; only the owner's settings change it.
+LAUNCH_PLACES = ("space", "item_project")
 #: The one basis a caller names itself: an agent taking on work it was asked to do.
 #: A person's write is the owner's without naming it, and the rest the server gives.
 NAMED_BASIS = "assignment"
@@ -139,6 +146,7 @@ UPDATABLE_FIELDS = (
     "kind",
     "parent",
     "rank",
+    "projects",
 )
 
 
@@ -356,11 +364,13 @@ def space_key(value: object) -> str:
 
 
 def derive_space_key(name: str, taken: frozenset[str]) -> str:
-    """A key from a space's name, and a number only when the name collides.
+    """A key from a space's name, and a number only when the letters cannot be the key.
 
     `Beta Garden` becomes `BG`, `Valkama` becomes `VAL`. A second space whose
     name derives to the same letters gets `BG2`, because the key is what every
-    human identifier in that space is built from and it cannot be shared.
+    human identifier in that space is built from and it cannot be shared. A name
+    of one letter gets a number too: `S` becomes `S2`, because a key has at least
+    two characters and a reference built from one could never be read back.
     """
 
     words = [word for word in re.split(r"[^A-Za-z0-9]+", name) if word]
@@ -373,7 +383,7 @@ def derive_space_key(name: str, taken: frozenset[str]) -> str:
     base = re.sub(r"[^A-Z0-9]", "", base) or "SPC"
     if not base[0].isalpha():
         base = f"S{base}"[:8]
-    if base not in taken:
+    if len(base) > 1 and base not in taken:
         return base
     for suffix in range(2, 1000):
         candidate = f"{base[: 8 - len(str(suffix))]}{suffix}"

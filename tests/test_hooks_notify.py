@@ -71,7 +71,7 @@ class Harness(unittest.TestCase):
             os.environ.pop(name, None)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        self.space = service.create_planning_space(self.conn, project_id="p", name="Quality Crew")
+        self.space = service.create_planning_space(self.conn, name="Quality Crew")
         self.item = service.create_work_item(
             self.conn, space=self.space["key"], title="Do the work", author="filer"
         )

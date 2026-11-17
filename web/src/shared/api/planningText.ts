@@ -1,22 +1,10 @@
 /**
- * The text fields Planning records share: blank-or-bounded text, what the server composes,
- * what a caller wrote about itself, a holder, and an id a client reported.
+ * The text fields Planning records share beside blank-or-bounded text (`blankable`,
+ * in the contract): what the server composes, what a caller wrote about itself, a
+ * holder, and an id a client reported.
  */
 
-import { boundedText, z } from '@/shared/api/contract.ts'
-
-/**
- * A field that may be blank, which several of these are: an unheld item has no
- * claim, an item raised by hand has no source, an event needs no detail.
- * `boundedText` requires one character, so blank needs its own reader rather
- * than a pattern pretending an empty string is a value.
- */
-export function blankable(max: number) {
-  return z
-    .string()
-    .max(max)
-    .refine((value) => !/\u{0}/u.test(value), { message: 'expected bounded string' })
-}
+import { blankable, boundedText, z } from '@/shared/api/contract.ts'
 
 /**
  * Text the server composes itself (a warning, a refusal joining its guards),

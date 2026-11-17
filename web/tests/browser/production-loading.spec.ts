@@ -4,7 +4,7 @@ import type { Route } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const planningRead = (url: URL) => url.pathname === '/api/planning'
@@ -19,7 +19,7 @@ test('a stalled board read settles with a localized recovery action and can retr
   await page.route(planningRead, (route) => {
     stalled = route
   })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await expect.poll(() => stalled !== undefined).toBe(true)
   // While it is read, the bar stands and the stage says so.
   await expect(page.locator('.workspace-head')).toBeVisible()

@@ -275,7 +275,7 @@ class RetiredWordTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="rw", name="Retired", key=KEY)
+        service.create_planning_space(self.conn, name="Retired", key=KEY)
         self.item = str(service.create_work_item(self.conn, space=KEY, title="Work")["reference"])
         self.conn.commit()
 

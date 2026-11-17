@@ -6,15 +6,15 @@ import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platfor
 
 import { installBackend } from './backend.ts'
 import { largeChainHere, serve, showChain } from './chainFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
-const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: spaceScope })
 
 /**
  * Going from a card to a card the panel does not close, so it does not open either:
@@ -281,7 +281,8 @@ test('a double click on the scrim over a tile opens no card', async ({ page }) =
   await page.mouse.dblclick((tile?.x ?? 0) + 10, (tile?.y ?? 0) + 10, { delay: 20 })
   await expect(page.locator('.overlay-host')).toHaveCount(0)
   await expect(drawer).toHaveCount(0)
-  expect(parsePlatformRoute(page.url()).entity?.kind).toBe('planning-space')
+  // Closed, the address names the space alone.
+  expect(parsePlatformRoute(page.url()).entity).toBeUndefined()
   await expect(opener).toBeFocused()
 })
 
@@ -313,7 +314,7 @@ test('a route out of the module takes the panel with the page, and leaves nothin
   const { drawer } = await openFromBoard(page, 1440)
   await page.evaluate(
     (route) => (window as unknown as { handOver(to: string): void }).handOver(route),
-    serializePlatformRoute({ module_id: 'settings', scope: projectScope }),
+    serializePlatformRoute({ module_id: 'settings', scope: spaceScope }),
   )
   await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
   await expect(drawer).toHaveCount(0)

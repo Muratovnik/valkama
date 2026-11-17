@@ -32,7 +32,7 @@ class PinCase(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="pins", name="Pins", key=SPACE)
+        service.create_planning_space(self.conn, name="Pins", key=SPACE)
 
     def item(self) -> str:
         return str(service.create_work_item(self.conn, space=SPACE, title="Work")["reference"])
@@ -156,7 +156,7 @@ class LifetimeTests(PinCase):
         answer = service.merge_work_items(self.conn, survivor, [merged, other])
         self.assertEqual({self.identity(survivor): "2026-01-01T00:00:00Z"}, self.pins())
         self.assertEqual(
-            [{"steps": 0, "comments": 0, "refs": 0, "links": 0}] * 2,
+            [{"steps": 0, "comments": 0, "refs": 0, "links": 0, "projects": 0}] * 2,
             [entry["moved"] for entry in answer["merged"]],
             "a pin is no part of what a merge reports moved",
         )
@@ -164,7 +164,7 @@ class LifetimeTests(PinCase):
 
 class ExportTests(PinCase):
     def test_an_export_carries_the_pins_of_the_spaces_it_carries(self) -> None:
-        service.create_planning_space(self.conn, project_id="other", name="Other", key="OTH")
+        service.create_planning_space(self.conn, name="Other", key="OTH")
         reference = self.item()
         elsewhere = str(service.create_work_item(self.conn, space="OTH", title="x")["reference"])
         self.post({"id": reference, "pinned": True})

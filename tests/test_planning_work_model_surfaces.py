@@ -151,7 +151,7 @@ MCP_READS: dict[str, list[Args]] = {
     "list_platform_modules": [_none],
 }
 MCP_WRITES: dict[str, list[Args]] = {
-    "create_planning_space": [lambda _case: {"project_id": "other", "name": "Other", "key": "OX"}],
+    "create_planning_space": [lambda _case: {"name": "Other", "key": "OX"}],
     "create_work_item": [
         lambda case: {"space": KEY, "title": "Under the goal", "parent": case.refs["G"]},
         _Accepting(
@@ -240,7 +240,8 @@ HTTP_READS: dict[str, list[Args]] = {
     "/api/planning/held": [_q(lambda _case: {"session": SESSION})],
 }
 HTTP_WRITES: dict[str, list[Args]] = {
-    "/api/planning/spaces": [lambda _case: {"project_id": "other", "name": "Other", "key": "OX"}],
+    "/api/planning/spaces": [lambda _case: {"name": "Other", "key": "OX"}],
+    "/api/planning/space/settings": [lambda _case: {"space": KEY, "launch_place": "item_project"}],
     "/api/planning/work-items": [
         lambda case: {"space": KEY, "title": "Under the goal", "parent": case.refs["G"]},
         _Accepting(
@@ -333,11 +334,11 @@ HTTP_WRITES: dict[str, list[Args]] = {
 def _exact(case: Surfaces, **extra: str) -> dict:
     """The fields that name the space exactly: a read's, and a write's with no kind."""
 
-    return {"project_id": PROJECT, "data_scope_id": case.data_scope_id, "space_key": KEY, **extra}
+    return {"data_scope_id": case.data_scope_id, "space_key": KEY, **extra}
 
 
 def _exact_read(case: Surfaces, **extra: str) -> dict[str, list[str]]:
-    return _query(scope_kind="project", **_exact(case, **extra))
+    return _query(scope_kind="space", **_exact(case, **extra))
 
 
 EXACT_READS: dict[str, list[Args]] = {
@@ -404,12 +405,12 @@ STREAMED_HOLDS: dict[str, tuple[Callable[[Surfaces], tuple[str, object]], ...]] 
 
 
 #: Every place a state leaves the server, by how it gives it: 13 build it through
-#: `states.public_state`, 13 read the record that function published and 4 read the
+#: `states.public_state`, 15 read the record that function published and 4 read the
 #: history. Each names what its source holds for that: a builder its call of the
 #: boundary or what carries the boundary's answer on, a reader of a record the
 #: field it reads instead of the state, a reader of the history the entry it tells.
 PLACES: tuple[tuple[str, str, str, str], ...] = (
-    ("builds", "server.planning.read_model", "present", "states.public_state("),
+    ("builds", "server.planning.read_model", "_record", "states.public_state("),
     ("builds", "server.planning.read_model", "end_state", "states.public_state("),
     ("builds", "server.planning.chain", "chain", "states.public_state("),
     ("builds", "server.planning.exact_api", "_space_view", "states.public_state("),
@@ -435,6 +436,8 @@ PLACES: tuple[tuple[str, str, str, str], ...] = (
     ("reads the record", "server.planning.interactions", "search", 'item["container_state"]'),
     ("reads the record", "server.cli", "summary_main", "_shown_state"),
     ("reads the record", "server.executions.lifecycle", "_launch_reserved", '("goal", "stage")'),
+    ("reads the record", "server.planning.read_model", "card", 'record["state"]'),
+    ("reads the record", "server.hooks.held_note", "_task_line", 'item["state"]'),
     ("reads the history", "server.planning.views", "activity_feed", "('created', 'transitioned')"),
     ("reads the history", "server.planning.person_events", "_BLOCKER_CHANGES", "'opened'"),
     ("reads the history", "server.planning.person_events", "_event_entry", "OPENED"),
@@ -712,7 +715,7 @@ class Surfaces(unittest.TestCase):
         self.assertEqual(set(api.READ_PATHS), set(HTTP_READS))
         self.assertEqual(set(api.WRITE_PATHS), set(HTTP_WRITES))
 
-    def test_every_exact_project_path_is_called(self) -> None:
+    def test_every_exact_space_path_is_called(self) -> None:
         self.assertEqual(set(exact_api.READ_PATHS), set(EXACT_READS))
         self.assertEqual(set(exact_api.WRITE_PATHS), set(EXACT_WRITES))
 
@@ -737,7 +740,7 @@ class Surfaces(unittest.TestCase):
 
         self.each(HTTP_WRITES, write)
 
-    def test_the_exact_project_routes_show_no_service_state(self) -> None:
+    def test_the_exact_space_routes_show_no_service_state(self) -> None:
         def read(conn: sqlite3.Connection, path: str, query: dict) -> object:
             return exact_api.handle_get(
                 conn,
@@ -849,12 +852,12 @@ class Surfaces(unittest.TestCase):
         self.assertIn("not_started 1", text)
         self.assertIn("awaiting_confirmation 1", text)
 
-    # -- the thirty places ------------------------------------------------------
+    # -- the places a state leaves by ---------------------------------------------
 
-    def test_the_thirty_places_say_how_each_gives_its_state(self) -> None:
+    def test_each_place_says_how_it_gives_its_state(self) -> None:
         ways = [way for way, _module, _name, _token in PLACES]
         self.assertEqual(
-            (13, 13, 4),
+            (13, 15, 4),
             (ways.count("builds"), ways.count("reads the record"), ways.count("reads the history")),
         )
         for way, module, name, token in PLACES:

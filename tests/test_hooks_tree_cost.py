@@ -47,7 +47,7 @@ class TreeCostTests(unittest.TestCase):
         conn = store.connect()
         cls.addClassCleanup(conn.close)
         cls.conn = conn
-        service.create_planning_space(conn, project_id="p", name="Crew", key="MAIN")
+        service.create_planning_space(conn, name="Crew", key="MAIN")
         with calls.bind(calls.browser(), "/api/planning/work-items"):
             goal = cls.made("A goal of 274 items", "goal")
             cls.stages = [cls.made(f"Stage {n}", "stage", goal) for n in range(STAGES)]

@@ -1,7 +1,5 @@
 import { computed } from 'vue'
 
-import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
-import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import {
   planningSpaceEntity,
   resolvePlanningRouteSelection,
@@ -11,47 +9,35 @@ import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.t
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 
 interface RouteInputs {
-  context: () => PlatformContextReady | null
   route: () => PlatformRoute
   scope: () => OperatingScope
 }
 
 /**
- * Which project, space and item the route names, as the Kernel binds them.
+ * Which space, project and item the route names.
  *
- * The Kernel answers which project this is and which resource it is bound to;
- * the route names the item inside it. Which item is open is in the route rather
- * than in the surface, which is what makes an item linkable: a reload comes back
- * to it, Back closes it, and a bookmark is a work item rather than a space. It
- * reads the item out of the same `work-item` entity the Kernel encodes —
- * `{space_ref, reference}` — so there is one spelling of the identity.
+ * The scope names the space and, when it narrows, the project; the route names the
+ * item inside the space. Which item is open is in the route rather than in the
+ * surface, which is what makes an item linkable: a reload comes back to it, Back
+ * closes it, and a bookmark is a work item rather than a space. It reads the item out
+ * of the same `work-item` entity the Kernel encodes — `{space_ref, reference}` — so
+ * there is one spelling of the identity.
  */
 export function usePlanningRouteSelection(inputs: RouteInputs) {
-  const mappedResourceRefs = computed<EntityRef[]>(() => {
+  const selection = computed(() => {
     const scope = inputs.scope()
-    if (scope.kind !== 'project') return []
-    const project = inputs
-      .context()
-      ?.projects.find((item) => item.project_id === scope.project_ref.project_id)
-    return (project?.resources ?? [])
-      .filter((resource) => resource.state === 'mapped')
-      .map((resource) => resource.resource_ref)
+    return resolvePlanningRouteSelection(
+      inputs.route().entity,
+      scope.kind === 'space' ? scope.space_ref : undefined,
+    )
   })
 
-  const selection = computed(() =>
-    resolvePlanningRouteSelection(
-      inputs.route().entity,
-      mappedResourceRefs.value,
-      inputs.scope().kind === 'project',
-    ),
-  )
-
-  /** The Kernel resource this project binds, which is what write ownership keys on. */
+  /** The space the work is read from, which is what write ownership keys on. */
   const space = computed<PlanningSpaceRef | undefined>(() =>
     selection.value.status === 'ready' ? selection.value.space_ref : undefined,
   )
 
-  /** The canonical Kernel identity whose project binding owns local source access. */
+  /** The canonical Kernel identity of that space. */
   const spaceResourceRef = computed<PlanningSpaceEntityRef | undefined>(() => {
     const bound = space.value
     return bound === undefined ? undefined : planningSpaceEntity(bound)
@@ -59,7 +45,7 @@ export function usePlanningRouteSelection(inputs: RouteInputs) {
 
   const projectId = computed(() => {
     const scope = inputs.scope()
-    return scope.kind === 'project' ? scope.project_ref.project_id : undefined
+    return scope.kind === 'space' ? scope.project_ref?.project_id : undefined
   })
 
   /** Which item the route names. */

@@ -22,12 +22,12 @@ import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
 import { settled } from './documentBeside.ts'
 import { installLiveStreams, liveRow } from './liveWorkPage.ts'
-import { globalScope, projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { globalScope, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: globalScope })
@@ -63,7 +63,7 @@ async function stepHost(page: Page, width: number): Promise<Host> {
     route.fulfill({
       json: {
         interface_version: 'valkama-planning-work-item',
-        scope: projectScope,
+        scope: spaceScope,
         work_item_ref: workItemRef,
         state: {
           interface_version: 'valkama-ui-state',

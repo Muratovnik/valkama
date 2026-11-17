@@ -307,6 +307,15 @@ def current() -> Identity | None:
     return call.identity if call is not None else None
 
 
+def confirmed_session() -> str | None:
+    """The session the call in progress proved, or None when it proved none."""
+
+    identity = current()
+    if identity is None or identity.state != CONFIRMED:
+        return None
+    return identity.session_id
+
+
 def from_agent() -> bool:
     """Whether an agent is making this call: bound, and neither the interface nor Valkama."""
 

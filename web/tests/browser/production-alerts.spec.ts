@@ -8,14 +8,14 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { ALERT_SETTINGS, installAlerts, READINESS_CASES } from './alertsFixtures.ts'
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: projectScope })
-const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: spaceScope })
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: spaceScope })
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

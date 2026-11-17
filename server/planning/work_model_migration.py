@@ -27,6 +27,22 @@ otherwise cascade into them:
   and gives an active task nobody holds back to ready; **children-left** takes each open child
   out of a closed container into triage.
 - **checks** creates the trigger that keeps every kind where it may stand.
+- **item-projects** creates the table of the projects each item changes, and the two triggers
+  through which a project gained or lost marks its item for the word index, and
+  fills it: a task the file `valkama projects map-items` wrote holds projects for
+  gets them, every other task its space's former project, `migrated`; a container
+  none. The file is the one `store` checked before the first write and left in
+  `Context.memo`, beside the registry it read.
+- **labels** takes off each item the labels its entry in that file drops, the
+  others in their order, and brings the word index current inside the transaction:
+  `item-projects` and the labels marked items stale, and `indexes` reads the index.
+- **spaces** rebuilds `planning_spaces` without the project each space held and
+  with the place an agent launched from one of its cards works, `space` for each.
+  `item-projects` has read that project, which the registry now binds to the
+  space. A name becomes the space's alone: no two spaces share one, as `store`
+  checked before the first write.
+- **last-route** drops the last route the shell remembered when its scope is a project:
+  a space is the scope now, and the address it names no longer opens.
 - **addressee** appends the column a request names the agent session it asks with
   (`work_item_requests.addressee`) and its index; every request it finds asks the
   owner, as it did.
@@ -40,10 +56,10 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
-The postconditions `fresh-shape` to `second-run` and `requests-asked` to `fresh-tables` are checked after the steps, inside the
+The postconditions `fresh-shape` to `second-run` and `store-identity` to `fresh-tables` are checked after the steps, inside the
 same transaction, `second-run` last; `store` adds `recovery-point`, the recovery point. `row-counts` compares the
-row counts of the tables `oracle` counted; `fresh-tables` holds every other table to being empty and
-declared by a fresh store.
+row counts of the tables `oracle` counted and of the projects `item-projects` fills; `fresh-tables` holds every
+other table to being empty and declared by a fresh store.
 """
 
 from __future__ import annotations
@@ -102,6 +118,9 @@ def _sql_set(values: Iterable[str]) -> str:
 
 
 # -- the records the history holds ---------------------------------------------
+
+#: The source of a project a task took from its space because nothing else named one.
+_MIGRATED = "migrated"
 
 _KEY = r"[a-z][a-z0-9-]{0,31}"
 #: The three forms a `created` or `transitioned` record has: `<key>`,
@@ -251,6 +270,22 @@ class Oracle:
     request_ids: frozenset[str] = frozenset()
     containers: int = 0
     started_from_created: int = 0
+    #: The rows `item-projects` leaves in `work_item_projects`, a table the store `oracle`
+    #: reads lacks, and each task's set of them; a container has none.
+    item_projects: int = 0
+    projects: dict[str, set[tuple[str, str]]] = field(default_factory=dict)
+    #: Each item's labels after `items` and `labels`, and the items whose labels `labels` changes.
+    labels_after: dict[str, list[str]] = field(default_factory=dict)
+    labels_dropped: set[str] = field(default_factory=set)
+    #: For each stem searched, the tasks a word of one of their projects' ids starts
+    #: with it: what the search finds after the migration besides what it found before.
+    search_added: dict[str, list[str]] = field(default_factory=dict)
+    #: Every remembered preference, record by key, and the keys `last-route` drops.
+    ui_prefs: dict[str, str] = field(default_factory=dict)
+    dropped_prefs: list[str] = field(default_factory=list)
+    #: The store's identity and each space as `spaces` keeps it: id, key, name, next number.
+    data_scope_id: str = ""
+    spaces: set[tuple[str, str, str, int]] = field(default_factory=set)
 
 
 def _oracle(context: Context) -> Oracle:
@@ -260,15 +295,23 @@ def _oracle(context: Context) -> Oracle:
     return found
 
 
+#: The tables FTS5 keeps the word index in, which the word index's own name begins.
+#: Its stale marks are a plain table of the store's and are not among them.
+_INDEX_SHADOWS = f"{words.INDEX}_"
+
+
 def _tables(conn: sqlite3.Connection) -> list[str]:
-    """Every table whose rows count: the virtual index is counted by its own tables."""
+    """Every table whose rows count. The word index is derived from the rows of the
+    others and is held to them by `indexes`, so neither it nor the tables FTS5 keeps it in
+    are counted: bringing it current in `labels` changes how many rows those hold."""
 
     return [
         str(row[0])
         for row in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'"
             " AND substr(name, 1, 7) != 'sqlite_' AND sql NOT LIKE 'CREATE VIRTUAL%'"
-            " ORDER BY name"
+            " AND (substr(name, 1, ?) != ? OR name = ?) ORDER BY name",
+            (len(_INDEX_SHADOWS), _INDEX_SHADOWS, words.ROWS),
         )
     ]
 
@@ -290,16 +333,29 @@ def _objects(conn: sqlite3.Connection) -> dict[str, list[str]]:
     return names
 
 
-def _search_sample(conn: sqlite3.Connection) -> dict[str, list[str] | None]:
-    """A few words from the items' titles and what a search for each finds."""
+def _search_queries(conn: sqlite3.Connection, projects: Iterable[str]) -> list[str]:
+    """A few words from the items' titles, and the stem of every word of the ids of
+    the projects `item-projects` gives: the words a search finds an item by when `labels` has taken
+    the labels that held them."""
 
     queries: list[str] = []
     for (title,) in conn.execute("SELECT title FROM work_items ORDER BY work_item_id LIMIT 40"):
         for stem in words.stems(str(title), shortest=3)[:1]:
             if stem not in queries:
                 queries.append(stem)
+    queries = queries[:12]
+    for project in sorted(projects):
+        for term in words.terms(project):
+            if term[: words.STEM] not in queries:
+                queries.append(term[: words.STEM])
+    return queries
+
+
+def _search(conn: sqlite3.Connection, queries: Iterable[str]) -> dict[str, list[str] | None]:
+    """What a search for each stem finds, by item id; None where the index cannot be read."""
+
     found: dict[str, list[str] | None] = {}
-    for stem in queries[:12]:
+    for stem in queries:
         rows = words.search_rows(conn, [stem], space_id=None, limit=100_000, offset=0)
         found[stem] = None if rows is None else sorted(str(row["work_item_id"]) for row in rows)
     return found
@@ -606,7 +662,18 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         _DERIVED_BEFORE,
         [identity for identity, found in expect.items() if found["category"] == _SERVICE],
     )
-    oracle.search = _search_sample(conn)
+    _read_item_projects(conn, context, oracle)
+    oracle.ui_prefs = {
+        str(key): str(record)
+        for key, record in conn.execute("SELECT key, record_json FROM platform_ui_prefs")
+    }
+    oracle.dropped_prefs = sorted(
+        key
+        for key, record in oracle.ui_prefs.items()
+        if key == _LAST_ROUTE and _project_scoped(record)
+    )
+    oracle.data_scope_id = _data_scope_id(conn)
+    oracle.spaces = _spaces(conn)
     context.memo["oracle"] = oracle
     context.memo["renames"] = renames
     return {
@@ -620,6 +687,88 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         "events_to_write": dict(sorted(oracle.events.items())),
         "children_to_take_out": len(oracle.moved),
         "accepted_open_containers": len(oracle.derived),
+        "remembered_routes_to_drop": len(oracle.dropped_prefs),
+        "item_projects": oracle.item_projects,
+        "items_losing_labels": len(oracle.labels_dropped),
+    }
+
+
+def _item_projects_file(context: Context) -> Mapping[str, Any]:
+    found = context.memo.get("item_projects")
+    if not isinstance(found, Mapping):
+        raise UnmetError("the item projects file was not read before the steps")
+    return found
+
+
+def _read_item_projects(conn: sqlite3.Connection, context: Context, oracle: Oracle) -> None:
+    """The oracle's reading of the projects `item-projects` gives and the labels `labels`
+    takes, in Python.
+
+    A task with a nonempty entry in the file gets that entry's projects, any other
+    task its space's former project as `migrated`; a container gets none and keeps
+    its labels. The searches are read before any write, with what each will find
+    besides: the tasks a word of one of their projects' ids starts the stem.
+    """
+
+    entries = _item_projects_file(context)["items"]
+    former = {
+        str(identity): str(project)
+        for identity, project in conn.execute(
+            "SELECT planning_space_id, project_id FROM planning_spaces"
+        )
+    }
+    spaces = {
+        str(identity): str(space)
+        for identity, space in conn.execute(
+            "SELECT work_item_id, planning_space_id FROM work_items"
+        )
+    }
+    for identity, found in oracle.expect.items():
+        entry = entries.get(identity) or {"projects": [], "drop_labels": []}
+        oracle.labels_after[identity] = list(found["labels"])
+        if found["container"]:
+            continue
+        given = {(str(p["project_id"]), str(p["source"])) for p in entry["projects"]}
+        oracle.projects[identity] = given or {(former[spaces[identity]], _MIGRATED)}
+        kept = [label for label in found["labels"] if label not in entry["drop_labels"]]
+        if kept != found["labels"]:
+            oracle.labels_after[identity] = kept
+            oracle.labels_dropped.add(identity)
+    oracle.item_projects = sum(len(given) for given in oracle.projects.values())
+    queries = _search_queries(
+        conn, {project for given in oracle.projects.values() for project, _ in given}
+    )
+    oracle.search = _search(conn, queries)
+    for stem in queries:
+        oracle.search_added[stem] = sorted(
+            identity
+            for identity, given in oracle.projects.items()
+            if any(term.startswith(stem) for project, _ in given for term in words.terms(project))
+        )
+
+
+def _project_scoped(record: str) -> bool:
+    """Whether a remembered route's scope is a project, read in Python for `oracle`."""
+
+    try:
+        value = json.loads(record)
+    except ValueError:
+        return False
+    scope = value.get("scope") if isinstance(value, dict) else None
+    return isinstance(scope, dict) and scope.get("kind") == "project"
+
+
+def _data_scope_id(conn: sqlite3.Connection) -> str:
+    row = conn.execute("SELECT data_scope_id FROM platform_store_metadata").fetchone()
+    return "" if row is None else str(row[0])
+
+
+def _spaces(conn: sqlite3.Connection) -> set[tuple[str, str, str, int]]:
+    return {
+        (str(row[0]), str(row[1]), str(row[2]), int(row[3]))
+        for row in conn.execute(
+            "SELECT planning_space_id, key, name, next_number FROM planning_spaces"
+        )
     }
 
 
@@ -1171,7 +1320,174 @@ def _check_trigger(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError("the trigger that keeps each kind in its states is missing")
 
 
-# -- `addressee`: the session a request asks --------------------------------------------
+def _item_projects_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    present = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE (type = 'table' AND name = 'work_item_projects')"
+            " OR (type = 'trigger' AND tbl_name = 'work_item_projects')"
+        )
+    }
+    return not {"work_item_projects", *words.PROJECT_TRIGGERS} <= present
+
+
+def _create_item_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`item-projects`: the table of the projects each item changes, as a fresh store holds it, with
+    the two triggers that mark an item for the word index when it gains or loses one,
+    filled in SQL from the file and the spaces' former projects."""
+
+    for statement in (*planning_store.ITEM_PROJECTS, *words.PROJECT_TRIGGER_STATEMENTS):
+        conn.execute(statement)
+    entries = _item_projects_file(context)["items"]
+    given = sorted(
+        (identity, str(project["project_id"]), str(project["source"]))
+        for identity, entry in entries.items()
+        for project in entry["projects"]
+    )
+    conn.executemany(
+        "INSERT INTO work_item_projects(work_item_id, project_id, source) SELECT ?1, ?2, ?3"
+        " WHERE EXISTS (SELECT 1 FROM work_items WHERE work_item_id = ?1 AND kind != ?4)",
+        [(*row, _CONTAINER) for row in given],
+    )
+    migrated = conn.execute(
+        "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+        " SELECT w.work_item_id, p.project_id, ? FROM work_items w"
+        " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+        " WHERE w.kind != ? AND w.work_item_id NOT IN (SELECT value FROM json_each(?))",
+        (_MIGRATED, _CONTAINER, json.dumps(sorted({row[0] for row in given}))),
+    ).rowcount
+    return {
+        "rows": int(conn.execute("SELECT COUNT(*) FROM work_item_projects").fetchone()[0]),
+        "migrated": migrated,
+    }
+
+
+def _check_item_projects(conn: sqlite3.Connection, context: Context) -> None:
+    if _item_projects_needed(conn, context):
+        raise UnmetError("the table of the items' projects or its search triggers are missing")
+
+
+# -- the labels a project now carries ------------------------------------------
+
+
+def _labels_to_drop(conn: sqlite3.Connection, context: Context) -> list[tuple[str, str]]:
+    """Each item whose labels still hold one its entry drops, with the labels it keeps."""
+
+    changed: list[tuple[str, str]] = []
+    for identity, entry in sorted(_item_projects_file(context)["items"].items()):
+        if not entry["drop_labels"]:
+            continue
+        row = conn.execute(
+            "SELECT labels FROM work_items WHERE work_item_id = ? AND kind != ?",
+            (identity, _CONTAINER),
+        ).fetchone()
+        if row is None:
+            continue
+        labels = json.loads(row[0] or "[]")
+        kept = [label for label in labels if label not in entry["drop_labels"]]
+        if kept != labels:
+            changed.append((model.dumps(kept), identity))
+    return changed
+
+
+def _index_stale(conn: sqlite3.Connection) -> bool:
+    stale = f"SELECT 1 FROM {words.ROWS} WHERE stale = 1 LIMIT 1"  # noqa: S608
+    return conn.execute(stale).fetchone() is not None
+
+
+def _labels_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    return bool(_labels_to_drop(conn, context)) or _index_stale(conn)
+
+
+def _drop_labels(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`labels`: a label whose project the item now names leaves it, and the index catches up.
+
+    The labels go through the store's own spelling; the trigger on them, and the one
+    on each project `item-projects` gave, marked the items stale, and the index reads them here,
+    inside the transaction, as every verb that writes an item's text does.
+    """
+
+    changed = _labels_to_drop(conn, context)
+    conn.executemany("UPDATE work_items SET labels = ? WHERE work_item_id = ?", changed)
+    stale = int(conn.execute(f"SELECT COUNT(*) FROM {words.ROWS} WHERE stale = 1").fetchone()[0])  # noqa: S608
+    words.bring_current(conn)
+    return {"items": len(changed), "index_rows_read": stale}
+
+
+def _check_labels(conn: sqlite3.Connection, context: Context) -> None:
+    if _labels_to_drop(conn, context):
+        raise UnmetError("an item still holds a label its entry drops")
+
+
+# -- the space without its project ---------------------------------------------
+
+
+def _space_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(planning_spaces)")}
+    return "project_id" in columns or "launch_place" not in columns
+
+
+def _rebuild_spaces(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`spaces`: `planning_spaces` as a fresh store holds it, each space launching in itself.
+
+    Every column but the project is kept as it was; the launch place is the one
+    every space starts with.
+    """
+
+    del context
+    recreated = planning_store.rebuild_table(
+        conn,
+        "planning_spaces",
+        planning_store.table_definition(
+            "planning_spaces", f"planning_spaces{planning_store.REPLACEMENT}"
+        ),
+        "SELECT planning_space_id, name, key, provider_kind, next_number,"  # noqa: S608
+        f" '{model.LAUNCH_PLACES[0]}', created_at, updated_at FROM planning_spaces",
+    )
+    spaces = int(conn.execute("SELECT COUNT(*) FROM planning_spaces").fetchone()[0])
+    return {"spaces": spaces, "recreated": recreated}
+
+
+def _check_space(conn: sqlite3.Connection, context: Context) -> None:
+    if _space_needed(conn, context):
+        raise UnmetError("planning_spaces still holds a project or has no launch place")
+
+
+# -- the last route ------------------------------------------------------------
+
+_LAST_ROUTE = "last-route"
+#: The remembered route whose scope is a project, read in SQL for `last-route`.
+_PROJECT_ROUTE = (
+    "key = 'last-route' AND json_valid(record_json)"
+    " AND json_type(record_json, '$.scope') = 'object'"
+    " AND json_extract(record_json, '$.scope.kind') = 'project'"
+)
+
+
+def _route_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return (
+        conn.execute(f"SELECT 1 FROM platform_ui_prefs WHERE {_PROJECT_ROUTE}").fetchone()  # noqa: S608
+        is not None
+    )
+
+
+def _drop_project_route(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`last-route`: the last route a project scoped goes; the shell then opens where it starts."""
+
+    del context
+    dropped = conn.execute(f"DELETE FROM platform_ui_prefs WHERE {_PROJECT_ROUTE}").rowcount  # noqa: S608
+    return {"dropped": dropped}
+
+
+def _check_route(conn: sqlite3.Connection, context: Context) -> None:
+    if _route_needed(conn, context):
+        raise UnmetError("a remembered route still has a project as its scope")
+
+
+# -- the session a request asks ------------------------------------------------
 
 
 def _addressee_needed(conn: sqlite3.Connection, context: Context) -> bool:
@@ -1256,9 +1572,17 @@ STEPS = (
     Step("containers", "containers", _migrate_containers, _containers_needed, _check_containers),
     Step("task-holders", "task holders", _migrate_holders, _holders_needed, _check_holders),
     Step(
-        "children-left", "closed containers with open children", _take_out_children, _left_needed, _check_left
+        "children-left",
+        "closed containers with open children",
+        _take_out_children,
+        _left_needed,
+        _check_left,
     ),
     Step("checks", "checks", _create_trigger, _trigger_needed, _check_trigger),
+    Step("item-projects", "item projects", _create_item_projects, _item_projects_needed, _check_item_projects),
+    Step("labels", "labels", _drop_labels, _labels_needed, _check_labels),
+    Step("spaces", "the space", _rebuild_spaces, _space_needed, _check_space),
+    Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
     Step("addressee", "the session a request asks", _add_addressee, _addressee_needed, _check_addressee),
     Step("waiting-words", "words that wait for a session", _create_waiting, _waiting_needed, _check_waiting),
 )
@@ -1304,7 +1628,7 @@ def _structure(conn: sqlite3.Connection) -> tuple[dict[str, dict[str, list]], li
     return shape, triggers
 
 
-def _p1(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_fresh_shape(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     version = int(conn.execute("PRAGMA user_version").fetchone()[0])
     if version != context.schema:
         raise UnmetError(f"the store is at schema {version}, not {context.schema}")
@@ -1357,11 +1681,14 @@ def _expected_counts(oracle: Oracle) -> dict[str, int]:
         found["transitions"] for found in oracle.workflows.values()
     )
     expected["work_item_events"] += sum(oracle.events.values())
+    expected["work_item_projects"] = expected.get("work_item_projects", 0) + oracle.item_projects
+    expected["platform_ui_prefs"] = expected.get("platform_ui_prefs", 0) - len(oracle.dropped_prefs)
     return expected
 
 
 def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
-    """The tables `oracle` counted hold the rows it foresaw; any other table is `fresh-tables`'s."""
+    """The tables `oracle` counted and the projects `item-projects` fills hold the rows foreseen; any other
+    table is `fresh-tables`'s."""
 
     oracle = _oracle(context)
     counts = _counts(conn)
@@ -1682,9 +2009,10 @@ def _holds_indexes(conn: sqlite3.Connection, context: Context) -> Mapping[str, A
         found.append(f"the index marks {rows} rows for {total} items")
     if stale:
         found.append(f"{stale} index rows are stale")
-    searched = _search_sample(conn)
+    searched = _search(conn, oracle.search)
     for stem, before in oracle.search.items():
-        if searched.get(stem) != before:
+        wanted = before if before is None else sorted({*before, *oracle.search_added[stem]})
+        if searched.get(stem) != wanted:
             found.append(f"a search for {stem!r} finds other items")
     _unmet(found, "indexes, triggers and search")
     return {"index_rows": rows, "searches_compared": len(oracle.search)}
@@ -1706,8 +2034,9 @@ def _holds_identities(conn: sqlite3.Connection, context: Context) -> Mapping[str
         # A value no step writes is compared as stored, character for character, so a
         # step that rewrote it to the same meaning is still seen. Only what a step
         # writes anew is compared parsed: the checklist whose step claims `containers` to `children-left`
-        # release goes through `model.dumps`, and the labels `items` adds a kind label to
-        # through `json_insert`, each in a spelling of its own.
+        # release goes through `model.dumps`, the labels `items` adds a kind label to
+        # through `json_insert`, and those `labels` takes some from through `model.dumps`,
+        # each in a spelling of its own.
         for column in ("title", "description", "position", "summary"):
             if row[column] != before[column]:
                 found.append(f"{identity} changed its {column}")
@@ -1720,8 +2049,8 @@ def _holds_identities(conn: sqlite3.Connection, context: Context) -> Mapping[str
                 found.append(f"{identity} changed its checklist beyond the claims released")
         elif row["checklist"] != before["checklist"]:
             found.append(f"{identity} changed its checklist")
-        if before["kind_label"]:
-            labels = oracle.expect[identity]["labels"]
+        if before["kind_label"] or identity in oracle.labels_dropped:
+            labels = oracle.labels_after[identity]
             if json.loads(row["labels"]) != labels:
                 found.append(f"{identity} has the labels {row['labels']}, not {labels}")
         elif row["labels"] != before["labels"]:
@@ -1750,6 +2079,102 @@ def _holds_known_exceptions(conn: sqlite3.Connection, context: Context) -> Mappi
         found.append(f"in review {review}, the oracle expected {oracle.review}")
     _unmet(found, "known exceptions")
     return {"taken_out_of_closed_containers": moved, "tasks_left_in_review": review}
+
+
+def _holds_store_identity(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The store keeps its identity, and each space its id, key, name and next number."""
+
+    oracle = _oracle(context)
+    found = []
+    data_scope_id = _data_scope_id(conn)
+    if data_scope_id != oracle.data_scope_id:
+        found.append(f"the store is {data_scope_id}, not {oracle.data_scope_id}")
+    spaces = _spaces(conn)
+    found += [f"space {space} is missing" for space in sorted(oracle.spaces - spaces)]
+    found += [f"space {space} is extra" for space in sorted(spaces - oracle.spaces)]
+    _unmet(found, "the store and its spaces")
+    return {"data_scope_id": data_scope_id, "spaces": len(spaces)}
+
+
+def _holds_space_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """No space holds a project, and each launches in itself."""
+
+    del context
+    found = []
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(planning_spaces)")}
+    if "project_id" in columns:
+        found.append("planning_spaces still has the column project_id")
+    elif "launch_place" not in columns:
+        found.append("planning_spaces has no column launch_place")
+    else:
+        found += [
+            f"{row[0]} launches in {row[1]}"
+            for row in conn.execute(
+                "SELECT key, launch_place FROM planning_spaces WHERE launch_place != ?"
+                " ORDER BY key",
+                (model.LAUNCH_PLACES[0],),
+            )
+        ]
+    _unmet(found, "the spaces")
+    return {"launch_place": model.LAUNCH_PLACES[0]}
+
+
+def _holds_task_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Each task names the projects `oracle` read for it, each by its source; a container none."""
+
+    oracle = _oracle(context)
+    held: dict[str, set[tuple[str, str]]] = {}
+    for identity, project, source in conn.execute(
+        "SELECT work_item_id, project_id, source FROM work_item_projects"
+    ):
+        held.setdefault(str(identity), set()).add((str(project), str(source)))
+    references = _references(conn)
+    found = [
+        f"{references.get(identity, identity)} names {sorted(held.get(identity, set()))},"
+        f" not {sorted(oracle.projects.get(identity, set()))}"
+        for identity in sorted(set(held) | set(oracle.projects))
+        if held.get(identity, set()) != oracle.projects.get(identity, set())
+    ]
+    _unmet(found, "the items' projects")
+    sources = Counter(source for given in held.values() for _, source in given)
+    return {"tasks": len(held), "by_source": dict(sorted(sources.items()))}
+
+
+def _holds_labels_kept(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Each item's labels are those before, less the ones its entry drops, in order."""
+
+    oracle = _oracle(context)
+    references = _references(conn)
+    found = [
+        f"{references.get(str(identity), identity)} has the labels {labels},"
+        f" not {oracle.labels_after.get(str(identity))}"
+        for identity, labels in conn.execute("SELECT work_item_id, labels FROM work_items")
+        if json.loads(labels or "[]") != oracle.labels_after.get(str(identity))
+    ]
+    _unmet(found, "labels")
+    return {"items_losing_labels": len(oracle.labels_dropped)}
+
+
+def _holds_routes(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    oracle = _oracle(context)
+    after = {
+        str(key): str(record)
+        for key, record in conn.execute("SELECT key, record_json FROM platform_ui_prefs")
+    }
+    kept = {
+        key: record for key, record in oracle.ui_prefs.items() if key not in oracle.dropped_prefs
+    }
+    found = [
+        f"{key} carries a project as its scope"
+        for key, record in after.items()
+        if _project_scoped(record)
+    ]
+    if after != kept:
+        found.append(
+            f"the preferences are {sorted(after)}, the oracle expected {sorted(kept)} as they were"
+        )
+    _unmet(found, "remembered routes")
+    return {"dropped": oracle.dropped_prefs, "kept": len(after)}
 
 
 def _holds_requests_asked(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
@@ -1864,6 +2289,11 @@ POSTCONDITIONS = (
     Postcondition("indexes", "indexes, triggers and the word index", _p13),
     Postcondition("identities", "identities and content", _p14),
     Postcondition("known-exceptions", "known exceptions", _p15),
+    Postcondition("store-identity", "the store and each space keep their identity", _p18),
+    Postcondition("space-projects", "no space holds a project; each launches in itself", _p19),
+    Postcondition("task-projects", "each task names the projects the file and its space give", _p20),
+    Postcondition("labels-kept", "each item keeps its labels but the ones its entry drops", _p21),
+    Postcondition("routes", "no remembered route has a project as its scope", _p22),
     Postcondition("requests-asked", "every request asks the owner, and none is lost", _p23),
     Postcondition("no-old-waiting", "no words wait from before 3.0", _p24),
     Postcondition("request-shapes", "requests and waiting words shaped as a fresh store's", _p25),

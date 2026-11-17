@@ -6,6 +6,7 @@
  */
 
 import { z } from '@/shared/api/contract.ts'
+import { sameScope } from '@/shared/api/platformRoute.ts'
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 
 class PlatformApiContractError extends Error {
@@ -21,8 +22,6 @@ export const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u
 export const PROJECT_ID = /^[a-z][a-z0-9-]{0,159}$/u
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 export const ISO = /^\d{4}-\d{2}-\d{2}T[^\s]{1,80}Z$/u
-/** The binding states the server's routing answers with. */
-export const BINDING_STATES = ['mapped', 'unbound', 'unavailable'] as const
 
 export function invalid(path: string, detail: string): never {
   throw new PlatformApiContractError(path, detail)
@@ -42,14 +41,6 @@ export function enumField<T extends string>(values: readonly T[], message = 'unk
     .nonoptional()
 }
 
-function scopesEqual(left: OperatingScope, right: OperatingScope): boolean {
-  return (
-    left.kind === right.kind &&
-    (left.kind === 'global' ||
-      (right.kind === 'project' && left.project_ref.project_id === right.project_ref.project_id))
-  )
-}
-
 export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value)
   if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`
@@ -61,5 +52,5 @@ export function canonicalJson(value: unknown): string {
 }
 
 export function assertScope(actual: OperatingScope, expected: OperatingScope, path: string): void {
-  if (!scopesEqual(actual, expected)) invalid(path, 'response scope does not match request scope')
+  if (!sameScope(actual, expected)) invalid(path, 'response scope does not match request scope')
 }

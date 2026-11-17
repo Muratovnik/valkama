@@ -123,6 +123,73 @@ class CommandLineTests(unittest.TestCase):
         self.assertNotIn("--last", argv)
 
 
+class AddedDirectoryTests(unittest.TestCase):
+    """Directories beside the working one: Claude on every run, Codex on a fresh one."""
+
+    DIRS = ("C:/work/rover", "C:/work/side")
+
+    def argv(self, client: str, *, resume: bool) -> list[str]:
+        return drivers.driver_for(client).argv(
+            contract.CommandRequest(
+                binary=client,
+                prompt="task",
+                effort="high",
+                session_id="session-1" if resume else "",
+                resume=resume,
+                added_dirs=self.DIRS,
+            )
+        )
+
+    def pairs(self, argv: list[str]) -> list[str]:
+        return [argv[index + 1] for index, part in enumerate(argv) if part == "--add-dir"]
+
+    def test_each_client_states_on_which_runs_it_takes_them(self) -> None:
+        self.assertEqual(
+            {"claude": "fresh_and_resume", "codex": "fresh_only"},
+            {
+                capability.client: capability.as_dict()["added_dirs"]
+                for capability in drivers.all_capabilities()
+            },
+        )
+        claude_takes = drivers.capabilities_for("claude").takes_added_dirs
+        codex_takes = drivers.capabilities_for("codex").takes_added_dirs
+        self.assertEqual(
+            (True, True, True, False),
+            (
+                claude_takes(resume=False),
+                claude_takes(resume=True),
+                codex_takes(resume=False),
+                codex_takes(resume=True),
+            ),
+        )
+
+    def test_claude_gets_one_add_dir_per_directory_on_a_fresh_run_and_a_resume(self) -> None:
+        for resume in (False, True):
+            with self.subTest(resume=resume):
+                argv = self.argv("claude", resume=resume)
+                self.assertEqual(list(self.DIRS), self.pairs(argv))
+                # `--add-dir` takes several values: the prompt stays the value of
+                # `-p`'s position, ahead of every directory, and is not one of them.
+                self.assertEqual("task", argv[argv.index("-p") + 1])
+                self.assertEqual(2, argv.count("--add-dir"))
+
+    def test_codex_gets_them_in_codex_exec_and_a_resume_goes_without(self) -> None:
+        fresh = self.argv("codex", resume=False)
+        self.assertEqual(list(self.DIRS), self.pairs(fresh))
+        self.assertEqual("task", fresh[-1], "the task stays the last positional")
+        resumed = self.argv("codex", resume=True)
+        self.assertEqual(["codex", "exec", "resume"], resumed[:3])
+        self.assertNotIn("--add-dir", resumed)
+        for argv in (fresh, resumed):
+            # Never through the configuration: `writable_roots` would replace the
+            # owner's own list.
+            self.assertFalse(any("writable_roots" in part for part in argv), argv)
+            self.assertEqual(
+                ['model_reasoning_effort="high"'],
+                [argv[index + 1] for index, part in enumerate(argv) if part == "-c"],
+            )
+
+
 class StdoutDialectTests(unittest.TestCase):
     """Reading a client's stdout is that client's driver's job, not the runner's.
 

@@ -13,13 +13,13 @@ import { installBackend } from './backend.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { frames } from './frames.ts'
 import { heldCard, openPlanFor, threeAgents } from './openSessionFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 import { drawnLines } from './textLines.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 

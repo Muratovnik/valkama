@@ -8,7 +8,7 @@ import { installBackend } from './backend.ts'
 import { aCardAsking, linkIn, NAMED_PATH } from './documentBackend.ts'
 import { paneOf, settled } from './documentBeside.ts'
 import { heldCard, openPlanFor, threeAgents } from './openSessionFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
@@ -113,7 +113,7 @@ test('what a dialog is about stands a step under its title, in the weight of a n
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
@@ -142,7 +142,7 @@ for (const width of [1280, 390]) {
   }) => {
     await page.setViewportSize({ width, height: 900 })
     await installBackend(page)
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.getByRole('button', { name: 'New work item' }).click()
     const dialog = page.getByRole('dialog', { name: 'New work' })
     await expect(dialog).toHaveCSS('transform', 'none')

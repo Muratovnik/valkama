@@ -130,10 +130,10 @@ PLANNING_INSTRUCTIONS = (
     " step already done is sent as {text, done: true}; a step sent with the text of"
     " one the item has keeps its id, claim and tick, so new steps are appended by"
     " sending the old ones first."
-    " History records every change with its author; get_work_item returns the"
-    " newest (full=true for all), so read it before assuming who did what. A write"
+    " History records every change with its author; get_work_item's events part"
+    " returns it, so read it before assuming who did what. A write"
     " answers with an acknowledgement: its revision is expected_revision for the next"
-    " write; verbose=true returns the full item."
+    " write; verbose=true returns its card."
     " Finished work reaches a terminal state; delete_work_item is"
     " only for an item that should never have existed."
 )

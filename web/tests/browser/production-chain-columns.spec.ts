@@ -17,7 +17,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { chainOf, mapId, mapMember } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
 import { serve, showChain } from './chainFixtures.ts'
-import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const ROOT = { id: workItem.work_item_id, reference: workItemRef.reference, title: workItem.title }
@@ -78,7 +78,7 @@ async function openCard(page: Page) {
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
@@ -398,7 +398,7 @@ test('a row highlights its full width and its inset past each edge, and a click 
   await row.click({ position: { x: (rowBox?.width ?? 0) - 8, y: (rowBox?.height ?? 0) / 2 } })
   const opened = serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
+    scope: spaceScope,
     entity: planningWorkItemEntity({ ...workItemRef, reference: 'MAIN-1134' }),
   })
   await expect.poll(() => new URL(page.url()).search).toBe(new URL(opened, page.url()).search)

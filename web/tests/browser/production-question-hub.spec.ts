@@ -192,12 +192,12 @@ test('the task number above a question opens that task, as a number does everywh
     listed(TOUCHED, 'The touched question', '2026-10-24T10:02:00Z'),
   ])
   const context = opened.card('The touched question').locator('.request-context')
-  await expect(context).toHaveText('Example Project · MAIN-264')
+  await expect(context).toHaveText('Main · MAIN-264')
   const number = context.getByRole('link', { name: 'MAIN-264', exact: true })
   await expect(number).toHaveClass(/rich-reference/u)
   // The route of the very task the question came with, as a press opens it.
-  await expect(number).toHaveAttribute('href', /^\/modules\/planning\/project\//u)
-  // The project stays words: only the number is the way to the task.
+  await expect(number).toHaveAttribute('href', /^\/modules\/planning\/space\//u)
+  // The space stays words: only the number is the way to the task.
   await expect(context.getByRole('link')).toHaveCount(1)
   await expect(context.getByRole('button')).toHaveCount(0)
   await number.click()

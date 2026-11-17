@@ -496,7 +496,9 @@ class CompactFormTests(AnswerCase):
             },
             compact["last_reply"],
         )
-        [on_item] = self.tool("get_work_item", id=self.reference)["questions"]["items"]
+        [on_item] = self.tool("get_work_item", id=self.reference, parts="questions")["questions"][
+            "items"
+        ]
         self.assertEqual((2, latest), (on_item["replies"], on_item["last_reply"]["id"]))
 
     def test_a_reply_through_the_interface_is_a_person_s(self) -> None:

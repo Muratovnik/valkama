@@ -179,7 +179,7 @@ class BrowserWriteTests(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="owner", name="Owner", key="OWN")
+        service.create_planning_space(self.conn, name="Owner", key="OWN")
         item = service.create_work_item(self.conn, space="OWN", title="By hand")
         self.reference = item["reference"]
         self.step = service.set_checklist(self.conn, self.reference, ["one"])["checklist"][0]["id"]

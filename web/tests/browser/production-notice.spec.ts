@@ -4,7 +4,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
@@ -19,7 +19,7 @@ test('the shell keeps its status region, and an open card does not cover the not
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
+      scope: spaceScope,
       entity: planningWorkItemEntity(workItemRef),
     }),
   )

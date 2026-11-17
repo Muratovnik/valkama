@@ -12,7 +12,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { centre, openBoard, serve } from './boardPage.ts'
 import { drawnColours } from './contrast.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** The fill drawn behind a chip's word, or nothing where it has none of its own. */
@@ -24,7 +24,7 @@ test('a label chip on a tile filters instead of opening, and the rest of the she
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   const sheet = page.locator('.work-item-column[data-state="dev"] .work-item-tile').first()
   const chip = sheet.locator('.label-chip').first()
   await expect(chip).toBeVisible()

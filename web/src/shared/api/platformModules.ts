@@ -27,23 +27,23 @@ const BOTH_STATES: ModuleUiStateName[] = [
  *  by shape and were only told apart by their position. */
 interface ModuleSpec {
   actionGlobal: string[]
-  actionProject: string[]
+  actionSpace: string[]
   allowed_keys: string[]
   feature_capabilities: string[]
   icon_key: string
   module_id: ModuleId
   navigation_group: NavigationGroup
   readGlobal: string[]
-  readProject: string[]
+  readSpace: string[]
   required_read_models: string[]
   secondaryGlobal: EntityKind[]
-  secondaryProject: EntityKind[]
+  secondarySpace: EntityKind[]
   sse_subscriptions: string[]
   supported_entity_kinds: EntityKind[]
   title_key: string
-  project_secondary_behavior?: 'all' | 'unavailable'
-  project_supported_states?: ModuleUiStateName[]
-  project_unsupported_reason?: string
+  space_secondary_behavior?: 'all' | 'unavailable'
+  space_supported_states?: ModuleUiStateName[]
+  space_unsupported_reason?: string
 }
 
 const MODULE = ({
@@ -53,18 +53,18 @@ const MODULE = ({
   icon_key,
   allowed_keys,
   readGlobal,
-  readProject,
+  readSpace,
   actionGlobal,
-  actionProject,
+  actionSpace,
   required_read_models,
   secondaryGlobal,
-  secondaryProject,
+  secondarySpace,
   sse_subscriptions,
   supported_entity_kinds,
   feature_capabilities,
-  project_supported_states,
-  project_unsupported_reason,
-  project_secondary_behavior = 'all',
+  space_supported_states,
+  space_unsupported_reason,
+  space_secondary_behavior = 'all',
 }: ModuleSpec): ModuleManifest => ({
   interface_version: MODULES_INTERFACE,
   module_id,
@@ -74,29 +74,29 @@ const MODULE = ({
   navigation_group,
   route_namespace: module_id,
   state_schema: { schema_id: `module.${module_id}.state`, allowed_keys, max_bytes: 2048 },
-  operating_levels: ['global', 'project'],
+  operating_levels: ['global', 'space'],
   semantics: {
     global: { read_models: readGlobal, action_semantics: actionGlobal },
-    project: { read_models: readProject, action_semantics: actionProject },
+    space: { read_models: readSpace, action_semantics: actionSpace },
   },
   secondary_context: {
     global: { kinds: secondaryGlobal, behavior: 'all' },
-    project: { kinds: secondaryProject, behavior: project_secondary_behavior },
+    space: { kinds: secondarySpace, behavior: space_secondary_behavior },
   },
   required_read_models,
   sse_subscriptions,
   supported_entity_kinds,
-  primary_actions: actionProject,
+  primary_actions: actionSpace,
   secondary_actions: actionGlobal,
   inspector_owner: `module.${module_id}`,
   feature_capabilities,
   states: {
     global: { supported: [...BOTH_STATES] },
-    project: {
-      supported: project_supported_states ?? [...BOTH_STATES],
-      ...(project_unsupported_reason === undefined
+    space: {
+      supported: space_supported_states ?? [...BOTH_STATES],
+      ...(space_unsupported_reason === undefined
         ? {}
-        : { unsupported_reason: project_unsupported_reason }),
+        : { unsupported_reason: space_unsupported_reason }),
     },
   },
 })
@@ -127,12 +127,12 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
       'holder',
     ],
     readGlobal: ['planning.spaces', 'planning.work-items'],
-    readProject: ['planning.project-spaces', 'planning.work-items'],
+    readSpace: ['planning.space', 'planning.work-items'],
     actionGlobal: ['module.planning.create-work-item', 'module.planning.open-work-item'],
-    actionProject: ['module.planning.create-work-item', 'module.planning.open-work-item'],
+    actionSpace: ['module.planning.create-work-item', 'module.planning.open-work-item'],
     required_read_models: ['planning-spaces', 'work-items'],
     secondaryGlobal: ['project', 'planning-space'],
-    secondaryProject: ['planning-space', 'work-item'],
+    secondarySpace: ['planning-space', 'work-item'],
     sse_subscriptions: ['planning.changed'],
     supported_entity_kinds: ['project', 'planning-space', 'workflow', 'work-item'],
     feature_capabilities: [],
@@ -145,13 +145,13 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
     // The page's view (`shared/api/analyticsAddress.ts`).
     allowed_keys: ['period', 'from', 'to', 'by', 'measure', 'filters', 'open', 'across'],
     readGlobal: ['analytics.usage', 'analytics.quota', 'analytics.uses'],
-    readProject: ['analytics.usage', 'analytics.quota', 'analytics.uses'],
+    readSpace: ['analytics.usage', 'analytics.quota', 'analytics.uses'],
     actionGlobal: ['module.analytics.report-use'],
-    actionProject: ['module.analytics.report-use'],
+    actionSpace: ['module.analytics.report-use'],
     required_read_models: ['usage'],
     // A task's card opens over the page, and the address names it.
     secondaryGlobal: ['work-item'],
-    secondaryProject: ['work-item'],
+    secondarySpace: ['work-item'],
     sse_subscriptions: [],
     supported_entity_kinds: ['project', 'work-item'],
     feature_capabilities: [],
@@ -163,12 +163,12 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
     icon_key: 'book-open',
     allowed_keys: ['query', 'provider'],
     readGlobal: ['memory.providers', 'memory.recent'],
-    readProject: ['memory.search', 'memory.linked'],
+    readSpace: ['memory.search', 'memory.linked'],
     actionGlobal: ['module.memory.attach'],
-    actionProject: ['module.memory.open'],
+    actionSpace: ['module.memory.open'],
     required_read_models: ['memory'],
     secondaryGlobal: ['memory-resource'],
-    secondaryProject: ['memory-resource', 'work-item'],
+    secondarySpace: ['memory-resource', 'work-item'],
     sse_subscriptions: [],
     supported_entity_kinds: ['project', 'memory-resource', 'work-item'],
     feature_capabilities: ['memory.open', 'memory.health'],
@@ -180,13 +180,13 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
     icon_key: 'settings-2',
     allowed_keys: ['section', 'query'],
     readGlobal: [],
-    readProject: ['project.bindings'],
+    readSpace: ['space.projects'],
     actionGlobal: ['module.settings.open-adapter'],
-    actionProject: ['module.settings.configure-project'],
+    actionSpace: ['module.settings.configure-space'],
     required_read_models: ['settings'],
     // A task's card opens over the section, and the address names it.
     secondaryGlobal: ['work-item'],
-    secondaryProject: ['work-item'],
+    secondarySpace: ['work-item'],
     sse_subscriptions: [],
     supported_entity_kinds: ['project', 'work-item'],
     feature_capabilities: ['settings.configure'],

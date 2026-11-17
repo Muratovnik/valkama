@@ -6,12 +6,11 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { boardId } from '../fixtures/board.ts'
 import { installBackend } from './backend.ts'
-import { planningReadModel, projectScope, spaceRef, workItem } from './planningFixtures.ts'
+import { planningReadModel, spaceScope, workItem } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { briefAnswer } from './previewPage.ts'
 
@@ -87,12 +86,11 @@ export async function serveKinds(page: Page) {
 const planningRoute = (view: string, state: Record<string, string> = {}) =>
   serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
-    entity: planningSpaceEntity(spaceRef),
+    scope: spaceScope,
     state: { view, ...state },
   })
 
-export const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: projectScope })
+export const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: spaceScope })
 
 export async function openBoard(page: Page) {
   await page.goto(planningRoute('kanban', {}))

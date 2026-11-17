@@ -2,7 +2,6 @@ import { computed } from 'vue'
 import type { Ref } from 'vue'
 
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import type { ProjectDirectoryResource } from '@/shared/api/platformApiTypes.ts'
 import { hasModuleRenderer } from '@/shared/api/platformModuleContract.ts'
 import type { ModuleManifest, ModuleRegistration } from '@/shared/api/platformModuleContract.ts'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
@@ -24,48 +23,9 @@ interface AuthorityInputs {
 }
 
 /**
- * Project resources the active module can truthfully accept as secondary
- * context. Mapping state and both manifest declarations participate: a broad
- * supported-kind declaration alone does not authorize a scoped route.
- */
-export function selectableProjectResources(
-  manifest: ModuleManifest | undefined,
-  resources: readonly ProjectDirectoryResource[],
-): ProjectDirectoryResource[] {
-  if (manifest === undefined) return []
-  const secondary = manifest.secondary_context.project
-  if (secondary.behavior !== 'all') return []
-  const supported = new Set(manifest.supported_entity_kinds)
-  const scoped = new Set(secondary.kinds)
-  return resources.filter(
-    (resource) =>
-      resource.state === 'mapped' &&
-      supported.has(resource.resource_ref.kind) &&
-      scoped.has(resource.resource_ref.kind),
-  )
-}
-
-/** Recheck a resource emission against the manifest current at click time. */
-export function resolveResourceSelection(
-  manifest: ModuleManifest | undefined,
-  route: PlatformRoute,
-  resource: ProjectDirectoryResource,
-): PlatformRoute | null {
-  if (
-    manifest === undefined ||
-    manifest.module_id !== route.module_id ||
-    route.scope.kind !== 'project' ||
-    resource.state !== 'mapped'
-  )
-    return null
-  const proposed = { ...route, entity: resource.resource_ref }
-  return resolveManifestRouteAuthority(manifest, proposed).status === 'ready' ? proposed : null
-}
-
-/**
  * Where a task pressed in the module on show opens its card: over that module, when its manifest
  * admits a work item in the route, as the same route naming the card; null where it does not, and
- * on the board, which opens the card in the task's own project instead.
+ * on the board, which opens the card in the task's own space instead.
  */
 export function cardInPlace(
   manifest: ModuleManifest | undefined,
@@ -103,11 +63,12 @@ export function useModuleRouteAuthority(inputs: AuthorityInputs) {
   const routeUnavailable = computed<PlatformRouteUnavailable | null>(() => {
     if (!inputs.modulesSettled.value || !inputs.modulesAuthoritative.value) return null
     const available = inputs.modules.value.map((module) => module.module_id)
-    if (inputs.parsedUnavailable.value)
-      return {
-        ...inputs.parsedUnavailable.value,
-        recovery: { kind: 'choose-module', available_modules: available },
-      }
+    const parsed = inputs.parsedUnavailable.value
+    // A retired address keeps its own way out, the choice of a space; any other the modules.
+    if (parsed)
+      return parsed.recovery.kind === 'choose-space'
+        ? parsed
+        : { ...parsed, recovery: { kind: 'choose-module', available_modules: available } }
     const registration = activeRegistration.value
     if (registration !== undefined && hasModuleRenderer(registration.manifest.module_id)) {
       const authority = resolveManifestRouteAuthority(registration.manifest, inputs.route.value)

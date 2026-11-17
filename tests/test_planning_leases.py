@@ -79,7 +79,7 @@ class LeaseTestCase(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        service.create_planning_space(self.conn, project_id="lease", name="Lease", key="LSE")
+        service.create_planning_space(self.conn, name="Lease", key="LSE")
         self.reference = service.create_work_item(self.conn, space="LSE", title="Held")["reference"]
         self.conn.commit()
 
@@ -167,7 +167,9 @@ class LeaseTestCase(unittest.TestCase):
         server = self.listener()
         _, item = self.http(server, "GET", f"/api/planning/work-item?id={self.reference}", None)
         _, listing = self.http(server, "GET", "/api/planning/work-items?space=LSE", None)
-        mcp_item = mcp_surface.call_tool(self.conn, "get_work_item", {"id": self.reference})
+        mcp_item = mcp_surface.call_tool(
+            self.conn, "get_work_item", {"id": self.reference, "parts": "claim"}
+        )
         mcp_rows = mcp_surface.call_tool(self.conn, "list_work_items", {"space": "LSE"})
         assert isinstance(mcp_item, dict) and isinstance(mcp_rows, dict)
         return {

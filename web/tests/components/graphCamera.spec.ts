@@ -81,6 +81,7 @@ const item: WorkItemBrief = {
   waits_for: [],
   workable: true,
   labels: [],
+  projects: [],
   source: '',
   checklist: [],
   revision: 0,

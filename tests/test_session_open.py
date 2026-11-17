@@ -756,7 +756,7 @@ class AGoneSessionTests(PlanCase):
 
 class ChoosingTheWindowTests(PlanCase):
     def bind_to_root(self, root: Path) -> None:
-        service.create_planning_space(self.conn, project_id="example", name="Example", key="MAIN")
+        service.create_planning_space(self.conn, name="Example", key="MAIN")
         item = service.create_work_item(self.conn, space="MAIN", title="Item")
         self.conn.execute("UPDATE sessions SET work_item_id = ?", (item["work_item_id"],))
         self.conn.commit()

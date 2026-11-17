@@ -187,6 +187,7 @@ const brief = (number: number, fields: Partial<WorkItemBrief>): WorkItemBrief =>
   reference: `MAIN-${number}`,
   number,
   labels: [],
+  projects: [],
   ...fields,
 })
 

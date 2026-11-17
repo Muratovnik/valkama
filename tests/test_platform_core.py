@@ -248,9 +248,7 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
             self.assertEqual(b"\n", response.readline())
             writer = store.connect()
             try:
-                planning_service.create_planning_space(
-                    writer, project_id="streamed", name="Streamed", key="STR"
-                )
+                planning_service.create_planning_space(writer, name="Streamed", key="STR")
                 writer.commit()
             finally:
                 writer.close()
@@ -314,6 +312,14 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
         unknown_status, unknown_type, _ = self._get("/modules/not-a-module/global")
         self.assertEqual(200, unknown_status)
         self.assertEqual("text/html; charset=utf-8", unknown_type)
+        # A space, a project narrowing it, and the project address a bookmark may keep:
+        # the shell opens on each and says itself what it can show there.
+        space = "/modules/planning/space/01234567-89ab-4def-8123-456789abcdef/MAIN"
+        for path in (space, f"{space}/project/valkama", "/modules/planning/project/valkama"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    (200, "text/html; charset=utf-8"), self._get(f"{path}?entity=abc")[:2]
+                )
         self.assertEqual(404, self._get("/modules/not_a_module/global")[0])
         self.assertEqual(404, self._get("/modules/planning/global.js")[0])
         self.assertEqual(404, self._get("/modules/adapter.notes/global")[0])

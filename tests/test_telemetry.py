@@ -82,7 +82,7 @@ class ExecutionUsageTests(unittest.TestCase):
         self.addCleanup(lambda: os.environ.__setitem__("VALKAMA_DB", SUITE_STORE))
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
-        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        planning.create_planning_space(self.conn, name="Test", key="TST")
         self.conn.commit()
 
     def item(self, title: str) -> dict:

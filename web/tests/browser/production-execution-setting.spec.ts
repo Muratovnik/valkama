@@ -15,15 +15,15 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
-const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: projectScope })
+const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: spaceScope })
 const SWITCH = { name: /^Execution tab on a card/u }
 
 function executionReads(page: Page) {

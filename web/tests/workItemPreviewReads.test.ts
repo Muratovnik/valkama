@@ -31,14 +31,8 @@ const fixture = (name: string): Record<string, unknown> =>
 
 const PRIMARY = '123e4567-e89b-42d3-a456-426614174000'
 const ATTACHED = '223e4567-e89b-42d3-a456-426614174000'
-const primary: PreviewCandidate = {
-  project_id: 'example-project',
-  space_ref: { data_scope_id: PRIMARY, space_key: 'MAIN' },
-}
-const attached: PreviewCandidate = {
-  project_id: 'other-project',
-  space_ref: { data_scope_id: ATTACHED, space_key: 'MAIN' },
-}
+const primary: PreviewCandidate = { space_ref: { data_scope_id: PRIMARY, space_key: 'MAIN' } }
+const attached: PreviewCandidate = { space_ref: { data_scope_id: ATTACHED, space_key: 'MAIN' } }
 
 /** What each store answers: a title for a record, or a refusal's status. */
 type Store = { title: string } | { status: number }
@@ -65,15 +59,14 @@ function serve(stores: Record<string, Store>) {
           init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)),
         )
       const answer = structuredClone(fixture('card-brief.json')) as {
-        scope: { project_ref: { project_id: string } }
+        scope: { space_ref: unknown }
         state: { payload: { work_item: Record<string, unknown> } }
         work_item_ref: { reference: string; space_ref: unknown }
       }
-      answer.scope.project_ref.project_id = query.get('project_id') ?? ''
-      answer.work_item_ref = {
-        space_ref: { data_scope_id: scope, space_key: query.get('space_key') },
-        reference,
-      }
+      // The server answers in the space it was asked about, as the card's own read does.
+      const space_ref = { data_scope_id: scope, space_key: query.get('space_key') }
+      answer.scope.space_ref = space_ref
+      answer.work_item_ref = { space_ref, reference }
       Object.assign(answer.state.payload.work_item, {
         reference,
         number: Number(reference.split('-')[1]),

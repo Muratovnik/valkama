@@ -14,7 +14,14 @@
  * a headline that disagrees with the rows under it is worse than an error.
  */
 
-import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
+import {
+  blankable,
+  boundedText,
+  parseContract,
+  positiveInt,
+  strictObject,
+  z,
+} from '@/shared/api/contract.ts'
 import {
   CLAIM_STATES,
   CONTAINER_STATES,
@@ -27,7 +34,6 @@ import {
   WORK_ITEM_KINDS,
   WORK_ITEM_REFERENCE,
 } from '@/shared/api/planningModel.ts'
-import { blankable } from '@/shared/api/planningText.ts'
 import { enumField, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 

@@ -25,11 +25,14 @@ from . import (
     chain,
     held,
     images,
+    item_projects,
     live_frame,
     mention_records,
     model,
+    participants,
     read_model,
     requests,
+    sections,
     service,
     subscriptions,
     usage,
@@ -169,33 +172,24 @@ def handle_get(
 def _spaces(conn: sqlite3.Connection, _parameters: Mapping[str, list[str]]) -> dict:
     return {
         "interface_version": PLANNING_API_INTERFACE,
-        "planning_spaces": service.list_planning_spaces(conn),
+        "planning_spaces": item_projects.spaces_shown(conn, service.list_planning_spaces(conn)),
     }
 
 
-def _chosen_space(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> str | None:
-    """Which space the caller means: named outright, or the one its project binds.
+def _chosen_space(parameters: Mapping[str, list[str]]) -> tuple[str | None, str | None]:
+    """Which space the caller reads, the first when it names none, and the project narrowing it.
 
-    A browser knows which project it is in long before it knows a space id, and
-    a Kernel binding still names the space the way the Board era did. Resolving
-    the project here keeps that translation in one place instead of making every
-    view carry it.
+    A space holds no project, so a project does not name one: several spaces'
+    projects are the registry's to bind, and one project may be named by items of
+    any space. It narrows the read of the space named beside it.
     """
 
-    space = _first(parameters, "space")
-    project = _first(parameters, "project")
-    if space is not None and project is not None:
+    space, project = _first(parameters, "space"), _first(parameters, "project")
+    if project is not None and space is None:
         raise PlanningHttpError(
-            400, "invalid_request", "space and project are two answers to one question"
+            400, "invalid_request", "a project does not choose a planning space: name the space"
         )
-    if space is not None:
-        return space
-    if project is None:
-        return None
-    bound = views.space_for_project(conn, project)
-    if bound is None:
-        raise PlanningHttpError(404, "unavailable", f"project {project} has no planning space yet")
-    return str(bound["planning_space_id"])
+    return space, project
 
 
 def _read_model(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
@@ -205,11 +199,13 @@ def _read_model(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             "invalid_request",
             "The complete read model does not accept limit; use /api/planning/work-items",
         )
-    return views.planning_payload(conn, space=_chosen_space(conn, parameters))
+    space, project = _chosen_space(parameters)
+    return views.planning_payload(conn, space=space, project=project)
 
 
 def _graph(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    return views.graph_payload(conn, space=_chosen_space(conn, parameters))
+    space, project = _chosen_space(parameters)
+    return views.graph_payload(conn, space=space, project=project)
 
 
 def _activity(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
@@ -265,6 +261,9 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             kind=_first(parameters, "kind"),
             owner=_first(parameters, "owner"),
             parent=_first(parameters, "parent"),
+            project=_first(parameters, "project"),
+            # The list of a space is a read of it: other spaces' items naming its projects too.
+            other_spaces=True,
             limit=_int(_first(parameters, "limit"), "limit", 200),
             offset=_offset(parameters),
         ),
@@ -272,11 +271,35 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
 
 
 def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    """One item. Every cut of its history is opt-in; without them, the full record.
+    """One item. With `parts`, the parts it names; without, the full record.
 
-    A goal or a stage carries who works on it, as every HTTP read of one item does.
+    The full record is what a screen and every write answer with, and each cut of
+    its history is opt-in; on a goal or a stage it carries who works on it, as every
+    HTTP read of one item does. `parts` is a comma-separated list of
+    `read_model.PARTS`; a comment mode beside it cuts the comments part and `events`
+    names how many newest events the events part reads. `section`, which may repeat
+    because a heading may hold a comma, names the sections the sections part reads
+    with their text, and without `parts` reads that part alone.
     """
 
+    names = _part_names(parameters)
+    section = parameters.get("section")
+    if names is None and section:
+        names = ["sections"]
+    if names is not None:
+        return {
+            "interface_version": PLANNING_API_INTERFACE,
+            "work_item": _parts_of(
+                conn,
+                _required(parameters, "id"),
+                names,
+                comments_after=_count(parameters, "comments_after"),
+                thread=_count(parameters, "thread"),
+                unresolved=_switch(parameters, "unresolved"),
+                events=_events_count(parameters),
+                section=section or None,
+            ),
+        }
     return {
         "interface_version": PLANNING_API_INTERFACE,
         "work_item": service.get_work_item(
@@ -292,6 +315,137 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
             participants=True,
         ),
     }
+
+
+def _events_count(parameters: Mapping[str, list[str]]) -> int | None:
+    """How many newest events the events part reads, or None for its default."""
+
+    value = _first(parameters, "events")
+    if value is None:
+        return None
+    try:
+        number: object = int(value, 10)
+    except ValueError:
+        number = value
+    return read_model.events_count(number)
+
+
+def _part_names(parameters: Mapping[str, list[str]]) -> list[str] | None:
+    """The parts a read names, each once in the order named, or None when it names none."""
+
+    value = _first(parameters, "parts")
+    if value is None:
+        return None
+    return read_model.part_names(name.strip() for name in value.split(","))
+
+
+#: How each part but the card, the comments, the events and the sections is read, as the
+#: field of its name.
+_PART_READERS: dict[str, Callable[[sqlite3.Connection, sqlite3.Row], dict]] = {
+    "links": lambda conn, row: {"links": read_model.links(conn, str(row["work_item_id"]))},
+    "refs": lambda conn, row: {"refs": read_model.refs(conn, str(row["work_item_id"]))},
+    "questions": lambda conn, row: {
+        "questions": requests.item_questions(conn, str(row["work_item_id"]))
+    },
+    "mentions": lambda conn, row: dict(
+        zip(
+            ("mentions", "mentions_total"),
+            read_model.mentions_of(conn, str(row["work_item_id"]), read_model.HTTP_MENTIONS),
+            strict=True,
+        )
+    ),
+    "sessions": lambda conn, row: {"sessions": read_model.sessions(conn, str(row["work_item_id"]))},
+    "images": lambda conn, row: {"images": images.of_item(conn, str(row["work_item_id"]))},
+    "subscribers": lambda conn, row: {
+        "subscribers": subscriptions.subscribers(conn, str(row["work_item_id"]))
+    },
+    "claim": lambda conn, row: {"claim": read_model.claim(conn, row)},
+    "participants": lambda conn, row: {"participants": _participants(conn, row)},
+}
+
+
+def _participants(conn: sqlite3.Connection, row: sqlite3.Row) -> list[dict]:
+    """Who works on a goal or a stage. A task has no such part, so reading it is refused."""
+
+    if str(row["kind"]) != model.CONTAINER_KIND:
+        others = ", ".join(name for name in read_model.PARTS if name != "participants")
+        raise model.PlanningError(f"unknown part 'participants'; a task's parts are {others}")
+    return participants.of_container(conn, row)
+
+
+def _card_counts(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, dict[str, int]]:
+    """What the card's table of contents counts that `read_model` cannot: the questions,
+    which `requests` reads, and on a goal or a stage the sessions working on it."""
+
+    identity = str(row["work_item_id"])
+    counted = {"questions": requests.question_counts(conn, identity)}
+    if str(row["kind"]) == model.CONTAINER_KIND:
+        counted["participants"] = {"count": len(participants.of_container(conn, row))}
+    return counted
+
+
+@read_model.whole_store_read()
+def _parts_of(
+    conn: sqlite3.Connection,
+    reference: str,
+    names: list[str],
+    *,
+    comments_after: int | None,
+    thread: int | None,
+    unresolved: bool,
+    events: int | None = None,
+    section: list[str] | None = None,
+) -> dict:
+    """The parts named of one item, beside its reference and the revision they were read at.
+
+    A part no reader here names is the field of its name in the full record when the
+    record has it, so a field a later build adds to the record is read as a part
+    without a reader of its own; a part the record does not hold answers with nothing.
+    A mode names the part it cuts, and a read that leaves that part out is refused
+    rather than answered without what the mode asked for.
+    """
+
+    row = read_model.item_row(conn, reference)
+    identity = str(row["work_item_id"])
+    modes = {
+        "thread": ("comments", thread),
+        "unresolved": ("comments", unresolved or None),
+        "comments_after": ("comments", comments_after),
+        "events": ("events", events),
+        "section": ("sections", section),
+    }
+    for mode, (cut, value) in modes.items():
+        if value is not None and cut not in names:
+            raise model.PlanningError(
+                f"{mode} reads the {cut} part: add {cut} to parts or leave parts out"
+            )
+    answer: dict[str, object] = {
+        "reference": read_model.reference(conn, row),
+        "revision": int(row["revision"]),
+    }
+    for name in names:
+        if name == "card":
+            part = read_model.card(conn, row, counted=_card_counts(conn, row))
+        elif name == "comments":
+            part = read_model.comments_part(
+                conn, row, comments_after=comments_after, thread=thread, unresolved=unresolved
+            )
+        elif name == "events":
+            part = read_model.events_part(conn, row, events)
+        elif name == "sections":
+            described = str(row["description"])
+            part = {
+                "sections": sections.contents(described)
+                if section is None
+                else sections.named(described, section)
+            }
+        elif name in _PART_READERS:
+            part = _PART_READERS[name](conn, row)
+        else:
+            record = service.get_work_item(conn, identity, comments=0, events=0)
+            part = {name: record[name]} if name in record else {}
+        answer.update(part)
+    return answer
 
 
 def _chain(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
@@ -437,7 +591,7 @@ def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.create_work_item(
         conn,
-        space=_text(payload, "space"),
+        space=_optional_text(payload, "space"),
         title=_text(payload, "title"),
         state=_optional_text(payload, "state"),
         kind=str(payload.get("kind") or "task"),
@@ -448,6 +602,7 @@ def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         parent=_optional_text(payload, "parent"),
         author=_author(payload),
         acceptance=payload.get("acceptance"),
+        projects=payload.get("projects"),
     )
 
 
@@ -486,6 +641,7 @@ def _edited(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         kind=_optional_text(payload, "kind"),
         parent=_optional_text(payload, "parent"),
         rank=_optional_text(payload, "rank"),
+        projects=payload.get("projects"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
     )
@@ -839,12 +995,19 @@ def _ref(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
 
 def _space(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    return service.create_planning_space(
-        conn,
-        project_id=_text(payload, "project_id"),
-        name=_text(payload, "name"),
-        key=_optional_text(payload, "key"),
+    created = service.create_planning_space(
+        conn, name=_text(payload, "name"), key=_optional_text(payload, "key")
     )
+    (shown,) = item_projects.spaces_shown(conn, [created])
+    return shown
+
+
+def _space_settings(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """The owner's settings of one space, answered with the space record."""
+
+    changed = service.set_launch_place(conn, _text(payload, "space"), payload.get("launch_place"))
+    (shown,) = item_projects.spaces_shown(conn, [changed])
+    return shown
 
 
 def _author(payload: Mapping[str, object]) -> str | None:
@@ -1199,6 +1362,7 @@ def _run_steps(
 
 _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] = {
     "/api/planning/spaces": _space,
+    "/api/planning/space/settings": _space_settings,
     "/api/planning/work-items": _create,
     "/api/planning/work-item/update": _update,
     "/api/planning/work-item/delete": _delete,

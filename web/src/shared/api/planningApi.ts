@@ -124,11 +124,13 @@ async function write(path: string, body: Record<string, unknown>): Promise<unkno
 // -- reads -------------------------------------------------------------------
 
 /**
- * One space's whole read model, resolved through its exact project binding.
+ * A space read exactly, by its store and key, and narrowed to one project when `project`
+ * names one: the space's own, or another space's that items of this space name.
  */
-export async function fetchPlanning(
-  target: { project: string } & PlanningSpaceRef,
-): Promise<PlanningReadModel> {
+export type PlanningSpaceTarget = { project?: string } & PlanningSpaceRef
+
+/** One space's whole read model. */
+export async function fetchPlanning(target: PlanningSpaceTarget): Promise<PlanningReadModel> {
   return validateReadModel(await request(`/api/planning${query({ ...target })}`))
 }
 
@@ -149,7 +151,7 @@ function readLiveFrame(event: MessageEvent<string>): LiveFrame {
  * stream is open as a frame would. A change that landed after that read still comes.
  */
 export function subscribePlanning(
-  target: { project: string } & PlanningSpaceRef,
+  target: PlanningSpaceTarget,
   callbacks: {
     /** Something was recorded about an agent, which no frame of the model says. */
     agents?: () => void
@@ -263,14 +265,8 @@ export function subscribeLive(callbacks: {
   return close
 }
 
-export async function fetchWorkItem(
-  reference: string,
-  target: { project: string; space: PlanningSpaceRef },
-): Promise<WorkItem> {
-  const payload = await fetchPlanningWorkItem(
-    { kind: 'project', project_ref: { project_id: target.project } },
-    { reference, space_ref: target.space },
-  )
+export async function fetchWorkItem(reference: string, space: PlanningSpaceRef): Promise<WorkItem> {
+  const payload = await fetchPlanningWorkItem({ reference, space_ref: space })
   if (payload.state.status !== 'ready')
     throw new PlanningRefusedError('unavailable', 'Exact work item is unavailable', 409)
   return payload.state.payload.work_item

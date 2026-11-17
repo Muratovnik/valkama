@@ -21,7 +21,10 @@ SUMMARY = {"done": "Shipped the parser", "next": "Nothing", "friction": FRICTION
 
 class SummaryFrictionTests(Harness):
     def read(self) -> dict:
-        return self.agent("get_work_item", id=self.ref, full=True)
+        # The card with every comment from the first, the newest last.
+        return self.agent(
+            "get_work_item", id=self.ref, parts=["card", "comments"], comments_after=0
+        )
 
     def http_read(self) -> dict:
         answer = api.handle_get(self.conn, "/api/planning/work-item", {"id": [self.ref]})

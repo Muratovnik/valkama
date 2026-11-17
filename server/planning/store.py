@@ -153,9 +153,25 @@ _STATE_FITS_KIND = "".join(f"{statement};\n" for statement in STATE_FITS_KIND)
 
 _ACCEPTANCE_SQL = ",".join(f"'{basis}'" for basis in model.ACCEPTANCE_BASES)
 
-#: The two tables the work-model migration rebuilds, as their column lists: a fresh
+_LAUNCH_PLACE_SQL = ",".join(f"'{place}'" for place in model.LAUNCH_PLACES)
+
+#: The tables the work-model migration rebuilds, as their column lists: a fresh
 #: store creates them from the same text the migration rebuilds them from, so the
 #: two shapes cannot drift apart. `table_definition` names one.
+#: A space holds no project: the registry binds projects to it, and a name is the
+#: space's alone, since a space is found by its name as well as by its key.
+_PLANNING_SPACES = f"""(
+    planning_space_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    key TEXT NOT NULL UNIQUE,
+    provider_kind TEXT NOT NULL DEFAULT 'local' CHECK(provider_kind IN ('local')),
+    next_number INTEGER NOT NULL DEFAULT 1 CHECK(next_number >= 1),
+    launch_place TEXT NOT NULL DEFAULT '{model.LAUNCH_PLACES[0]}'
+        CHECK(launch_place IN ({_LAUNCH_PLACE_SQL})),
+    created_at TEXT NOT NULL DEFAULT {_NOW},
+    updated_at TEXT NOT NULL DEFAULT {_NOW},
+    UNIQUE(name)
+)"""
 _WORKFLOW_STATES = f"""(
     state_id TEXT PRIMARY KEY,
     workflow_id TEXT NOT NULL REFERENCES workflows(workflow_id) ON DELETE CASCADE,
@@ -202,7 +218,27 @@ _WORK_ITEMS = f"""(
     started_at TEXT,
     UNIQUE(planning_space_id, number)
 )"""
-_REBUILT = {"workflow_states": _WORKFLOW_STATES, "work_items": _WORK_ITEMS}
+_REBUILT = {
+    "planning_spaces": _PLANNING_SPACES,
+    "workflow_states": _WORKFLOW_STATES,
+    "work_items": _WORK_ITEMS,
+}
+
+_PROJECT_SOURCE_SQL = ",".join(f"'{source}'" for source in model.PROJECT_SOURCES)
+#: The projects each item changes (`planning.item_projects`), one row per project with
+#: the source it came by. Its own table rather than a column of `work_items`: what
+#: names a project is read across every space, by the index on the project. A fresh
+#: store creates it from this text, and so does the work-model migration.
+ITEM_PROJECTS = (
+    "CREATE TABLE IF NOT EXISTS work_item_projects(\n"
+    "    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,\n"
+    "    project_id TEXT NOT NULL,\n"
+    f"    source TEXT NOT NULL CHECK(source IN ({_PROJECT_SOURCE_SQL})),\n"
+    "    PRIMARY KEY(work_item_id, project_id)\n"
+    ") WITHOUT ROWID",
+    "CREATE INDEX IF NOT EXISTS work_item_projects_by_project ON work_item_projects(project_id)",
+)
+_ITEM_PROJECTS = "".join(f"{statement};\n" for statement in ITEM_PROJECTS)
 
 
 def table_definition(table: str, name: str) -> str:
@@ -212,17 +248,7 @@ def table_definition(table: str, name: str) -> str:
 
 
 SCHEMA = f"""
-CREATE TABLE IF NOT EXISTS planning_spaces(
-    planning_space_id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    key TEXT NOT NULL UNIQUE,
-    provider_kind TEXT NOT NULL DEFAULT 'local' CHECK(provider_kind IN ('local')),
-    next_number INTEGER NOT NULL DEFAULT 1 CHECK(next_number >= 1),
-    created_at TEXT NOT NULL DEFAULT {_NOW},
-    updated_at TEXT NOT NULL DEFAULT {_NOW},
-    UNIQUE(project_id, name)
-);
+CREATE TABLE IF NOT EXISTS planning_spaces{_PLANNING_SPACES};
 CREATE TABLE IF NOT EXISTS workflows(
     workflow_id TEXT PRIMARY KEY,
     planning_space_id TEXT NOT NULL
@@ -372,6 +398,7 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {WAITING_OPEN_INDEX};
 {WAITING_DELIVERED_INDEX};
 
+{_ITEM_PROJECTS}
 """
 
 
@@ -787,25 +814,25 @@ SCHEMA_TABLES = (
     "work_item_subscriptions",
     "work_item_images",
     "work_item_waiting_notices",
+    "work_item_projects",
 )
 
 
 def create_space(
     conn: sqlite3.Connection,
     *,
-    project_id: str,
     name: str,
     key: str | None = None,
     space_id: str | None = None,
 ) -> dict:
     """Insert one PlanningSpace and the workflow it starts with.
 
-    The default workflow is written as rows, so the space that gets it can be
-    changed afterwards without touching this function.
+    The space holds no project: the registry binds projects to it. The default
+    workflow is written as rows, so the space that gets it can be changed
+    afterwards without touching this function.
     """
 
     space_name = model.text_field(name, "planning_space.name")
-    project = model.text_field(project_id, "planning_space.project_id", limit=160)
     # The lock comes before the read of the keys in use: otherwise two spaces
     # deriving one key both find it free, and the second dies on its UNIQUE.
     if not conn.in_transaction:
@@ -814,23 +841,20 @@ def create_space(
     chosen = model.space_key(key) if key else model.derive_space_key(space_name, taken)
     if chosen in taken:
         raise model.PlanningError(f"planning space key {chosen} is already in use")
-    if conn.execute(
-        "SELECT 1 FROM planning_spaces WHERE project_id = ? AND name = ?", (project, space_name)
-    ).fetchone():
-        raise model.PlanningError(f"project {project} already has a planning space {space_name}")
+    if conn.execute("SELECT 1 FROM planning_spaces WHERE name = ?", (space_name,)).fetchone():
+        raise model.PlanningError(f"a planning space named {space_name} already exists")
     identifier = (
         model.identifier(space_id, "planning_space.planning_space_id")
         if space_id
         else model.new_id()
     )
     conn.execute(
-        "INSERT INTO planning_spaces(planning_space_id,project_id,name,key) VALUES(?,?,?,?)",
-        (identifier, project, space_name, chosen),
+        "INSERT INTO planning_spaces(planning_space_id,name,key) VALUES(?,?,?)",
+        (identifier, space_name, chosen),
     )
     workflow = create_default_workflow(conn, identifier)
     return {
         "planning_space_id": identifier,
-        "project_id": project,
         "name": space_name,
         "key": chosen,
         "provider_kind": "local",

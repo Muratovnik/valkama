@@ -11,7 +11,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { shot } from './boardPage.ts'
 import { showChain } from './chainFixtures.ts'
-import { attachedWorkItemRef, projectScope } from './planningFixtures.ts'
+import { attachedSpaceRef, attachedWorkItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 test('an attached store item asks for no chain, and as a goal says where it is read', async ({
@@ -29,7 +29,7 @@ test('an attached store item asks for no chain, and as a goal says where it is r
   })
   const attached = serializePlatformRoute({
     module_id: 'planning',
-    scope: projectScope,
+    scope: { kind: 'space', space_ref: attachedSpaceRef },
     entity: planningWorkItemEntity(attachedWorkItemRef),
   })
   // A task cannot be known to have a chain, so it has no tab for one.

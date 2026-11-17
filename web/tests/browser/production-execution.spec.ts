@@ -7,12 +7,11 @@
  */
 import { expect } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { enableExecutionTab, launchedSessionId } from './executionFixtures.ts'
-import { globalScope, projectScope, spaceRef, workItemRef } from './planningFixtures.ts'
+import { globalScope, spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 test.beforeEach(({ page }) => enableExecutionTab(page))
@@ -24,8 +23,7 @@ test('the execution section shows the attempt and the launch form is built per c
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(spaceRef),
+      scope: spaceScope,
       state: { view: 'list' },
     }),
   )
@@ -73,8 +71,7 @@ test('the memory section offers exactly what the provider says it can do', async
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(spaceRef),
+      scope: spaceScope,
       state: { view: 'list' },
     }),
   )

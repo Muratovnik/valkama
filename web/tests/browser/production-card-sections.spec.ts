@@ -6,7 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { frames } from './frames.ts'
-import { projectScope } from './planningFixtures.ts'
+import { spaceScope } from './planningFixtures.ts'
 import { pressWhereItStands } from './stuckPress.ts'
 import { test } from './test.ts'
 
@@ -57,7 +57,7 @@ for (const width of [1440, 390]) {
       identity: { agent_id: null, session_id: null, source: null, state: 'unconfirmed' },
     }))
     await installBackend(page, { events, longRead: true })
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
     const drawer = page.locator('.drawer')
     await expect(drawer.locator('.card-facts')).toBeVisible()
@@ -106,7 +106,7 @@ for (const width of [1440, 390]) {
   }) => {
     await page.setViewportSize({ width, height: 700 })
     await installBackend(page, { longRead: true })
-    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
     const drawer = page.locator('.drawer')
     await expect(drawer.locator('.card-facts')).toBeVisible()
@@ -154,7 +154,7 @@ test('a refused move answered from another section brings the checklist into vie
       }),
     }),
   )
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts')).toBeVisible()
@@ -174,7 +174,7 @@ test('a refused move answered from another section brings the checklist into vie
 async function cardReadDown(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height })
   await installBackend(page, { longRead: true })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts')).toBeVisible()
@@ -294,7 +294,7 @@ test('sections below the fold of a short window are still brought into view for 
 }) => {
   await page.setViewportSize({ width: 390, height: 240 })
   await installBackend(page, { longRead: true })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts')).toBeAttached()

@@ -5,20 +5,20 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { blockedWorkItem, projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { blockedWorkItem, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity(workItemRef),
 })
 const OTHER_CARD = serializePlatformRoute({
   module_id: 'planning',
-  scope: projectScope,
+  scope: spaceScope,
   entity: planningWorkItemEntity({ ...workItemRef, reference: blockedWorkItem.reference }),
 })
-const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: spaceScope })
 
 /** Paragraphs enough to scroll the facts out of the card. */
 const LONG_READ = Array.from({ length: 40 }, (_, index) => `Paragraph ${index + 1}.`).join(
@@ -197,7 +197,7 @@ async function cardWithHeldClaims(page: Page, holder: string) {
     route.fulfill({
       json: {
         interface_version: 'valkama-planning-work-item',
-        scope: projectScope,
+        scope: spaceScope,
         work_item_ref: workItemRef,
         state: {
           interface_version: 'valkama-ui-state',

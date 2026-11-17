@@ -184,7 +184,9 @@ class CardTests(ExecutorCase):
         plain = service.get_work_item(self.conn, self.card)
         self.assertNotIn("executor", plain["claim"])
         self.assertNotIn("executor", plain["checklist"][0])
-        answer = mcp_surface.call_tool(self.conn, "get_work_item", {"id": self.card})
+        answer = mcp_surface.call_tool(
+            self.conn, "get_work_item", {"id": self.card, "parts": ["card", "claim"]}
+        )
         self.assertNotIn("executor", answer["claim"])
         self.assertNotIn("executor", answer["checklist"][0])
 
