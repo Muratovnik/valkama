@@ -78,7 +78,10 @@ opens the item), `work_item_id`, `revision`, `state` (`key`, `name`,
 alone says what it derives), `open` (whether its work is over), `claim_ref` (the
 holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
 `container_state` where the item has one and what the call changed. Pass
-`verbose: true` for the item's card instead; it carries `url` too.
+`verbose: true` for the item's card instead; it carries `url` too. A write that
+closed, moved or deleted the last open item under a goal or stage also answers
+`awaiting_confirmation`, the references of the goals and stages it brought to
+await confirmation: check each and complete it, as the skill's Close section says.
 
 | Tool | Also answers |
 | --- | --- |
@@ -277,7 +280,8 @@ owner. Read it with the item's questions, where it carries `comment_id`.
 
 `get_work_item` takes `id` and reads an item by parts. `parts` names them, one
 name or a list: `card`, `comments`, `events`, `links`, `refs`, `questions`,
-`mentions`, `sessions`, `images`, `subscribers`, `claim` and `sections`. The
+`mentions`, `sessions`, `images`, `subscribers`, `claim` and `sections`, and on a
+goal or stage `participants`, and `confirmation` while it awaits confirmation. The
 answer carries `reference`, `revision` and the fields of each part named, the
 card's among them when `card` is. Without `parts` it reads the card, and a mode
 without `parts` reads only the part it cuts: `unresolved`, `thread` and
@@ -312,6 +316,8 @@ is left out.
 | `claim` | `count`, 1 while it is held | `claim`, the lease: `holder`, `state`, `session_id`, `agent_id`, `source`, `acquired_at`, `last_seen` and `expires_at`, the time it lapses unless the session shows a sign of life; null while nobody holds it |
 | `sections` | `count`, for a description longer than 2,000 characters | `sections`, as below |
 | `links`, `refs`, `sessions`, `images`, `subscribers` | `count` | the list of that name |
+| `participants` | `count`, on a goal or stage | `participants`, the live sessions working on it: each `session`, `client`, `label`, `holds` (the tasks under it it holds), `follows` and `last_seen` |
+| `confirmation` | `count`, the items it lists, only while a goal or stage awaits confirmation | `confirmation`: `since`, `steps` (how many it has; 0: check it against its description), `cancelled` and `moved_out` (each `reference` and `reason`), `asked` (the owner's question, once asked) and `left_for_next_session` |
 
 The comments part takes one of these modes:
 
@@ -355,6 +361,7 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 | active, review or blocked, for a goal or stage | refused: a goal or stage is accepted (ready), completed or cancelled |
 | a triage state, for an accepted open goal or stage | refused: an accepted goal or stage is completed or cancelled |
 | a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
+| a completed state, for a goal or stage | nothing open under it at any depth, triage and deferred included, which `force` does not carry (`children`); when the last item under it closes it awaits confirmation, and completing it is the confirmation |
 | a review or completed state | every step done and a summary |
 | a review state, from outside review | `to_check`, what the owner is to check, which `force` does not carry (`review_question`); the move asks it of the owner |
 | a review or completed state | no step marked `by_previous_holder`: tick it again to confirm it, or reopen it (`previous_holder`) |
@@ -386,9 +393,10 @@ owner is open on it, `force` or not; cancelling is not.
 | `workflow_guard` with `[new_item]` | Create the item, then move it. |
 | `workflow_guard` with `[review_question]` | Send `to_check`, what the owner is to check. |
 | `workflow_guard` with `[question]` | Wait for the owner's answer, or withdraw a question you asked. |
+| `workflow_guard` with `[children]` | Close, cancel or move out what is open under it; it then awaits confirmation. |
 | `cancel_list` | Read the list, then send the same transition with `cancels` set to `list_token`. |
 | `owner_only` | The owner answers this question in Valkama: leave it. |
-| `[purpose]` | The review question takes one of its two answers, and its answer is not changed or declined. |
+| `[purpose]` | A question with a purpose (review, confirm) takes one of its two answers, and its answer is not changed or declined. |
 | `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
 | `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |
@@ -482,7 +490,10 @@ and withdrawn only by the session that asked (`not_asker`); while the session as
 has ended or gone quiet, it reads expired with `session_gone`. The question a move
 into review asks is the owner's to answer (`owner_only` refuses an agent); the
 answer completes the item or returns it to ready, and withdrawing it, which only the
-asking session does, returns it to ready too. With `answered_after` the oldest answer comes first, and a page runs
+asking session does, returns it to ready too. The question Valkama asks to confirm a
+goal or stage nobody confirmed (purpose `confirm`) is the owner's too, and nobody
+withdraws it; the owner's answer completes it or leaves it to the next session that
+takes work in its space. With `answered_after` the oldest answer comes first, and a page runs
 past `limit` rather than part two answers of one time. Both give a compact form
 unless `full` is true:
 

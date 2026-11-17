@@ -25,11 +25,21 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from server import mcp_surface, store
-from server.planning import api, calls, closing, leases, person_events, questions, service
+from server.planning import (
+    api,
+    calls,
+    closing,
+    leases,
+    model,
+    person_events,
+    questions,
+    service,
+    sweep,
+)
 from tests.test_hooks_tree_notices import AS_C, C, Harness
 
 COORDINATOR = C
@@ -441,6 +451,29 @@ class NoStepsTests(Tree):
         self.assertTrue(detail.endswith("no steps: check it against its description"), detail)
         self.assertEqual("no steps: check it against its description", detail)
         self.assertEqual(0, self.confirmation(goal)["steps"])
+        # The question the owner gets after the hold names the description.
+        with mock.patch.object(leases, "utc_now", lambda: NOW + closing.CONFIRMATION_HOLD):
+            sweep.run_pass(self.conn)
+        [prompt] = self.conn.execute(
+            "SELECT prompt FROM work_item_requests WHERE purpose = 'confirm'"
+        ).fetchone()
+        self.assertTrue(
+            prompt.endswith("\n\nIt has no steps: check what was done against its description."),
+            prompt,
+        )
+
+    def test_a_question_too_long_counts_the_lines_it_leaves_out(self) -> None:
+        part = {
+            "cancelled": [{"reference": f"MAIN-{n}", "reason": "x" * 90} for n in range(200)],
+            "moved_out": [],
+        }
+        text = closing.prompt("MAIN-3", part, ["a step"])
+        self.assertLessEqual(len(text), closing.PROMPT_LIMIT)
+        shown = text.count("\n- MAIN-")
+        self.assertGreater(shown, 50)
+        self.assertTrue(
+            text.endswith(f"\n({200 - shown + 3} more line(s) not shown: see MAIN-3)"), text[-80:]
+        )
 
 
 class CancelListTests(Tree):
@@ -752,6 +785,249 @@ class SingleCancelTests(Tree):
         answer = self.cancel(self.goal)
         self.assertNotIn("cancelled", answer["applied"]["transition"])
         self.assertFalse(service.get_work_item(self.conn, self.goal)["open"])
+
+
+class Waiting(Tree):
+    """G awaits confirmation: a closed by the case, b cancelled and c moved out, each with why."""
+
+    ANSWER = "/api/planning/request/answer"
+    EXPIRE = "/api/planning/request/expire"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.a = self.made("a", parent=self.goal)
+        self.b = self.made("b", parent=self.goal)
+        self.c = self.made("c", parent=self.goal)
+        self.cancel(self.b, "the owner dropped it")
+        self.person(UPDATE, id=self.c, parent=self.made("H", "goal"))
+        self.conn.execute(
+            "UPDATE work_item_events SET detail = ? WHERE action = 'child_left'",
+            (f"{self.c}: split into its own goal",),
+        )
+        self.conn.commit()
+
+    def sweep(self, at: datetime = NOW) -> dict[str, int]:
+        with mock.patch.object(leases, "utc_now", lambda: at):
+            done = sweep.run_pass(self.conn)
+        self.assertEqual(({}, [], []), (done.failures, done.busy, done.left))
+        return done.changed
+
+    def live(self, session: str, at: datetime = NOW) -> None:
+        """The session was seen at `at`: live for `leases.QUIET_PERIOD` after it."""
+
+        seen = at.strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.conn.execute(
+            "INSERT INTO sessions(id, client, last_seen) VALUES(?, 'claude', ?)"
+            " ON CONFLICT(id) DO UPDATE SET last_seen = excluded.last_seen, status = 'active'",
+            (session, seen),
+        )
+        self.conn.commit()
+
+    def questions(self, reference: str) -> list[dict]:
+        """The confirmation questions on the item, oldest first."""
+
+        return [
+            dict(row)
+            for row in self.conn.execute(
+                "SELECT * FROM work_item_requests WHERE work_item_id = ? AND purpose = 'confirm'"
+                " ORDER BY created_at, request_id",
+                (self.identity(reference),),
+            )
+        ]
+
+    def answer(self, asked: dict, given: str, note: str = "") -> dict:
+        body: dict = {
+            "id": asked["request_id"],
+            "expected_revision": asked["revision"],
+            "answers": {"answer": given},
+        }
+        if note:
+            body["note"] = note
+        return self.person(self.ANSWER, **body)
+
+    def written(self) -> tuple:
+        """What a refused write must leave as it was."""
+
+        return (
+            self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0],
+            self.conn.execute("SELECT status, revision FROM work_item_requests").fetchall(),
+            service.get_work_item(self.conn, self.goal)["revision"],
+            self.rows(),
+        )
+
+
+class OwnerQuestionTests(Waiting):
+    """G awaits with nobody working there, since a person closed the last item."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.person(APPLY, id=self.a, summary=DONE, transition={"state": "done"})
+        self.assertEqual([], self.followers(self.goal))
+
+    def test_a_pass_asks_the_owner_once_naming_what_was_cancelled_and_moved_out(self) -> None:
+        self.assertEqual({sweep.CONFIRMATIONS: 1}, self.sweep())
+        [asked] = self.questions(self.goal)
+        self.assertEqual(
+            ("question", "pending", "valkama"), (asked["kind"], asked["status"], asked["author"])
+        )
+        self.assertEqual(
+            f"All work under {self.goal} is closed: confirm it, or leave it to the next session"
+            " that takes work in this space.\n"
+            f"\nCancelled:\n- {self.b}: the owner dropped it\n"
+            f"\nMoved out:\n- {self.c}: split into its own goal\n"
+            "\nIts steps:\n- The goal holds",
+            asked["prompt"],
+        )
+        [field] = json.loads(asked["fields_json"])
+        self.assertEqual(
+            ("answer", "choice", True, ["confirm", "leave"]),
+            (field["id"], field["type"], field["required"], [o["id"] for o in field["options"]]),
+        )
+        [(detail, author, _call, source, tool)] = self.events(self.goal, "request_created")
+        self.assertEqual(
+            (asked["request_id"], "valkama", "valkama", closing.QUESTION_TOOL),
+            (detail, author, source, tool),
+        )
+        self.assertEqual(asked["request_id"], self.rows()[self.identity(self.goal)][2])
+        self.assertEqual(asked["request_id"], self.confirmation(self.goal)["asked"])
+        # One question in a period of waiting, however many passes follow.
+        self.assertEqual({}, self.sweep())
+        self.assertEqual({}, self.sweep(NOW + timedelta(days=2)))
+        self.assertEqual(1, len(self.questions(self.goal)))
+
+    def test_confirm_ticks_its_steps_writes_its_summary_and_completes_it(self) -> None:
+        self.sweep()
+        [asked] = self.questions(self.goal)
+        answer = self.answer(asked, "confirm", note="checked against the plan")
+        self.assertEqual(("answered", "completed"), (answer["status"], answer["carried_out"]))
+        goal = service.get_work_item(self.conn, self.goal)
+        self.assertEqual("completed", goal["state"]["category"])
+        self.assertEqual(
+            [(True, "user")], [(step["done"], step["done_by"]) for step in goal["checklist"]]
+        )
+        self.assertEqual(
+            {
+                "done": "Confirmed by the owner: all work under it is closed.",
+                "next": "Nothing: the work under it is closed.",
+                "why": "checked against the plan",
+            },
+            goal["summary"],
+        )
+        self.assertEqual("answered", self.questions(self.goal)[0]["status"])
+        self.assertEqual({}, self.rows())
+        self.holds()
+
+    def test_leave_leaves_it_to_the_next_session_in_the_space_and_asks_no_more(self) -> None:
+        self.sweep()
+        [asked] = self.questions(self.goal)
+        later = NOW + timedelta(hours=2)
+        with mock.patch.object(leases, "utc_now", lambda: later):
+            answer = self.answer(asked, "leave")
+        self.assertEqual("left_for_next_session", answer["carried_out"])
+        notices = self.conn.execute(
+            "SELECT scope, delivered_call FROM work_item_waiting_notices WHERE work_item_id = ?",
+            (self.identity(self.goal),),
+        ).fetchall()
+        self.assertIn(("space", None), [tuple(row) for row in notices])
+        self.assertEqual(
+            "2026-11-17T11:30:00Z", self.confirmation(self.goal)["left_for_next_session"]
+        )
+        self.assertEqual(
+            "awaiting_confirmation", service.get_work_item(self.conn, self.goal)["container_state"]
+        )
+        self.assertEqual({}, self.sweep(NOW + timedelta(days=3)))
+        self.assertEqual(1, len(self.questions(self.goal)))
+
+    def test_an_own_variant_carries_nothing_out(self) -> None:
+        self.sweep()
+        [asked] = self.questions(self.goal)
+        before = self.written()
+        body = {"id": asked["request_id"], "expected_revision": asked["revision"]}
+        with self.assertRaisesRegex(model.PlanningError, r"\[purpose\] answer is confirm or leave"):
+            self.person(self.ANSWER, **body, answers={}, own={"answer": "Half of it"})
+        self.conn.rollback()
+        self.assertEqual(before, self.written())
+
+    def test_the_step_records_a_wait_a_write_left_unrecorded(self) -> None:
+        """A write that went around the marks: the pass records it, then asks."""
+
+        self.conn.execute("DELETE FROM work_item_confirmations")
+        self.conn.commit()
+        self.assertEqual({sweep.CONFIRMATIONS: 1}, self.sweep(), "recorded and asked count once")
+        self.holds()
+        recorded = self.events(self.goal, "awaiting_confirmation")[-1]
+        self.assertEqual(
+            (f"cancelled {self.b}; moved out {self.c}", "valkama", "valkama", sweep.CONFIRMATIONS),
+            (recorded[0], recorded[1], recorded[3], recorded[4]),
+        )
+        since, call, request, left = self.rows()[self.identity(self.goal)]
+        self.assertEqual(("2026-11-17T09:30:00Z", recorded[2], None), (since, call, left))
+        self.assertEqual(self.questions(self.goal)[0]["request_id"], request)
+        self.assertEqual([], self.followers(self.goal), "the step subscribes nobody")
+        self.assertEqual({}, self.sweep())
+
+
+class HoldTests(Waiting):
+    """C's subagent A closed the last item, and C stays live and says nothing."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.agent("claim_work_item", AS_A, id=self.a)
+        self.close(AS_A, self.a)
+        self.assertEqual([COORDINATOR], self.followers(self.goal))
+
+    def test_the_owner_is_asked_after_a_day_and_cs_confirmation_ends_the_question(self) -> None:
+        self.live(COORDINATOR, NOW + timedelta(hours=23))
+        self.assertEqual({}, self.sweep(NOW + timedelta(hours=23, minutes=59)))
+        self.assertEqual([], self.questions(self.goal))
+        self.assertEqual({sweep.CONFIRMATIONS: 1}, self.sweep(NOW + closing.CONFIRMATION_HOLD))
+        [asked] = self.questions(self.goal)
+        self.confirm(AS_C, self.goal)
+        self.assertEqual("done", service.get_work_item(self.conn, self.goal)["state"]["key"])
+        [ended] = self.questions(self.goal)
+        self.assertEqual(
+            (asked["request_id"], "expired", "item_completed"),
+            (ended["request_id"], ended["status"], ended["expired_reason"]),
+        )
+        self.assertEqual({}, self.rows())
+
+    def test_once_nobody_is_live_the_owner_is_asked_at_once(self) -> None:
+        self.live(COORDINATOR, NOW - leases.QUIET_PERIOD)
+        changed = self.sweep(NOW + timedelta(minutes=10))
+        self.assertEqual(1, changed[sweep.CONFIRMATIONS])
+        self.assertEqual(1, len(self.questions(self.goal)))
+
+
+class WhoAnswersTests(Waiting):
+    """No agent answers or withdraws it; the person's answer counts."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.person(APPLY, id=self.a, summary=DONE, transition={"state": "done"})
+        self.sweep()
+        [self.asked] = self.questions(self.goal)
+
+    def test_agents_neither_answer_nor_withdraw_it(self) -> None:
+        before = self.written()
+        body = {"id": self.asked["request_id"], "expected_revision": self.asked["revision"]}
+        for meta in (AS_A, AS_B):
+            for tool, arguments, code in (
+                (
+                    "answer_work_item_request",
+                    {**body, "answers": {"answer": "confirm"}},
+                    "owner_only",
+                ),
+                ("expire_work_item_request", body, "not_asker"),
+            ):
+                with self.subTest(meta=meta, tool=tool):
+                    with self.assertRaises(Exception) as refusal:
+                        mcp_surface.run_tool_call(self.conn, tool, arguments, meta=meta)
+                    self.conn.rollback()
+                    status, error = api.error_response(refusal.exception)
+                    self.assertEqual((403, code), (status, error["error"]["code"]))
+        self.assertEqual(before, self.written())
+        answer = self.answer(self.questions(self.goal)[0], "confirm")
+        self.assertEqual("completed", answer["carried_out"])
 
 
 class WakeTests(Harness):

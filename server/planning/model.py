@@ -708,6 +708,10 @@ def new_checklist_item(text: object) -> dict:
     }
 
 
+#: The longest each field of a summary may be.
+SUMMARY_LIMIT = 4000
+
+
 def summary(value: object, *, required: bool = True) -> dict | None:
     """What was done, why when the choice is not obvious, and what comes next.
 
@@ -730,17 +734,17 @@ def summary(value: object, *, required: bool = True) -> dict | None:
     if unknown:
         raise PlanningError(f"work_item.summary has unknown field(s): {', '.join(sorted(unknown))}")
     record = {
-        "done": multiline_field(value.get("done"), "work_item.summary.done", limit=4000),
-        "next": multiline_field(value.get("next"), "work_item.summary.next", limit=4000),
+        "done": multiline_field(value.get("done"), "work_item.summary.done", limit=SUMMARY_LIMIT),
+        "next": multiline_field(value.get("next"), "work_item.summary.next", limit=SUMMARY_LIMIT),
     }
     if not record["done"] or not record["next"]:
         raise PlanningError("a summary states what was done and what comes next")
     why = value.get("why")
     if why:
-        record["why"] = multiline_field(why, "work_item.summary.why", limit=4000)
+        record["why"] = multiline_field(why, "work_item.summary.why", limit=SUMMARY_LIMIT)
     friction = value.get("friction")
     if friction is not None:
-        text = multiline_field(friction, "work_item.summary.friction", limit=4000)
+        text = multiline_field(friction, "work_item.summary.friction", limit=SUMMARY_LIMIT)
         if text:
             record["friction"] = text
     return record

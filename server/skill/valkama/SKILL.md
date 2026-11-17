@@ -430,6 +430,13 @@ you did about it (a comment is enough), then close; a comment in the same call
 as the close does not count. `force: true` carries a refusal through and records
 it as `overridden`: use it only when the record would still be true.
 
+**A goal or stage** completes only with nothing open under it (`children`). When
+the last item under one closes, it awaits confirmation and you hear it (the
+answer's `awaiting_confirmation`): read its `confirmation` part, check its steps or
+description against what was done, tick them, write the summary and complete it;
+if something is missing, file a task under it. Unconfirmed, the owner is asked
+([work model](references/work-model.md#goals-and-stages)).
+
 **Closing a release.** Before closing the release's goal, run
 `valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It
 lists the open items whose commit refs went into that range, including a change

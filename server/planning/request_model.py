@@ -36,6 +36,23 @@ REVIEW_FIELDS = (
         ],
     },
 )
+#: The field of the question that asks the owner to confirm a goal or stage whose work
+#: is all closed, under the same id as review's: `confirm` completes it, `leave` leaves
+#: it to the next session that takes work in its space.
+CONFIRM_CONFIRM = "confirm"
+CONFIRM_LEAVE = "leave"
+CONFIRM_FIELDS = (
+    {
+        "id": REVIEW_ANSWER,
+        "label": "Answer",
+        "type": "choice",
+        "required": True,
+        "options": [
+            {"id": CONFIRM_CONFIRM, "label": "Confirm it"},
+            {"id": CONFIRM_LEAVE, "label": "Leave it to the next session"},
+        ],
+    },
+)
 MAX_NOTE = 8000
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each
