@@ -1336,8 +1336,16 @@ class CostTests(unittest.TestCase):
                 env=environ,
                 timeout=60,
             ).stdout.decode()
+        # The look for the session's commit records loads only its own module, which
+        # imports `os` alone.
         self.assertEqual(
-            {"server", "server.hooks", "server.hooks.entry", "server.hooks.notify"},
+            {
+                "server",
+                "server.hooks",
+                "server.hooks.commit_records",
+                "server.hooks.entry",
+                "server.hooks.notify",
+            },
             set(loaded.split()),
         )
 

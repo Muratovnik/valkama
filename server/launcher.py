@@ -123,12 +123,14 @@ def _paths(directory: Path, platform_name: str) -> dict[str, Path]:
     }
 
 
-#: The module a release answers each early command with: `valkama hook`, and
-#: `valkama statusline`, which Claude Code runs on every refresh of its status line.
+#: The module a release answers each early command with: `valkama hook`,
+#: `valkama statusline`, which Claude Code runs on every refresh of its status line,
+#: and `valkama git-hook`, which Git runs after every commit of an agent's shell.
 #: A release pinned from a commit before one of them existed lacks its module.
 EARLY_ENTRIES = {
     "hook": ("server", "hooks", "entry.py"),
     "statusline": ("server", "hooks", "statusline.py"),
+    "git-hook": ("server", "hooks", "git_hook.py"),
 }
 
 
@@ -150,7 +152,9 @@ def _shim_bytes(script: Path) -> bytes:
     `PostToolUse` on every tool call, and those two imports alone cost about
     as much as the rest of the hook, so the hook path runs the release's entry
     point the way `runpy.run_path` would, with `os` alone. The status line
-    command takes that path too.
+    command takes that path too, and so does `git-hook`, which Git runs after
+    an agent's commit: a release from before it answers with nothing and exit 0,
+    as Git's `post-*` hooks need.
     """
 
     encoded = json.dumps(str(script), ensure_ascii=False)

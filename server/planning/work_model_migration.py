@@ -49,6 +49,8 @@ otherwise cascade into them:
 - **waiting-words** creates the table of the words a person left on a goal or stage that no
   session heard (`work_item_waiting_notices`) and its two indexes. It starts empty:
   which of a person's acts before 3.0 nobody heard cannot be known now.
+- **commits** creates the tables of the commits Valkama knows (`commits`) and of the items
+  they are attached to (`work_item_commits`), with their indexes. Both start empty.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -58,8 +60,9 @@ written: nobody recorded an acceptance before this, and `migrated` says exactly 
 
 The postconditions `fresh-shape` to `second-run` and `store-identity` to `fresh-tables` are checked after the steps, inside the
 same transaction, `second-run` last; `store` adds `recovery-point`, the recovery point. `row-counts` compares the
-row counts of the tables `oracle` counted and of the projects `item-projects` fills; `fresh-tables` holds every
-other table to being empty and declared by a fresh store.
+row counts of the tables `oracle` counted, of the projects `item-projects` fills and of the commit
+tables `commits` creates; `fresh-tables` holds every other table to being empty and declared by a
+fresh store.
 """
 
 from __future__ import annotations
@@ -1578,6 +1581,51 @@ def _check_waiting(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError(f"{_WAITING} or one of its indexes is missing")
 
 
+# -- `commits`: the commits ------------------------------------------------------------
+
+#: The tables of the commits Valkama knows and of their attachments.
+COMMIT_TABLES = ("commits", "work_item_commits")
+_COMMIT_OBJECTS = (
+    *(("table", table) for table in COMMIT_TABLES),
+    ("index", "commits_pair"),
+    ("index", "commits_session"),
+    ("index", "work_item_commits_by_commit"),
+)
+
+
+def _commits_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return any(
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?", (kind, name)
+        ).fetchone()
+        is None
+        for kind, name in _COMMIT_OBJECTS
+    )
+
+
+def _create_commits(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`commits`: the commit tables and their indexes, each if missing, from a fresh store's text."""
+
+    del context
+    created = [
+        table
+        for table in COMMIT_TABLES
+        if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+        ).fetchone()
+        is None
+    ]
+    for statement in planning_store.COMMITS:
+        conn.execute(statement)
+    return {"tables_created": created}
+
+
+def _check_commits(conn: sqlite3.Connection, context: Context) -> None:
+    if _commits_needed(conn, context):
+        raise UnmetError("a commit table or one of its indexes is missing")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1599,6 +1647,7 @@ STEPS = (
     Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
     Step("addressee", "the session a request asks", _add_addressee, _addressee_needed, _check_addressee),
     Step("waiting-words", "words that wait for a session", _create_waiting, _waiting_needed, _check_waiting),
+    Step("commits", "commits", _create_commits, _commits_needed, _check_commits),
 )
 
 
@@ -1696,6 +1745,9 @@ def _expected_counts(oracle: Oracle) -> dict[str, int]:
     )
     expected["work_item_events"] += sum(oracle.events.values())
     expected["work_item_projects"] = expected.get("work_item_projects", 0) + oracle.item_projects
+    # `commits` creates them; nothing fills them yet.
+    for table in COMMIT_TABLES:
+        expected[table] = expected.get(table, 0)
     expected["platform_ui_prefs"] = expected.get("platform_ui_prefs", 0) - len(oracle.dropped_prefs)
     return expected
 

@@ -49,6 +49,7 @@ store, and an internal error:
 | `pre-compact` | `PreCompact` | `compact` | yes | yes |
 | `notification` | `Notification` | `attention` | yes | no such hook |
 | `post-tool-use` | `PostToolUse` | `agent_launch`, for the Agent tool only | yes | nothing recorded |
+| `post-tool-use-failure` | `PostToolUseFailure` | nothing: only [commits](#commits) | yes | no such hook |
 | `pre-tool-use` | `PreToolUse` | nothing in the store: [the call pair](#the-call-pair) | yes | not needed |
 | `watch` | `UserPromptSubmit` and `Stop`, with `asyncRewake` | nothing: [the watcher](#the-watcher) | yes | no such mechanism |
 
@@ -61,7 +62,9 @@ a Codex input with `agent_id` is a subagent's hook and is answered with nothing
 (see [when it is told](#when-it-is-told)). That is described in
 [Telling the agent what a person did](#telling-the-agent-what-a-person-did).
 `session-start` with `source` `resume` or `compact` may answer, for both
-clients, with [the resume note](#the-resume-note).
+clients, with [the resume note](#the-resume-note). `post-tool-use` of both
+clients and `post-tool-use-failure` first take the [commits](#commits) the
+session's shell made.
 
 An event a client does not have, an unknown client, or input whose
 `hook_event_name` names a different hook than the command line is ignored, with
@@ -1916,6 +1919,115 @@ Under Capabilities → Quota sources:
   The doctor reads those two files and the named folders' manifests, and
   changes nothing. A mod enabled for one project, loaded with `--plugin-dir`
   or from a shell's `CLAUDE_CODE_PLUGIN_DIRS` is not seen, and the text says so.
+
+## Commits
+
+A commit an agent makes reaches the store in two steps. Git runs Valkama's own
+hook after the commit, and that hook leaves a record beside the store; the
+client hook that runs after the agent's shell call takes the record into the
+store. Nothing is written into Git: no trailer, note or branch.
+
+### The Git hook
+
+Git runs hooks from its configuration in addition to the hook directory's own
+ones, and before them, so a global `core.hooksPath` and the hooks it points to
+stay as they are. Valkama's are three entries in the global configuration:
+
+| Name | `event` | `command` |
+| --- | --- | --- |
+| `hook.valkama-commit` | `post-commit` | `<guard>; exec <python> -I -S <launcher>/valkama-launcher.py git-hook run post-commit` |
+| `hook.valkama-rewrite` | `post-rewrite` | the same, ending in `git-hook run post-rewrite` |
+| `hook.valkama-merge` | `post-merge` | the same, ending in `git-hook run post-merge` |
+
+Three names, because Git does not tell a command which event ran it. Git runs
+the command with `sh -c` and appends the event's arguments to it. The guard is
+
+```sh
+[ -n "${CLAUDE_CODE_SESSION_ID:-}${CODEX_SESSION_ID:-}${CODEX_THREAD_ID:-}" ] || exit 0
+```
+
+so a commit made outside every client session, a person's, a test's or a
+build's, ends in the shell Git already started, and Python never starts. A
+repository can turn one off for itself with
+`git config hook.valkama-commit.enabled false`; `--no-verify` does not skip
+`post-*` hooks.
+
+`valkama git-hook run <event>` prints nothing and always exits 0: a `post-*`
+event cannot change what Git did, and anything printed would show in every
+commit. Its own Git calls share five seconds. For `post-commit` it:
+
+1. reads the sessions from the environment: `CLAUDE_CODE_SESSION_ID` for Claude
+   Code; `CODEX_SESSION_ID`, or else `CODEX_THREAD_ID`, for Codex, with
+   `CODEX_THREAD_ID` and `CODEX_TOOL_CALL_ID`. A client started from another
+   one's shell inherits that one's variables, so both may be there, and the
+   record carries both. Neither, and nothing is written;
+2. finds the repository with one `git rev-parse`: the parent of the common Git
+   directory when that is named `.git`, which is the main checkout for a linked
+   worktree too, and otherwise the top level. `git -C nested commit` is the
+   nested repository's. While a rebase is under way the run ends here;
+3. looks that root up in the project registry, exactly and, on Windows,
+   without case. A repository the registry does not name is not recorded, and
+   nobody is told: a project registered later gets its commits from then on;
+4. reads the commit with one `git log` and leaves the record.
+
+`post-rewrite` and `post-merge` record nothing in this release.
+
+### The record
+
+One JSON file per run and session:
+
+```json
+{"format": "valkama-commit-record", "version": 1, "event": "post-commit", "rewrite": null,
+ "root": "D:/src/alpha", "project_id": "alpha",
+ "commits": [{"hash": "<40 hex>", "parents": ["<40 hex>"], "subject": "fix: …",
+              "committed_at": "2026-11-20T10:31:02+03:00"}],
+ "rewritten": [], "claude": {"session_id": "…"}, "codex": null,
+ "occurred_at": "2026-11-20T07:31:02.415Z"}
+```
+
+It is named `<session key>--<nanoseconds>-<16 hex>.json`, the key being the one
+the notice's place files use, so a client hook finds its own session's records
+by the name alone. With two sessions in the environment the same record is
+written twice, one file per key, with the same time and hex part. A file is
+written under a temporary name and moved into place.
+
+It goes to `commits/` beside the store the one configuration resolution names
+(`VALKAMA_DB`, then `~/.valkama/config.json`, then the default), when the
+store's file is there and that directory takes it. The hook creates no
+directory but `commits/` there. Otherwise it goes to
+`<common Git directory>/valkama/commits/` of the repository: Git just wrote the
+commit's objects there, so it takes a file whenever the commit succeeded, and
+it is inside the Git directory, where no commit and no `git status` sees it. A
+store `VALKAMA_PROTECTED_STORE` names gets no record anywhere.
+
+### Taking the records
+
+`post-tool-use` of both clients and Claude Code's `post-tool-use-failure`
+look for the records of their session, in `commits/` beside the store and in
+`<root>/.git/valkama/commits/` of each registered project with a `.git`
+directory of its own; the registry is read as a file. Which records a hook
+takes:
+
+- **Codex**: those whose `codex.session_id` is the input's `session_id` and
+  whose `codex.tool_call_id` is its `tool_use_id`: the shell call the commit was
+  made in.
+- **Claude Code**, on `Bash` or `PowerShell`: those whose `claude.session_id`
+  is the input's `session_id`, written within the call's `duration_ms` before
+  now and two seconds more; without `duration_ms`, within ten minutes, the
+  longest a shell call takes by default.
+
+With none, the hook is what it was, a reader: the store is not opened for
+writing. With some, it opens the store for writing with the same one-second
+wait as a lifecycle event, and in one transaction of Valkama's own records each
+commit once per pair of project and hash, with the session, the agent (the
+input's `agent_id`; for Codex without it, a `CODEX_THREAD_ID` that is not the
+session), the client and the time. After the transaction commits it deletes
+those files. A record that changes nothing, because its commit is recorded
+already, is deleted as well: that is how the second file of a nested client's
+commit goes. A busy store, or one of another schema, leaves every record where
+it is for the session's next hook.
+
+`post-tool-use-failure` is no lifecycle event and answers with nothing.
 
 ## Not covered
 

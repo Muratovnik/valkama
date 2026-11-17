@@ -245,6 +245,41 @@ ITEM_PROJECTS = (
 )
 _ITEM_PROJECTS = "".join(f"{statement};\n" for statement in ITEM_PROJECTS)
 
+#: The commits Valkama knows, one row per pair of a registry project and a hash, and
+#: which item each is attached to and by whom (`planning.commits`). `project_id` is NULL
+#: only for a commit carried over whose repository was not found, `session_id` for one
+#: no hook reported; `rewritten_to` names the commit an amend or a rebase replaced it
+#: with. A fresh store creates them from this text, and so does the work-model migration.
+COMMITS = (
+    "CREATE TABLE IF NOT EXISTS commits(\n"
+    "    commit_id INTEGER PRIMARY KEY,\n"
+    "    project_id TEXT,\n"
+    "    hash TEXT NOT NULL"
+    " CHECK(length(hash) BETWEEN 7 AND 64 AND hash NOT GLOB '*[^0-9a-f]*'),\n"
+    "    subject TEXT NOT NULL DEFAULT '',\n"
+    "    committed_at TEXT,\n"
+    "    session_id TEXT,\n"
+    "    agent_id TEXT,\n"
+    "    client TEXT,\n"
+    "    reported_at TEXT NOT NULL,\n"
+    "    rewritten_to INTEGER REFERENCES commits(commit_id)\n"
+    ")",
+    "CREATE UNIQUE INDEX IF NOT EXISTS commits_pair ON commits(COALESCE(project_id, ''), hash)",
+    "CREATE INDEX IF NOT EXISTS commits_session ON commits(session_id, reported_at)",
+    "CREATE TABLE IF NOT EXISTS work_item_commits(\n"
+    "    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,\n"
+    "    commit_id INTEGER NOT NULL REFERENCES commits(commit_id),\n"
+    "    attached_by TEXT NOT NULL CHECK(attached_by IN ('server','manual','migrated')),\n"
+    "    label TEXT NOT NULL DEFAULT '',\n"
+    "    author TEXT NOT NULL DEFAULT 'agent',\n"
+    "    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n"
+    "    call_id INTEGER REFERENCES execution_events(id),\n"
+    "    PRIMARY KEY(work_item_id, commit_id)\n"
+    ")",
+    "CREATE INDEX IF NOT EXISTS work_item_commits_by_commit ON work_item_commits(commit_id)",
+)
+_COMMITS = "".join(f"{statement};\n" for statement in COMMITS)
+
 
 def table_definition(table: str, name: str) -> str:
     """The `CREATE TABLE` of one rebuilt table under `name`, as a fresh store holds it."""
@@ -403,6 +438,7 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {WAITING_DELIVERED_INDEX};
 
 {_ITEM_PROJECTS}
+{_COMMITS}
 """
 
 
@@ -819,6 +855,8 @@ SCHEMA_TABLES = (
     "work_item_images",
     "work_item_waiting_notices",
     "work_item_projects",
+    "commits",
+    "work_item_commits",
 )
 
 
