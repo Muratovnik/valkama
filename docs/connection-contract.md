@@ -398,7 +398,7 @@ replaces the word; none is read as its replacement.
 ### The projects an item changes
 
 A task names the projects it changes, at most 20 and each once, by their ids in
-the [project registry](../README.md#project-registry); the space it lies in does
+the [project registry](guides/configuration.md#project-registry); the space it lies in does
 not change with them. `create_work_item` takes them as `projects`, and the
 `update` group of `apply_work_item_changes` (and `POST
 /api/planning/work-item/update`) replaces the whole set with `projects`, each
@@ -1708,7 +1708,7 @@ anywhere. The kinds are a closed list:
 | `task_open` | a task opened from any of those |
 
 `POST /api/analytics/uses` counts one use, under the rules of every write from the page
-([local HTTP security](../README.md#local-http-security)): an allowed `Origin`
+([local HTTP security](guides/http-security.md#browser-writes-and-the-installation-token)): an allowed `Origin`
 (`origin_refused`, 403), `Sec-Fetch-Site: same-origin` (`fetch_metadata_refused`, 403)
 and the page's session credential in `X-Valkama-Session` (401 without it), with a JSON
 object for a body:
@@ -2733,7 +2733,7 @@ An event written before calls were recorded, or by the execution runner outside
 any call, has
 `{"state": "unconfirmed", "source": null, "session_id": null, "agent_id": null}`.
 A write from the browser UI is `confirmed` with source `browser` and no session;
-see [Local HTTP security](../README.md#local-http-security).
+see [Local HTTP security](guides/http-security.md#whose-write-it-is).
 
 `browser` means this and no more: the request carried the fetch metadata a
 browser sets on its own -- `Sec-Fetch-Site: same-origin` -- together with the
@@ -2922,7 +2922,7 @@ Who may release or take over a claim follows the lease:
   taken. Its history reads `released` and then `claimed`.
   `claim_work_item` with `release` on a stale lease stops after that release.
 - `claim_ready_work_item` first releases every lapsed hold in its space, as the
-  sweep below does. It neither gives nor releases an item whose lease is in the
+  sweep below does, except one the calling session holds. It neither gives nor releases an item whose lease is in the
   grace, because nobody asked for that item in particular.
 - A task in an active state whose workflow lets it reach no `ready` state keeps
   its stale lease: releasing it would leave work with no holder, so every sweep
@@ -2943,6 +2943,16 @@ Who may release or take over a claim follows the lease:
 
   Releases written before the reasons were told apart say `lease-expired`,
   whatever the cause, and stay as they were written.
+- A checklist step's claim records no call of its own, so it lapses with the
+  session its holder names, by the same rules, read from that session's newest
+  confirmed call. Releasing a lapsed lease releases the steps the same holder
+  holds there in the same write, whether the grace is over or a caller asked for
+  the item. A step of any other holder is released once its own lease lapses, by
+  the same sweeps that release a lease, whether or not somebody holds the item,
+  and a task left at work with nothing holding it goes back to the queue. A done
+  step is nobody's hold, and a step of a closed item never lapses. A claim or a
+  step of the session making the call stays, as `claim_work_item` keeps its
+  claim: the call is that session's sign of life.
 - An `unconfirmed` claim is compared by `author`, as every claim was before
   leases. It has no session to go quiet, so it lapses when its item has had no
   history event for 3 days, and so does a step whose holder no session proved.
@@ -4713,5 +4723,5 @@ one open under `preschema14`). A store already at 15 opens without either. A
 build of the previous release, at schema 14, refuses a store at 15 with
 `StoreTooNew` and leaves it untouched rather than show cards it would refuse;
 going back to it means restoring the `preschema15` snapshot with its pictures
-(see [Migrating an older store](../README.md#migrating-an-older-store)), which
+(see [Restoring a snapshot](guides/store-upgrades.md#restoring-a-snapshot)), which
 loses everything written since.

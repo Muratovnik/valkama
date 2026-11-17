@@ -203,7 +203,7 @@ def start_up(conn: sqlite3.Connection) -> list[str]:
     if report.spool.stopped:
         lines.append(f"hook spool drain stopped: {report.spool.stopped}")
     if report.expired_leases:
-        lines.append(f"released {report.expired_leases} expired Planning lease(s)")
+        lines.append(f"released expired Planning claims on {report.expired_leases} work item(s)")
     return lines
 
 

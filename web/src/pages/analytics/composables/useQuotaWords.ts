@@ -76,9 +76,6 @@ export function useQuotaWords() {
       : t('analytics.quota.bar', { ...values, even: share(window.even_percent) })
   }
 
-  const used = (window: QuotaShareWindow) =>
-    t('analytics.quota.used', { share: share(window.latest.used_percent) })
-
   const even = (window: QuotaShareWindow) =>
     window.even_percent === null
       ? t('analytics.quota.noPace')
@@ -131,6 +128,17 @@ export function useQuotaWords() {
       : t('analytics.quota.read', values)
   }
 
+  /**
+   * What a window's bar neither draws nor says: where steady use would stand now, and how old its
+   * latest reading is and who read it, a line each, for the bar's hint.
+   */
+  const meterHint = (window: QuotaShareWindow, now: number, today: string) =>
+    `${even(window)}\n${latest(window, now, today)}`
+
+  /** The bar's words and how old its latest reading is and who read it, for a screen reader. */
+  const barRead = (window: QuotaShareWindow, now: number, today: string) =>
+    t('analytics.quota.barRead', { bar: barLabel(window), read: latest(window, now, today) })
+
   /** A window of money past a limit: its state, its age and its source, and no figure. */
   const other = (window: QuotaWindow, now: number) =>
     t('analytics.quota.other', {
@@ -139,6 +147,10 @@ export function useQuotaWords() {
       ago: ago(window.latest.at, now),
       source: source(window),
     })
+
+  /** Such a window by its name and state alone, its age and source left to its hint. */
+  const otherState = (window: QuotaWindow) =>
+    t('analytics.quota.otherState', { window: windowName(window), state: state(window) })
 
   /** A window's readings as a step line takes them, each said with its moment and source. */
   const points = (window: QuotaShareWindow, today: string): StepPoint[] =>
@@ -176,18 +188,20 @@ export function useQuotaWords() {
     accountName,
     ago,
     barLabel,
+    barRead,
     even,
     forecast,
     latest,
+    meterHint,
     moment,
     other,
+    otherState,
     points,
     readingsLabel,
     reset,
     sectionName,
     share,
     state,
-    used,
     windowName,
   }
 }

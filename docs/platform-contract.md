@@ -51,7 +51,7 @@ recovery explains the owning boundary and next action.
   its identity, its version and the capabilities it answers — four fields and
   nothing else. The transport record, written by the owner, says where the
   adapter is reached. Neither enables anything or authorizes anything, and
-  neither is published to the browser. The [README](../README.md#external-adapters)
+  neither is published to the browser. The [external adapters guide](guides/external-adapters.md)
   describes the three calls and the checks.
 
 ## Routes and adapters

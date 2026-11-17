@@ -5,13 +5,16 @@
  * each row's tokens by kind under the measure «tokens» (`useTableModel`). A figure the read does not hold says so in words; a period before that was
  * not read is said once, over the table.
  *
- * It stands at its full height in the panel's one scroll, and only a table wider than its column
- * scrolls sideways, in its own frame, the names held at the frame's start. While any of its rows
- * is in view, its heading row stays at the panel's top edge and its total at the bottom edge
- * (`stuck`), and a row brought into view by the focus stands clear of both. Each
- * column's heading sorts by it, largest first, then the other way; the first sort is the chosen
+ * Its frame is held to about the window's height and scrolls inside itself both ways: its heading
+ * row stays at the frame's top edge, its total at the bottom edge and its names at its start,
+ * each held there by the browser as the frame scrolls (`position: sticky`), and a row brought into
+ * view by the focus stands clear of the heading row and the total. A table shorter than that
+ * height stands at its own. Each column's heading sorts by it, largest first, then the other way; the first sort is the chosen
  * measure. A row is one line: the figures take what they need, the name the rest down to its
- * least, cut where the column is narrower (`SpendingTableName`).
+ * least, cut where the column is narrower (`SpendingTableName`). A cost that leaves tokens without
+ * a price says how many on a second line of its cell, under its amount (`SpendingTableFigure`):
+ * that row is taller, and its column is as wide as the longer of the two lines. A window too
+ * narrow for that column scrolls the table sideways in its frame, the names held at its start.
  *
  * The sorted column's heading is marked, in the ink of the figures with its arrow and a rule under
  * it. The heading row over the frame (`SpendingTableHead`) counts the rows, gives their whole account
@@ -22,13 +25,13 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import SpendingTableFigure from '@/pages/analytics/components/SpendingTableFigure.vue'
 import SpendingTableHead from '@/pages/analytics/components/SpendingTableHead.vue'
 import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useHeadingLines } from '@/pages/analytics/composables/useHeadingLines.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { useStuckEdges } from '@/pages/analytics/composables/useStuckEdges.ts'
 import { useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
 import { NAME_COLUMN, useTableSort } from '@/pages/analytics/composables/useTableSort.ts'
 import { tableFile } from '@/pages/analytics/utils/spendingCsv.ts'
@@ -44,6 +47,7 @@ import { offerDownload } from '@/shared/lib/fileDownload.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
 import FieldError from '@/shared/ui/FieldError.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -110,7 +114,6 @@ const headings = computed(() => [
     text: words.dimension(props.by),
     chosen: false,
     numeric: false,
-    detail: undefined,
   },
   ...model.value.columns.map((column) => ({ ...column, numeric: true })),
 ])
@@ -138,9 +141,6 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
 
 const root = ref<HTMLElement | null>(null)
 
-/** Its heading row and total held at the edges of the panel's scroll (`useStuckEdges`). */
-const stuck = useStuckEdges(root)
-
 /** Its headings over figures on one line, or on two where one would widen it past its frame. */
 const headingLines = useHeadingLines(root, [model, held])
 
@@ -163,12 +163,6 @@ defineExpose({ reveal })
     :data-headings="headingLines"
     :data-rows="rows"
     :aria-label="model.title"
-    :style="{
-      '--stuck-head': `${stuck.head}px`,
-      '--stuck-foot': `${stuck.foot}px`,
-      '--stuck-table': `${stuck.table}px`,
-      '--stuck-travel': `${stuck.travel}px`,
-    }"
   >
     <SpendingTableHead
       :by="by"
@@ -236,7 +230,7 @@ defineExpose({ reveal })
             :aria-sort="marks[column.key]?.aria"
           >
             <button
-              v-tooltip.detail="{ text: column.detail, words: column.text }"
+              v-tooltip.clipped="column.text"
               type="button"
               class="table-sort"
               :aria-description="t('analytics.panel.table.sortBy', { column: column.text })"
@@ -266,16 +260,11 @@ defineExpose({ reveal })
             :line="line"
             @narrow="(value, label) => emit('narrow', value, label)"
           />
-          <td
+          <SpendingTableFigure
             v-for="cell in line.cells"
             :key="cell.key"
-            class="chart-cell"
-            data-numeric="true"
-            :data-measure="cell.key"
-            :data-chosen="cell.chosen"
-          >
-            {{ cell.text }}
-          </td>
+            :cell="cell"
+          />
         </tr>
       </tbody>
       <tfoot>
@@ -286,16 +275,11 @@ defineExpose({ reveal })
           >
             {{ t('analytics.panel.table.total') }}
           </th>
-          <td
+          <SpendingTableFigure
             v-for="cell in model.total"
             :key="cell.key"
-            class="chart-cell"
-            data-numeric="true"
-            :data-measure="cell.key"
-            :data-chosen="cell.chosen"
-          >
-            {{ cell.text }}
-          </td>
+            :cell="cell"
+          />
         </tr>
       </tfoot>
     </ChartTable>
@@ -310,12 +294,6 @@ defineExpose({ reveal })
 /* The heading row, the notes and the frame, top to bottom, each as tall as it is. Its headings
    ask it how wide it is. Focused from a link to it, it rings itself inside its edge. */
 .spending-table {
-  /* Its heading row, total and whole height, and how far the heading row goes (`useStuckEdges`). */
-  --stuck-head: 0px;
-  --stuck-foot: 0px;
-  --stuck-table: 0px;
-  --stuck-travel: 0px;
-
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
@@ -347,12 +325,23 @@ defineExpose({ reveal })
   align-items: center;
 }
 
-/* The heading row and the total stay at the panel's edges while any row is in view, over the rows
-   and under each other's corners. The frame scrolls sideways (`ChartTable`), so a sticky cell
-   would stick in it: the panel's scroll moves them instead, by the frame's view timeline, the
-   heading row as far as the total (`stuck`). Without scroll-driven animations they stay put. */
+/* The frame is held to the window's height, less what stands over the panel and the table's own
+   heading row, so at 1280×800 and 1440×900 the table and its heading row stand in the window
+   together; it scrolls inside itself both ways. A shorter table stands at its own height. Its
+   heading row and total stay at its edges and its names at its start, held by the browser as it
+   scrolls: moved by the panel's scroll through a view timeline instead, they lagged a frame
+   behind the rows and shook. The room kept at its edges (`scroll-padding`) is the heading row's
+   two lines and the total's, so a row the focus brings into view stands clear of both. */
+.spending-table-frame {
+  max-block-size: calc(100dvh - 13rem);
+  overflow: auto;
+  scroll-padding-block: 4rem 3rem;
+}
+
+/* The heading row and the total over the rows, the names' corner over both. */
 .table-head .chart-cell {
   position: sticky;
+  inset-block-start: 0;
   z-index: 3;
   background: var(--color-chart-table-ground, var(--color-canvas));
   box-shadow: inset 0 -1px var(--color-rule);
@@ -364,6 +353,7 @@ defineExpose({ reveal })
 
 .table-total .chart-cell {
   position: sticky;
+  inset-block-end: 0;
   z-index: 2;
   color: var(--color-text);
   background: var(--color-chart-table-ground, var(--color-canvas));
@@ -371,43 +361,6 @@ defineExpose({ reveal })
 
   &.chart-name {
     z-index: 3;
-  }
-}
-
-@supports (animation-timeline: view()) {
-  .spending-table-frame {
-    view-timeline: --spending-rows block;
-  }
-
-  .table-head .chart-cell {
-    /* Longhands: the build folds a timeline into the shorthand, and Chrome drops it. Fixed range
-       starts: Chrome keeps the start a range was first given and takes later ones as its length. */
-    animation-name: table-head-stays;
-    animation-timing-function: linear;
-    animation-fill-mode: both;
-    animation-timeline: --spending-rows;
-    animation-range: exit-crossing 0% exit-crossing var(--stuck-travel);
-  }
-
-  .table-total .chart-cell {
-    animation-name: table-total-stays;
-    animation-timing-function: linear;
-    animation-fill-mode: both;
-    animation-timeline: --spending-rows;
-    animation-range: entry-crossing 0% entry-crossing var(--stuck-table);
-  }
-}
-
-/* Each moves from or to its own place, the keyframe left out. */
-@keyframes table-head-stays {
-  to {
-    translate: 0 var(--stuck-travel);
-  }
-}
-
-@keyframes table-total-stays {
-  from {
-    translate: 0 calc(-1 * var(--stuck-table));
   }
 }
 
@@ -443,8 +396,9 @@ defineExpose({ reveal })
 }
 
 /* A row is one line: each figure and its heading take what they need, the name the rest, cut
-   where it is longer (`SpendingTableName`). Where the headings on one line would widen the table
-   past its frame, they take a second line instead (`headingLines`). */
+   where it is longer (`SpendingTableName`); a figure's remark takes a second line of its own
+   (`SpendingTableFigure`). Where the headings on one line would widen the table past its frame,
+   they take a second line instead (`headingLines`). */
 .chart-cell[data-numeric='true'] {
   inline-size: 1px;
 }

@@ -589,8 +589,8 @@ class MigratedStoreTests(StoreCase):
         self.assertEqual(os.path.join(self.directory.name, "backups"), os.path.dirname(point))
         digest = hashlib.sha256(PICTURE).hexdigest()
         self.assertTrue(os.path.isfile(os.path.join(store_backups.images_beside(point), digest)))
-        # Restored as README says: the copy in the store's place opens as the store 2.9
-        # left, which this build refuses until the migration runs again.
+        # Restored as the store upgrades guide says: the copy in the store's place opens as
+        # the store 2.9 left, which this build refuses until the migration runs again.
         restored = os.path.join(self.directory.name, "restored", "valkama.sqlite3")
         os.makedirs(os.path.dirname(restored))
         shutil.copyfile(point, restored)

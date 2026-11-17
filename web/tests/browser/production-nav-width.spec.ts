@@ -1,12 +1,12 @@
 /**
- * The rail's width is the reader's, and a name it cuts short says itself in a hint.
+ * The rail's width is the reader's, and a name it cuts short says itself whole.
  *
  * The rail stood at 260px with no way to widen it, and most names in the list of work
  * going on now were cut by an ellipsis whose only rescue was the browser's `title`. Its
  * right edge is now a window splitter, dragged or stepped by the arrow keys between 200px
  * and what the window leaves, and kept across a reload; a phone's icon rail has no edge.
- * A name the rail cuts shows a hint beside the rail, anchored to the name and inside the
- * window, and a name it does not cut shows none.
+ * A name the rail cuts says itself whole over its own place, reading on past the rail's edge
+ * and inside the window, and a name it does not cut shows none.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -120,56 +120,67 @@ test('the window keeps the workspace its room, and a phone’s icon rail has no 
   expect(await railWidth(page)).toBe(64)
 })
 
-test('a name the rail cuts shows a hint beside it, and one it does not cut shows none', async ({
+test('a name the rail cuts says itself whole over its place, and one it does not cut shows none', async ({
   page,
 }) => {
   await open(page, { width: 1280, height: 800 })
   const long = page.locator('.nav-tree-space-name', { hasText: LONG_NAME })
   const short = page.locator('.nav-tree-space-name', { hasText: 'MAIN space' })
-  const hint = page.locator('.tooltip-hint')
-  // The words assistive technology is given while it shows; the hint draws them once more.
-  const words = page.getByRole('tooltip')
+  const whole = page.locator('.whole-text')
 
   await short.hover()
   await page.clock.runFor(1000)
-  await expect(hint).toHaveCount(0)
+  await expect(whole).toHaveCount(0)
+  await expect(page.locator('.tooltip-hint')).toHaveCount(0)
 
   await long.hover()
   await page.clock.runFor(1000)
-  await expect(words).toHaveText(LONG_LABEL)
-  const [name, shown] = await Promise.all([boxOf(long), boxOf(hint)])
-  // At the rail's right, past the name's end, level with it, and inside the window.
-  expect(shown.x).toBeGreaterThanOrEqual(name.right)
-  expect(Math.abs(shown.y + shown.height / 2 - (name.y + name.height / 2))).toBeLessThanOrEqual(1)
-  expect(shown.right).toBeLessThanOrEqual(1280)
-  expect(shown.y).toBeGreaterThanOrEqual(0)
-  expect(shown.bottom).toBeLessThanOrEqual(800)
+  await expect(whole).toHaveText(LONG_LABEL)
+  await expect(page.locator('.tooltip-hint')).toHaveCount(0)
+  const [rail, name, shown] = await Promise.all([
+    boxOf(page.locator('.app-nav-shell')),
+    boxOf(long),
+    boxOf(whole),
+  ])
+  // Over the name's own line, reading on past the rail's edge and 8px inside the window. It
+  // stood in a box past the rail's edge, the name said a second time beside its cut words.
+  expect(shown.x).toBeLessThan(name.x)
+  expect(shown.right).toBeGreaterThan(rail.right)
+  expect(shown.right).toBeLessThanOrEqual(1280 - 8)
+  expect(shown.y).toBeLessThanOrEqual(name.y)
+  expect(shown.bottom).toBeGreaterThanOrEqual(name.bottom)
 
   await page.keyboard.press('Escape')
-  await expect(hint).toHaveCount(0)
+  await expect(whole).toHaveCount(0)
   await expect(page.locator('.nav-work-list')).toBeVisible()
 })
 
-test('a title the rail cuts hints beside it, clear of its text, and says it without its number', async ({
+test('a title the rail cuts says itself whole over its place, without its number', async ({
   page,
 }) => {
   await open(page, { width: 1280, height: 800 })
   const title = page
     .locator('.nav-row', { has: page.locator('[aria-label^="LONG-1 "]') })
     .locator('.nav-row-title')
-  const words = page.getByRole('tooltip')
+  const whole = page.locator('.whole-text')
   await page.getByRole('separator', { name: 'Navigation width' }).focus()
   await page.keyboard.press('Home')
   await title.hover()
   await page.clock.runFor(1000)
-  // The row draws its number, so the hint says the title alone: the words the rail cuts.
-  await expect(words).toHaveText(LONG_TITLE)
-  await expect(words).not.toContainText('LONG-1')
-  // The title's own hint stands at its end, level with it and inside the window.
-  const [name, shown] = await Promise.all([boxOf(title), boxOf(page.locator('.tooltip-hint'))])
-  expect(shown.x).toBeGreaterThanOrEqual(name.right)
-  expect(Math.abs(shown.y + shown.height / 2 - (name.y + name.height / 2))).toBeLessThanOrEqual(1)
-  expect(shown.right).toBeLessThanOrEqual(1280)
+  // The row draws its number, so the whole words are the title alone: the words the rail cuts.
+  await expect(whole).toHaveText(LONG_TITLE)
+  await expect(whole).not.toContainText('LONG-1')
+  // Laid over the title's own line, from the title's start on past the rail's edge.
+  const [rail, line, shown] = await Promise.all([
+    boxOf(page.locator('.app-nav-shell')),
+    boxOf(title),
+    boxOf(whole),
+  ])
+  expect(shown.x).toBeLessThan(line.x)
+  expect(shown.right).toBeGreaterThan(rail.right)
+  expect(shown.right).toBeLessThanOrEqual(1280 - 8)
+  expect(shown.y).toBeLessThanOrEqual(line.y)
+  expect(shown.bottom).toBeGreaterThanOrEqual(line.bottom)
 })
 
 test('focus brought by a key shows an icon’s hint, and a press shows none', async ({ page }) => {
@@ -184,9 +195,12 @@ test('focus brought by a key shows an icon’s hint, and a press shows none', as
   await page.keyboard.press('Shift+Tab')
   await expect(fold).toBeFocused()
   await expect(words).toHaveText(label ?? '')
-  // Escape closes the hint and goes on to the list, which folds the space back.
+  // Escape closes the hint and goes no further; with no hint up, it reaches the list, which
+  // folds the space back.
   await page.keyboard.press('Escape')
   await expect(words).toHaveCount(0)
+  await expect(fold).toHaveAttribute('aria-expanded', 'true')
+  await page.keyboard.press('Escape')
   await expect(fold).toHaveAttribute('aria-expanded', 'false')
   await page.keyboard.press('Enter')
   await expect(fold).toHaveAttribute('aria-expanded', 'true')

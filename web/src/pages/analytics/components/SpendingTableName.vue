@@ -132,13 +132,12 @@ function narrowTo() {
      line around it, a link's name had no hint under the keyboard. A box that cuts has no
      baseline to give the line, so the press stands on the line's top rather than raising the
      line by the depth under its letters. Brought into view by the focus, it stands clear of the
-     heading row and the total its table keeps at the panel's edges (`--stuck-head`,
-     `--stuck-foot`, declared by `SpendingTable`). */
+     heading row and the total its table holds at its frame's edges, by the room the frame keeps
+     for them (`scroll-padding`, `SpendingTable`). */
   & .chart-press {
     display: inline-block;
     vertical-align: top;
     max-inline-size: 100%;
-    scroll-margin-block: var(--stuck-head, 0) var(--stuck-foot, 0);
   }
 
   & .press-words {

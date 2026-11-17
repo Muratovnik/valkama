@@ -103,6 +103,7 @@ claimed or completed step is refused unless `force`, which discards its state.
 **Shared items.** When agents split one item, each claims its step with
 `claim_work_item_checklist_item` before working on it and ticks it when done.
 Item and step claims are independent: a step's holder need not hold the item.
+A step's claim lapses with its session as a claim does, and Valkama releases it.
 
 **One call for several writes.** Writes to one item go in one
 `apply_work_item_changes` call, applied in this order and all or nothing:

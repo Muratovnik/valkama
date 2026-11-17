@@ -102,7 +102,7 @@ test('a control states its own subject, so nothing captions it twice', () => {
   assert.doesNotMatch(navConnection, /refresh\.label/)
   // Its hint names the refresh, after the lost connection it is there for, and its word
   // first while the rail cuts it.
-  assert.match(navConnection, /v-tooltip:right.detail="\{ text: hint, words: status \}"/)
+  assert.match(navConnection, /v-tooltip.detail="\{ text: hint, words: status \}"/)
   assert.match(navConnection, /t\('refresh\.title'\)/)
   assert.match(
     navConnection,

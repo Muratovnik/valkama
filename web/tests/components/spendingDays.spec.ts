@@ -191,8 +191,9 @@ describe('the days', () => {
     expect(folded.length).toBeGreaterThan(0)
     for (const one of folded) {
       expect(one.element.tagName).toBe('SPAN')
-      expect(one.attributes('data-tooltip')).toContain('Other')
     }
+    // The folded tail only shows: a segment has no hint of its own, and its day's hint names it.
+    expect(spokenDays(days).some((day) => day.holds.includes('Other'))).toBe(true)
 
     await none[0]?.trigger('click')
     await days.get('button.chart-key[data-series="none"]').trigger('click')
@@ -239,10 +240,10 @@ describe('the days', () => {
     const hint = (index: number) =>
       (spokenDays(days)[index]?.holds ?? '').replaceAll(/[^\S\n]/gu, ' ')
     expect(hint(4)).toBe(
-      'Friday, November 13: total 1 h\nAccount change: acc-b → acc-a, acc-b\nMAIN-1 One 1 h',
+      'Friday, November 13: total 1 h\nAccount change: acc-b → acc-a, acc-b\nMAIN-1 One 1 h, 100% of the total',
     )
     expect(hint(3)).toBe(
-      'Thursday, November 12: total 1 h\nAccount change: acc-a → acc-b\nMAIN-1 One 1 h',
+      'Thursday, November 12: total 1 h\nAccount change: acc-a → acc-b\nMAIN-1 One 1 h, 100% of the total',
     )
   })
 

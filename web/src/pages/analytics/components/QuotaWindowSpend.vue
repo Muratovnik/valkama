@@ -2,10 +2,16 @@
 /**
  * Where a window of an account went: the work Valkama recorded on the account from the window's
  * start to the answer's moment, by its API price estimate, ranked, each item with its share of
- * that estimate — by task, the first breakdown, by project or by model (`useWindowSpend`). It is
- * the page's ranked bars (`RankedBars`), or their table, with the first five items and one line
- * for the rest, and it stands under the window's readings on an axis of its own: no dollar meets
- * the window's bar or its step line, and no share here is a share of the quota.
+ * that estimate — by task, the first breakdown, by project or by model (`useWindowSpend`). Its
+ * items split one whole, the account's estimate, so it is drawn as the page draws a split: the
+ * ranked bars (`RankedBars`) with the first five items and one line for the rest, or a ring
+ * (`DonutChart`) of every item that folds its own rest, each item in a hue of its rank there; a
+ * switch beside the breakdowns chooses, opening on what `firstSplitView` says of the breakdown —
+ * the bars by task, the ring by project or by model — and a person's choice stands until the page
+ * is left. Where the quota's section shows its tables (`shown`), it is the bars' table, with no
+ * switch: the section's own switch chose for every chart of the card. It stands under the
+ * window's readings on an axis of its own: no dollar meets the window's bar or its step line, and
+ * no share here is a share of the quota.
  *
  * Its heading names the stretch it covers. That it is an estimate at API prices, not quota points,
  * and that work in claude.ai and the desktop app, which the window's share counts, is not in it,
@@ -14,7 +20,7 @@
  * say so in words of their own; the organization's work with no account is never drawn as the
  * account's. A wait and a failure stay in this block, with a retry.
  */
-import { computed, useId } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useHeadingUnder } from '@/pages/analytics/composables/usePanelOutline.ts'
@@ -22,12 +28,17 @@ import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
+import { firstSplitView } from '@/pages/analytics/utils/splitView.ts'
+import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
 import { measureOf } from '@/pages/analytics/utils/usageFigures.ts'
+import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { shareOf, SPEND_BREAKDOWNS } from '@/pages/analytics/utils/windowSpend.ts'
 import type { SpendBy } from '@/pages/analytics/utils/windowSpend.ts'
 
 import type { QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
+import DonutChart from '@/shared/ui/DonutChart.vue'
+import type { DonutWords } from '@/shared/ui/DonutChart.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
@@ -37,7 +48,7 @@ import VButton from '@/shared/ui/VButton.vue'
 const props = defineProps<{
   account: QuotaAccount
   shown: 'chart' | 'table'
-  /** The quota answer's own moment, whose day a time is said on without its date. */
+  /** The quota answer's moment at its offset: each time is said at it, and undated on its day. */
   today: string
   window: QuotaShareWindow
 }>()
@@ -64,6 +75,16 @@ const options = computed(() =>
 )
 function choose(value: SpendBy) {
   by.value = value
+}
+
+/** The drawing a person chose, which stands until the page is left; none before they choose. */
+const chosen = ref<SplitView | null>(null)
+const view = computed(() => chosen.value ?? firstSplitView(by.value))
+const views = computed(() =>
+  (['ring', 'bars'] as const).map((value) => ({ value, label: t(`analytics.shown.${value}`) })),
+)
+function draw(value: SplitView) {
+  chosen.value = value
 }
 
 /** The first read's wait, shown once it has lasted and held for the minimum. */
@@ -103,7 +124,22 @@ const heading = computed(() => {
 
 const cost = (spent: Parameters<typeof words.lineFigure>[1]) => words.lineFigure('cost', spent)
 
-/** Each line its name, its estimate and its share of the account's estimate, in one value. */
+/** A line as a row of either drawing: its name, what it leaves out and its estimate. */
+function rowOf(held: NonNullable<typeof answer.value>, line: SpendingLine) {
+  return {
+    key: line.key,
+    label: words.lineLabel(held.by, line),
+    detail: words.valueDetail(held.by, line.value),
+    kind: line.kind,
+    quiet: line.kind === 'none' || line.kind === 'unknown',
+    value: measureOf('cost', line.spent) ?? 0,
+  }
+}
+
+/**
+ * Each line of the bars its name, its estimate and its share of the account's estimate, in one
+ * value, every bar in the one hue: the bars compare the items, which no hue tells apart.
+ */
 const rows = computed<RankedRow[]>(() => {
   const held = answer.value
   if (!held) return []
@@ -112,13 +148,8 @@ const rows = computed<RankedRow[]>(() => {
     const share = shareOf(line, total)
     const figure = cost(line.spent)
     return {
-      key: line.key,
-      label: words.lineLabel(held.by, line),
-      detail: words.valueDetail(held.by, line.value),
-      kind: line.kind,
-      quiet: line.kind === 'none' || line.kind === 'unknown',
+      ...rowOf(held, line),
       slot: line.kind === 'category' ? 1 : 'other',
-      value: measureOf('cost', line.spent) ?? 0,
       valueText:
         share === null
           ? figure
@@ -126,6 +157,24 @@ const rows = computed<RankedRow[]>(() => {
     }
   })
 })
+/**
+ * Each item of the ring by its estimate alone, since its legend says the share: an item in the hue
+ * of its place in the ring, work with no item or unknown in the neutral of work apart.
+ */
+const parts = computed<RankedRow[]>(() => {
+  const held = answer.value
+  if (!held) return []
+  return held.spent.parts.map((line) => ({
+    ...rowOf(held, line),
+    slot: line.kind === 'category' ? undefined : 'apart',
+    valueText: cost(line.spent),
+  }))
+})
+const ringWords = computed<DonutWords>(() => ({
+  empty: t('analytics.quota.spent.none'),
+  rest: (count) => t('analytics.values.other', { count }, count),
+}))
+const formatCost = (amount: number) => words.scale('cost', amount)
 
 const chartLabel = computed(() =>
   t('analytics.quota.spent.label', {
@@ -176,6 +225,15 @@ const failedAgain = computed(() =>
         :options="options"
         @update:model-value="choose"
       />
+      <!-- Only over a drawing: a window with nothing to draw has no view to choose. -->
+      <SegmentedControl
+        v-if="shown === 'chart' && state === 'spent'"
+        size="compact"
+        :model-value="view"
+        :label="t('analytics.shown.label', { chart: heading })"
+        :options="views"
+        @update:model-value="draw"
+      />
     </div>
     <div
       class="window-spend-body"
@@ -183,8 +241,17 @@ const failedAgain = computed(() =>
     >
       <template v-if="answer">
         <template v-if="state === 'spent'">
+          <DonutChart
+            v-if="shown === 'chart' && view === 'ring'"
+            :label="chartLabel"
+            :rows="parts"
+            :words="ringWords"
+            :format-value="formatCost"
+            :format-part="words.share"
+            :format-share="words.markShare"
+          />
           <RankedBars
-            v-if="shown === 'chart'"
+            v-else-if="shown === 'chart'"
             :label="chartLabel"
             :rows="rows"
             :words="barWords"

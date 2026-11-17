@@ -185,7 +185,7 @@ function press(event: MouseEvent) {
   <!-- The pointer and focus on a row hold it while it fades; they are no input of its own. -->
   <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
   <div
-    v-tooltip:right.detail="rowHint"
+    v-tooltip.detail="rowHint"
     class="nav-row reveal-row"
     :class="rowClass"
     :style="depthStyle"

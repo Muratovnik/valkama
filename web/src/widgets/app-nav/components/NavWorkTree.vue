@@ -264,7 +264,7 @@ function escape(event: KeyboardEvent) {
           </button>
           <a
             v-if="entry.href"
-            v-tooltip:right.clipped="nameHint(entry)"
+            v-tooltip.clipped="nameHint(entry)"
             class="nav-tree-space-name nav-tree-space-link one-line"
             :href="entry.href"
             :aria-current="spaceCurrent(entry)"
@@ -273,13 +273,13 @@ function escape(event: KeyboardEvent) {
           >
           <span
             v-else-if="entry.space"
-            v-tooltip:right.detail="{ text: t('liveWork.noProject'), words: entry.label }"
+            v-tooltip.detail="{ text: t('liveWork.noProject'), words: entry.label }"
             class="nav-tree-space-name one-line"
             >{{ entry.label }}</span
           >
           <span
             v-else
-            v-tooltip:right.clipped="nameHint(entry)"
+            v-tooltip.clipped="nameHint(entry)"
             class="nav-tree-space-name one-line"
             >{{ entry.label }}</span
           >

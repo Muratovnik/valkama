@@ -45,7 +45,7 @@ async function toggle() {
 
 <template>
   <button
-    v-tooltip:right.name="words"
+    v-tooltip.name="words"
     class="nav-row-pin"
     type="button"
     :class="marks"

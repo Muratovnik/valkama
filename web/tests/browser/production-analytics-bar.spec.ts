@@ -229,7 +229,7 @@ test('«Today» is its hours 0 to 23, the running one hatched, against the same 
   })
 })
 
-/** The newest record of the owner's report: 6 h 44 min before now. */
+/** A newest record hours old: 6 h 44 min before now. */
 const OLD = new Date(NOW.getTime() - (6 * 60 + 44) * 60_000)
 
 /** Filters of none to four values, each a chip. */

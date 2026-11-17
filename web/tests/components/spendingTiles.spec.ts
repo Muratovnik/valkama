@@ -142,22 +142,30 @@ describe('the tiles', () => {
     )
   })
 
-  // The month cut short ends the change with a stop of its own, and the hint that says the tile
-  // whole, sentence by sentence, adds none after it: «2–8 нояб..» read as a typing slip.
-  it('say the tile whole in its hint with one stop after a period named in Russian', () => {
+  // A line the tile cuts says its own words whole over itself, as every cut text does: the month
+  // cut short keeps its own stop, and no hint joins the tile's lines into sentences of its own.
+  it('say each line it may cut whole as that line, the cut month with its own stop', () => {
     const moved = mountTiles(
       NOW,
       { seconds: 3600, tokens: 2_400_000, cost: 12.5, unpriced: 0 },
       'time',
       'ru',
     )
+    expect(moved.find('.tile-body[data-tooltip]').exists()).toBe(false)
     for (const measure of ['time', 'tokens', 'cost'] as const) {
-      const hint = moved
-        .get(`.tile-figure[data-measure="${measure}"]`)
-        .element.closest('.tile-body')
-      const said = (hint as HTMLElement | null)?.dataset.tooltip?.replaceAll(/\s/gu, ' ') ?? ''
-      expect(said).toContain('2–8 нояб.')
-      expect(said).not.toContain('..')
+      const figure = moved.get(`.tile-figure[data-measure="${measure}"]`)
+      const body = figure.element.closest('.tile-body') as HTMLElement
+      const lines = [
+        ...body.querySelectorAll<HTMLElement>('.tile-figure, .tile-change, .tile-note'),
+      ]
+      expect(lines.length).toBeGreaterThanOrEqual(2)
+      for (const line of lines) {
+        expect(line.dataset.tooltipKind).toBe('clipped')
+        expect(line.dataset.tooltip).toBe(line.textContent)
+      }
+      const change = body.querySelector('.tile-change')?.textContent ?? ''
+      expect(change.replaceAll(/\s/gu, ' ')).toContain('2–8 нояб.')
+      expect(change).not.toContain('..')
     }
   })
 

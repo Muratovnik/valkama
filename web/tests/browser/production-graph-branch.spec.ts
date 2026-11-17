@@ -76,15 +76,17 @@ async function focused(page: Page) {
   }, REFERENCE)
 }
 
-// Wide, the whole branch reads at once; on a phone it opens on its beginning.
-for (const [width, whole] of [
-  [1440, true],
-  [390, false],
+// Wide and tall enough, the whole branch reads at once; on a phone it opens on its beginning.
+// The branch stands five cards tall, each discovery after the work it was found in, so the
+// wide field is given the height that reads it whole.
+for (const [width, height, whole] of [
+  [1440, 1000, true],
+  [390, 900, false],
 ] as const) {
   test(`a branch chosen on the map is framed, lit and kept in the address at ${width}px`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width, height: 900 })
+    await page.setViewportSize({ width, height })
     await installBackend(page)
     const { chain, items, edges } = smallChain()
     await serve(page, chain, items, edges)

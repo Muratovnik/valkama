@@ -56,8 +56,11 @@ role = "product-data-provider"
 allowed_surfaces = ["docs/*", "server/*", "tests/*", "web/*"]
 
 [changelog]
-profile = "strict"
+profile = "conventional-changelog"
 first_version = "1.0.2"
+
+[changelog.generator]
+engine = "git-cliff"
 
 [release]
 publisher = "github"

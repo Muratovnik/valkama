@@ -12,6 +12,7 @@ import os
 import sqlite3
 import tempfile
 import threading
+import time
 import unittest
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
@@ -109,6 +110,31 @@ class ReadOpenTests(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "migration lock"),
         ):
             store.connect_for_read()
+
+    def test_an_open_waits_out_a_bring_up_that_takes_seconds(self) -> None:
+        """A release opening a large store for the first time runs a one-time step under
+        the lock, a verified snapshot and an index build that take seconds. A process that
+        opens the store meanwhile, such as a session switching to that release, waits it
+        out; one that gave up after five seconds kept the session on the release it had."""
+
+        store.connect().close()
+        entered = threading.Event()
+
+        def hold() -> None:
+            with store_lock.migration_lock(self.path):
+                entered.set()
+                time.sleep(5.5)
+
+        holder = threading.Thread(target=hold)
+        holder.start()
+        try:
+            self.assertTrue(entered.wait(5))
+            started = time.monotonic()
+            store.connect().close()
+            waited = time.monotonic() - started
+        finally:
+            holder.join(10)
+        self.assertGreater(waited, 5.0)
 
 
 if __name__ == "__main__":

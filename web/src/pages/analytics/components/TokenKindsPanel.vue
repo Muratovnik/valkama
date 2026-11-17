@@ -1,14 +1,18 @@
 <script setup lang="ts">
 /**
- * The panel of the period's tokens by kind, laid out as a dimension's panel is: the kinds ranked
- * (`RankedBars`) beside a small chart of the period for each on one scale (`SmallMultiples`), and
- * under them the table of each kind beside the period before (`TokenKindsTable`). Every chart is
- * drawn or read as its table, as every chart of the page is (`ChartSection`).
+ * The panel of the period's tokens by kind, laid out as a dimension's panel is: how the kinds
+ * split the tokens, as a ring (`DonutChart`) or as ranked bars (`RankedBars`), beside a small
+ * chart of the period for each on one scale (`SmallMultiples`), and under them the table of each
+ * kind beside the period before (`TokenKindsTable`). Every chart is drawn or read as its table, as
+ * every chart of the page is (`ChartSection`); the split opens on its ring, as `firstSplitView`
+ * says of a few parts, and its table ranks the kinds (`RankedBarsTable`).
  *
- * The kinds the tokens figure counts — input, the cache writes, output — rank with a bar, each in
- * its own hue (`KIND_SLOTS`), and add up to the «Tokens» figure of the summary, which the panel
- * says at its top. The cache reads and the reasoning, a part of output, stand after them as notes
- * with their figures and no bar, and never set a scale: the summary leaves them out as well.
+ * The kinds the tokens figure counts — input, the cache writes, output — are the ring's sectors
+ * and the ranked bars, each in its own hue (`KIND_SLOTS`), and add up to the «Tokens» figure of
+ * the summary, which the panel says at its top. The cache reads and the reasoning, a part of
+ * output, close the chart as notes with their figures, under the ring's legend or under the bars,
+ * and are no part of its whole: the summary leaves them out as well, and no bar's share counts
+ * them.
  *
  * It reads the page's own answer, whatever dimension that was read by: its total and its steps
  * hold the tokens by kind. An answer whose period before could not be read says so at the top.
@@ -26,10 +30,14 @@ import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import { firstSplitView } from '@/pages/analytics/utils/splitView.ts'
+import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
 import { countedTotal, KIND_SLOTS, kindLines } from '@/pages/analytics/utils/tokenKinds.ts'
 
 import type { Usage } from '@/shared/api/analyticsApi.ts'
 import type { RankedRow, RankedWords } from '@/shared/ui/chartGeometry.ts'
+import DonutChart from '@/shared/ui/DonutChart.vue'
+import type { DonutWords } from '@/shared/ui/DonutChart.vue'
 import type { MultiplesWords, SmallMultiple } from '@/shared/ui/multiplesGeometry.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
@@ -48,12 +56,16 @@ const words = useSpendingWords()
 const kindWords = useKindWords()
 
 const lines = computed(() => kindLines(props.usage))
-const total = computed(() => kindWords.count(countedTotal(lines.value)))
+const counted = computed(() => countedTotal(lines.value))
+const total = computed(() => kindWords.count(counted.value))
 
 const root = ref<HTMLElement | null>(null)
 const narrow = useNarrowCharts(root)
 
 const barsTitle = computed(() => t('analytics.kinds.bars'))
+/** The kinds are no dimension's values, and a few: the split opens as the rule says of a few. */
+const views: readonly SplitView[] = ['ring', 'bars']
+const first = firstSplitView(null)
 const bars = computed<RankedRow[]>(() =>
   lines.value.map((line) => ({
     key: line.kind,
@@ -68,6 +80,10 @@ const barWords = computed<RankedWords>(() => ({
   category: t('analytics.kinds.kind'),
   value: words.measure('tokens'),
   empty: t('analytics.bars.empty'),
+}))
+const ringWords = computed<DonutWords>(() => ({
+  empty: t('analytics.bars.empty'),
+  rest: (count) => t('analytics.values.other', { count }, count),
 }))
 
 /** The chart's full name; its section heading is the short form of the same, as the sibling's is. */
@@ -131,12 +147,26 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
           class="kinds-bars"
           :title="barsTitle"
           :narrow="narrow"
+          :views="views"
+          :first="first"
         >
-          <template #chart>
+          <template #chart="{ view }">
+            <DonutChart
+              v-if="view === 'ring'"
+              :label="barsTitle"
+              :rows="bars"
+              :words="ringWords"
+              :format-value="formatValue"
+              :format-part="words.share"
+              :format-share="words.markShare"
+            />
+            <!-- The shares are of the counted kinds alone, the tokens figure. -->
             <RankedBars
+              v-else
               :label="barsTitle"
               :rows="bars"
               :words="barWords"
+              :whole="counted ?? 0"
               :format-share="words.markShare"
             />
           </template>

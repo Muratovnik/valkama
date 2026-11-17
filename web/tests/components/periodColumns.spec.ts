@@ -151,19 +151,32 @@ describe('period columns that open nothing', () => {
     )
   })
 
-  it('gives each segment a hint of its series, its value and its share of the period', () => {
+  // Each segment once had a hint of its own, and crossing a period swapped the period's for it.
+  it('gives a period one hint, with each series’ share of it, and its segments none', () => {
     const chart = mountColumns({ formatShare: share })
-    const segments = chart.findAll('[data-key="d1"] .period-segment')
+    const slot = chart.get('[data-key="d1"]')
+    const segments = slot.findAll('.period-segment')
 
-    expect(segments.map((one) => one.attributes('data-tooltip'))).toEqual([
-      'ci 2 h, 67% of the total\nMay 1',
-      'work 1 h, 33% of the total\nMay 1',
-    ])
+    // The period's slot is one place for the pointer and the focus, its column the one hint.
+    expect(slot.attributes()).toHaveProperty('data-tooltip-area')
+    expect(slot.findAll('[data-tooltip]').map((one) => one.classes())).toEqual([['period-column']])
+    expect(slot.get('.period-column').attributes('data-tooltip')).toBe(
+      'May 1: total 3 h\nci 2 h, 67% of the total\nwork 1 h, 33% of the total',
+    )
+    expect(chart.get('[data-cell="3:"]').attributes('data-tooltip')).toBe(
+      'May 4: total 1 h so far\nci 1 h, 100% of the total',
+    )
     // A segment that leads nowhere is a block of hue, out of the reader's way.
     expect(segments.map((one) => one.attributes('aria-hidden'))).toEqual(['true', 'true'])
-    expect(chart.get('[data-key="d4"] .period-segment').attributes('data-tooltip')).toBe(
-      'ci 1 h so far, 100% of the total\nMay 4',
-    )
+  })
+
+  // What the segment's own hint said to a screen reader, its name now says.
+  it('names a segment that acts with its share of the period, and gives it no hint', () => {
+    const chart = mountColumns({ series: pressed, formatShare: share })
+    const link = chart.get('[data-cell="0:0"]')
+
+    expect(link.attributes('aria-label')).toBe('May 1: ci 2 h, 67% of the total, total 3 h')
+    expect(chart.findAll('.period-segment[data-tooltip]')).toHaveLength(0)
   })
 
   it('gives each legend entry a hint of its series over the span and its share', () => {
