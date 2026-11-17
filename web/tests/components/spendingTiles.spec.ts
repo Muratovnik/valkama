@@ -153,17 +153,21 @@ describe('the tiles', () => {
     )
     expect(moved.find('.tile-body[data-tooltip]').exists()).toBe(false)
     for (const measure of ['time', 'tokens', 'cost'] as const) {
-      const figure = moved.get(`.tile-figure[data-measure="${measure}"]`)
-      const body = figure.element.closest('.tile-body') as HTMLElement
-      const lines = [
-        ...body.querySelectorAll<HTMLElement>('.tile-figure, .tile-change, .tile-note'),
-      ]
-      expect(lines.length).toBeGreaterThanOrEqual(2)
-      for (const line of lines) {
-        expect(line.dataset.tooltipKind).toBe('clipped')
-        expect(line.dataset.tooltip).toBe(line.textContent)
-      }
-      const change = body.querySelector('.tile-change')?.textContent ?? ''
+      const segment = tile(moved, measure).segment
+      // Every line with a hint: the figure, the change and the tokens' two notes, what they
+      // processed anew and the cache reads, say themselves whole, as a cut line does; every token
+      // is priced, so the cost has no note. The trend says what it draws, and the rate of the
+      // tokens and the cost what it is of, in hints of their own (`detail`).
+      const hinted = [...segment.querySelectorAll<HTMLElement>('[data-tooltip-kind]')]
+      const clipped = hinted.filter((line) => line.dataset.tooltipKind === 'clipped')
+      expect(clipped).toHaveLength(measure === 'tokens' ? 4 : 2)
+      expect(hinted.length - clipped.length).toBe(measure === 'time' ? 1 : 2)
+      for (const line of clipped) expect(line.dataset.tooltip).toBe(line.textContent)
+      // And no line but the tile's name stands with no hint at all.
+      let rest = segment.textContent
+      for (const line of hinted) rest = rest.replace(line.textContent, '')
+      expect(rest.trim()).toBe(segment.querySelector('.tile-name')?.textContent.trim())
+      const change = segment.querySelector('.tile-change')?.textContent ?? ''
       expect(change.replaceAll(/\s/gu, ' ')).toContain('2–8 нояб.')
       expect(change).not.toContain('..')
     }
