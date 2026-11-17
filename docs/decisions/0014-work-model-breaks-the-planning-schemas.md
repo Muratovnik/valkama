@@ -94,6 +94,15 @@ and no compatibility layer.
      `transition` group and its HTTP write take `cancels`, that list's token,
      which cancels the work under it in the same write; that answer's
      `released` is then a list of `{reference, holder}`;
+   - an edit's `parent: ""`, which cleared the parent, is refused with
+     `[parent]`: an item leaves its goal or stage by the new `move_out` group and
+     its HTTP write, with a reason, which the goal or stage records in
+     `child_left` as `MAIN-12: <reason>`, as a move under another records
+     `MAIN-12: moved under MAIN-7` where it recorded the reference alone;
+   - an edit's `parent` refuses an accepted open item under a goal or stage that,
+     or one over which, stands in `triage` or `deferred` (`[parent]`), and moves
+     an item in `triage` put under goals and stages all accepted to `ready`, or a
+     goal or stage to its service state, accepted with them;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -171,6 +180,8 @@ and no compatibility layer.
 | completing a goal or stage with open work under it | close, cancel or move out what is open under it; completing it then is the confirmation |
 | a launch that ends `complete` moves its item to `review` | the launched agent moves it to `review` with `to_check` |
 | cancelling a goal or stage with open work under it in one move | the move, refused with `cancel_list`; then the same move with `cancels` set to its `list_token` |
+| `update` with `parent: ""` | `move_out` with the `reason` the item leaves its goal or stage for |
+| moving accepted work under a goal or stage in triage or deferred | accept that goal or stage first, or move the item out |
 
 ## Consequences
 

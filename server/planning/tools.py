@@ -79,7 +79,9 @@ _PARENT = {
     "type": "string",
     "description": "The goal or stage it stands under, by its reference (MAIN-142) or its"
     " work_item_id: an open goal or stage of the same space, at any depth, never the"
-    " item itself or one under it. A task holds no children.",
+    " item itself or one under it. An accepted item does not move under a goal or stage"
+    " not accepted; an item in triage moved under goals and stages all accepted is"
+    " accepted with them. A task holds no children. To take an item out, use move_out.",
 }
 #: The one basis of acceptance an agent names itself, read by a creation and a move.
 _ACCEPTANCE = {
@@ -219,7 +221,8 @@ _COMMENT_FORM = (
 #: What a batch's transition takes, and the guards it meets.
 _TRANSITION_FORM = (
     'An object, never a bare state name: {"state": "done"}, with reason, force,'
-    " acceptance, to_check or cancels when they apply. The one path a state changes by. The"
+    " acceptance, to_check or cancels when they apply. The one path a state changes by,"
+    " except taking the item out of its goal or stage (move_out). The"
     " workflow's guards apply: an active state needs a holder after the write"
     " (executor); review and a completed state need every checklist step ticked and a"
     " closing summary, and are refused while a step stands ticked by a holder whose"
@@ -805,8 +808,8 @@ TOOLS = [
         "Several writes to one item in one call, all or nothing. The groups apply"
         " in this order: claim,"
         " subscribe, update, checklist, checklist_ticks, refs, links, comment or comments,"
-        " resolutions, questions, summary, transition — so a claim and its steps"
-        " take one call, and a closing"
+        " resolutions, questions, summary, then transition or move_out — so a claim and"
+        " its steps take one call, and a closing"
         " transition sees the ticks and the summary sent with it, and a transition"
         " sent with claim moves an item the claim has already started; a closing"
         " transition releases the claim, so no release call follows. A refused step"
@@ -1062,6 +1065,16 @@ TOOLS = [
                     },
                 },
                 "required": ["state"],
+            },
+            "move_out": {
+                "type": "object",
+                "description": "Take the item out of its goal or stage, with the reason: it goes"
+                " to the top level and to triage, keeps that it started, and loses its claims"
+                " and its basis. The goal or stage it left records the reason. The one way to"
+                " clear a parent. Refused for an item another session holds unless force;"
+                " not with transition in one call.",
+                "properties": {"reason": _STR, "force": _FORCE},
+                "required": ["reason"],
             },
             "expected_revision": {
                 **_EXPECTED_REVISION,

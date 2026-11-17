@@ -632,7 +632,7 @@ def set_launch_place(conn: sqlite3.Connection, space: str, launch_place: object)
 
 
 def _parent_row(
-    conn: sqlite3.Connection, space_id: str, parent: str | None, item_id: str | None = None
+    conn: sqlite3.Connection, space_id: str, parent: str | None, item: sqlite3.Row | None = None
 ) -> sqlite3.Row | None:
     """The row a work item may take as its parent, or None when it takes none.
 
@@ -640,9 +640,11 @@ def _parent_row(
     parent exists, lives in the same space, is a goal or stage, is open, and is
     neither the item nor anything under it. The last is read by climbing from the
     parent to its root (`item_tree.above`), inside the write lock the caller took,
-    so two crossing moves cannot both pass it. An `item_id` is given only when an
-    existing item is reparented: a new item cannot yet name itself or have children.
-    The tree has no depth limit.
+    so two crossing moves cannot both pass it. `item` is given only when an
+    existing item is reparented: a new item cannot yet name itself or have children,
+    nor be accepted on its own. An accepted open item does not move under a goal or
+    stage that, or one over which, stands in triage or deferred: the owner's decision
+    about the work would sit under one not yet taken. The tree has no depth limit.
     """
 
     if not parent:
@@ -657,13 +659,25 @@ def _parent_row(
         raise model.PlanningError(
             f"{read_model.reference(conn, parent_row)} is closed; reopen it first"
         )
-    if item_id is not None and any(
-        identity == item_id
-        for identity, _kind, _category in item_tree.above(conn, str(parent_row["work_item_id"]))
-    ):
+    if item is None:
+        return parent_row
+    chain = item_tree.above(conn, str(parent_row["work_item_id"]))
+    if any(identity == str(item["work_item_id"]) for identity, _kind, _category in chain):
         raise model.PlanningError(
             f"{read_model.reference(conn, parent_row)} stands under this item, or is it:"
             " a parent there would close a cycle"
+        )
+    category = read_model.state_by_id(conn, str(item["state_id"]))["category"]
+    accepted_open = item["acceptance"] is not None and category not in (
+        *model.UNACCEPTED_CATEGORIES,
+        *model.TERMINAL_CATEGORIES,
+    )
+    if accepted_open and any(
+        found in model.UNACCEPTED_CATEGORIES for _identity, _kind, found in chain
+    ):
+        raise model.PlanningError(
+            "[parent] an accepted item does not move under a goal or stage that is not"
+            " accepted: accept it first, or move the item out"
         )
     return parent_row
 
@@ -860,17 +874,20 @@ def update_work_item(
     if kind is not None:
         updates.append("kind = ?")
         parameters.append(_edited_kind(row, kind))
-    left: str | None = None
+    moved_under: sqlite3.Row | None = None
     if parent is not None:
-        parent_row = _parent_row(
-            conn, str(row["planning_space_id"]), parent, item_id=str(row["work_item_id"])
-        )
-        moved_to = str(parent_row["work_item_id"]) if parent_row is not None else None
+        if not parent.strip():
+            raise model.PlanningError(
+                f"[parent] an edit does not clear the parent: take"
+                f" {read_model.reference(conn, row)} out of its goal or stage with move_out,"
+                " which records why it leaves"
+            )
+        parent_row = _parent_row(conn, str(row["planning_space_id"]), parent, item=row)
+        moved_to = None if parent_row is None else str(parent_row["work_item_id"])
         updates.append("parent_id = ?")
         parameters.append(moved_to)
-        if row["parent_id"] is not None and str(row["parent_id"]) != moved_to:
-            left = str(row["parent_id"])
-        if str(row["parent_id"]) != str(moved_to):
+        if parent_row is not None and str(row["parent_id"]) != moved_to:
+            moved_under = parent_row
             # The container it leaves and the one it joins each derive from it.
             closing.note(conn, row["parent_id"], author)
             closing.note(conn, moved_to, author)
@@ -889,9 +906,9 @@ def update_work_item(
     _write(conn, row, updates, parameters)
     if reprojected and changes is not None:
         item_projects.replace(conn, str(row["work_item_id"]), changes)
-    if left is not None:
-        # The container keeps that it had this child: what it derives counts the child.
-        _log(conn, left, "child_left", read_model.reference(conn, row), author)
+    under = None if moved_under is None else read_model.reference(conn, moved_under)
+    if moved_under is not None and row["parent_id"] is not None:
+        _left(conn, row, f"moved under {under}", author)
     # Any other field's edit is no audited action; the revision and the call row carry it.
     if change is not None:
         _log(
@@ -902,10 +919,96 @@ def update_work_item(
             author,
             limit=model.LABELS_DETAIL_LIMIT,
         )
+    if moved_under is not None:
+        _accept_moved(conn, row, f"moved under {under}", author)
     words.bring_current(conn)
     return read_model.present(
         conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
     )
+
+
+def _left(conn: sqlite3.Connection, row: sqlite3.Row, reason: str, author: str | None) -> None:
+    """Record on the goal or stage `row` stood under that it left, and why: `child_left`.
+
+    The container keeps that it had this child, so what it derives counts the child,
+    and its `confirmation` part reads the reason: `MAIN-12: <reason>`.
+    """
+
+    detail = f"{read_model.reference(conn, row)}: {reason}"
+    _log(conn, str(row["parent_id"]), "child_left", detail, author)
+
+
+def _accept_moved(
+    conn: sqlite3.Connection, row: sqlite3.Row, reason: str, author: str | None
+) -> None:
+    """Accept an item in triage that a move put under goals and stages all accepted and open.
+
+    Moving it there is filing it there: it takes the basis `inherited`, a task moves
+    to the first ready state its workflow reaches and a goal or stage to the service
+    state, taking the work in triage under it along (`_transition`). An item put off
+    stays put off, and one with no ready state to reach stays where it is.
+    """
+
+    identity = str(row["work_item_id"])
+    current = read_model.state_by_id(conn, str(row["state_id"]))
+    if current["category"] != "triage" or not item_tree.accepted_chain(
+        conn, str(read_model.item_by_id(conn, identity)["parent_id"])
+    ):
+        return
+    target = states.reachable(conn, row, "ready")
+    if target is None:
+        return
+    _transition(conn, identity, str(target["state_id"]), reason=reason, author=author)
+
+
+@_marked
+def take_out(conn: sqlite3.Connection, reference: str, reason: str, author: str | None) -> dict:
+    """Clear an item's parent, recording on the goal or stage it left why it left.
+
+    The one write that clears a parent: an edit refuses `parent: ""`, so the reason
+    the work model asks for is never bypassed. `split.move_out` makes it, beside the
+    move to triage (`move_to_triage`); the caller has checked that there is a parent.
+    """
+
+    row = _row_for_write(conn, reference, None)
+    closing.note(conn, row["parent_id"], author)
+    calls.call_id(conn, str(row["work_item_id"]), edited="parent_id")
+    _write(conn, row, ["parent_id = ?"], [None])
+    _left(conn, row, reason, author)
+    return read_model.present(
+        conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
+    )
+
+
+#: The refusal a move out of a goal or stage is spared: an accepted one leaves for triage.
+_MOVED_OUT_SPARES = frozenset({"container_state"})
+
+
+def move_to_triage(
+    conn: sqlite3.Connection, reference: str, state: str, *, reason: str, author: str | None
+) -> dict:
+    """Move an item that leaves its goal or stage to `state`, the triage state chosen for it.
+
+    A move like any other, with its guards, except the one that keeps an accepted goal
+    or stage out of triage: moved out, it is new work for the owner to decide on again,
+    as a task moved out is. Nothing on a surface reaches this but `split.move_out`.
+    """
+
+    return _transition(
+        conn, reference, state, reason=reason, author=author, spared=_MOVED_OUT_SPARES
+    )
+
+
+def locked_row(
+    conn: sqlite3.Connection, reference: object, expected_revision: int | None = None
+) -> sqlite3.Row:
+    """The item an action composed above the service decides from, read under the write lock.
+
+    `_row_for_write` for `split`: the writes it then makes through the service find
+    the lock already taken, so nothing lands between its decision and them.
+    """
+
+    return _row_for_write(conn, reference, expected_revision)
 
 
 def _edited_kind(row: sqlite3.Row, kind: str) -> str:
@@ -1230,7 +1333,7 @@ def _transition(
         # The order of bases for what is under it, read with the item now accepted.
         under = "inherited" if item_tree.accepted_chain(conn, identity) else gives
         warnings += _cascade(conn, identity, read_model.reference(conn, row), under, author)
-    overridden = _record_overrides(conn, identity, [guard for guard, _ in refusals], author)
+    overridden = record_overrides(conn, identity, [guard for guard, _ in refusals], author)
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     answer["warnings"] = warnings
     if held:
@@ -1583,7 +1686,7 @@ def claim_work_item(
             _log(conn, identity, "claimed", "", author)
         _started(conn, identity, start, author, start_reason)
         waiting.deliver(conn, row)
-    overridden = _record_overrides(conn, identity, carried, author)
+    overridden = record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     if requeued is not None:
@@ -2267,7 +2370,7 @@ def set_checklist(
     _keep_held(conn, row, str(row["claim_ref"]), replacement)
     identity = str(row["work_item_id"])
     _write_checklist(conn, row, replacement, completed, author)
-    overridden = _record_overrides(conn, identity, guards, author)
+    overridden = record_overrides(conn, identity, guards, author)
     # A step completed or dropped here ends its claim, which may have been the last holder.
     _settle(conn, identity, author, "steps replaced")
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
@@ -2292,7 +2395,7 @@ def _write_checklist(
         _log(conn, identity, "checklist_completed", step["text"][:120], author)
 
 
-def _record_overrides(
+def record_overrides(
     conn: sqlite3.Connection, identity: str, guards: list[str], author: str | None
 ) -> list[str]:
     """Record the refusals a `force` carried through, as one `overridden` event; the guards named.
@@ -2369,7 +2472,7 @@ def claim_checklist_item(
     _started(conn, identity, start, author, "claimed")
     if not release:
         waiting.deliver(conn, row)
-    overridden = _record_overrides(conn, identity, carried, author)
+    overridden = record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     _say_started(conn, answer, start)
@@ -2415,7 +2518,7 @@ def tick_checklist_item(
         step["text"][:120],
         author,
     )
-    overridden = _record_overrides(conn, identity, ["checklist_claim"] if theirs else [], author)
+    overridden = record_overrides(conn, identity, ["checklist_claim"] if theirs else [], author)
     # A tick ends the step's claim, which may have been the last holder of the task.
     requeued = _settle(conn, identity, author, "step completed") if done else None
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
@@ -2525,7 +2628,7 @@ def merge_work_items(
 
     survivor = _row_for_write(conn, reference, expected_revision)
     merged = _merged_rows(conn, survivor, items)
-    overridden = _merge_claims(conn, [survivor, *merged], author, force)
+    overridden = held_elsewhere(conn, [survivor, *merged], author, force)
     spoke = _merge_spoke(conn, merged, force)
     steps = model.checklist(survivor["checklist"])
     moving = [model.checklist(row["checklist"]) for row in merged]
@@ -2616,14 +2719,21 @@ def _merged_rows(
     return rows
 
 
-def _merge_claims(
-    conn: sqlite3.Connection, rows: list[sqlite3.Row], author: str | None, force: bool
+def held_elsewhere(
+    conn: sqlite3.Connection,
+    rows: list[sqlite3.Row],
+    author: str | None,
+    force: bool,
+    *,
+    doing: str = "merge it",
 ) -> dict[str, str]:
-    """The claims of other sessions a merge would override, by item id.
+    """The claims of other sessions a write would override, by item id; refused without `force`.
 
     Moving steps into an item someone else holds changes their work, and closing
-    an item someone else holds ends it, so either needs `force`. An abandoned
-    lease (`leases.abandoned`) is nobody's work any more and does not stand in the way.
+    an item someone else holds ends it, so a merge needs `force`, and so does an
+    action that takes the item from its holder's work (`split`). `doing` says what
+    `force` would do anyway, in the refusal. An abandoned lease (`leases.abandoned`)
+    is nobody's work any more and does not stand in the way.
     """
 
     actor = model.actor(author)
@@ -2636,7 +2746,7 @@ def _merge_claims(
         if not force:
             raise model.PlanningError(
                 f"{read_model.reference(conn, row)} is held by {lease.holder};"
-                " pass force to merge it anyway"
+                f" pass force to {doing} anyway"
             )
         overridden[str(row["work_item_id"])] = lease.holder
     return overridden
@@ -2699,7 +2809,7 @@ def _fold(
     warnings: list[str] = []
     forced: list[str] = []
     if survivor_id in overridden:
-        _record_overrides(conn, survivor_id, ["claim"], author)
+        record_overrides(conn, survivor_id, ["claim"], author)
         forced.append(f"{survivor_ref}: claim")
     for row, found, target in merging:
         identity = str(row["work_item_id"])
@@ -2751,7 +2861,7 @@ def _fold(
             _hold(conn, current, "")
             _log(conn, identity, "released", str(current["claim_ref"]), author)
         if identity in overridden:
-            _record_overrides(conn, identity, ["claim"], author)
+            record_overrides(conn, identity, ["claim"], author)
             forced.append(f"{reference}: claim")
         summary = {
             "done": f"Merged into {survivor_ref}, which now holds its {_counts(moved)}.",
@@ -2772,7 +2882,7 @@ def _fold(
         guards = closed.get("overridden", [])
         forced.extend(f"{reference}: {guard}" for guard in guards)
         if identity in spoke and "person_spoke" not in guards:
-            _record_overrides(conn, identity, ["person_spoke"], author)
+            record_overrides(conn, identity, ["person_spoke"], author)
             forced.append(f"{reference}: person_spoke")
         parent = row["parent_id"]
         if parent and parent not in (survivor["parent_id"], survivor_id):
