@@ -116,6 +116,9 @@ for (const colorScheme of ['light', 'dark'] as const)
       )
       await expect(blockOf(page, 'a1b2c3d4')).toHaveAttribute('data-state', 'unplaced')
       await expect(blockOf(page, 'a1b2c3d4')).toContainText('with the account unknown')
+      // A block with nothing to draw offers no view to draw it in.
+      for (const account of ['7e6d5c4b', 'a1b2c3d4'])
+        await expect(blockOf(page, account).getByRole('radio', { name: 'Ring' })).toHaveCount(0)
 
       // No dollar among the quota's shares, no quota share in a block, and each block under its
       // window's bar and readings, not beside them.

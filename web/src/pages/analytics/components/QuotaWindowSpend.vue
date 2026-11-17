@@ -225,8 +225,9 @@ const failedAgain = computed(() =>
         :options="options"
         @update:model-value="choose"
       />
+      <!-- Only over a drawing: a window with nothing to draw has no view to choose. -->
       <SegmentedControl
-        v-if="shown === 'chart'"
+        v-if="shown === 'chart' && state === 'spent'"
         size="compact"
         :model-value="view"
         :label="t('analytics.shown.label', { chart: heading })"
