@@ -2182,7 +2182,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `links` | list of `{other, kind, remove?}`, linking from this item | `/link` |
 | `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `/comment` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
-| `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `/request`, as `create_work_item_request` |
+| `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?, addressees?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
 | `transition` | `{state, reason?, force?, acceptance?}` | `/transition` |
 
@@ -2241,10 +2241,11 @@ comment the same call writes is not known to the caller, so a reply to it is a
 second call. The same holds for `resolutions`.
 
 `questions` asks up to 100 questions, each with what `create_work_item_request`
-takes and checked by the same rules. Each is that tool's question: it
-waits in the owner's list and raises the owner's alert once the call is
-committed. A call that asks a question and closes the item with its
-`transition` is refused, `invalid_request` on the `transition` step, and
+takes and checked by the same rules. Without `addressees` each is that tool's
+question: it waits in the owner's list and raises the owner's alert once the call
+is committed. With `addressees` an entry asks those sessions instead, as that tool
+does, one request each, and waits in no owner's list. A call that asks a question
+and closes the item with its `transition` is refused, `invalid_request` on the `transition` step, and
 `force` does not carry it: a closed item reads a waiting question `expired`, so
 it would be asked and lost in one write. Move the item to review, or leave the
 question out. A question asked by an earlier call does not stop a close, as it
@@ -2270,7 +2271,9 @@ one call with its identity, and every row its steps write points to that call.
 The acknowledgement's `applied` names only the groups that changed something.
 `update` lists the fields sent;
 `comments` and `questions` list every comment and question the call wrote, so
-a reply or a withdrawal needs no read first. A comment or a summary that carried a
+a reply or a withdrawal needs no read first. A question with `addressees` lists its
+`requests`, each `request_id` with its `addressee`, in place of `request_id` and
+`revision`. A comment or a summary that carried a
 [list](#a-list-on-a-comment) adds its `list_request_id`, and a comment or a summary
 that named other items adds who will hear them as [`mentions`](#mentions). Who will
 hear the items an `update`'s description named stands beside `applied`, as
@@ -3731,8 +3734,9 @@ session where there is one:
 The hour counts the requests asked of that session whose confirmed call names the
 asking session, its subagents included; a refused call asked nothing and counts
 toward no hour, and Valkama's own requests count toward none. The batch's
-`questions` ask the owner only: an entry with `addressees` is refused there as an
-unknown field.
+`questions` take `addressees` as well: an entry with them asks those sessions in the
+same write as the batch's other groups and answers with `requests`, as above. A
+refused entry refuses the whole batch and writes nothing of it.
 
 **Who answers.** Only a call whose session a client proved and that is the
 `addressee` answers it, changes the answer or declines it, from that session's

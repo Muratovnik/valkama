@@ -975,9 +975,12 @@ TOOLS = [
             "questions": {
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
-                "description": "Questions to the owner, each as create_work_item_request"
-                " takes it; refused beside a transition that closes the item, which"
-                " would end them unanswered. applied.questions lists each request_id.",
+                "description": "Questions, each as create_work_item_request takes it. Without"
+                " addressees it asks the owner, and applied.questions lists each request_id"
+                " and revision. With addressees it asks agent sessions, as that tool does,"
+                " and applied.questions lists each entry's requests, each request_id with"
+                " its addressee. Refused beside a transition that closes the item, which"
+                " would end them unanswered.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -987,6 +990,14 @@ TOOLS = [
                         "execution_id": _STR,
                         "session_id": _STR,
                         "expires_at": _STR,
+                        "addressees": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": requests.MOST_ADDRESSEES,
+                            "items": _STR,
+                            "description": "Top-level agent session ids to ask instead of the"
+                            " owner, as create_work_item_request takes them.",
+                        },
                     },
                     "required": ["kind", "prompt", "fields"],
                 },

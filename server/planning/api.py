@@ -1100,7 +1100,17 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("resolutions", frozenset({"comment_id", "resolution", "reopen"})),
     (
         "questions",
-        frozenset({"kind", "prompt", "fields", "execution_id", "session_id", "expires_at"}),
+        frozenset(
+            {
+                "kind",
+                "prompt",
+                "fields",
+                "execution_id",
+                "session_id",
+                "expires_at",
+                "addressees",
+            }
+        ),
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
     ("transition", frozenset({"state", "reason", "force", "acceptance"})),
@@ -1253,7 +1263,10 @@ def _apply_step(
         return {}, {name: marked[name] for name in ("comment_id", "resolution")}
     if group == "questions":
         asked = _create_request(conn, {**entry, **base})
-        return {}, {name: asked[name] for name in ("request_id", "revision")}
+        # An entry asked of sessions answers as the single write does: its requests,
+        # each with its addressee.
+        names = ("requests",) if "addressees" in entry else ("request_id", "revision")
+        return {}, {name: asked[name] for name in names}
     if group == "summary":
         beside = {name: entry[name] for name in ("list", "mentions") if name in entry}
         summary = {name: value for name, value in entry.items() if name not in beside}

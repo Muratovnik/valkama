@@ -321,6 +321,7 @@ class AskRefusalTests(Harness):
 
 
 ASK = "/api/planning/work-item/request"
+APPLY = "/api/planning/work-item/apply"
 C = "c0000000-0000-4000-8000-00000000000c"
 D = "d0000000-0000-4000-8000-00000000000d"
 
@@ -443,6 +444,108 @@ class AgentAskTests(Harness):
             self.post(ASK, self.asking(B), E)["http"],
             "and another session asks B as before",
         )
+
+    def batch_asking(self, *asked: str, **extra: object) -> dict:
+        """A batch with a comment and one question asked of the sessions named."""
+
+        question = {
+            "kind": "question",
+            "prompt": "Which parser does T2 keep?",
+            "fields": [CHOICE],
+            "addressees": list(asked),
+            **extra,
+        }
+        return {
+            "id": self.t3,
+            "comment": {"body": "Asking before I go on."},
+            "questions": [question],
+        }
+
+    def batch(
+        self, body: dict, caller: calls.Identity | str | None, agent: str | None = A1
+    ) -> dict:
+        """The batch route as a caller makes it: a session's agent, the person (None), or an identity.
+
+        A refused batch is committed, as the surface commits what a handler leaves, so only
+        its savepoint keeps the refused comment out of the store.
+        """
+
+        if isinstance(caller, calls.Identity):
+            identity = caller
+        elif caller is None:
+            identity = calls.browser()
+        else:
+            identity = calls.Identity(
+                state=calls.CONFIRMED,
+                source=calls.CLAUDE_PAIR,
+                session_id=caller,
+                agent_id=agent,
+                client="claude-code",
+            )
+        try:
+            with calls.bind(identity, "test"):
+                answer = api.handle_post(self.conn, APPLY, body)
+        except (model.PlanningError, api.PlanningHttpError) as error:
+            self.conn.commit()
+            status, refusal = api.error_response(error)
+            return {"http": status, **refusal["error"]}
+        self.conn.commit()
+        assert answer is not None
+        return {"http": answer[0], **answer[1]}
+
+    def test_a_batch_question_asks_the_session_and_answers_its_request(self) -> None:
+        """A `questions` entry takes `addressees` as `create_work_item_request` does."""
+
+        made = self.batch(self.batch_asking(B), A)
+        self.assertEqual(200, made["http"], made)
+        self.assertIn("comment", made["applied"], "the comment is written beside the question")
+        [asked] = made["applied"]["questions"]
+        self.assertEqual(["requests"], list(asked), "the answer is requests, not a revision")
+        [entry] = asked["requests"]
+        self.assertEqual({"request_id", "addressee"}, set(entry))
+        self.assertEqual(B, entry["addressee"])
+        record = requests.get(self.conn, entry["request_id"])
+        self.assertEqual(
+            (B, "pending", self.t3, A),
+            (
+                record["addressee"],
+                record["status"],
+                record["reference"],
+                requests._asker(self.conn, entry["request_id"]),
+            ),
+            "asked of B on the item, by A",
+        )
+        self.assertEqual([], questions.open_rows(self.conn), "nothing waits for the owner")
+
+    def test_a_refused_batch_question_writes_nothing_of_the_batch(self) -> None:
+        """A question the batch refuses takes its comment and every other entry down with it."""
+
+        unproved = calls.Identity(state=calls.UNCONFIRMED, source=calls.MCP, session_id=A)
+        for turn in range(3):
+            self.assertEqual(200, self.post(ASK, self.asking(B), A, A1)["http"], turn)
+        for caller, agent, says, code, status in (
+            (None, None, "this call proved none", "invalid_request", 400),
+            (unproved, None, "this call proved none", "invalid_request", 400),
+            (A, A1, f"no session {D} is known to Valkama", "invalid_request", 400),
+            (A, A2, f"session {B} was asked 3 times in the last hour", "ask_limit", 429),
+        ):
+            with self.subTest(says=says):
+                comments = self.conn.execute("SELECT COUNT(*) FROM work_item_comments").fetchone()
+                asked = self.conn.execute("SELECT COUNT(*) FROM work_item_requests").fetchone()
+                asking = D if says.startswith("no session") else B
+                refused = self.batch(self.batch_asking(asking), caller, agent)
+                self.assertEqual((status, code), (refused["http"], refused["code"]))
+                self.assertTrue(refused["message"].startswith("questions[0]: "), refused["message"])
+                self.assertIn(says, refused["message"])
+                self.assertEqual(
+                    tuple(comments),
+                    tuple(self.conn.execute("SELECT COUNT(*) FROM work_item_comments").fetchone()),
+                    "the comment of a refused batch is not written",
+                )
+                self.assertEqual(
+                    tuple(asked),
+                    tuple(self.conn.execute("SELECT COUNT(*) FROM work_item_requests").fetchone()),
+                )
 
     def post_as(self, body: dict, caller: calls.Identity | str | None) -> dict:
         """The route as a session, the person (None) or a call that proved nothing."""
