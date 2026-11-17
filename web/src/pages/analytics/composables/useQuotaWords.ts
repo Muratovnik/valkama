@@ -85,14 +85,15 @@ export function useQuotaWords() {
 
   /**
    * The bar's words for a reader who cannot see it: the share, the pace, the state with how long
-   * the window has been silent at `now` (ms), and the forecast its tail draws, after its key.
+   * the window has been silent at `now` (ms), and the forecast its tail draws, after its key, or
+   * that the window has reset (`forecastAt`).
    */
   function barLabel(window: QuotaShareWindow, now: number, today: string) {
     const values = {
       window: windowName(window),
       share: share(window.latest.used_percent),
       state: stateAt(window, now),
-      forecast: forecastLine(window, today),
+      forecast: forecastAt(window, now, today),
     }
     return window.even_percent === null
       ? t('analytics.quota.barNoPace', values)
@@ -155,6 +156,14 @@ export function useQuotaWords() {
           forecast: forecast(window, today),
         })
       : forecast(window, today)
+
+  /**
+   * What a window forecasts at `now` (ms): its forecast after its key while it stands; past its
+   * reset, that it has reset, since a forecast for a window that has reset says nothing more and
+   * nothing of it is drawn.
+   */
+  const forecastAt = (window: QuotaShareWindow, now: number, today: string) =>
+    stands(window, now) ? forecastLine(window, today) : reset(window, now, today)
 
   /** How old the latest reading is and who read it; a silent one since when it has not moved. */
   function latest(window: QuotaWindow, now: number, today: string) {
@@ -251,11 +260,16 @@ export function useQuotaWords() {
 
   /**
    * The step line's words for a reader who cannot see it: every reading with its moment, and the
-   * forecast its corridor draws.
+   * forecast its corridor draws, or that the window has reset by `now` (ms) (`forecastAt`).
    */
-  const readingsLabel = (account: QuotaAccount, window: QuotaShareWindow, today: string) =>
+  const readingsLabel = (
+    account: QuotaAccount,
+    window: QuotaShareWindow,
+    now: number,
+    today: string,
+  ) =>
     t('analytics.quota.readings.label', {
-      forecast: forecastLine(window, today),
+      forecast: forecastAt(window, now, today),
       window: windowName(window),
       account: accountName(account),
       from: window.started_at ? moment(window.started_at, today) : '',

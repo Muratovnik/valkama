@@ -67,6 +67,15 @@ const accountNamed = (page: VueWrapper, name: string) => {
 }
 /** Words as a reader reads them: the app keeps a figure and its unit together with a no-break space. */
 const plain = (text: string) => text.replaceAll(' ', ' ')
+
+/** Shows the panel as a table by its own switch, not a step line's span. */
+async function showTable(page: VueWrapper) {
+  const table = page
+    .findAll('.quota-panel [role="radio"]:not([aria-checked="true"])')
+    .find((one) => one.element.closest('.step-views') === null)
+  await table?.trigger('click')
+  await flushPromises()
+}
 /**
  * What a window of the panel says: its state, its lead, its facts, and what its bar's hint adds —
  * where steady use would stand, then how old the latest reading is and who read it — with the
@@ -318,11 +327,7 @@ describe('the quota panel', () => {
     await work.findAll('.step-views [role="radio"]')[1]?.trigger('click')
     expect(work.findAll('.step-axis span').map((one) => one.text())).toEqual(['11:30', '16:30'])
     // The panel's own switch, not a line's span, turns the readings into a table.
-    const table = page
-      .findAll('.quota-panel [role="radio"]:not([aria-checked="true"])')
-      .find((one) => one.element.closest('.step-views') === null)
-    await table?.trigger('click')
-    await flushPromises()
+    await showTable(page)
     const readings = accountNamed(page, 'Work')
     expect(readings.find('.step-line').exists()).toBe(false)
     // Its three readings, and the forecast after them.
@@ -330,6 +335,24 @@ describe('the quota panel', () => {
     expect(rows).toHaveLength(4)
     expect(rows[0]).toContain('the poll')
     expect(rows[3]).toMatch(/^Forecast by the reset100%Runs out at \d{2}:\d{2}; Resets /u)
+  })
+
+  it('says a window reset since it was read where its forecast stood, and draws nothing ahead', async () => {
+    // Read five hours ago: the five hours ran out at a time since past, and reset since.
+    stubAnalyticsReads(usage, () => quotaAnswer(quotaAt(NOW.getTime() - 5 * HOUR)))
+    const page = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
+    const reset = expect.stringMatching(/Reset at \d{2}:\d{2}, since the last reading$/u)
+    const window = accountNamed(page, 'Work').get('.quota-window[data-window="five_hour"]')
+    expect(window.findAll('[data-fact]').map((one) => plain(one.text()))).toEqual([reset])
+    expect(window.findAll('.window-ahead')).toHaveLength(0)
+    // The bar's words and the line's name say the reset where they said the forecast.
+    expect(plain(window.get('.window-track').attributes('aria-label') ?? '')).toMatch(
+      /fresh\. Reset at \d{2}:\d{2}, since the last reading\. /u,
+    )
+    expect(window.get('.step-line').attributes('aria-label')).toEqual(reset)
+    // As a table, the account's table says the reset in the forecast's column.
+    await showTable(page)
+    expect(plain(accountNamed(page, 'Work').get('[data-cell="forecast"]').text())).toEqual(reset)
   })
 
   it('says the quota could not be read, and that an organization with no source has nothing more', async () => {
@@ -452,11 +475,7 @@ describe('the quota panel’s times', () => {
 
     // As a table no hint shows, so the window says its pace and its latest reading in words; its
     // forecast is a column of its account's table.
-    const table = page
-      .findAll('.quota-panel [role="radio"]:not([aria-checked="true"])')
-      .find((one) => one.element.closest('.step-views') === null)
-    await table?.trigger('click')
-    await flushPromises()
+    await showTable(page)
     const window = accountNamed(page, 'Work').get('.quota-window[data-window="week"]')
     expect(window.find('.quota-window-lead').exists()).toBe(false)
     expect(

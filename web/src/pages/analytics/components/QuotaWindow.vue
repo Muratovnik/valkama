@@ -99,9 +99,10 @@ const spends = computed(() => seatOf(props.account) !== null && props.window.sta
 
 /**
  * The facts said in words: the forecast after its key, in the text's ink where there is one, and
- * the reset. A table leaves the forecast to its account's table and adds what the bar's hint
- * holds and that table does not: the latest reading, and that there is no pace, where that table
- * has only a dash for it. `swatch` is whether the line leads with the key of the bar's hatch.
+ * the reset; past the reset the reset alone, which says so. A table leaves the forecast to its
+ * account's table and adds what the bar's hint holds and that table does not: the latest reading,
+ * and that there is no pace, where that table has only a dash for it. `swatch` is whether the
+ * line leads with the key of the bar's hatch.
  */
 const facts = computed(() => {
   const { window, now, today, shown } = props
@@ -113,7 +114,7 @@ const facts = computed(() => {
       quiet: window.forecast === null,
       swatch: bar.value.hatched,
     }
-    return [forecast, reset]
+    return ended.value ? [reset] : [forecast, reset]
   }
   const latest = { key: 'latest', text: words.latest(window, now, today), quiet: true }
   return [
@@ -177,7 +178,9 @@ const ahead = computed<StepAhead | null>(() => {
       found && ends ? { ...words.forecastTarget(window, ends, now, today), ...found } : null,
   }
 })
-const readingsLabel = computed(() => words.readingsLabel(props.account, props.window, props.today))
+const readingsLabel = computed(() =>
+  words.readingsLabel(props.account, props.window, props.now, props.today),
+)
 const readingsCaption = computed(() =>
   t('analytics.quota.readings.caption', {
     window: name.value,

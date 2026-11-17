@@ -2635,20 +2635,22 @@ end there says the week runs out before its reset and about when its slower pace
 high end there that it may, and ends said alike one value — and when it resets in absolute and
 relative time, quieter, each line 4px from the next. The bar's tail, the tile's and the step
 line's corridor are drawn from one mapping of the forecast (`forecastCourses`), so none of them
-and none of their words disagree. Where steady use would stand is drawn — the bar's tick, the
-line's diagonal — and said in their hints, the bar's with how old the latest reading is and who
-read it, which its words for a screen reader say too, with the forecast. As a table, where no
-hint shows, the account's table holds each window's forecast, the readings' table ends with
-it, and the window says its latest reading in words under its reset, and that it has no pace
-where it has none. A window's step line is on no period of the page, so its scale is its own:
-it opens on «To now and the forecast» with a switch to the whole window (Charts), points at
-«now» and at its forecast by the reset past its readings, and a frame dragged along it narrows
-that line alone. An account no source read says so and draws no window; a silent window is as
-solid as a fresh one, says how long it has been silent and, in its bar's hint, since when it
-has not changed; a fresh 0 % draws an empty track and says «0% used · fresh». A window of money
-past a limit is a line of its name and its state, its age and its source in the line's hint as
-a window of a share keeps them in its bar's and in words as a table, with no figure. No share
-is added to another, of two windows or two accounts, and no dollar stands beside one.
+and none of their words disagree; a window past its reset by the page's clock forecasts nothing
+more, so none of them is drawn and its words say when it reset where they said its forecast.
+Where steady use would stand is drawn — the bar's tick, the line's diagonal — and said in their
+hints, the bar's with how old the latest reading is and who read it, which its words for a
+screen reader say too, with the forecast. As a table, where no hint shows, the account's table
+holds each window's forecast, the readings' table ends with it, and the window says its latest
+reading in words under its reset, and that it has no pace where it has none. A window's step
+line is on no period of the page, so its scale is its own: it opens on «To now and the forecast»
+with a switch to the whole window (Charts), points at «now» and at its forecast by the reset
+past its readings, and a frame dragged along it narrows that line alone. An account no source
+read says so and draws no window; a silent window is as solid as a fresh one, says how long it
+has been silent and, in its bar's hint, since when it has not changed; a fresh 0 % draws an
+empty track and says «0% used · fresh». A window of money past a limit is a line of its name and
+its state, its age and its source in the line's hint as a window of a share keeps them in its
+bar's and in words as a table, with no figure. No share is added to another, of two windows or
+two accounts, and no dollar stands beside one.
 
 Under each window that names its start stands «Where the window went»: the work Valkama
 recorded on that account from the window's start to the answer's moment, held to the last five
