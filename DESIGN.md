@@ -1133,12 +1133,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   and `StepLineTable`.
   A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a
   day — and its name beside it.
-  A table that is the subject of its panel, as a dimension's breakdown, runs at its full height
-  in the panel's one scroll and never scrolls up and down in a frame of its own: its heading row
-  and its total row stick while any of its rows is in view, and its names stay at its start when
-  it scrolls sideways. Each heading sorts by its column, and a line under the table, which
-  sticks with the total, says how many rows it shows of how many, how they are sorted, and
-  downloads what it shows in that order.
+  A table that is the subject of its panel, as a dimension's breakdown, is held to about the
+  window's height, so it and its heading line stand in the window together, and scrolls both
+  ways inside its own frame: its heading row stays at the frame's top, its total row at its
+  bottom and its names at its start, each a sticky cell of the frame. A shorter table stands at
+  its own height. Held at the edges of the panel's scroll instead, moved there by a
+  scroll-driven animation, the heading row lagged a frame behind the rows and shook as the page
+  scrolled. Each heading sorts by its column, and a line over the table says how many rows it
+  shows of how many, how they are sorted, and downloads what it shows in that order.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole
@@ -2336,11 +2338,12 @@ Analytics is a monitor of what agent work spent, and it fills the window: a bar 
 and a panel. Nothing in it moves under the pointer or when an answer arrives; a hint lies over
 the page and shifts nothing, and a part that has nothing to say yet keeps the room it will need.
 
-Each column has one scroll: the rail scrolls, the panel scrolls, and nothing inside the panel
-scrolls up and down on its own. Only a row of periods or a table wider than its column scrolls
-sideways, in a frame of its own. Held to the window, a section once stacked three scrolls in
-one column — the panel, its charts and its table — and left the table eight rows of a 44-row
-list.
+Each column has one scroll: the rail scrolls, the panel scrolls, and inside the panel only a
+dimension's table scrolls up and down, in its own frame about the window's height. Only a row
+of periods or a table wider than its column scrolls sideways, in a frame of its own. Held to
+the window, a section once stacked three scrolls in one column — the panel, its charts and its
+table — and left the table eight rows of a 44-row list; held at its full height instead, the
+table's heading row was moved along the panel's scroll and shook behind its rows.
 
 The bar, the rail and the panel stand on one grid of columns. The edge of the rail's entry
 boxes, the bar's first control and the page's heading share one left line, the bar's next
@@ -2473,13 +2476,12 @@ of an unknown model — is ranked where its figure puts it, in the neutral colou
 keeps one colour on the whole page: in its tile, its bar, its small chart and its share of
 a day. That colour is its place in the period's ranking without the page's filters, so a
 filter that takes values away repaints none of those it leaves; another measure ranks again
-and may. Ranked over what the filter left, every survivor moved up a hue. The section runs in the panel's one scroll: the cells, the charts at their own height,
-and the table at its full height under them, whose heading row and total row stick inside the
-panel's scroll while any of its rows is in view, so what focus brings into view stands clear of
-them. A «To the table» link over the charts, like the ranked bars' line of how many more the
-table holds, brings the table into view with the focus on it. The heading and the total that
-stick are what the table's own frame was for: reaching the table without losing either. The
-table sorts by any column and downloads what it shows. A line under its heading row counts the
+and may. Ranked over what the filter left, every survivor moved up a hue. The section runs in the panel's one scroll: the cells and the charts at their own height,
+and the table under them, held to about the window's height so it and its heading line stand
+in the window together, scrolling inside its frame with its heading row and total row at the
+frame's edges, so what focus brings into view stands clear of them. A «To the table» link over
+the charts, like the ranked bars' line of how many more the table holds, brings the table into
+view with the focus on it. The table sorts by any column and downloads what it shows. A line under its heading row counts the
 values of the period that have a figure in the measure, as their tile does, and says apart
 those that spent in the period only in another measure — the adviser has tokens and no agent
 time — and those that spent only before it. The line is a row of its own, kept while it has

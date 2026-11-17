@@ -1,8 +1,8 @@
 /**
  * The panel of a dimension in the real app, measured. Beside the rail its parts stand whole, one
- * under the next, and the table stands at its full height in the panel's one scroll: a wheel over
- * it scrolls the panel, the document standing still, and at the end of that scroll its heading
- * row, its names and its total row are still in view. On a phone the names stay in view
+ * under the next, and a table shorter than the window stands at its own height, its frame no
+ * taller: a wheel over it scrolls the panel or the table, the document standing still, and at the
+ * end of both scrolls its heading row, its names and its total row are still in view. On a phone the names stay in view
  * while the table scrolls sideways. A second dimension chosen in the section's heading splits the
  * table into pairs, is the address and outlives a reload, and the file downloaded is a row per
  * pair; with the measure
@@ -62,8 +62,11 @@ async function scrolled(page: Page) {
       panelEnd: panel ? panel.scrollHeight - panel.clientHeight : 0,
       // How far the charts could scroll sideways: never, whatever a chart reaches past.
       chartsWide: charts ? charts.scrollWidth - charts.clientWidth : -1,
-      // How far the table's frame could scroll up and down: never, it stands at its full height.
+      // How far the table's frame could scroll up and down, and how much taller it is than its table.
       tableEnd: frame ? frame.scrollHeight - frame.clientHeight : -1,
+      frameRoom: frame
+        ? frame.clientHeight - (frame.querySelector('table')?.offsetHeight ?? 0)
+        : -1,
       tableLeft: frame?.scrollLeft ?? 0,
     }
   })
@@ -113,7 +116,7 @@ for (const [width, height] of [
   [1440, 900],
   [1280, 768],
 ] as const)
-  test(`at ${width}×${height} the table stands whole in the panel’s scroll and keeps its heading, names and total in view`, async ({
+  test(`at ${width}×${height} the table stands at its own height and keeps its heading, names and total in view`, async ({
     page,
   }, info) => {
     await serve(page)
@@ -125,7 +128,9 @@ for (const [width, height] of [
 
     expect(await parts(page), 'parts that spill or overlap').toEqual([])
     const before = await scrolled(page)
-    expect(before.tableEnd, 'a table that scrolls up and down on its own').toBe(0)
+    // Fourteen rows are shorter than the window: the frame is as tall as its table, no taller.
+    expect(before.tableEnd, 'a short table that scrolls up and down on its own').toBe(0)
+    expect(before.frameRoom, 'room in the frame past its table').toBe(0)
     expect(before.panelEnd, 'a panel taller than its window').toBeGreaterThan(0)
     expect(before.chartsWide, 'charts that scroll sideways').toBe(0)
 
