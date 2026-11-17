@@ -2075,6 +2075,26 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 with self.subTest(document=name, word=word):
                     self.assertIn(word, document)
 
+    def test_the_item_read_and_the_texts_name_the_requests_and_who_works_on_it(self) -> None:
+        """The open requests asked of sessions, the participants part and the note's line of requests."""
+
+        [tool] = [tool for tool in mcp_surface.catalogue() if tool["name"] == "get_work_item"]
+        words = ("addressed_open", "participants", "Waiting for your answer")
+        texts = {"get_work_item": tool["description"]}
+        for name in (
+            "server/skill/valkama/SKILL.md",
+            "server/skill/valkama/references/tools.md",
+            "docs/connection-contract.md",
+            "docs/hook-contract.md",
+        ):
+            with open(os.path.join(ROOT, *name.split("/")), encoding="utf-8") as handle:
+                texts[name] = handle.read()
+        for name, text in texts.items():
+            # The hook contract describes the note, not the parts of an item read.
+            for word in words[2:] if name == "docs/hook-contract.md" else words:
+                with self.subTest(text=name, word=word):
+                    self.assertIn(word, text)
+
     def test_an_object_parameter_named_like_text_shows_its_form(self) -> None:
         """A bare-text value for an object parameter fails in the client, before this server.
 

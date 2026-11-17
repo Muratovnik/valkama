@@ -1213,7 +1213,8 @@ context no longer says where that work stood, and without help it reads each
 item again to find out. `valkama hook <client> session-start` answers such a
 start with a short note instead: what the agent holds, each item's state, next
 condition and project root, what the lease expiry took from it since its last
-call, and a last line saying that the note stands for that read.
+call, which items have a request waiting for its session's answer, and a last
+line saying that the note stands for that read.
 
 - **When.** Only when the input's `source` is `resume` or `compact`. `startup`,
   `clear` and `fork` open a session with a new id, which holds nothing, so they
@@ -1240,6 +1241,7 @@ Valkama now: this session holds 4 open items; the 3 it wrote to last:
 - MAIN-9 «Draft the release note», Blocked. All 3 conditions ticked. 1 open question. Goal MAIN-1.
 Root of these items: ../main.
 No longer held by you: MAIN-7.
+Waiting for your answer: MAIN-3.
 Current: read an item only for what this note leaves out.
 ```
 
@@ -1292,13 +1294,24 @@ changed between the two is not named. A subagent is told only its own losses,
 its orchestrator those of the whole session. The line is left out when there is
 no loss.
 
+The line `Waiting for your answer: MAIN-3, MAIN-12 and 1 more.` names the items
+with an open request [asked of the session](#asked-of-a-session), each once, the
+item of the newest request first: the requests `list_work_item_requests` with
+`addressed: true` lists for that session. A request answered, declined,
+withdrawn or past its deadline leaves it. The asking was told once, as news, and
+the note neither reads nor moves the places the notices keep, so this line is
+how a request told before a compaction comes back while it still waits. The line
+does not repeat the request's text: the list names it, and
+`get_work_item_request` reads it whole. Only the orchestrator gets it: the request asks the session, and a
+subagent's note has no such line. It is left out when nothing waits.
+
 ### How long it is
 
 The note is at most 600 characters, and that bound holds by construction, not by
 what the store happens to hold. The note tries three items, then two, then one.
 For each count it tries titles of at most 60, 44 and 32 characters with next
-conditions of at most 72, 52 and 36 and 3, 2 and 1 numbers in the line of
-losses, and one item also gets 20 and 24 with 1. It takes
+conditions of at most 72, 52 and 36 and 3, 2 and 1 numbers in each of the lines
+of losses and of requests, and one item also gets 20 and 24 with 1. It takes
 the first version that fits. Inside a field every run of whitespace is one
 space, so a field never breaks a line; a field that is cut ends with `…`; a
 state is at most 20 characters; and a number past 999 is `999+`. A root is at
@@ -1311,8 +1324,8 @@ it is at most 48.
 Beside a start with another `source`, there is no note when notices are
 [switched off](#switching-it-off) or the store is protected, when the store is
 missing, at another schema, or cannot be opened to read, and when the recipient
-holds nothing and lost nothing since its last call. The hook prints nothing then
-and exits 0.
+holds nothing, lost nothing since its last call and, for an orchestrator, has no
+request waiting for its answer. The hook prints nothing then and exits 0.
 
 The note is a stage of its own: the lifecycle event of the start is recorded in
 every case, and a note that fails is reported on stderr and costs nothing else.
@@ -1328,8 +1341,9 @@ then.
 ### What it reads
 
 The store, opened read-only and only at the schema this build writes, the
-history of what the lease expiry released for the line of losses, and the
-project registry, once for every item. The note writes nothing, and it neither reads nor moves the places
+history of what the lease expiry released for the line of losses, the requests
+asked of the session for the line of requests, and the project registry, once
+for every item. The note writes nothing, and it neither reads nor moves the places
 [the notices keep](#where-each-agents-place-is-kept), so news that arrived
 before or after the compaction is still told at the next tool call. The planning
 modules the note reads with are loaded only for a start it answers; a tool call
