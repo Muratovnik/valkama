@@ -46,6 +46,10 @@ prefix is expanded by the project's own repository; a commit Valkama did not
 know is recorded without a session. A goal or stage holds no projects, so a
 commit gives one only to a task, and detaching the last commit of a project a
 task holds by its commits takes that project away (the projects rule).
+
+On no card. A session's commit that no item holds and no rewrite replaced waits
+on the list `unattached` reads, by a project or by the projects the registry
+binds to a space, until someone attaches it.
 """
 
 from __future__ import annotations
@@ -62,7 +66,7 @@ from typing import Any
 from .. import git_worktrees
 from ..hooks import commit_records, notify
 from ..projects import project_registry
-from . import calls, held, item_projects, leases, model, read_model
+from . import calls, held, item_projects, leases, model, read_model, request_model, service
 
 #: The tool a client hook's own call is bound under (`calls.bind`): what it writes is
 #: Valkama's, and the session and agent of the commit live on the commit's row.
@@ -559,6 +563,84 @@ def _owner(record: dict, key: str) -> tuple[str, str] | None:
     return None
 
 
+# -- on no card ----------------------------------------------------------------
+
+#: How many commits one read of those on no card lists at most, and unasked.
+UNATTACHED_MOST = 500
+UNATTACHED_LIMIT = 100
+
+#: A commit on no card: a session's, attached to no item, and not one a rewrite replaced.
+#: A commit no session reported, migrated or attached by hand, is never on the list.
+_ON_NO_CARD = (
+    "c.session_id IS NOT NULL AND c.rewritten_to IS NULL"
+    " AND NOT EXISTS (SELECT 1 FROM work_item_commits a WHERE a.commit_id = c.commit_id)"
+    " AND c.project_id IN (SELECT value FROM json_each(:projects))"
+)
+#: When the commit was made, by its committer time, which Git gives with its offset;
+#: the time Valkama learned of it when Git gave none.
+_MADE = "julianday(COALESCE(c.committed_at, c.reported_at))"
+
+
+def unattached(
+    conn: sqlite3.Connection,
+    *,
+    space: str | None = None,
+    project: str | None = None,
+    since: str | None = None,
+    limit: int = UNATTACHED_LIMIT,
+) -> dict[str, Any]:
+    """The commits on no card of a project, or of a space's projects: `total` and `items`.
+
+    A space's projects are those the registry binds to it. `since` keeps the commits
+    made at or after a time with its offset; `total` counts every commit the scope
+    and `since` keep, and `items` the newest `limit` of them, newest first.
+    """
+
+    if (space is None) == (project is None):
+        raise model.PlanningError(
+            "[commit] the commits on no card are read by a space or by a project: name one"
+        )
+    if not 0 <= limit <= UNATTACHED_MOST:
+        raise model.PlanningError(f"limit must be between 0 and {UNATTACHED_MOST}")
+    after = request_model.timestamp(since, "since")
+    listing = _readable(project_registry.read_registry())
+    if project is not None:
+        projects = [registered(project, listing)["project_id"]]
+    else:
+        identity = service.space_identity(conn, space)
+        key = conn.execute(
+            "SELECT key FROM planning_spaces WHERE planning_space_id = ?", (identity,)
+        ).fetchone()[0]
+        projects = item_projects.space_project_ids(conn, str(key), listing=listing)
+    names = {str(entry["project_id"]): str(entry["display_name"]) for entry in listing["projects"]}
+    scope = f"{_ON_NO_CARD} AND (:since IS NULL OR {_MADE} >= julianday(:since))"
+    parameters = {"projects": json.dumps(projects), "since": after, "limit": limit}
+    counted = f"SELECT COUNT(*) FROM commits c WHERE {scope}"  # noqa: S608 - fixed clauses
+    total = conn.execute(counted, parameters).fetchone()[0]
+    columns = "c.project_id, c.hash, c.subject, c.committed_at, c.session_id, c.agent_id"
+    newest = f"SELECT {columns}, c.client, c.reported_at FROM commits c WHERE {scope}"  # noqa: S608 - fixed clauses
+    rows = conn.execute(
+        f"{newest} ORDER BY {_MADE} DESC, c.commit_id DESC LIMIT :limit", parameters
+    ).fetchall()
+    return {
+        "total": int(total),
+        "items": [
+            {
+                "repository": row[0],
+                "display_name": names.get(str(row[0])),
+                "hash": row[1],
+                "subject": row[2],
+                "committed_at": row[3],
+                "session": row[4],
+                "agent": row[5],
+                "client": row[6],
+                "reported_at": row[7],
+            }
+            for row in rows
+        ],
+    }
+
+
 # -- by hand -------------------------------------------------------------------
 
 #: A hash or its start: at least seven hex digits, as a commit row holds one.
@@ -687,20 +769,26 @@ def stored_hash(text: str, repository: str) -> str:
     return value
 
 
-def registered(repository: str) -> dict[str, str]:
+def registered(
+    repository: str, listing: project_registry.RegistryResult | None = None
+) -> dict[str, str]:
     """The project's id and root from the registry, refused with the ids when it has none."""
 
-    listing = project_registry.read_registry()
-    if listing["status"] != "available":
-        raise model.PlanningError(item_projects.REGISTRY_UNREADABLE)
-    roots = {
-        str(entry["project_id"]): str(entry["canonical_root"]) for entry in listing["projects"]
-    }
+    found = _readable(project_registry.read_registry() if listing is None else listing)
+    roots = {str(entry["project_id"]): str(entry["canonical_root"]) for entry in found["projects"]}
     if repository not in roots:
         raise model.PlanningError(
             f"[commit] {repository} is not a registered project: {', '.join(sorted(roots))}"
         )
     return {"project_id": repository, "root": roots[repository]}
+
+
+def _readable(listing: project_registry.RegistryResult) -> project_registry.RegistryResult:
+    """The registry as read, refused when it could not be: no project is known then."""
+
+    if listing["status"] != "available":
+        raise model.PlanningError(item_projects.REGISTRY_UNREADABLE)
+    return listing
 
 
 def rooted(project: dict[str, str]) -> bool:

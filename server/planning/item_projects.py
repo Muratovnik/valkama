@@ -591,13 +591,20 @@ def naming(conn: sqlite3.Connection, projects: Iterable[str]) -> list[str]:
     return [str(row[0]) for row in rows]
 
 
-def space_project_ids(conn: sqlite3.Connection, space_key: str) -> list[str]:
+def space_project_ids(
+    conn: sqlite3.Connection,
+    space_key: str,
+    *,
+    listing: project_registry.RegistryResult | None = None,
+) -> list[str]:
     """The ids of the projects the registry binds to one space of the store `conn` reads.
 
-    A registry that was not read binds none that a read could rely on.
+    `listing` is the registry a caller read already, read here when it names none. A
+    registry that was not read binds none that a read could rely on.
     """
 
-    listing = project_registry.read_registry()
+    if listing is None:
+        listing = project_registry.read_registry()
     if listing["status"] != "available":
         return []
     return [str(project["project_id"]) for project in _bound(conn, listing, space_key)]
