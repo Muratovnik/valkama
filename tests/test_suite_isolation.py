@@ -144,5 +144,80 @@ class StartUpTests(unittest.TestCase):
         self.assertTrue(Path(answer["registry"]).resolve().is_relative_to(throwaway), answer)
 
 
+#: A process started as a targeted run starts, that writes the global Git configuration
+#: as `git-hook install` does and reports what it reads there.
+GLOBAL_WRITES = """\
+import json, os, subprocess, sys
+sys.path.insert(0, sys.argv[1])
+import tests
+
+def git(*arguments):
+    return subprocess.run(["git", "config", "--global", *arguments], capture_output=True)
+
+written = git("--replace-all", "hook.valkama-commit.event", "post-commit")
+print(json.dumps({
+    "written": written.returncode,
+    "variable": os.environ.get("GIT_CONFIG_GLOBAL"),
+    "origin": git("--show-origin", "-z", "--get", "hook.valkama-commit.event").stdout.decode(),
+    "suite": tests.SUITE_GIT_CONFIG,
+    "name": git("--get", "user.name").stdout.decode().strip(),
+    "safe": git("--get-all", "safe.directory").stdout.decode().splitlines(),
+    "alias": git("--get", "alias.from-the-caller").returncode,
+}))
+"""
+
+
+class GlobalGitFileTests(unittest.TestCase):
+    """The global Git configuration a test process reads and writes is the suite's own."""
+
+    def test_this_process_names_a_global_git_file_inside_the_suite_s_directory(self) -> None:
+        path = Path(os.environ["GIT_CONFIG_GLOBAL"])
+        self.assertTrue(path.is_file())
+        self.assertTrue(
+            path.resolve().is_relative_to(_throwaway_root()),
+            f"a test process writes the global Git file at {path}",
+        )
+
+    def test_a_targeted_run_writes_no_global_git_file_of_the_caller_s(self) -> None:
+        """A caller without `GIT_CONFIG_GLOBAL`, whose global file is the one in its home:
+        a fresh process that imports the package writes the suite's file and leaves that
+        one byte for byte, and keeps from it only who commits and what is safe."""
+
+        directory = tempfile.TemporaryDirectory(prefix="vk-caller-", ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        home = Path(directory.name).resolve()
+        caller = home / ".gitconfig"
+        original = (
+            b"[user]\n\tname = Somebody Real\n\temail = somebody@example.com\n"
+            b'[safe]\n\tdirectory = C:/work/alpha\n\tdirectory = "C:/work/with space"\n'
+            b"[alias]\n\tfrom-the-caller = status\n"
+        )
+        caller.write_bytes(original)
+        environment = {
+            name: value for name, value in os.environ.items() if name != "GIT_CONFIG_GLOBAL"
+        }
+        environment.update({"HOME": str(home), "USERPROFILE": str(home)})
+        found = subprocess.run(
+            [sys.executable, "-c", GLOBAL_WRITES, str(ROOT)],
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, found.returncode, found.stderr)
+        answer = json.loads(found.stdout)
+        self.assertEqual(original, caller.read_bytes(), "a test process wrote the caller's file")
+        self.assertEqual(0, answer["written"])
+        self.assertEqual(answer["suite"], answer["variable"])
+        # Where Git itself says the write went: `file:<path>`, a NUL, the value.
+        origin = answer["origin"].partition("\0")[0].removeprefix("file:")
+        self.assertEqual(Path(answer["suite"]).resolve(), Path(origin).resolve())
+        self.assertNotEqual(Path(answer["suite"]).resolve(), caller)
+        self.assertEqual("Somebody Real", answer["name"])
+        self.assertEqual(["C:/work/alpha", "C:/work/with space"], answer["safe"])
+        self.assertEqual(1, answer["alias"], "a setting other than identity was carried")
+
+
 if __name__ == "__main__":
     unittest.main()
