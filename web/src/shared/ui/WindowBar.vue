@@ -9,7 +9,7 @@
  * The share spent is a final figure and always a solid fill, one hue on a darker step of the same
  * hue, whether its latest reading is fresh or not: a reading no longer fresh says its age in the
  * words beside the bar, never by the drawing. Past it the forecast continues the fill as a hatched
- * tail (`forecastHatch.css`) to where the window is forecast to stand at its reset, a surface gap
+ * tail (`hatch.css`, over the fill's own hue) to where the window is forecast to stand at its reset, a surface gap
  * of the track after the fill. A forecast of a range runs to its high end, its faster pace's, and
  * the same gap splits it where its low end stands, its slower pace's: the hatch before the gap is
  * what both paces spend, the whole tail what the faster does. One hatch and one gap, the device
@@ -114,7 +114,7 @@ const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
       <span
         v-for="part in ahead"
         :key="part.key"
-        class="window-ahead forecast-hatch"
+        class="window-ahead hatched"
         :class="{ 'window-ahead-start': part.start, 'window-ahead-end': part.end }"
         :data-part="part.key"
         :style="aheadStyle(part)"
@@ -140,7 +140,7 @@ const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
   </span>
 </template>
 
-<style scoped src="@/shared/ui/forecastHatch.css"></style>
+<style scoped src="@/shared/ui/hatch.css"></style>
 
 <style scoped>
 /* The bar takes what its words leave it; the words keep to one line beside it. */
@@ -182,12 +182,18 @@ const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
   }
 }
 
-/* The forecast past the fill: the hatch (`forecastHatch.css`), square where it follows the fill
-   or the part before it and at the gap it leaves, rounded at the end it reaches, as the fill's
-   own end is. */
+/* The forecast past the fill: the fill's own hue under the hatch (`hatch.css`), square where it
+   follows the fill or the part before it and at the gap it leaves, rounded at the end it reaches,
+   as the fill's own end is; a forced palette's ink, as the fill's. */
 .window-ahead {
   position: absolute;
   inset-block: 0;
+  background: var(--color-series-1);
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
 }
 
 /* From the track's start, where nothing is spent yet, it is rounded there as the track is. */

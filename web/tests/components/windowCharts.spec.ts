@@ -319,7 +319,7 @@ describe('the step line past its readings', () => {
     expect(line.find('[data-key="ahead"]').exists()).toBe(false)
     await line.setProps({ ahead: AHEAD })
     const corridor = line.get('.step-ahead')
-    expect(corridor.classes()).toContain('forecast-hatch')
+    expect(corridor.classes()).toContain('hatched')
     // From now, 60 % across, along the faster edge to 100 % at 80 % across and flat to the end,
     // then back along the slower edge from 70 % at the end to 50 % at now.
     const clip = style(corridor)

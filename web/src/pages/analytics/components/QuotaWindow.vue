@@ -228,7 +228,7 @@ const readingsCaption = computed(() =>
           >
             <span
               v-if="fact.swatch"
-              class="quota-window-swatch forecast-hatch"
+              class="quota-window-swatch hatched"
               aria-hidden="true"
             />{{ fact.text }}
           </li>
@@ -269,7 +269,7 @@ const readingsCaption = computed(() =>
   </PanelLevel>
 </template>
 
-<style scoped src="@/shared/ui/forecastHatch.css"></style>
+<style scoped src="@/shared/ui/hatch.css"></style>
 
 <style scoped>
 /* The window's three parts — what stands now, its readings and what used it — stand as far apart
@@ -327,6 +327,12 @@ const readingsCaption = computed(() =>
   inline-size: var(--space-3);
   block-size: var(--space-2);
   margin-inline-end: var(--space-1);
+  background: var(--color-series-1);
   border-radius: 999px;
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
 }
 </style>

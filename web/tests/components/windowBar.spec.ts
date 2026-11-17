@@ -22,7 +22,7 @@ const tail = (bar: ReturnType<typeof mount>) =>
   bar.findAll('.window-ahead').map((part) => ({
     part: part.attributes('data-part'),
     style: style(part),
-    hatched: part.classes('forecast-hatch'),
+    hatched: part.classes('hatched'),
     start: part.classes('window-ahead-start'),
     end: part.classes('window-ahead-end'),
   }))

@@ -7,7 +7,7 @@
  * (`even`): a thin line from nothing at the start to the whole at the reset. Past `end`, while the
  * window still runs (`ahead`), the corridor of its forecast: from the share it stands at now to
  * where its slower and its faster pace leave it at the reset, a band in the readings' hue under
- * the one hatch of a figure not final yet (`forecastHatch.css`); a forecast of one value is a
+ * the one hatch of a figure not final yet (`hatch.css`); a forecast of one value is a
  * ribbon of the same hatch, flat along the top from where it runs out. The band keeps half a
  * ribbon's width outside each edge, so its start at now and a range said alike are never a
  * hairline.
@@ -329,7 +329,7 @@ function stand(index: number) {
         </svg>
         <span
           v-if="corridorClip"
-          class="step-ahead forecast-hatch"
+          class="step-ahead hatched"
           aria-hidden="true"
           :style="{ clipPath: corridorClip }"
         />
@@ -407,7 +407,7 @@ function stand(index: number) {
 
 <style scoped src="@/shared/ui/axisFrame.css"></style>
 
-<style scoped src="@/shared/ui/forecastHatch.css"></style>
+<style scoped src="@/shared/ui/hatch.css"></style>
 
 <style scoped src="@/shared/ui/stepMarks.css"></style>
 

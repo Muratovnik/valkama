@@ -3,7 +3,7 @@
  * The head of a window's step line (`StepLine`): the switch of the span shown at its start, and
  * over its end the legend that names what the plot draws by how each is drawn — the readings a
  * heavier line in the chart's hue, the pace a hairline in the quiet ink, and, where the plot shows
- * one, the forecast's corridor by its hatch (`forecastHatch.css`) — so none is told by a hue alone,
+ * one, the forecast's corridor by its hatch (`hatch.css`) — so none is told by a hue alone,
  * in grayscale too.
  *
  * One row as tall as the switch whether it stands there or not, so the plot never moves when it
@@ -60,13 +60,13 @@ const emit = defineEmits<{ choose: [scope: StepScope] }>()
         v-if="ahead && legend.ahead"
         class="step-key"
         data-key="ahead"
-        ><span class="step-swatch swatch-ahead forecast-hatch" />{{ legend.ahead }}</span
+        ><span class="step-swatch swatch-ahead hatched" />{{ legend.ahead }}</span
       >
     </span>
   </div>
 </template>
 
-<style scoped src="@/shared/ui/forecastHatch.css"></style>
+<style scoped src="@/shared/ui/hatch.css"></style>
 
 <style scoped>
 .step-head {
@@ -113,6 +113,12 @@ const emit = defineEmits<{ choose: [scope: StepScope] }>()
 
   &.swatch-ahead {
     block-size: var(--space-2);
+    background: var(--color-series-1);
+
+    @media (forced-colors: active) {
+      background: CanvasText;
+      forced-color-adjust: none;
+    }
   }
 
   @media (forced-colors: active) {

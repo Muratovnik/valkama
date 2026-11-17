@@ -1,9 +1,11 @@
 /*
  * The hatch, read by each chart that draws one as its own scoped style: a mark carries `.hatched`.
- * It means one thing on every chart, a figure not final yet, such as a period still running, so
- * the chart that hatches names it in its legend or its words. A final figure is never hatched:
- * work with no value is its neutral under its name. The hatch is a mask over the mark's own
- * paint, which adds no colour, so it keeps the mark's hue and a forced palette's ink alike.
+ * It means one thing on every chart, a figure not final yet, such as a period still running or a
+ * window's forecast to its reset, so the chart that hatches names it in its legend or its words.
+ * A final figure is never hatched: work with no value is its neutral under its name. The hatch is
+ * a mask over the mark's own paint in 135° stripes of the whole paint and two fifths of it, which
+ * adds no colour, so it keeps the mark's hue and a forced palette's ink alike: a mark that hatches
+ * sets its hue, and its ink under a forced palette, where it sets its paint.
  */
 .hatched {
   mask-image: repeating-linear-gradient(

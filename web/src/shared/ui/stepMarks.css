@@ -52,11 +52,18 @@
   border-radius: var(--radius-status);
 }
 
-/* The forecast's corridor: the hatch over the whole field, cut to the corridor's outline. */
+/* The forecast's corridor: the readings' hue under the hatch (`hatch.css`) over the whole field,
+   cut to the corridor's outline; a forced palette's ink, as the readings' line. */
 .step-ahead {
   position: absolute;
   inset: 0;
+  background: var(--color-series-1);
   pointer-events: none;
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
 }
 
 /* A place past the readings: a ring in the line's hue around the ground, never a reading's dot;

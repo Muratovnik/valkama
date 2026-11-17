@@ -1050,8 +1050,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   chart in a list of their own, set apart by air, draw no bar and are read by their figures.
   Hatching means one thing on every chart: a figure that is not final yet — a period still
   running, the forecast to a window's reset, the minutes no record has reached yet. Where a
-  chart hatches, its legend or its words name what the hatch is. A final figure is never
-  hatched: a reading that is no longer fresh is drawn solid and says its age in words, and a
+  chart hatches, its legend or its words name what the hatch is. The hatch is one drawing
+  (`hatch.css`): a mask over the mark's own paint in 135° stripes of the whole paint and two
+  fifths of it, which adds no colour, so it keeps the hue of what it continues, reads in
+  grayscale, and under a forced palette draws its stripes in the mark's ink. A final figure is
+  never hatched: a reading that is no longer fresh is drawn solid and says its age in words, and a
   part with no value or no recorded owner is the neutral under its name. The hatch once marked
   work on no task and an organization nobody recorded as well, so one texture said two things
   and a reader could not tell from it which one was meant.
@@ -1172,8 +1175,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   use as a thin diagonal in the text ink. The share spent is a reading, final however old, so
   its fill is solid whether the window is fresh or silent, and a silent one says how long in
   words. What the window's forecast says it reaches by the reset is not final, so both draw it
-  in the one hatch of a forecast (`forecastHatch.css`): the series hue in 135° stripes of the
-  whole hue and two fifths of it, a mask that adds no colour. On the bar it is a tail inside the
+  hatched, in the series hue of the share it continues. On the bar it is a tail inside the
   track from the share spent to the forecast's share at the reset, 2px of ground past the fill: a
   week's range as two parts parted by the same 2px where its slower pace ends, since both paces
   spend at least that much and only the faster spends the rest; five hours that run out to the
