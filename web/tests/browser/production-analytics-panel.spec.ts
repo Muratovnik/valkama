@@ -164,7 +164,8 @@ test('at 1440 pixels the ranked list and the small charts beside it are titled i
 }, info) => {
   await serve(page)
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(TASK_REPORT)
+  // A section named by identifiers: the tasks, named by free text, draw no small charts.
+  await page.goto(pageAt({ by: 'model' }))
   await expect(page.locator('.spending-multiples h3')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
 
@@ -260,34 +261,29 @@ test.describe('in Russian', () => {
   }, info) => {
     await serve(page)
     await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto(TASK_REPORT)
-    await expect(page.locator('.spending-table-summary')).toBeVisible()
+    const fit = (selector: string) =>
+      page.locator(selector).evaluate((element) => ({
+        text: element.textContent.trim(),
+        height: Math.round(element.getBoundingClientRect().height),
+        cut: element.scrollWidth > element.clientWidth,
+      }))
+    // The small charts stand in a section named by identifiers; the tasks draw none.
+    await page.goto(pageAt({ by: 'model' }))
+    await expect(page.locator('.spending-multiples h3')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
-    const seen = await page.evaluate(() => {
-      // This body runs in the page, so a helper at the module's own scope would not be there.
-      // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
-      const fit = (selector: string) => {
-        const element = document.querySelector<HTMLElement>(selector)
-        if (!element) throw new Error(`${selector} is missing`)
-        return {
-          text: element.textContent.trim(),
-          height: Math.round(element.getBoundingClientRect().height),
-          cut: element.scrollWidth > element.clientWidth,
-        }
-      }
-      return {
-        bars: fit('.spending-bars h3'),
-        multiples: fit('.spending-multiples h3'),
-        count: fit('.spending-table-summary'),
-      }
-    })
-    await record(info, 'analytics panel one line ru 1440x900', seen)
-    expect(seen.multiples.text).toBe('По дням, по задачам')
+    const seen = {
+      bars: await fit('.spending-bars h3'),
+      multiples: await fit('.spending-multiples h3'),
+    }
+    await page.goto(TASK_REPORT)
+    const count = await fit('.spending-table-summary')
+    await record(info, 'analytics panel one line ru 1440x900', { ...seen, count })
+    expect(seen.multiples.text).toBe('По дням, по моделям')
     expect(seen.multiples.cut).toBe(false)
     expect(seen.multiples.height).toBe(seen.bars.height)
     // Twelve tasks spent this week, and none only in the week before.
-    expect(seen.count.text).toBe('12 задач')
-    expect(seen.count.cut).toBe(false)
+    expect(count.text).toBe('12 задач')
+    expect(count.cut).toBe(false)
   })
 
   test('on a phone no name or heading in a chart’s table breaks inside a word', async ({

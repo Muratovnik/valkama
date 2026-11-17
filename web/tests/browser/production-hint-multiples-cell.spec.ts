@@ -12,7 +12,9 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { openReport, serve } from './analyticsPage.ts'
+import { value } from '../fixtures/analytics.ts'
+import type { TimedStretch } from '../fixtures/analytics.ts'
+import { openReport, pageAt, serve } from './analyticsPage.ts'
 import { test } from './test.ts'
 
 /** Longer than the rest a hint waits for, and the grace it stays after the pointer leaves. */
@@ -59,13 +61,27 @@ const standing = (page: Page, index: number, period: number) =>
     [index, period, EDGE] as const,
   )
 
+/**
+ * Six projects over the three days of the week so far: small charts enough for two rows. The
+ * projects are named by identifiers, so their section draws small charts, which the tasks' does
+ * not.
+ */
+const PROJECTS: TimedStretch[] = Array.from({ length: 12 }, (_, index) => ({
+  at: new Date(2026, 10, 9 + (index % 3), 10),
+  group: {
+    project: value(`project-${String(index % 6)}`),
+    account: value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f'),
+  },
+  spend: { seconds: (13 - index) * 3600, tokens: 1000, cost: 1 },
+}))
+
 /** Analytics' small multiples drawn as charts, at this window. */
 async function openMultiples(page: Page, width: number) {
   await page.addInitScript(() => localStorage.setItem('valkama-locale', 'en'))
   // The hint's delay runs on this clock, so each rest is read after it.
   await page.clock.install()
-  await serve(page)
-  await openReport(page, width)
+  await serve(page, PROJECTS)
+  await openReport(page, width, pageAt({ by: 'project' }))
   const multiples = page.locator('.spending-multiples')
   await multiples.scrollIntoViewIfNeeded()
   if ((await multiples.getAttribute('data-shown')) !== 'chart')

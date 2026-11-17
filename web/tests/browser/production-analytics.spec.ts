@@ -372,23 +372,20 @@ for (const width of [1440, 390]) {
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-one-${width}.png`))
   })
 
-  test(`a chart of many values, the first twelve a bar and the rest a small «other», stands whole at ${width}px`, async ({
+  test(`a chart of many tasks, the first ten a bar and the rest a large «other» with its own, stands whole at ${width}px`, async ({
     page,
   }, info) => {
     await serve(page, LONG_TAIL)
     const analytics = await openReport(page, width)
-    for (const part of ['.spending-bars', '.spending-multiples'])
-      await drawLined(analytics.locator(part))
-    await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(12)
-    await expect(analytics.locator('.spending-bars-more')).toHaveText('13 more — in the table')
+    await drawLined(analytics.locator('.spending-bars'))
+    // Ten tasks and the other fifteen in one row apart, which draws its bar on the same scale.
+    await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(11)
+    await expect(analytics.locator('.spending-bars-more')).toHaveText('15 more — in the table')
     const measured = await bars(page)
     await record(info, `analytics large other ${width}`, measured)
-    expect(measured.rest).toEqual([])
-    // The small charts name the eight largest and fold the other seventeen into one.
-    await expect(analytics.locator('.spending-multiples .multiple')).toHaveCount(9)
-    await expect(
-      analytics.locator('.spending-multiples .multiple[data-kind="other"] .multiple-name'),
-    ).toHaveText('Other, 17 more')
+    expect(measured.rest).toEqual(['Other, 15 more'])
+    // The tasks are named by free text: a list, with no small charts beside it.
+    await expect(analytics.locator('.spending-multiples')).toHaveCount(0)
     expectBarsInTracks(measured)
     await expectNoSilentClipping(page, `analytics large other at ${width}px`, '.analytics-page')
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-other-${width}.png`))

@@ -346,12 +346,12 @@ async function showAs(page: Page, view: string) {
     if (!(await radio.isChecked()) && (await radio.isVisible())) await radio.click()
 }
 
-async function open(page: Page, width: number) {
+async function open(page: Page, width: number, address?: string) {
   await page.addInitScript(() => localStorage.setItem('valkama-locale', 'en'))
   // The hint's delay runs on this clock, so each hint is read after it.
   await page.clock.install()
   await serve(page)
-  await openReport(page, width)
+  await openReport(page, width, address)
   await drawAllLined(page)
   await page.evaluate(() => document.fonts.ready)
 }
@@ -392,7 +392,8 @@ for (const width of [1440, 390]) {
   test(`at ${width}px a small chart's columns and name have their hints at them`, async ({
     page,
   }, info) => {
-    await open(page, width)
+    // A section named by identifiers: the tasks, named by free text, draw no small charts.
+    await open(page, width, pageAt({ by: 'model' }))
     const multiples = page.locator('.spending-multiples')
     await multiples.scrollIntoViewIfNeeded()
     await expect(multiples.locator('.multiple-period').first()).toBeVisible()
