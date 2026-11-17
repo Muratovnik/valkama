@@ -286,6 +286,9 @@ HTTP_WRITES: dict[str, list[Args]] = {
             D="awaiting_confirmation",
         ),
     ],
+    "/api/planning/work-item/defer": [
+        _with(_ids(id="z"), until="2099-01-01", reason="waits for the vendor"),
+    ],
     "/api/planning/work-item/move-out": [
         _with(_ids(id="e"), reason="It belongs to no stage"),
         _Accepting(
