@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import tomllib
@@ -27,8 +28,10 @@ from unittest import mock
 
 from server import store
 from server.store_identity.refs import planning_space_entity
-from tests import agent_probes, registry_fixtures
+from tests import agent_probes
 from tests import test_planning_work_model_migration as work_model
+from tests.test_registry_owner import _former_inventory as former_inventory
+from tests.test_registry_owner import _former_projection as former_projection
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = ROOT / "tests" / "agent_probes"
@@ -179,7 +182,9 @@ def make_user(root: Path) -> dict[str, Path]:
         }
         for key, project in sorted(work_model.SPACE_PROJECTS.items())
     ]
-    (local / "Valkama" / "projects.json").write_bytes(registry_fixtures.registry_bytes(entries))
+    # The registry as 2.9 leaves it: an inventory of format 1 beside a projection of 3.
+    (local / "Valkama" / "project-registry.toml").write_bytes(former_inventory(entries))
+    (local / "Valkama" / "projects.json").write_bytes(former_projection(entries))
     work_model.build(str(root / ".valkama" / "valkama.sqlite3"))
     return {"claude": claude, "codex": codex, "coordinator": coordinator}
 
@@ -207,6 +212,10 @@ class RunCase(unittest.TestCase):
         (cls.home / ".claude").mkdir()
         (cls.home / ".claude" / ".credentials.json").write_text('{"login": 1}', "utf-8")
         (cls.home / "leftover.txt").write_text("from an earlier run", encoding="utf-8")
+        kept_read_only = cls.home / ".codex" / "plugins" / "objects" / "pack"
+        kept_read_only.parent.mkdir(parents=True)
+        kept_read_only.write_bytes(b"written read-only, as Git writes its objects")
+        kept_read_only.chmod(stat.S_IREAD)
         cls.before = tree_digest(cls.user)
         cls.code, cls.said = cls.main(
             "--client-home", str(cls.home), "--out", str(cls.out), *arguments
@@ -457,6 +466,7 @@ class RunTests(RunCase):
             '{"login": 1}', (self.home / ".claude" / ".credentials.json").read_text("utf-8")
         )
         self.assertFalse((self.home / "leftover.txt").exists())
+        self.assertFalse((self.home / ".codex" / "plugins" / "objects").exists())
 
     def test_the_users_files_registrations_and_store_are_unchanged(self) -> None:
         self.assertEqual(self.before, tree_digest(self.user))
@@ -589,6 +599,17 @@ class ScenarioFormatTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(agent_probes.ProbeError, "no scenario"):
             agent_probes.load_cases(self.cases, ["Z9"])
+
+
+class ProgramTests(unittest.TestCase):
+    def test_a_client_program_named_relative_to_the_caller_runs_from_any_workspace(self) -> None:
+        relative = os.path.relpath(FAKE, Path.cwd())
+
+        programs = agent_probes._programs(["claude"], [f"claude={relative}"], "")
+
+        self.assertEqual([sys.executable, str(FAKE)], programs["claude"])
+        with self.assertRaisesRegex(agent_probes.ProbeError, "CLIENT=PATH"):
+            agent_probes._programs(["claude"], ["claude"], "")
 
 
 class SectionTests(unittest.TestCase):

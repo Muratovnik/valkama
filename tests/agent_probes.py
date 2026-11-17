@@ -51,6 +51,7 @@ import re
 import shlex
 import shutil
 import sqlite3
+import stat
 import subprocess
 import sys
 import threading
@@ -620,12 +621,29 @@ def clear_home(home: Path) -> None:
             if child in keep_dirs and child.is_dir() and not child.is_symlink():
                 clear(child)
             elif child.is_dir() and not child.is_symlink() and not _is_junction(child):
-                if not _isolated().remove_tree(child):
+                if not remove_tree(child):
                     raise ProbeError(f"could not clear {child}")
             else:
                 child.unlink()
 
     clear(home)
+
+
+def remove_tree(path: Path) -> bool:
+    """Remove `path`, read-only files included; report whether it went.
+
+    A copied plugin holds Git objects, which Git writes read-only, and Windows
+    refuses to delete those until they are made writable.
+    """
+
+    def writable(function: Callable[[str], object], name: str, _: object) -> None:
+        os.chmod(name, stat.S_IWRITE)
+        function(name)
+
+    with contextlib.suppress(OSError):
+        shutil.rmtree(path, onerror=writable)
+    # What is left is held by a process that just ended; that waits it out.
+    return bool(_isolated().remove_tree(path))
 
 
 def _is_junction(path: Path) -> bool:
@@ -913,12 +931,10 @@ def prepare_store(source: Path | None, work: Path) -> tuple[Path, dict[str, Any]
     isolated.copy_store(source, base)
     isolated.copy_registry(migration)
     registry = migration / "AppData" / "Local" / "Valkama"
-    if (registry / "projects.json").is_file() and not (
-        registry / "project-registry.toml"
-    ).is_file():
-        _valkama(environment, "projects", "upgrade")
     arguments = ["migrate", "work-model"]
     if (registry / "projects.json").is_file():
+        # A registry 2.9 left is of the formats before; one already carried says so.
+        _valkama(environment, "projects", "upgrade")
         items = work / "item-projects.json"
         _valkama(environment, "projects", "map-items", "--output", str(items))
         arguments += ["--item-projects", str(items)]
@@ -1235,7 +1251,7 @@ class SessionRunner:
 
     def run(self) -> Session:
         isolated = _isolated()
-        if self.directory.exists() and not isolated.remove_tree(self.directory):
+        if self.directory.exists() and not remove_tree(self.directory):
             raise ProbeError(f"could not clear {self.directory}")
         self.directory.mkdir(parents=True)
         try:
@@ -1633,6 +1649,8 @@ def _programs(chosen: Sequence[str], given: Sequence[str], path: str) -> dict[st
         client, _, program = item.partition("=")
         if client not in CLIENTS or not program:
             raise ProbeError(f"--client-program takes CLIENT=PATH, not {item!r}")
+        # Resolved here: a turn runs in the scenario's workspace, not where the run started.
+        program = str(Path(program).resolve()) if Path(program).exists() else program
         programs[client] = [sys.executable, program] if program.endswith(".py") else [program]
     for client in chosen:
         if client not in programs:
