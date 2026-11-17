@@ -605,8 +605,8 @@ whole record and took `full`, is in
 | `section` | a section key, or a list of them | those sections of the description, with their text |
 
 The parts are `card`, `comments`, `events`, `links`, `refs`, `questions`,
-`mentions`, `sessions`, `images`, `subscribers`, `claim`, `sections` and
-`participants`. Without `parts` and without a mode the read is `["card"]`. A
+`mentions`, `sessions`, `images`, `subscribers`, `claim`, `sections`,
+`participants` and `confirmation`. Without `parts` and without a mode the read is `["card"]`. A
 mode without `parts` reads only the part it cuts: `unresolved`, `thread` and
 `comments_after` the comments, `events` the events, `section` the sections, and
 several modes read each of their parts. Each of these is refused with
@@ -636,6 +636,7 @@ at, and beside them the fields of each part named:
 | `claim` | `claim`, the lease as [Claims are leases](#claims-are-leases) shows it, `null` while nobody holds the item |
 | `links`, `refs`, `questions`, `sessions`, `images`, `subscribers` | the field of that name, as described below and in [Reading a question](#reading-a-question) |
 | `participants` | on a goal or a stage, the field of that name, as [Participants](#participants) shows it; a task has no such part, and naming it is refused with `unknown part 'participants'; a task's parts are card, comments, …` |
+| `confirmation` | on a goal or stage awaiting confirmation, the field of that name, as [Completing a goal or stage](#completing-a-goal-or-stage) shows it; on any other item the answer has no such field |
 
 #### The card
 
@@ -2763,6 +2764,7 @@ A pass runs its steps in order, each in a transaction of its own:
 | `leases` | releases every lapsed claim and claimed step, as [above](#who-holds-a-claim-or-a-step), and marks the lapsed holder's ticks |
 | `waiting` | leaves [words waiting](#words-that-wait-for-a-session) on a goal or stage that a session stopped working on while its claim, step or subscription still stands -- it ended, or went quiet past the lease -- once no live session works there; the words are what a person did there after that session's last call, and they wait under a call of `valkama` with the tool `waiting-recovery` |
 | `subscriptions` | removes every [subscription](#subscriptions) and mute whose session lapsed |
+| `confirmations` | asks the owner to confirm a goal or stage that awaits confirmation with no live session working there, or unconfirmed a day after its wait began, once in a period of waiting, under the tool `confirmation-question`; and records the wait, with its event, of one a write left unrecorded (see [Completing a goal or stage](#completing-a-goal-or-stage)) |
 
 Every step keeps the same contract:
 
@@ -2920,6 +2922,88 @@ the field is `null`.
 The card's own read says more about who that was: `last_claim_executor` is the
 same `executor` its claim, steps and agents carry, for the holder
 `last_claim_ref` names, with `state` `none` when there is no session to open.
+
+### Completing a goal or stage
+
+A goal or stage is done when nothing under it is open, so a move of one to a
+`completed` state is refused with the `children` guard (409 `workflow_guard`) while
+an item under it, at any depth, is open, one in `triage` or `deferred` included.
+`force` does not carry it, and a person meets it as an agent does. The message names
+up to five of the open items and counts the rest: `[children] MAIN-3 has 7 open
+item(s) under it: MAIN-4, MAIN-5, MAIN-6, MAIN-8, MAIN-9 and 2 more; close, cancel or
+move out what is open under it, and it awaits confirmation once nothing is`.
+
+**Awaiting confirmation.** The write that closes, moves out, moves away or deletes
+the last open item under an accepted open goal or stage brings it to
+`container_state: awaiting_confirmation`, and in the same transaction:
+
+- the answer of that write, over HTTP and as an MCP acknowledgement, adds
+  `awaiting_confirmation`, the references of the goals and stages that came to wait
+  in it. Confirming the last open stage under a goal is such a write: the goal comes
+  to wait in it;
+- Valkama records `awaiting_confirmation` on the goal or stage in a call of its own,
+  with the tool `awaiting-confirmation` and the author `valkama`. Its detail names
+  what closed without being done and what left, such as `cancelled MAIN-12, MAIN-14;
+  moved out MAIN-15`, at most 512 characters, the references that do not fit counted
+  as `and N more`. A goal or stage with no steps ends it with `no steps: check it
+  against its description`. The record's kind asks for a session, so it wakes the
+  sessions working there (see [the hook contract](hook-contract.md));
+- when an agent's write did it, that agent's top-level session follows the goal or
+  stage, so a coordinator whose subagent closed the last task hears it. A person's
+  write and Valkama's own subscribe nobody.
+
+While it waits, a read of it by parts names the part `confirmation` in its card's
+`parts`, with `count` the items it lists, and reads it by that name:
+
+| Field | What it holds |
+| --- | --- |
+| `since` | when this period of waiting began |
+| `steps` | how many steps the goal or stage has; 0 means it is checked against its description |
+| `cancelled` | the items under it that were cancelled, each `{reference, reason}`: the reason of the move that cancelled it, else its summary's `why`, else its `done`, else `null` |
+| `moved_out` | the items that left it and did not come back, each `{reference, reason}`: the reason the move out gave, or `moved under MAIN-7`; `null` where the move recorded none |
+| `asked` | the id of the owner's confirmation question, once it is asked; `null` before |
+| `left_for_next_session` | when the owner left it to the next session; `null` otherwise |
+
+A goal or stage that does not wait has no such part, and a read that names it answers
+without the field.
+
+**Confirming.** Any session or a person confirms it by completing it, under the guards
+a task meets: every step ticked and a summary. Whoever confirms checks its steps, or
+its description when it has none, against what was done; when something is missing,
+they file a task under it, which brings it back to work. A new or reopened item under
+it, or one moved under it, ends the wait in that write, and an open confirmation
+question ends `expired` with `expired_reason: withdrawn`.
+
+**The owner's question.** The planning sweep's `confirmations` step asks the owner
+when no live session works on the goal or stage (see [Participants](#participants)),
+or when a day has passed since the wait began and nobody confirmed it. It asks once
+in a period of waiting, in a call of Valkama's own with the tool
+`confirmation-question`: `kind` `question`, purpose `confirm`, the prompt `All work
+under MAIN-3 is closed: confirm it, or leave it to the next session that takes work in
+this space.` followed by what was cancelled and what moved out, each with its reason,
+and its steps, or `It has no steps: check what was done against its description.`,
+and one required choice field, `answer`, with the options `confirm` (`Confirm it`)
+and `leave` (`Leave it to the next session`).
+
+Only a person answers it, in Valkama (`owner_only`, 403, for an agent), and as with
+[review's question](#review-asks-the-owner) it is not declined, its answer is not
+changed and an own variant is no answer to it (`[purpose]`). Valkama asked it, so
+nobody withdraws it (`not_asker`, 403): the write that ends the wait ends it. The
+answer is carried out in the write that gives it, and a refused move refuses the
+answer; the answer's record says what it did as `carried_out`:
+
+- `confirm` ticks the open steps as the person's, writes the summary `done`
+  `Confirmed by the owner: all work under it is closed.`, `next` `Nothing: the work
+  under it is closed.` and the answer's note as `why`, and moves it to the first
+  `completed` state of its workflow: `carried_out: completed`;
+- `leave` leaves it as [words that wait](#words-that-wait-for-a-session) for the first
+  session that takes work anywhere in its space, with the scope `space`, and records
+  `left_for_next_session`: `carried_out: left_for_next_session`. It goes on waiting,
+  and no question is asked again in this period.
+
+A session's confirmation while the question is open completes it, which ends the
+question with `expired_reason: item_completed`. A confirmation question does not hold
+that completion (see [the `question` guard](#review-asks-the-owner)).
 
 ### Cancelling a goal or stage
 

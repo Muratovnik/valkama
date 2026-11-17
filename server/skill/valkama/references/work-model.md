@@ -65,6 +65,27 @@ progress within what can be verified and merged: a change counts once it is
 integrated, and every further open item adds coordination and delays the
 feedback on the others [DORA, Claude Code teams].
 
+## Goals and stages
+
+A goal or stage is done when nothing under it is open, at any depth; completing
+it before then is refused (`children`). When the last open item under it closes,
+moves out or is deleted, it awaits confirmation: the write that did it answers
+with `awaiting_confirmation`, the top-level session of the agent that wrote it
+follows the goal or stage, and Valkama records the wait there, which wakes the
+sessions working on it.
+
+Confirming is completing it. Read its `confirmation` part: what was cancelled and
+what moved out under it, each with its reason, and how many steps it has. Check
+its steps, or its description when it has none, against what was done, tick
+them, write the summary and complete it. When something is missing, file a task
+under it instead: the goal or stage goes back to work.
+
+When no live session works on it, or none has confirmed it a day after its wait
+began, Valkama asks the owner, once in that wait. Only the owner answers:
+`confirm` completes it with its steps ticked, `leave` leaves it to the next
+session that takes work in the space, which hears it as words left for it. A
+session that confirms it meanwhile ends the question.
+
 ## Sources
 
 Read on 2026-11-01.
