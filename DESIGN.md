@@ -1015,6 +1015,15 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
 - **Charts:** three primitives answer "how much, and of what". `RankedBars` breaks one
   measure down by one dimension, largest first: a name on one line (cut with an ellipsis, whole
   in its hint), the value as it reads and a bar as long as its share of the longest category.
+  Values named by free text — tasks and sessions by their titles, which run to a sentence — are
+  a list of their own (`freeText`): each name on lines of its own at every width, two at most and
+  then an ellipsis, whole in the row's hint, so the reference a task's name starts with,
+  «VAL-1228 …», is never cut; the bar and the value under it, every value ending at one edge; a
+  pair a line a part, each cut at its own end. It lists the first ten values; the folded tail,
+  «no task» and «unknown» close it under a rule, unranked, each with a bar in its neutral on one
+  scale with the values, which the longest row of all sets, so a large «no task» still reads as
+  large. Over the rows a thin strip (`MiniShareBar`) splits the whole among every row in its hue
+  and in the list's order, a picture of the figures the rows give, said to no screen reader.
   `PeriodColumns` stands a column per day or hour, stacked by a few series. `SmallMultiples`
   draws one small chart of the span per leading value, all on one scale whose top is written
   once over them, each with its name on one line and its figure; the folded tail shares the
@@ -1033,7 +1042,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   `--color-series-apart`. Two greys and no hue: in a stack the two can stand on each other and
   are often a period's two largest parts, so they differ in lightness for every reader, and the
   legend names them in the stack's order. In a section's
-  ranked chart and small charts «no task» and «unknown» stand where their figures put them,
+  ranked chart named by identifiers and its small charts «no task» and «unknown» stand where
+  their figures put them,
   drawn on the same scale in their neutral with their names in the quiet ink, since the largest
   share of a period can be work on no task; only the folded tail closes the chart, apart and
   unranked, and sets no scale. Elsewhere, as in a card of first values, all three close the
@@ -1050,7 +1060,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   accessible name say each series by name. The legend's lines step 24px with no gap between
   them, every line one height, and every key fills its line: one that acts, a link or a button
   alike, is the 24px target WCAG 2.5.8 asks and reaches no key of the next line, and one that
-  only shows takes no focus, no pointer's hand and no press.
+  only shows takes no focus, no pointer's hand and no press. A legend's name takes one line, as
+  wide as the legend at most, and ends in an ellipsis from its end, so a task's reference stays;
+  the entry's hint says it whole. Broken wherever a letter fell, a task's name took two lines an
+  entry and 164 of the day chart's 435 pixels, and a session's four, «Valkama: проектирова / ние
+  системы агентов».
   Every mark of a chart — a period, a segment of one, a small chart's name, a legend entry, a
   ranked row — keeps one contract. Pointing at it, or focusing it from the keyboard, shows its
   hint at the mark through the one hint host, a segment's being its period's: the mark's series, its value, its share and the
@@ -2515,17 +2529,25 @@ panel scrolls rather than the chart shrinking, and a tall window's room under th
 to the chart.
 
 A dimension's section answers «of what»: the same cells, then its values three ways. The
-values split one whole, drawn as a ring or as ranked bars and switched with the table as «Ring |
-Bars | Table», the same numbers in each: the ranked bars list the first twelve and say how many
-more the table holds, and the ring (`DonutChart`) names its first parts and folds the smaller
-into one rest. A section opens on its ring, except by task, which opens on its bars
-(`firstSplitView`): tasks are as many as the work done, and a ring of them folds most of the
-period into one rest no reader can take apart, where the other dimensions fold little. Split by
-a second dimension it draws bars alone, since a ring of pairs would tell one value's pairs apart
-by hue alone. The small charts
+form follows how the values are named (`splitView.ts`). Named by identifiers — accounts,
+projects, roles, models, efforts, environments, launch classes — they split one whole, drawn as
+a ring or as ranked bars and switched with the table as «Ring | Bars | Table», the same numbers
+in each, opening on the ring: the ranked bars list the first twelve and say how many more the
+table holds, and the ring (`DonutChart`) names its first parts and folds the smaller into one
+rest. Split by a second dimension it draws bars alone, since a ring of pairs would tell one
+value's pairs apart by hue alone. Named by free text — tasks and sessions, by their own or on
+either side of a pair — they are a list only, switched with the table as «Chart | Table»: the
+ranked list of free text, with no ring and no small charts, across the whole width of the
+charts. Their names run to a sentence, 90 characters at a week's median and 209 at its longest
+for tasks, 36 and 67 for sessions, where an identifier is 17 at most: a ring's legend broke
+them inside words, four lines an entry, and beside the small charts the list had 415 of 846
+pixels. And tasks are as many as the work done, hundreds a week, which a ring of five named
+parts folds into one rest no reader can take apart. Which dimensions are free text is one set
+in code, `FREE_TEXT_DIMENSIONS`. The small charts
 draw each leading value's days on one scale; the table lists every value with the figures
-of the period and of the period before. Work with no value in the dimension — on no task,
-of an unknown model — is ranked where its figure puts it, in the neutral colour. A value
+of the period and of the period before. Work with no value in the dimension, or of a value
+nobody can place — an unknown model — is ranked where its figure puts it, in the neutral colour;
+a list of free text sets it apart after its values instead, with its bar on their scale. A value
 keeps one colour on the whole page: in its tile, its bar, its small chart and its share of
 a day. That colour is its place in the period's ranking without the page's filters, so a
 filter that takes values away repaints none of those it leaves; another measure ranks again
@@ -2604,9 +2626,10 @@ minutes, as ranked bars — the first five items by the API price estimate, each
 of the account's estimate, and one line for the rest — or as a ring of every item that folds its
 own rest, chosen with «Ring | Bars» beside the breakdowns, or as the bars' table when the panel
 turns to its tables, which hides that switch. It opens by task and offers projects and models;
-the choice of breakdown holds for that window when the panel turns to its table. By task it opens
-on the bars and by project or model on the ring, as every split opens (`firstSplitView`), and a
-person's choice of drawing holds until the page is left. Its heading names the stretch it covers. That it is the API price estimate and not
+the choice of breakdown holds for that window when the panel turns to its table. By project or
+model it opens on the ring, as every split named by identifiers does, and a person's choice of
+drawing holds until the page is left; by task it is the list of free text alone, with no switch,
+the rest and the work on no task apart after the five under their rule. Its heading names the stretch it covers. That it is the API price estimate and not
 quota points, and that work in claude.ai and the desktop app, which the window's share counts,
 is not in it, the section's «ⓘ» says once for every window. It is read by the account's seat,
 one window at a time and only for the windows shown, so another account's work is never in it;
