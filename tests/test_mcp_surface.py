@@ -2119,6 +2119,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "claim",
                 "subscribe",
                 "update",
+                "convert",
                 "checklist",
                 "checklist_ticks",
                 "refs",

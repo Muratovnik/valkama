@@ -18,8 +18,8 @@ Mermaid graph.
 Each write runs on its own copy of the tree. A write that changes which goals and
 stages stand accepted and open says so (`_Accepting`): one that accepts a goal or a
 stage, confirms one, creates one already accepted, opens a closed one again, files
-work under a stage or moves an accepted one out is read against the tree as that
-write leaves it, and `ACCEPTING` names the six. The Planning routes write as the owner's interface
+work under a stage, moves an accepted one out or converts a task into one and back is read
+against the tree as that write leaves it, and `ACCEPTING` names the eight. The Planning routes write as the owner's interface
 does, bound as the person's writes; the MCP tools as an agent's.
 """
 
@@ -80,6 +80,8 @@ ACCEPTING = frozenset(
         "a closed goal or stage opened again by a move to ready",
         "an item filed under a stage",
         "an accepted stage moved out: from the service state to triage, a goal",
+        "an accepted task converted into a goal: from ready to the service state",
+        "an accepted goal with nothing under it converted into a task: to ready",
     }
 )
 #: The name `_Accepting` gives the item its write creates.
@@ -207,6 +209,16 @@ MCP_WRITES: dict[str, list[Args]] = {
             _with(_ids(id="S2"), move_out={"reason": "It is a goal of its own"}),
             S2=None,
         ),
+        _Accepting(
+            "an accepted task converted into a goal: from ready to the service state",
+            _with(_ids(id="y"), convert={"to": "goal"}),
+            y="not_started",
+        ),
+        _Accepting(
+            "an accepted goal with nothing under it converted into a task: to ready",
+            _with(_ids(id="H"), convert={"to": "task"}),
+            H=None,
+        ),
     ],
     "delete_work_item": [_ids(id="u")],
     "create_work_item_request": [
@@ -286,12 +298,27 @@ HTTP_WRITES: dict[str, list[Args]] = {
             D="awaiting_confirmation",
         ),
     ],
+    "/api/planning/work-item/defer": [
+        _with(_ids(id="z"), until="2099-01-01", reason="waits for the vendor"),
+    ],
     "/api/planning/work-item/move-out": [
         _with(_ids(id="e"), reason="It belongs to no stage"),
         _Accepting(
             "an accepted stage moved out: from the service state to triage, a goal",
             _with(_ids(id="S2"), reason="It is a goal of its own"),
             S2=None,
+        ),
+    ],
+    "/api/planning/work-item/convert": [
+        _Accepting(
+            "an accepted task converted into a goal: from ready to the service state",
+            _with(_ids(id="y"), to="goal"),
+            y="not_started",
+        ),
+        _Accepting(
+            "an accepted goal with nothing under it converted into a task: to ready",
+            _with(_ids(id="H"), to="task"),
+            H=None,
         ),
     ],
     "/api/planning/work-item/claim": [_ids(id="b")],

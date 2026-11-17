@@ -654,7 +654,12 @@ def _parent_row(
     if str(parent_row["planning_space_id"]) != space_id:
         raise model.PlanningError("a parent work item lives in another planning space")
     if parent_row["kind"] != model.CONTAINER_KIND:
-        raise model.PlanningError("a task holds no children; convert it to a stage first")
+        # The word a conversion of that task passes with: its place says which it becomes.
+        raise model.PlanningError(
+            f"{read_model.reference(conn, parent_row)} is a task and holds no children:"
+            f" convert it first, with convert {{to: {_container_word(parent_row)}}} in"
+            " apply_work_item_changes"
+        )
     # Work filed under finished work would read as done before it began.
     if read_model.state_by_id(conn, str(parent_row["state_id"]))["is_terminal"]:
         raise model.PlanningError(
@@ -874,7 +879,7 @@ def update_work_item(
         parameters.append(model.dumps(labels))
     if kind is not None:
         updates.append("kind = ?")
-        parameters.append(_edited_kind(row, kind))
+        parameters.append(_edited_kind(conn, row, kind))
     moved_under: sqlite3.Row | None = None
     if parent is not None:
         if not parent.strip():
@@ -1012,24 +1017,165 @@ def locked_row(
     return _row_for_write(conn, reference, expected_revision)
 
 
-def _edited_kind(row: sqlite3.Row, kind: str) -> str:
+# -- converting -------------------------------------------------------------------
+
+
+def reform(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    kind: str,
+    state: sqlite3.Row | None,
+    reason: str,
+    steps: list[dict],
+    labels: list[str],
+    author: str | None,
+) -> dict:
+    """Write an item converted to `kind`: one of `split.convert`'s writes, which decides it.
+
+    `state` is where it then stands, or None where it stays: a goal or stage accepted
+    stands in the service state, recorded `opened` with `reason`, and a task out of it
+    in a ready state, recorded `transitioned`. Its claim ends, and so does every step
+    claim it had, which `steps`, the steps it keeps, no longer carry: each recorded
+    `released` or `checklist_released`. A goal or stage keeps no start of its own, so
+    it loses `started_at`. The goal or stage it stands under, and the item itself,
+    derive from it, and are marked. The `converted` event is the caller's
+    (`log_converted`), once it knows what the conversion left.
+    """
+
+    identity = str(row["work_item_id"])
+    # The first write of the call names what it acted on: the converted item.
+    calls.call_id(conn, identity)
+    closing.note(conn, row["parent_id"], author)
+    closing.note(conn, identity, author)
+    current = model.labels(json.loads(str(row["labels"])))
+    change = model.labels_change(current, labels)
+    updates = ["kind = ?", "checklist = ?", "labels = ?"]
+    parameters: list[object] = [kind, model.dumps(steps), model.dumps(labels)]
+    if state is not None:
+        updates.append("state_id = ?")
+        parameters.append(str(state["state_id"]))
+    held = str(row["claim_ref"])
+    if held:
+        updates += ["claim_ref = ?", "claim_call_id = ?"]
+        parameters += ["", None]
+    if kind == model.CONTAINER_KIND:
+        updates.append("started_at = NULL")
+    _write(conn, row, updates, parameters)
+    if held:
+        _log(conn, identity, "released", held, author)
+    for step in model.checklist(row["checklist"]):
+        if step["claimed_by"]:
+            _log(conn, identity, "checklist_released", step["text"][:120], author)
+    if change is not None:
+        _log(conn, identity, "labels_changed", change, author, limit=model.LABELS_DETAIL_LIMIT)
+    if state is not None and state["category"] == model.SERVICE_CATEGORY:
+        _log(conn, identity, "opened", reason, author)
+    elif state is not None:
+        _log(conn, identity, "transitioned", f"{state['key']}: {reason}", author)
+    return {"released": held} if held else {}
+
+
+def file_leftover(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    title: str,
+    steps: list[dict],
+    state: sqlite3.Row,
+    basis: str | None,
+    holder: bool,
+    reason: str,
+    author: str | None,
+) -> str:
+    """File the work a task converted into a goal or stage leaves, under it; its reference.
+
+    `row` is the task as it stood before the conversion (`reform`): the new task takes
+    its kind, priority and start, its holder with the call that took it, so the claim
+    reads as the same lease, when `holder`, and its projects (`item_projects.carry`).
+    `steps` go with their ids, ticks and claims, each claim recorded
+    `checklist_claimed`. It stands in `state` with `basis`; `reason` follows the key
+    of its `created`, as a move's does, for one blocked as the task was.
+    """
+
+    parent = str(row["work_item_id"])
+    identity = model.new_id()
+    number = store.next_number(conn, str(row["planning_space_id"]))
+    closing.note(conn, parent, author)
+    claim = str(row["claim_ref"]) if holder else ""
+    conn.execute(
+        "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,"
+        "parent_id,priority,title,claim_ref,claim_call_id,checklist,acceptance,accepted_at,"
+        f"started_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ? IS NULL THEN NULL ELSE {_NOW}"
+        " END,?)",
+        (
+            identity,
+            str(row["planning_space_id"]),
+            number,
+            str(row["workflow_id"]),
+            str(state["state_id"]),
+            str(row["kind"]),
+            parent,
+            str(row["priority"]),
+            model.text_field(title, "leftover.title"),
+            claim,
+            row["claim_call_id"] if claim else None,
+            model.dumps(steps),
+            basis,
+            basis,
+            row["started_at"],
+        ),
+    )
+    _log(conn, identity, "created", f"{state['key']}: {reason}" if reason else state["key"], author)
+    if basis is not None:
+        _log(conn, identity, "accepted", basis, author)
+    if claim:
+        _log(conn, identity, "claimed", "", author)
+    for step in steps:
+        if step["claimed_by"]:
+            _log(conn, identity, "checklist_claimed", step["text"][:120], author)
+    item_projects.carry(conn, parent, identity)
+    return read_model.reference(conn, read_model.item_by_id(conn, identity))
+
+
+def log_converted(conn: sqlite3.Connection, identity: str, detail: str, author: str | None) -> None:
+    """Record on a converted item what it became and what the conversion left: `converted`."""
+
+    _log(conn, identity, "converted", detail, author)
+
+
+def _edited_kind(conn: sqlite3.Connection, row: sqlite3.Row, kind: str) -> str:
     """The stored kind an edit of `kind` leaves, refused where an edit cannot change it.
 
     An edit changes a task's kind among the task kinds. A task becomes a goal or
-    stage, and back, by converting it, which is an action of its own; whether a
-    container is a goal or a stage follows from whether it stands under a parent.
+    stage, and back, by converting it (`split.convert`), which is an action of its
+    own, and the refusal names the word it passes with; whether a container is a goal
+    or a stage follows from whether it stands under a parent.
     """
 
     named = model.public_kind(kind)
     container = row["kind"] == model.CONTAINER_KIND
     if container and named == model.outward_kind(row["kind"], row["parent_id"]):
         return model.CONTAINER_KIND
-    if container or named not in model.TASK_KINDS:
+    reference = read_model.reference(conn, row)
+    if container:
         raise model.PlanningError(
-            "an edit changes kind among task, bug and improvement; a task and a goal or stage"
-            " become each other by conversion, and goal or stage follows from the parent"
+            f"an edit does not make a goal or stage a task: {reference} becomes one with"
+            " convert {to: task}, and goal or stage follows from the parent"
+        )
+    if named not in model.TASK_KINDS:
+        word = _container_word(row)
+        raise model.PlanningError(
+            f"an edit changes kind among task, bug and improvement: {reference} becomes a"
+            f" {word} with convert {{to: {word}}}"
         )
     return model.work_item_kind(named)
+
+
+def _container_word(row: sqlite3.Row) -> str:
+    """What a task becomes when converted where it stands: a stage under a parent, else a goal."""
+
+    return "stage" if row["parent_id"] else "goal"
 
 
 def _edited(row: sqlite3.Row, updates: list[str], parameters: list[object]) -> str | None:

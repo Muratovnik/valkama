@@ -286,7 +286,9 @@ instead, is in
 
 A goal or a stage is never claimed or worked itself: what stands under it is. A
 `kind` sent as `goal` with a parent is read as `stage`; `stage` without one is
-refused. An edit changes a kind only among `task`, `bug` and `improvement`.
+refused. An edit changes a kind only among `task`, `bug` and `improvement`; a
+task and a goal or stage become each other by
+[converting](#converting-a-task-into-a-goal-or-stage).
 `list_work_items` with `kind=goal` lists the goals, with `kind=stage` the stages.
 
 | Category | The work in it |
@@ -2179,6 +2181,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `claim` | `true`; `false` is no change | `/claim`, as `claim_work_item` |
 | `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
 | `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, kind?, parent?, source?, mentions?}` | `/update` |
+| `convert` | `{to, leftover?: {title?, steps?}, force?}`; not with `transition`, `defer` or `move_out` | `/convert`, see [Converting a task into a goal or stage](#converting-a-task-into-a-goal-or-stage) |
 | `checklist` | the steps' list, or `{items, force?}`; each step text or `{text, done?}` | `/checklist` |
 | `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `/checklist/tick` |
 | `refs` | list of `{kind, value, label?}` | `/ref` |
@@ -2188,8 +2191,8 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?, addressees?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
 | `transition` | `{state, reason?, force?, acceptance?, to_check?, cancels?}` | `/transition` |
-| `defer` | `{until, reason, force?}`; not with `transition` or `move_out` | `/defer`, see [Putting work off](#putting-work-off) |
-| `move_out` | `{reason, force?}`; not with `transition` or `defer` | `/move-out`, see [Moving work out of a goal or stage](#moving-work-out-of-a-goal-or-stage) |
+| `defer` | `{until, reason, force?}`; not with `transition`, `move_out` or `convert` | `/defer`, see [Putting work off](#putting-work-off) |
+| `move_out` | `{reason, force?}`; not with `transition`, `defer` or `convert` | `/move-out`, see [Moving work out of a goal or stage](#moving-work-out-of-a-goal-or-stage) |
 
 Each path in the last column is under `POST /api/planning/work-item`.
 
@@ -2239,8 +2242,8 @@ null is left alone, and an edit writes no history event. It is applied after
 the claim. `parent` moves the item under another goal or stage; `parent: ""`,
 which cleared the parent, is refused with `[parent]`, `invalid_request`, naming
 `move_out`: an item leaves its goal or stage only with the reason that group
-records. `transition`, `defer` and `move_out` each change the state, and a call
-that names two of them is refused with `invalid_request` before anything is
+records. `convert`, `transition`, `defer` and `move_out` each change the state,
+and a call that names two of them is refused with `invalid_request` before anything is
 written.
 
 `comments` writes up to 100 comments in the order sent, each as `comment`
@@ -3110,6 +3113,63 @@ parent meets the rules of a creation's, and two more:
   off stays put off.
 
 A parent in another space is refused as before.
+
+### Converting a task into a goal or stage
+
+A task becomes a goal or stage, and a goal or stage with nothing under it a task
+again, by the `convert` group of `apply_work_item_changes` or
+`POST /api/planning/work-item/convert` with `{id, to, leftover?, force?,
+expected_revision?, author?}`. `to` is `stage` for a task under a parent and
+`goal` for one without, the word its place gives, or `task`, `bug` or
+`improvement` for a goal or stage. In one write:
+
+- the item keeps its number, title, description, comments, history, links,
+  questions, subscribers, refs, steps with their ticks and the wait it was put
+  off on; a `bug` or `improvement` made a goal or stage takes its kind as a label;
+- a task accepted and open comes to stand in the service state, recorded `opened`
+  with `converted from a task`, and loses `started_at`, which a goal or stage
+  reads from the work under it; a goal or stage accepted and open goes to the first
+  `ready` state, recorded `transitioned` with `<key>: converted from a goal`; each
+  keeps its basis, and one in `triage` or `deferred` stays there;
+- its claim and step claims end (`released`, `checklist_released`);
+- a held task, by its claim or a claim of a step, leaves the work at hand in a new
+  task under it: its holder with the call that took the claim, so the lease reads
+  as it did, every claimed step with its claim (`claimed`, `checklist_claimed`),
+  the steps `leftover.steps` names by `item_id`, with their ids and ticks, the
+  title `leftover.title` or the task's own, its kind, priority, `started_at` and
+  projects. It stands in the first `active` state, or in the task's `blocked`
+  state for the same reason, with the basis `inherited` under goals and stages all
+  accepted and open, else the task's. A task nobody holds leaves one only when
+  `leftover` is sent, in the first `ready` state, or `triage` when the item is in
+  triage or deferred; without one the task's projects are dropped, since a goal
+  or stage names none;
+- the top-level session of each holder follows the converted item;
+- the goal or stage it stands under, and the item, are marked: a goal or stage
+  made a task stops awaiting confirmation, and its `confirm` question is
+  withdrawn.
+
+The item records `converted` with the detail `task -> stage`, then `; leftover
+MAIN-15` and `; projects dropped: alpha` when so. The answer adds `converted:
+{from, to, leftover, projects_dropped}`, `from` and `to` the kinds, `leftover`
+the new task's reference or null; over MCP the acknowledgement carries it, and
+`applied.convert` says `kind`, `state` (null for a goal or stage accepted and
+open, with its `container_state`) and `released`. It is refused with
+`invalid_request`, nothing written, for another word, naming the one that passes
+(`[convert]`), for a closed item, one in `review`, a goal or stage with any item
+under it (one that left does not count) or with `leftover`, and a step
+`leftover` does not find (`[convert]`); with `workflow_guard` for an agent's
+conversion while a question to the owner other than a `confirm` one is open on
+it (`question`, which `force` does not carry); and for an item another session
+holds: `MAIN-12 is held by …; pass force to convert it anyway`. `force` carries
+the last through and records `overridden` with `claim`.
+
+The refusals that lead here name the word that passes: a parent that is a task,
+`MAIN-12 is a task and holds no children: convert it first, with convert {to:
+stage} in apply_work_item_changes` (`goal` for one without a parent); an edit of
+a task's kind to a goal or stage, `an edit changes kind among task, bug and
+improvement: MAIN-12 becomes a stage with convert {to: stage}`; and of a goal's or
+stage's kind to a task, `an edit does not make a goal or stage a task: MAIN-12
+becomes one with convert {to: task}, and goal or stage follows from the parent`.
 
 ### Putting work off
 

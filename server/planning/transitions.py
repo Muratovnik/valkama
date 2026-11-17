@@ -363,6 +363,30 @@ def owner_question(
     )
 
 
+def converting_question(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+    """What stops an agent's conversion of an item while a question to the owner is open on it.
+
+    The question was asked of the item as it is, and converting it changes what it is.
+    A person is not held to it, as with a close. The question a goal or stage awaits
+    its confirmation by does not stop it: made a task, it awaits nothing, and the
+    question ends with the wait.
+    """
+
+    if not calls.from_agent():
+        return ""
+    found = [
+        row
+        for row in questions.open_rows(conn, str(item["work_item_id"]))
+        if row["purpose"] != "confirm"
+    ]
+    if not found:
+        return ""
+    return (
+        f"{reference} has {len(found)} open question(s) to the owner, and an agent does not"
+        " convert it over them: wait for the owner's answer, or withdraw a question you asked"
+    )
+
+
 def return_question(
     conn: sqlite3.Connection,
     item: sqlite3.Row,

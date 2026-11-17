@@ -697,7 +697,7 @@ class PlanningDomainTests(unittest.TestCase):
         self.assertEqual(
             (epic["work_item_id"], stage["work_item_id"]), (stage["parent_id"], child["parent_id"])
         )
-        with self.assertRaisesRegex(model.PlanningError, "a task holds no children"):
+        with self.assertRaisesRegex(model.PlanningError, "is a task and holds no children"):
             self.item("The grandchild", parent=child["reference"])
 
     def test_an_item_cannot_be_its_own_parent(self) -> None:

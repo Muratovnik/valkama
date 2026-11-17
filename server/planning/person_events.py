@@ -96,6 +96,9 @@ KINDS = {
     "mentioned": "mentioned",
     # Nothing under a goal or stage is open any more: it waits for its confirmation.
     "awaiting_confirmation": "awaiting_confirmation",
+    # A task made a goal or stage, or back: a change of what it is, not of where it
+    # stands, which the `opened` or `transitioned` beside it tells as `status`.
+    "converted": "converted",
 }
 #: The kinds that say where the work stands: its state changed, it got its summary, it
 #: was left without a holder or changed holders, it came to wait for the owner or

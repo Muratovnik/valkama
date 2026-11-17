@@ -439,7 +439,7 @@ answer's `awaiting_confirmation`): read its `confirmation` part, check its steps
 description against what was done, tick them, write the summary and complete it;
 if something is missing, file a task under it. Unconfirmed, the owner is asked
 ([work model](references/work-model.md#goals-and-stages)).
-Dividing, moving out and putting off work: [work model](references/work-model.md#goals-and-stages).
+Converting, dividing, moving out and putting off work: [work model](references/work-model.md#goals-and-stages).
 
 **Closing a release.** Before closing the release's goal, run
 `valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It

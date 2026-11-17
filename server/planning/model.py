@@ -225,6 +225,9 @@ EVENT_ACTIONS = (
     # Put-off work that came back, recorded by Valkama beside the move that returned
     # it, in the same call: why, as `date 2026-12-01` or `completed MAIN-12`.
     "returned",
+    # A task made a goal or stage, or one made a task again, by the call that converted
+    # it: `task -> stage`, then `; leftover MAIN-15` and `; projects dropped: …` when so.
+    "converted",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 #: The actions that say which state an item came to stand in: `created` and

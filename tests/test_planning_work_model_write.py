@@ -404,11 +404,11 @@ class ThroughMcpTests(WriteCase):
         self.conn.commit()
         self.refused(
             lambda: self.update("S", parent=self.ref("a")),
-            "a task holds no children; convert it to a stage first",
+            "is a task and holds no children: convert it first, with convert {to: stage}",
         )
         self.refused(
             lambda: self.create(title="Under a task", parent=self.ref("a")),
-            "a task holds no children",
+            "is a task and holds no children",
         )
 
     def test_a_parent_that_would_close_a_cycle_is_refused(self) -> None:
@@ -475,10 +475,17 @@ class ThroughMcpTests(WriteCase):
         self.tree.add("a")
         self.accepted_goal()
         self.conn.commit()
-        for name, kind in (("a", "goal"), ("a", "stage"), ("G", "task"), ("G", "stage")):
+        # Each refusal names the conversion that passes: a top-level task becomes a goal.
+        for name, kind, word in (
+            ("a", "goal", "goal"),
+            ("a", "stage", "goal"),
+            ("G", "task", "task"),
+            ("G", "stage", "task"),
+        ):
             with self.subTest(item=name, kind=kind):
                 self.refused(
-                    lambda name=name, kind=kind: self.update(name, kind=kind), "conversion"
+                    lambda name=name, kind=kind: self.update(name, kind=kind),
+                    f"convert {{to: {word}}}",
                 )
         self.update("a", kind="bug")
         self.assertEqual("bug", self.record("a")["kind"])

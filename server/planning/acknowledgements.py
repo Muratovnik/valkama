@@ -75,7 +75,8 @@ def _moved(item: dict) -> dict:
     guards had to say, or why an item that should have moved did not;
     `awaiting_confirmation` the goals and stages the write left with nothing open
     under them, which now wait for their confirmation; `moved_out` the goal or stage
-    a move out took the item out of, with the reason.
+    a move out took the item out of, with the reason; `converted` what a conversion
+    made of the item and the task it left.
     """
 
     return {
@@ -87,6 +88,7 @@ def _moved(item: dict) -> dict:
             "warnings",
             "awaiting_confirmation",
             "moved_out",
+            "converted",
         )
         if item.get(name)
     }

@@ -81,7 +81,8 @@ _PARENT = {
     " work_item_id: an open goal or stage of the same space, at any depth, never the"
     " item itself or one under it. An accepted item does not move under a goal or stage"
     " not accepted; an item in triage moved under goals and stages all accepted is"
-    " accepted with them. A task holds no children. To take an item out, use move_out.",
+    " accepted with them. A task holds no children: convert it first. To take an item out,"
+    " use move_out.",
 }
 #: The one basis of acceptance an agent names itself, read by a creation and a move.
 _ACCEPTANCE = {
@@ -233,7 +234,21 @@ _DEFER_FORM = (
     " under it stays with whoever holds it, the queue hands out none of it until it"
     " comes back, and the sessions working under it hear that it was put off and that it"
     " came back. Refused for an item another session holds unless force. Not with"
-    " transition or move_out in one call."
+    " transition, move_out or convert in one call."
+)
+#: What a batch's convert takes, and what converting keeps and leaves.
+_CONVERT_FORM = (
+    "Turn a task into a goal or stage, or a goal or stage with nothing under it back"
+    " into a task. to is stage for a task under a parent, goal for one without, or"
+    " task, bug or improvement. The item keeps its number, text, comments, history,"
+    " links, questions, subscribers, refs and steps with their ticks; a bug or"
+    " improvement kind becomes a label. Claims end, and the holder's session follows"
+    " the new goal or stage. A held task leaves its unfinished work in a new task under"
+    " it, held by the same holder and started as it was: leftover names its title and"
+    " the steps that go there, a claimed step always goes, and its projects go with"
+    " it. Refused while a question to the owner on it is open, in review or closed,"
+    " and for an item another session holds unless force. Not with transition, defer"
+    " or move_out in one call."
 )
 #: What a batch's transition takes, and the guards it meets.
 _TRANSITION_FORM = (
@@ -247,8 +262,8 @@ _TRANSITION_FORM = (
     " claim lapsed (previous_holder): tick it again; review also needs to_check, what"
     " the owner is to check, which becomes the owner's question on the item"
     " (review_question); a blocked state needs a stated reason, for a cause outside"
-    " Valkama. An agent cannot complete an item or move it out of review while a"
-    " question to the owner on it is open (question). An item with no basis, in"
+    " Valkama. An agent cannot complete an item, convert it or move it out of review"
+    " while a question to the owner on it is open (question). An item with no basis, in"
     " triage, deferred or cancelled out"
     " of triage, moved to ready, active, review, blocked or completed needs one"
     " (acceptance): inherited under goals and stages that are all accepted and open,"
@@ -828,7 +843,8 @@ TOOLS = [
         "Apply several changes to a work item",
         "Several writes to one item in one call, all or nothing. The groups apply"
         " in this order: claim,"
-        " subscribe, update, checklist, checklist_ticks, refs, links, comment or comments,"
+        " subscribe, update, convert, checklist, checklist_ticks, refs, links, comment or"
+        " comments,"
         " resolutions, questions, summary, then one of transition, defer or move_out — so a"
         " claim and"
         " its steps take one call, and a closing"
@@ -882,8 +898,9 @@ TOOLS = [
                     "kind": {
                         "type": "string",
                         "enum": sorted(model.TASK_KINDS),
-                        "description": "A task's kind, changed among these; a goal or stage"
-                        " is never edited into a task, and its place says which it is.",
+                        "description": "A task's kind, changed among these; a task and a goal"
+                        " or stage become each other with convert, and its place says which"
+                        " it is.",
                     },
                     "parent": _PARENT,
                     "projects": _PROJECTS
@@ -893,6 +910,25 @@ TOOLS = [
                     },
                     "mentions": _TEXT_MENTIONS,
                 },
+            },
+            "convert": {
+                "type": "object",
+                "description": _CONVERT_FORM,
+                "properties": {
+                    "to": {"type": "string", "enum": list(model.PUBLIC_KINDS)},
+                    "leftover": {
+                        "type": "object",
+                        "description": "The new task a held task leaves, or one a task"
+                        " nobody holds leaves when this is sent: its title, the task's own"
+                        " when left out, and the item_ids of the steps that go there.",
+                        "properties": {
+                            "title": _STR,
+                            "steps": {"type": "array", "items": _STR, "maxItems": 100},
+                        },
+                    },
+                    "force": _FORCE,
+                },
+                "required": ["to"],
             },
             "checklist": {
                 "type": "object",
@@ -1110,7 +1146,7 @@ TOOLS = [
                 " to the top level and to triage, keeps that it started, and loses its claims"
                 " and its basis. The goal or stage it left records the reason. The one way to"
                 " clear a parent. Refused for an item another session holds unless force;"
-                " not with transition or defer in one call.",
+                " not with transition, defer or convert in one call.",
                 "properties": {"reason": _STR, "force": _FORCE},
                 "required": ["reason"],
             },
