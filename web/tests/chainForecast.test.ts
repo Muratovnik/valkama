@@ -73,7 +73,7 @@ describe('the forecast of a chain', () => {
   })
 
   it('says the open part grows, and what must close a day to turn it, when more is added', () => {
-    // The owner's chain: 126 discovered and 107 closed in seven days.
+    // A chain that outgrows its closing: 126 discovered and 107 closed in seven days.
     const growing = answer(132, { ...BEFORE, 5: [70, 50], 1: [56, 57] })
     expect(forecastChain(growing, TODAY)).toEqual({ kind: 'growing', needed: 18 })
   })
