@@ -18,16 +18,28 @@ says what they mean together.
   `goal` for work that holds other work under no parent, and `stage` for such work
   under a parent, at any depth. A goal or stage is never claimed. A task's kind
   changes only among the first three.
-- **A file or folder** in a text is a Markdown link to its path from the root of
-  the item's space (its default project's root), or a whole path in backticks; a
-  label reads better.
-  Valkama opens a Markdown file in its own viewer at the `#kb:…` anchor, heading
-  or `:42` line the link names, another file in the owner's editor at that line,
-  and a folder in the editor. A relative path is looked for in that root first,
-  and in the projects registered inside it only when the root has nothing there.
-  A path with spaces goes in `<…>` inside a link; in backticks only an absolute
-  path may hold one. A path outside every project registered with Valkama does
-  not open, and a press copies it: link it, but do not promise it opens.
+
+## Naming a file in a text
+
+A description, a comment, a report, a summary, a question or an option's
+description names a file or folder of the project as a Markdown link to its path
+from the root of the item's space (its default project's root), with a label that
+says what it is:
+`docs/plan.md#kb:a7f3`, `src/parse.ts:42`, `docs/plans/`.
+
+- **Where it opens.** Valkama opens a Markdown file in its own viewer at the
+  `#kb:…` anchor, heading or `:42` line the link names, another file in the
+  owner's editor at that line, and a folder in the editor. A whole path in
+  backticks works too; a label reads better.
+- **From the root.** Write a path from that root, not from your working folder or
+  another repository: a relative path is looked for there first, and in the
+  projects registered inside it only when the root has nothing there. Use an
+  absolute path only where there is no relative one, such as a file of another
+  project.
+- **Spaces.** A path with spaces goes in `<…>` inside a link; in backticks only an
+  absolute path may hold one.
+- **Outside every project.** A path outside every project registered with Valkama
+  does not open, and a press copies it: link it, but do not promise it opens.
 
 ## What an item says about itself
 
@@ -67,7 +79,7 @@ holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started` |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
 `claim_ready_work_item` takes the first workable task in the order of work —
@@ -94,10 +106,20 @@ in Valkama's interface since an agent last wrote there, and has no such key
 otherwise. Each entry has `kind` (`comment`, `report`, `status`, `edited`,
 `question_answered`, `mentioned` and the rest), `via: "interface"`, `at`,
 `comment_id`, `request_id` or `fields` when it has one, `from` for `mentioned` (the
-item whose comment told this one), and `text`, cut at 300 characters;
-the `comments` part of `get_work_item` has the whole text. It lists the newest 20, and
+item whose comment told this one), and `text`, whole up to 1500 characters. A
+longer one is cut there and says `cut: true`, and the `comments` part of
+`get_work_item` has the rest. It lists the newest 20, and
 `from_person_omitted` counts the earlier ones. Each event is told once, to
 whichever agent writes to the item next.
+
+A claim of a task or of a step also answers with `waiting` when a person acted on
+a goal or stage over the task while no live session worked under it: one entry per
+goal or stage, with its `reference`, `title` and `said`, what the person did there
+from that act on, in the entries of `from_person` (the newest 20, and `omitted`
+counting the earlier ones); a record of Valkama's that asks for a session waits the
+same way, with `via: "valkama"`. The claim takes them: the next one under that goal gets
+nothing until a person acts there again with nobody working. No key when nothing
+waited.
 
 An answer where a claim began or held the item -- `claim_work_item`,
 `claim_ready_work_item`, and `create_work_item` or `apply_work_item_changes` with
@@ -339,6 +361,21 @@ the refusal names what they did. A `comment` sent in the same
 `apply_work_item_changes` call does not lift it.
 `force: true` carries a refusal through and records an `overridden` event.
 
+## When a call is refused
+
+| Refusal | What to do |
+| --- | --- |
+| `revision_conflict` | Someone wrote since your read: read the item, then retry on the new `revision`. |
+| A claim held by another | Take other work, or take it over only on an instruction (`force: true`). |
+| `workflow_guard` with `[executor]` | Claim the item or a step before moving it to an active state. |
+| `workflow_guard` with `[acceptance]` | Send `acceptance: "assignment"` only on the owner's word; otherwise leave the item to the owner to accept. |
+| `workflow_guard` with `[checklist]` or `[summary]` | Tick what was done, move undone work to an item of its own, record the summary, then close. |
+| `workflow_guard` with `[blocker]` | Link the blocking item, or give the reason. |
+| `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
+| `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
+| An unknown state | The refusal lists the workflow's states and the categories that name one. |
+| A refused batch or creation step | The message starts with the group and index; correct that entry. |
+
 ## Claims
 
 A claim is a lease on the session that took it: `live` while that session is
@@ -410,11 +447,17 @@ when its item closes or its deadline (`expires_at`) passes. A comment over an
 open question changes nothing about it.
 
 The `questions` part of `get_work_item` is
-`{"total": 6, "open": 2, "items": […], "truncated": true}`, at most 5 items, the
-open ones first and then the newest closed. `list_work_item_requests` takes
-`space`, `id` (one item), `status`, `answered_after` (an ISO timestamp with a
-timezone), `limit`, `offset` and `full`, and its page says `truncated` and
-`next_offset`. With `answered_after` the oldest answer comes first, and a page runs
+`{"total": 6, "open": 2, "items": […], "truncated": true, "addressed_open": 0}`, at
+most 5 items, the open ones first and then the newest closed; a request asked of an
+agent session stays out of them, and `addressed_open` counts the open ones.
+`list_work_item_requests` takes `space`, `id` (one item), `status`,
+`answered_after` (an ISO timestamp with a timezone), `limit`, `offset`, `full` and
+`addressed`, and its page says `truncated` and `next_offset`. `addressed: true`
+lists the open requests asked of your own session; answer each with
+`answer_work_item_request`, from your conversation or a subagent. A request asked of
+a session is answered only by that session (`not_addressed` refuses anyone else)
+and withdrawn only by the session that asked (`not_asker`); while the session asked
+has ended or gone quiet, it reads expired with `session_gone`. With `answered_after` the oldest answer comes first, and a page runs
 past `limit` rather than part two answers of one time. Both give a compact form
 unless `full` is true:
 
@@ -471,6 +514,56 @@ interface.
 first, each with `version`, its parts, `answered_by`, `answered_at` and
 `by_person`), `by_person` and the rest of the record. `get_work_item_request` also
 gives `replies`, the question's whole thread, oldest first.
+
+### A review of many points
+
+A review of many points is one `verdict` field per proposal: the owner
+accepts it, puts it off or rejects it, and may comment on it or give an own
+variant. The steps or the ways of a point are a field `under` it,
+`{"field": "p4", "option": "accept"}`, which stands right after it and is shown
+and answered only while the point is accepted; a `group` per area replaces a
+field per executor. Everything the owner chooses from is an option: never a step
+in a label or a description, never `p4a` in a field shared by several points.
+Put `recommended`, with its `why`, wherever you have one: a button drafts from it.
+Two points, one with its steps and one with its way:
+
+```json
+[{"id": "p4", "label": "P4 Checks: false alarms", "type": "verdict", "required": false,
+  "options": [], "group": "Checks", "recommended": "accept",
+  "why": "All fourteen false alarms came from one rule."},
+ {"id": "p4-steps", "label": "Steps", "type": "multi_choice", "required": true,
+  "under": {"field": "p4", "option": "accept"},
+  "options": [{"id": "p4a", "label": "Mark the refusals, then narrow the rule", "recommended": true,
+               "why": "The marks show which cases the narrower rule must keep."},
+              {"id": "p4b", "label": "Skip the check on an intermediate stop"}]},
+ {"id": "p13", "label": "P13 A 400-line limit for .vue files", "type": "verdict",
+  "required": false, "options": [], "group": "Web code", "recommended": "accept",
+  "why": "Six files passed 400 lines this month."},
+ {"id": "p13-way", "label": "How", "type": "choice", "required": true,
+  "under": {"field": "p13", "option": "accept"},
+  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true,
+               "why": "The rule already exists; no file moves."},
+              {"id": "split_first", "label": "Split the files first"}]}]
+```
+
+A field `under` a later field, a field of a type other than `verdict`, `choice` or
+`multi_choice`, a field that is itself under another, or an option its parent lacks
+is refused, naming the field and how to put it right.
+
+### Asking another session
+
+`create_work_item_request` with `addressees` (1 to 5 top-level session ids, as
+`participants`, `subscribers` and holders name them) asks those sessions instead of
+the owner: one request each, with the call's `kind`, `prompt`, `fields` and
+`expires_at`, and the answer is `{"requests": [{"request_id": "…", "addressee":
+"…"}]}`. Your session is the one that asked, whichever of its agents called. Each
+request wakes the session it asks; its answer wakes yours as `your question answered
+… by agent <id> of session <id>: <field>=<value>, …`, by the ids you sent. Refused
+with `invalid_request`, naming the session where there is one: a call that proved
+no agent session, an unknown session, one that ended or went quiet past its lease,
+your own, a subagent's, one named twice, more than 5 or none, and `execution_id` or
+`session_id` beside `addressees`. A session asks one other at most 3 times an hour:
+the fourth is refused with `ask_limit`. The batch's `questions` take `addressees` too, and answer with `requests`.
 
 ## Merging
 

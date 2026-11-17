@@ -6,8 +6,8 @@
     "fresh_for_seconds": 900,
     "accounts": [
       {
-        "organization": "00000000-0000-4000-8000-000000000020",
-        "account_uuid": "00000000-0000-4000-8000-000000000021",
+        "organization": "00000000-0000-4000-8000-000000000023",
+        "account_uuid": "00000000-0000-4000-8000-000000000024",
         "seat": null,
         "plan": "Max",
         "name": null,
@@ -104,7 +104,7 @@
         ]
       },
       {
-        "organization": "00000000-0000-4000-8000-000000000022",
+        "organization": "00000000-0000-4000-8000-000000000025",
         "account_uuid": null,
         "seat": null,
         "plan": null,
@@ -113,7 +113,7 @@
         "windows": []
       },
       {
-        "organization": "00000000-0000-4000-8000-000000000023",
+        "organization": "00000000-0000-4000-8000-000000000026",
         "account_uuid": null,
         "seat": "week:2026-11-15T10:00Z",
         "plan": null,

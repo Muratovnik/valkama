@@ -396,6 +396,18 @@ def holder_ids(label: str) -> tuple[str, str | None] | None:
     return (found.group(2), found.group(1)) if found is not None else None
 
 
+def session_holder(label: str) -> str | None:
+    """The holder a session's own conversation records, from its label or one of its agents'.
+
+    None for a holder that is no `holder_label`.
+    """
+
+    found = _HOLDER_LABEL.fullmatch(label)
+    if found is None:
+        return None
+    return f"{label.split(' ', 1)[0]} (session {found.group(2)})"
+
+
 def label_id(value: str) -> str:
     """An id as a holder carries it: itself, or a short digest of one that is not plain.
 

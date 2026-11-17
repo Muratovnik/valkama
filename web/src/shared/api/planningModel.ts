@@ -32,6 +32,7 @@ import {
   spaceIdentitySchema,
   TITLE,
 } from '@/shared/api/planningSpaceModel.ts'
+import { actor, callField, holderField, serverText } from '@/shared/api/planningText.ts'
 import { enumField, ID, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
 export { SPACE_KEY, TITLE } from '@/shared/api/planningSpaceModel.ts'
@@ -64,21 +65,6 @@ const REF_KINDS = ['commit', 'memory', 'session', 'url'] as const
 /** `MAIN-142`: what a person types and what a URL carries. */
 export const WORK_ITEM_REFERENCE = /^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u
 export const STATE_KEY = /^[a-z][a-z0-9-]{0,31}$/u
-
-/**
- * Text the server composes itself (a warning, a refusal joining its guards),
- * which no write bounds: present and free of NUL, at whatever length it runs.
- */
-export const serverText = () =>
-  z
-    .string()
-    .min(1)
-    .refine((value) => !/\u{0}/u.test(value), { message: 'expected text' })
-
-/** Free text an agent wrote about itself, bounded and never resolved. */
-const actor = () => blankable(128)
-/** A holder that is somebody: `claim_ref` as it reads while the item is held. */
-const holderField = () => boundedText(/^[^\u{0}]{1,128}$/u, 128)
 
 /** A state as it reads outside its workflow: no id, which only that workflow resolves. */
 const publicStateShape = {
@@ -330,9 +316,6 @@ const commentSchema = z.union([
   }),
 ])
 
-/** A client-reported id, never resolved here; the server bounds it at 200. */
-const callField = () => blankable(200).nullable()
-
 /**
  * Who made the call that wrote an event, as far as the call proved it. `author`
  * is what the caller wrote about itself; this is what the call carried. An
@@ -368,6 +351,19 @@ const subscriberSchema = strictObject({
   agent: callField(),
   label: holderField(),
   since: boundedText(ISO, 96),
+})
+
+/**
+ * A session working on a goal or a stage: holding work under it, itself or through a
+ * subagent, or following it or a container over it. The server lists at most 50.
+ */
+const participantSchema = strictObject({
+  session: boundedText(/^[^\u{0}]{1,200}$/u, 200),
+  client: blankable(200),
+  label: holderField(),
+  holds: boundedList(boundedText(WORK_ITEM_REFERENCE, 20), 20),
+  follows: z.boolean(),
+  last_seen: boundedText(ISO, 96),
 })
 
 /**
@@ -434,6 +430,8 @@ const workItemSchema = recordObject({
   // A write whose text told other items answers who will hear them.
   mentions_told: boundedList(toldSchema, 20).optional(),
   subscribers: z.array(subscriberSchema).optional(),
+  // Who works on a goal or a stage: only the HTTP reads of one item carry it.
+  participants: boundedList(participantSchema, 50).optional(),
   // A transition answers with these; a plain read does not.
   warnings: z.array(serverText()).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),

@@ -5,7 +5,7 @@
  */
 
 import { boundedText, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
-import { serverText } from '@/shared/api/planningModel.ts'
+import { serverText } from '@/shared/api/planningText.ts'
 
 const PLANNING_API = 'valkama-planning-api' as const
 

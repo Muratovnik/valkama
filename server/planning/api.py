@@ -29,6 +29,7 @@ from . import (
     live_frame,
     mention_records,
     model,
+    participants,
     read_model,
     requests,
     sections,
@@ -36,6 +37,7 @@ from . import (
     subscriptions,
     usage,
     views,
+    waiting,
 )
 
 PLANNING_API_INTERFACE = f"{model.PLANNING_INTERFACE}-api"
@@ -142,6 +144,12 @@ def error_response(error: BaseException) -> tuple[int, dict]:
         return 409, {"error": {"code": "workflow_guard", "message": str(error)}}
     if isinstance(error, model.MentionLimitError):
         return 429, {"error": {"code": "mention_limit", "message": str(error)}}
+    if isinstance(error, model.AskLimitError):
+        return 429, {"error": {"code": "ask_limit", "message": str(error)}}
+    if isinstance(error, model.NotAddressedError):
+        return 403, {"error": {"code": "not_addressed", "message": str(error)}}
+    if isinstance(error, model.NotAskerError):
+        return 403, {"error": {"code": "not_asker", "message": str(error)}}
     if isinstance(error, model.StoreSchemaError):
         return 409, {"error": {"code": model.STORE_SCHEMA_MISMATCH, "message": str(error)}}
     if isinstance(error, model.PlanningError):
@@ -268,11 +276,12 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
     """One item. With `parts`, the parts it names; without, the full record.
 
     The full record is what a screen and every write answer with, and each cut of
-    its history is opt-in. `parts` is a comma-separated list of `read_model.PARTS`;
-    a comment mode beside it cuts the comments part and `events` names how many
-    newest events the events part reads. `section`, which may repeat because a
-    heading may hold a comma, names the sections the sections part reads with their
-    text, and without `parts` reads that part alone.
+    its history is opt-in; on a goal or a stage it carries who works on it, as every
+    HTTP read of one item does. `parts` is a comma-separated list of
+    `read_model.PARTS`; a comment mode beside it cuts the comments part and `events`
+    names how many newest events the events part reads. `section`, which may repeat
+    because a heading may hold a comma, names the sections the sections part reads
+    with their text, and without `parts` reads that part alone.
     """
 
     names = _part_names(parameters)
@@ -305,6 +314,7 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
             unresolved=_switch(parameters, "unresolved"),
             events=_count(parameters, "events"),
             sessions=_switch(parameters, "sessions"),
+            participants=True,
         ),
     }
 
@@ -352,7 +362,28 @@ _PART_READERS: dict[str, Callable[[sqlite3.Connection, sqlite3.Row], dict]] = {
         "subscribers": subscriptions.subscribers(conn, str(row["work_item_id"]))
     },
     "claim": lambda conn, row: {"claim": read_model.claim(conn, row)},
+    "participants": lambda conn, row: {"participants": _participants(conn, row)},
 }
+
+
+def _participants(conn: sqlite3.Connection, row: sqlite3.Row) -> list[dict]:
+    """Who works on a goal or a stage. A task has no such part, so reading it is refused."""
+
+    if str(row["kind"]) != model.CONTAINER_KIND:
+        others = ", ".join(name for name in read_model.PARTS if name != "participants")
+        raise model.PlanningError(f"unknown part 'participants'; a task's parts are {others}")
+    return participants.of_container(conn, row)
+
+
+def _card_counts(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, dict[str, int]]:
+    """What the card's table of contents counts that `read_model` cannot: the questions,
+    which `requests` reads, and on a goal or a stage the sessions working on it."""
+
+    identity = str(row["work_item_id"])
+    counted = {"questions": requests.question_counts(conn, identity)}
+    if str(row["kind"]) == model.CONTAINER_KIND:
+        counted["participants"] = {"count": len(participants.of_container(conn, row))}
+    return counted
 
 
 @read_model.whole_store_read()
@@ -396,9 +427,7 @@ def _parts_of(
     }
     for name in names:
         if name == "card":
-            part = read_model.card(
-                conn, row, counted={"questions": requests.question_counts(conn, identity)}
-            )
+            part = read_model.card(conn, row, counted=_card_counts(conn, row))
         elif name == "comments":
             part = read_model.comments_part(
                 conn, row, comments_after=comments_after, thread=thread, unresolved=unresolved
@@ -475,6 +504,7 @@ def _requests(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> 
             answered_after=_first(parameters, "answered_after"),
             limit=_int(_first(parameters, "limit"), "limit", 100),
             offset=_offset(parameters),
+            addressed=_switch(parameters, "addressed"),
         ),
     }
 
@@ -523,12 +553,17 @@ def handle_post(
         return None
     if not isinstance(payload, Mapping):
         raise PlanningHttpError(400, "invalid_request", "request body must be a JSON object")
+    # A person's act on a goal or stage that nobody hears waits for the next
+    # session, in the same transaction as the act (`waiting.after_person`).
+    before = waiting.place(conn) if calls.by_person() else None
     answer = writer(conn, payload)
     # Every write call has its row, including one that logged nothing — an edit,
     # a claim that found itself already held, a take-next with nothing to take.
     # Inside a bound call this finds the row a write already inserted; outside
     # one it does nothing.
     calls.call_id(conn, calls.acted_on(answer))
+    if before is not None:
+        waiting.after_person(conn, before)
     return 200, answer
 
 
@@ -861,10 +896,43 @@ def _request_fields(payload: Mapping[str, object], allowed: set[str]) -> None:
 
 
 def _create_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """A question to the owner, or with `addressees` one to each agent session named.
+
+    A request asked of a session binds to no execution and no session of its item:
+    those say whose work a question to the owner is about, and the session asked is
+    named instead.
+    """
+
     _request_fields(
         payload,
-        {"id", "kind", "prompt", "fields", "author", "execution_id", "session_id", "expires_at"},
+        {
+            "id",
+            "kind",
+            "prompt",
+            "fields",
+            "author",
+            "execution_id",
+            "session_id",
+            "expires_at",
+            "addressees",
+        },
     )
+    if "addressees" in payload:
+        if payload.get("execution_id") is not None or payload.get("session_id") is not None:
+            raise model.PlanningError(
+                "addressees asks agent sessions, and execution_id and session_id bind a"
+                " question to the owner; send one or the other"
+            )
+        return requests.ask_from_agent(
+            conn,
+            _text(payload, "id"),
+            addressees=payload["addressees"],
+            kind=_field(payload, "kind"),
+            prompt=_field(payload, "prompt"),
+            fields=_field(payload, "fields"),
+            expires_at=_optional_text(payload, "expires_at"),
+            author=_author(payload),
+        )
     return requests.create(
         conn,
         _text(payload, "id"),
@@ -1032,7 +1100,17 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("resolutions", frozenset({"comment_id", "resolution", "reopen"})),
     (
         "questions",
-        frozenset({"kind", "prompt", "fields", "execution_id", "session_id", "expires_at"}),
+        frozenset(
+            {
+                "kind",
+                "prompt",
+                "fields",
+                "execution_id",
+                "session_id",
+                "expires_at",
+                "addressees",
+            }
+        ),
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
     ("transition", frozenset({"state", "reason", "force", "acceptance"})),
@@ -1185,7 +1263,10 @@ def _apply_step(
         return {}, {name: marked[name] for name in ("comment_id", "resolution")}
     if group == "questions":
         asked = _create_request(conn, {**entry, **base})
-        return {}, {name: asked[name] for name in ("request_id", "revision")}
+        # An entry asked of sessions answers as the single write does: its requests,
+        # each with its addressee.
+        names = ("requests",) if "addressees" in entry else ("request_id", "revision")
+        return {}, {name: asked[name] for name in names}
     if group == "summary":
         beside = {name: entry[name] for name in ("list", "mentions") if name in entry}
         summary = {name: value for name, value in entry.items() if name not in beside}

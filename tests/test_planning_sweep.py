@@ -156,7 +156,9 @@ class LeaseStepTests(PassTestCase):
     def test_a_step_past_the_deadline_is_left_for_the_next_pass(self) -> None:
         self.lapse_after_ticks()
         done = self.run_pass(deadline=time.monotonic() - 1)
-        self.assertEqual(([sweep.LEASES, sweep.SUBSCRIPTIONS], {}), (done.left, done.changed))
+        self.assertEqual(
+            ([sweep.LEASES, sweep.WAITING, sweep.SUBSCRIPTIONS], {}), (done.left, done.changed)
+        )
         self.assertEqual(held(ONE), self.read()["claim_ref"])
 
 

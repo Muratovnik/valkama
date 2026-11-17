@@ -142,7 +142,10 @@ Every tool that writes to a work item and leaves it standing -- all of the above
 a person acted on that item
 through the interface since an agent last wrote to it, and only then; see
 [What a person did reaches the agent](#what-a-person-did-reaches-the-agent).
-A `verbose` answer carries it too. `delete_work_item` and `create_planning_space`
+A claim's answer carries `waiting` beside it when a person's words on a goal or
+stage over the work found nobody working there; see
+[Words that wait for a session](#words-that-wait-for-a-session).
+A `verbose` answer carries both too. `delete_work_item` and `create_planning_space`
 never do.
 
 Each of these tools takes an optional boolean `verbose`, false by default. With
@@ -630,7 +633,7 @@ at, and beside them the fields of each part named:
 | `sections` | `sections`, as [Sections of the description](#sections-of-the-description) says |
 | `claim` | `claim`, the lease as [Claims are leases](#claims-are-leases) shows it, `null` while nobody holds the item |
 | `links`, `refs`, `questions`, `sessions`, `images`, `subscribers` | the field of that name, as described below and in [Reading a question](#reading-a-question) |
-| `participants` | the field of that name where the item's record has one, and nothing where it has none |
+| `participants` | on a goal or a stage, the field of that name, as [Participants](#participants) shows it; a task has no such part, and naming it is refused with `unknown part 'participants'; a task's parts are card, comments, …` |
 
 #### The card
 
@@ -667,10 +670,10 @@ nothing in it:
 | --- | --- |
 | `comments` | `count`, `threads` (the roots), `unresolved` (the roots without the mark) and `chars`, the length of every body and report |
 | `events` | `count` and `chars`, the length of every `detail` |
-| `questions` | `count` and `open`, the questions to the owner |
+| `questions` | `count` and `open`, the questions to the owner, and `addressed_open`, the open requests asked of agent sessions; it stands while any of them is above 0 |
 | `sections` | `count`, and only for a description longer than 2,000 characters; a shorter one is cheaper to read whole |
 | `claim` | `count`, 1 while somebody holds the item |
-| `links`, `refs`, `mentions`, `sessions`, `images`, `subscribers` | `count` |
+| `links`, `refs`, `mentions`, `sessions`, `images`, `subscribers`, `participants` | `count` |
 
 ```json
 {"reference": "MAIN-12", "revision": 14, "title": "Widen the check", "kind": "task",
@@ -2124,6 +2127,42 @@ after the channel that proved the session, not after `client`, and with an id to
 long for a label replaced by its digest, as a claim's is. So a reader that compares
 it with `claim_ref` tells which subscriber holds the item.
 
+A goal an agent creates is followed from the start by the conversation of the
+agent's session, `agent` null, even when a subagent created it: the goal outlives
+the subagent, and its news is for the conversation leading the work. A stage
+subscribes nobody, and a goal the interface creates nobody either. This
+subscription, too, writes no event.
+
+### Participants
+
+A goal or a stage also says who works on it: the sessions that are live and that,
+themselves or through a subagent, hold the claim or an open step of a task anywhere
+under it, or follow it or an item over it. A participant is always a session's own
+conversation. Live is one rule for all three: the session has a row, has neither
+ended nor failed, and was seen within the 14 days of a claim's lease. An ended
+session is no participant from the moment it ended, though its claim stands through
+its 12 hours of grace; resumed, it is one again while its claim or subscription
+stands. Nothing is stored: every read derives them from the holders and the
+subscriptions.
+
+The card's read (`/api/modules/planning/work-item`) and the HTTP read of one item
+(`/api/planning/work-item`) carry them on a goal or a stage, and `get_work_item`
+reads them as its `participants` part, which the card counts; its card, every
+answer of a write and the brief records of a list do not carry them, and a task has
+none:
+
+```json
+"participants": [{"session": "019a…", "client": "claude-code",
+                  "label": "claude (session 019a…)", "holds": ["MAIN-12", "MAIN-15"],
+                  "follows": false, "last_seen": "2026-11-16T09:12:03Z"}]
+```
+
+`client` is the client the session's row names, and `label` the holder its own
+conversation records, as in `subscribers`. `holds` names up to 20 tasks under the
+item that the session or its subagents hold, by reference; `follows` says whether
+it follows the item or an item over it. They stand in the order of `label`, at
+most 50.
+
 ### Several changes in one call
 
 `apply_work_item_changes` applies several writes to one item in one call, all or
@@ -2143,7 +2182,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `links` | list of `{other, kind, remove?}`, linking from this item | `/link` |
 | `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `/comment` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
-| `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `/request`, as `create_work_item_request` |
+| `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?, addressees?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
 | `transition` | `{state, reason?, force?, acceptance?}` | `/transition` |
 
@@ -2202,10 +2241,11 @@ comment the same call writes is not known to the caller, so a reply to it is a
 second call. The same holds for `resolutions`.
 
 `questions` asks up to 100 questions, each with what `create_work_item_request`
-takes and checked by the same rules. Each is that tool's question: it
-waits in the owner's list and raises the owner's alert once the call is
-committed. A call that asks a question and closes the item with its
-`transition` is refused, `invalid_request` on the `transition` step, and
+takes and checked by the same rules. Without `addressees` each is that tool's
+question: it waits in the owner's list and raises the owner's alert once the call
+is committed. With `addressees` an entry asks those sessions instead, as that tool
+does, one request each, and waits in no owner's list. A call that asks a question
+and closes the item with its `transition` is refused, `invalid_request` on the `transition` step, and
 `force` does not carry it: a closed item reads a waiting question `expired`, so
 it would be asked and lost in one write. Move the item to review, or leave the
 question out. A question asked by an earlier call does not stop a close, as it
@@ -2231,7 +2271,9 @@ one call with its identity, and every row its steps write points to that call.
 The acknowledgement's `applied` names only the groups that changed something.
 `update` lists the fields sent;
 `comments` and `questions` list every comment and question the call wrote, so
-a reply or a withdrawal needs no read first. A comment or a summary that carried a
+a reply or a withdrawal needs no read first. A question with `addressees` lists its
+`requests`, each `request_id` with its `addressee`, in place of `request_id` and
+`revision`. A comment or a summary that carried a
 [list](#a-list-on-a-comment) adds its `list_request_id`, and a comment or a summary
 that named other items adds who will hear them as [`mentions`](#mentions). Who will
 hear the items an `update`'s description named stands beside `applied`, as
@@ -2697,6 +2739,7 @@ A pass runs its steps in order, each in a transaction of its own:
 | Step | What it does |
 | --- | --- |
 | `leases` | releases every lapsed claim and claimed step, as [above](#who-holds-a-claim-or-a-step), and marks the lapsed holder's ticks |
+| `waiting` | leaves [words waiting](#words-that-wait-for-a-session) on a goal or stage that a session stopped working on while its claim, step or subscription still stands -- it ended, or went quiet past the lease -- once no live session works there; the words are what a person did there after that session's last call, and they wait under a call of `valkama` with the tool `waiting-recovery` |
 | `subscriptions` | removes every [subscription](#subscriptions) and mute whose session lapsed |
 
 Every step keeps the same contract:
@@ -2879,7 +2922,8 @@ window. Order is the call rows' ids.
 | `comment_id` | for `comment` and `report` |
 | `request_id` | for the question kinds |
 | `fields` | for `edited`: the fields it changed |
-| `text` | what it said, at most 300 characters, the last one `…` when cut: a comment's body, a report's `done`, an answer as `label: choice` pairs and its note, or a review's summary (see [Reading a question](#reading-a-question)), the prompt of a question asked, declined or withdrawn, an edit's fields as they read now, a step's or a link's detail; absent when there is nothing to quote |
+| `text` | what it said, at most 1500 characters, the last one `…` when cut: a comment's body, a report's `done`, an answer as `label: choice` pairs and its note, or a review's summary (see [Reading a question](#reading-a-question)), the prompt of a question asked, declined or withdrawn, an edit's fields as they read now, a step's or a link's detail; absent when there is nothing to quote |
+| `cut` | `true` when `text` was cut at the 1500 characters, the rest being in `get_work_item`; absent when it is whole |
 
 **Since 2.5**, four more kinds:
 
@@ -2888,7 +2932,7 @@ window. Order is the call rows' ids.
 | `reply` | a person replied in a thread; a new root is still told as `comment` | `comment_id`; `reply_to` or `reply_to_request`, the root; `text`, the reply |
 | `thread_resolved` | a person marked a root resolved | `comment_id`; `text`, the decision |
 | `thread_reopened` | a person removed the mark | `comment_id` |
-| `question_changed` | a person changed a given answer | `request_id`; `text`, [what changed](#the-difference-between-two-answers), within the 300 characters |
+| `question_changed` | a person changed a given answer | `request_id`; `text`, [what changed](#the-difference-between-two-answers), within the 1500 characters |
 
 ```json
 {"kind": "reply", "via": "interface", "at": "2026-11-03T10:12:00.000000Z",
@@ -2916,7 +2960,9 @@ It counts in the window and in the `person_spoke` guard as the other kinds do. A
 agent's mention is never one of these events: it is an agent's words, and it reaches
 the holders through the hook and the item's `mentions`, never through `from_person`.
 
-The whole text is in `get_work_item` and `get_work_item_request`. Filing an item,
+**Since 3.0** a text is whole up to 1500 characters, where it was cut at 300, and a
+cut one says `cut: true`; the one bound holds for `from_person` and for the hook's
+notices alike. The whole text is in `get_work_item` and `get_work_item_request`. Filing an item,
 attaching a session and a recorded override are never told. A drag within a
 state, or an edit that changed nothing, says nothing.
 
@@ -2926,6 +2972,50 @@ write, as `from_person`, and no key at all when it is empty. It holds the newest
 read inside the write's own transaction, so a person's write that lands while the
 call runs is either in this answer or in the next window, never in neither. An
 HTTP write answers without it, and no schema of the interface changed.
+
+### Words that wait for a session
+
+A goal or a stage is never held, so what a person does on one reaches the agent
+sessions that work under it, through their hooks, and nobody when no live session
+works there. **Since 3.0** such words wait on the goal or stage for the next
+session that takes work under it. A person's act on a goal or stage -- a comment,
+an edit or any kind above -- while no live session holds work under it or under a
+goal or stage over it, or follows one of them, leaves its words waiting from that
+act on. Filing a goal or a stage leaves nothing. One record waits per goal or
+stage: a later act adds to what it holds rather than adding another. Words also
+wait when the session that worked there went quiet past its lease or ended
+without hearing them: Valkama's release of its lapsed claim leaves what a person
+did over the work after that session's last call, if nobody else works there.
+A session can stop working there before anything is released -- it ended while
+its claim waits out its grace, or it went quiet past the lease while its
+subscription stands -- and the [planning sweep](#the-planning-sweep) leaves the
+same words for it.
+A record Valkama makes on a goal or stage in a call of its own waits the same way
+when its kind is one that asks for a session, which wakes whoever works there; no
+kind asks yet, so today only a person's words wait.
+
+A claim of a task, or of one of its steps, by an agent session its client proved
+takes every word waiting on the goals and stages over the task, in the claim's
+own transaction: a refused claim takes nothing. The MCP answer of the claim --
+`claim_work_item`, `claim_ready_work_item`, `claim_work_item_checklist_item`, and
+`apply_work_item_changes` or `create_work_item` with `claim` -- then carries
+`waiting`, one entry per goal or stage:
+
+```json
+"waiting": [{"reference": "MAIN-10", "title": "Release 3.0",
+  "said": [{"kind": "comment", "via": "interface", "at": "2026-11-16T09:12:03Z",
+            "comment_id": 412, "text": "Keep the old route until the docs are out."}]}]
+```
+
+`said` holds what a person did there from the act that left the words to the
+claim, as the entries of `from_person`, and such a record of Valkama's with
+`via: "valkama"`: the newest 20, with `omitted` counting the
+earlier ones when there are more, and each text whole up to 1500 characters, a
+longer one cut there with `cut: true`. A whole text has no `cut`. The words are
+taken once: the next claim under the same goal gets nothing until a person acts
+there again with nobody working. They never lapse, and they go with their item.
+The key is absent when nothing waited, and the HTTP answer of a claim never has
+it: the interface takes no work for an agent.
 
 ### A close over what a person did
 
@@ -3071,7 +3161,9 @@ item. `get_work_item_request` and `list_work_item_requests` are read-only tools.
 The answer, decline and expire tools take the request's own `expected_revision`;
 it is independent of the work item revision. Only one concurrent resolution can
 succeed. A closed task, ended bound execution or elapsed deadline prevents a
-late answer. Reading effective expiry does not write to an attached store.
+late answer, and so does the end of the session a request was
+[asked of](#a-question-asked-of-an-agent-session). Reading effective expiry does
+not write to an attached store.
 
 Fields have stable IDs and one of five types: `text`, `choice`, `multi_choice`,
 `boolean` or `verdict`. A required boolean can be answered `false`; omission is
@@ -3284,7 +3376,7 @@ is one row, its value first, then its own variant, then its comment:
 
 A quoted own variant, comment or note is cut at 60 characters, the last one `…`.
 The text of `question_changed` is `changed: ` and the rows joined by `; `, within
-300 characters: rows that do not fit are left out from the end and counted, as
+1500 characters: rows that do not fit are left out from the end and counted, as
 `; and 4 more`. The card draws the same rows in the same order in the person's
 words, with labels in place of ids, for a question it draws as a review (one with a
 `group`, or with more than 8 verdict fields); it shows any other question's versions
@@ -3310,19 +3402,23 @@ changed: p10-steps +lock −glob; p12 later→accept; p15 comment: Frozen until 
 An agent reads a question three ways:
 
 - The `questions` part of `get_work_item`, which the card counts in its `parts`
-  as `count` and `open`:
-  `{"total": 6, "open": 2, "items": […], "truncated": true}`. At most 5 items, the
-  open ones first and then the newest closed. The full record of the HTTP read
-  has no such key; an HTTP read that names the part does.
+  as `count`, `open` and `addressed_open`:
+  `{"total": 6, "open": 2, "items": […], "truncated": true, "addressed_open": 0}`.
+  At most 5 items, the open ones first and then the newest closed. A request asked
+  of an agent session is none of them and counts in none of the numbers but
+  `addressed_open`, the open ones. The full record of the HTTP read has no such
+  key; an HTTP read that names the part does.
 - `list_work_item_requests` takes `space`, `id` (one item), `status`,
-  `answered_after`, `limit` and `offset`, and answers in the compact form below, or
-  whole with `full: true`. Its page says `truncated` and `next_offset` as every list
-  does. `answered_after` keeps only answers given after that timestamp, oldest first
-  by `answered_at` and then by id, so a reader takes what came since by passing the
-  last `answered_at` it read and asking again while `truncated` is true. A page never
-  ends between two answers of one time: it runs past `limit` by the tie, because the
-  next page starts after that time. Without `answered_after` the newest question
-  comes first.
+  `answered_after`, `limit`, `offset` and `addressed`, and answers in the compact
+  form below, or whole with `full: true`. It leaves out every request asked of an
+  agent session, unless `addressed: true`: then it lists only the open requests
+  asked of the session of the call, and refuses a call that proved none. Its page
+  says `truncated` and `next_offset` as every list does. `answered_after` keeps only
+  answers given after that timestamp, oldest first by `answered_at` and then by id,
+  so a reader takes what came since by passing the last `answered_at` it read and
+  asking again while `truncated` is true. A page never ends between two answers of
+  one time: it runs past `limit` by the tie, because the next page starts after that
+  time. Without `answered_after` the newest question comes first.
 - `get_work_item_request` answers with one question whole.
 
 The compact form carries no options and no descriptions:
@@ -3599,6 +3695,79 @@ that wants the ticks keeps the item open, in review for instance.
 **Merging.** A list goes with its comment: a comment root's list moves to the
 survivor with it, and a report's list stays with the report on the merged item. A
 comment is deleted only with its item, and its list with it.
+
+### A question asked of an agent session
+
+A request can ask one top-level agent session instead of the owner: its record
+names that session in `addressee`, which is `null` on a question to the owner.
+Several sessions asked one question get one request each, written in one call, with
+the fields of any question. A session asked must be known, live, a top-level one rather than a subagent's, and
+not the caller's own; one that is not is refused with `invalid_request`, naming
+the session, and nothing is written.
+
+**How an agent asks.** `create_work_item_request` with `addressees`, a list of 1 to
+5 top-level session ids, as `participants`, `subscribers` and holders name them,
+asks those sessions instead of the owner: one request each, in one write, with the
+`kind`, `prompt`, `fields` and `expires_at` of the call. The session that asked is
+the one the call proved, whichever of its agents made it. The answer names each
+request and the session it asks:
+
+```json
+{"requests": [{"request_id": "…", "addressee": "019a3c2e-…"}]}
+```
+
+The interface writes through the same route
+(`POST /api/planning/work-item/request`) and is refused like any call that proved
+no agent session. Refused before anything is written, the message naming the
+session where there is one:
+
+| Case | Refusal |
+| --- | --- |
+| a call that proved no agent session, the interface's or an unconfirmed one | `invalid_request` |
+| a session that is not known, has ended or has been quiet longer than a lease lasts | `invalid_request`, naming the session |
+| the caller's own session, or a subagent's rather than a top-level one | `invalid_request`, naming the session |
+| a session named twice, more than 5, or none | `invalid_request` |
+| `execution_id` or `session_id` beside `addressees`: those bind a question to the owner | `invalid_request` |
+| a closed item | `invalid_request`, as for any request |
+| a fourth request from one session to one other within an hour | `ask_limit` (429): `session <id> was asked 3 times in the last hour by this session; write once there, or wait` |
+
+The hour counts the requests asked of that session whose confirmed call names the
+asking session, its subagents included; a refused call asked nothing and counts
+toward no hour, and Valkama's own requests count toward none. The batch's
+`questions` take `addressees` as well: an entry with them asks those sessions in the
+same write as the batch's other groups and answers with `requests`, as above. A
+refused entry refuses the whole batch and writes nothing of it.
+
+**Who answers.** Only a call whose session a client proved and that is the
+`addressee` answers it, changes the answer or declines it, from that session's
+conversation or any of its subagents. Only the session that asked, from any of its
+agents, or Valkama withdraws it with `expire_work_item_request`:
+
+| Case | Refusal |
+| --- | --- |
+| an answer, a change or a decline from any other caller, the interface included | `not_addressed` (403) |
+| a withdrawal by anyone but the session that asked or Valkama | `not_asker` (403) |
+
+**When the session is gone.** While the `addressee` has ended, or has been quiet
+longer than a lease lasts, the request reads `expired` with
+`expired_reason: session_gone`, from the moment the session ends and with no grace,
+and an answer is refused as on any expired request. Nothing is written: when the
+session resumes, the request waits for its answer again. A deadline (`expires_at`)
+is what gives one a stored end.
+
+**What it does not do.** It is no question to the owner: it raises no Windows
+notification and takes none back, it is not in
+[the panel of open questions](#the-panel-of-open-questions) or any count of what
+waits for the owner, it holds nothing up, and a merge moves it with the work but
+does not say it waits on the survivor. `GET /api/modules/planning/requests`,
+`list_work_item_requests` without `addressed` and `get_work_item`'s `questions`
+leave it out; `get_work_item_request`, a read by its id, and an export read it as
+any request.
+
+**Who is told.** Where Valkama's client hooks are installed, the asking wakes the
+session asked, and what becomes of the request reaches that session and the one that
+asked, nobody else: see
+[asked of a session](hook-contract.md#asked-of-a-session).
 
 ### Steps from a comment
 

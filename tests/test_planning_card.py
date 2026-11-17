@@ -140,7 +140,12 @@ class FullItemCase(CardCase):
         if name == "mentions":
             return {"count": answer["mentions_total"]}
         if name == "questions":
-            return {"count": answer["questions"]["total"], "open": answer["questions"]["open"]}
+            questions = answer["questions"]
+            return {
+                "count": questions["total"],
+                "open": questions["open"],
+                "addressed_open": questions["addressed_open"],
+            }
         if name == "claim":
             return {"count": 0 if answer["claim"] is None else 1}
         return {"count": len(answer.get(name) or [])}
@@ -179,6 +184,13 @@ class DefaultReadTests(FullItemCase):
         self.assertEqual(named, set(contents), "this item has something in each part")
         for name in read_model.PARTS[1:]:
             with self.subTest(part=name):
+                if name == "participants":
+                    # Only a goal or a stage has them; this item is a task.
+                    with self.assertRaisesRegex(
+                        model.PlanningError, "unknown part 'participants'; a task's parts are"
+                    ):
+                        self.read(parts=[name])
+                    continue
                 answer = self.read(parts=[name])
                 size = self.part_size(name, answer)
                 # A short description is read whole, so the card does not name its sections.
@@ -246,6 +258,8 @@ class PartTests(FullItemCase):
         }
         for name in read_model.PARTS[1:]:
             with self.subTest(part=name):
+                if name == "participants":
+                    continue  # a task has no such part, and naming it is refused
                 answer = self.read(parts=[name])
                 self.assertEqual(beside, {key: answer[key] for key in beside})
                 fields = set(answer) - set(beside)
@@ -282,6 +296,18 @@ class PartTests(FullItemCase):
             self.assertIn("; parts are card, comments, events, links, refs,", str(caught.exception))
         with self.assertRaises(model.PlanningError):
             self.read(parts=[])
+
+    def test_a_goal_reads_who_works_on_it_as_a_part_its_card_counts(self) -> None:
+        goal = self.read()["parent"]
+        part = tools.OPS["get_work_item"](self.conn, {"id": goal, "parts": "participants"})
+        answer = api.handle_get(self.conn, "/api/planning/work-item", {"id": [goal]})
+        assert isinstance(part, dict) and answer is not None
+        self.assertEqual(answer[1]["work_item"]["participants"], part["participants"])
+        self.assertEqual([HOLDER], [entry["session"] for entry in part["participants"]])
+        card = tools.OPS["get_work_item"](self.conn, {"id": goal})
+        assert isinstance(card, dict)
+        self.assertNotIn("participants", card, "the card counts them and leaves them out")
+        self.assertEqual({"count": 1}, card["parts"]["participants"])
 
     def test_a_comment_mode_beside_parts_without_comments_is_refused(self) -> None:
         with self.assertRaises(model.PlanningError) as caught:

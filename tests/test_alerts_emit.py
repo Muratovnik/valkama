@@ -256,6 +256,37 @@ class ListTests(EmitHarness):
         # One open question carries no count; two would read ": 2<".
         self.assertNotRegex(message["xml"], r": \d+<", "the lists are no open questions")
 
+    def test_a_request_asked_of_a_session_raises_no_toast_and_takes_none_back(self) -> None:
+        other = "019a3c2e-6c8e-7c11-9e0f-2f4b6d8a1c3e"
+        self.conn.execute("INSERT INTO sessions(id, client) VALUES(?, 'codex')", (other,))
+        self.conn.commit()
+        elsewhere = self.item("Asked of a session")
+        self.ask()
+        self.settle()
+        self.assertEqual(1, len(self.shown), "the owner's question raises its toast")
+        asking = calls.Identity(
+            state=calls.CONFIRMED, source=calls.CODEX_META, session_id=AGENT["sessionId"]
+        )
+        with calls.bind(asking, "test"):
+            [asked] = requests.ask_sessions(
+                self.conn, elsewhere, sessions=[other], prompt="Agree?", fields=[FIELD]
+            )
+            self.assertEqual([], emit.due_after_write(self.conn))
+        answering = calls.Identity(state=calls.CONFIRMED, source=calls.CODEX_META, session_id=other)
+        with calls.bind(answering, "test"):
+            requests.resolve(
+                self.conn,
+                asked["request_id"],
+                status="answered",
+                expected_revision=asked["revision"],
+                answers={"answer": "yes"},
+            )
+            self.assertEqual(
+                [],
+                emit.due_after_write(self.conn),
+                "an answer the owner never saw takes nothing back",
+            )
+
     def test_a_person_ticking_a_list_takes_no_toast_back(self) -> None:
         listed = self.listed()
         self.settle()

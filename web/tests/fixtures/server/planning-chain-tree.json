@@ -2,8 +2,8 @@
   "interface_version": "valkama-planning-api",
   "chain": {
     "root": {
-      "work_item_id": "00000000-0000-4000-8000-000000000041",
-      "reference": "MAIN-6",
+      "work_item_id": "00000000-0000-4000-8000-000000000046",
+      "reference": "MAIN-9",
       "title": "Tree goal",
       "kind": "goal",
       "has_children": true,
@@ -26,19 +26,19 @@
     },
     "origins": [
       {
-        "parent_reference": "MAIN-6",
+        "parent_reference": "MAIN-9",
         "parent_title": "Tree goal",
         "count": 2,
         "open": 1
       },
       {
-        "parent_reference": "MAIN-7",
+        "parent_reference": "MAIN-10",
         "parent_title": "Tree stage",
         "count": 2,
         "open": 2
       },
       {
-        "parent_reference": "MAIN-8",
+        "parent_reference": "MAIN-11",
         "parent_title": "Tree nested stage",
         "count": 1,
         "open": 1
@@ -61,8 +61,8 @@
     },
     "members": [
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000035",
-        "reference": "MAIN-9",
+        "work_item_id": "00000000-0000-4000-8000-000000000039",
+        "reference": "MAIN-12",
         "title": "Tree work in the nested stage",
         "kind": "task",
         "state": {
@@ -75,15 +75,15 @@
         "container_state": null,
         "claim_ref": "",
         "claim_state": null,
-        "parent_reference": "MAIN-8",
+        "parent_reference": "MAIN-11",
         "created_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "workable": true,
         "queue_order": 1
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000037",
-        "reference": "MAIN-10",
+        "work_item_id": "00000000-0000-4000-8000-000000000041",
+        "reference": "MAIN-13",
         "title": "Tree work under the stage",
         "kind": "task",
         "state": {
@@ -96,15 +96,15 @@
         "container_state": null,
         "claim_ref": "",
         "claim_state": null,
-        "parent_reference": "MAIN-7",
+        "parent_reference": "MAIN-10",
         "created_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "workable": true,
         "queue_order": 2
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000040",
-        "reference": "MAIN-11",
+        "work_item_id": "00000000-0000-4000-8000-000000000045",
+        "reference": "MAIN-14",
         "title": "Tree work finished under the goal",
         "kind": "task",
         "state": {
@@ -117,15 +117,15 @@
         "container_state": null,
         "claim_ref": "",
         "claim_state": null,
-        "parent_reference": "MAIN-6",
+        "parent_reference": "MAIN-9",
         "created_at": "2026-01-02T03:04:05Z",
         "closed_at": "2026-01-02T03:04:05Z",
         "workable": false,
         "queue_order": null
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000038",
-        "reference": "MAIN-7",
+        "work_item_id": "00000000-0000-4000-8000-000000000042",
+        "reference": "MAIN-10",
         "title": "Tree stage",
         "kind": "stage",
         "state": null,
@@ -133,15 +133,15 @@
         "container_state": "not_started",
         "claim_ref": "",
         "claim_state": null,
-        "parent_reference": "MAIN-6",
+        "parent_reference": "MAIN-9",
         "created_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "workable": false,
         "queue_order": null
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000036",
-        "reference": "MAIN-8",
+        "work_item_id": "00000000-0000-4000-8000-000000000040",
+        "reference": "MAIN-11",
         "title": "Tree nested stage",
         "kind": "stage",
         "state": null,
@@ -149,7 +149,7 @@
         "container_state": "not_started",
         "claim_ref": "",
         "claim_state": null,
-        "parent_reference": "MAIN-7",
+        "parent_reference": "MAIN-10",
         "created_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "workable": false,

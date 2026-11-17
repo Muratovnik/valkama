@@ -29,6 +29,7 @@ from . import (
     item_tree,
     leases,
     model,
+    questions,
     queue,
     read_model,
     request_model,
@@ -36,10 +37,17 @@ from . import (
     store,
     subscriptions,
     transitions,
+    waiting,
     words,
 )
+from . import participants as working
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
+#: How many questions to the owner are still pending on one item.
+_OWNER_QUESTIONS_ON = (
+    "SELECT COUNT(*) FROM work_item_requests r WHERE r.work_item_id = ? AND "  # noqa: S608 - constant text
+    + questions.OWNER_QUESTION
+)
 
 #: How many candidates the take-next queue will try before reporting the race it
 #: keeps losing. Bounded rather than open-ended because a caller inside its own
@@ -120,6 +128,7 @@ def get_work_item(
     events: int | None = None,
     sessions: bool = False,
     agents: bool = False,
+    participants: bool = False,
 ) -> dict:
     """One item in full; `comments` and `events` keep only the newest of each.
 
@@ -128,15 +137,18 @@ def get_work_item(
     a page of the roots without the resolved mark, as `read_model.present` says.
     `sessions` adds the agent sessions whose confirmed calls wrote to it, and
     `agents` the agents standing on it and an `executor` at the claim, each step
-    and each agent, which only the card asks for. Without any of these the answer
-    is the complete record a screen draws from. Every form carries `mentions`, the
-    newest `read_model.HTTP_MENTIONS` comments on other items that named this one, oldest
-    first, and `mentions_total`.
+    and each agent, which only the card asks for. `participants` adds, to a goal
+    or a stage, the sessions working on it (`planning.participants`), which costs a
+    walk of the tree under it and so no write's answer carries. Without any of these
+    the answer is the complete record a screen draws from. Every form carries
+    `mentions`, the newest `read_model.HTTP_MENTIONS` comments on other items that
+    named this one, oldest first, and `mentions_total`.
     """
 
+    row = read_model.item_row(conn, reference)
     record = read_model.present(
         conn,
-        read_model.item_row(conn, reference),
+        row,
         full=True,
         comments=comments,
         comments_after=comments_after,
@@ -149,6 +161,8 @@ def get_work_item(
         record["sessions"] = read_model.sessions(conn, str(record["work_item_id"]))
     if agents:
         planning_agents.on_card(conn, record)
+    if participants and row["kind"] == model.CONTAINER_KIND:
+        record["participants"] = working.of_container(conn, row)
     return record
 
 
@@ -729,6 +743,11 @@ def create_work_item(
         _log(conn, item_id, "accepted", basis, author)
     if opened:
         _log(conn, item_id, "opened", "", author)
+    creator = subscriptions.agent_session(calls.current())
+    if stored_kind == model.CONTAINER_KIND and parent_id is None and creator is not None:
+        # A goal outlives the subagent that filed it, and its news is for the
+        # conversation that leads the work; a stage's come through the goal.
+        subscriptions.follow(conn, item_id, creator)
     words.bring_current(conn)
     return read_model.present(conn, read_model.item_by_id(conn, item_id), full=True)
 
@@ -1328,6 +1347,7 @@ def claim_work_item(
         else:
             _log(conn, identity, "claimed", "", author)
         _started(conn, identity, start, author, start_reason)
+        waiting.deliver(conn, row)
     overridden = _record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
@@ -1697,6 +1717,11 @@ def _expire(
     write, whatever state the item stands in: nobody is left to stand behind
     that tick, so a later holder confirms it before review or a close. A tick
     someone else made is theirs and stays as it is.
+
+    What a person said over the work after a lapsed session's last call reached
+    nobody, so the same call leaves it for the next session (`waiting.recover`),
+    for every lease it releases that a session held, before a claim that met the
+    lapsed lease looks for words to take.
     """
 
     identity = str(row["work_item_id"])
@@ -1725,6 +1750,9 @@ def _expire(
         for step in released:
             _log(conn, identity, "checklist_released", step["text"][:120], leases.EXPIRY_AUTHOR)
         _hand_back(conn, identity, leases.EXPIRY_AUTHOR, reason)
+        waiting.recover(
+            conn, [(lease.session_id, identity) for lease in gone if lease.session_id is not None]
+        )
     return read_model.item_by_id(conn, identity)
 
 
@@ -1793,6 +1821,7 @@ def claim_ready_work_item(
             continue
         _log(conn, chosen, "claimed", "", author)
         _started(conn, chosen, start, author, "claimed")
+        waiting.deliver(conn, row)
         answer = read_model.present(conn, read_model.item_by_id(conn, chosen), full=True)
         _say_started(conn, answer, start)
         return answer
@@ -2077,6 +2106,8 @@ def claim_checklist_item(
     identity = str(row["work_item_id"])
     _log(conn, identity, action, step["text"][:120], author)
     _started(conn, identity, start, author, "claimed")
+    if not release:
+        waiting.deliver(conn, row)
     overridden = _record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
@@ -2411,15 +2442,16 @@ def _fold(
     for row, found, target in merging:
         identity = str(row["work_item_id"])
         reference = read_model.reference(conn, row)
-        # A list waits for nobody, so only a question is said to wait on the survivor.
+        # Only a question to the owner is said to wait on the survivor: a list waits for
+        # nobody, and a request asked of an agent session waits for that session.
         pending = conn.execute(
-            "SELECT COUNT(*) FROM work_item_requests WHERE work_item_id = ? AND status = 'pending'"
-            " AND comment_id IS NULL",
+            _OWNER_QUESTIONS_ON,
             (identity,),
         ).fetchone()[0]
         roots = _moving_roots(conn, identity)
         # The question was about the work, and the work moves. Left here a pending
         # one would end with this item, and its answer would stay on a closed one.
+        # A request asked of an agent session is about the work too, and moves with it.
         # A list goes with the comment it stands under, so a report's stays here.
         conn.execute(
             "UPDATE work_item_requests SET work_item_id = ? WHERE work_item_id = ?"

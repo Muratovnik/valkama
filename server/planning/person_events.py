@@ -31,7 +31,10 @@ would end it before the session's orchestrator was told. The hook remembers the
 last call it has read for each item and asks for what came after that. The same
 hook reads what other agents wrote apart (`agents_since`), from the same rows and
 into the same entries: it is told to the holders and followers, and never as a
-person's.
+person's; so is what Valkama recorded in a call of its own, a lease that ran out
+(`valkama_since`). What is written under a goal an orchestrator works on reaches it from
+items it never wrote to, so for those the hook reads every item's new rows at once,
+from three places of its own (`tree_since`), and keeps the items of its tree.
 
 Nothing here is imported at module level past `sqlite3`: a client hook calls this
 on a read-only connection of its own, in a process that starts for one tool call,
@@ -44,14 +47,21 @@ from __future__ import annotations
 
 import sqlite3
 
+# `typing` and `collections.abc` cost a client hook time it does not spend; the checker
+# reads the names.
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
 #: What `execution_events.identity_source` says about a call; `calls` publishes these.
 BROWSER = "browser"
 VALKAMA = "valkama"
 #: What `execution_events.kind` says about a Planning write call.
 KIND = "planning_write"
 
-#: How much of what a person wrote one event quotes, the ellipsis counted.
-MAX_TEXT = 300
+#: How much of what was written one event quotes, the ellipsis counted: most comments
+#: come whole, so the reader need not open the item. A cut one says `cut: true`.
+MAX_TEXT = 1500
 #: How many events one answer names, the newest ones.
 MOST_SHOWN = 20
 
@@ -82,6 +92,12 @@ KINDS = {
     # A person's words about this item, written on another one in a comment's `mentions`.
     "mentioned": "mentioned",
 }
+#: The kinds that say where the work stands: its state changed, it got its summary, it
+#: was left without a holder or changed holders, it came to wait for the owner or
+#: stopped waiting. An orchestrator hears these of its own subagents' writes.
+WORK_KINDS = frozenset(
+    {"status", "summary_selected", "released", "taken_over", "question_asked", "question_withdrawn"}
+)
 #: The actions never told. `created`: an item a person filed says what it says, in
 #: the description an agent reads when it takes it. `execution_attached`: a launch
 #: or an observed session, which the agent in question already knows. `overridden`:
@@ -92,6 +108,12 @@ KINDS = {
 NOT_TOLD = frozenset(
     {"created", "execution_attached", "overridden", "labels_changed", "accepted", "child_left"}
 )
+#: The kinds of Valkama's own records that ask for a session: one wakes it, as a person's
+#: act does, and waits on a goal or stage nobody works on for the next session that takes
+#: work there (`waiting`). Empty: a lease that ran out, the one record Valkama makes on
+#: its own today, is told at the next tool call. A stage that adds a record which must
+#: wake names its kind here.
+SERVER_ASKS: frozenset[str] = frozenset()
 
 #: The call that edits an item's fields, and those fields' columns by the name
 #: `calls.call_id` records. The one place a name read back from a row meets SQL.
@@ -256,6 +278,228 @@ def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> lis
             )
         )
     return [(order[0], entry) for order, entry in sorted(found, key=lambda pair: pair[0])]
+
+
+#: What Valkama recorded on an item in a call of its own (`calls.valkama()`): a write the
+#: server makes inside another caller's call is that caller's, and read as theirs.
+_VALKAMA_EVENTS = (
+    "SELECT e.id, e.action, e.detail, e.created_at, e.call_id"
+    " FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.work_item_id = ? AND e.call_id > ? AND c.identity_source = ? ORDER BY e.id"
+)
+
+
+def valkama_since(
+    conn: sqlite3.Connection, work_item_id: str, after: int
+) -> list[tuple[int, dict]]:
+    """What Valkama recorded on one item through calls of its own after `after`, with the call.
+
+    The events `KINDS` names, in the entries a person's act is told by, with
+    `via: "valkama"`: neither a person's words nor another agent's, so they are in
+    neither `from_person` nor `agents_since`. One of a kind in `SERVER_ASKS` says
+    `asks: true`. Who is told is the hook's to decide.
+    """
+
+    found = []
+    for row in conn.execute(_VALKAMA_EVENTS, (work_item_id, after, VALKAMA)).fetchall():
+        if str(row[1]) in KINDS:
+            found.append((int(row[4]), _by_valkama(_event_entry(conn, row, work_item_id))))
+    return found
+
+
+def unheard(conn: sqlite3.Connection, work_item_id: str, after: int) -> list[tuple[int, dict]]:
+    """What waits on a container for whoever works there, after `after`, with its call.
+
+    A person's acts as `from_person` gives them, and Valkama's own records of a kind
+    that asks for a session (`SERVER_ASKS`), in the order of their calls. Valkama's
+    other records wake nobody, so a session that missed them lost nothing. Words left
+    waiting (`waiting`) are these, and so is what a client hook tells the orchestrator
+    whose subagent was handed them.
+    """
+
+    found = since_call(conn, work_item_id, after)
+    asking = [
+        (call, entry)
+        for call, entry in valkama_since(conn, work_item_id, after)
+        if entry.get("asks")
+    ]
+    if not asking:
+        return found
+    return sorted([*found, *asking], key=lambda pair: pair[0])
+
+
+def _by_valkama(entry: dict) -> dict:
+    entry["via"] = VALKAMA
+    if entry["kind"] in SERVER_ASKS:
+        entry["asks"] = True
+    return entry
+
+
+#: How many rows of each source one read of the tree's news takes: the rest is read the
+#: next time, from where this one stopped, so nothing is lost and no read grows unbounded.
+MOST_FEED_ROWS = 2000
+#: The rows after a place, of every item, in order, with what the call that wrote each
+#: proved: whose words they are is decided here, from the call row, as for one item.
+_FEED_EVENTS = (
+    "SELECT e.id, e.action, e.detail, e.created_at, e.call_id, e.work_item_id,"
+    " c.identity_source, c.identity_state, c.tool, c.session_id, c.agent_id"
+    " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.id > ? ORDER BY e.id LIMIT ?"
+)
+_FEED_COMMENTS = (
+    "SELECT m.id, m.body, m.report, m.created_at, m.call_id, m.reply_to, m.reply_to_request,"
+    " m.work_item_id, c.identity_source, c.identity_state, c.tool, c.session_id, c.agent_id,"
+    " m.awaits_reply, m.created_at >= (SELECT strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?))"
+    " FROM work_item_comments m LEFT JOIN execution_events c ON c.id = m.call_id"
+    " WHERE m.id > ? ORDER BY m.id LIMIT ?"
+)
+#: The call rows are read by key alone: the last of the next ones a read takes, and among
+#: those the person's edits, which no event or comment row names.
+_FEED_LAST_CALL = (
+    "SELECT MAX(id) FROM (SELECT id FROM execution_events WHERE id > ? ORDER BY id LIMIT ?)"
+)
+_FEED_EDITS = (
+    "SELECT id, identity_source, tool, reason, received_at, work_item_id FROM execution_events"
+    " WHERE id > ? AND id <= ? AND kind = ? AND identity_source = ? AND tool = ?"
+    " AND reason <> '' AND work_item_id IS NOT NULL ORDER BY id"
+)
+#: The tools a person's write comes through, the `LIKE` of `_PERSON_EVENTS` as prefixes.
+_PERSON_TOOLS = ("/api/planning/", "/api/modules/planning/")
+
+
+def tree_since(
+    conn: sqlite3.Connection,
+    after: tuple[int, int, int],
+    choose: Callable[[set[str]], Mapping[str, bool]],
+    *,
+    asked_of: str | None = None,
+) -> tuple[list[tuple[str, int, dict]], tuple[int, int, int]]:
+    """What was written on any item after three places, for the items `choose` keeps,
+    and every event of a request asked of the session `asked_of`, wherever it was asked.
+
+    The places are an event, a comment and a call row: the three sources a person's
+    or an agent's write lands in, an edit being found on its call row alone. Each
+    source is read by its primary key after its place, at most `MOST_FEED_ROWS` rows,
+    and `choose` is asked once which of the items those rows name to read, so a reader
+    of a whole tree pays for the rows written since, not for the size of the tree.
+    For each item it keeps it says whether everything there is read, or only what
+    says where the work stands (`WORK_KINDS`).
+
+    Each entry is the one `since_call` or `agents_since` gives for that item: a
+    person's act with `via: "interface"`, an edit with what it edited as it reads
+    now, another agent's write with its `session` and `agent`, an event Valkama
+    recorded in a call of its own as `valkama_since` gives it. A row whose call proved
+    nobody is nobody's words and is left out, and so is a comment of Valkama's. They come
+    as `(work_item_id, call, entry)` in the order the calls were made, with the
+    places the next read starts from: the last row read of each source.
+
+    The events of a request asked of `asked_of` come whatever `choose` says of their
+    item, every kind of them: a session is asked from anywhere on the board. Each
+    request's entry names its `addressee` (`_request_entry`), so the reader can leave
+    out what was asked of somebody else; who is told is the reader's to decide.
+    """
+
+    most = MOST_FEED_ROWS
+    events = conn.execute(_FEED_EVENTS, (after[0], most)).fetchall()
+    comments = conn.execute(_FEED_COMMENTS, (ASKS_FOR, after[1], most)).fetchall()
+    last = conn.execute(_FEED_LAST_CALL, (after[2], most)).fetchone()[0]
+    edits = (
+        conn.execute(_FEED_EDITS, (after[2], last, KIND, BROWSER, _EDIT_TOOL)).fetchall()
+        if last
+        else []
+    )
+    places = (
+        int(events[-1][0]) if events else after[0],
+        int(comments[-1][0]) if comments else after[1],
+        int(last) if last else after[2],
+    )
+    named = {str(row[5]) for row in events} | {str(row[7]) for row in comments}
+    named |= {str(row[5]) for row in edits}
+    kept = choose(named) if named else {}
+    theirs = _asked_of(conn, asked_of, events) if asked_of else set()
+    found: list[tuple[tuple[int, int, int], str, dict]] = []
+    reports: set[int] = set()
+    for row in comments:
+        item = str(row[7])
+        if not kept.get(item):
+            continue  # not kept, or a task, where no comment says where the work stands
+        speaker = _feed_speaker(row[8], row[9], row[10], row[11])
+        if speaker is None or speaker == VALKAMA:
+            continue
+        if row[2]:
+            reports.add(int(row[4]))
+        entry = _comment_entry(row)
+        if speaker != BROWSER:
+            entry = _spoken(entry, row[11], row[12])
+            if row[13]:
+                entry["awaits_reply"] = True
+                if row[14]:
+                    entry["recent"] = True
+        found.append(((int(row[4]), 1, int(row[0])), item, entry))
+    for row in events:
+        item, action = str(row[5]), str(row[1])
+        if action not in KINDS:
+            continue
+        if not (action.startswith("request_") and str(row[2]) in theirs) and (
+            item not in kept or not (kept[item] or KINDS[action] in WORK_KINDS)
+        ):
+            continue
+        speaker = _feed_speaker(row[6], row[7], row[8], row[9])
+        if speaker is None:
+            continue
+        if action == "summarized" and int(row[4]) in reports:
+            continue
+        entry = _event_entry(conn, row, item)
+        if speaker == VALKAMA:
+            entry = _by_valkama(entry)
+        elif speaker != BROWSER:
+            entry = _spoken(entry, row[9], row[10])
+        found.append(((int(row[4]), 2, int(row[0])), item, entry))
+    by_item: dict[str, list[tuple]] = {}
+    for row in edits:
+        if kept.get(str(row[5])):
+            by_item.setdefault(str(row[5]), []).append(row)
+    for item, rows in by_item.items():
+        found.extend((order, item, entry) for order, entry in _edit_entries(conn, item, rows))
+    found.sort(key=lambda each: each[0])
+    return [(item, order[0], entry) for order, item, entry in found], places
+
+
+def _asked_of(conn: sqlite3.Connection, session: str, events: list[tuple]) -> set[str]:
+    """Which of the requests these event rows name were asked of `session`: one read, and
+    none when no row is a request's."""
+
+    named = {str(row[2]) for row in events if str(row[1]).startswith("request_")}
+    if not named:
+        return set()
+    import json
+
+    return {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT request_id FROM work_item_requests WHERE addressee = ?"
+            " AND request_id IN (SELECT value FROM json_each(?))",
+            (session, json.dumps(sorted(named))),
+        )
+    }
+
+
+def _feed_speaker(source: object, state: object, tool: object, session: object) -> str | None:
+    """Whose a row of the tree's news is: `browser` for a person, `valkama` for Valkama's
+    own call, the session for an agent.
+
+    The rules of `_PERSON_EVENTS`, `_VALKAMA_EVENTS` and `_AGENT_EVENTS`, read off the
+    call row: a person through Planning's own paths, an agent through a call that proved
+    its session.
+    """
+
+    if source == BROWSER:
+        return BROWSER if isinstance(tool, str) and tool.startswith(_PERSON_TOOLS) else None
+    if source == VALKAMA:
+        return VALKAMA
+    if state != "confirmed" or session is None:
+        return None
+    return str(session)
 
 
 #: A thread's comments in order, with what the call that wrote each proved: whoever
@@ -551,7 +795,7 @@ def _event_entry(conn: sqlite3.Connection, row: tuple, work_item_id: str) -> dic
     action, detail, at = str(row[1]), str(row[2]), str(row[3])
     kind = KINDS[action]
     if action.startswith("request_"):
-        return _entry(kind, at, request_id=detail, text=_question_text(conn, action, detail))
+        return _request_entry(conn, kind, at, action, detail)
     if action == "checklist_replaced":
         return _entry(kind, at, text=f"{detail} steps")
     if action in ("comment_resolved", "comment_reopened"):
@@ -628,21 +872,53 @@ def _described(conn: sqlite3.Connection, at: str, source: str, named: str) -> di
     return _entry("mentioned", at, text=said, **place, **{"from": f"{row[1]}-{row[2]}"})
 
 
-def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> str:
+def _request_entry(
+    conn: sqlite3.Connection, kind: str, at: str, action: str, request_id: str
+) -> dict:
+    """A question's event: what was asked, or what came back, and of whom it was asked.
+
+    A request asked of a session says so, `addressee` naming it, since who hears what
+    becomes of it is decided by that; its asking also names its fields, `asked`, each
+    as `(id, type, option ids)`, so the session asked can answer without a read. A
+    question to the owner carries neither.
+    """
+
+    row = conn.execute(
+        "SELECT prompt, fields_json, answers_json, comment_id, addressee FROM work_item_requests"
+        " WHERE request_id = ?",
+        (request_id,),
+    ).fetchone()
+    if row is None:
+        return _entry(kind, at, request_id=request_id, text="")
+    entry = _entry(
+        kind, at, request_id=request_id, text=_question_text(conn, action, request_id, row)
+    )
+    if row[4] is not None:
+        entry["addressee"] = str(row[4])
+        fields = _json(str(row[1])) if action == "request_created" else None
+        if isinstance(fields, list):
+            entry["asked"] = [
+                (
+                    str(field.get("id")),
+                    str(field.get("type")),
+                    [str(option.get("id")) for option in field.get("options") or []],
+                )
+                for field in fields
+                if isinstance(field, dict)
+            ]
+    return entry
+
+
+def _question_text(conn: sqlite3.Connection, action: str, request_id: str, row: tuple) -> str:
     """What came back when a person answered, and otherwise what was asked.
 
     An answer reads as it stands now, as an edit does: a change says what differs
     between the current answer and the version it replaced, row by row, whichever
     change of a window it is. Two whole answers of a review do not fit in one event.
+    The answer of a session asked reads by field and option ids instead.
+    `row` is the request's prompt, fields, answers, comment and addressee.
     """
 
-    row = conn.execute(
-        "SELECT prompt, fields_json, answers_json, comment_id FROM work_item_requests"
-        " WHERE request_id = ?",
-        (request_id,),
-    ).fetchone()
-    if row is None:
-        return ""
     if action not in ("request_answered", "request_changed"):
         return str(row[0])
     fields = _json(str(row[1]))
@@ -651,6 +927,9 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> st
         return ""
     from . import request_model
 
+    if action == "request_answered" and row[4] is not None:
+        # Only the session that asked hears this answer, and it reads it by its own ids.
+        return request_model.session_answer_text(fields, stored)
     listed = row[3] is not None
     answer = request_model.answer_text(fields, stored, listed=listed)
     if action == "request_answered":
@@ -685,7 +964,30 @@ def _entry(kind: str, at: str, *, text: str, **identity: object) -> dict:
     entry: dict = {"kind": kind, "via": "interface", "at": at, **identity}
     if text:
         entry["text"] = _cut(text, MAX_TEXT)
+        if len(text) > MAX_TEXT:
+            entry["cut"] = True
     return entry
+
+
+def lists(conn: sqlite3.Connection, request_ids: set[str]) -> set[str]:
+    """Which of these requests are lists on a comment, which nobody waits for.
+
+    A list is asked and withdrawn as a question is, but the work never waits on it:
+    it raises no alert and holds nothing open (`questions.open_rows`).
+    """
+
+    if not request_ids:
+        return set()
+    import json
+
+    return {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT request_id FROM work_item_requests"
+            " WHERE request_id IN (SELECT value FROM json_each(?)) AND comment_id IS NOT NULL",
+            (json.dumps(sorted(request_ids)),),
+        )
+    }
 
 
 def describe(events: list[dict]) -> str:

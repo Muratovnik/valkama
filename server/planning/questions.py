@@ -1,14 +1,18 @@
-"""What an open question to the owner is, and when a request has lapsed.
+"""What a question to the owner is, and when a request has lapsed.
 
-Three readers ask it and must agree: the alert that tells a person a question
-waits, the take-next queue that gives no task a question holds up, and the
-record of an item, whose `withheld` names that question. The rule is stated once
-here, as the one condition a request row meets to be a question to the owner,
-`OWNER_QUESTION`, and the one test of whether it has lapsed although nothing
-wrote that down, `lapse`. A read of many items asks `asked` once for all of them.
+A request asks either the owner or an agent session (its `addressee`). A list on a
+comment asks nobody: nobody waits for it. Only a question to the owner raises the
+owner's alert, holds an item up in the take-next queue, stops the count of a
+lease's silence and stands in an item's `withheld`; a request asked of a session
+waits for that session alone, and the session hears it. Every reader must agree,
+so the rule is stated once here, as the one condition a request row meets to be
+a question to the owner, `OWNER_QUESTION`, and the one test of whether a request
+has lapsed although nothing wrote that down, `lapse`. A read of many items asks
+`asked` once for all of them.
 
-The module sits below the read model and the leases, so it reads the store
-itself and imports neither: `requests` imports the service, which imports both.
+The conditions read a request row named `r`. The module sits below the read model
+and the leases, so it reads the store itself and imports neither: `requests`
+imports the service, which imports both.
 """
 
 from __future__ import annotations
@@ -20,10 +24,12 @@ from collections.abc import Iterable
 
 from . import model, request_model
 
+#: A request row `r` that asks the owner, open or closed: neither a list on a
+#: comment nor a request asked of an agent session.
+OWNER_ASKED = "r.comment_id IS NULL AND r.addressee IS NULL"
 #: A request row `r` that is a question to the owner while nobody has answered it.
-#: A list on a comment is never one: nobody waits for it, so it raises no alert
-#: and holds nothing up.
-OWNER_QUESTION = "r.status = 'pending' AND r.comment_id IS NULL"
+#: A row can still have lapsed although nothing wrote that down (`lapse`).
+OWNER_QUESTION = "r.status = 'pending' AND " + OWNER_ASKED
 #: The columns `OWNER_QUESTION` reads. A store an earlier build wrote, read as it
 #: is, may lack one, and its rows read it as null: that build wrote nothing it
 #: would have set.

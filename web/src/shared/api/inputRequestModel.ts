@@ -113,11 +113,16 @@ const requestSchema = strictObject({
   by_person: z.boolean().nullable(),
   execution_id: text(200).nullable(),
   session_id: text(512).nullable(),
+  /** The agent session asked instead of the owner; null asks the owner. */
+  addressee: text(200).nullable(),
   expires_at: boundedText(ISO, 96).nullable(),
   created_at: boundedText(ISO, 96),
   resolved_at: boundedText(ISO, 96).nullable(),
   revision: positiveInt(true),
-  expired_reason: z.enum(['deadline', 'withdrawn', 'execution_closed', 'task_closed']).nullable(),
+  /** `session_gone`: the session asked ended or went quiet, read while it stays so. */
+  expired_reason: z
+    .enum(['deadline', 'withdrawn', 'execution_closed', 'task_closed', 'session_gone'])
+    .nullable(),
   /** The comment a list stands under; null for any other question. */
   comment_id: positiveInt().nullable().optional(),
 })

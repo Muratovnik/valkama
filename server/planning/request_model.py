@@ -615,6 +615,34 @@ def _row_line(row: dict, name: str) -> str:
     return f"{name}: {head}"
 
 
+def session_answer_text(descriptors: list[dict], stored: dict) -> str:
+    """What a session asked answered, as the session that asked reads it: `field=value`, ...
+
+    By the ids that session sent, field and option alike, since it reads the answer to
+    act on it rather than to show it: several options as `[a, b]`, an own variant and a
+    comment after the value, then the note on the question.
+    """
+
+    parts = split_answers(stored)
+    rows, _clipped = _answer_rows(descriptors, parts)
+    said = []
+    for row in rows:
+        value = row["value"]
+        if isinstance(value, list):
+            shown = "[" + ", ".join(str(entry) for entry in value) + "]"
+        elif isinstance(value, bool):
+            shown = "true" if value else "false"
+        else:
+            shown = "" if value is None else str(value)
+        if "own" in row:
+            shown = f"{shown} (own variant: {row['own']})".lstrip()
+        if "note" in row:
+            shown = f"{shown} (comment: {row['note']})".lstrip()
+        said.append(f"{row['field']}={shown}")
+    note = parts["note"]
+    return ", ".join([*said, f"note: {note}"] if note else said)
+
+
 def answer_text(descriptors: list[dict], stored: dict, *, listed: bool = False) -> str:
     """What came back as one line: each field by its label, then the note on the question.
 

@@ -42,6 +42,15 @@ T3 = "2026-08-03T10:00:00Z"
 T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
+#: The steps a migration of a 2.9 store reports, in the order it takes them.
+STEP_NAMES = [f"M{number}" for number in range(14)]
+#: Its postconditions in the order it checks them: a second run, then the fault check, last.
+POSTCONDITION_NAMES = [
+    *(f"P{number}" for number in range(1, 16)),
+    *(f"P{number}" for number in range(18, 27)),
+    "second-run",
+    "recovery-point",
+]
 
 #: The work items of the space `WM`, by number: kind, state key, parent number,
 #: holder, the step its holder claimed, labels, and the history, as (action,
@@ -487,21 +496,6 @@ def file_digest(path: str) -> str:
         return hashlib.sha256(handle.read()).hexdigest()
 
 
-#: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [f"M{number}" for number in range(12)]
-#: Its postconditions in the order it checks them: a second run, then the fault check, last.
-POSTCONDITION_NAMES = [
-    *(f"P{number}" for number in range(1, 16)),
-    "store-identity",
-    "space-projects",
-    "task-projects",
-    "labels-kept",
-    "routes",
-    "second-run",
-    "recovery-point",
-]
-
-
 class StoreCase(unittest.TestCase):
     """A 2.9 store of its own in a temporary directory."""
 
@@ -793,6 +787,64 @@ class MigratedStoreTests(StoreCase):
                 (service, self.ids["WM-9"]),
             )
         conn.rollback()
+
+    def test_addressee_lets_a_request_name_a_session_and_leaves_each_one_asking_the_owner(
+        self,
+    ) -> None:
+        columns = [row[1] for row in self.read("PRAGMA table_info(work_item_requests)")]
+        self.assertEqual("addressee", columns[-1], "appended last, as a fresh store declares it")
+        [index] = self.read(
+            "SELECT sql FROM sqlite_master WHERE name = 'work_item_requests_addressee'"
+        )
+        self.assertIn("(addressee, status) WHERE addressee IS NOT NULL", index[0])
+        self.assertEqual(
+            [("kept-request", None)],
+            [
+                tuple(row)
+                for row in self.read("SELECT request_id, addressee FROM work_item_requests")
+            ],
+        )
+        [step] = [step for step in self.report["steps"] if step["name"] == "addressee"]
+        self.assertEqual((True, {"column_added": True}), (step["needed"], step["result"]))
+        [entry] = [
+            entry for entry in self.report["postconditions"] if entry["name"] == "requests-asked"
+        ]
+        self.assertEqual({"requests": 1}, entry["detail"])
+
+    def test_waiting_words_creates_the_waiting_words_empty_and_shaped_as_a_fresh_store(
+        self,
+    ) -> None:
+        names = {
+            str(row[0])
+            for row in self.read(
+                "SELECT name FROM sqlite_master WHERE tbl_name = 'work_item_waiting_notices'"
+            )
+        }
+        self.assertLessEqual(
+            {
+                "work_item_waiting_notices",
+                "work_item_waiting_notices_open",
+                "work_item_waiting_notices_delivered",
+            },
+            names,
+        )
+        [(rows,)] = self.read("SELECT COUNT(*) FROM work_item_waiting_notices")
+        self.assertEqual(0, rows, "nothing waits from before 3.0")
+        [step] = [step for step in self.report["steps"] if step["name"] == "waiting-words"]
+        self.assertEqual((True, {"table_created": True}), (step["needed"], step["result"]))
+        details = {
+            entry["name"]: entry["detail"]
+            for entry in self.report["postconditions"]
+            if entry["name"] in ("no-old-waiting", "request-shapes", "fresh-tables")
+        }
+        self.assertEqual(
+            {
+                "no-old-waiting": {"rows": 0},
+                "request-shapes": {"refused": ["scope 'other'", "delivered_call without delivered_at"]},
+                "fresh-tables": {"added": ["work_item_waiting_notices"]},
+            },
+            details,
+        )
 
     def test_m8_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
         self,
@@ -1252,6 +1304,18 @@ FAULTS = (
         " WHERE workflow_id = work_items.workflow_id AND key = 'done') WHERE work_item_id = ?",
         lambda ids: (ids["WM-21"],),
     ),
+    fault(
+        "requests-asked",
+        "UPDATE work_item_requests SET addressee = 'kept-session' WHERE request_id = 'kept-request'",
+    ),
+    fault(
+        "no-old-waiting",
+        "INSERT INTO work_item_waiting_notices(work_item_id,scope,from_call,created_call)"
+        " VALUES(?,'tree',0,0)",
+        lambda ids: (ids["WM-1"],),
+    ),
+    fault("request-shapes", "DROP INDEX work_item_waiting_notices_delivered"),
+    fault("fresh-tables", "CREATE TABLE stray_rows(id INTEGER PRIMARY KEY)"),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
     fault(
@@ -1279,6 +1343,11 @@ FAULTS = (
         lambda _ids: ('{"module_id":"planning","scope":{"kind":"project"}}',),
     ),
 )
+
+#: `work_item_waiting_notices` as a fresh store declares it, but with neither CHECK.
+_UNCHECKED_WAITING = planning_store.WAITING_NOTICES.replace(
+    " CHECK(scope IN ('tree','space'))", ""
+).replace(",\n    CHECK((delivered_call IS NULL) = (delivered_at IS NULL))", "")
 
 
 def once(
@@ -1412,6 +1481,59 @@ def _quiet(sql: str, parameters: tuple) -> list[tuple[str, tuple]]:
 CLAUSE_FAULTS: tuple[
     tuple[str, str, Callable[[dict[str, str]], list[tuple[str, tuple]]], list[str]], ...
 ] = (
+    (
+        "request-shapes",
+        "work_item_waiting_notices takes a row with scope 'other'",
+        lambda _ids: [
+            ("DROP TABLE work_item_waiting_notices", ()),
+            (_UNCHECKED_WAITING, ()),
+            (planning_store.WAITING_OPEN_INDEX, ()),
+            (planning_store.WAITING_DELIVERED_INDEX, ()),
+        ],
+        ["fresh-shape", "request-shapes"],
+    ),
+    (
+        "fresh-tables",
+        "table stray_rows is not one a fresh store declares",
+        lambda _ids: [("CREATE TABLE stray_rows(id INTEGER PRIMARY KEY)", ())],
+        ["fresh-shape", "fresh-tables"],
+    ),
+    (
+        "fresh-tables",
+        "table work_item_waiting_notices holds 1 rows, not 0",
+        lambda ids: [
+            (
+                "INSERT INTO work_item_waiting_notices(work_item_id,scope,from_call,created_call)"
+                " VALUES(?,'tree',0,0)",
+                (ids["WM-1"],),
+            )
+        ],
+        ["integrity", "no-old-waiting", "fresh-tables"],
+    ),
+    (
+        "requests-asked",
+        "the request kept-request asks the session kept-session",
+        lambda _ids: [
+            (
+                "UPDATE work_item_requests SET addressee = 'kept-session'"
+                " WHERE request_id = 'kept-request'",
+                (),
+            )
+        ],
+        ["requests-asked"],
+    ),
+    (
+        "requests-asked",
+        "requests differ: missing ['kept-request'], extra ['other-request']",
+        lambda _ids: [
+            (
+                "UPDATE work_item_requests SET request_id = 'other-request'"
+                " WHERE request_id = 'kept-request'",
+                (),
+            )
+        ],
+        ["requests-asked"],
+    ),
     (
         "row-counts",
         "work_item_projects holds",

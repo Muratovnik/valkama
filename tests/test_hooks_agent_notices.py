@@ -4,8 +4,10 @@ The owner's example: session A comments on an item session B holds, and on one
 B only subscribed to. B's next tool call tells both, in the block that says the
 news is from agents and names A; A hears neither; B's `Stop` and its watcher tell
 and wake nothing for it. After B unsubscribes, A's next comment there is not told.
-A person's comment on B's item is still told, and still wakes. B's own subagent
-is B: what it writes is not news to B's orchestrator.
+A person's comment on B's item is still told, and still wakes. Of what B's own
+subagents write, B's orchestrator hears where the work stands, one short line that
+quotes nothing and wakes nothing, on any item the session wrote to; a subagent hears
+nothing of its own session.
 
 The expectations come from the hook contract, "Telling the agent what another
 agent did". Agents write through `mcp_surface.call_tool` with a proved session, a
@@ -37,11 +39,13 @@ CHILD = "019a3c2e-9999-7c11-9e0f-2f4b6d8a1c3e"
 A = "019a3c2e-7777-7c11-9e0f-2f4b6d8a1c3e"
 AS_B = {"sessionId": B}
 AS_CHILD = {"sessionId": B, "threadId": CHILD}
+#: B's second subagent, beside `CHILD`.
+SECOND = "019a3c2e-8888-7c11-9e0f-2f4b6d8a1c3e"
 AS_A = {"sessionId": A}
 #: A session that neither holds nor follows anything here, as a merge's author.
 THIRD = "019a3c2e-4444-7c11-9e0f-2f4b6d8a1c3e"
 AS_THIRD = {"sessionId": THIRD}
-FROM_AGENTS = "Valkama notice from agents, not from a person:"
+FROM_AGENTS = "Valkama notice, not from the person:"
 COMMENT = "/api/planning/work-item/comment"
 TRANSITION = "/api/planning/work-item/transition"
 UPDATE = "/api/planning/work-item/update"
@@ -55,7 +59,13 @@ class Harness(unittest.TestCase):
         os.makedirs(os.path.dirname(self.path))
         home = os.path.join(directory.name, "home")
         os.makedirs(home)
-        self.environ = {"VALKAMA_DB": self.path, "HOME": home, "USERPROFILE": home}
+        self.environ = {
+            "VALKAMA_DB": self.path,
+            # The suite's guard for the owner's real store, handed to every hook call.
+            "VALKAMA_PROTECTED_STORE": os.environ["VALKAMA_PROTECTED_STORE"],
+            "HOME": home,
+            "USERPROFILE": home,
+        }
         patch = mock.patch.dict(os.environ, self.environ)
         patch.start()
         self.addCleanup(patch.stop)
@@ -225,14 +235,194 @@ class OwnersExampleTests(Harness):
         self.assertEqual(notify.WAKE_STATUS, status)
         self.assertIn("marker P-2", text.decode("utf-8"))
 
-    def test_bs_own_subagent_is_no_news_to_its_orchestrator(self) -> None:
+    def test_bs_own_subagents_words_are_no_news_and_where_the_work_stands_is(self) -> None:
         self.set_up_b()
         self.comment(AS_CHILD, self.held, "From B's own subagent")
         self.comment(AS_CHILD, self.followed, "Here too")
-        self.assertIsNone(self.hook())
+        self.assertIsNone(self.hook(), "a subagent's comment is no news to its orchestrator")
         self.assertIsNone(self.hook(CHILD))
+        self.agent("claim_work_item", AS_CHILD, id=self.followed)
+        told = self.hook()
+        assert told is not None, "the state of the work it follows is"
+        self.assertRegex(
+            told, rf"\n{self.followed} «Followed by B»:\n- status at \S+ by your agent {CHILD}\n"
+        )
+        self.assertIsNone(self.hook(CHILD), "the subagent hears nothing of its own session")
         self.comment(AS_A, self.held, "Control from A")
         self.assertIn("Control from A", self.hook() or "")
+
+
+class OwnSubagentTests(Harness):
+    """B's orchestrator hears its subagents' work on items its session wrote to.
+
+    The rule of the speaker pair: one short line `by your agent <id>` for a state
+    change, a summary, a release, a takeover, a question to the owner; no quote, no
+    wake; nothing of its own writes, and a subagent nothing of its session.
+    """
+
+    def close(self, meta: object, ref: str, **extra: object) -> None:
+        self.agent(
+            "apply_work_item_changes",
+            meta,
+            id=ref,
+            transition={"state": "done"},
+            summary={"done": "Parser rewritten, marker S-1", "next": "Nothing"},
+            **extra,
+        )
+
+    def told_closed(self, told: str | None, ref: str, title: str) -> None:
+        """The close, as one line a subagent's work is told by, quoting nothing."""
+
+        assert told is not None, "the orchestrator hears its subagent's close"
+        self.assertTrue(told.startswith(FROM_AGENTS), told)
+        self.assertIn(f"\n{ref} «{title}»:\n", told)
+        self.assertRegex(told, rf"\n- status at \S+ by your agent {CHILD}\n")
+        self.assertNotIn("marker S-1", told, "the summary is not quoted")
+        self.assertNotRegex(told, r"by your agent [^\n]*«", "nor anything else")
+        self.assertNotIn("This is not an error", told, "it says nothing woke the session")
+
+    def test_an_orchestrator_hears_its_agent_close_after_reading_it_held(self) -> None:
+        self.agent("claim_work_item", AS_CHILD, id=self.held)
+        self.hook()
+        self.assertIsNone(self.hook(), "the claim was told, once")
+        self.close(AS_CHILD, self.held)
+        self.assertIsNone(self.hook(event="stop"), "the close continues no turn")
+        self.assertEqual((0, b""), self.watch(alive=1.0), "and wakes nothing")
+        told = self.hook()
+        self.told_closed(told, self.held, "Held by B")
+        self.assertIsNone(self.hook(), "once")
+        self.assertIsNone(self.hook(CHILD), "the subagent is not told its own close")
+
+    def test_an_orchestrator_hears_its_agent_close_with_no_read_between(self) -> None:
+        self.agent("claim_work_item", AS_CHILD, id=self.held)
+        self.close(AS_CHILD, self.held)
+        told = self.hook()
+        self.told_closed(told, self.held, "Held by B")
+        self.assertIsNone(self.hook(), "once")
+
+    def test_an_orchestrator_hears_a_claim_and_close_in_one_call(self) -> None:
+        self.close(AS_CHILD, self.held, claim=True)
+        told = self.hook()
+        self.told_closed(told, self.held, "Held by B")
+        assert told is not None
+        self.assertEqual(1, told.count("\n- status at "), told)
+        self.assertIsNone(self.hook(), "once")
+
+    def test_nobody_hears_itself_and_a_subagent_hears_nothing_of_its_session(self) -> None:
+        second = {"sessionId": B, "threadId": SECOND}
+        answer = self.agent(
+            "apply_work_item_changes",
+            AS_B,
+            id=self.held,
+            checklist={"items": ["Write the parser"]},
+            comment={"body": "The orchestrator's own, marker O7-A"},
+        )
+        step = answer["applied"]["checklist"][0]["item_id"]
+        self.agent("claim_work_item_checklist_item", second, id=self.held, item_id=step)
+        root = self.comment(AS_CHILD, self.held, "Which parser, marker O7-Q?", awaits_reply=True)
+        self.agent(
+            "create_work_item_request",
+            AS_CHILD,
+            id=self.held,
+            kind="question",
+            prompt="Which parser, marker O7-P?",
+            fields=[
+                {
+                    "id": "way",
+                    "label": "Way",
+                    "type": "choice",
+                    "required": True,
+                    "options": [{"id": "a", "label": "Long"}],
+                }
+            ],
+        )
+        self.comment(second, self.held, "This one, marker O7-R", reply_to=root)
+        self.assertIsNone(self.hook(event="stop"), "nothing of its own session continues a turn")
+        self.assertEqual((0, b""), self.watch(alive=1.0), "or wakes it")
+        self.assertIsNone(self.hook(SECOND, event="stop"))
+        told = self.hook()
+        assert told is not None, "the question to the owner is where the work stands"
+        self.assertRegex(told, rf"\n- question_asked at \S+ by your agent {CHILD}\n")
+        # The step claim started the item: a state change, told as its claimer's.
+        self.assertRegex(told, rf"\n- status at \S+ by your agent {SECOND}\n")
+        for heard_not in ("marker O7", "step_claimed", "- comment at", "- reply at"):
+            self.assertNotIn(heard_not, told)
+        self.assertEqual(2, told.count("\n- "), "nothing else of the session")
+        self.assertNotRegex(told, r"\n- [^\n]*«", "and no line quotes")
+        self.assertIsNone(self.hook(), "once")
+        self.assertIsNone(self.hook(SECOND), "a subagent hears neither its orchestrator nor a1")
+        self.assertIsNone(self.hook(CHILD), "nor the reply of its sibling in its thread")
+
+    def test_a_list_on_its_agents_comment_is_no_question_to_the_owner(self) -> None:
+        """Nobody waits on a list: the work does not wait for the owner, so no line says so."""
+
+        self.agent("claim_work_item", AS_CHILD, id=self.held)
+        self.assertIsNotNone(self.hook(), "the claim")
+        options = [{"id": "a", "label": "Keep"}, {"id": "b", "label": "Drop"}]
+        answer = self.agent(
+            "apply_work_item_changes",
+            AS_CHILD,
+            id=self.held,
+            comment={
+                "body": "Tick what to keep, marker L-1",
+                "list": {"label": "Keep", "options": options},
+            },
+        )
+        listed = str(answer["applied"]["comment"]["list_request_id"])
+        self.assertIsNone(self.hook(), "no question_asked by your agent for a list")
+        revision = self.agent("get_work_item_request", AS_CHILD, id=listed)["revision"]
+        self.agent("expire_work_item_request", AS_CHILD, id=listed, expected_revision=revision)
+        self.assertIsNone(self.hook(), "nor question_withdrawn when it is taken back")
+        self.close(AS_CHILD, self.held)
+        told = self.hook()
+        self.told_closed(told, self.held, "Held by B")
+        assert told is not None
+        self.assertNotIn("- question_", told)
+        self.assertNotIn("get_work_item", told, "an own agent's line asks for no read")
+
+    def test_past_three_notices_its_agents_work_on_an_item_folds(self) -> None:
+        for number in range(1, 4):
+            self.agent("claim_work_item", AS_CHILD, id=self.held)
+            self.agent("claim_work_item", AS_CHILD, id=self.held, release=True)
+            told = self.hook()
+            assert told is not None, f"notice {number}"
+            self.assertRegex(told, rf"\n- released at \S+ by your agent {CHILD}\n")
+        self.agent("claim_work_item", AS_CHILD, id=self.held)
+        self.agent("claim_work_item", AS_CHILD, id=self.held, release=True)
+        told = self.hook()
+        assert told is not None, "folded, not dropped"
+        self.assertNotIn("- released at", told)
+        self.assertRegex(
+            told,
+            rf"\n{self.held} «Held by B»: \d+ events? by your agent {CHILD}, the newest at \S+,"
+            r" folded into this line after 3 notices on this item within the hour;",
+        )
+
+    def test_the_person_sees_a_line_saying_its_subagent_wrote(self) -> None:
+        alert_settings.write(self.conn, {"locale": "en"})
+        self.agent("claim_work_item", AS_CHILD, id=self.held)
+        self.hook()
+        self.close(AS_CHILD, self.held)
+        answer = self.answer()
+        assert answer is not None
+        self.assertEqual(
+            f"Valkama told the agent what a subagent of this session wrote on {self.held}"
+            " «Held by B»",
+            answer["systemMessage"],
+        )
+        alert_settings.write(self.conn, {"locale": "ru"})
+        self.conn.commit()
+        self.agent("claim_work_item", AS_CHILD, id=self.followed)
+        self.hook()
+        self.close(AS_CHILD, self.followed)
+        self.person(COMMENT, id=self.followed, body="A person")
+        answer = self.answer()
+        assert answer is not None
+        self.assertEqual(
+            "Valkama передала агенту ваши действия и запись субагента этой сессии по задаче"
+            f" {self.followed} «Followed by B»",
+            answer["systemMessage"],
+        )
 
 
 class WhoListensTests(Harness):
@@ -315,7 +505,7 @@ class WhoListensTests(Harness):
         self.comment(AS_A, self.followed, "For the subagent's item")
         child = self.hook(CHILD)
         assert child is not None
-        self.assertIn("you hold, follow or started threads on.", child)
+        self.assertIn("on work you hold or follow,", child)
         self.assertIn("For the subagent's item", self.hook() or "")
 
     def test_a_subscription_a_third_session_merged_away_is_heard_on_the_survivor(self) -> None:
@@ -401,6 +591,10 @@ class WhoListensTests(Harness):
         self.conn.commit()
         sweep.run_pass(self.conn)
         self.comment(AS_A, self.followed, "After the session lapsed")
+        told = self.hook()
+        assert told is not None, "B held the item its lapsed lease released: it hears so once"
+        self.assertRegex(told, r"\n- released at \S+ by Valkama: «session-ended: ")
+        self.assertNotIn("After the session lapsed", told, "the subscription lapsed with B")
         self.assertIsNone(self.hook())
 
 
@@ -426,8 +620,9 @@ class FoldTests(Harness):
             told,
             rf"\n{self.held} «Held by B»: 2 events by session {A}, session {THIRD}, the newest"
             rf" at \S+, folded into this line after 3 notices on this item within the hour;"
-            r" read the item with get_work_item for what they say\.\n",
+            r" read the item with get_work_item, parts comments and events, for what they say\.\n",
         )
+        self.assertTrue(told.endswith(notify.READ_THE_REST), "a folded line is something left out")
         self.comment(AS_A, self.held, "News 6, marker F-6")
         again = self.hook()
         assert again is not None
@@ -547,6 +742,8 @@ class LapseTests(Harness):
         )
         self.assertNotEqual(leases.QUIET_PERIOD, subscriptions.QUIET_PERIOD)
         self.assertEqual(leases.ENDED_GRACE.total_seconds(), notify.ENDED_GRACE_SECONDS)
+        # The tree a session works on is a participant's, live by the lease's silence.
+        self.assertEqual(leases.QUIET_PERIOD.total_seconds(), notify.LEASE_QUIET_SECONDS)
 
 
 class LockTests(Harness):

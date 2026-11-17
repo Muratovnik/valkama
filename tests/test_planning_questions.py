@@ -69,6 +69,7 @@ WEB_REQUEST_KEYS = {
     "answered_by",
     "execution_id",
     "session_id",
+    "addressee",
     "expires_at",
     "created_at",
     "resolved_at",
@@ -533,7 +534,7 @@ class ThreeReadsTests(QuestionCase):
 
     def test_nothing_is_cut_at_five_and_no_questions_read_as_none(self) -> None:
         self.assertEqual(
-            {"total": 0, "open": 0, "items": [], "truncated": False},
+            {"total": 0, "open": 0, "items": [], "truncated": False, "addressed_open": 0},
             self.tool("get_work_item", id=self.reference, parts="questions")["questions"],
         )
         for index in range(5):

@@ -213,6 +213,63 @@ class WriteTests(Harness):
         self.assertEqual([], self.rows())
 
 
+class ContainerMuteTests(Harness):
+    """Working under a goal or stage is holding it, so `false` mutes it; following one is not.
+
+    Goal G holds stage S with task T; goal H holds task U, which is elsewhere.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        key = self.space["key"]
+        self.goal = self.made(key, "G", "goal")
+        self.stage = self.made(key, "S", "stage", self.goal)
+        self.task = self.made(key, "T", parent=self.stage)
+        self.other = self.made(key, "H", "goal")
+        self.elsewhere = self.made(key, "U", parent=self.other)
+
+    def made(self, key: str, title: str, kind: str = "task", parent: str | None = None) -> str:
+        made = service.create_work_item(self.conn, space=key, title=title, kind=kind, parent=parent)
+        self.conn.commit()
+        return str(made["reference"])
+
+    def test_false_mutes_a_goal_and_a_stage_a_claim_under_them_holds(self) -> None:
+        self.agent("claim_work_item", id=self.task)
+        self.assertEqual(subscriptions.MUTED, self.subscribe(False, ref=self.goal))
+        self.assertEqual(subscriptions.MUTED, self.subscribe(False, ref=self.stage))
+        self.assertEqual([(SESSION, "", 0), (SESSION, "", 0)], self.rows())
+        self.assertEqual([], self.followers(self.goal), "a mute is not a subscriber")
+        self.assertEqual(subscriptions.NOT_FOLLOWING, self.subscribe(False, ELSEWHERE, self.goal))
+        self.assertEqual(subscriptions.FOLLOWING, self.subscribe(True, ref=self.goal), "lifted")
+
+    def test_a_subagent_mutes_a_goal_only_over_what_it_holds_itself(self) -> None:
+        self.agent("apply_work_item_changes", id=self.task, checklist={"items": ["one"]})
+        step = service.get_work_item(self.conn, self.task)["checklist"][0]["id"]
+        self.agent("claim_work_item_checklist_item", SUBAGENT, id=self.task, item_id=step)
+        self.assertEqual(subscriptions.MUTED, self.subscribe(False, SUBAGENT, self.goal))
+        self.assertEqual(
+            subscriptions.MUTED, self.subscribe(False, ref=self.goal), "its session holds the step"
+        )
+        another = {"sessionId": SESSION, "threadId": OTHER}
+        self.assertEqual(subscriptions.NOT_FOLLOWING, self.subscribe(False, another, self.goal))
+        self.agent(
+            "apply_work_item_changes", SUBAGENT, id=self.task, checklist_ticks=[{"item_id": step}]
+        )
+        self.assertEqual(
+            subscriptions.NOT_FOLLOWING,
+            self.subscribe(False, SUBAGENT, self.stage),
+            "a step done holds nothing",
+        )
+
+    def test_false_forgets_a_goal_only_followed_or_with_work_held_elsewhere(self) -> None:
+        self.assertEqual(subscriptions.FOLLOWING, self.subscribe(True, ref=self.goal))
+        self.assertEqual(subscriptions.NOT_FOLLOWING, self.subscribe(False, ref=self.goal))
+        self.assertEqual([], self.rows(), "following alone is no hold: the row goes")
+        self.agent("claim_work_item", id=self.elsewhere)
+        self.assertEqual(subscriptions.NOT_FOLLOWING, self.subscribe(False, ref=self.goal))
+        self.assertEqual([], self.rows())
+
+
 class LifetimeTests(Harness):
     def ended(self, hours: float) -> None:
         self.conn.execute(

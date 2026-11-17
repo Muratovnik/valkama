@@ -298,15 +298,22 @@ class AskerTests(Wakes):
         self.assertIn("marker O-1", text)
         self.assertIn(f"in thread #{root} of agent {A_CHILD}", text)
 
-    def test_codex_is_told_at_its_next_tool_call_and_has_no_wake(self) -> None:
-        root = self.ask()
+    def test_codex_is_told_at_its_next_prompt_and_has_no_wake(self) -> None:
+        """The reply A's subagent awaited: never at Codex `Stop`, never at the subagent's hook."""
+
+        root = self.ask(AS_A_CHILD)
         self.hook(session=A)
         self.reply(AS_B, root, "X-1")
-        self.assertIsNone(notify.deliver("codex", "stop", {"session_id": A}, self.environ))
-        answer = notify.deliver("codex", "post-tool-use", {"session_id": A}, self.environ)
+        for payload in ({"session_id": A}, {"session_id": A, "stop_hook_active": False}):
+            self.assertIsNone(notify.deliver("codex", "stop", payload, self.environ))
+        child = {"session_id": A, "agent_id": A_CHILD}
+        for event in ("user-prompt-submit", "post-tool-use"):
+            self.assertIsNone(notify.deliver("codex", event, child, self.environ), event)
+        answer = notify.deliver("codex", "user-prompt-submit", {"session_id": A}, self.environ)
         assert answer is not None
-        told = json.loads(answer)["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("marker X-1", told)
+        parsed = json.loads(answer)
+        self.assertIn("marker X-1", parsed["hookSpecificOutput"]["additionalContext"])
+        self.assertIn(self.held, parsed["systemMessage"], "with the line for the person")
 
 
 class AddresseeTests(Wakes):
@@ -331,7 +338,7 @@ class AddresseeTests(Wakes):
         self.assertEqual(notify.WAKE_STATUS, status, "no tool call carried it within the grace")
         self.assertIn(
             f"while this session was busy and made no tool call for {notify.GRACE_SECONDS:g}"
-            " seconds, another agent wrote on",
+            " seconds, news on work this session holds",
             text,
         )
         self.assertNotIn("idle", text)
@@ -397,9 +404,35 @@ class AddresseeTests(Wakes):
         self.assertIn("marker J-1", told)
 
     def test_a_question_from_bs_own_subagent_asks_b_nothing(self) -> None:
-        self.comment({"sessionId": B, "threadId": A_CHILD}, self.held, "Mine", awaits_reply=True)
+        """A comment awaiting a reply is no news; a question to the owner is a line, later."""
+
+        own = {"sessionId": B, "threadId": A_CHILD}
+        self.comment(own, self.held, "Mine", awaits_reply=True)
         self.assertIsNone(self.stop(B))
         self.assertIsNone(self.hook(session=B))
+        self.agent(
+            "create_work_item_request",
+            own,
+            id=self.held,
+            kind="question",
+            prompt="Which parser, marker OQ-1?",
+            fields=[
+                {
+                    "id": "way",
+                    "label": "Way",
+                    "type": "choice",
+                    "required": True,
+                    "options": [{"id": "a", "label": "Long"}],
+                }
+            ],
+        )
+        self.assertIsNone(self.stop(B), "it continues no turn")
+        self.assertEqual((0, ""), self.watch_as(B), "and wakes nothing")
+        told = self.hook(session=B)
+        assert told is not None, "told at the next tool call"
+        self.assertRegex(told, rf"\n- question_asked at \S+ by your agent {A_CHILD}\n")
+        self.assertNotIn("OQ-1", told)
+        self.assertIsNone(self.hook(session=B), "once")
 
 
 TRANSITION = "/api/planning/work-item/transition"
@@ -455,6 +488,18 @@ class BlockerTests(Wakes):
         self.assertEqual((0, ""), self.watch_as(B))
         self.assertIsNone(self.hook(session=B))
         self.assertIsNone(self.stop(A))
+
+    def test_its_own_subagent_closing_it_wakes_nobody_and_is_a_line_on_the_blocker(self) -> None:
+        self.close_as(AS_CHILD)
+        self.assertIsNone(self.stop(B))
+        self.assertEqual((0, ""), self.watch_as(B))
+        told = self.hook(session=B)
+        assert told is not None, "the orchestrator hears its subagent's close, on the blocker"
+        self.assertIn(f"\n{self.blocker} «The parser rewrite»:\n", told)
+        self.assertRegex(told, rf"\n- status at \S+ by your agent {CHILD}\n")
+        self.assertNotIn("blocker_closed", told)
+        self.assertIsNone(self.hook(session=B), "once")
+        self.assertIsNone(self.hook(CHILD, session=B), "and the subagent nothing")
 
     def test_closed_again_after_a_reopen_it_wakes_again_and_busy_it_waits(self) -> None:
         self.close_as(AS_A)

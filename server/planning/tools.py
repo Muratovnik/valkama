@@ -30,6 +30,7 @@ from . import (
     request_model,
     requests,
     service,
+    waiting,
     words,
 )
 
@@ -372,6 +373,8 @@ TOOLS = [
         " is accepted as part of them; another an agent files starts in triage unless"
         " acceptance accepts it. Accepted, a task starts in ready and a goal or stage"
         " stands accepted at once. A named state meets the refusals a move there does."
+        " A goal you create is followed for your session from the start, as subscribe"
+        " true would, so its news reaches you; a stage subscribes nobody."
         " claim, checklist and links act on the new item in the same call, all or"
         " nothing: it is created, then claimed, then given its steps, then linked,"
         " each as the same group of apply_work_item_changes does. A refused step"
@@ -460,7 +463,9 @@ TOOLS = [
         f" starting from the first. events: the newest {read_model.PART_EVENTS} history"
         " events, or the newest n, with events_total and events_truncated. questions: its"
         " questions in compact form: total, open, at most"
-        f" {requests.ITEM_QUESTIONS} items with the open ones first. claim: the lease, with"
+        f" {requests.ITEM_QUESTIONS} items with the open ones first; requests asked of agent"
+        " sessions stay out of them, and addressed_open counts the open ones. claim: the"
+        " lease, with"
         " expires_at. sections: the description's sections, by heading or, without"
         " headings, by paragraph, each with its key and size; section reads the ones named,"
         " so a long description is refreshed without reading it all. Each comment names its"
@@ -653,7 +658,10 @@ TOOLS = [
         " read each one's instructions before editing it."
         " The answer carries from_person when"
         " a person acted on the item in the interface since an agent last wrote to it:"
-        " their words about this work, to read before the next step.",
+        " their words about this work, to read before the next step, each text whole up to"
+        " 1500 characters and marked cut past them."
+        " It carries waiting when a person's words on a goal or stage above the work found"
+        " nobody working there: read them before you start.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -680,7 +688,9 @@ TOOLS = [
         " The claim starts the task as claim_work_item does. The answer names the root of"
         " each project the task changes in project_roots: read each one's instructions"
         " before editing it. Answers with nothing when no task is workable; a record's"
-        " withheld says why an item is not given.",
+        " withheld says why an item is not given."
+        " The answer carries waiting when a person's words on a goal or stage above the"
+        " work found nobody working there: read them before you start.",
         WRITES,
         {
             "space": _SPACE,
@@ -712,7 +722,9 @@ TOOLS = [
         " Claiming a step of a task in a triage, deferred or ready state starts the task"
         " as claiming it would. When the last held step of an active task nobody holds"
         " is released, the task goes back to the first ready state, named in requeued;"
-        " with no ready state to reach the release is refused.",
+        " with no ready state to reach the release is refused."
+        " The answer carries waiting when a person's words on a goal or stage above the"
+        " work found nobody working there: read them before you start.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -783,7 +795,8 @@ TOOLS = [
         " writes nothing and names the step and the refusal's code. Name at least"
         " one group. Answers with the acknowledgement and applied, what each group"
         " changed, and from_person when a person acted on the item since an agent"
-        " last wrote. The call is one write: its comment does not lift a closing"
+        " last wrote, each text whole up to 1500 characters and marked cut past them."
+        " The call is one write: its comment does not lift a closing"
         " transition's person_spoke refusal.",
         WRITES,
         {
@@ -791,15 +804,17 @@ TOOLS = [
             "claim": {
                 "type": "boolean",
                 "description": "true claims the item as claim_work_item does,"
-                " starting it when it is in a triage, deferred or ready state.",
+                " starting it when it is in a triage, deferred or ready state; the answer"
+                " then carries waiting as claim_work_item's does.",
             },
             "subscribe": {
                 "type": "boolean",
                 "description": "true: this session hears other sessions' news on the item"
                 " as its holder would, a person's acts at its next call; false stops that,"
-                " and on an item the session holds mutes other sessions' news there while"
-                " it holds it (a person's acts and the replies to its own awaits_reply"
-                " still come). Written for the proved session and agent, lapsing with the"
+                " and on an item the session holds, or a goal or stage it holds work under,"
+                " mutes other sessions' news there while it holds it (a person's acts and"
+                " the replies to its own awaits_reply still come); on a goal or stage it"
+                " only follows, false stops following. Written for the proved session and agent, lapsing with the"
                 " session; applied.subscribe says following, muted or not_following.",
             },
             "update": {
@@ -960,9 +975,12 @@ TOOLS = [
             "questions": {
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
-                "description": "Questions to the owner, each as create_work_item_request"
-                " takes it; refused beside a transition that closes the item, which"
-                " would end them unanswered. applied.questions lists each request_id.",
+                "description": "Questions, each as create_work_item_request takes it. Without"
+                " addressees it asks the owner, and applied.questions lists each request_id"
+                " and revision. With addressees it asks agent sessions, as that tool does,"
+                " and applied.questions lists each entry's requests, each request_id with"
+                " its addressee. Refused beside a transition that closes the item, which"
+                " would end them unanswered.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -972,6 +990,14 @@ TOOLS = [
                         "execution_id": _STR,
                         "session_id": _STR,
                         "expires_at": _STR,
+                        "addressees": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": requests.MOST_ADDRESSEES,
+                            "items": _STR,
+                            "description": "Top-level agent session ids to ask instead of the"
+                            " owner, as create_work_item_request takes them.",
+                        },
                     },
                     "required": ["kind", "prompt", "fields"],
                 },
@@ -1098,7 +1124,12 @@ TOOLS.extend(
             "Create a typed question or decision on an item. The fields of one question fit in"
             " 64 KiB as stored. A review is a verdict field per proposal, its steps or ways in"
             " a field under it, and a group per area. Does not change workflow or execution"
-            " lifecycle.",
+            " lifecycle. addressees asks other agent sessions instead of the person: up to"
+            f" {requests.MOST_ADDRESSEES} top-level session ids, as participants, subscribers"
+            " and holders name them. Each gets its own request, which wakes it; its answer"
+            f" wakes you. A session is asked at most {requests.MOST_ASKS_PER_HOUR} times an"
+            " hour by yours (ask_limit). Ask for an answer in fields before you go on; for a"
+            " free exchange write a comment with awaits_reply.",
             WRITES,
             {
                 "id": WORK_ITEM_REFERENCE,
@@ -1114,6 +1145,14 @@ TOOLS.extend(
                 "execution_id": _STR,
                 "session_id": _STR,
                 "expires_at": _STR,
+                "addressees": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": requests.MOST_ADDRESSEES,
+                    "items": _STR,
+                    "description": "Top-level agent session ids to ask instead of the person;"
+                    " the answer is requests, each request_id with its addressee.",
+                },
             },
             ["id", "kind", "prompt", "fields"],
         ),
@@ -1147,7 +1186,8 @@ TOOLS.extend(
             " cut. full=true gives each"
             " whole. With answered_after the oldest answer comes first, a changed answer comes"
             " again, and a page runs past limit rather than part two answers of one time."
-            + _PAGING,
+            " addressed=true lists the open requests asked of your own session; answer each with"
+            " answer_work_item_request." + _PAGING,
             READ_ONLY,
             {
                 "space": _SPACE,
@@ -1168,6 +1208,12 @@ TOOLS.extend(
                     "type": "boolean",
                     "description": "Answer with each whole question instead of the compact form.",
                 },
+                "addressed": {
+                    "type": "boolean",
+                    "description": "Only the open requests another session or Valkama asked of"
+                    " the session of this call. Without it a request asked of a session is left"
+                    " out.",
+                },
             },
         ),
         _tool(
@@ -1177,7 +1223,10 @@ TOOLS.extend(
             " answered by a value or by its own variant; a note no longer stands in for it."
             " change=true replaces the answer of an answered question instead, while its item is"
             " open: the replaced answer is kept as a version. Change one only when the owner asks."
-            " Does not resume an execution.",
+            " Does not resume an execution. A request asked of a session (its addressee) is"
+            " answered only by that session, its conversation or any of its subagents; any other"
+            " caller, the interface included, is refused with not_addressed. A request whose"
+            " addressee ended or went quiet reads expired with session_gone.",
             WRITES,
             {
                 "id": _STR,
@@ -1216,7 +1265,9 @@ TOOLS.extend(
         _tool(
             "expire_work_item_request",
             "Withdraw a human request",
-            "Explicitly withdraw a pending request, retaining its record.",
+            "Explicitly withdraw a pending request, retaining its record. A request asked of a"
+            " session is withdrawn only by the session that asked, from any of its agents; others"
+            " are refused with not_asker.",
             WRITES,
             {"id": _STR, "expected_revision": _EXPECTED_REVISION, "author": _AUTHOR},
             ["id", "expected_revision"],
@@ -1353,23 +1404,31 @@ def _told(
     the tool named it, named a request, or took it from the queue. A refused
     write answers with its refusal and moves nothing. The key is absent when
     there is nothing to tell.
+
+    A claim says, beside it, the words a person left on a goal or stage over the
+    work while nobody worked there, which the claim took (`waiting`).
     """
 
     def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
         answer = write(conn, arguments)
         own = calls.written(conn) if calls.from_agent() else None
-        if own is None or own[1] is None or not isinstance(answer, dict):
+        if own is None or not isinstance(answer, dict):
             return answer
-        events = person_events.since_last_agent_write(conn, own[1], own_call=own[0])
-        if not events:
-            return answer
-        shown = events[-person_events.MOST_SHOWN :]
-        omitted = len(events) - len(shown)
-        return {
-            **answer,
-            "from_person": shown,
-            **({"from_person_omitted": omitted} if omitted else {}),
-        }
+        told: dict[str, object] = {}
+        events = (
+            person_events.since_last_agent_write(conn, own[1], own_call=own[0])
+            if own[1] is not None
+            else []
+        )
+        if events:
+            shown = events[-person_events.MOST_SHOWN :]
+            told["from_person"] = shown
+            if len(events) > len(shown):
+                told["from_person_omitted"] = len(events) - len(shown)
+        left = waiting.delivered(conn, own[0])
+        if left:
+            told["waiting"] = left
+        return {**answer, **told} if told else answer
 
     return run
 
@@ -1668,6 +1727,8 @@ def _request_list(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> 
         for name in ("space", "id", "status", "answered_after", "limit", "offset")
         if arguments.get(name) is not None
     }
+    if arguments.get("addressed") is not None:
+        parameters["addressed"] = ["true" if arguments["addressed"] is True else "false"]
     read = api.handle_get(conn, "/api/planning/requests", parameters)
     if read is None:  # pragma: no cover - the path table above is closed
         raise ValueError("no planning requests read")

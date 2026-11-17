@@ -837,14 +837,14 @@ class ChangeTests(ReviewCase):
             request_model.difference(fields, {"_note": "Gone"}, {"_own": {"p9": "Labels only"}}),
         )
 
-    def test_rows_past_300_characters_are_left_out_and_counted(self) -> None:
-        fields = [verdict(f"p{n}{'x' * 60}") for n in range(10)]
+    def test_rows_past_the_limit_are_left_out_and_counted(self) -> None:
+        fields = [verdict(f"p{n:02}{'x' * 120}") for n in range(15)]
         old = {field["id"]: "later" for field in fields}
         new = {field["id"]: "accept" for field in fields}
         text = request_model.change_text(fields, old, new, limit=person_events.MAX_TEXT)
         self.assertLessEqual(len(text), person_events.MAX_TEXT)
         shown = text.removeprefix("changed: ").split("; ")
-        self.assertEqual(f"and {10 - len(shown) + 1} more", shown[-1])
+        self.assertEqual(f"and {15 - len(shown) + 1} more", shown[-1])
         self.assertEqual(
             [f"{field['id']} later→accept" for field in fields[: len(shown) - 1]], shown[:-1]
         )

@@ -57,7 +57,7 @@ SPEAKER_AGENT = "019a3c2e-2222-7c11-9e0f-2f4b6d8a1c3e"
 ELSEWHERE_AGENT = {"sessionId": SPEAKER, "threadId": SPEAKER_AGENT}
 SAID = "Decided: keep the new route, marker M-1"
 #: What an agents' block begins and ends with, from the hook contract.
-AGENTS_HEAD = "Valkama notice from agents, not from a person: another agent mentioned work"
+AGENTS_HEAD = "Valkama notice, not from the person: news on work"
 AGENTS_LAST = "Do not answer with a mention unless you have news of your own."
 SUMMARY = {"done": "Dropped it", "next": "Nothing"}
 
@@ -725,7 +725,12 @@ class AgentMentionTests(Harness):
 
         told = self.hook()
         assert told is not None, "the Stop read past it, and it still arrives"
-        self.assertTrue(told.startswith(f"{AGENTS_HEAD} this session holds."), told)
+        self.assertTrue(
+            told.startswith(
+                f"{AGENTS_HEAD} this session holds, follows or works on, from other agents and from Valkama."
+            ),
+            told,
+        )
         self.assertNotIn("a person acted", told)
         self.assertIn(f"{self.target} «Drop the old route»:", told)
         self.assertIn(
@@ -767,13 +772,23 @@ class AgentMentionTests(Harness):
 
         child = self.hook(CHILD)
         assert child is not None
-        self.assertTrue(child.startswith(f"{AGENTS_HEAD} you hold."), child)
+        self.assertTrue(
+            child.startswith(
+                f"{AGENTS_HEAD} you hold or follow, from other agents and from Valkama."
+            ),
+            child,
+        )
         self.assertIn("marker M-1", child)
         self.assertIsNone(self.hook(CHILD), "once for the subagent")
         self.assertIsNone(self.hook(STRANGER), "a subagent holding nothing there")
         told = self.hook()
         assert told is not None
-        self.assertTrue(told.startswith(f"{AGENTS_HEAD} this session holds."), told)
+        self.assertTrue(
+            told.startswith(
+                f"{AGENTS_HEAD} this session holds, follows or works on, from other agents and from Valkama."
+            ),
+            told,
+        )
         self.assertEqual(1, told.count("- mentioned at"))
         self.assertIsNone(self.hook(), "once for the orchestrator")
 
@@ -783,7 +798,9 @@ class AgentMentionTests(Harness):
             self.assertIsNone(self.hook(agent), f"nothing yet: {agent}")
         self.spoken(SUBAGENT, body="From the step")
         self.assertIsNone(self.hook(CHILD), "the subagent that spoke")
-        self.assertIsNone(self.hook(), "nor its orchestrator: one session is one speaker")
+        self.assertIsNone(
+            self.hook(), "nor its orchestrator: a mention is not where the work stands"
+        )
         self.spoken(ORCHESTRATOR, body="From the orchestrator")
         self.assertIsNone(self.hook(), "the orchestrator that spoke")
         self.assertIsNone(self.hook(CHILD), "nor its subagent holding a step")
@@ -942,7 +959,7 @@ class AgentMarksTests(Harness):
         self.assertIsNotNone(self.hook())
         path = self.marks_path()
         with open(path, "rb") as handle:
-            self.assertEqual(b"v4\n", handle.read(3))
+            self.assertEqual(b"v5\n", handle.read(3))
         marks = notify.read_marks(path)
         lines = [
             f"{item} {mark[0]} {mark[1][0]} {mark[1][1]} {mark[1][2]} {int(mark[2])}"
@@ -989,7 +1006,9 @@ class AgentNoticeTextTests(unittest.TestCase):
         start = text.index(AGENTS_HEAD)
         self.assertLess(text.index("a person acted"), start, "the person's block first")
         self.assertIn("not permission for an irreversible action", text[:start])
-        self.assertTrue(text.endswith(AGENTS_LAST), text)
+        self.assertTrue(
+            text.endswith(AGENTS_LAST + "\n" + notify.READ_THE_REST), "the read of the rest last"
+        )
         self.assertIn("«Person 11 ", text, "the newest of each")
         self.assertIn("«Agent 11 ", text)
         self.assertEqual(2, text.count(" earlier, in the history of the item."))

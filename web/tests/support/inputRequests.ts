@@ -27,6 +27,7 @@ export function requestEntry(): InputRequestEntry {
       by_person: null,
       execution_id: 'execution-7',
       session_id: 'session-7',
+      addressee: null,
       expires_at: null,
       created_at: '2026-10-24T10:00:00Z',
       resolved_at: null,

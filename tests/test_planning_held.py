@@ -236,6 +236,19 @@ class HeldTests(unittest.TestCase):
         self.conn.commit()
         self.assertEqual(2, self.held(SESSION)["items"][0]["pending_questions"])
 
+    def test_a_request_asked_of_another_session_is_no_pending_question(self) -> None:
+        reference = self.item("Asked of another session")
+        self.claim(SESSION, reference)
+        self.sql("INSERT INTO sessions(id, client) VALUES(?, 'codex')", OTHER)
+        requests.ask_sessions(
+            self.conn, reference, sessions=[OTHER], prompt="Agree?", fields=[FIELD]
+        )
+        self.conn.commit()
+        self.assertEqual(0, self.held(SESSION)["items"][0]["pending_questions"])
+        requests.create(self.conn, reference, kind="question", prompt="Owner?", fields=[FIELD])
+        self.conn.commit()
+        self.assertEqual(1, self.held(SESSION)["items"][0]["pending_questions"])
+
     def test_the_most_recently_changed_item_comes_first(self) -> None:
         older = self.item("Older")
         newer = self.item("Newer")

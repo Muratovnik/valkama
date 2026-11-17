@@ -280,6 +280,27 @@ class MentionLimitError(PlanningError):
     """
 
 
+class AskLimitError(PlanningError):
+    """A session asked one other session as often as an hour allows.
+
+    Its own code, as `MentionLimitError` has: the request is well formed and would be
+    accepted later, or asked once with every field it needs.
+    """
+
+
+class NotAddressedError(PlanningError):
+    """A request asked of an agent session, answered or declined by any other caller.
+
+    Its own code: the request is fine and so is the answer; only that session,
+    from its conversation or a subagent, may give it.
+    """
+
+
+class NotAskerError(PlanningError):
+    """A request asked of an agent session, withdrawn by neither the session that asked
+    nor Valkama."""
+
+
 class RevisionConflictError(PlanningError):
     """Someone else wrote this item since the caller read it."""
 

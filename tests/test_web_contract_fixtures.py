@@ -41,7 +41,7 @@ from server import http_surface, mcp_surface, session_open, sessions, store
 from server.analytics import quota as analytics_quota
 from server.hooks import ingest, normalize
 from server.ops import doctor, url_schemes
-from server.planning import calls, read_model, service, subscriptions
+from server.planning import calls, read_model, requests, service, subscriptions
 from server.projects import project_registry
 from server.quota import samples
 from server.store_identity.metadata import read_store_metadata
@@ -238,6 +238,74 @@ class _Scenario:
             conn.commit()
         finally:
             conn.close()
+
+    def goal_card(self) -> dict:
+        """A goal's card naming who works on it: its creator, and a holder under a stage."""
+
+        def who(identity: str, agent: str | None = None) -> calls.Identity:
+            return calls.Identity(
+                state=calls.CONFIRMED,
+                source=calls.CLAUDE_HOOK,
+                session_id=identity,
+                agent_id=agent,
+                tool_use_id="t",
+                client="claude-code",
+            )
+
+        creator = "6f1c2a8e-0000-4000-8000-0000000000e1"
+        holder = "6f1c2a8e-0000-4000-8000-0000000000e2"
+        conn = store.connect()
+        try:
+            with calls.bind(who(creator, "a7c3e9f1d2b4a608"), "create_work_item"):
+                goal = str(
+                    service.create_work_item(
+                        conn, space=SPACE, title="Goal with participants", kind="goal"
+                    )["reference"]
+                )
+            stage = service.create_work_item(
+                conn, space=SPACE, title="Its stage", kind="stage", parent=goal
+            )["reference"]
+            task = service.create_work_item(conn, space=SPACE, title="Its task", parent=stage)
+            with calls.bind(who(holder), "claim_work_item"):
+                service.claim_work_item(conn, str(task["reference"]))
+            conn.commit()
+        finally:
+            conn.close()
+        return self.http(f"/api/modules/planning/work-item?{self.scope(reference=goal)}")
+
+    def session_gone(self) -> dict:
+        """A request one session asked of another, read after the one asked ended."""
+
+        def who(identity: str) -> calls.Identity:
+            return calls.Identity(
+                state=calls.CONFIRMED,
+                source=calls.CLAUDE_HOOK,
+                session_id=identity,
+                tool_use_id="t",
+                client="claude",
+            )
+
+        asker = "6f1c2a8e-0000-4000-8000-0000000000a1"
+        asked = "6f1c2a8e-0000-4000-8000-0000000000a2"
+        conn = store.connect()
+        try:
+            ref = str(
+                service.create_work_item(conn, space=SPACE, title="Asked of a session")["reference"]
+            )
+            with calls.bind(who(asked), "claim_work_item"):
+                service.claim_work_item(conn, ref)
+            with calls.bind(who(asker), "create_work_item_request"):
+                [request] = requests.ask_sessions(
+                    conn, ref, sessions=[asked], prompt="May it be cancelled?", fields=[CHOICE]
+                )
+            conn.commit()
+            sessions.op_ingest_session_event(
+                conn, {"event": "session_end", "session_id": asked, "client": "claude"}
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return self.http(f"/api/modules/planning/request?{self.scope(id=request['request_id'])}")
 
     def executor_card(self) -> dict:
         """A card whose claim, steps and agents each name an executor."""
@@ -806,6 +874,7 @@ class _Scenario:
             "description-told": described,
             "card": self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}"),
             "card-executors": executors,
+            "card-goal": self.goal_card(),
             "card-brief": self.http(
                 f"/api/modules/planning/work-item?{self.scope(reference=ref, brief='true')}"
             ),
@@ -831,6 +900,7 @@ class _Scenario:
             "analytics-quota": self.quota(),
             # Last, so the references the answers above name stay theirs.
             **self.tree(),
+            "request-session-gone": self.session_gone(),
         }
 
 

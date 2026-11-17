@@ -43,6 +43,12 @@ otherwise cascade into them:
   checked before the first write.
 - **last-route** drops the last route the shell remembered when its scope is a project:
   a space is the scope now, and the address it names no longer opens.
+- **addressee** appends the column a request names the agent session it asks with
+  (`work_item_requests.addressee`) and its index; every request it finds asks the
+  owner, as it did.
+- **waiting-words** creates the table of the words a person left on a goal or stage that no
+  session heard (`work_item_waiting_notices`) and its two indexes. It starts empty:
+  which of a person's acts before 3.0 nobody heard cannot be known now.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -50,8 +56,10 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
-The postconditions `fresh-shape` to `second-run` and `store-identity` to `routes` are checked after the steps, inside the
-same transaction; `store` adds `recovery-point`, the recovery point.
+The postconditions `fresh-shape` to `second-run` and `store-identity` to `fresh-tables` are checked after the steps, inside the
+same transaction, `second-run` last; `store` adds `recovery-point`, the recovery point. `row-counts` compares the
+row counts of the tables `oracle` counted and of the projects `item-projects` fills; `fresh-tables` holds every
+other table to being empty and declared by a fresh store.
 """
 
 from __future__ import annotations
@@ -259,6 +267,7 @@ class Oracle:
     search: dict[str, list[str] | None] = field(default_factory=dict)
     content: dict[str, dict[str, Any]] = field(default_factory=dict)
     numbers: set[tuple[str, int]] = field(default_factory=set)
+    request_ids: frozenset[str] = frozenset()
     containers: int = 0
     started_from_created: int = 0
     #: The rows `item-projects` leaves in `work_item_projects`, a table the store `oracle`
@@ -441,6 +450,9 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
     """
 
     oracle = Oracle(counts=_counts(conn), objects=_objects(conn))
+    oracle.request_ids = frozenset(
+        str(row[0]) for row in conn.execute("SELECT request_id FROM work_item_requests")
+    )
     oracle.last_event = int(
         conn.execute("SELECT coalesce(MAX(id), 0) FROM work_item_events").fetchone()[0]
     )
@@ -1489,6 +1501,83 @@ def _check_route(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError("a remembered route still has a project as its scope")
 
 
+# -- the session a request asks ------------------------------------------------
+
+
+def _addressee_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return "addressee" not in _columns(conn, "work_item_requests") or (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index'"
+            " AND name = 'work_item_requests_addressee'"
+        ).fetchone()
+        is None
+    )
+
+
+def _add_addressee(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`addressee`: a request may ask an agent session instead of the owner.
+
+    ALTER TABLE appends and cannot be run twice, so the column is added only when it
+    is missing; the index is created if it is not there.
+    """
+
+    del context
+    added = "addressee" not in _columns(conn, "work_item_requests")
+    if added:
+        conn.execute(f"ALTER TABLE work_item_requests ADD COLUMN {planning_store.ADDRESSEE_COLUMN}")
+    conn.execute(planning_store.ADDRESSEE_INDEX)
+    return {"column_added": added}
+
+
+def _check_addressee(conn: sqlite3.Connection, context: Context) -> None:
+    if _addressee_needed(conn, context):
+        raise UnmetError("work_item_requests lacks the addressee column or its index")
+
+
+# -- the words that wait for a session -----------------------------------------
+
+_WAITING = "work_item_waiting_notices"
+_WAITING_OBJECTS = (
+    ("table", _WAITING),
+    ("index", "work_item_waiting_notices_open"),
+    ("index", "work_item_waiting_notices_delivered"),
+)
+
+
+def _waiting_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return any(
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?", (kind, name)
+        ).fetchone()
+        is None
+        for kind, name in _WAITING_OBJECTS
+    )
+
+
+def _create_waiting(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`waiting-words`: the table of a person's words nobody heard, and its indexes, each if
+    missing."""
+
+    del context
+    created = (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (_WAITING,)
+        ).fetchone()
+        is None
+    )
+    conn.execute(planning_store.WAITING_NOTICES)
+    conn.execute(planning_store.WAITING_OPEN_INDEX)
+    conn.execute(planning_store.WAITING_DELIVERED_INDEX)
+    return {"table_created": created}
+
+
+def _check_waiting(conn: sqlite3.Connection, context: Context) -> None:
+    if _waiting_needed(conn, context):
+        raise UnmetError(f"{_WAITING} or one of its indexes is missing")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1497,13 +1586,19 @@ STEPS = (
     Step("containers", "containers", _migrate_containers, _containers_needed, _check_containers),
     Step("task-holders", "task holders", _migrate_holders, _holders_needed, _check_holders),
     Step(
-        "children-left", "closed containers with open children", _take_out_children, _left_needed, _check_left
+        "children-left",
+        "closed containers with open children",
+        _take_out_children,
+        _left_needed,
+        _check_left,
     ),
     Step("checks", "checks", _create_trigger, _trigger_needed, _check_trigger),
     Step("item-projects", "item projects", _create_item_projects, _item_projects_needed, _check_item_projects),
     Step("labels", "labels", _drop_labels, _labels_needed, _check_labels),
     Step("spaces", "the space", _rebuild_spaces, _space_needed, _check_space),
     Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
+    Step("addressee", "the session a request asks", _add_addressee, _addressee_needed, _check_addressee),
+    Step("waiting-words", "words that wait for a session", _create_waiting, _waiting_needed, _check_waiting),
 )
 
 
@@ -1547,7 +1642,7 @@ def _structure(conn: sqlite3.Connection) -> tuple[dict[str, dict[str, list]], li
     return shape, triggers
 
 
-def _p1(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_fresh_shape(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     version = int(conn.execute("PRAGMA user_version").fetchone()[0])
     if version != context.schema:
         raise UnmetError(f"the store is at schema {version}, not {context.schema}")
@@ -1555,6 +1650,7 @@ def _p1(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
         raise UnmetError("no fresh store to compare with")
     with context.reference() as fresh:
         expected, expected_triggers = _structure(fresh)
+        context.memo["fresh_structure"] = (expected, expected_triggers)
         # Foreign keys are off on the store the migration holds; off on the fresh one
         # too, so a probe row needs no parent on either.
         fresh.commit()
@@ -1577,9 +1673,22 @@ def _p1(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     return {"schema": version, "tables": len(shape), "triggers": len(triggers)}
 
 
-def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
-    oracle = _oracle(context)
-    counts = _counts(conn)
+def _fresh_structure(context: Context) -> tuple[dict[str, dict[str, list]], list[str]]:
+    """What `_structure` says of a fresh store of this build; `fresh-shape` reads it first."""
+
+    found = context.memo.get("fresh_structure")
+    if found is None:
+        if context.reference is None:
+            raise UnmetError("no fresh store to compare with")
+        with context.reference() as fresh:
+            found = _structure(fresh)
+        context.memo["fresh_structure"] = found
+    return found
+
+
+def _expected_counts(oracle: Oracle) -> dict[str, int]:
+    """The rows each table `oracle` counted holds after the steps, by what the oracle foresaw."""
+
     expected = dict(oracle.counts)
     expected["workflow_states"] += sum(found["adds"] for found in oracle.workflows.values())
     expected["workflow_transitions"] += sum(
@@ -1588,10 +1697,20 @@ def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     expected["work_item_events"] += sum(oracle.events.values())
     expected["work_item_projects"] = expected.get("work_item_projects", 0) + oracle.item_projects
     expected["platform_ui_prefs"] = expected.get("platform_ui_prefs", 0) - len(oracle.dropped_prefs)
+    return expected
+
+
+def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The tables `oracle` counted and the projects `item-projects` fills hold the rows foreseen; any other
+    table is `fresh-tables`'s."""
+
+    oracle = _oracle(context)
+    counts = _counts(conn)
+    expected = _expected_counts(oracle)
     found = [
-        f"{table} holds {counts.get(table)} rows, not {expected.get(table)}"
-        for table in sorted(set(counts) | set(expected))
-        if counts.get(table) != expected.get(table)
+        f"{table} holds {counts.get(table)} rows, not {expected[table]}"
+        for table in sorted(expected)
+        if counts.get(table) != expected[table]
     ]
     written = dict(context.memo.get("written", Counter()))
     if written != dict(oracle.events):
@@ -1600,7 +1719,7 @@ def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     return {"tables": counts, "events_written": dict(sorted(written.items()))}
 
 
-def _p3(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_integrity(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     del context
     broken = conn.execute("PRAGMA foreign_key_check").fetchall()
     _unmet([f"{row[0]} row {row[1]} names a missing {row[2]}" for row in broken], "foreign keys")
@@ -1610,7 +1729,7 @@ def _p3(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     return {"foreign_key_check": "empty", "integrity_check": result}
 
 
-def _p4(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_no_epic(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     oracle = _oracle(context)
     epics, containers = conn.execute(
         "SELECT SUM(kind = 'epic'), SUM(kind = ?) FROM work_items", (_CONTAINER,)
@@ -1624,7 +1743,7 @@ def _p4(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     return {"containers": int(containers or 0)}
 
 
-def _p5(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_parents(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     del context
     references = _references(conn)
     found = [
@@ -1660,7 +1779,7 @@ def _p5(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
 _DEFAULT_KEYS = frozenset(key for key, _, _ in model.DEFAULT_STATES)
 
 
-def _p6(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_categories(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     oracle = _oracle(context)
     found = [
         f"a state is still in {row[0]}"
@@ -1686,7 +1805,7 @@ def _p6(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     return {"standard_workflows": sum(1 for wf in oracle.workflows.values() if wf["standard"])}
 
 
-def _p7(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_history_keys(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     oracle = _oracle(context)
     keys: dict[str, set[str]] = {}
     for workflow, key in conn.execute("SELECT workflow_id, key FROM workflow_states"):
@@ -2073,6 +2192,96 @@ def _holds_routes(conn: sqlite3.Connection, context: Context) -> Mapping[str, An
     return {"dropped": oracle.dropped_prefs, "kept": len(after)}
 
 
+def _holds_requests_asked(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    oracle = _oracle(context)
+    found = [
+        f"the request {row[0]} asks the session {row[1]}"
+        for row in conn.execute(
+            "SELECT request_id, addressee FROM work_item_requests WHERE addressee IS NOT NULL"
+        )
+    ]
+    held = frozenset(
+        str(row[0]) for row in conn.execute("SELECT request_id FROM work_item_requests")
+    )
+    if held != oracle.request_ids:
+        found.append(
+            f"requests differ: missing {sorted(oracle.request_ids - held)[:5]},"
+            f" extra {sorted(held - oracle.request_ids)[:5]}"
+        )
+    _unmet(found, "requests")
+    return {"requests": len(held)}
+
+
+def _holds_no_old_waiting(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    del context
+    if (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (_WAITING,)
+        ).fetchone()
+        is None
+    ):
+        raise UnmetError(f"{_WAITING} is missing")
+    rows = int(conn.execute(f"SELECT COUNT(*) FROM {_WAITING}").fetchone()[0])  # noqa: S608
+    found = [f"{_WAITING} holds {rows} rows, not 0"] if rows else []
+    found += [
+        f"{_WAITING} row {row[1]} names a missing {row[2]}"
+        for row in conn.execute(f"PRAGMA foreign_key_check({_WAITING})")
+    ]
+    _unmet(found, "words waiting before 3.0")
+    return {"rows": rows}
+
+
+#: The writes `work_item_waiting_notices` must refuse: a scope it does not know, and a
+#: delivery that names its call without its time.
+_WAITING_REFUSED = (
+    ("scope 'other'", {"scope": "other"}),
+    ("delivered_call without delivered_at", {"delivered_call": 1}),
+)
+_WAITING_PROBE = {"work_item_id": "probe", "scope": "tree", "from_call": 0, "created_call": 0}
+
+
+def _holds_request_shapes(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    expected, _triggers = _fresh_structure(context)
+    shape, _ = _structure(conn)
+    found = [
+        f"{table} differs from a fresh store in its {part.replace('_', ' ')}"
+        for table in ("work_item_requests", _WAITING)
+        for part in ("columns", "indexes", "foreign_keys")
+        if shape.get(table, {}).get(part) != expected.get(table, {}).get(part)
+    ]
+    for what, change in _WAITING_REFUSED:
+        row = {**_WAITING_PROBE, **change}
+        conn.execute("SAVEPOINT waiting_probe")
+        try:
+            conn.execute(
+                f"INSERT INTO {_WAITING}({','.join(row)}) VALUES({','.join('?' * len(row))})",
+                tuple(row.values()),
+            )
+            found.append(f"{_WAITING} takes a row with {what}")
+        except sqlite3.Error as refused:
+            if not str(refused).startswith(work_model_probes.CHECK_FAILED):
+                found.append(f"{_WAITING} refuses a row with {what} for another reason: {refused}")
+        finally:
+            conn.execute("ROLLBACK TO waiting_probe")
+            conn.execute("RELEASE waiting_probe")
+    _unmet(found, "the requests and the waiting words are not shaped like a fresh store's")
+    return {"refused": [what for what, _change in _WAITING_REFUSED]}
+
+
+def _holds_fresh_tables(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    expected = _expected_counts(_oracle(context))
+    declared, _triggers = _fresh_structure(context)
+    added = {table: rows for table, rows in _counts(conn).items() if table not in expected}
+    found = [
+        f"table {table} is not one a fresh store declares"
+        for table in added
+        if table not in declared
+    ]
+    found += [f"table {table} holds {rows} rows, not 0" for table, rows in added.items() if rows]
+    _unmet(found, "tables the store before the migration lacked")
+    return {"added": sorted(added)}
+
+
 def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
@@ -2100,6 +2309,10 @@ POSTCONDITIONS = (
     Postcondition("task-projects", "each task names the projects the file and its space give", _p20),
     Postcondition("labels-kept", "each item keeps its labels but the ones its entry drops", _p21),
     Postcondition("routes", "no remembered route has a project as its scope", _p22),
+    Postcondition("requests-asked", "every request asks the owner, and none is lost", _p23),
+    Postcondition("no-old-waiting", "no words wait from before 3.0", _p24),
+    Postcondition("request-shapes", "requests and waiting words shaped as a fresh store's", _p25),
+    Postcondition("fresh-tables", "a table the store lacked is declared fresh and empty", _p26),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 

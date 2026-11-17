@@ -1163,12 +1163,16 @@ def table_of_contents(counts: Mapping[str, Mapping[str, int]]) -> dict:
     """Every part an item has but the card, in the order of `PARTS`, each with its counts.
 
     A part with nothing in it is left out, so the card names only what there is to read.
+    The questions part has something in it when only a request asked of an agent
+    session is open, which its `count` of the owner's questions leaves out.
     """
 
     return {
         name: dict(counts[name])
         for name in PARTS
-        if name != "card" and name in counts and int(counts[name].get("count", 0)) > 0
+        if name != "card"
+        and name in counts
+        and any(int(value) > 0 for value in counts[name].values())
     }
 
 
