@@ -69,9 +69,15 @@ export interface Served {
   /** The path the page asks, with the query when the contract depends on it. */
   url: string
   method?: 'GET' | 'POST' | 'PUT'
+  /** What a write sent, where the contract the page applies depends on it. */
+  sent?: unknown
 }
 
-type Check = (body: unknown, query: URLSearchParams) => unknown
+type Check = (body: unknown, query: URLSearchParams, sent?: unknown) => unknown
+
+/** A reply's answer names its root; the answer to a remark of its own the page does not read. */
+const isReply = (sent: unknown) =>
+  typeof sent === 'object' && sent !== null && ('reply_to' in sent || 'reply_to_request' in sent)
 
 const parsed =
   (schema: z.ZodTypeAny, path: string): Check =>
@@ -130,7 +136,8 @@ const POST: Record<string, Check> = {
   ...Object.fromEntries(
     ITEM_WRITES.map((path) => [path, (body: unknown) => validateWorkItemRecord(body)]),
   ),
-  '/api/planning/work-item/comment': (body) => validateCommentWritten(body),
+  '/api/planning/work-item/comment': (body, _query, sent) =>
+    isReply(sent) ? validateCommentWritten(body) : body,
   '/api/planning/work-item/comment/resolve': (body) => validateCommentResolved(body),
   '/api/planning/work-item/pin': (body) => validateLiveFrame(body),
   '/api/execution/attach': (body) => validateAttached(body),
@@ -152,11 +159,11 @@ function contractFor(method: string, url: string): Check | null {
  * The error the contract throws names a path such as `planning.work_items.3.workable`;
  * the item at that index is named by its reference so a reader finds it in the file.
  */
-export function checkServed({ name, method = 'GET', url, body }: Served): string | null {
+export function checkServed({ name, method = 'GET', url, body, sent }: Served): string | null {
   const check = contractFor(method, url)
   if (!check) return `${name}: ${method} ${url} has no contract the page applies`
   try {
-    check(body, new URL(url, 'http://localhost').searchParams)
+    check(body, new URL(url, 'http://localhost').searchParams, sent)
     return null
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

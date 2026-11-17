@@ -40,7 +40,7 @@ async function drive({ install, name, reads }: DrivenRoutes) {
     const { url, method = 'GET', body } = typeof read === 'string' ? { url: read } : read
     const answer = await ask(url, { method, body })
     if (answer && answer.status >= 200 && answer.status < 300)
-      served.push({ name, method, url, body: answer.body })
+      served.push({ name, method, url, body: answer.body, sent: body })
     else missed.push(`${name}: ${method} ${url} answered ${answer?.status ?? 'nothing'}`)
   }
   return { missed, served }
