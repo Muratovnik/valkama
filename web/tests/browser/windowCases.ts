@@ -147,8 +147,8 @@ export const stepProps = {
   from: STEP_START,
   to: STEP_START + 5 * STEP_HOUR,
   end: STEP_START + 3.5 * STEP_HOUR,
-  moment: (at: number) =>
-    `${String(new Date(at).getUTCHours()).padStart(2, '0')}:${String(new Date(at).getUTCMinutes()).padStart(2, '0')}`,
+  // The moment's hours and minutes on the UTC clock, «14:30».
+  moment: (at: number) => new Date(at).toISOString().slice(11, 16),
   points: stepPoints,
   words: stepWords,
   even: true,
