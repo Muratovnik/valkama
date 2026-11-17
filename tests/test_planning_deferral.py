@@ -30,6 +30,9 @@ ANSWER = "/api/planning/request/answer"
 #: The day after the fixed clock, and a moment once it has come.
 TOMORROW = "2026-11-18"
 CAME = datetime(2026, 11, 18, 0, 0, 1, tzinfo=UTC)
+#: An hour after the fixed clock, and as the store writes it.
+LATER = datetime(2026, 11, 17, 10, 30, tzinfo=UTC)
+LATER_AT = "2026-11-17T10:30:00Z"
 WHY = "waits for the vendor's reply"
 #: The items standing in a deferred state, and the items with a condition.
 DEFERRED = (
@@ -589,6 +592,73 @@ class OwnerQuestionTests(Deferral):
                     self.assertEqual((403, code), (status, error["code"]))
         self.assertEqual(before, self.written())
         self.assertEqual("ready", self.answer(self.asked, "do")["carried_out"])
+
+
+class AwaitedItemTests(Deferral):
+    """Work under an accepted goal waits on an item that closes, closes again or goes.
+
+    The condition names that item, and the store lets the item go only once no
+    condition names it; the owner is asked once, when the condition first comes.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.x = self.made("x")
+        self.t = self.made("t", parent=self.goal)
+        self.defer(self.t, until=self.x)
+
+    def at(self, moment: datetime, write: object) -> dict:
+        with mock.patch.object(leases, "utc_now", lambda: moment):
+            return write()  # type: ignore[operator,no-any-return]
+
+    def waits_on(self) -> tuple:
+        """The moment, the item and when it came, as the condition of t holds them."""
+
+        until_at, until_item, _reason, _call, _since, reached = self.condition(self.t) or ()
+        return until_at, until_item, reached
+
+    def test_deleted_open_it_asks_the_owner_and_keeps_the_moment_in_its_place(self) -> None:
+        answer = self.at(LATER, lambda: self.person(DELETE, id=self.x))
+        self.assertEqual([self.t], answer["returned"])
+        self.assertEqual("deferred", self.category(self.t))
+        self.assertEqual((LATER_AT, None, LATER_AT), self.waits_on())
+        self.assertEqual(["pending"], [row["status"] for row in self.returns(self.t)])
+        self.holds()
+
+    def test_closed_again_or_deleted_after_the_owner_was_asked_it_asks_nothing_new(
+        self,
+    ) -> None:
+        self.person(APPLY, id=self.x, summary=DONE, transition={"state": "done"})
+        [asked] = self.returns(self.t)
+        came = "2026-11-17T09:30:00Z"
+        self.assertEqual((None, self.identity(self.x), came), self.waits_on())
+        self.at(LATER, lambda: self.person(APPLY, id=self.x, transition={"state": "triage"}))
+        self.at(LATER, lambda: self.cancel(self.x))
+        self.assertEqual((None, self.identity(self.x), came), self.waits_on())
+        answer = self.at(LATER, lambda: self.person(DELETE, id=self.x))
+        self.assertNotIn("returned", answer, "nothing came back by the delete")
+        self.assertEqual((came, None, came), self.waits_on())
+        self.assertEqual(
+            [(asked["request_id"], "pending")],
+            [(row["request_id"], row["status"]) for row in self.returns(self.t)],
+        )
+        self.assertEqual("ready", self.answer(asked, "do")["carried_out"])
+        self.holds()
+
+    def test_deleted_itself_while_asked_it_takes_its_condition_and_question_along(
+        self,
+    ) -> None:
+        self.person(APPLY, id=self.x, summary=DONE, transition={"state": "done"})
+        identity = self.identity(self.t)
+        self.person(DELETE, id=self.t)
+        for table in ("work_item_deferrals", "work_item_requests"):
+            with self.subTest(table=table):
+                found = self.conn.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE work_item_id = ?",
+                    (identity,),
+                ).fetchone()[0]
+                self.assertEqual(0, found)
+        self.holds()
 
 
 class ClaimTests(Deferral):

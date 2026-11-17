@@ -3219,7 +3219,10 @@ it brought back.
 Under goals and stages all accepted and open, or when its workflow reaches no
 `triage` state, the item stays put off with `reached_at` set, and Valkama asks the
 owner a question of purpose `return`: `MAIN-12 was put off until 2026-12-01; that
-has come. Do it, put it off again, or drop it.` Its one required choice, `answer`,
+has come. Do it, put it off again, or drop it.` It is asked once: the item waited
+on closing again, or being deleted, asks nothing more. A delete of that item, before
+or after its close, leaves `until` at the moment the condition came and
+`until_item` `null`. Its one required choice, `answer`,
 takes `do`, `later` with the text `until`, or `drop` with the optional text
 `cancels`, a cancel list's token. As with [review](#review-asks-the-owner), only a
 person answers it, and the answer is carried out in the same write: `do` moves the

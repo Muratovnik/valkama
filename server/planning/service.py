@@ -1818,16 +1818,17 @@ def return_due(
 
 
 def _return_waiting(conn: sqlite3.Connection, items: list[str], because: str) -> list[str]:
-    """Bring back what was put off until one of `items`, which closed or goes; their
-    references."""
+    """Bring back what was put off until one of `items`, which closed or goes; the
+    references of those whose condition came with it."""
 
-    return [
+    found = (
         return_deferred(conn, deferral.Due(waiting_id, because, until_id, None))
         for waiting_id, until_id in deferral.waiting(conn, items)
-    ]
+    )
+    return [reference for reference in found if reference is not None]
 
 
-def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str:
+def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str | None:
     """Bring one put-off item back, its condition having come; its reference.
 
     The return is Valkama's own call (`deferral.RETURN_TOOL`), so the history names
@@ -1836,7 +1837,9 @@ def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str:
     `returned` (`date 2026-12-01`, `completed MAIN-12`) side by side, and its
     condition goes with the move. Under goals and stages all accepted and open, or
     with no triage to reach, it stays put off: its condition is marked come and the
-    owner is asked whether to do it, put it off again or drop it.
+    owner is asked whether to do it, put it off again or drop it. A condition that
+    came before was asked about then: the item it waits on closing again or going
+    asks nothing new, and the answer is None.
     """
 
     row = read_model.item_by_id(conn, due.work_item_id)
@@ -1851,12 +1854,13 @@ def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str:
         target = states.reachable(conn, row, "triage")
         parent = None if row["parent_id"] is None else str(row["parent_id"])
         if target is None or item_tree.accepted_chain(conn, parent):
-            deferral.reach(
+            if not deferral.reach(
                 conn,
                 due.work_item_id,
                 deferral.stamp(leases.utc_now()),
                 gone=due.because == deferral.DELETED,
-            )
+            ):
+                return None
             condition = deferral.said(str(due.until_at)) if item is None else f"{item} closed"
             questions.ask(
                 conn,

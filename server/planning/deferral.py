@@ -315,23 +315,33 @@ def due(conn: sqlite3.Connection, at: str, limit: int, *, space_id: str | None =
     return found
 
 
-def reach(conn: sqlite3.Connection, work_item_id: str, at: str, *, gone: bool = False) -> None:
-    """The condition came, and the owner is asked instead of the item coming back.
+def reach(conn: sqlite3.Connection, work_item_id: str, at: str, *, gone: bool = False) -> bool:
+    """The condition came at `at`, and the owner is asked instead of the item coming
+    back; whether it came only now.
 
-    `gone` says the item it waited on is being deleted: the row then keeps the moment
-    it came in place of that item, which it can no longer name.
+    A condition that came before keeps that moment: the owner was asked then, and
+    the item it waits on closing again, or going, asks nothing new. `gone` says
+    that item is being deleted: the row then keeps the moment the condition came in
+    place of the item, which it can no longer name.
     """
 
+    found = conn.execute(
+        "SELECT reached_at FROM work_item_deferrals WHERE work_item_id = ?", (work_item_id,)
+    ).fetchone()
+    came = found is not None and found[0] is not None
     if gone:
+        # Every right-hand side reads the row as it stood before this statement.
         conn.execute(
-            "UPDATE work_item_deferrals SET reached_at = ?, until_at = ?, until_item_id = NULL"
-            " WHERE work_item_id = ?",
+            "UPDATE work_item_deferrals SET reached_at = COALESCE(reached_at, ?),"
+            " until_at = COALESCE(reached_at, ?), until_item_id = NULL WHERE work_item_id = ?",
             (at, at, work_item_id),
         )
-        return
-    conn.execute(
-        "UPDATE work_item_deferrals SET reached_at = ? WHERE work_item_id = ?", (at, work_item_id)
-    )
+    elif not came:
+        conn.execute(
+            "UPDATE work_item_deferrals SET reached_at = ? WHERE work_item_id = ?",
+            (at, work_item_id),
+        )
+    return not came
 
 
 def asked(conn: sqlite3.Connection, work_item_id: str) -> str | None:
