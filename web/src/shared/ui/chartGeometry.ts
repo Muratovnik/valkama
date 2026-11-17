@@ -165,6 +165,8 @@ export interface PeriodSeries extends MarkAction {
   key: string
   label: string
   slot: SeriesSlot
+  /** The end of a pair's `label` that stays whole while the rest gives way (`PairName`). */
+  labelEnd?: string
 }
 
 export interface PeriodColumn {

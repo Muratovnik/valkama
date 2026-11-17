@@ -13,10 +13,11 @@
  * column of numbers to read down beside the names.
  *
  * A name takes one line, as wide as the legend at most, and ends in an ellipsis where it is cut; it
- * is cut from its end, so the start that tells it apart, a task's reference, stays. The entry's
- * hint says it whole while it is cut, or, where the entry has no hint of its own, is the name
- * whole over the cut one. Broken wherever a letter fell, a task's title took two lines an entry
- * and a session's title four, «Valkama: проектирова / ние системы агентов».
+ * is cut from its end, so the start that tells it apart, a task's reference, stays. A pair's first
+ * part gives way instead and its end, the model a task was split by, stays whole (`PairName`). The
+ * entry's hint says it whole while it is cut, or, where the entry has no hint of its own, is the
+ * name whole over the cut one. Broken wherever a letter fell, a task's title took two lines an
+ * entry and a session's title four, «Valkama: проектирова / ние системы агентов».
  *
  * An entry is a mark of its chart: its hint says what the name does not (`hints`, by series key,
  * `outline` for the mark of the period compared with), under its name beside its swatch where the
@@ -34,6 +35,7 @@ import { useId } from 'vue'
 
 import type { PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 import { markPartId, markTag, markType } from '@/shared/ui/chartGeometry.ts'
+import PairName from '@/shared/ui/PairName.vue'
 import type { TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
@@ -130,8 +132,10 @@ const figureOf = (key: string) => props.figures?.get(key)
         <span
           :id="nameId(one)"
           class="chart-key-name one-line"
-          >{{ one.label }}</span
-        >
+          ><PairName
+            :name="one.label"
+            :end="one.labelEnd"
+        /></span>
       </component>
       <span
         v-if="figureOf(one.key)"

@@ -134,6 +134,7 @@ const series = computed(() =>
   stacked.value.map((one) => ({
     ...one,
     label: seriesName(one.line),
+    ...(one.line ? { labelEnd: words.lineEnd(one.line) } : {}),
     ...(one.line ? marks.markOf(one.line) : {}),
   })),
 )
