@@ -23,6 +23,7 @@ from .. import query_params
 from . import (
     calls,
     chain,
+    commits,
     held,
     images,
     item_projects,
@@ -360,6 +361,7 @@ def _part_names(parameters: Mapping[str, list[str]]) -> list[str] | None:
 _PART_READERS: dict[str, Callable[[sqlite3.Connection, sqlite3.Row], dict]] = {
     "links": lambda conn, row: {"links": read_model.links(conn, str(row["work_item_id"]))},
     "refs": lambda conn, row: {"refs": read_model.refs(conn, str(row["work_item_id"]))},
+    "commits": lambda conn, row: {"commits": read_model.commits(conn, str(row["work_item_id"]))},
     "questions": lambda conn, row: {
         "questions": requests.item_questions(conn, str(row["work_item_id"]))
     },
@@ -536,6 +538,19 @@ def _request(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> d
     }
 
 
+def _unattached(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """The commits on no card of a space's projects or of one project, newest first."""
+
+    limit = _count(parameters, "limit")
+    return commits.unattached(
+        conn,
+        space=_first(parameters, "space"),
+        project=_first(parameters, "project"),
+        since=_first(parameters, "since"),
+        limit=commits.UNATTACHED_LIMIT if limit is None else limit,
+    )
+
+
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
     "/api/planning": _read_model,
     "/api/planning/spaces": _spaces,
@@ -553,6 +568,7 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/requests": _requests,
     "/api/planning/request": _request,
     "/api/planning/held": _held,
+    "/api/planning/commits/unattached": _unattached,
 }
 
 
@@ -710,19 +726,26 @@ def _refuse_retired_fields(payload: Mapping[str, object]) -> None:
 
 
 def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """A move to a state; one into review or completed leaves the window the net looks
+    behind once the write commits (`commits.closes`)."""
+
     _refuse_retired_fields(payload)
-    return service.transition_work_item(
+    reference, author = _text(payload, "id"), _author(payload)
+    before = commits.before_transition(conn, reference)
+    answer = service.transition_work_item(
         conn,
-        _text(payload, "id"),
+        reference,
         _text(payload, "state"),
         reason=str(payload.get("reason") or ""),
         force=_flag(payload, "force"),
         expected_revision=_optional_int(payload, "expected_revision"),
-        author=_author(payload),
+        author=author,
         acceptance=payload.get("acceptance"),
         to_check=payload.get("to_check"),
         cancels=payload.get("cancels"),
     )
+    commits.after_transition(before, answer)
+    return answer
 
 
 def _defer(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
@@ -1125,6 +1148,57 @@ def _ref(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     )
 
 
+def _commit(conn: sqlite3.Connection, payload: Mapping[str, object]) -> tuple[str, dict]:
+    """One commit attached to the item by hand, or detached with `remove`: what it did."""
+
+    reference, repository = _text(payload, "id"), _text(payload, "repository")
+    hash_text = _text(payload, "hash")
+    if _flag(payload, "remove"):
+        return commits.detach(conn, reference, repository, hash_text, author=_author(payload))
+    return commits.attach(
+        conn,
+        reference,
+        repository,
+        hash_text,
+        label=_optional_text(payload, "label") or "",
+        author=_author(payload),
+    )
+
+
+def _attach_commit(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """A commit attached from the list of those on no card, or detached with `remove`.
+
+    It is the `commits` group's entry, written by whoever calls: from the interface,
+    the person. The answer names the commit as the item's record lists it, as it is
+    attached now or, once detached, as it was (null for one a rewrite replaced, which
+    the record does not list), and whether the write changed anything.
+    """
+
+    _request_fields(payload, {"reference", "repository", "hash", "remove"})
+    reference = _text(payload, "reference")
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    identity = str(read_model.item_row(conn, reference)["work_item_id"])
+    before = read_model.commits(conn, identity)
+    entry = {name: payload[name] for name in ("repository", "hash", "remove") if name in payload}
+    outcome, pair = _commit(conn, {"id": reference, **entry})
+    shown = next(
+        (
+            listed
+            for listed in (*read_model.commits(conn, identity), *before)
+            if (listed["repository"], listed["hash"]) == (pair["repository"], pair["hash"])
+        ),
+        None,
+    )
+    row = read_model.item_by_id(conn, identity)
+    return {
+        "reference": read_model.reference(conn, row),
+        "revision": int(row["revision"]),
+        "commit": shown,
+        "changed": outcome != commits.UNCHANGED,
+    }
+
+
 def _space(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     created = service.create_planning_space(
         conn, name=_text(payload, "name"), key=_optional_text(payload, "key")
@@ -1180,6 +1254,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("checklist", frozenset({"items", "force"})),
     ("checklist_ticks", frozenset({"item_id", "done", "force"})),
     ("refs", frozenset({"kind", "value", "label"})),
+    ("commits", frozenset({"repository", "hash", "label", "remove"})),
     ("links", frozenset({"other", "kind", "remove"})),
     ("comment", _COMMENT_FIELDS),
     ("comments", _COMMENT_FIELDS),
@@ -1215,7 +1290,7 @@ CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
 )
 #: The groups that are lists of entries rather than one object.
 _APPLY_LISTS = frozenset(
-    {"checklist_ticks", "refs", "links", "comments", "resolutions", "questions"}
+    {"checklist_ticks", "refs", "commits", "links", "comments", "resolutions", "questions"}
 )
 #: The list groups whose answer says what each entry left rather than how many.
 _APPLY_LISTED = frozenset({"checklist_ticks", "comments", "resolutions", "questions"})
@@ -1350,6 +1425,8 @@ def _apply_step(
     if group == "refs":
         _ref(conn, {**entry, **base})
         return {}, 1
+    if group == "commits":
+        return {}, _commit(conn, {**entry, **base})
     if group == "links":
         _link(conn, {**entry, **base})
         return {}, 1
@@ -1572,7 +1649,9 @@ def _run_steps(
         }
         findings.update(extra)
         findings.update({name: values for name, values in joined.items() if values})
-        if group in _APPLY_LISTED:
+        if group == "commits" and isinstance(change, tuple):
+            applied[group] = commits.tally(applied.get(group), *change)
+        elif group in _APPLY_LISTED:
             applied.setdefault(group, []).append(change)
         elif group in _APPLY_LISTS:
             applied[group] = applied.get(group, 0) + 1
@@ -1605,6 +1684,7 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/report": _report,
     "/api/planning/work-item/summary/select": _select_summary,
     "/api/planning/work-item/ref": _ref,
+    "/api/planning/work-item/commit": _attach_commit,
     "/api/planning/work-item/apply": _apply,
     "/api/planning/work-item/request": _create_request,
     "/api/planning/request/answer": _answer_request,

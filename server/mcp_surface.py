@@ -22,6 +22,7 @@ from .ops import configuration, tray
 from .planning import acknowledgements
 from .planning import api as planning_api
 from .planning import calls as planning_calls
+from .planning import commits as planning_commits
 from .planning import images as planning_images
 from .planning import model as planning_model
 from .planning import tools as planning_tools
@@ -121,7 +122,8 @@ PLANNING_INSTRUCTIONS = (
     " checklist of your actual steps; when agents split it, each must"
     " claim_work_item_checklist_item by stable item_id before work and tick it in"
     " checklist_ticks on completion. Item and checklist claims are independent."
-    " refs carry commits and AgentMemory record ids materially used for the work."
+    " Valkama attaches the commits a session makes; refs carry AgentMemory record"
+    " ids materially used for the work."
     " Memory refs are one-way Valkama pointers; never infer or write a reverse"
     " relation inside AgentMemory. Valkama records the confirmed session behind"
     " every write and get_work_item lists them, so attach no session id as a ref."
@@ -422,12 +424,13 @@ def run_tool_call(
     What the call owes the owner is read while the call is still bound, because who
     made it is known only there, and handed over only after the commit: a refused
     call raises before either, and a commit that fails hands nothing over. Nothing
-    here waits for a toast.
+    here waits for a toast. A close the call made names, once it is committed, the
+    commits made behind it that no hook reported (`commits.with_unreported`).
     """
 
     identity, prepared = _prepared(name, arguments, meta, client, _pair(conn, meta))
     try:
-        with planning_calls.bind(identity, name):
+        with planning_calls.bind(identity, name), planning_commits.closes() as closed:
             data = _OPS[name](conn, prepared)
             due = alert_emit.due_after_write(conn)
         # The write has to be committed here. Board operations committed inside
@@ -441,7 +444,7 @@ def run_tool_call(
         raise
     planning_images.settle(conn)
     alert_emit.send(due)
-    return data
+    return planning_commits.with_unreported(conn, closed, data)
 
 
 def _compact(payload: object) -> str:

@@ -3233,8 +3233,8 @@ def merge_work_items(
     other work wait. Here the survivor takes all of that — the steps with their
     ids, ticks and step claims, the discussion threads whole, the questions with
     their replies, a list with the comment it stands under, the refs, the
-    links in their own direction, and the projects, a project more than one of
-    them names keeping its strongest source — and each
+    attached commits, the links in their own direction, and the projects, a
+    project more than one of them names keeping its strongest source — and each
     merged item is linked `duplicates` to it, given a summary naming it,
     released and closed in its cancelled state. What describes the merged item
     itself stays with it: its history, its reports with their threads, its
@@ -3460,6 +3460,7 @@ def _fold(
                 "UPDATE OR IGNORE work_item_refs SET work_item_id = ? WHERE work_item_id = ?",
                 (survivor_id, identity),
             ).rowcount,
+            "commits": _move_commits(conn, identity, survivor_id),
             "links": _repoint_links(conn, identity, survivor_id, involved, author),
             # A project both name keeps the stronger source (`item_projects.carry`).
             "projects": item_projects.carry(conn, identity, survivor_id),
@@ -3584,6 +3585,23 @@ def _move_threads(
     )
 
 
+def _move_commits(conn: sqlite3.Connection, identity: str, survivor_id: str) -> int:
+    """Move a merged item's attached commits to the survivor; how many moved.
+
+    One the survivor has already stays there as it was, and the merged item's
+    attachment of it goes: a commit is attached to an item once. The projects
+    those commits gave move with the item's projects, so each project the
+    survivor holds by its commits still has one of them.
+    """
+
+    moved = conn.execute(
+        "UPDATE OR IGNORE work_item_commits SET work_item_id = ? WHERE work_item_id = ?",
+        (survivor_id, identity),
+    ).rowcount
+    conn.execute("DELETE FROM work_item_commits WHERE work_item_id = ?", (identity,))
+    return int(moved)
+
+
 def _repoint_links(
     conn: sqlite3.Connection,
     identity: str,
@@ -3637,7 +3655,7 @@ def _stored_link(conn: sqlite3.Connection, source: str, target: str, kind: str) 
 
 
 def _counts(moved: dict[str, int]) -> str:
-    """`2 steps, 1 comment, 0 refs and 3 links`."""
+    """`2 steps, 1 comment, 0 refs, 3 commits and 1 link`."""
 
     parts = [f"{count} {name if count != 1 else name[:-1]}" for name, count in moved.items()]
     return f"{', '.join(parts[:-1])} and {parts[-1]}"

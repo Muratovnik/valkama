@@ -66,6 +66,15 @@ otherwise cascade into them:
   postcondition of the same name holds a condition to each item in a deferred state.
 - **history-actions** gives the events table the CHECK of every action this build declares, when
   `items` left one out: `items` widens it already, so on a 2.9 store the step has nothing to do.
+- **commits** creates the tables of the commits Valkama knows (`commits`) and of the items
+  they are attached to (`work_item_commits`), with their indexes.
+- **commit-refs** carries the commit refs over, as the file's `commit_refs` says: each pair
+  of a record not dropped becomes a commit, attached to the ref's item `migrated`,
+  each record that is a url a `url` ref; then every commit ref leaves. Several refs
+  of one item naming one commit give one attachment.
+- **refs-without-commits** rebuilds `work_item_refs` when its CHECK still takes the
+  kind `commit`, as a store before 3.0 declared it: a commit is attached now, never a
+  ref, and `commit-refs` has left none.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -73,10 +82,12 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
-The postconditions `fresh-shape` to `second-run` and `store-identity` to `awaiting-rows` are checked after the steps, inside the
+The postconditions `fresh-shape` to `second-run` and `store-identity` to `commit-projects` are checked after the steps, inside the
 same transaction, `second-run` last; `store` adds `recovery-point`, the recovery point. `row-counts` compares the
-row counts of the tables `oracle` counted, of the projects `item-projects` fills and of the rows `confirmations`
-writes; `fresh-tables` holds every other table to being empty and declared by a fresh store.
+row counts of the tables `oracle` counted, of the projects `item-projects` fills, of the rows `confirmations`
+writes and of the commit tables `commits` creates and `commit-refs` fills; `fresh-tables` holds every other
+table to being empty and declared by a fresh store. `no-commit-refs` to `commit-projects` hold each item's
+refs, attachments and projects from commits to what `oracle` read of the file and the refs.
 """
 
 from __future__ import annotations
@@ -92,7 +103,16 @@ from typing import Any
 from .. import store_steps
 from ..store_steps import Context, Postcondition, Step, UnmetError
 from . import closing as closing_rules
-from . import item_tree, model, questions, read_model, words, work_model_probes
+from . import (
+    item_projects,
+    item_projects_map,
+    item_tree,
+    model,
+    questions,
+    read_model,
+    words,
+    work_model_probes,
+)
 from . import store as planning_store
 
 #: Who every record the migration writes names as its author.
@@ -310,6 +330,14 @@ class Oracle:
     #: The store's identity and each space as `spaces` keeps it: id, key, name, next number.
     data_scope_id: str = ""
     spaces: set[tuple[str, str, str, int]] = field(default_factory=set)
+    #: What `commit-refs` makes of the commit refs: how many it removes and how many `url` refs
+    #: it adds; each item's refs after it, as (kind, value), and its attachments, as
+    #: (project or '', hash); and the rows of `commits`, one a distinct pair.
+    commit_refs: int = 0
+    url_refs: int = 0
+    refs_after: dict[str, set[tuple[str, str]]] = field(default_factory=dict)
+    attachments: dict[str, set[tuple[str, str]]] = field(default_factory=dict)
+    commit_rows: int = 0
 
 
 def _oracle(context: Context) -> Oracle:
@@ -716,6 +744,7 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         [identity for identity, found in expect.items() if found["category"] == _SERVICE],
     )
     _read_item_projects(conn, context, oracle)
+    _read_commit_refs(conn, context, oracle)
     oracle.ui_prefs = {
         str(key): str(record)
         for key, record in conn.execute("SELECT key, record_json FROM platform_ui_prefs")
@@ -744,6 +773,10 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         "remembered_routes_to_drop": len(oracle.dropped_prefs),
         "item_projects": oracle.item_projects,
         "items_losing_labels": len(oracle.labels_dropped),
+        "commit_refs": oracle.commit_refs,
+        "commits": oracle.commit_rows,
+        "commit_attachments": sum(len(pairs) for pairs in oracle.attachments.values()),
+        "url_refs_added": oracle.url_refs,
     }
 
 
@@ -799,6 +832,48 @@ def _read_item_projects(conn: sqlite3.Connection, context: Context, oracle: Orac
             for identity, given in oracle.projects.items()
             if any(term.startswith(stem) for project, _ in given for term in words.terms(project))
         )
+
+
+def _commit_records(context: Context) -> dict[int, Mapping[str, Any]]:
+    """The file's record of each commit ref, by the ref's id."""
+
+    records = _item_projects_file(context).get(item_projects_map.COMMIT_REFS) or []
+    return {int(record["ref"]): record for record in records}
+
+
+def _read_commit_refs(conn: sqlite3.Connection, context: Context, oracle: Oracle) -> None:
+    """The oracle's reading of what `commit-refs` makes of the commit refs, from the file
+    and the refs.
+
+    A record `commit-refs` carries -- one not dropped -- gives its item each of its pairs as an
+    attachment and, when it is a url, a `url` ref of the same text unless the item
+    holds one already; every commit ref leaves.
+    """
+
+    records = _commit_records(context)
+    texts: dict[int, tuple[str, str]] = {}
+    for ref, identity, kind, value in conn.execute(
+        "SELECT id, work_item_id, kind, value FROM work_item_refs"
+    ):
+        if kind == "commit":
+            texts[int(ref)] = (str(identity), str(value))
+        else:
+            oracle.refs_after.setdefault(str(identity), set()).add((str(kind), str(value)))
+    kept = sum(len(refs) for refs in oracle.refs_after.values())
+    pairs: set[tuple[str, str]] = set()
+    for ref, (identity, value) in sorted(texts.items()):
+        record = records.get(ref)
+        if record is None or record["drop"]:
+            continue
+        for pair in record["pairs"]:
+            key = (str(pair["project"] or ""), str(pair["hash"]))
+            pairs.add(key)
+            oracle.attachments.setdefault(identity, set()).add(key)
+        if record["url"]:
+            oracle.refs_after.setdefault(identity, set()).add(("url", value))
+    oracle.commit_refs = len(texts)
+    oracle.url_refs = sum(len(refs) for refs in oracle.refs_after.values()) - kept
+    oracle.commit_rows = len(pairs)
 
 
 def _project_scoped(record: str) -> bool:
@@ -1901,6 +1976,177 @@ def _check_actions(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError(f"the events table refuses the actions {missing}")
 
 
+# -- `commits`: the commits ------------------------------------------------------------
+
+#: The tables of the commits Valkama knows and of their attachments.
+COMMIT_TABLES = ("commits", "work_item_commits")
+_COMMIT_OBJECTS = (
+    *(("table", table) for table in COMMIT_TABLES),
+    ("index", "commits_pair"),
+    ("index", "commits_session"),
+    ("index", "work_item_commits_by_commit"),
+)
+
+
+def _commits_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return any(
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?", (kind, name)
+        ).fetchone()
+        is None
+        for kind, name in _COMMIT_OBJECTS
+    )
+
+
+def _create_commits(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`commits`: the commit tables and their indexes, each if missing, from a fresh store's
+    text."""
+
+    del context
+    created = [
+        table
+        for table in COMMIT_TABLES
+        if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+        ).fetchone()
+        is None
+    ]
+    for statement in planning_store.COMMITS:
+        conn.execute(statement)
+    return {"tables_created": created}
+
+
+def _check_commits(conn: sqlite3.Connection, context: Context) -> None:
+    if _commits_needed(conn, context):
+        raise UnmetError("a commit table or one of its indexes is missing")
+
+
+# -- the commit refs become commits --------------------------------------------
+
+_COMMIT_REF = "SELECT 1 FROM work_item_refs WHERE kind = 'commit' LIMIT 1"
+
+
+def _commit_refs_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return conn.execute(_COMMIT_REF).fetchone() is not None
+
+
+def _carry_commit_refs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`commit-refs`: each commit ref the file carries becomes its commits, attached `migrated`.
+
+    A pair gets a row of `commits` when it has none: the subject and time from the
+    file, no session, reported when its earliest ref was made. Its item gets one
+    attachment however many refs name it, labelled by `item_projects.commit_label`
+    and made by, when and in the call of the first of those refs that gives a label,
+    or of the first. A record that is a url adds a `url` ref of the same text, label,
+    author, time and call. Then every commit ref leaves, carried or dropped.
+    """
+
+    records = _commit_records(context)
+    refs = conn.execute(
+        "SELECT id, work_item_id, value, label, author, created_at, call_id FROM work_item_refs"
+        " WHERE kind = 'commit' ORDER BY id"
+    ).fetchall()
+    commits: dict[tuple[str, str], list[Any]] = {}
+    attached: dict[tuple[str, tuple[str, str]], tuple[str, str, str, int | None]] = {}
+    urls: list[tuple[str, str, str, str, str, int | None]] = []
+    for ref in refs:
+        record = records.get(int(ref["id"]))
+        if record is None:
+            raise UnmetError(
+                f"the item projects file holds no record of the commit ref {ref['id']}"
+            )
+        if record["drop"]:
+            continue
+        identity, made = str(ref["work_item_id"]), str(ref["created_at"])
+        written = (str(ref["author"]), made, ref["call_id"])
+        label = item_projects.commit_label(str(ref["label"]), str(ref["value"]))
+        for pair in record["pairs"]:
+            key = (str(pair["project"] or ""), str(pair["hash"]))
+            row = commits.setdefault(
+                key, [pair["project"], pair["hash"], pair["subject"], pair["committed_at"], made]
+            )
+            row[4] = min(row[4], made)
+            chosen = attached.get((identity, key))
+            if chosen is None or (not chosen[0] and label):
+                attached[(identity, key)] = (label, *written)
+        if record["url"]:
+            urls.append((identity, str(ref["value"]), str(ref["label"]), *written))
+    conn.executemany(
+        "INSERT OR IGNORE INTO commits(project_id, hash, subject, committed_at, reported_at)"
+        " VALUES(?,?,?,?,?)",
+        [tuple(row) for _key, row in sorted(commits.items())],
+    )
+    ids = {
+        (str(project), str(hash_)): int(commit_id)
+        for commit_id, project, hash_ in conn.execute(
+            "SELECT commit_id, COALESCE(project_id, ''), hash FROM commits"
+        )
+    }
+    conn.executemany(
+        "INSERT OR IGNORE INTO work_item_commits(work_item_id, commit_id, attached_by, label,"
+        " author, created_at, call_id) VALUES(?,?,?,?,?,?,?)",
+        [
+            (identity, ids[key], _MIGRATED, *chosen)
+            for (identity, key), chosen in sorted(attached.items())
+        ],
+    )
+    added = conn.executemany(
+        "INSERT OR IGNORE INTO work_item_refs(work_item_id, kind, value, label, author,"
+        " created_at, call_id) VALUES(?,'url',?,?,?,?,?)",
+        urls,
+    ).rowcount
+    removed = conn.execute("DELETE FROM work_item_refs WHERE kind = 'commit'").rowcount
+    return {
+        "commit_refs": removed,
+        "dropped": sum(1 for ref in refs if records[int(ref["id"])]["drop"]),
+        "commits": len(commits),
+        "attachments": len(attached),
+        "url_refs": added,
+    }
+
+
+def _check_commit_refs(conn: sqlite3.Connection, context: Context) -> None:
+    if _commit_refs_needed(conn, context):
+        raise UnmetError("a ref of the kind commit is left")
+
+
+# -- refs-without-commits: the refs stop taking a commit ------------------------------
+
+
+def _ref_kinds_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return _ref_kinds(conn) != sorted(model.REF_KINDS)
+
+
+def _rebuild_refs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`work_item_refs` as a fresh store declares it, taking only `model.REF_KINDS`.
+
+    It comes after `commit-refs`, which left no ref of the kind `commit`, so every row is
+    kept as it was; one left would make the rebuild fail rather than vanish.
+    """
+
+    del context
+    before = _ref_kinds(conn)
+    recreated = planning_store.rebuild_table(
+        conn,
+        "work_item_refs",
+        planning_store.table_definition(
+            "work_item_refs", f"work_item_refs{planning_store.REPLACEMENT}"
+        ),
+        "SELECT id, work_item_id, kind, value, label, author, created_at, call_id"
+        " FROM work_item_refs",
+    )
+    refs = int(conn.execute("SELECT COUNT(*) FROM work_item_refs").fetchone()[0])
+    return {"kinds_before": before, "kinds": _ref_kinds(conn), "refs": refs, "recreated": recreated}
+
+
+def _check_ref_kinds(conn: sqlite3.Connection, context: Context) -> None:
+    if _ref_kinds_needed(conn, context):
+        raise UnmetError(f"work_item_refs takes the kinds {_ref_kinds(conn)}")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1961,6 +2207,15 @@ STEPS = (
         _check_deferrals,
     ),
     Step("history-actions", "the actions the history takes", _widen_actions, _actions_needed, _check_actions),
+    Step("commits", "commits", _create_commits, _commits_needed, _check_commits),
+    Step("commit-refs", "commit refs", _carry_commit_refs, _commit_refs_needed, _check_commit_refs),
+    Step(
+        "refs-without-commits",
+        "refs without the kind commit",
+        _rebuild_refs,
+        _ref_kinds_needed,
+        _check_ref_kinds,
+    ),
 )
 
 
@@ -2058,6 +2313,13 @@ def _expected_counts(oracle: Oracle) -> dict[str, int]:
     )
     expected["work_item_events"] += sum(oracle.events.values())
     expected["work_item_projects"] = expected.get("work_item_projects", 0) + oracle.item_projects
+    # `commits` creates them and `commit-refs` fills them with the commits the refs carry; the refs
+    # lose every commit ref and gain the `url` refs an item did not hold yet.
+    expected["commits"] = expected.get("commits", 0) + oracle.commit_rows
+    expected["work_item_commits"] = expected.get("work_item_commits", 0) + sum(
+        len(pairs) for pairs in oracle.attachments.values()
+    )
+    expected["work_item_refs"] += oracle.url_refs - oracle.commit_refs
     expected["platform_ui_prefs"] = expected.get("platform_ui_prefs", 0) - len(oracle.dropped_prefs)
     # `confirmations` gives a row to each accepted open container that awaits confirmation.
     expected[_CONFIRMATIONS] = sum(
@@ -2067,8 +2329,8 @@ def _expected_counts(oracle: Oracle) -> dict[str, int]:
 
 
 def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
-    """The tables `oracle` counted, the projects `item-projects` fills and the rows `confirmations` writes hold the rows
-    foreseen; any other table is `fresh-tables`'s."""
+    """The tables `oracle` counted, the projects `item-projects` fills and the rows `confirmations` and `commit-refs` write hold the
+    rows foreseen; any other table is `fresh-tables`'s."""
 
     oracle = _oracle(context)
     counts = _counts(conn)
@@ -2781,6 +3043,133 @@ def _deferred_items(conn: sqlite3.Connection, context: Context) -> Mapping[str, 
     return {"rows": rows, "deferred": deferred}
 
 
+#: The kinds the CHECK of `work_item_refs` names.
+_REF_KINDS_CHECK = re.compile(r"CHECK\s*\(\s*kind\s+IN\s*\(([^)]*)\)\s*\)", re.IGNORECASE)
+
+
+def _ref_kinds(conn: sqlite3.Connection) -> list[str]:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'work_item_refs'"
+    ).fetchone()
+    found = _REF_KINDS_CHECK.search(str(row[0])) if row is not None else None
+    return sorted(re.findall(r"'([^']*)'", found[1])) if found else []
+
+
+def _holds_no_commit_refs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """No commit ref is left, and the refs take the kinds a fresh store's take."""
+
+    expected = context.memo.get("fresh_ref_kinds")
+    if expected is None:
+        if context.reference is None:
+            raise UnmetError("no fresh store to compare with")
+        with context.reference() as fresh:
+            expected = context.memo["fresh_ref_kinds"] = _ref_kinds(fresh)
+    left = int(
+        conn.execute("SELECT COUNT(*) FROM work_item_refs WHERE kind = 'commit'").fetchone()[0]
+    )
+    kinds = _ref_kinds(conn)
+    found = [f"{left} refs of the kind commit are left"] if left else []
+    if kinds != expected:
+        found.append(f"work_item_refs takes the kinds {kinds}, a fresh store {expected}")
+    _unmet(found, "commit refs")
+    return {"commit_refs_left": left, "kinds": kinds}
+
+
+def _differs(
+    conn: sqlite3.Connection,
+    held: Mapping[str, set[tuple[str, str]]],
+    expected: Mapping[str, set[tuple[str, str]]],
+) -> list[str]:
+    """Each item whose set in `held` is not its set in `expected`, with what differs."""
+
+    references = _references(conn)
+    found = []
+    for identity in sorted(set(held) | set(expected)):
+        has, wants = held.get(identity, set()), expected.get(identity, set())
+        if has != wants:
+            found.append(
+                f"{references.get(identity, identity)} lacks {sorted(wants - has)[:3]}"
+                f" and holds {sorted(has - wants)[:3]} besides"
+            )
+    return found
+
+
+def _holds_other_refs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Each item keeps its refs but the commit refs, and holds a `url` ref for each of
+    its records that is a url."""
+
+    oracle = _oracle(context)
+    held: dict[str, set[tuple[str, str]]] = {}
+    for identity, kind, value in conn.execute(
+        "SELECT work_item_id, kind, value FROM work_item_refs"
+    ):
+        held.setdefault(str(identity), set()).add((str(kind), str(value)))
+    _unmet(_differs(conn, held, oracle.refs_after), "refs")
+    return {"items": len(held), "url_refs_added": oracle.url_refs}
+
+
+def _holds_record_pairs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Each item holds the pairs of its records the file carries, each `migrated`."""
+
+    oracle = _oracle(context)
+    held: dict[str, set[tuple[str, str]]] = {}
+    others: list[str] = []
+    for identity, project, hash_, attached_by in conn.execute(
+        "SELECT a.work_item_id, COALESCE(c.project_id, ''), c.hash, a.attached_by"
+        " FROM work_item_commits a JOIN commits c ON c.commit_id = a.commit_id"
+    ):
+        held.setdefault(str(identity), set()).add((str(project), str(hash_)))
+        if attached_by != _MIGRATED:
+            others.append(f"{identity} holds {project} {hash_} attached by {attached_by}")
+    _unmet(_differs(conn, held, oracle.attachments) + others, "commit attachments")
+    return {"items": len(held), "attachments": sum(len(pairs) for pairs in held.values())}
+
+
+def _holds_commits_attached(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Every commit is attached somewhere, reported by no session and rewritten by no
+    record."""
+
+    del context
+    found = [
+        f"the commit {project} {hash_}"
+        + (" is attached to nothing" if not attached else "")
+        + (f" names the session {session}" if session is not None else "")
+        + (f" was rewritten to {rewritten}" if rewritten is not None else "")
+        + (f" carries a rewrite recorded at {recorded}" if recorded is not None else "")
+        for project, hash_, session, rewritten, recorded, attached in conn.execute(
+            "SELECT COALESCE(project_id, ''), hash, session_id, rewritten_to, rewrite_recorded_ns,"
+            " EXISTS (SELECT 1 FROM work_item_commits a WHERE a.commit_id = c.commit_id)"
+            " FROM commits c ORDER BY commit_id"
+        )
+        if not attached or session is not None or rewritten is not None or recorded is not None
+    ]
+    _unmet(found, "commits")
+    return {"commits": int(conn.execute("SELECT COUNT(*) FROM commits").fetchone()[0])}
+
+
+def _holds_commit_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Every project an item holds from its commits is one of a commit attached to it."""
+
+    del context
+    references = _references(conn)
+    found = [
+        f"{references.get(str(identity), identity)} holds {project} from commits it has none of"
+        for identity, project in conn.execute(
+            "SELECT p.work_item_id, p.project_id FROM work_item_projects p WHERE p.source = ?"
+            " AND NOT EXISTS (SELECT 1 FROM work_item_commits a JOIN commits c"
+            " ON c.commit_id = a.commit_id WHERE a.work_item_id = p.work_item_id"
+            " AND c.project_id = p.project_id AND c.rewritten_to IS NULL)"
+            " ORDER BY p.work_item_id, p.project_id",
+            (item_projects.COMMITS,),
+        )
+    ]
+    _unmet(found, "projects from commits")
+    held = conn.execute(
+        "SELECT COUNT(*) FROM work_item_projects WHERE source = ?", (item_projects.COMMITS,)
+    ).fetchone()[0]
+    return {"projects_from_commits": int(held)}
+
+
 def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
@@ -2821,6 +3210,11 @@ POSTCONDITIONS = (
     Postcondition(
         DEFERRED_ITEMS, "a condition for each item put off, and for no other", _deferred_items
     ),
+    Postcondition("no-commit-refs", "no commit ref is left; the refs take a fresh store's kinds", _p31),
+    Postcondition("other-refs", "each item keeps its other refs and gains its url records", _p32),
+    Postcondition("record-pairs", "each item holds the pairs its records carry, migrated", _p33),
+    Postcondition("commits-attached", "every commit is attached, with no session and no rewrite", _p34),
+    Postcondition("commit-projects", "every project from commits is one of an attached commit", _p35),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 

@@ -542,20 +542,12 @@ class SearchAndRefTests(unittest.TestCase):
         self.assertFalse(resolved["resolved"])
         self.assertIn("one-way pointer", resolved["detail"])
 
-    def test_an_unknown_commit_is_reported_unresolved_not_raised(self) -> None:
-        os.environ[documents.DOC_ROOTS_VAR] = self._dir.name
-        # A commit lookup also asks every registered project; outside the gate
-        # the registry under LOCALAPPDATA would be the operator's own.
-        with mock.patch.dict(os.environ, {"LOCALAPPDATA": self._dir.name}):
-            resolved = refs.resolve_ref("commit", "0" * 40)
-        self.assertFalse(resolved["resolved"])
-
     def test_a_url_ref_resolves_to_itself_and_garbage_is_refused(self) -> None:
         self.assertTrue(refs.resolve_ref("url", "docs/plan.md")["resolved"])
         with self.assertRaises(ValueError):
             refs.resolve_ref("nonsense", "x")
         with self.assertRaises(ValueError):
-            refs.resolve_ref("commit", "  ")
+            refs.resolve_ref("url", "  ")
 
     def test_a_session_ref_resolves_from_observed_sessions_even_by_prefix(self) -> None:
         sessions.op_ingest_session_event(

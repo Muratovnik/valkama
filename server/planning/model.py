@@ -177,7 +177,10 @@ def updated_fields(arguments: Mapping[str, object]) -> list[str]:
 LINK_KINDS = frozenset({"blocks", "relates-to", "discovered-from", "duplicates"})
 SYMMETRIC_LINK_KINDS = frozenset({"relates-to"})
 
-REF_KINDS = frozenset({"session", "commit", "memory", "url"})
+#: A commit is no ref: it is attached (`planning.commits`) and read as the item's `commits`.
+REF_KINDS = frozenset({"session", "memory", "url"})
+#: What a ref of the kind `commit` is refused with: where a commit goes instead.
+COMMIT_REF_HINT = "commits are attached with the commits group"
 
 # Every audited action, in one tuple, because the schema's CHECK and the code
 # that writes it drifted apart once already in the Board era.
@@ -236,6 +239,12 @@ EVENT_ACTIONS = (
     # many steps it took, `MAIN-15: 2 steps`, and on the part the task's reference.
     "split_off",
     "split_from",
+    # A commit attached to the item or detached from it, `<project_id> <hash>` as the
+    # detail, and an attachment a rewrite carried to the new commit, `<project_id>
+    # <old> -> <new>`. No schema raise: the open widens the CHECK (`widen_event_actions`).
+    "commit_attached",
+    "commit_detached",
+    "commit_rewritten",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 #: The actions that say which state an item came to stand in: `created` and
@@ -522,7 +531,12 @@ def link_kind(value: object) -> str:
 
 
 def ref_kind(value: object) -> str:
-    return enum_field(value, REF_KINDS, "work_item_ref.kind")
+    try:
+        return enum_field(value, REF_KINDS, "work_item_ref.kind")
+    except PlanningError as error:
+        if value == "commit":
+            raise PlanningError(f"{error}: {COMMIT_REF_HINT}") from None
+        raise
 
 
 def event_action(value: object) -> str:

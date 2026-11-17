@@ -196,6 +196,9 @@ def isolated_environment(home: Path) -> dict[str, str]:
     through, because those are the variables that point a child back at real
     state. `VALKAMA_PROTECTED_STORE` is the store's own guard for the one path
     it must refuse, named from the caller's profile before the move.
+    `GIT_CONFIG_GLOBAL` names the profile's own file rather than leaving Git to
+    find it through `HOME`: `git-hook install` writes the global configuration,
+    and a test of it must never reach the caller's, whatever Git takes for home.
     """
 
     real_store = Path(store.data_root()) / f"{store.DATA_PREFIX}.sqlite3"
@@ -210,6 +213,7 @@ def isolated_environment(home: Path) -> dict[str, str]:
             "USERPROFILE": str(home),
             "LOCALAPPDATA": str(home / "AppData" / "Local"),
             "APPDATA": str(home / "AppData" / "Roaming"),
+            "GIT_CONFIG_GLOBAL": str(home / ".gitconfig"),
             "VALKAMA_DB": str(store_path(home)),
             "VALKAMA_NO_TRAY": "1",
             "VALKAMA_NO_ALERTS": "1",

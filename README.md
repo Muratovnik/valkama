@@ -160,6 +160,13 @@ from the release the launcher pins, and `launcher install` keeps it in step. It
 edits no client configuration; see
 [`SERVICE.md`](SERVICE.md#install-the-skill).
 
+To have Valkama attach the commits an agent makes to the task it holds, install
+its Git hook too ([details](#the-git-commit-hook)):
+
+```bash
+python valkama.py git-hook install
+```
+
 ### 4. Check that it worked
 
 Restart the client, then ask it to list Planning spaces. In Claude Code:
@@ -251,10 +258,11 @@ python valkama.py <command> [options]
 | `launcher status [--directory DIR]` | verify launcher ownership and hashes |
 | `launcher listener status\|stop [--port 8642]` | inspect or stop only the Windows listener proven to run through the managed shim |
 | `launcher autostart enable\|disable\|status [--port 8642] [--force]` | on Windows, keep an on-demand listener on the port from login; off until enabled, see [`SERVICE.md`](SERVICE.md#holding-the-port-from-login) |
-| `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files and this launcher's autostart value |
+| `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files, this launcher's autostart value and Valkama's three Git hooks (see [The Git commit hook](#the-git-commit-hook)) |
 | `summary [--space KEY]` | a short Planning-space report, meant for session hooks |
-| `released --space KEY --repo PATH --range A..B [--json]` | list the open work items whose commit refs went into a release range, and how each was found: `hash` (the commit is in the range), `patch-id` (the same change arrived under another hash), or one of two weak matches: `changed-patch` (the commit is outside the range and not in the history before it, and a commit in the range has its subject with another patch) and `subject` (the object is gone and the ref's label has the subject of a commit in the range). A hint to check by hand when closing a release: partly released work shows too, an item with no commit ref cannot, and it changes neither the store nor the repository |
+| `released --space KEY --repo PATH --range A..B [--json]` | list the open work items whose attached commits went into a release range, and how each was found: `hash` (the commit is in the range), `patch-id` (the same change arrived under another hash), or one of two weak matches: `changed-patch` (the commit is outside the range and not in the history before it, and a commit in the range has its subject with another patch) and `subject` (the object is gone and the subject recorded for it is that of a commit in the range). Only the commits of the project registered at `--repo` are compared, and those attached with no repository by their hash. A hint to check by hand when closing a release: partly released work shows too, an item with no attached commit cannot, and it changes neither the store nor the repository |
 | `hook CLIENT EVENT` | record one client hook event from stdin without a running server; see [Client hooks](#client-hooks) |
+| `git-hook install\|status\|uninstall [--json] [--launcher-directory DIR]` | install, inspect or remove Valkama's Git commit hook in the global Git configuration; see [The Git commit hook](#the-git-commit-hook) |
 | `runtime` | print this checkout's backend and static identity |
 | `projects list\|add\|update\|remove\|bind\|check\|apply\|doctor\|rollback\|upgrade\|downgrade\|import` | manage the local project inventory and its projection; see [Project registry](#project-registry) |
 | `config [--json]` | every setting, the layer it came from, and the value in use |
@@ -485,9 +493,10 @@ python valkama.py setup
 ```
 
 It reports what this installation has — Python, Git, a verified stable launcher,
-and whether each agent client runs that launcher with its required author and
-UTF-8 environment — and prints the exact command sequence for anything missing
-or stale. It changes nothing until you add `--apply`.
+whether each agent client runs that launcher with its required author and
+UTF-8 environment, and whether [the Git commit hook](#the-git-commit-hook) is
+installed for that launcher — and prints the exact command sequence for anything
+missing or stale. It changes nothing until you add `--apply`.
 
 It never edits `~/.claude.json` or `~/.codex/config.toml`. Both clients own
 their registration through their own CLI, so this reads through `claude mcp get`
@@ -519,7 +528,7 @@ goal or stage stands in no state of its own: it shows what it derives from the w
 under it, Not started, In progress or Awaiting confirmation. The exact rules are in
 [the connection contract](docs/connection-contract.md#the-work-model).
 
-Three things make a card honest about its own progress:
+What makes a card honest about its own progress:
 
 - **A checklist with stable ids.** Agents claim a step with
   `claim_work_item_checklist_item` and complete it by id in the
@@ -527,11 +536,17 @@ Three things make a card honest about its own progress:
   two agents splitting a work item each hold their own step.
   A comment accepts an optional `checklist_item_id`: the saved comment
   keeps a quote of that step even after it is renamed or removed.
-- **Typed refs** — commit hashes, memory entry ids, urls — attached in the
-  `refs` of `apply_work_item_changes`, so the next agent reads pointers instead of doing
+- **Typed refs** — memory entry ids and urls — attached in the `refs` of
+  `apply_work_item_changes`, so the next agent reads pointers instead of doing
   archaeology. An agent's own session needs no ref: Valkama records the
   confirmed session behind every write, and the `sessions` part of
   `get_work_item` lists those sessions.
+- **Commits.** Valkama attaches each commit an agent's session makes to the
+  task it holds; the `commits` group of `apply_work_item_changes` attaches or
+  moves one by hand, as a registered project and a hash. The card lists them
+  as its `commits`, and `GET /api/commit?repository=<id>&hash=<hash>` shows
+  one from its project's repository. A commit is not a ref: `refs` refuses
+  the kind `commit`.
 - **An activity trace.** Creations, moves, claims, takeovers, releases,
   completions and link changes are all recorded with an author. The `events`
   part of `get_work_item` returns the newest of it, up to a thousand events at a
@@ -553,7 +568,7 @@ exact shapes are in
 
 Two items filed for one change — the same finding twice, or one cause found in
 two places — are folded together with `merge_work_items`. The surviving item
-takes their steps, discussion, refs, links and projects, and each merged item
+takes their steps, discussion, refs, commits, links and projects, and each merged item
 closes as its duplicate with its own history intact
 ([details](docs/connection-contract.md#merging-items-that-are-one-change)).
 
@@ -671,17 +686,31 @@ valkama projects map-items --output item-projects.json
 ```
 
 `map-items` reads a copy of the store, the registry and the registered repositories,
-and writes nothing else. For each task its commits decide first: a value
-`project@hash` names a registered project, and a bare hash belongs to the one
-registered repository holding it. Without such a commit, a label equal to the id of
-a project bound to the task's space names that project, and `--label LABEL=PROJECT`
+and writes nothing else. It reads the text of each commit ref for the commits it
+names: every hash of 7 to 64 hex digits, except the left end of a range `X..Y` and
+the hash right after `base`, `from`, `onto` or `от`, which name where work started.
+An address `…/<name>/commit/<hash>` (or GitLab's `…/<name>/-/commit/<hash>`) reads as
+`<name>@<hash>`. A hash with a registered project's id before it (`project@hash`,
+`project hash`, `project:hash`, `owner/project@hash`) belongs to that project;
+otherwise it belongs to the one registered repository holding it, and with none or
+several it is kept without a project. Another address becomes a `url` ref, and a
+text naming no hash is dropped. The file holds one record of each commit ref under
+`commit_refs`: its commits as project and hash, with the subject and time Git gave,
+the hashes it skipped, and whether it becomes a `url` ref or is dropped. Set `drop`
+on a record, or take a commit out of it, to carry less.
+
+For each task its commits decide first: it takes the registered projects of its
+commits. Without such a commit, a label equal to the id of a project bound to the
+task's space names that project, and `--label LABEL=PROJECT`
 carries another label in any space, provided its words are words of the project's
 id. A task with neither keeps its space's project. A carried label leaves the task,
 and the project's id still finds it in a search. The command prints the tasks it
 counted by space and by source, each task whose label names another project than
-its commits, and each task holding the label of a project of another space: read
-the file before migrating, and add a project where it is right. It refuses a file
-that already exists.
+its commits, and each task holding the label of a project of another space. Under
+`commit_refs` it prints the commits by project and those without one, the refs that
+become `url` refs, those dropped and those that skipped a hash, and each commit two
+refs of one item label differently. Read the file before migrating, and add a
+project where it is right. It refuses a file that already exists.
 
 Then stop every process that holds the store -- the listener and every agent
 client, since each one runs its own server -- and run:
@@ -693,15 +722,23 @@ valkama migrate work-model --item-projects item-projects.json
 It migrates the configured store (`store` or `VALKAMA_DB`). First it checks, only
 reading, that the registry is format 4 and binds each space's project to it, that no
 two spaces share a name, and that the file belongs to this store as it is now and
-names registered projects only; a store holding work items needs the file. A
-refusal names what to run, and nothing is written. Before its first write
-it takes a verified snapshot labelled `pre3.0` in `backups/` beside the store, with
+names registered projects only, holds a well-formed record of every commit ref, and
+derives a task's project from commits only when it carries one of them; a store
+holding work items needs the file. A refusal names what to run, and nothing is
+written. Before its first write it takes a verified snapshot labelled `pre3.0` in `backups/` beside the store, with
 the pictures in a `.images` folder beside it, and then runs every step and checks
 every postcondition in one transaction: a step that fails or a postcondition that
 does not hold rolls all of it back and leaves the store at 17. The command prints a
 JSON report with the time and result of each step and postcondition and of the
 snapshot, and exits 1 when the run failed, naming what failed. A second run finds
 the store current and changes nothing.
+
+Among its steps, the migration attaches each commit a record carries to the ref's
+item, marked as carried over, and adds the `url` refs; several refs of one item
+naming one commit give one attachment, with the label, author and time of the first
+of them that has a label. A label gets the ref's text after it when that text is an
+address or a note rather than a hash. Every commit ref then leaves the store, and
+the refs table is rebuilt to refuse the kind `commit`, as a fresh store's does.
 
 `--dry-run` migrates a copy instead and only reads the store: `--into <directory>`
 keeps the copy and its snapshot there, and without it the copy goes when the run
@@ -924,11 +961,11 @@ of an operating-system error.
 
 `GET /api/documents/resolve?space=<id>&path=<p>&path=<p>...` takes up to 64 paths
 and only asks the file system whether each exists; it opens no file. `space` is
-the planning space's exact identity, the same value `GET /api/ref` takes, and is
-only the base of a relative path. Inside a document the page shows, the base is
-that document's project instead: `project=<id>` in place of `space`, the id
-`resolve` answered with. Its root is the one the registry gives that id, a
-project registered inside it is asked after it, as from a space, and the boundary
+the planning space's exact identity and only the base of a relative path. Inside
+a document the page shows, the base is that document's project instead:
+`project=<id>` in place of `space`, the id `resolve` answered with. Its root is
+the one the registry gives that id, a project registered inside it is asked
+after it, as from a space, and the boundary
 stays every registered root. The page has already read a link in the document
 from the document's folder into a path from the project's root, so no folder is
 sent, and it adds `exact=1` for those links: a project registered inside the root
@@ -1200,6 +1237,57 @@ again, or were refused by reason, and what share of the usage segments, and of
 their seconds, names the organization they ran for. The fields, the spool format, the session
 rules and the archive's retention are in
 [the client hook contract](docs/hook-contract.md).
+
+## The Git commit hook
+
+Valkama attaches each commit an agent's shell makes to the task that agent's
+session holds. It learns of the commit from Git hooks it keeps in the global Git
+configuration, the file `git config --global` writes:
+
+```
+valkama git-hook install
+valkama git-hook status
+valkama git-hook uninstall
+```
+
+`install` writes three hooks, `valkama-commit` for `post-commit`,
+`valkama-rewrite` for `post-rewrite` and `valkama-merge` for `post-merge`, each
+as `hook.<name>.command` and `hook.<name>.event`. It needs the stable launcher
+and refuses without it: each command runs the launcher's shim on the
+interpreter its manifest records, so the hooks follow the pinned release.
+`launcher install` rewrites the command of each hook that is there; if that
+fails, its answer names the failure in `git_hook_error` and the launcher stays
+installed. Nothing else in the file is read for a decision or changed: not
+`core.hooksPath`, not the hook directory, not another program's hooks.
+`uninstall` removes the three sections whole, which leaves the file as it was
+before the install when nothing else changed it. `launcher uninstall` takes the
+same three out before it removes the launcher, so they never run a shim that is
+gone; if that removal fails, its answer names the failure in `git_hook_error`
+and the launcher is removed all the same.
+
+Git runs these hooks in addition to the hook directory's scripts. Each command
+first checks that the environment names a Claude Code or Codex session, so a
+commit made outside one — yours, a build's — ends in the shell Git started and
+never starts Python. Inside a session, a commit to a repository registered in
+the [project registry](#project-registry) leaves one small JSON record: the
+repository and its project, each commit's hash, parents, subject and time, the
+old and new hashes of an amend or a rebase, and the client's session ids;
+never a file's content or a diff. The record goes to `commits/` beside the
+store, or to `valkama/commits/` in the repository's Git directory when the
+store's directory takes no file. The client's next hook takes it into the store
+and deletes it; a record no hook took for an hour is taken by the planning
+sweep. The hook prints nothing and always exits 0. To switch one hook off in
+one repository: `git config hook.valkama-commit.enabled false`.
+
+`status` reads each hook as `installed`, `missing`, `stale` (a command or event
+other than the current launcher's), `disabled` (`hook.<name>.enabled` is false
+in the global file) or `unsupported` (Git does not list it in `git hook list`:
+this Git runs no hooks from its configuration), and counts the records waiting
+with the directories they wait in; `--json` gives the fields `global_file`,
+`hooks`, `records` and `record_directories`. `doctor` reports the hooks and the
+records that waited for over an hour or were set aside in `commits/rejected/`,
+and `setup` offers the install. Which task a commit goes to, and what the agent
+is told, is in [the client hook contract](docs/hook-contract.md#commits).
 
 ## The desktop app and the tray
 

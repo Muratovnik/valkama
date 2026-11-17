@@ -28,6 +28,7 @@ import shutil
 import sys
 
 from .. import launcher, processes
+from . import git_hook
 
 #: The source entry point the managed launcher binds to. Client registrations
 #: name only the stable launcher command.
@@ -224,6 +225,46 @@ def _launcher_finding() -> tuple[dict, dict[str, object]]:
             f"{state.get('detail') or 'launcher is not managed by Valkama'}",
         ),
         state,
+    )
+
+
+def _git_hook_finding() -> dict:
+    """Valkama's hooks in the global Git configuration, offered on their own.
+
+    The install runs after the launcher's, which `--apply` runs first, and refuses
+    by itself while no launcher is installed. A hook disabled in the global file,
+    or a Git that runs none from its configuration, gets no command: installing
+    again changes neither.
+    """
+
+    title = "Git commit hook"
+    install = [sys.executable, entry_point_path(), "git-hook", "install"]
+    try:
+        reading = git_hook.hook_states()
+    except git_hook.GitHookError as error:
+        return _finding("git-hook", title, "unknown", str(error))
+    state = git_hook.overall(reading["hooks"])
+    where = reading["global_file"]
+    names = ", ".join(entry["name"] for entry in reading["hooks"] if entry["state"] == state)
+    if state == "installed":
+        return _finding("git-hook", title, "ok", f"Git runs {names} from {where}")
+    if state == "missing":
+        detail = (
+            f"{names} not in {where}: Valkama does not attach the commits an agent's"
+            " shell makes to the task it holds"
+        )
+        return _finding("git-hook", title, "warn", detail, commands=[install])
+    if state == "stale":
+        detail = f"{names} in {where} run another launcher than the one installed"
+        return _finding("git-hook", title, "warn", detail, commands=[install])
+    if state == "disabled":
+        detail = f"{names} switched off by hook.<name>.enabled = false in {where}"
+        return _finding("git-hook", title, "warn", detail)
+    return _finding(
+        "git-hook",
+        title,
+        "warn",
+        f"this Git does not list {names} from {where}: it runs no hooks from its configuration",
     )
 
 
@@ -437,6 +478,7 @@ def inspect(*, runner=None) -> dict:
             _codex_registration,
             runner=runner,
         ),
+        _git_hook_finding(),
     ]
     counts = {
         status: sum(1 for item in findings if item["status"] == status) for status in STATUSES

@@ -43,7 +43,9 @@ is complete on its own.
   scope `space` and the module levels — and for reading an item by parts — the
   arguments and answer of `get_work_item`, `section` among them, the `verbose`
   answer of a write, the `work_item` of `claim_ready_work_item`, and the
-  handshake text about reading — as
+  handshake text about reading — and for commits — the ref kind `commit`,
+  commits among an item's refs, `kind=commit` and `space` on `GET /api/ref`,
+  and the handshake text about commits — as
   `docs/decisions/0014-work-model-breaks-the-planning-schemas.md` records. It
   covers nothing else and no later change. Preserve existing
   local data through a verified backup, one forward-only migration, and a

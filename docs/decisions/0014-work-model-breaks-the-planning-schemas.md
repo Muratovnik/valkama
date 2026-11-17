@@ -116,6 +116,14 @@ and no compatibility layer.
      cancelled state, is refused with `acceptance_question`, which `force` does
      not carry. A close, a delete or a merge that brings work back answers
      with `returned`;
+   - a commit is attached to an item rather than written as a ref: the `refs`
+     group and `POST /api/planning/work-item/ref` refuse the kind `commit`,
+     naming the `commits` group, an item record's `refs` holds no commit, and
+     `GET /api/ref` refuses `kind=commit` and no longer reads `space`, which
+     only chose the repositories a commit was looked for in;
+     `GET /api/commit?repository=<id>&hash=<hash>` shows an attached commit
+     from its project's repository instead, and the handshake says that
+     Valkama attaches the commits a session makes;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -198,6 +206,9 @@ and no compatibility layer.
 | moving accepted work under a goal or stage in triage or deferred | accept that goal or stage first, or move the item out |
 | `transition` into a deferred state | `defer` with `until` and `reason`; the work comes back by itself |
 | an agent claiming or moving work the owner is asked to take up again | wait for the owner's answer; only a cancel moves it before then |
+| `refs: [{"kind": "commit", "value": "…"}]` | `commits: [{"repository": "<project id>", "hash": "…"}]` |
+| a card's commits among its `refs` | its `commits` |
+| `GET /api/ref?kind=commit&value=…&space=…` | `GET /api/commit?repository=<project id>&hash=…` |
 
 ## Consequences
 

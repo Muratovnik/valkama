@@ -318,10 +318,6 @@ class WorkModelPreconditionError(RuntimeError):
         self.report = report
 
 
-LINK_KINDS = ("blocks", "blocked_by", "discovered_from")
-REF_KINDS = ("session", "commit", "memory", "url")
-
-
 DATA_ROOT = ".valkama"
 DATA_PREFIX = "valkama"
 

@@ -38,6 +38,9 @@ export const EVENT_ACTIONS = [
   'checklist_removed',
   'split_off',
   'split_from',
+  'commit_attached',
+  'commit_detached',
+  'commit_rewritten',
 ] as const
 
 /** The longest detail any event but `labels_changed` carries. */

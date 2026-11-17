@@ -148,19 +148,43 @@ describe('the server fixtures', () => {
     })
   })
 
-  it('give every quota code the doctor reports a title and a detail in each language', () => {
+  it('give every quota and commit-hook code the doctor reports a title and a detail in each language', () => {
     // Read from the server's source, so a code the server adds fails here until it has words.
-    const { quota } = read('doctor-vocabulary.json') as { quota: string[] }
+    const { commit, quota } = read('doctor-vocabulary.json') as {
+      commit: string[]
+      quota: string[]
+    }
     expect(quota.length).toBeGreaterThan(0)
+    expect(commit.length).toBeGreaterThan(0)
     const missing = (['en', 'ru'] as const).flatMap((locale) => {
       const findings: Record<string, { detail?: unknown; title?: unknown } | undefined> =
         messages[locale].health.finding
-      return quota
+      return [...quota, ...commit]
         .filter((code) => {
           const words = findings[code]
           return typeof words?.title !== 'string' || typeof words.detail !== 'string'
         })
         .map((code) => `${locale}: ${code}`)
+    })
+    expect(missing).toEqual([])
+  })
+
+  it('name in both languages each count a commit-records code reports', () => {
+    const counted: Record<string, string[]> = {
+      'commit-records-current': ['{waiting}'],
+      'commit-records-waiting': ['{count}', '{oldest}'],
+      'commit-records-rejected': ['{rejected}', '{paths}'],
+      'commit-records-waiting-rejected': ['{count}', '{oldest}', '{rejected}', '{paths}'],
+    }
+    const missing = (['en', 'ru'] as const).flatMap((locale) => {
+      const findings: Record<string, { detail?: unknown } | undefined> =
+        messages[locale].health.finding
+      return Object.entries(counted).flatMap(([code, placeholders]) => {
+        const detail = String(findings[code]?.detail)
+        return placeholders
+          .filter((placeholder) => !detail.includes(placeholder))
+          .map((placeholder) => `${locale}: ${code} lacks ${placeholder}`)
+      })
     })
     expect(missing).toEqual([])
   })

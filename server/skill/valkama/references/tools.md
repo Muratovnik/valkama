@@ -92,8 +92,8 @@ await confirmation: check each and complete it, as the skill's Close section say
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
-| `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
+| `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `commits`, `links`, `projects`) |
 
 `claim_ready_work_item` takes the first workable task in the order of work —
 urgent, started, a goal or stage under way, priority, age — which a list row
@@ -223,7 +223,7 @@ and `moved`, each item that took steps along (`{to, count}`).
 
 `apply_work_item_changes` takes `id`, `author`, `expected_revision`, `verbose`
 and any of these groups, applied in this order. It is the one tool that edits
-an item's fields, sets and ticks its steps, attaches refs, links it, writes and
+an item's fields, sets and ticks its steps, attaches refs and commits, links it, writes and
 resolves its discussion, records its summary and moves its state:
 
 | Group | Shape | Does |
@@ -234,7 +234,8 @@ resolves its discussion, records its summary and moves its state:
 | `convert` | `{"to": "stage", "leftover": {"title": "…", "steps": ["…"]}, "force": false}`, not with `transition`, `defer` or `move_out` | turns a task into a goal or stage, or one with nothing under it into a task ([work model](work-model.md#goals-and-stages)) |
 | `checklist` | `["…", {"text": "…", "done": true}]`, or `{"items": [...], "force": true}` to carry a refusal through | sets the steps |
 | `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | completes or reopens steps |
-| `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | attaches pointers |
+| `refs` | `[{"kind": "memory", "value": "…", "label": "…"}]` | attaches pointers: a `memory` record id or a `url` |
+| `commits` | `[{"repository": "alpha", "hash": "3f2a9c1", "label": "…", "remove": false}]` | attaches commits by hand, or detaches them |
 | `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | adds or removes links |
 | `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…", "list": {"label": "…", "options": [...]}, "mentions": ["MAIN-14"]}` | writes one comment |
 | `comments` | `[{"body": "…"}, {"body": "…", "reply_to": 12}]`, not with `comment` | writes comments, in order |
@@ -257,12 +258,25 @@ entry of `applied.comments` carry `mentions` when they named other items. A refu
 writes nothing and answers with the step:
 `{"error": {"code": "…", "message": "transition: …", "step": {"group": "transition", "index": 0}}}`.
 
+Valkama attaches each commit your session makes to the task you hold, and its
+hook answer says where it went; `commits` is for the rest. When the answer names
+several tasks, attach the commit to the right one with the call the answer gives.
+Send `remove: true` on the item that has a commit by mistake, then attach it
+where it belongs. `repository` is the registered project's id and `hash` a whole
+hash or its first 7 or more hex digits, which the project's repository expands
+on this machine; without its root here, only a whole hash is taken. A goal or
+stage takes a commit too; a task also gains the commit's project, and loses it
+again with its last commit unless it names the project. A refusal starts with
+`[commit]` and says what to send: the registered ids for an unknown project, more
+digits for an ambiguous start, the full hash where there is no root, and that the
+item has no such commit for a `remove`. A commit is never a ref: `refs` refuses
+the kind `commit` and names the `commits` group.
+
 A typical close, in one call:
 
 ```json
 {"id": "MAIN-12", "expected_revision": 7,
  "checklist_ticks": [{"item_id": "…"}],
- "refs": [{"kind": "commit", "value": "3f2a9c1"}],
  "summary": {"done": "Parser accepts empty input; regression test added.",
              "next": "Nothing; MAIN-14 covers the CLI message.",
              "friction": "none"},
@@ -303,9 +317,10 @@ owner. Read it with the item's questions, where it carries `comment_id`.
 ## Reading an item
 
 `get_work_item` takes `id` and reads an item by parts. `parts` names them, one
-name or a list: `card`, `comments`, `events`, `links`, `refs`, `questions`,
-`mentions`, `sessions`, `images`, `subscribers`, `claim` and `sections`, and on a
-goal or stage `participants`, and `confirmation` while it awaits confirmation. The
+name or a list: `card`, `comments`, `events`, `links`, `refs`, `commits`,
+`questions`, `mentions`, `sessions`, `images`, `subscribers`, `claim` and
+`sections`, and on a goal or stage `participants`, and `confirmation` while it
+awaits confirmation. The
 answer carries `reference`, `revision` and the fields of each part named, the
 card's among them when `card` is. Without `parts` it reads the card, and a mode
 without `parts` reads only the part it cuts: `unresolved`, `thread` and
@@ -339,6 +354,7 @@ is left out.
 | `mentions` | `count` | `mentions`, the 50 newest texts on other items that named this one, oldest first, each with `in` (`comment`, `report`, `summary` or `description`), `from`, `quote`, `author`, `by_person` and `at`; `mentions_total` |
 | `claim` | `count`, 1 while it is held | `claim`, the lease: `holder`, `state`, `session_id`, `agent_id`, `source`, `acquired_at`, `last_seen` and `expires_at`, the time it lapses unless the session shows a sign of life; null while nobody holds it |
 | `sections` | `count`, for a description longer than 2,000 characters | `sections`, as below |
+| `commits` | `count`, the commits attached now | `commits`, the newest first, each with `repository`, `display_name`, `hash`, `subject`, `committed_at`, `session`, `agent`, `attached_by` (`server`, `manual` or `migrated`) and `label` |
 | `links`, `refs`, `sessions`, `images`, `subscribers` | `count` | the list of that name |
 | `participants` | `count`, on a goal or stage | `participants`, the live sessions working on it: each `session`, `client`, `label`, `holds` (the tasks under it it holds), `follows` and `last_seen` |
 | `confirmation` | `count`, the items it lists, only while a goal or stage awaits confirmation | `confirmation`: `since`, `steps` (how many it has; 0: check it against its description), `cancelled` and `moved_out` (each `reference` and `reason`), `asked` (the owner's question, once asked) and `left_for_next_session` |
@@ -396,7 +412,8 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 | any state | a transition the workflow allows from where the item stands |
 | review, blocked, completed or cancelled, for an item being created | refused (`new_item`): create it, then move it there; `force` does not carry this |
 
-A move to review without a session or commit ref warns but is not refused.
+A move to review warns, and is not refused, when the item has no `session` ref,
+no attached commit and no write a confirmed session made.
 An agent's move to a completed or cancelled state is also refused with
 `person_spoke` while a person acted on the item since an agent last wrote to it;
 the refusal names what they did. A `comment` sent in the same
@@ -404,6 +421,17 @@ the refusal names what they did. A `comment` sent in the same
 item or takes it out of review is refused with `question` while a question to the
 owner is open on it, `force` or not; cancelling is not.
 `force: true` carries a refusal through and records an `overridden` event.
+
+## Closing a release
+
+Before closing the release's goal, run
+`valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It
+lists the open items whose attached commits went into that range, including a
+change that arrived under another hash, and it changes nothing. `--repo` is the
+checkout of a registered project: its attached commits are compared, and those
+attached with no repository by their hash. Check each item and close what is
+finished: partly released work shows as well, a `changed-patch` or `subject`
+match is weak, and an item with no attached commit cannot show.
 
 ## When a call is refused
 
@@ -646,8 +674,8 @@ Merge before handing the work to anyone.
 `merge_work_items` takes `id` (the survivor), `items` (1 to 20), and optionally
 `reason`, `force`, `expected_revision` (the survivor's) and `author`. What
 moves: steps (their ids, ticks and step claims kept), discussion threads whole,
-questions with their replies, refs the survivor lacks, links in their own
-direction, and projects (a project more than one of them names keeps the
+questions with their replies, refs and attached commits the survivor lacks,
+links in their own direction, and projects (a project more than one of them names keeps the
 strongest source: named, then commits, then migrated); `moved.comments` counts
 the comment rows, replies included. A list goes with the comment it stands
 under. What stays on a merged item: its history, reports with their threads and

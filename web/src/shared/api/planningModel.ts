@@ -7,6 +7,7 @@
  * lane would make Kanban the model again.
  */
 
+import { commitSchema } from '@/shared/api/commitModel.ts'
 import { confirmationSchema } from '@/shared/api/confirmationModel.ts'
 import {
   blankable,
@@ -429,6 +430,8 @@ const workItemSchema = recordObject({
   // The server counts neither, so neither does the card.
   links: z.array(linkSchema),
   refs: z.array(refSchema),
+  // Every full record carries them; optional while no view reads them.
+  commits: z.array(commitSchema).optional(),
   // Unbounded on purpose: the server sends the whole record, however long the
   // discussion and the history grew, and a card refused for its length is lost.
   // Each entry stays bounded.

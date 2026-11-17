@@ -21,6 +21,7 @@ import re
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 
+from ..projects import project_registry
 from . import (
     acknowledgements,
     calls,
@@ -870,6 +871,7 @@ def present(
     record["summary_comment_id"] = row["summary_comment_id"]
     record["links"] = links(conn, identity)
     record["refs"] = refs(conn, identity)
+    record["commits"] = commits(conn, identity)
     record["comments"], shown_threads, more = _cut_comments(
         conn,
         identity,
@@ -1079,6 +1081,7 @@ PARTS = (
     "events",
     "links",
     "refs",
+    "commits",
     "questions",
     "mentions",
     "sessions",
@@ -1306,6 +1309,8 @@ def part_counts(
         " (SELECT COUNT(*) FROM work_item_links WHERE from_id = :id)"
         " + (SELECT COUNT(*) FROM work_item_links WHERE to_id = :id),"
         " (SELECT COUNT(*) FROM work_item_refs WHERE work_item_id = :id),"
+        " (SELECT COUNT(*) FROM work_item_commits a JOIN commits c"
+        "  ON c.commit_id = a.commit_id WHERE a.work_item_id = :id AND c.rewritten_to IS NULL),"
         " (SELECT COUNT(*) FROM work_item_events WHERE work_item_id = :id"
         "  AND action = 'mentioned'),"
         " (SELECT COUNT(DISTINCT session_id)" + _SESSION_CALLS + "),"
@@ -1322,6 +1327,7 @@ def part_counts(
         detail,
         linked,
         pointed,
+        attached,
         named,
         writers,
         pictures,
@@ -1336,6 +1342,7 @@ def part_counts(
         "events": {"count": events, "chars": detail},
         "links": {"count": linked},
         "refs": {"count": pointed},
+        "commits": {"count": attached},
         "mentions": {"count": named},
         "sessions": {"count": writers},
         "images": {"count": pictures},
@@ -1445,6 +1452,47 @@ def refs(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
         for ref in conn.execute(
             "SELECT * FROM work_item_refs WHERE work_item_id = ? ORDER BY id", (work_item_id,)
         )
+    ]
+
+
+def commits(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
+    """The commits attached to an item now, the newest attachment first.
+
+    A commit a rewrite replaced is not among them: its attachments moved to the
+    commit that replaced it. `display_name` is the registry's when it records the
+    project, read only when there is a commit to name; `repository` and
+    `display_name` are null for a commit whose repository is not known.
+    """
+
+    rows = conn.execute(
+        "SELECT c.project_id, c.hash, c.subject, c.committed_at, c.session_id, c.agent_id,"
+        " a.attached_by, a.label FROM work_item_commits a"
+        " JOIN commits c ON c.commit_id = a.commit_id"
+        " WHERE a.work_item_id = ? AND c.rewritten_to IS NULL"
+        " ORDER BY a.created_at DESC, a.commit_id DESC",
+        (work_item_id,),
+    ).fetchall()
+    names: dict[str, str] = {}
+    if any(row[0] is not None for row in rows):
+        listing = project_registry.read_registry()
+        if listing["status"] == "available":
+            names = {
+                str(entry["project_id"]): str(entry["display_name"])
+                for entry in listing["projects"]
+            }
+    return [
+        {
+            "repository": row[0],
+            "display_name": None if row[0] is None else names.get(str(row[0])),
+            "hash": row[1],
+            "subject": row[2],
+            "committed_at": row[3],
+            "session": row[4],
+            "agent": row[5],
+            "attached_by": row[6],
+            "label": row[7],
+        }
+        for row in rows
     ]
 
 
