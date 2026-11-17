@@ -12,24 +12,31 @@ own refusal hands over, not to the module that builds both.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import sqlite3
 import tempfile
 import unittest
+from datetime import UTC, datetime
 from unittest import mock
 
 from server import store
 from server.planning import (
     api,
     calls,
+    decisions,
+    leases,
     model,
+    participation,
     pending,
     person_events,
     questions,
     request_model,
     requests,
     service,
+    sweep,
+    tools,
 )
 
 AGENT = calls.Identity(calls.CONFIRMED, calls.CLAUDE_PAIR, session_id="session-a")
@@ -75,12 +82,26 @@ class Harness(unittest.TestCase):
         parent: str | None = None,
         by: calls.Identity = AGENT,
     ) -> str:
-        """An item filed by `by`: an agent's lies in triage, the owner's is accepted."""
+        """An item filed by `by`: an agent's lies in triage, the owner's is accepted.
 
-        with calls.bind(by, "create_work_item"):
-            created = service.create_work_item(
-                self.conn, space="ALPHA", title=title, kind=kind, parent=parent
-            )
+        An agent's goal with no parent is filed outside any call, so it lies in triage
+        with nothing asked about it, for the action a test asks on it: in a call, the
+        goal an agent proposes meets the owner's setting (`ProposedGoalTests`).
+        """
+
+        create = functools.partial(
+            service.create_work_item,
+            self.conn,
+            space="ALPHA",
+            title=title,
+            kind=kind,
+            parent=parent,
+        )
+        if kind == "goal" and parent is None and by.source not in (calls.BROWSER, calls.VALKAMA):
+            created = create()
+        else:
+            with calls.bind(by, "create_work_item"):
+                created = create()
         self.conn.commit()
         return str(created["reference"])
 
@@ -112,7 +133,9 @@ class Harness(unittest.TestCase):
         self.conn.commit()
         return waiting
 
-    def answer(self, question: str, choice: str, by: calls.Identity | None = None) -> dict:
+    def answer(
+        self, question: str, choice: str, by: calls.Identity | None = None, **more: object
+    ) -> dict:
         row = self.request(question)
         try:
             with calls.bind(by or calls.browser(), "/api/planning/request/resolve"):
@@ -121,7 +144,7 @@ class Harness(unittest.TestCase):
                     question,
                     status="answered",
                     expected_revision=int(row["revision"]),
-                    answers={"answer": choice},
+                    answers={"answer": choice, **more},
                     author="user",
                 )
         except BaseException:
@@ -211,9 +234,8 @@ class Harness(unittest.TestCase):
 
 class AskTests(Harness):
     def test_an_agents_action_waits_on_its_question_and_its_session_follows(self) -> None:
-        # Filed by another session, which follows what it filed.
         goal = self.filed("A goal of the agent's own", kind="goal", by=OTHER)
-        self.assertEqual([("session-b", "", 1)], self.followers(goal))
+        self.assertEqual([], self.followers(goal))
         waiting = self.ask(goal, by=SUBAGENT)
 
         question = self.request(waiting.question)
@@ -240,7 +262,7 @@ class AskTests(Harness):
             ("proposed_goal", None, None), (stored["point"], stored["outcome"], stored["ended_at"])
         )
         # The session's own conversation follows the goal, though its subagent asked.
-        self.assertEqual([("session-a", "", 1), ("session-b", "", 1)], self.followers(goal))
+        self.assertEqual([("session-a", "", 1)], self.followers(goal))
         self.assertEqual(
             ["request_created"],
             [
@@ -686,6 +708,266 @@ class EndTests(Harness):
                 f"SELECT COUNT(*) FROM {table} WHERE work_item_id = ?", (identity,)
             ).fetchone()[0]
             self.assertEqual(0, found, table)
+
+
+#: The clock these scenarios run at, the day a goal is put off until, and a moment
+#: after it has come, when the sweep brings the goal back.
+NOW = datetime(2026, 11, 17, 9, 30, tzinfo=UTC)
+UNTIL = "2026-11-18"
+CAME = datetime(2026, 11, 18, 0, 0, 1, tzinfo=UTC)
+
+
+class ProposedGoalTests(Harness):
+    """A goal an agent files with no parent, and a goal that comes back from being put
+    off: by the owner's setting of its space the agent's decision stands, as the basis
+    `agent` marked in the summary of decisions, or the owner is asked the question
+    `goal`, whose answers `do`, `later` and `drop` take it on, put it off or cancel it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        clock = mock.patch.object(leases, "utc_now", lambda: NOW)
+        clock.start()
+        self.addCleanup(clock.stop)
+        self.space = service.space_identity(self.conn, "ALPHA")
+
+    def at(self, name: str) -> None:
+        participation.write_set(self.conn, self.space, name)
+        self.conn.commit()
+
+    def propose(self, title: str = "A goal of the agent's own", **arguments: object) -> dict:
+        """The agent files a goal with no parent through its tool, and the answer."""
+
+        try:
+            with calls.bind(AGENT, "create_work_item"):
+                answer = tools.OPS["create_work_item"](
+                    self.conn, {"space": "ALPHA", "title": title, "kind": "goal", **arguments}
+                )
+        except BaseException:
+            self.conn.rollback()
+            raise
+        self.conn.commit()
+        assert isinstance(answer, dict)
+        return answer
+
+    def card(self, reference: str) -> dict:
+        return service.get_work_item(self.conn, reference)
+
+    def decided(self) -> list[tuple[str, str, str]]:
+        return [
+            (entry["point"], entry["item"]["reference"], entry["what"])
+            for entry in decisions.page(self.conn, space=self.space)["items"]
+        ]
+
+    def waiting_on(self, reference: str) -> list[pending.Action]:
+        return pending.open_on(self.conn, self.id(reference))
+
+    def owners_list(self) -> list[str]:
+        """The questions waiting for the owner's answer, everywhere."""
+
+        return [str(row["request_id"]) for row in questions.open_rows(self.conn)]
+
+    # -- the goal an agent proposes ---------------------------------------------------
+
+    def test_an_agent_goal_is_accepted_when_the_agent_decides(self) -> None:
+        self.at(participation.MINIMAL)
+        answer = self.propose()
+        card = self.card("ALPHA-1")
+        self.assertEqual(
+            (None, "not_started", "agent"),
+            (card["state"], card["container_state"], card["acceptance"]["basis"]),
+        )
+        self.assertNotIn("waits_for_owner", answer)
+        self.assertEqual([], self.waiting_on("ALPHA-1"))
+        self.assertEqual([], self.owners_list())
+        self.assertEqual([("proposed_goal", "ALPHA-1", "accepted ALPHA-1")], self.decided())
+        # The mark stands on the event that recorded the acceptance.
+        [entry] = decisions.page(self.conn, space=self.space)["items"]
+        marked = self.conn.execute(
+            "SELECT action, detail FROM work_item_events WHERE id = ?", (entry["event_id"],)
+        ).fetchone()
+        self.assertEqual(("accepted", "agent"), tuple(marked))
+
+    def test_an_agent_goal_waits_for_the_owner(self) -> None:
+        answer = self.propose()
+        card = self.card("ALPHA-1")
+        self.assertEqual(("triage", None), (card["state"]["category"], card["acceptance"]))
+        [action] = self.waiting_on("ALPHA-1")
+        waits = answer["waits_for_owner"]
+        self.assertEqual(
+            {
+                "action": action.id,
+                "point": "proposed_goal",
+                "question": waits["question"],
+                "what": "accepted ALPHA-1",
+            },
+            waits,
+        )
+        question = self.request(waits["question"])
+        self.assertEqual(
+            ("goal", action.id, None, "pending"),
+            (question["purpose"], question["action_id"], question["addressee"], question["status"]),
+        )
+        self.assertEqual([waits["question"]], self.owners_list())
+        [choice, until, cancels] = json.loads(question["fields_json"])
+        self.assertEqual(
+            [("do", True), ("later", False), ("drop", False)],
+            [(option["id"], bool(option.get("recommended"))) for option in choice["options"]],
+        )
+        self.assertEqual(
+            [("until", "later"), ("cancels", "drop")],
+            [(field["id"], field["under"]["option"]) for field in (until, cancels)],
+        )
+        self.assertEqual([("session-a", "", 1)], self.followers("ALPHA-1"))
+        self.assertEqual([], self.decided())
+
+    def test_an_assignment_passes_and_is_summarised(self) -> None:
+        self.at(participation.MAXIMAL)
+        answer = self.propose(acceptance="assignment")
+        card = self.card("ALPHA-1")
+        self.assertEqual(
+            ("not_started", "assignment"), (card["container_state"], card["acceptance"]["basis"])
+        )
+        self.assertNotIn("waits_for_owner", answer)
+        self.assertEqual(([], []), (self.waiting_on("ALPHA-1"), self.owners_list()))
+        self.assertEqual([("assignment", "ALPHA-1", "accepted ALPHA-1")], self.decided())
+
+    def test_the_owners_own_goal_and_a_stage_meet_no_gate(self) -> None:
+        # The owner's word, and work under a goal, are no goal an agent proposes.
+        goal = self.filed("The owner's goal", kind="goal", by=calls.browser())
+        self.at(participation.MANUAL)
+        with calls.bind(AGENT, "create_work_item"):
+            stage = service.create_work_item(
+                self.conn, space="ALPHA", title="A stage", kind="stage", parent=goal
+            )
+        self.conn.commit()
+        self.assertEqual("owner", self.card(goal)["acceptance"]["basis"])
+        self.assertEqual("inherited", stage["acceptance"]["basis"])
+        self.assertNotIn("waits_for_owner", stage)
+        self.assertEqual([], self.owners_list())
+
+    # -- the owner's answers ----------------------------------------------------------
+
+    def proposed_with_work(self) -> tuple[str, str]:
+        """A goal waiting for the owner and a task the agent filed under it meanwhile."""
+
+        waits = self.propose()["waits_for_owner"]
+        task = self.filed("Work under the proposed goal", parent="ALPHA-1")
+        self.assertEqual("triage", self.card(task)["state"]["category"])
+        return waits["question"], task
+
+    def test_do_accepts_the_goal_and_tells_the_asker(self) -> None:
+        question, task = self.proposed_with_work()
+        record = self.answer(question, "do")
+        self.assertEqual("carried_out", record["carried_out"])
+        goal = self.card("ALPHA-1")
+        self.assertEqual(
+            (None, "not_started", "owner"),
+            (goal["state"], goal["container_state"], goal["acceptance"]["basis"]),
+        )
+        under = self.card(task)
+        self.assertEqual(
+            ("ready", "inherited"), (under["state"]["category"], under["acceptance"]["basis"])
+        )
+        self.assertEqual("carried_out", self.action(record["action"]["id"])["outcome"])
+        # The asker follows the goal and hears the answer and the acceptance on it.
+        told = {
+            entry["kind"]
+            for entry in person_events.since_last_agent_write(self.conn, self.id("ALPHA-1"))
+        }
+        self.assertLessEqual({"question_answered", "status"}, told)
+        self.assertIn(("session-a", "", 1), self.followers("ALPHA-1"))
+        # The owner took it on: nothing goes into the summary of agent decisions.
+        self.assertEqual([], self.decided())
+
+    def test_drop_cancels_the_goal_by_its_list(self) -> None:
+        question, task = self.proposed_with_work()
+        before = self.counts()
+        with self.assertRaises(model.PlanningError) as caught:
+            self.answer(question, "drop")
+        status, body = api.error_response(caught.exception)
+        self.assertEqual((409, "cancel_list"), (status, body["error"]["code"]))
+        self.assertEqual([task], [entry["reference"] for entry in body["error"]["cancels"]])
+        self.assertEqual(before, self.counts())
+        self.assertEqual("pending", self.request(question)["status"])
+        token = requests.get(self.conn, question)["action"]["cancel_list"]["list_token"]
+        self.assertEqual(body["error"]["list_token"], token)
+        record = self.answer(question, "drop", cancels=token)
+        self.assertEqual("declined", record["carried_out"])
+        self.assertEqual(
+            ["cancelled", "cancelled"],
+            [self.card(reference)["state"]["category"] for reference in ("ALPHA-1", task)],
+        )
+
+    def test_later_puts_the_goal_off(self) -> None:
+        question, _task = self.proposed_with_work()
+        record = self.answer(question, "later", until=UNTIL)
+        self.assertEqual("declined", record["carried_out"])
+        goal = self.card("ALPHA-1")
+        self.assertEqual(("deferred", None), (goal["state"]["category"], goal["acceptance"]))
+        self.assertTrue(goal["deferred"]["until"].startswith(UNTIL), goal["deferred"])
+
+    # -- the goal that comes back -----------------------------------------------------
+
+    def returned_goal(self) -> tuple[str, str]:
+        """An accepted goal with a task under it that B works on, put off by A and
+        brought back by the sweep after its day: the goal and the task."""
+
+        goal = self.filed("A goal put off", kind="goal", by=calls.browser())
+        task = self.filed("Work going on under it", parent=goal, by=calls.browser())
+        self.person("/api/planning/work-item/apply", id=task, checklist=["X"])
+        with calls.bind(OTHER, "claim_work_item"):
+            service.claim_work_item(self.conn, task, author="claude")
+        with calls.bind(AGENT, "apply_work_item_changes"):
+            service.defer_work_item(
+                self.conn, goal, until=UNTIL, reason="waits for the next release", author="claude"
+            )
+        self.conn.commit()
+        self.before_return = self.followers(goal)
+        with mock.patch.object(leases, "utc_now", lambda: CAME):
+            done = sweep.run_pass(self.conn)
+        self.assertEqual({sweep.RETURNS: 1}, done.changed)
+        card = self.card(goal)
+        self.assertEqual("triage", card["state"]["category"])
+        self.assertEqual(1, len(self.events(goal, "returned")))
+        return goal, task
+
+    def test_a_returned_goal_asks_the_owner_when_proposed_goals_are_theirs(self) -> None:
+        goal, task = self.returned_goal()
+        [action] = self.waiting_on(goal)
+        self.assertEqual(("proposed_goal", "accept"), (action.point, action.kind))
+        asked = self.conn.execute(
+            "SELECT identity_source, tool FROM execution_events WHERE id = ?", (action.asked_call,)
+        ).fetchone()
+        self.assertEqual((calls.VALKAMA, "deferral-return"), tuple(asked))
+        [question] = self.owners_list()
+        record = requests.get(self.conn, question)
+        self.assertEqual(("goal", "Valkama"), (record["purpose"], record["action"]["asked_by"]))
+        choice = json.loads(self.request(question)["fields_json"])[0]
+        self.assertFalse(any(option.get("recommended") for option in choice["options"]))
+        self.assertEqual(self.before_return, self.followers(goal))
+        # The work under it stays accepted and held: its holder takes a step of it.
+        step = self.card(task)["checklist"][0]["id"]
+        with calls.bind(OTHER, "claim_work_item_checklist_item"):
+            service.claim_checklist_item(self.conn, task, step, author="claude")
+        self.conn.commit()
+        record = self.answer(question, "do")
+        self.assertEqual("carried_out", record["carried_out"])
+        card = self.card(goal)
+        self.assertEqual(
+            (None, "in_progress", "owner"),
+            (card["state"], card["container_state"], card["acceptance"]["basis"]),
+        )
+        self.assertEqual("carried_out", self.action(action.id)["outcome"])
+
+    def test_a_returned_goal_waits_for_triage_when_the_agent_decides(self) -> None:
+        self.at(participation.MINIMAL)
+        goal, _task = self.returned_goal()
+        self.assertEqual([], self.waiting_on(goal))
+        self.assertEqual([], self.owners_list())
+        self.assertIsNone(self.card(goal)["acceptance"])
+        self.assertEqual(
+            participation.AGENT, participation.load(self.conn).mode(self.space, "proposed_goal")
+        )
 
 
 if __name__ == "__main__":

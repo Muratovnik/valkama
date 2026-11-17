@@ -27,6 +27,7 @@ from . import agents as planning_agents
 from . import (
     calls,
     closing,
+    decisions,
     deferral,
     images,
     item_projects,
@@ -717,9 +718,15 @@ def create_work_item(
 
     Without `state`, work filed inside a chain of accepted goals and stages is
     accepted with it, `inherited`, and so is work the owner files, as the owner's;
-    an agent's stays in triage unless it names `acceptance`. Accepted work stands
-    in ready, and a goal or stage accepted at once stands in the service state:
-    `created` names no state for it, and `accepted` and `opened` follow. A named
+    an agent's stays in triage unless it names `acceptance`. A goal an agent files
+    with no parent and no `acceptance` is the owner's to decide on, by the setting
+    of its space (`proposed_goal`): left to the agent, it is accepted at once on the
+    basis `agent`; kept for the owner, it lies in triage and the answer's
+    `waits_for_owner` names the question about it. Either acceptance an agent makes
+    alone, `agent` or `assignment`, is marked in the summary of decisions.
+    Accepted work stands in ready, and a goal or stage accepted at once stands in
+    the service state: `created` names no state for it, and `accepted` and `opened`
+    follow. A named
     state is held to the refusals a move there meets (`transitions.placement`),
     and review, blocked and the closed states are refused (`new_item`): the move
     there carries what entering asks for. An active state needs an executor, and
@@ -744,6 +751,9 @@ def create_work_item(
     parent_row = _parent_row(conn, space_id, parent)
     parent_id = None if parent_row is None else str(parent_row["work_item_id"])
     entry = _entry_basis(named)
+    proposed = _proposed_goal(conn, space_id, stored_kind, parent_id, entry)
+    if proposed == participation.AGENT:
+        entry = model.AGENT_BASIS
     given = _given(conn, parent_id, entry)
     if state:
         target = states.resolve(conn, workflow_id, state)
@@ -784,7 +794,12 @@ def create_work_item(
     # A goal or stage accepted at once names no state: its opening says where it stands.
     _log(conn, item_id, "created", "" if opened else str(target["key"]), author)
     if basis is not None:
-        _log(conn, item_id, "accepted", basis, author)
+        accepted = _log(conn, item_id, "accepted", basis, author)
+        # An agent's own decision, and its word that the owner gave the work, are the
+        # owner's to read in the summary of decisions.
+        point = {model.AGENT_BASIS: "proposed_goal", model.NAMED_BASIS: "assignment"}.get(basis)
+        if point is not None and calls.from_agent():
+            decisions.mark(conn, accepted, point, _accepted_what(conn, item_id))
     if opened:
         _log(conn, item_id, "opened", "", author)
     creator = subscriptions.agent_session(calls.current())
@@ -792,8 +807,66 @@ def create_work_item(
         # A goal outlives the subagent that filed it, and its news is for the
         # conversation that leads the work; a stage's come through the goal.
         subscriptions.follow(conn, item_id, creator)
+    waits = None
+    if proposed == participation.HUMAN and target["category"] == "triage":
+        waits = _ask_about_goal(conn, item_id, author, by_agent=True)
     words.bring_current(conn)
-    return read_model.present(conn, read_model.item_by_id(conn, item_id), full=True)
+    answer = read_model.present(conn, read_model.item_by_id(conn, item_id), full=True)
+    if waits is not None:
+        answer["waits_for_owner"] = waits.answer()
+    return answer
+
+
+def _proposed_goal(
+    conn: sqlite3.Connection,
+    space_id: str,
+    kind: str,
+    parent_id: str | None,
+    entry: str | None,
+) -> str | None:
+    """Who decides on a goal an agent files with no parent and on no one's word, `agent` or
+    `human` by the owner's setting of its space; None for any other new item.
+
+    The owner's own write and an agent's `assignment` are the owner's word, and work
+    under a goal or stage has its own point.
+    """
+
+    if kind != model.CONTAINER_KIND or parent_id is not None or entry is not None:
+        return None
+    if not calls.from_agent():
+        return None
+    return participation.load(conn).mode(space_id, "proposed_goal")
+
+
+def _accepted_what(conn: sqlite3.Connection, identity: str) -> str:
+    """What the summary of decisions says of an acceptance: `accepted MAIN-12`."""
+
+    return f"accepted {read_model.reference(conn, read_model.item_by_id(conn, identity))}"
+
+
+def _ask_about_goal(
+    conn: sqlite3.Connection, identity: str, author: str | None, *, by_agent: bool
+) -> pending.Waiting:
+    """Ask the owner whether to take on a goal lying in triage, which waits on the answer
+    (`requests.carry_out`): one an agent proposed, which recommends taking it on, or one
+    that came back from being put off, asked by Valkama with no recommendation."""
+
+    row = read_model.item_by_id(conn, identity)
+    reference = read_model.reference(conn, row)
+    if by_agent:
+        prompt = f"An agent proposes the goal {reference}: {row['title']}."
+    else:
+        prompt = f"The goal {reference} came back from being put off: {row['title']}."
+    return pending.ask(
+        conn,
+        identity,
+        "proposed_goal",
+        pending.Proposal("accept", {}, _accepted_what(conn, identity)),
+        purpose="goal",
+        prompt=prompt + " Take it on, put it off, or drop it.",
+        fields=request_model.fields(request_model.goal_fields(recommend=by_agent)),
+        author=author,
+    )
 
 
 def _insert_item(
@@ -1855,7 +1928,9 @@ def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str | None:
     the server and why. Under no accepted chain the item moves to the first triage
     state it reaches, with `transitioned` (`triage: returned, date 2026-12-01`) and
     `returned` (`date 2026-12-01`, `completed MAIN-12`) side by side, and its
-    condition goes with the move. Under goals and stages all accepted and open, or
+    condition goes with the move; a goal, where the owner decides on goals an agent
+    proposes, waits there on the owner's question about it, as such a goal does.
+    Under goals and stages all accepted and open, or
     with no triage to reach, it stays put off: its condition is marked come and the
     owner is asked whether to do it, put it off again or drop it. A condition that
     came before was asked about then: the item it waits on closing again or going
@@ -1904,6 +1979,15 @@ def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str | None:
             author=deferral.AUTHOR,
         )
         _log(conn, due.work_item_id, "returned", said, deferral.AUTHOR)
+        if (
+            row["kind"] == model.CONTAINER_KIND
+            and parent is None
+            and participation.load(conn).mode(str(row["planning_space_id"]), "proposed_goal")
+            == participation.HUMAN
+        ):
+            # A goal back in triage is the owner's to take on again, as one an agent
+            # proposes: Valkama asks, and the answer decides it.
+            _ask_about_goal(conn, due.work_item_id, deferral.AUTHOR, by_agent=False)
     return reference
 
 
@@ -1915,7 +1999,7 @@ def _put_off_ends(conn: sqlite3.Connection, identity: str, author: str | None) -
 
 
 #: The most characters the reason for putting work off holds.
-_PUT_OFF_REASON_LIMIT = 400
+PUT_OFF_REASON_LIMIT = 400
 
 
 def _put_off_reason(reason: object) -> str:
@@ -1924,7 +2008,7 @@ def _put_off_reason(reason: object) -> str:
             f"[{deferral.TAG}] defer needs reason: why the work waits, which the owner reads"
             " when it comes back"
         )
-    return model.text_field(reason, "reason", limit=_PUT_OFF_REASON_LIMIT)
+    return model.text_field(reason, "reason", limit=PUT_OFF_REASON_LIMIT)
 
 
 def _condition(
@@ -4220,10 +4304,11 @@ def _log(
     author: str | None,
     *,
     limit: int = EVENT_DETAIL_LIMIT,
-) -> None:
-    """Write one history event; `limit` is raised only for a detail this module composes."""
+) -> int:
+    """Write one history event, and answer its id; `limit` is raised only for a detail
+    this module composes."""
 
-    conn.execute(
+    inserted = conn.execute(
         "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id) VALUES(?,?,?,?,?)",
         (
             work_item_id,
@@ -4233,6 +4318,7 @@ def _log(
             calls.call_id(conn, work_item_id),
         ),
     )
+    return int(inserted.lastrowid or 0)
 
 
 def _step(steps: list[dict], item_id: object, conn: sqlite3.Connection, row: sqlite3.Row) -> dict:

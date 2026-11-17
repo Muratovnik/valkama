@@ -73,9 +73,11 @@ WORK_ITEM_KINDS = TASK_KINDS | {CONTAINER_KIND}
 PUBLIC_KINDS = ("task", "bug", "improvement", "goal", "stage")
 _CONTAINER_WORDS = frozenset({"goal", "stage"})
 
-#: Why accepted work was accepted: the basis an acceptance records. `migrated` is
-#: the work-model migration's alone: no tool and no HTTP write takes it.
-ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "migrated")
+#: Why accepted work was accepted: the basis an acceptance records. `agent` is an
+#: agent's own decision where the owner's participation setting leaves it to the
+#: agent, as for a goal it proposes. `migrated` is the work-model migration's alone:
+#: no tool and no HTTP write takes it.
+ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "agent", "migrated")
 #: How a project came to an item (`item_projects`), strongest first: named by whoever
 #: filed or edited it, derived from its commits, or its space's former project.
 PROJECT_SOURCES = ("named", "commits", "migrated")
@@ -86,6 +88,9 @@ LAUNCH_PLACES = ("space", "item_project")
 #: The one basis a caller names itself: an agent taking on work it was asked to do.
 #: A person's write is the owner's without naming it, and the rest the server gives.
 NAMED_BASIS = "assignment"
+#: The basis of an agent's own decision, which the server gives where the owner's
+#: participation setting leaves the decision to the agent.
+AGENT_BASIS = "agent"
 
 
 class RetiredWord(NamedTuple):

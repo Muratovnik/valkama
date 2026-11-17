@@ -48,9 +48,13 @@ says what it is:
   `awaiting_confirmation`, read from the work under it. In `triage`, `deferred`,
   `completed` or `cancelled` it shows its `state` like any item.
 - `acceptance` is why and when the work was accepted (`basis`: `owner`,
-  `assignment`, `inherited`, `label_rule`, `migrated`; `at`), null while it is
-  not. Work under goals and stages that are all accepted and open is accepted as
-  part of them (`inherited`); a claim of any other work accepts it (`assignment`).
+  `assignment`, `inherited`, `label_rule`, `agent`, `migrated`; `at`), null while
+  it is not. Work under goals and stages that are all accepted and open is accepted
+  as part of them (`inherited`); a claim of any other work accepts it
+  (`assignment`). `agent` is an agent's own decision where the owner's setting
+  leaves it to the agent: a goal you file with no parent is accepted at once on it,
+  or, where the owner decides, stays in `triage` and the answer says
+  `waits_for_owner` with the question they answer.
   Other work an agent files without a `state` stays in `triage` unless it sends
   `acceptance: "assignment"`, on the owner's word; an item with no basis moved to
   `ready`, `active`, `review`, `blocked` or `completed` without it is refused with
@@ -89,7 +93,7 @@ await confirmation: check each and complete it, as the skill's Close section say
 
 | Tool | Also answers |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task |
+| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task; `waits_for_owner` (`action`, `point`, `question`, `what`) when the owner decides on it and it waits in `triage` for their answer |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
 | `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |

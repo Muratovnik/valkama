@@ -9,8 +9,8 @@
     "writable": true
   },
   "request": {
-    "request_id": "00000000-0000-4000-8000-000000000047",
-    "work_item_id": "00000000-0000-4000-8000-000000000048",
+    "request_id": "00000000-0000-4000-8000-000000000048",
+    "work_item_id": "00000000-0000-4000-8000-000000000049",
     "reference": "MAIN-18",
     "title": "Asked of a session",
     "kind": "question",
@@ -46,7 +46,7 @@
     "answered_by": "",
     "execution_id": null,
     "session_id": null,
-    "addressee": "00000000-0000-4000-8000-000000000049",
+    "addressee": "00000000-0000-4000-8000-000000000050",
     "expires_at": null,
     "created_at": "2026-01-02T03:04:05.000000Z",
     "resolved_at": null,

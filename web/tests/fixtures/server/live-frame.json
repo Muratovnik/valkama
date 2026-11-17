@@ -61,7 +61,7 @@
           "since": "2026-01-02T03:04:05Z",
           "quiet_since": null,
           "executor": {
-            "session": "00000000-0000-4000-8000-000000000019",
+            "session": "00000000-0000-4000-8000-000000000020",
             "agent": null,
             "opened_in": "",
             "opened_host": "",
@@ -106,7 +106,7 @@
           "since": null,
           "quiet_since": "2026-01-02T03:04:05Z",
           "executor": {
-            "session": "00000000-0000-4000-8000-000000000021",
+            "session": "00000000-0000-4000-8000-000000000022",
             "agent": null,
             "opened_in": "terminal",
             "opened_host": "",
@@ -168,7 +168,7 @@
       ],
       "sessions": [
         {
-          "session": "00000000-0000-4000-8000-000000000022",
+          "session": "00000000-0000-4000-8000-000000000023",
           "title": "Contract session",
           "folder": "checkout",
           "state": "waiting",
@@ -177,7 +177,7 @@
           "agents": 0,
           "since": "2026-01-02T03:04:05Z",
           "executor": {
-            "session": "00000000-0000-4000-8000-000000000022",
+            "session": "00000000-0000-4000-8000-000000000023",
             "agent": null,
             "opened_in": "",
             "opened_host": "",

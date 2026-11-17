@@ -19,7 +19,7 @@
     "status": "ready",
     "payload": {
       "work_item": {
-        "work_item_id": "00000000-0000-4000-8000-000000000050",
+        "work_item_id": "00000000-0000-4000-8000-000000000051",
         "planning_space_id": "00000000-0000-4000-8000-000000000002",
         "reference": "MAIN-19",
         "number": 19,
@@ -27,7 +27,7 @@
         "kind": "task",
         "priority": "medium",
         "state": {
-          "state_id": "00000000-0000-4000-8000-000000000028",
+          "state_id": "00000000-0000-4000-8000-000000000029",
           "key": "deferred",
           "name": "Deferred",
           "category": "deferred",

@@ -2,7 +2,7 @@
   "interface_version": "valkama-planning-api",
   "chain": {
     "root": {
-      "work_item_id": "00000000-0000-4000-8000-000000000046",
+      "work_item_id": "00000000-0000-4000-8000-000000000047",
       "reference": "MAIN-9",
       "title": "Tree goal",
       "kind": "goal",
@@ -61,7 +61,7 @@
     },
     "members": [
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000039",
+        "work_item_id": "00000000-0000-4000-8000-000000000040",
         "reference": "MAIN-12",
         "title": "Tree work in the nested stage",
         "kind": "task",
@@ -82,7 +82,7 @@
         "queue_order": 1
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000041",
+        "work_item_id": "00000000-0000-4000-8000-000000000042",
         "reference": "MAIN-13",
         "title": "Tree work under the stage",
         "kind": "task",
@@ -103,7 +103,7 @@
         "queue_order": 2
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000045",
+        "work_item_id": "00000000-0000-4000-8000-000000000046",
         "reference": "MAIN-14",
         "title": "Tree work finished under the goal",
         "kind": "task",
@@ -124,7 +124,7 @@
         "queue_order": null
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000042",
+        "work_item_id": "00000000-0000-4000-8000-000000000043",
         "reference": "MAIN-10",
         "title": "Tree stage",
         "kind": "stage",
@@ -140,7 +140,7 @@
         "queue_order": null
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000040",
+        "work_item_id": "00000000-0000-4000-8000-000000000041",
         "reference": "MAIN-11",
         "title": "Tree nested stage",
         "kind": "stage",

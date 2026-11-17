@@ -60,6 +60,7 @@ POSTCONDITION_NAMES = [
     "participation",
     "agent-decisions",
     "pending-actions",
+    "agent-basis",
     "second-run",
     "recovery-point",
 ]
@@ -1189,6 +1190,40 @@ class MigratedStoreTests(StoreCase):
         )
         conn.rollback()
 
+    def test_no_item_is_accepted_by_an_agent_after_migration(self) -> None:
+        """No item stands accepted on an agent's own decision: no 2.9 setting let one
+        decide. The rebuilt items take that basis, as a fresh store's do, and a second
+        run changes nothing."""
+
+        bases = {str(row[0]) for row in self.read("SELECT DISTINCT acceptance FROM work_items")}
+        self.assertNotIn("agent", bases)
+        self.assertIn("migrated", bases, "the store held accepted work to look at")
+        held = {
+            entry["name"]: (entry["passed"], entry["detail"])
+            for entry in self.report["postconditions"]
+            if entry["name"] in ("agent-basis", "fresh-shape", "second-run")
+        }
+        self.assertEqual((True, {"accepted_by_agent": 0}), held["agent-basis"])
+        self.assertTrue(held["fresh-shape"][0])
+        self.assertEqual((True, {"steps_needed_again": []}), held["second-run"])
+        before = file_digest(self.path)
+        self.assertEqual("current", self.migrate()["status"])
+        self.assertEqual(before, file_digest(self.path))
+        # The migrated store takes an agent's decision, which a fresh one takes.
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        conn.execute(
+            "UPDATE work_items SET acceptance = 'agent' WHERE work_item_id ="
+            " (SELECT work_item_id FROM work_items WHERE acceptance = 'migrated' LIMIT 1)"
+        )
+        self.assertEqual(
+            1,
+            conn.execute("SELECT COUNT(*) FROM work_items WHERE acceptance = 'agent'").fetchone()[
+                0
+            ],
+        )
+        conn.rollback()
+
     def test_a_second_run_changes_nothing_and_says_the_migration_ran(self) -> None:
         backups = sorted(os.listdir(os.path.join(self.directory.name, "backups")))
         before = file_digest(self.path)
@@ -1893,6 +1928,7 @@ FAULTS = (
         "pending-actions",
         "UPDATE work_item_requests SET purpose = 'goal' WHERE request_id = 'kept-request'",
     ),
+    fault("agent-basis", "UPDATE work_items SET acceptance = 'agent' WHERE acceptance IS NOT NULL"),
     fault("awaiting-rows", "UPDATE work_item_confirmations SET left_at = since"),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
