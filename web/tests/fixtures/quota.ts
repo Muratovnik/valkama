@@ -225,3 +225,60 @@ export function quotaOfSix(now: Date | number, offset = -new Date(now).getTimezo
   const more = MORE.map((account) => ({ ...work, ...account }))
   return { ...quota, accounts: [...quota.accounts, ...more] }
 }
+
+/** An account at the edges a forecast is drawn at, by this name and ids. */
+const EDGE = {
+  name: 'Edge',
+  organization: '4d5e6f7a-8b9c-4d0e-9f1a-2b3c4d5e6f7a',
+  account_uuid: '5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b',
+}
+
+/**
+ * The four accounts as of `now`, and a fifth, «Edge», at the edges a forecast is drawn at: five
+ * hours spent, a week read past 100 %, and a model's week at a fresh 0 % with a range ahead.
+ */
+export function quotaOfEdges(
+  now: Date | number,
+  offset = -new Date(now).getTimezoneOffset(),
+): Quota {
+  const quota = quotaAt(now, offset)
+  const moment = new Date(now).getTime()
+  const window = (shape: Parameters<typeof share>[2]) => share(moment, offset, shape)
+  const edge: QuotaAccount = {
+    ...EDGE,
+    seat: null,
+    plan: 'Max',
+    no_source: false,
+    windows: [
+      window({
+        kind: 'five_hour',
+        left: HOUR,
+        source: 'poll',
+        readings: [
+          [2 * HOUR, 60],
+          [10 * MINUTE, 100],
+        ],
+        forecast: { outcome: 'spent', runs_out_at: null, basis: 'recent' },
+      }),
+      window({
+        kind: 'week',
+        left: DAY,
+        source: 'poll',
+        readings: [
+          [2 * DAY, 80],
+          [5 * MINUTE, 104],
+        ],
+        forecast: { low_percent: 104, high_percent: 110 },
+      }),
+      window({
+        kind: 'week_model',
+        model: 'model-b',
+        left: 3 * DAY,
+        source: 'poll',
+        readings: [[5 * MINUTE, 0]],
+        forecast: { low_percent: 4, high_percent: 9 },
+      }),
+    ],
+  }
+  return { ...quota, accounts: [...quota.accounts, edge] }
+}
