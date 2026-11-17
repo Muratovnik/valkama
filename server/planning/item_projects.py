@@ -621,6 +621,50 @@ def space_project_ids(
     return [str(project["project_id"]) for project in _bound(conn, listing, space_key)]
 
 
+def space_read(
+    conn: sqlite3.Connection,
+    space: sqlite3.Row | None,
+    project: str | None = None,
+    *,
+    other_spaces: bool = True,
+) -> tuple[list[str], list[object]]:
+    """The items a read holds, as conditions on `work_items i` and their parameters, in order.
+
+    The one rule of which items a read of a space holds, for every reader that counts
+    them as its board does. `space` is the space's row, its `planning_space_id` and
+    `key`, or None for every space. A read of a space holds its items and, with
+    `other_spaces`, the items of other spaces that name a project the registry binds
+    to it. `project` (an id) narrows the read to the items naming it (`naming`): from
+    the space, and from other spaces only when it is one of the space's projects, so
+    a project of another space that the space's items name brings only the space's
+    own. Without a space it keeps the items naming it in every space. The conditions
+    are joined by `AND`; none means every item.
+    """
+
+    kept = naming(conn, [project]) if project is not None else None
+    clauses: list[str] = []
+    parameters: list[object] = []
+    if space is not None:
+        space_id = str(space["planning_space_id"])
+        foreign = space_project_ids(conn, str(space["key"])) if other_spaces else []
+        if kept is not None:
+            # Narrowed to one project, other spaces bring what names it, if it is the space's.
+            foreign = [found for found in foreign if found == project]
+        if foreign:
+            clauses.append(
+                "(i.planning_space_id = ? OR i.work_item_id IN (SELECT value FROM json_each(?)))"
+            )
+            reached = kept if kept is not None else naming(conn, foreign)
+            parameters.extend([space_id, json.dumps(reached)])
+        else:
+            clauses.append("i.planning_space_id = ?")
+            parameters.append(space_id)
+    if kept is not None:
+        clauses.append("i.work_item_id IN (SELECT value FROM json_each(?))")
+        parameters.append(json.dumps(kept))
+    return clauses, parameters
+
+
 def naming_like(conn: sqlite3.Connection, like: str) -> list[str]:
     """The items that name a project whose id matches a `LIKE` pattern, by work item id.
 

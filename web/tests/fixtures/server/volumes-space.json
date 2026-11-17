@@ -1,0 +1,95 @@
+{
+  "interface_version": "valkama-planning-api",
+  "volumes": {
+    "scope": {
+      "kind": "space",
+      "space_ref": {
+        "data_scope_id": "00000000-0000-4000-8000-000000000004",
+        "space_key": "MAIN"
+      },
+      "project_ref": null
+    },
+    "period": {
+      "from": "2026-01-02T03:04:05+03:00",
+      "to": "2026-01-02T03:04:05+03:00",
+      "utc_offset": 180
+    },
+    "measured_from": "2026-01-02T03:04:05.000Z",
+    "counts": {
+      "categories": [
+        {
+          "category": "triage",
+          "tasks": 5,
+          "goals": 3,
+          "stages": 2,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000005",
+            "reference": "MAIN-1",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "deferred",
+          "tasks": 1,
+          "goals": 0,
+          "stages": 0,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000050",
+            "reference": "MAIN-19",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "ready",
+          "tasks": 2,
+          "goals": 0,
+          "stages": 0,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000039",
+            "reference": "MAIN-12",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "active",
+          "tasks": 5,
+          "goals": 0,
+          "stages": 0,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000010",
+            "reference": "MAIN-3",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "review",
+          "tasks": 0,
+          "goals": 0,
+          "stages": 0,
+          "oldest": null
+        },
+        {
+          "category": "completed",
+          "tasks": 1,
+          "goals": 0,
+          "stages": 0,
+          "oldest": null
+        },
+        {
+          "category": "blocked",
+          "tasks": 0,
+          "goals": 0,
+          "stages": 0,
+          "oldest": null
+        },
+        {
+          "category": "cancelled",
+          "tasks": 0,
+          "goals": 0,
+          "stages": 0,
+          "oldest": null
+        }
+      ]
+    }
+  }
+}

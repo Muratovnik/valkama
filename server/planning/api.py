@@ -39,6 +39,7 @@ from . import (
     subscriptions,
     usage,
     views,
+    volumes,
     waiting,
 )
 
@@ -551,6 +552,44 @@ def _unattached(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
     )
 
 
+#: What the volumes read takes: its scope (`project_id` alone may be left out) and its period.
+_VOLUMES_SCOPE = ("scope_kind", "data_scope_id", "space_key", "project_id")
+_VOLUMES_PERIOD = ("from", "to", "utc_offset")
+
+
+def _volumes(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """How much work stands in a scope and what came to a close in a period."""
+
+    unknown = sorted(set(parameters) - {*_VOLUMES_SCOPE, *_VOLUMES_PERIOD})
+    if unknown:
+        raise PlanningHttpError(400, "invalid_request", f"{unknown[0]} is not a parameter")
+    named = {name: _first(parameters, name) for name in _VOLUMES_SCOPE}
+    scope = volumes.scope(
+        conn,
+        named["scope_kind"],
+        data_scope_id=named["data_scope_id"],
+        space_key=named["space_key"],
+        project_id=named["project_id"],
+    )
+    offset = _required(parameters, "utc_offset")
+    try:
+        minutes = int(offset, 10)
+    except ValueError as error:
+        raise PlanningHttpError(
+            400, "invalid_request", "utc_offset must be a whole number of minutes"
+        ) from error
+    period = volumes.period(_required(parameters, "from"), _required(parameters, "to"), minutes)
+    return {
+        "interface_version": PLANNING_API_INTERFACE,
+        "volumes": volumes.read(conn, volumes.Request(scope, period)),
+    }
+
+
+#: The reads under `/api/planning/` that name their scope exactly, by `data_scope_id` and
+#: `space_key`, and answer for the store this service writes. Every other read here
+#: takes no data scope.
+SCOPED_READS = frozenset({"/api/planning/volumes"})
+
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
     "/api/planning": _read_model,
     "/api/planning/spaces": _spaces,
@@ -569,6 +608,7 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/request": _request,
     "/api/planning/held": _held,
     "/api/planning/commits/unattached": _unattached,
+    "/api/planning/volumes": _volumes,
 }
 
 

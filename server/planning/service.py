@@ -218,7 +218,8 @@ def list_work_items(
     or stage names what a task under it names), in every space unless `space` is
     given; a project no item names lists none.
 
-    `other_spaces` makes `space` a read of that space: its items, and the items of
+    `other_spaces` makes `space` a read of that space, by the one rule of what a read
+    of a space holds (`item_projects.space_read`): its items, and the items of
     other spaces that name one of the projects the registry binds to it, each record
     marked with `other_space`, the `{key, name}` of the space it lies in, or None
     for the space's own. The space's queue never gives another space's item, so
@@ -244,29 +245,13 @@ def list_work_items(
     honest account of what it left out asks `list_work_items_page`.
     """
 
-    clauses: list[str] = []
-    parameters: list[object] = []
     space_row = _space_row(conn, space) if space is not None else None
     space_id = str(space_row["planning_space_id"]) if space_row is not None else None
     wanted = item_projects.project_id(project, "project") if project is not None else None
-    kept = item_projects.naming(conn, [wanted]) if wanted is not None else None
     marked = space_row is not None and other_spaces
-    if space_row is not None:
-        foreign = (
-            item_projects.space_project_ids(conn, str(space_row["key"])) if other_spaces else []
-        )
-        if kept is not None:
-            # Narrowed to one project, other spaces bring what names it, if it is the space's.
-            foreign = [found for found in foreign if found == wanted]
-        if foreign:
-            clauses.append(
-                "(i.planning_space_id = ? OR i.work_item_id IN (SELECT value FROM json_each(?)))"
-            )
-            reached = kept if kept is not None else item_projects.naming(conn, foreign)
-            parameters.extend([space_id, json.dumps(reached)])
-        else:
-            clauses.append("i.planning_space_id = ?")
-            parameters.append(space_id)
+    clauses, parameters = item_projects.space_read(
+        conn, space_row, wanted, other_spaces=other_spaces
+    )
     if state is not None:
         workflows = (
             [str(store.workflow_for_space(conn, space_id)["workflow_id"])]
@@ -294,9 +279,6 @@ def list_work_items(
     if parent is not None:
         clauses.append("i.parent_id = ?")
         parameters.append(str(read_model.item_row(conn, parent)["work_item_id"]))
-    if kept is not None:
-        clauses.append("i.work_item_id IN (SELECT value FROM json_each(?))")
-        parameters.append(json.dumps(kept))
     start = model.count_field(offset, "offset")
     query = with_clauses(
         "SELECT i.*, s.position AS state_position, p.key AS space_key, p.name AS space_name"

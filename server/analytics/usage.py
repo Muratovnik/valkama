@@ -158,10 +158,6 @@ class UsageQuery:
     compare: bool = False
 
 
-def _at(micro: int, zone: dt.tzinfo) -> str:
-    return (item_usage.EPOCH + dt.timedelta(microseconds=micro)).astimezone(zone).isoformat()
-
-
 def _dimensions(names: Iterable[str], parameter: str) -> list[str]:
     found = list(names)
     for name in found:
@@ -723,7 +719,7 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     zone = dt.timezone(dt.timedelta(minutes=request.utc_offset))
 
     def at(moment: int) -> str:
-        return _at(moment, zone)
+        return item_usage.at(moment, zone)
 
     last = conn.execute("SELECT MAX(last_at) FROM usage_runs").fetchone()[0]
     return {

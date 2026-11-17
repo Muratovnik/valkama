@@ -1692,6 +1692,80 @@ give differently. The other is `seat`: a quota sample that arrives later, such a
 history, can say where earlier work was, and one that names an account's UUID turns a seat's
 key into its account.
 
+### How much work stands and what it took
+
+The Volumes read counts the work of a scope by where it stands: how much waits in each
+category now, which card has stood there longest, and how much came to be completed or
+cancelled in a period. It answers `GET /api/planning/volumes` with `interface_version`
+`valkama-planning-api` and `volumes`. A later build only adds fields and sections to
+this answer. No MCP tool reads it: the numbers would cost an agent context.
+
+| Parameter | What it takes |
+| --- | --- |
+| `scope_kind` | required: `global`, every space of the store this service writes, or `space` |
+| `data_scope_id`, `space_key` | with `space`, required: the space, named exactly as the shell names it |
+| `project_id` | with `space`, optional: a project, which narrows the space to the items that name it |
+| `from`, `to` | required: a date or a time with its offset, as in [What agent work spent in a period](#what-agent-work-spent-in-a-period). The period holds at most 2,400 days |
+| `utc_offset` | required: the caller's offset from UTC in minutes, from `-840` to `840`; a date means the start of that day at it |
+
+A space's scope holds the items the space's board holds, so a number opens the board on
+the same work: the space's items, and the items of other spaces that name one of the
+projects the registry binds to the space, as `list_work_items` reads a space (see
+[Tool results](#tool-results)). A goal or stage names what the tasks under it name, at
+any depth. With `project_id`, the scope keeps the space's items that name the project,
+and other spaces' items that name it when it is one of the space's projects; a project
+of another space that the space's items name keeps only the space's own.
+
+```json
+{"interface_version": "valkama-planning-api",
+ "volumes": {
+   "scope": {"kind": "space",
+             "space_ref": {"data_scope_id": "6f1c2a8e-0000-4000-8000-000000000001",
+                           "space_key": "MAIN"},
+             "project_ref": null},
+   "period": {"from": "2030-03-04T00:00:00+03:00", "to": "2030-03-11T00:00:00+03:00",
+              "utc_offset": 180},
+   "measured_from": "2030-02-17T16:03:29.000Z",
+   "counts": {
+     "categories": [
+       {"category": "triage", "tasks": 40, "goals": 1, "stages": 1,
+        "oldest": {"work_item_id": "6f1c2a8e-0000-4000-8000-000000000012",
+                   "reference": "MAIN-12", "since": "2030-01-03T10:00:00Z"}},
+       {"category": "completed", "tasks": 31, "goals": 1, "stages": 0, "oldest": null},
+       {"…": "the other six categories"}]}}}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `scope` | the scope read: `kind`, `space_ref` (`{data_scope_id, space_key}`, or `null` for `global`) and `project_ref` (`{project_id}`, or `null`) |
+| `period` | the period asked for, with `from` and `to` at the caller's offset |
+| `measured_from` | the start of the first stretch of agent work counted to an item in this store, as the usage rows hold it, or `null` when none is: an item started before it may have spent more than its usage says (see [How much work an item took](#how-much-work-an-item-took)) |
+| `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest` |
+
+A category counts the items of the scope that stand in a state of it. An accepted open
+goal or stage stands in no category and is in none of these counts. Work in an open
+category is counted as it stands now; `completed` and `cancelled` count the items that
+came to stand there inside the period, and only those. An item came to stand where it
+is at its last state entry, the newest `created`, `transitioned` or `opened` event of
+its history, or at its creation when its history holds none. `oldest` is the item of an
+open category that came to stand there first, with that moment as `since`; it is `null`
+for a category nothing stands in, and always for `completed` and `cancelled`. How long
+ago that was is the reader's to say: the answer holds no clock of the server.
+
+The read counts the store this service writes, where usage is counted. A space of an
+attached store is refused rather than counted short.
+
+| Refusal (`400`, `invalid_request`) | When |
+| --- | --- |
+| `scope_kind must be global or space` | `scope_kind` is missing or neither |
+| `a space scope names data_scope_id and space_key` | a space scope lacks one of them |
+| `a global scope names no space and no project` | a global scope names one |
+| `volumes read the store this service writes; <KEY> lives in an attached store` | the space is in an attached store |
+| `no planning space <KEY>` | the store holds no such space, or the `data_scope_id` is no store this service knows |
+| `no project <id>` | neither the projects registry nor any item of the store names the project |
+| the period's refusals of [What agent work spent in a period](#what-agent-work-spent-in-a-period), in its words: `from must be a date or a time with its offset` (and the same of `to`), `to must be later than from`, `from and to must lie between 1970 and 9999, …`, `the period holds more than 2400 steps of one day`, `utc_offset must be from -840 to 840 minutes` | the period |
+| `utc_offset must be a whole number of minutes`, `<name> is required`, `<name> must occur at most once`, `<name> is not a parameter` | a parameter missing, repeated or not one of these |
+
 ### How often each analytics surface is opened
 
 The Analytics module counts, on this machine, how often each of its surfaces is opened
