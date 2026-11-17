@@ -213,6 +213,8 @@ for (const colorScheme of ['dark', 'light'] as const)
     await installBackend(page)
     const panel = await openModule(page)
     await expect(panel).toBeVisible()
+    // The failure's tone, which production-shell.spec.ts finds absent on a clean start.
+    await expect(panel).toHaveAttribute('data-tone', 'danger')
     const paint = await panel.evaluate((node) => {
       const mark = node.querySelector('.platform-state-mark')
       return {

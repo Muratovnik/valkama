@@ -102,7 +102,8 @@ for (const locale of ['ru', 'en'] as const) {
         })
       const holder = (number: number) => tile(number).locator('[data-facet="holder"]')
       for (const number of [490, 491, 492, 493, 494, 495]) await expect(tile(number)).toBeVisible()
-      // No tile draws a person for a holder: a client's sign, or nothing.
+      // No tile draws a person for a holder: a client's sign, or nothing. The person is the
+      // library's `user` glyph, which carries its name as the client's glyphs below carry theirs.
       await expect(page.locator('.work-item-tile svg.lucide-user')).toHaveCount(0)
       // Each state draws the session's one sign, the side panel's and the graph's.
       for (const [number, sign] of [
@@ -118,6 +119,7 @@ for (const locale of ['ru', 'en'] as const) {
       }
       await expect(holder(490).locator('svg.facet-glyph')).toHaveClass(/lucide-asterisk/u)
       await expect(holder(492).locator('svg.facet-glyph')).toHaveClass(/lucide-codex/u)
+      // The dots a wait draws, shown present in a drawer in production-card-surface.spec.ts.
       await expect(page.locator('.work-item-tile .work-dots')).toHaveCount(0)
       // The hover and a screen reader say who and what the session is doing.
       await expect(holder(492).locator('.facet-word-hidden')).toHaveText(

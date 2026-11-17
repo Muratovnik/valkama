@@ -56,7 +56,7 @@ test('a missing number says so, marks no section and offers the space', async ({
   await page.goto(`/open/${spaceRef.space_key}-999`)
   const main = page.locator('.work-item-link')
   await expect(main).toContainText(`There is no task ${spaceRef.space_key}-999`)
-  await expect(page.locator('.context-bar, .app-context-bar').first()).toContainText('Task link')
+  await expect(page.locator('.context-bar')).toContainText('Task link')
   await expect(page.locator('[aria-current="page"]')).toHaveCount(0)
   await expect(page).toHaveURL(new RegExp(`/open/${spaceRef.space_key}-999$`))
 

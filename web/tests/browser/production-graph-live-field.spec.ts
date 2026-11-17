@@ -119,6 +119,7 @@ test('work moving where the filter leaves it out offers no key to its line and n
   const { lone, elsewhere } = twoItems()
   await searchWith(page, elsewhere.work_item_id, lone.reference)
   await expect(page.locator('.graph-flow .graph-live')).toHaveCount(0)
+  // A frame's count of its moving work, shown present in production-graph-frame-working.spec.ts.
   await expect(page.locator('.graph-frame-working')).toHaveCount(0)
   await expect(page.locator('.graph-motion-toggle')).toHaveCount(0)
   await expect(page.locator('.graph-legend-on-field')).not.toContainText('work going on')

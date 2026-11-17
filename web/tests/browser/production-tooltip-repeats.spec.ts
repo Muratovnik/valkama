@@ -228,6 +228,9 @@ for (const locale of ['en', 'ru'] as const) {
     const menu = page.locator('.menu-popup')
     await expect(menu.locator('.menu-item').first()).toBeVisible()
     const inMenu = await sweep(page, menu)
+    // Every hint the menu holds was pointed at and heard. Its rows name themselves and hold
+    // none today (`InspectorMenu`), so this leg compares nothing until one gains a hint.
+    expect(inMenu.pointed).toBe(await menu.locator('[data-tooltip]').count())
     await page.keyboard.press('Escape')
     await expect(menu).toHaveCount(0)
     await drawer.getByRole('tab', { name: /^(Relations|Связи)$/u }).click()

@@ -129,6 +129,8 @@ test('a name the rail cuts says itself whole over its place, and one it does not
 
   await short.hover()
   await page.clock.runFor(1000)
+  // The whole words are shown present below, the hint where a rail label is hidden in
+  // production-hidden-labels.spec.ts.
   await expect(whole).toHaveCount(0)
   await expect(page.locator('.tooltip-hint')).toHaveCount(0)
 

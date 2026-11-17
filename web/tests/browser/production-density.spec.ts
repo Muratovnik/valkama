@@ -236,7 +236,9 @@ test('the view’s menu is the control its neighbours are, and holds how the vie
   await expect(
     page.locator('.workspace-tools').getByRole('button', { name: GROUPING }),
   ).toHaveCount(0)
-  await expect(page.locator('.filter-preset')).toHaveCount(0)
+  // A preset was a toggle of its own in the row. The filter's toggles, which do stand on the
+  // bar's line of state under it, are found pressed and not in production-filter.spec.ts.
+  await expect(page.locator('.workspace-tools button[aria-pressed]')).toHaveCount(0)
   // Every control of the row stands at one top and one height.
   expect(new Set(await allOneRow(page)).size).toBe(1)
 

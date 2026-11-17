@@ -66,8 +66,8 @@ test('Russian Planning portfolio presents an unbound project through typed local
   await expect(project.getByText('Не связан', { exact: true })).toBeVisible()
   await expect(project).toContainText('Привязанных пространств пока нет.')
   await expect(project).toContainText('Проверить настройку проекта')
+  // The server's own prose, which the contract now refuses (platformPlanningBinding.test.ts).
   await expect(project).not.toContainText('No owner Planning-space binding')
-  await expect(project.locator('.binding-reason')).toHaveCount(0)
 })
 
 /** The vertical extent of each control in the bar's first row that is drawn. */

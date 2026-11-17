@@ -76,7 +76,7 @@ function rows(page: Page, within: string) {
   return page.locator(within).evaluate((root) =>
     [...root.querySelectorAll<HTMLElement>('.nav-row')].map((row) => {
       const parts = {
-        sign: row.querySelector('.nav-row-sign, .nav-row-lead > :not(button), .nav-row-own > *'),
+        sign: row.querySelector('.nav-row-sign, .nav-row-lead > :not(button)'),
         title: row.querySelector('.nav-row-title'),
         words: row.querySelector('.nav-row-epic, .nav-row-title'),
         meta: row.querySelector('.nav-row-meta'),
@@ -208,7 +208,9 @@ function overTheRing(page: Page) {
       }
     }
     // Nothing else in the list that is not focused draws a box of its own.
-    for (const button of row.closest('.nav-tree')?.querySelectorAll('button') ?? [])
+    const tree = row.closest('.nav-tree')
+    if (!tree) throw new Error('The focused row stands in no list')
+    for (const button of tree.querySelectorAll('button'))
       if (
         button !== link &&
         button.checkVisibility({ visibilityProperty: true }) &&
@@ -324,8 +326,11 @@ for (const width of [1280, 390])
     const epic = all.find((row) => row.reference === 'MAIN-4')
     expect(epic?.sign, 'the epic’s own sign').toBeTruthy()
     oneEdge(all, signCentre, 'sign')
-    // It is a row like its tasks, with no fold of its own.
-    await expect(liveRow(page, 'MAIN-4', within).locator('button:not(.nav-row-pin)')).toHaveCount(0)
+    // It is a row like its tasks, with no fold of its own: no button but a pin, where a
+    // session's row, whose link is a button, shows the same selector present.
+    const notAPin = 'button:not(.nav-row-pin)'
+    await expect(page.locator(`${within} .nav-row ${notAPin}`).first()).toBeAttached()
+    await expect(liveRow(page, 'MAIN-4', within).locator(notAPin)).toHaveCount(0)
   })
 
 /** Where a box starts, or a failure naming what is missing. */

@@ -61,6 +61,12 @@ for (const [width, lang] of [
       countsInside: true,
     })
     expect(header.counts).toBeGreaterThan(0)
+    // Its counts other than the work going on, which a zoomed-out header gives up (below).
+    await expect(
+      page
+        .locator('.graph-frame:not(.folded) .graph-frame-count:not(.graph-frame-working)')
+        .first(),
+    ).toBeVisible()
     // Every frame draws its edge, open or folded.
     await expect(page.locator('.graph-frame .frame-progress')).toHaveCount(3)
     const scroll = await page.evaluate(
