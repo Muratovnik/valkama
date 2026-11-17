@@ -333,6 +333,7 @@ source_modules = [
   "server.planning.item_tree",
   "server.planning.leases",
   "server.planning.participation",
+  "server.planning.pending",
   "server.planning.questions",
   "server.planning.read_model",
   "server.planning.transitions",

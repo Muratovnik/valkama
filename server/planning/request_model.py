@@ -972,7 +972,8 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
     adds `verdicts` and `undecided`, which stand whole before any row, and a list
     on a comment `comment_id`, the comment it stands under, and `undecided`, its
     field while nothing on it is ticked. One that ended unanswered says why in
-    `expired_reason`, and one with a purpose names it in `purpose`.
+    `expired_reason`, and one with a purpose names it in `purpose`; one about a write
+    that waits for the owner names that write's point in `action`.
     `clipped` appears when anything was left out or cut: past `MAX_COMPACT_TEXT`
     in a text, or past `MAX_COMPACT_JSON` the replaced answer first, then every
     label, then the later fields of the current one.
@@ -995,6 +996,7 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
         # purpose carries out: each only where it is set.
         **({"expired_reason": record["expired_reason"]} if record.get("expired_reason") else {}),
         **({"purpose": record["purpose"]} if record.get("purpose") else {}),
+        **({"action": {"point": record["action"]["point"]}} if record.get("action") else {}),
         **(_verdicts(descriptors, record) if review else {}),
         **(_list_undecided(descriptors, record) if listed else {}),
         "answer": [],

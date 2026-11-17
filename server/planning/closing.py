@@ -685,7 +685,17 @@ def token(cancels: list[dict], dependents: list[dict]) -> str:
     changes it.
     """
 
-    projection = {
+    text = json.dumps(
+        projection(cancels, dependents), sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+    return hashlib.sha256(text.encode("ascii")).hexdigest()[:TOKEN_DIGITS]
+
+
+def projection(cancels: list[dict], dependents: list[dict]) -> dict[str, list[list]]:
+    """What the token of a list fingerprints, one row a list each: what is cancelled with
+    where it stands and who holds it, and what waits on it and how."""
+
+    return {
         "cancels": sorted(
             [entry["reference"], _token_state(entry), sorted(entry["holder"])] for entry in cancels
         ),
@@ -693,8 +703,6 @@ def token(cancels: list[dict], dependents: list[dict]) -> str:
             [entry["reference"], entry["waits_on"], entry["how"]] for entry in dependents
         ),
     }
-    text = json.dumps(projection, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    return hashlib.sha256(text.encode("ascii")).hexdigest()[:TOKEN_DIGITS]
 
 
 def freed(conn: sqlite3.Connection, closed: Iterable[str]) -> list[str]:
@@ -717,11 +725,11 @@ def _cancel_row(entry: sqlite3.Row, derived: str | None) -> dict:
         "kind": model.outward_kind(entry["kind"], entry["parent_id"]),
         "state": None if accepted else state,
         "container_state": derived,
-        "holder": _holders(entry),
+        "holder": holders(entry),
     }
 
 
-def _holders(entry: sqlite3.Row) -> list[str]:
+def holders(entry: sqlite3.Row) -> list[str]:
     """Who holds the item and who holds a step of it, each once, sorted."""
 
     found = {str(entry["claim_ref"])} if entry["claim_ref"] else set()
