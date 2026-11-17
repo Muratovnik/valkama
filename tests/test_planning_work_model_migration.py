@@ -21,6 +21,7 @@ import shutil
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from collections.abc import Callable, Iterator
 from unittest import mock
@@ -33,6 +34,7 @@ from server.planning import store as planning_store
 from server.planning import words
 from server.planning import work_model_migration as migration
 from server.store_identity.refs import planning_space_entity
+from server.telemetry import liveness
 from tests import registry_fixtures, schema9, schema17
 
 T0 = "2026-07-26T00:00:00Z"
@@ -1687,6 +1689,84 @@ class CommandTests(StoreCase):
         with contextlib.redirect_stdout(output):
             cli.main(["capabilities"])
         self.assertIn("migrate", json.loads(output.getvalue())["commands"])
+
+
+#: The refusal while a server may still hold the store, with the seconds since its last
+#: tick and the seconds left to wait, which add up to the three minutes a tick lasts.
+LIVE_SERVER = re.compile(
+    r"a Valkama server was running (\d+) s ago: stop the listener and every agent client,"
+    r" wait (\d+) s and run this again; nothing was written"
+)
+
+
+class LiveServerTests(StoreCase):
+    """A server that ticked the liveness file within three minutes may still hold the store."""
+
+    def seen(self, seconds_ago: float) -> None:
+        liveness.tick(self.path, time.time() - seconds_ago)
+
+    def test_a_server_seen_30_s_ago_refuses_the_command_before_any_write(self) -> None:
+        self.seen(30)
+        before = listed(self.directory.name)
+        digests = file_digest(self.path), file_digest(liveness.path_for(self.path))
+        output = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"VALKAMA_DB": self.path}),
+            contextlib.redirect_stdout(output),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            cli.main(["migrate", "work-model", "--item-projects", self.file])
+        message = str(raised.exception.code)
+        match = LIVE_SERVER.fullmatch(message)
+        assert match is not None, message
+        ago, wait = int(match[1]), int(match[2])
+        self.assertTrue(30 <= ago < 40, message)
+        self.assertEqual(180, ago + wait)
+        report = json.loads(output.getvalue())
+        self.assertEqual(("refused", message), (report["status"], report["message"]))
+        self.assertNotIn("recovery_point", report)
+        self.assertEqual(
+            digests, (file_digest(self.path), file_digest(liveness.path_for(self.path)))
+        )
+        self.assertEqual(17, identity(self.path)[0])
+        self.assertFalse(os.path.exists(os.path.join(self.directory.name, "backups")))
+        # The migration lock leaves its file; nothing else appears beside the store.
+        self.assertEqual(
+            {"valkama.sqlite3.migration.lock"}, set(listed(self.directory.name)) - set(before)
+        )
+
+    def test_the_refusal_comes_before_the_conditions_read_from_the_store(self) -> None:
+        self.seen(30)
+        with (
+            mock.patch.object(store, "_preconditions") as preconditions,
+            self.assertRaises(store.WorkModelPreconditionError) as raised,
+        ):
+            self.migrate()
+        preconditions.assert_not_called()
+        self.assertEqual("refused", raised.exception.report["status"])
+
+    def test_a_server_last_seen_10_min_ago_lets_the_migration_run(self) -> None:
+        self.seen(600)
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(store.STORE_SCHEMA_VERSION, identity(self.path)[0])
+
+    def test_a_dry_run_migrates_a_copy_while_a_server_holds_the_store(self) -> None:
+        self.seen(30)
+        digest = file_digest(self.path)
+        into = os.path.join(self.directory.name, "trial")
+        output = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"VALKAMA_DB": self.path}),
+            contextlib.redirect_stdout(output),
+        ):
+            cli.main(
+                ["migrate", "work-model", "--item-projects", self.file, "--dry-run", "--into", into]
+            )
+        report = json.loads(output.getvalue())
+        self.assertEqual((True, "migrated"), (report["dry_run"], report["status"]))
+        self.assertFalse(os.path.exists(liveness.path_for(report["store"])))
+        self.assertEqual((17, digest), (identity(self.path)[0], file_digest(self.path)))
 
 
 if __name__ == "__main__":
