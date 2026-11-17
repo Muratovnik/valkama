@@ -609,7 +609,7 @@ hears no tree: the orchestrator keeps the whole and passes it on.
 The tree is read as one feed, not item by item: each call reads the event, comment
 and call rows written since its own places, at most 2 000 of each, climbs from
 their items to the roots the session works on and keeps the items of its tree. The
-rest of a long backlog comes at the next call, and nothing is lost. A `Stop` or a
+rest of a long run of news comes at the next call, and nothing is lost. A `Stop` or a
 watcher read that finds only news that waits leaves the places where they were.
 A session's first read, and a place file from before the tree, start at the end
 of the tables: what was written under a goal before is not retold, and the item
