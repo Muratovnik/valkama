@@ -8,8 +8,9 @@
  * or the test file itself — and a use that is not is refused, unless a list below still names it.
  *
  * The scan reads text, so "written" means the name appears in that text as a whole word, or is
- * composed there from a template such as `module-${…}`. It cannot prove a class is rendered; it
- * proves that a class appearing nowhere cannot be.
+ * one a template there can compose, keeping its fixed parts, as `module-${…}` composes
+ * `module-planning`. It cannot prove a class is rendered; it proves that a class appearing nowhere
+ * cannot be.
  */
 
 import assert from 'node:assert/strict'
@@ -127,13 +128,19 @@ function isFileName(name: string, after: string): boolean {
   return FILE_EXTENSIONS.has(name) || (extension !== undefined && FILE_EXTENSIONS.has(extension))
 }
 
-/** Whether `name` is composed from a template whose fixed head it begins with, as `module-${…}`. */
-function isComposed(name: string, corpus: string): boolean {
-  const parts = name.split('-')
-  return (
-    name.endsWith('-') ||
-    parts.slice(1).some((_, index) => corpus.includes(`${parts.slice(0, index + 1).join('-')}-\${`))
-  )
+/** A class a template composes: a fixed head such as `step-`, then its parts and interpolations. */
+const TEMPLATE_CLASS = /(?<![\w$-])[a-z][\w-]*-\$\{[^{}]*\}(?:[\w-]|\$\{[^{}]*\})*/gu
+
+/**
+ * The classes the corpus composes from templates, each as the pattern of the names it can write:
+ * its fixed text stays and each `${…}` stands for letters, digits or hyphens. So `step-${kind}-mark`
+ * writes `step-ring-mark` and never `step-readout`, which a head alone would let through.
+ */
+function composedClasses(corpus: string): RegExp[] {
+  const patterns = new Set<string>()
+  for (const [template] of corpus.matchAll(TEMPLATE_CLASS))
+    patterns.add(template.split(/\$\{[^{}]*\}/u).join(String.raw`[\w-]+`))
+  return [...patterns].map((pattern) => new RegExp(`^${pattern}$`, 'u'))
 }
 
 /** The classes a line's selector literals name; a call broken before its literal is on `previous`. */
@@ -146,7 +153,9 @@ function selectorClasses(line: string, previous: string): string[] {
     if (!isSelector(literal, (ahead.trim() === '' ? previous : ahead).trimEnd())) continue
     for (const found of literal.matchAll(CLASS)) {
       const name = found[1] ?? ''
-      if (!isFileName(name, literal.slice(found.index + found[0].length))) names.push(name)
+      const after = literal.slice(found.index + found[0].length)
+      // A name called, as `).getUTCHours()` in a template's interpolation, is a method.
+      if (!after.startsWith('(') && !isFileName(name, after)) names.push(name)
     }
   }
   return names
@@ -157,6 +166,9 @@ function deadUses(sources: readonly Source[], corpus: string): Map<string, numbe
   if (sources.length === 0) throw new Error('the scan read no test files')
   if (corpus.trim() === '') throw new Error('the scan read an empty corpus')
   const written = new Set(corpus.match(/[\w-]+/gu))
+  const composed = composedClasses(corpus)
+  const isComposed = (name: string) =>
+    name.endsWith('-') || composed.some((pattern) => pattern.test(name))
   const uses = new Map<string, number[]>()
   for (const { file, text } of sources) {
     // A class the file writes itself, in a stub's template or a `class` it sets, is a bare word.
@@ -165,7 +177,7 @@ function deadUses(sources: readonly Source[], corpus: string): Map<string, numbe
     const lines = text.split('\n')
     for (const [index, line] of lines.entries()) {
       for (const name of selectorClasses(line, lines[index - 1] ?? '')) {
-        if (written.has(name) || own.has(name) || isComposed(name, corpus)) continue
+        if (written.has(name) || own.has(name) || isComposed(name)) continue
         const key = `${file} .${name}`
         uses.set(key, [...(uses.get(key) ?? []), index + 1])
       }
@@ -260,6 +272,22 @@ test('what a test writes itself, a composed class, a file name, prose and a comm
       ['components/synthetic.spec.ts .ghost-a', [9]],
       ['components/synthetic.spec.ts .ghost-b', [9]],
     ]),
+  )
+})
+
+test('a template covers only the names it can write, and a called name is no class', () => {
+  const corpus = '<i :class="`step-${kind}-mark`"></i>'
+  const spec = {
+    file: 'browser/synthetic.spec.ts',
+    text: [
+      "await page.locator('.step-ring-mark').hover()",
+      "await expect(page.locator('.step-readout')).toHaveCount(0)",
+      "const at = `${String(new Date(0).getUTCHours()).padStart(2, '0')}:00`",
+    ].join('\n'),
+  }
+  assert.deepEqual(
+    deadUses([spec], corpus),
+    new Map([['browser/synthetic.spec.ts .step-readout', [2]]]),
   )
 })
 
