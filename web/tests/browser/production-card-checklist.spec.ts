@@ -14,7 +14,8 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
+import { cardAnswer, STANDING_STEPS } from './served/cards.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
@@ -23,52 +24,16 @@ const CARD = serializePlatformRoute({
   entity: planningWorkItemEntity(workItemRef),
 })
 
-const steps = [
-  {
-    id: '123e4567-e89b-42d3-a456-426614174101',
-    text: 'A step nobody holds',
-    done: false,
-    claimed_by: '',
-    done_by: '',
-    by_previous_holder: false,
-  },
-  {
-    id: '123e4567-e89b-42d3-a456-426614174102',
-    text: 'A step somebody closed',
-    done: true,
-    claimed_by: '',
-    done_by: 'own-a (auto/val564-a)',
-    by_previous_holder: false,
-  },
-  {
-    id: '123e4567-e89b-42d3-a456-426614174103',
-    text: 'A step somebody holds',
-    done: false,
-    claimed_by: 'own-b',
-    done_by: '',
-    by_previous_holder: false,
-  },
-]
-
 async function openCard(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page)
   await page.route('**/api/modules/planning/work-item?*', (route) =>
     route.fulfill({
-      json: {
-        interface_version: 'valkama-planning-work-item',
-        scope: spaceScope,
-        work_item_ref: workItemRef,
-        state: {
-          interface_version: 'valkama-ui-state',
-          status: 'ready',
-          payload: { work_item: { ...workItem, checklist: steps } },
-        },
-      },
+      json: cardAnswer({ checklist: STANDING_STEPS }),
     }),
   )
   await page.goto(CARD)
-  await expect(page.locator('.step-row')).toHaveCount(steps.length)
+  await expect(page.locator('.step-row')).toHaveCount(STANDING_STEPS.length)
 }
 
 /** Where each row's parts stand, measured from what is drawn rather than from the boxes. */

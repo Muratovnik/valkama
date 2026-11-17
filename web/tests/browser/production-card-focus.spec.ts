@@ -6,6 +6,8 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { blockedWorkItem, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
+import { heldBy } from './served/cards.ts'
+import { itemAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
@@ -21,9 +23,6 @@ const OTHER_CARD = serializePlatformRoute({
 const BOARD = serializePlatformRoute({ module_id: 'planning', scope: spaceScope })
 
 /** Paragraphs enough to scroll the facts out of the card. */
-const LONG_READ = Array.from({ length: 40 }, (_, index) => `Paragraph ${index + 1}.`).join(
-  String.fromCodePoint(10, 10),
-)
 
 const reader = (drawer: Locator) => drawer.locator('.drawer-frame-body')
 const ringedControls = (page: Page) => page.locator('.drawer :is(button, a[href]):focus-visible')
@@ -186,25 +185,9 @@ async function cardWithHeldClaims(page: Page, holder: string) {
   await installBackend(page, { longRead: true })
   const held = { by: holder }
   const claims: unknown[] = []
-  const record = () => ({
-    ...workItem,
-    claim: null,
-    claim_ref: held.by,
-    description: LONG_READ,
-    links: [],
-  })
   await page.route('**/api/modules/planning/work-item?*', (route) =>
     route.fulfill({
-      json: {
-        interface_version: 'valkama-planning-work-item',
-        scope: spaceScope,
-        work_item_ref: workItemRef,
-        state: {
-          interface_version: 'valkama-ui-state',
-          status: 'ready',
-          payload: { work_item: record() },
-        },
-      },
+      json: itemAnswer(spaceScope, workItemRef, heldBy(held.by)),
     }),
   )
   const out: (() => void)[] = []
@@ -213,7 +196,7 @@ async function cardWithHeldClaims(page: Page, holder: string) {
     claims.push(body)
     await new Promise<void>((done) => out.push(done))
     held.by = body.release === true ? '' : 'user'
-    await route.fulfill({ json: record() })
+    await route.fulfill({ json: heldBy(held.by) })
   })
   /** Lets the one write that is out answer. */
   const answer = async () => {

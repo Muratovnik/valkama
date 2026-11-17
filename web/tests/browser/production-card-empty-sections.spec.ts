@@ -13,9 +13,10 @@ import type { Page } from '@playwright/test'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { requestEntry, requestList } from '../support/inputRequests.ts'
+import { requestEntry } from '../support/inputRequests.ts'
 import { installBackend } from './backend.ts'
-import { spaceRef, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
+import { aQuestion, cardAnswer, ONE_STEP, questionsAnswer } from './served/cards.ts'
 import { test } from './test.ts'
 
 interface Stream {
@@ -57,26 +58,14 @@ async function serveCard(page: Page) {
     const query = new URL(route.request().url()).searchParams
     if (query.get('reference') !== workItemRef.reference) return route.fallback()
     return route.fulfill({
-      json: {
-        interface_version: 'valkama-planning-work-item',
-        scope: spaceScope,
-        work_item_ref: workItemRef,
-        state: {
-          interface_version: 'valkama-ui-state',
-          status: 'ready',
-          payload: { work_item: { ...workItem, checklist: held.steps } },
-        },
-      },
+      json: cardAnswer({ checklist: held.steps }),
     })
   })
   await page.route('**/api/modules/planning/requests?*', (route) =>
     held.failing
       ? route.fulfill({ status: 500, json: {} })
       : route.fulfill({
-          json: {
-            ...requestList(held.questions),
-            coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
-          },
+          json: questionsAnswer(held.questions),
         }),
   )
   return held
@@ -90,18 +79,6 @@ const openCard = (page: Page) =>
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
-
-function aQuestion() {
-  const entry = requestEntry()
-  entry.target = {
-    space_ref: spaceRef,
-    reference: workItemRef.reference,
-    writable: true,
-  }
-  entry.request.work_item_id = workItem.work_item_id
-  entry.request.reference = workItemRef.reference
-  return entry
-}
 
 test.describe('a section with nothing in it', () => {
   test.beforeEach(async ({ page }) => {
@@ -128,16 +105,7 @@ test.describe('a section with nothing in it', () => {
     await expect(checklist).toHaveCount(0)
     await expect(overview.getByText('No checklist', { exact: false })).toHaveCount(0)
 
-    held.steps = [
-      {
-        id: '00000000-0000-4000-8000-000000000301',
-        text: 'A step',
-        done: false,
-        claimed_by: '',
-        done_by: '',
-        by_previous_holder: false,
-      },
-    ]
+    held.steps = ONE_STEP
     // The step is in the space too, so the frame that brings it differs from the read.
     const frame = JSON.stringify({
       ...first,

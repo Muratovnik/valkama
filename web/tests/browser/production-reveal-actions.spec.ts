@@ -22,7 +22,8 @@ import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
 import { settled } from './documentBeside.ts'
 import { installLiveStreams, liveRow } from './liveWorkPage.ts'
-import { globalScope, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
+import { globalScope, spaceScope, workItemRef } from './planningFixtures.ts'
+import { cardAnswer, TALKED_STEPS } from './served/cards.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
@@ -32,18 +33,6 @@ const CARD = serializePlatformRoute({
 })
 const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: globalScope })
 
-const steps = ['123e4567-e89b-42d3-a456-426614174201', '123e4567-e89b-42d3-a456-426614174202'].map(
-  (id, at) => ({
-    id,
-    text: at === 0 ? 'A step to talk over' : 'The step after it',
-    done: false,
-    claimed_by: '',
-    done_by: '',
-    by_previous_holder: false,
-  }),
-)
-
-/** One host as the spec reads it: the row, the text in it, the action and how to reach it. */
 interface Host {
   /** The action out of sight at rest, or the group of them. */
   action: Locator
@@ -62,16 +51,7 @@ async function stepHost(page: Page, width: number): Promise<Host> {
   await installBackend(page)
   await page.route('**/api/modules/planning/work-item?*', (route) =>
     route.fulfill({
-      json: {
-        interface_version: 'valkama-planning-work-item',
-        scope: spaceScope,
-        work_item_ref: workItemRef,
-        state: {
-          interface_version: 'valkama-ui-state',
-          status: 'ready',
-          payload: { work_item: { ...workItem, checklist: steps } },
-        },
-      },
+      json: cardAnswer({ checklist: TALKED_STEPS }),
     }),
   )
   await page.goto(CARD)
