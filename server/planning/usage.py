@@ -547,6 +547,20 @@ def micro(moment: dt.datetime) -> int:
     return (moment - EPOCH) // _MICRO
 
 
+def stored_micro(text: str) -> int:
+    """A moment as the store writes it, in microseconds since the epoch; one with no offset is UTC."""
+
+    moment = dt.datetime.fromisoformat(text)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=dt.UTC)
+    return micro(moment)
+
+
+#: When usage was first counted to an item in this store, as `first`: work begun before
+#: it spent more than its rows say.
+FIRST_COUNTED = "SELECT MIN(started_at) AS first FROM usage_segments WHERE work_item_id IS NOT NULL"
+
+
 def at(moment: int, zone: dt.tzinfo) -> str:
     """A moment held in microseconds since the epoch, written as a time in the caller's zone."""
 

@@ -105,6 +105,8 @@ class _Scenario:
 
     def __init__(self, root: Path) -> None:
         self.root = root
+        #: The goal, the stage and the task done under the goal that `tree` files.
+        self.tree_refs: dict[str, str] = {}
         conn = store.connect()
         try:
             service.create_planning_space(conn, name="Contract", key=SPACE)
@@ -720,6 +722,7 @@ class _Scenario:
             finished = item("Tree work finished under the goal", parent=goal)
             service.set_summary(conn, finished, {"done": "Finished.", "next": "Nothing."})
             service.transition_work_item(conn, finished, "done", acceptance="assignment")
+            self.tree_refs = {"goal": goal, "stage": stage, "finished": finished}
             waiting = item("Tree goal not accepted yet", kind="goal")
             loose = item("Tree stage not accepted yet", kind="stage", parent=waiting)
             item("Tree work under the stage not accepted", parent=loose)
@@ -748,8 +751,54 @@ class _Scenario:
         }
 
     def volumes(self) -> dict[str, object]:
-        """What stands in the space and in its project, over the days around today."""
+        """What stands in the space and in its project, over the days around today, and what
+        the tree's goal and stage took: work on the goal, on a task done and on one cancelled
+        under it, and on a task under the stage, one of its rows of no known price."""
 
+        conn = store.connect()
+        try:
+            goal = self.tree_refs["goal"]
+            cancelled = str(
+                service.create_work_item(
+                    conn, space=SPACE, title="Tree work cancelled under the goal", parent=goal
+                )["reference"]
+            )
+            service.set_summary(conn, cancelled, {"done": "Not needed.", "next": "Nothing."})
+            service.transition_work_item(conn, cancelled, "cancelled", acceptance="assignment")
+            under_stage = conn.execute(
+                "SELECT work_item_id FROM work_items WHERE title = 'Tree work under the stage'"
+            ).fetchone()[0]
+            run = conn.execute(
+                "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
+                " read_at) VALUES ('sess-goal', '', 'claude', 'goal.jsonl', ?, ?, ?)",
+                ("2026-11-14T10:00:00.000Z",) * 3,
+            ).lastrowid
+            for start, work_item, cost in (
+                ("10:00", read_model.item_row(conn, goal)["work_item_id"], 0.5),
+                (
+                    "10:10",
+                    read_model.item_row(conn, self.tree_refs["finished"])["work_item_id"],
+                    1.0,
+                ),
+                ("10:20", read_model.item_row(conn, cancelled)["work_item_id"], 0.25),
+                ("10:30", under_stage, None),
+            ):
+                conn.execute(
+                    "INSERT INTO usage_segments(run_id, session_id, model, started_at, ended_at,"
+                    " seconds, work_item_id, input_tokens, output_tokens, estimated_api_cost_usd,"
+                    " quality) VALUES (?, 'sess-goal', 'claude-opus-5-5', ?, ?, 300, ?, 40, 8, ?,"
+                    " 'observed')",
+                    (
+                        run,
+                        f"2026-11-14T{start}:00.000Z",
+                        f"2026-11-14T{start[:3]}{int(start[3:]) + 5:02d}:00.000Z",
+                        work_item,
+                        cost,
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
         today = datetime.now(UTC).date()
         period = {
             "from": (today - timedelta(days=7)).isoformat(),
@@ -760,6 +809,10 @@ class _Scenario:
             "volumes-space": self.http(f"/api/planning/volumes?{self.scope(**period)}"),
             "volumes-project": self.http(
                 f"/api/planning/volumes?{self.scope(project_id=PROJECT, **period)}"
+            ),
+            "goal-volumes": self.http(
+                "/api/planning/goal-volumes?"
+                + urlencode([("id", self.tree_refs["goal"]), ("id", self.tree_refs["stage"])])
             ),
         }
 

@@ -10,7 +10,9 @@ The read is a frame — the scope, the period and the moment usage was first cou
 to items — and its sections, each one function of the request (`SECTIONS`). The
 counts by category are the first section: work in an open category is counted as
 it stands now, with the card longest in it, and work that came to be completed or
-cancelled is counted when it came to stand there inside the period.
+cancelled is counted when it came to stand there inside the period. The goals come
+next: the open ones and those closed in the period, each with what it took over all
+its time and its stages under it (`goal_volumes`).
 
 Only the store this service writes is read. Usage is written there alone, and an
 attached store is read as an earlier build left it, so a space of one is refused
@@ -19,14 +21,13 @@ rather than counted short.
 
 from __future__ import annotations
 
-import datetime as dt
 import sqlite3
 from collections.abc import Callable
 from typing import NamedTuple
 
 from ..projects import project_registry, scopes
 from ..store_identity.metadata import read_store_metadata
-from . import item_projects, model, usage
+from . import goal_volumes, item_projects, model, usage
 
 SCOPE_KINDS = ("global", "space")
 UNKNOWN_SCOPE = "scope_kind must be global or space"
@@ -175,11 +176,17 @@ _STANDING = (
 )
 
 
-def _micro(text: str) -> int:
-    moment = dt.datetime.fromisoformat(text)
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=dt.UTC)
-    return usage.micro(moment)
+def _standing(
+    conn: sqlite3.Connection, scope: Scope, *more: str, parameters: tuple[object, ...] = ()
+) -> list[sqlite3.Row]:
+    """The scope's items, each where it stands and since when, kept by `more` conditions too."""
+
+    entries = ", ".join("?" * len(model.STATE_ENTRY_ACTIONS))
+    where = " AND ".join((scope.where(), *more))
+    query = _STANDING.format(entries=entries, where=where)
+    return conn.execute(
+        query, (*model.STATE_ENTRY_ACTIONS, *scope.parameters, *parameters)
+    ).fetchall()
 
 
 def category_counts(
@@ -194,9 +201,7 @@ def category_counts(
     stand there inside it; without one, every card counts as it stands now.
     """
 
-    entries = ", ".join("?" * len(model.STATE_ENTRY_ACTIONS))
-    query = _STANDING.format(entries=entries, where=scope.where())
-    rows = conn.execute(query, (*model.STATE_ENTRY_ACTIONS, *scope.parameters)).fetchall()
+    rows = _standing(conn, scope)
     found: dict[str, dict] = {
         category: {"tasks": 0, "goals": 0, "stages": 0, "oldest": None}
         for category in model.STORED_CATEGORIES
@@ -204,7 +209,7 @@ def category_counts(
     first: dict[str, tuple] = {}
     for row in rows:
         category = str(row["category"])
-        since = _micro(str(row["since"]))
+        since = usage.stored_micro(str(row["since"]))
         if period is not None and category in model.TERMINAL_CATEGORIES and not period.holds(since):
             continue
         counted = found[category]
@@ -241,15 +246,44 @@ def _counts(conn: sqlite3.Connection, request: Request) -> dict:
     return {"categories": _categories(conn, request)}
 
 
+# -- the goals -------------------------------------------------------------------
+
+
+def _goals(conn: sqlite3.Connection, request: Request) -> list[dict]:
+    """The scope's open goals and those that came to a close in the period, with their stages.
+
+    In space key and number order. Each adds up what the scope holds of it
+    (`goal_volumes.rows`): a goal of another space, or one read through a project,
+    may hold work the scope does not, and says so.
+    """
+
+    scope = request.scope
+    found = [
+        row
+        for row in _standing(
+            conn, scope, "i.kind = ?", "i.parent_id IS NULL", parameters=(model.CONTAINER_KIND,)
+        )
+        if str(row["category"]) not in model.TERMINAL_CATEGORIES
+        or request.period.holds(usage.stored_micro(str(row["since"])))
+    ]
+    found.sort(key=lambda row: (str(row["space_key"]), int(row["number"])))
+    return goal_volumes.rows(
+        conn,
+        [str(row["work_item_id"]) for row in found],
+        where=scope.where(),
+        parameters=scope.parameters,
+        space_id=None if scope.space is None else str(scope.space["planning_space_id"]),
+        children=True,
+    )
+
+
 # -- the read --------------------------------------------------------------------
 
 
 def measured_from(conn: sqlite3.Connection) -> str | None:
     """When usage was first counted to an item in this store: before it, work is counted short."""
 
-    row = conn.execute(
-        "SELECT MIN(started_at) FROM usage_segments WHERE work_item_id IS NOT NULL"
-    ).fetchone()
+    row = conn.execute(usage.FIRST_COUNTED).fetchone()
     return None if row is None or row[0] is None else str(row[0])
 
 
@@ -257,7 +291,7 @@ Section = Callable[[sqlite3.Connection, Request], object]
 
 #: The sections of the answer after its frame, in the order it gives them. Each is one
 #: function of the request; a part of the read is added as one more entry here.
-SECTIONS: tuple[tuple[str, Section], ...] = (("counts", _counts),)
+SECTIONS: tuple[tuple[str, Section], ...] = (("counts", _counts), ("goals", _goals))
 
 
 def read(conn: sqlite3.Connection, request: Request) -> dict:

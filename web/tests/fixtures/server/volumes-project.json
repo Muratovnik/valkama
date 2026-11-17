@@ -80,6 +80,139 @@
           "oldest": null
         }
       ]
-    }
+    },
+    "goals": [
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000046",
+        "reference": "MAIN-9",
+        "title": "Tree goal",
+        "kind": "goal",
+        "state": null,
+        "container_state": "in_progress",
+        "open": true,
+        "parent_reference": null,
+        "other_space": null,
+        "partial": true,
+        "spent": {
+          "agent_seconds": 300.0,
+          "tokens": {
+            "input": 40,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": 8,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": 0.5,
+          "unpriced_tokens": 0,
+          "quality": "observed",
+          "partly_measured": 0
+        },
+        "spent_with_cancelled": {
+          "agent_seconds": 300.0,
+          "tokens": {
+            "input": 40,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": 8,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": 0.5,
+          "unpriced_tokens": 0,
+          "quality": "observed",
+          "partly_measured": 0
+        },
+        "children": [
+          {
+            "work_item_id": "00000000-0000-4000-8000-000000000042",
+            "reference": "MAIN-10",
+            "title": "Tree stage",
+            "kind": "stage",
+            "state": null,
+            "container_state": "not_started",
+            "open": true,
+            "parent_reference": "MAIN-9",
+            "other_space": null,
+            "partial": true,
+            "spent": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": null,
+                "cached_read": null,
+                "cache_write_5m": null,
+                "cache_write_1h": null,
+                "output": null,
+                "reasoning": null
+              },
+              "estimated_api_cost_usd": null,
+              "unpriced_tokens": 0,
+              "quality": null,
+              "partly_measured": 0
+            },
+            "spent_with_cancelled": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": null,
+                "cached_read": null,
+                "cache_write_5m": null,
+                "cache_write_1h": null,
+                "output": null,
+                "reasoning": null
+              },
+              "estimated_api_cost_usd": null,
+              "unpriced_tokens": 0,
+              "quality": null,
+              "partly_measured": 0
+            },
+            "children": [
+              {
+                "work_item_id": "00000000-0000-4000-8000-000000000040",
+                "reference": "MAIN-11",
+                "title": "Tree nested stage",
+                "kind": "stage",
+                "state": null,
+                "container_state": "not_started",
+                "open": true,
+                "parent_reference": "MAIN-10",
+                "other_space": null,
+                "partial": false,
+                "spent": {
+                  "agent_seconds": 0.0,
+                  "tokens": {
+                    "input": null,
+                    "cached_read": null,
+                    "cache_write_5m": null,
+                    "cache_write_1h": null,
+                    "output": null,
+                    "reasoning": null
+                  },
+                  "estimated_api_cost_usd": null,
+                  "unpriced_tokens": 0,
+                  "quality": null,
+                  "partly_measured": 0
+                },
+                "spent_with_cancelled": {
+                  "agent_seconds": 0.0,
+                  "tokens": {
+                    "input": null,
+                    "cached_read": null,
+                    "cache_write_5m": null,
+                    "cache_write_1h": null,
+                    "output": null,
+                    "reasoning": null
+                  },
+                  "estimated_api_cost_usd": null,
+                  "unpriced_tokens": 0,
+                  "quality": null,
+                  "partly_measured": 0
+                },
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 }
