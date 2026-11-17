@@ -237,6 +237,54 @@ AGENT_DECISIONS = f"""CREATE TABLE IF NOT EXISTS agent_decisions(
     what TEXT NOT NULL
 )"""
 
+#: The points at which an agent's write can wait for the owner (`planning.pending`):
+#: `decision` is a question and no write, and `finding` is the review of findings at once.
+PENDING_POINTS = (
+    "finding",
+    "proposed_goal",
+    "task_in_goal",
+    "cancel_outside",
+    "cancel_shared",
+    "condition",
+    "goal_close",
+    "goal_defer",
+)
+#: How a waiting action ended: done on the answer, declined by it, dropped as no longer
+#: applying or with its item gone another way, or withdrawn by the session that asked.
+PENDING_OUTCOMES = ("carried_out", "declined", "dropped", "withdrawn")
+_PENDING_POINT_SQL = ",".join(f"'{point}'" for point in PENDING_POINTS)
+_PENDING_OUTCOME_SQL = ",".join(f"'{outcome}'" for outcome in PENDING_OUTCOMES)
+#: A write an agent asked for that waits for the owner's answer: the point, the write as
+#: checked and what its asker saw (`action_json`), the call that asked, and once it
+#: ended, how and by which call. Its questions name it (`work_item_requests.action_id`).
+#: It goes with its item.
+PENDING_ACTIONS = f"""CREATE TABLE IF NOT EXISTS pending_actions(
+    action_id TEXT PRIMARY KEY,
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    point TEXT NOT NULL CHECK(point IN ({_PENDING_POINT_SQL})),
+    action_json TEXT NOT NULL,
+    asked_call INTEGER NOT NULL REFERENCES execution_events(id),
+    created_at TEXT NOT NULL,
+    outcome TEXT CHECK(outcome IN ({_PENDING_OUTCOME_SQL})),
+    ended_call INTEGER REFERENCES execution_events(id),
+    ended_at TEXT,
+    CHECK((outcome IS NULL) = (ended_at IS NULL))
+)"""
+#: One open action per item and point.
+PENDING_ACTIONS_OPEN = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS pending_actions_open"
+    " ON pending_actions(work_item_id, point) WHERE outcome IS NULL"
+)
+#: The questions and requests of one action, which its end closes together.
+REQUESTS_ACTION_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_item_requests_action"
+    " ON work_item_requests(action_id) WHERE action_id IS NOT NULL"
+)
+#: The table, its index and the index of the requests, as a fresh store and the
+#: work-model migration create them.
+PENDING = (PENDING_ACTIONS, PENDING_ACTIONS_OPEN, REQUESTS_ACTION_INDEX)
+_PENDING = "".join(f"{statement};\n" for statement in PENDING)
+
 
 _ACCEPTED_SQL = ",".join(f"'{category}'" for category in model.ACCEPTED_CATEGORIES)
 
@@ -348,7 +396,8 @@ _PURPOSE_SQL = ",".join(f"'{purpose}'" for purpose in request_model.PURPOSES)
 #: A question, a decision or a list, asked of the owner or of one agent session, and
 #: how it ended. Closing its item ends one still pending (`questions.end`), as done or
 #: cancelled. The 3.0 migration rebuilds the table from this text, so the columns
-#: later schemas appended stand in the order they were appended, `purpose` last.
+#: later schemas appended stand in the order they were appended, then `purpose` and the
+#: action waiting for the owner the question is about (`action_id`), last.
 _WORK_ITEM_REQUESTS = f"""(
     request_id TEXT PRIMARY KEY,
     work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
@@ -367,7 +416,8 @@ _WORK_ITEM_REQUESTS = f"""(
     revision INTEGER NOT NULL DEFAULT 0,
     expired_reason TEXT CHECK(expired_reason IN ({_EXPIRED_REASON_SQL})){_appended("work_item_requests")},
     {ADDRESSEE_COLUMN},
-    purpose TEXT CHECK(purpose IS NULL OR purpose IN ({_PURPOSE_SQL}))
+    purpose TEXT CHECK(purpose IS NULL OR purpose IN ({_PURPOSE_SQL})),
+    action_id TEXT REFERENCES pending_actions(action_id) ON DELETE CASCADE
 )"""
 _REBUILT = {
     "planning_spaces": _PLANNING_SPACES,
@@ -542,7 +592,7 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {DEFERRALS_UNTIL_ITEM_INDEX};
 {_PARTICIPATION}
 {AGENT_DECISIONS};
-{_ITEM_PROJECTS}
+{_PENDING}{_ITEM_PROJECTS}
 """
 
 
@@ -964,6 +1014,7 @@ SCHEMA_TABLES = (
     "participation_settings",
     "label_settings",
     "agent_decisions",
+    "pending_actions",
 )
 
 

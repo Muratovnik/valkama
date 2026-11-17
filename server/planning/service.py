@@ -33,6 +33,7 @@ from . import (
     item_tree,
     leases,
     model,
+    pending,
     questions,
     queue,
     read_model,
@@ -1646,8 +1647,12 @@ def _transition(
         _log(conn, identity, "checklist_released", step["text"][:120], author)
     if target["is_terminal"]:
         # A close ends what still waits on the item, saying how it closed; reopening
-        # brings none of it back.
-        questions.end(conn, identity, questions.closed_reason(str(target["category"])), author)
+        # brings none of it back. A write that waited for the owner is dropped with it.
+        ended = questions.closed_reason(str(target["category"]))
+        pending.drop_on(
+            conn, identity, f"the item closed in {target['key']}", reason=ended, author=author
+        )
+        questions.end(conn, identity, ended, author)
     elif out_of_review:
         # The question of review is about the work as it stood there: a move that takes
         # the item elsewhere takes it back.
@@ -2425,13 +2430,13 @@ def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
         if _UNSETTLED.get() is not None:
             yield entered
             return
-        pending: dict[str, tuple[str | None, str]] = {}
-        token = _UNSETTLED.set(pending)
+        unsettled: dict[str, tuple[str | None, str]] = {}
+        token = _UNSETTLED.set(unsettled)
         try:
             yield entered
         finally:
             _UNSETTLED.reset(token)
-        for identity, (author, reason) in pending.items():
+        for identity, (author, reason) in unsettled.items():
             _hand_back(conn, identity, author, reason)
 
 
@@ -2469,10 +2474,10 @@ def _settle(
     made, for the caller's `requeued`; inside one the item waits for its end.
     """
 
-    pending = _UNSETTLED.get()
-    if pending is None:
+    unsettled = _UNSETTLED.get()
+    if unsettled is None:
         return _hand_back(conn, identity, author, reason)
-    pending.setdefault(identity, (author, reason))
+    unsettled.setdefault(identity, (author, reason))
     return None
 
 
@@ -3437,9 +3442,18 @@ def _fold(
     for row, found, target in merging:
         identity = str(row["work_item_id"])
         reference = read_model.reference(conn, row)
+        # A write that waited for the owner was about this item, not the survivor: it is
+        # dropped before the questions move, and its questions end here as cancelled.
+        pending.drop_on(
+            conn,
+            identity,
+            f"merged into {survivor_ref}",
+            reason=questions.closed_reason("cancelled"),
+            author=author,
+        )
         # Only a question to the owner is said to wait on the survivor: a list waits for
         # nobody, and a request asked of an agent session waits for that session.
-        pending = conn.execute(
+        waiting_on = conn.execute(
             _OWNER_QUESTIONS_ON,
             (identity,),
         ).fetchone()[0]
@@ -3447,9 +3461,11 @@ def _fold(
         # The question was about the work, and the work moves. Left here a pending
         # one would end with this item, and its answer would stay on a closed one.
         # A request asked of an agent session is about the work too, and moves with it.
-        # A list goes with the comment it stands under, so a report's stays here.
+        # A list goes with the comment it stands under, so a report's stays here, and
+        # the questions of a dropped action stay with the action.
         conn.execute(
             "UPDATE work_item_requests SET work_item_id = ? WHERE work_item_id = ?"
+            " AND action_id IS NULL"
             " AND (comment_id IS NULL OR comment_id IN (SELECT value FROM json_each(?)))",
             (survivor_id, identity, json.dumps(roots)),
         )
@@ -3517,9 +3533,9 @@ def _fold(
                 f" {read_model.reference(conn, read_model.item_by_id(conn, str(parent)))};"
                 f" {survivor_ref} keeps its own parent"
             )
-        if pending:
+        if waiting_on:
             warnings.append(
-                f"{reference}'s {pending} pending request(s) now wait on {survivor_ref}"
+                f"{reference}'s {waiting_on} pending request(s) now wait on {survivor_ref}"
             )
         report.append(
             {

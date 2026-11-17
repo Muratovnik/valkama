@@ -38,6 +38,7 @@ export const EVENT_ACTIONS = [
   'checklist_removed',
   'split_off',
   'split_from',
+  'action_dropped',
 ] as const
 
 /** The longest detail any event but `labels_changed` carries. */

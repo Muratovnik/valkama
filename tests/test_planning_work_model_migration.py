@@ -50,6 +50,7 @@ STEP_NAMES = [
     "history-actions",
     "participation",
     "agent-decisions",
+    "pending-actions",
 ]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
@@ -58,6 +59,7 @@ POSTCONDITION_NAMES = [
     "deferred-items",
     "participation",
     "agent-decisions",
+    "pending-actions",
     "second-run",
     "recovery-point",
 ]
@@ -803,7 +805,9 @@ class MigratedStoreTests(StoreCase):
     ) -> None:
         columns = [row[1] for row in self.read("PRAGMA table_info(work_item_requests)")]
         self.assertEqual(
-            ["addressee", "purpose"], columns[-2:], "in the order a fresh store declares them"
+            ["addressee", "purpose", "action_id"],
+            columns[-3:],
+            "in the order a fresh store declares them",
         )
         [index] = self.read(
             "SELECT sql FROM sqlite_master WHERE name = 'work_item_requests_addressee'"
@@ -860,6 +864,7 @@ class MigratedStoreTests(StoreCase):
                         "agent_decisions",
                         "label_settings",
                         "participation_settings",
+                        "pending_actions",
                         "work_item_deferrals",
                         "work_item_waiting_notices",
                     ]
@@ -1107,6 +1112,81 @@ class MigratedStoreTests(StoreCase):
         decisions.mark(conn, int(event[0]), "goal_close", "closed the goal")
         conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (event[1],))
         self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM agent_decisions").fetchone()[0])
+        conn.rollback()
+
+    def test_no_request_waits_on_an_action_after_migration(self) -> None:
+        """The table of waiting writes comes empty and declared as a fresh store declares
+        it; every request the store kept names no action and carries no purpose of the
+        owner's participation, and the history holds no dropped action but takes one."""
+
+        declared = {
+            str(row[0]): str(row[1])
+            for row in self.read(
+                "SELECT name, tbl_name FROM sqlite_master WHERE sql IS NOT NULL AND name IN"
+                " ('pending_actions', 'pending_actions_open', 'work_item_requests_action')"
+            )
+        }
+        self.assertEqual(
+            {
+                "pending_actions": "pending_actions",
+                "pending_actions_open": "pending_actions",
+                "work_item_requests_action": "work_item_requests",
+            },
+            declared,
+        )
+        self.assertEqual(0, self.read("SELECT COUNT(*) FROM pending_actions")[0][0])
+        self.assertEqual(
+            [("kept-request", None, None)],
+            [
+                tuple(row)
+                for row in self.read(
+                    "SELECT request_id, action_id, purpose FROM work_item_requests"
+                )
+            ],
+        )
+        self.assertEqual(
+            0,
+            self.read("SELECT COUNT(*) FROM work_item_events WHERE action = 'action_dropped'")[0][
+                0
+            ],
+        )
+        steps = {step["name"]: step for step in self.report["steps"]}
+        self.assertEqual(
+            (
+                True,
+                {
+                    "created": [
+                        "pending_actions",
+                        "pending_actions_open",
+                        "work_item_requests_action",
+                    ]
+                },
+            ),
+            (steps["pending-actions"]["needed"], steps["pending-actions"]["result"]),
+        )
+        held = {
+            entry["name"]: (entry["passed"], entry["detail"])
+            for entry in self.report["postconditions"]
+            if entry["name"] in ("pending-actions", "fresh-shape", "second-run")
+        }
+        self.assertEqual(
+            (True, {"actions": 0, "requests": 0, "dropped": 0}), held["pending-actions"]
+        )
+        # `fresh-shape` held the table, the requests and the events to a fresh store's declaration,
+        # and a second run takes no step.
+        self.assertTrue(held["fresh-shape"][0])
+        self.assertEqual((True, {"steps_needed_again": []}), held["second-run"])
+        self.assertEqual("current", store.migrate_work_model(self.path)["status"])
+        # The migrated store opens with every row it held, and its history takes a
+        # dropped action, which a fresh store's takes.
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        events = conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        self.assertEqual(self.read("SELECT COUNT(*) FROM work_item_events")[0][0], events)
+        conn.execute(
+            "INSERT INTO work_item_events(work_item_id, action, detail)"
+            " SELECT work_item_id, 'action_dropped', 'proposed_goal: test' FROM work_items LIMIT 1"
+        )
         conn.rollback()
 
     def test_a_second_run_changes_nothing_and_says_the_migration_ran(self) -> None:
@@ -1809,6 +1889,10 @@ FAULTS = (
         "INSERT INTO agent_decisions(event_id, point, what)"
         " SELECT MAX(id), 'goal_close', 'closed' FROM work_item_events",
     ),
+    fault(
+        "pending-actions",
+        "UPDATE work_item_requests SET purpose = 'goal' WHERE request_id = 'kept-request'",
+    ),
     fault("awaiting-rows", "UPDATE work_item_confirmations SET left_at = since"),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
@@ -2005,6 +2089,29 @@ CLAUSE_FAULTS: tuple[
             )
         ],
         ["integrity", "no-old-waiting", "fresh-tables"],
+    ),
+    (
+        "pending-actions",
+        "the request kept-request (cancel) carries a purpose of participation",
+        lambda _ids: [
+            (
+                "UPDATE work_item_requests SET purpose = 'cancel' WHERE request_id = 'kept-request'",
+                (),
+            )
+        ],
+        ["pending-actions"],
+    ),
+    (
+        "pending-actions",
+        "the history holds 1 action_dropped, not 0",
+        lambda ids: [
+            (
+                "INSERT INTO work_item_events(work_item_id, action, detail)"
+                " VALUES(?, 'action_dropped', 'proposed_goal: dropped')",
+                (ids["WM-1"],),
+            )
+        ],
+        ["row-counts", "pending-actions"],
     ),
     (
         "requests-asked",

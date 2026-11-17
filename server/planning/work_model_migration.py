@@ -50,7 +50,8 @@ otherwise cascade into them:
   session heard (`work_item_waiting_notices`) and its two indexes. It starts empty:
   which of a person's acts before 3.0 nobody heard cannot be known now.
 - **ended-requests** rebuilds `work_item_requests` from the fresh declaration, with the `purpose`
-  a question to the owner may carry and the reasons a close stores: a request still
+  a question to the owner may carry, the action waiting for the owner it is about
+  (`action_id`, null on every row it carries) and the reasons a close stores: a request still
   pending on a closed item, which 2.9 read `task_closed` and left pending, ends
   `expired` as `item_completed` or `item_cancelled` by the category its item stands
   in, with no event, as does one that stored `task_closed`. One that had already
@@ -73,6 +74,12 @@ otherwise cascade into them:
 - **agent-decisions** creates the summary of the decisions agents took on their own
   (`agent_decisions`), empty: the 2.9 history knew no points, so no earlier decision
   can be marked. Its postcondition of the same name holds it empty.
+- **pending-actions** creates the table of the writes that wait for the owner's answer
+  (`pending_actions`), its index of the open ones and the index of the requests by their
+  action, empty: no 2.9 write waited, and a question asked before keeps asking as it did,
+  its answer acted on by the agent. Its postcondition of the same name holds the table
+  empty, no request naming an action or carrying a purpose of the owner's
+  participation, and no `action_dropped` in the history.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -99,7 +106,16 @@ from typing import Any
 from .. import store_steps
 from ..store_steps import Context, Postcondition, Step, UnmetError
 from . import closing as closing_rules
-from . import item_tree, model, participation, questions, read_model, words, work_model_probes
+from . import (
+    item_tree,
+    model,
+    participation,
+    questions,
+    read_model,
+    request_model,
+    words,
+    work_model_probes,
+)
 from . import store as planning_store
 
 #: Who every record the migration writes names as its author.
@@ -1699,8 +1715,10 @@ def _requests_needed(conn: sqlite3.Connection, context: Context) -> bool:
     declared = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (_REQUESTS,)
     ).fetchone()
+    columns = _columns(conn, _REQUESTS)
     return (
-        "purpose" not in _columns(conn, _REQUESTS)
+        "purpose" not in columns
+        or "action_id" not in columns
         or "'task_closed'" in str(declared[0])
         or conn.execute(f"SELECT 1{_REQUEST_STATES} WHERE {_ENDS} LIMIT 1").fetchone() is not None
     )
@@ -2012,6 +2030,79 @@ def _decisions_empty(conn: sqlite3.Connection, context: Context) -> Mapping[str,
     return {"rows": rows}
 
 
+# -- pending-actions: the writes that wait for the owner, none -----------------------
+
+#: The step and the postcondition that give the store the writes waiting for the owner.
+PENDING_ACTIONS = "pending-actions"
+_PENDING_OBJECTS = ("pending_actions", "pending_actions_open", "work_item_requests_action")
+
+
+def _pending_missing(conn: sqlite3.Connection) -> list[str]:
+    present = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE name IN (?, ?, ?)", _PENDING_OBJECTS
+        )
+    }
+    return [name for name in _PENDING_OBJECTS if name not in present]
+
+
+def _pending_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return bool(_pending_missing(conn))
+
+
+def _create_pending(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table and its two indexes, empty: no write of 2.9 waited for the owner."""
+
+    del context
+    missing = _pending_missing(conn)
+    for statement in planning_store.PENDING:
+        conn.execute(statement)
+    return {"created": missing}
+
+
+def _check_pending(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    missing = _pending_missing(conn)
+    if missing:
+        raise UnmetError(f"{', '.join(missing)} missing")
+
+
+def _pending_none(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Nothing waits on an action: no action, no request naming one or carrying a purpose
+    of the owner's participation, and no action dropped in the history."""
+
+    del context
+    actions = int(conn.execute("SELECT COUNT(*) FROM pending_actions").fetchone()[0])
+    named = [
+        str(row[0])
+        for row in conn.execute(
+            "SELECT request_id FROM work_item_requests WHERE action_id IS NOT NULL"
+            " ORDER BY request_id"
+        )
+    ]
+    purposed = [
+        f"{row[0]} ({row[1]})"
+        for row in conn.execute(
+            "SELECT request_id, purpose FROM work_item_requests"
+            " WHERE purpose IN (SELECT value FROM json_each(?)) ORDER BY request_id",
+            (json.dumps(request_model.PARTICIPATION_PURPOSES),),
+        )
+    ]
+    dropped = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM work_item_events WHERE action = 'action_dropped'"
+        ).fetchone()[0]
+    )
+    found = [f"pending_actions holds {actions} rows, not 0"] if actions else []
+    found += [f"the request {request} names an action" for request in named]
+    found += [f"the request {request} carries a purpose of participation" for request in purposed]
+    found += [f"the history holds {dropped} action_dropped, not 0"] if dropped else []
+    _unmet(found, "an action waits")
+    return {"actions": actions, "requests": len(named) + len(purposed), "dropped": dropped}
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -2085,6 +2176,13 @@ STEPS = (
         _create_decisions,
         _decisions_needed,
         _check_decisions,
+    ),
+    Step(
+        PENDING_ACTIONS,
+        "the writes that wait for the owner",
+        _create_pending,
+        _pending_needed,
+        _check_pending,
     ),
 )
 
@@ -2957,6 +3055,7 @@ POSTCONDITIONS = (
         PARTICIPATION, "no setting stored; every space at the default set", _participation_default
     ),
     Postcondition(AGENT_DECISIONS, "no decision marked", _decisions_empty),
+    Postcondition(PENDING_ACTIONS, "no request waits on an action", _pending_none),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 

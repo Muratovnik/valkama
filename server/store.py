@@ -256,8 +256,9 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
 # as the default set. The owner sets there where an agent's decision waits for them; a
 # build at 19 would read none of it and let an agent go ahead where the owner chose to
 # decide, so the ratchet makes it refuse a store at 20. The same schema marks the
-# decisions an agent took on its own (`agent_decisions`), empty in a migrated store. The
-# work-model migration carries a store at 17 straight to 20.
+# decisions an agent took on its own (`agent_decisions`), and holds the writes that wait
+# for the owner's answer (`pending_actions`, named by their questions' `action_id`), both
+# empty in a migrated store. The work-model migration carries a store at 17 straight to 20.
 STORE_SCHEMA_VERSION = 20
 
 

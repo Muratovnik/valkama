@@ -174,12 +174,14 @@ def ask(
     expires_at: str | None = None,
     addressee: str | None = None,
     comment_id: int | None = None,
+    action_id: str | None = None,
 ) -> str:
     """Insert one request on an item and its `request_created`; answer its id.
 
     The one insert of a request row. Its caller has checked and parsed what it
     passes, and checks after the insert what it must of the row; `purpose` names
-    one of `request_model.PURPOSES`, or nothing.
+    one of `request_model.PURPOSES`, or nothing, and `action_id` the action waiting
+    for the owner the request is about (`pending`), or nothing.
     """
 
     if purpose is not None:
@@ -187,8 +189,8 @@ def ask(
     identity = model.new_id()
     conn.execute(
         "INSERT INTO work_item_requests(request_id,work_item_id,comment_id,kind,prompt,"
-        "fields_json,author,execution_id,session_id,expires_at,created_at,addressee,purpose)"
-        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "fields_json,author,execution_id,session_id,expires_at,created_at,addressee,purpose,"
+        "action_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             identity,
             work_item_id,
@@ -203,6 +205,7 @@ def ask(
             request_model.now(),
             addressee,
             purpose,
+            action_id,
         ),
     )
     log_event(conn, work_item_id, "request_created", identity, author)
@@ -216,8 +219,10 @@ def end(
     author: str | None,
     *,
     purpose: str | None = None,
+    action_id: str | None = None,
 ) -> list[str]:
-    """End every request still pending on an item, or those of one `purpose`, unanswered.
+    """End every request still pending on an item, or those of one `purpose` or of one
+    action waiting for the owner (`action_id`), unanswered.
 
     One still waiting becomes `expired` with `reason`, one of
     `request_model.EXPIRED_REASONS`, and gets its `request_expired`, whoever it
@@ -235,6 +240,9 @@ def end(
     if purpose is not None:
         query += " AND r.purpose = ?"
         parameters += (purpose,)
+    if action_id is not None:
+        query += " AND r.action_id = ?"
+        parameters += (action_id,)
     rows = _read(conn, query + " ORDER BY r.created_at, r.request_id", parameters)
     at = request_model.now()
     ended = []

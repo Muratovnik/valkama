@@ -85,6 +85,14 @@ _ROWS: dict[str, dict[str, object]] = {
         "value": "on",
         "updated_at": "probe",
     },
+    "pending_actions": {
+        "action_id": _NEW,
+        "work_item_id": _NEW,
+        "point": "finding",
+        "action_json": "{}",
+        "asked_call": 0,
+        "created_at": "probe",
+    },
     "planning_spaces": {
         "planning_space_id": _NEW,
         "name": _NEW,
@@ -212,6 +220,10 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
         ({"ready": None},),
         ({"ready": None, "description": "probe"},),
     ),
+    ("pending_actions", "(outcome IS NULL) = (ended_at IS NULL)"): (
+        ({"outcome": "dropped"}, {"ended_at": "probe"}),
+        ({"outcome": "dropped", "ended_at": "probe"},),
+    ),
     ("planning_spaces", "next_number >= 1"): (({"next_number": 0},), ({"next_number": 1},)),
     ("quota_account_names", "length(organization) BETWEEN 1 AND 512"): (
         ({"organization": ""}, {"organization": "o" * 513}),
@@ -275,6 +287,10 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
 #: A listed value another clause of the row ties to a second column, with the
 #: change that lets the row take it.
 _TAKEN_WITH: dict[tuple[str, str, object], dict[str, object]] = {
+    **{
+        ("pending_actions", "outcome", outcome): {"ended_at": "probe"}
+        for outcome in ("carried_out", "declined", "dropped", "withdrawn")
+    },
     ("quota_alerts", "kind", "week_model"): {"model": "probe"},
     ("quota_samples", "kind", "week_model"): {"model": "probe"},
     ("quota_samples", "source", "poll"): _POLLED,

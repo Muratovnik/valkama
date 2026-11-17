@@ -11,7 +11,8 @@ every request still pending on it, stored as done or cancelled (`questions.end`)
 A question with a purpose, such as the one a move into review asks, is the owner's
 to answer, in Valkama; its answer is carried out in the write that gives it
 (`carry_out`), so it is never declined or changed, and only the session that asked
-it withdraws it.
+it withdraws it. A question about a write that waits for the owner (`pending`) carries
+that write out, declines it or drops it, by its point (`CARRIERS`).
 """
 
 from __future__ import annotations
@@ -19,7 +20,8 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 
 from . import (
     calls,
@@ -27,6 +29,7 @@ from . import (
     deferral,
     leases,
     model,
+    pending,
     questions,
     read_model,
     request_model,
@@ -151,7 +154,18 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
         "comment_id": row["comment_id"] if "comment_id" in columns else None,
         # What the owner's answer carries out; an attached store from before has none.
         "purpose": row["purpose"] if "purpose" in columns else None,
+        # The write waiting for the owner the question is about, only on such a question.
+        **_action_part(conn, row),
     }
+
+
+def _action_part(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    """The `action` of a question about a write that waits for the owner; nothing on any other."""
+
+    action = pending.of_request(row)
+    if action is None:
+        return {}
+    return {"action": pending.part(conn, action, _purpose(row), str(row["author"]))}
 
 
 def get(conn: sqlite3.Connection, identity: object, *, replies: bool = False) -> dict:
@@ -1005,6 +1019,9 @@ def carry_out(
     `deferred` or `left_for_next_session`; None for a question with no purpose.
     """
 
+    action = pending.of_request(row)
+    if action is not None:
+        return _carry_action(conn, row, pending.get(conn, action), answers, note, author)
     purpose = _purpose(row)
     if purpose == closing.CONFIRM:
         return _confirmed(conn, row, answers, note, author)
@@ -1029,6 +1046,70 @@ def carry_out(
         conn, read_model.reference(conn, item), key, reason=reason, author=author
     )
     return category
+
+
+@dataclass(frozen=True)
+class Carrier:
+    """What carries out the owner's answer at one point.
+
+    `outcomes` gives the outcome of the action by the answer's choice: `carried_out`
+    for the choice that makes the write, `declined` for one that leaves it unmade.
+    `run` does what the choice says, as the person who answered, held to the guards
+    of the write it makes: a refusal refuses the answer with it. It gets the question,
+    the action, the answer as stored and its note.
+    """
+
+    outcomes: Mapping[str, str]
+    run: Callable[[sqlite3.Connection, sqlite3.Row, pending.Action, dict, str, str | None], object]
+
+
+#: The carrier of each point, by the point; a point its gate does not keep back yet has none.
+CARRIERS: dict[str, Carrier] = {}
+
+
+def _carry_action(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict | None,
+    note: str,
+    author: str | None,
+) -> str | None:
+    """The answer to a question about a write that waits for the owner, or its withdrawal.
+
+    A withdrawal withdraws the action, and every other question and request of it
+    ends with it. An answer to a request asked of a session carries nothing out here.
+    The owner's answer to an action that no longer applies drops it (`pending.inapplicable`),
+    the answer standing as given; to one that still does, the action ends with the
+    outcome its carrier gives the choice, and then the carrier does what the choice
+    says, so the write it makes finds the action already ended. Answers the outcome.
+    """
+
+    if answers is None:
+        pending.end(conn, action, pending.WITHDRAWN, author=author)
+        return pending.WITHDRAWN
+    if _addressee(row) is not None:
+        return None
+    why = pending.inapplicable(conn, action)
+    if why is not None:
+        pending.end(conn, action, pending.DROPPED, author=author, why=why)
+        return pending.DROPPED
+    carrier = CARRIERS.get(action.point)
+    if carrier is None:
+        raise model.PlanningError(
+            f"[purpose] this build carries out no answer on {action.point}; withdraw the question"
+        )
+    given = answers.get(request_model.REVIEW_ANSWER)
+    outcome = carrier.outcomes.get(str(given)) if given is not None else None
+    if outcome is None:
+        choices = ", ".join(carrier.outcomes)
+        raise model.PlanningError(
+            f"[purpose] answer is one of {choices}: an own variant carries nothing out;"
+            " say more in note"
+        )
+    pending.end(conn, action, outcome, author=author)
+    carrier.run(conn, row, action, answers, note, author)
+    return outcome
 
 
 #: What a summary the owner's confirmation writes says comes next.

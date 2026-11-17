@@ -103,6 +103,9 @@ KINDS = {
     "checklist_removed": "steps_edited",
     # Steps that left with a part split off: they left the item, as an edit takes them.
     "split_off": "steps_edited",
+    # A write that waited for the owner, dropped without being carried out: news of the
+    # owner's participation, not of where the work stands, which it leaves as it was.
+    "action_dropped": "action_dropped",
 }
 #: The kinds that say where the work stands: its state changed, it got its summary, it
 #: was left without a holder or changed holders, it came to wait for the owner or

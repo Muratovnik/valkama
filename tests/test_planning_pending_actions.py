@@ -1,0 +1,692 @@
+"""Writes that wait for the owner: how one is asked, read, answered, and how it ends.
+
+The expectations come from the contract of a waiting action: one open per item and
+point, the same one sent again answering the same wait and another refused with
+`[participation]`; the asking agent's session following the item and Valkama's asking
+making no follower; the `action` of the question read whole and its point in the
+compact form; an answer ending the action before its write is made, an action that no
+longer applies dropped with the answer standing; and a merge, a close or a delete of
+its item taking it. The cancel list a question shows is held to the one a cancel's
+own refusal hands over, not to the module that builds both.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+import tempfile
+import unittest
+from unittest import mock
+
+from server import store
+from server.planning import (
+    api,
+    calls,
+    model,
+    pending,
+    person_events,
+    questions,
+    request_model,
+    requests,
+    service,
+)
+
+AGENT = calls.Identity(calls.CONFIRMED, calls.CLAUDE_PAIR, session_id="session-a")
+#: A subagent of the same session: what it asks, the session's conversation follows.
+SUBAGENT = calls.Identity(
+    calls.CONFIRMED, calls.CLAUDE_PAIR, session_id="session-a", agent_id="worker-a"
+)
+OTHER = calls.Identity(calls.CONFIRMED, calls.CLAUDE_PAIR, session_id="session-b")
+#: How the question names the agent that asked: as a holder is named.
+ASKER = "claude (session session-a)"
+FIELDS = [
+    {
+        "id": "answer",
+        "label": "Answer",
+        "type": "choice",
+        "required": True,
+        "options": [{"id": "do", "label": "Do it"}, {"id": "drop", "label": "Drop it"}],
+    }
+]
+GOAL = pending.Proposal("accept", {"basis": "owner"}, "accept the goal", reason="the plan needs it")
+
+
+class Harness(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        path = os.path.join(directory.name, "valkama.sqlite3")
+        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": path})
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        service.create_planning_space(self.conn, name="Alpha", key="ALPHA")
+        self.conn.commit()
+
+    # -- writes ---------------------------------------------------------------------
+
+    def filed(
+        self,
+        title: str,
+        *,
+        kind: str = "task",
+        parent: str | None = None,
+        by: calls.Identity = AGENT,
+    ) -> str:
+        """An item filed by `by`: an agent's lies in triage, the owner's is accepted."""
+
+        with calls.bind(by, "create_work_item"):
+            created = service.create_work_item(
+                self.conn, space="ALPHA", title=title, kind=kind, parent=parent
+            )
+        self.conn.commit()
+        return str(created["reference"])
+
+    def ask(
+        self,
+        reference: str,
+        proposal: pending.Proposal = GOAL,
+        *,
+        point: str = "proposed_goal",
+        purpose: str = "goal",
+        by: calls.Identity = AGENT,
+        tool: str = "create_work_item",
+    ) -> pending.Waiting:
+        try:
+            with calls.bind(by, tool):
+                waiting = pending.ask(
+                    self.conn,
+                    self.id(reference),
+                    point,
+                    proposal,
+                    purpose=purpose,
+                    prompt="Take it on?",
+                    fields=request_model.fields(FIELDS),
+                    author="claude",
+                )
+        except BaseException:
+            self.conn.rollback()
+            raise
+        self.conn.commit()
+        return waiting
+
+    def answer(self, question: str, choice: str, by: calls.Identity | None = None) -> dict:
+        row = self.request(question)
+        try:
+            with calls.bind(by or calls.browser(), "/api/planning/request/resolve"):
+                record = requests.resolve(
+                    self.conn,
+                    question,
+                    status="answered",
+                    expected_revision=int(row["revision"]),
+                    answers={"answer": choice},
+                    author="user",
+                )
+        except BaseException:
+            self.conn.rollback()
+            raise
+        self.conn.commit()
+        return record
+
+    def withdraw(self, question: str, by: calls.Identity = AGENT) -> dict:
+        row = self.request(question)
+        try:
+            with calls.bind(by, "expire_work_item_request"):
+                record = requests.resolve(
+                    self.conn,
+                    question,
+                    status="expired",
+                    expected_revision=int(row["revision"]),
+                    author="claude",
+                )
+        except BaseException:
+            self.conn.rollback()
+            raise
+        self.conn.commit()
+        return record
+
+    def person(self, path: str, **payload: object) -> dict:
+        with calls.bind(calls.browser(), path):
+            answer = api.handle_post(self.conn, path, payload)
+        self.conn.commit()
+        assert answer is not None
+        return answer[1]
+
+    # -- reads ----------------------------------------------------------------------
+
+    def id(self, reference: str) -> str:
+        return str(service.get_work_item(self.conn, reference)["work_item_id"])
+
+    def row(self, reference: str) -> sqlite3.Row:
+        return self.conn.execute(
+            "SELECT * FROM work_items WHERE work_item_id = ?", (self.id(reference),)
+        ).fetchone()
+
+    def request(self, question: str) -> sqlite3.Row:
+        return self.conn.execute(
+            "SELECT * FROM work_item_requests WHERE request_id = ?", (question,)
+        ).fetchone()
+
+    def action(self, identity: str) -> sqlite3.Row:
+        return self.conn.execute(
+            "SELECT * FROM pending_actions WHERE action_id = ?", (identity,)
+        ).fetchone()
+
+    def counts(self) -> tuple[int, int, int, int]:
+        return tuple(  # type: ignore[return-value]
+            int(self.conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            for table in (
+                "pending_actions",
+                "work_item_requests",
+                "work_item_events",
+                "work_item_subscriptions",
+            )
+        )
+
+    def events(self, reference: str, action: str) -> list[str]:
+        return [
+            str(row[0])
+            for row in self.conn.execute(
+                "SELECT detail FROM work_item_events WHERE work_item_id = ? AND action = ?"
+                " ORDER BY id",
+                (self.id(reference), action),
+            )
+        ]
+
+    def followers(self, reference: str) -> list[tuple]:
+        return [
+            tuple(row)
+            for row in self.conn.execute(
+                "SELECT session_id, agent_id, follows FROM work_item_subscriptions"
+                " WHERE work_item_id = ? ORDER BY session_id, agent_id",
+                (self.id(reference),),
+            )
+        ]
+
+    def applies(self, waiting: pending.Waiting) -> str | None:
+        return pending.inapplicable(self.conn, pending.get(self.conn, waiting.action))
+
+
+class AskTests(Harness):
+    def test_an_agents_action_waits_on_its_question_and_its_session_follows(self) -> None:
+        # Filed by another session, which follows what it filed.
+        goal = self.filed("A goal of the agent's own", kind="goal", by=OTHER)
+        self.assertEqual([("session-b", "", 1)], self.followers(goal))
+        waiting = self.ask(goal, by=SUBAGENT)
+
+        question = self.request(waiting.question)
+        self.assertEqual(
+            {
+                "action": waiting.action,
+                "point": "proposed_goal",
+                "question": waiting.question,
+                "what": "accept the goal",
+            },
+            waiting.answer(),
+        )
+        self.assertEqual(
+            ("goal", waiting.action, None),
+            (question["purpose"], question["action_id"], question["addressee"]),
+        )
+        stored = self.action(waiting.action)
+        asked_by = self.conn.execute(
+            "SELECT session_id, agent_id FROM execution_events WHERE id = ?",
+            (stored["asked_call"],),
+        ).fetchone()
+        self.assertEqual(("session-a", "worker-a"), tuple(asked_by))
+        self.assertEqual(
+            ("proposed_goal", None, None), (stored["point"], stored["outcome"], stored["ended_at"])
+        )
+        # The session's own conversation follows the goal, though its subagent asked.
+        self.assertEqual([("session-a", "", 1), ("session-b", "", 1)], self.followers(goal))
+        self.assertEqual(
+            ["request_created"],
+            [
+                str(row[0])
+                for row in self.conn.execute(
+                    "SELECT action FROM work_item_events WHERE work_item_id = ? AND id >"
+                    " (SELECT MAX(id) FROM work_item_events WHERE work_item_id = ? AND action = 'created')",
+                    (self.id(goal), self.id(goal)),
+                )
+            ],
+        )
+        self.assertEqual(["triage"], [service.get_work_item(self.conn, goal)["state"]["category"]])
+
+    def test_the_same_action_again_answers_the_same_wait_and_writes_nothing(self) -> None:
+        goal = self.filed("Asked twice", kind="goal")
+        first = self.ask(goal)
+        before = self.counts()
+        again = self.ask(goal, pending.Proposal("accept", {"basis": "owner"}, "accept the goal"))
+        self.assertEqual(first, again)
+        self.assertEqual(before, self.counts())
+
+    def test_another_action_of_the_point_is_refused_and_another_point_waits_beside_it(
+        self,
+    ) -> None:
+        goal = self.filed("One wait a point", kind="goal")
+        self.ask(goal)
+        before = self.counts()
+        with self.assertRaises(model.PlanningError) as refused:
+            self.ask(goal, pending.Proposal("accept", {"basis": "assignment"}, "accept it"))
+        self.assertEqual(
+            "[participation] ALPHA-1 already waits for the owner on proposed_goal:"
+            " withdraw that question first",
+            str(refused.exception),
+        )
+        self.assertEqual(
+            (400, "invalid_request"),
+            (
+                api.error_response(refused.exception)[0],
+                api.error_response(refused.exception)[1]["error"]["code"],
+            ),
+        )
+        self.assertEqual(before, self.counts())
+        beside = self.ask(
+            goal,
+            pending.Proposal("defer", {"until": "2026-12-01"}, "put it off"),
+            point="goal_defer",
+        )
+        self.assertEqual(2, len(pending.open_on(self.conn, self.id(goal))))
+        self.assertEqual("goal_defer", beside.point)
+
+    def test_a_question_valkama_asked_subscribes_nobody(self) -> None:
+        goal = self.filed("Came back", kind="goal", by=OTHER)
+        before = self.followers(goal)
+        waiting = self.ask(goal, by=calls.valkama(), tool="deferral-return")
+        self.assertEqual(before, self.followers(goal))
+        part = requests.get(self.conn, waiting.question)["action"]
+        self.assertEqual("Valkama", part["asked_by"])
+
+    def test_the_holder_that_asks_is_not_made_a_follower(self) -> None:
+        task = self.filed("Held by its asker")
+        with calls.bind(AGENT, "claim_work_item"):
+            service.claim_work_item(self.conn, task, author="claude")
+        self.conn.commit()
+        self.ask(
+            task,
+            pending.Proposal("transition", {"state": "cancelled"}, f"cancel {task}"),
+            point="cancel_outside",
+            purpose="cancel",
+        )
+        self.assertEqual([], self.followers(task))
+
+
+class ReadTests(Harness):
+    def test_the_question_carries_the_action_whole_and_its_point_compact(self) -> None:
+        goal = self.filed("Owner's goal", kind="goal", by=calls.browser())
+        self.filed("Work under it", parent=goal, by=calls.browser())
+        waiting = self.ask(
+            goal,
+            pending.Proposal(
+                "transition",
+                {"state": "cancelled"},
+                f"cancel {goal}",
+                seen=pending.cancel_seen(self.conn, self.row(goal)),
+                reason="superseded by another plan",
+                proposed={"state": "cancelled"},
+            ),
+            point="cancel_outside",
+            purpose="cancel",
+        )
+        # The list and token a cancel of the goal is refused with, read apart.
+        with self.assertRaises(api.PlanningHttpError) as caught:
+            self.person(
+                "/api/planning/work-item/apply",
+                id=goal,
+                summary={"done": "Not needed", "next": "Nothing"},
+                transition={"state": "cancelled", "reason": "not needed"},
+            )
+        self.conn.rollback()
+        status, body = api.error_response(caught.exception)
+        self.assertEqual((409, "cancel_list"), (status, body["error"]["code"]))
+        listed = body["error"]
+        record = requests.get(self.conn, waiting.question)
+        part = record["action"]
+        self.assertEqual(
+            {
+                "id": waiting.action,
+                "point": "cancel_outside",
+                "asked_by": ASKER,
+                "reason": "superseded by another plan",
+                "proposed": {"state": "cancelled"},
+                "outcome": None,
+                "cancel_list": {
+                    "cancels": listed["cancels"],
+                    "dependents": listed["dependents"],
+                    "list_token": listed["list_token"],
+                },
+            },
+            {name: value for name, value in part.items() if name != "asked_at"},
+        )
+        self.assertEqual(str(self.action(waiting.action)["created_at"]), part["asked_at"])
+        self.assertEqual("cancel", record["purpose"])
+        [compact] = requests.item_questions(self.conn, self.id(goal))["items"]
+        self.assertEqual(
+            ({"point": "cancel_outside"}, "cancel"), (compact["action"], compact["purpose"])
+        )
+
+    def test_a_question_about_no_action_reads_as_before(self) -> None:
+        task = self.filed("Asked plainly")
+        with calls.bind(AGENT, "create_work_item_request"):
+            record = requests.create(
+                self.conn, task, kind="question", prompt="Which road?", fields=FIELDS
+            )
+        self.conn.commit()
+        self.assertNotIn("action", record)
+        [compact] = requests.item_questions(self.conn, self.id(task))["items"]
+        self.assertNotIn("action", compact)
+
+
+class CarryOutTests(Harness):
+    def setUp(self) -> None:
+        super().setUp()
+        self.ran: list[tuple[str, str | None]] = []
+
+        def run(conn, _row, action, answers, _note, _author):  # type: ignore[no-untyped-def]
+            # What the write would find: the action already ended.
+            self.ran.append((answers["answer"], pending.get(conn, action.id).outcome))
+
+        carriers = mock.patch.dict(
+            requests.CARRIERS,
+            {
+                "proposed_goal": requests.Carrier(
+                    {"do": pending.CARRIED_OUT, "drop": pending.DECLINED}, run
+                )
+            },
+        )
+        carriers.start()
+        self.addCleanup(carriers.stop)
+        self.goal = self.filed("Proposed by the agent", kind="goal")
+
+    def ended(self, waiting: pending.Waiting) -> tuple:
+        row = self.action(waiting.action)
+        return (row["outcome"], row["ended_call"] is not None, row["ended_at"] is not None)
+
+    def test_the_owners_choice_ends_the_action_before_its_write_is_made(self) -> None:
+        for choice, outcome in (("do", "carried_out"), ("drop", "declined")):
+            with self.subTest(choice=choice):
+                goal = self.filed(f"Answered {choice}", kind="goal")
+                waiting = self.ask(goal)
+                record = self.answer(waiting.question, choice)
+                self.assertEqual(outcome, record["carried_out"])
+                self.assertEqual((outcome, True, True), self.ended(waiting))
+                self.assertEqual((choice, outcome), self.ran[-1])
+                self.assertEqual([], pending.open_on(self.conn, self.id(goal)))
+
+    def test_an_own_variant_or_a_point_nothing_carries_is_refused_and_nothing_written(
+        self,
+    ) -> None:
+        waiting = self.ask(self.goal)
+        before = self.counts()
+        with self.assertRaises(model.PlanningError) as refused:
+            self.answer(waiting.question, "maybe")
+        self.assertEqual("answer answer does not match its field", str(refused.exception))
+        self.assertEqual(before, self.counts())
+        self.assertEqual((None, False, False), self.ended(waiting))
+        task = self.filed("Nothing carries this point")
+        other = self.ask(
+            task,
+            pending.Proposal(
+                "transition",
+                {"state": "cancelled"},
+                f"cancel {task}",
+                seen=pending.cancel_seen(self.conn, self.row(task)),
+            ),
+            point="cancel_outside",
+            purpose="cancel",
+        )
+        before = self.counts()
+        with self.assertRaises(model.PlanningError) as nothing:
+            self.answer(other.question, "do")
+        self.assertEqual(before, self.counts())
+        self.assertIsNone(self.action(other.action)["outcome"])
+        self.assertTrue(
+            str(nothing.exception).startswith(
+                "[purpose] this build carries out no answer on cancel_outside"
+            )
+        )
+        self.assertEqual("pending", self.request(other.question)["status"])
+        self.assertEqual([], self.ran)
+
+    def test_an_action_that_no_longer_applies_is_dropped_and_the_answer_stands(self) -> None:
+        waiting = self.ask(self.goal)
+        self.person("/api/planning/work-item/apply", id=self.goal, transition={"state": "ready"})
+        record = self.answer(waiting.question, "do")
+        self.assertEqual("dropped", record["carried_out"])
+        stored = self.request(waiting.question)
+        self.assertEqual(
+            ("answered", {"answer": "do"}), (stored["status"], json.loads(stored["answers_json"]))
+        )
+        self.assertEqual(("dropped", True, True), self.ended(waiting))
+        [detail] = self.events(self.goal, "action_dropped")
+        self.assertTrue(detail.startswith("proposed_goal: "), detail)
+        self.assertEqual([], self.ran)
+
+    def test_the_asker_withdraws_the_action_with_every_question_of_it(self) -> None:
+        waiting = self.ask(self.goal)
+        # A request of the same action asked of another session ends with it; that
+        # session has made a call, so it can be addressed.
+        with calls.bind(OTHER, "claim_ready_work_item"):
+            calls.call_id(self.conn, None)
+        with calls.bind(AGENT, "create_work_item"):
+            asked = questions.ask(
+                self.conn,
+                self.id(self.goal),
+                kind="question",
+                prompt="Do you agree?",
+                fields=request_model.fields(FIELDS),
+                author="claude",
+                purpose="consent",
+                addressee="session-b",
+                action_id=waiting.action,
+            )
+        self.conn.commit()
+        record = self.withdraw(waiting.question)
+        self.assertEqual("withdrawn", record["carried_out"])
+        self.assertEqual(("withdrawn", True, True), self.ended(waiting))
+        self.assertEqual(
+            ("expired", "withdrawn"),
+            tuple(self.request(asked)[name] for name in ("status", "expired_reason")),
+        )
+        self.assertEqual([], self.events(self.goal, "action_dropped"))
+        with self.assertRaises(model.NotAskerError):
+            self.withdraw(self.ask(self.filed("Another", kind="goal")).question, by=OTHER)
+
+
+class ApplicabilityTests(Harness):
+    def test_a_proposed_goal_applies_while_it_lies_unaccepted_in_triage(self) -> None:
+        goal = self.filed("Proposed", kind="goal")
+        waiting = self.ask(goal)
+        self.assertIsNone(self.applies(waiting))
+        self.person("/api/planning/work-item/apply", id=goal, transition={"state": "ready"})
+        self.assertIsNotNone(self.applies(waiting))
+
+    def test_a_task_in_a_goal_applies_while_the_goal_is_accepted_and_the_task_stayed(
+        self,
+    ) -> None:
+        accepted = self.filed("Accepted goal", kind="goal", by=calls.browser())
+        proposed = self.filed("Proposed goal", kind="goal")
+        task = self.filed("A finding")
+        before = service.get_work_item(self.conn, task)["parent_id"]
+        moving = self.ask(
+            task,
+            pending.Proposal(
+                "parent",
+                {"parent": self.id(accepted)},
+                f"move {task} under {accepted}",
+                seen={"parent": before},
+            ),
+            point="task_in_goal",
+            purpose="task",
+        )
+        self.assertIsNone(self.applies(moving))
+        self.person("/api/planning/work-item/update", id=task, parent=proposed)
+        self.assertEqual("the task moved", self.applies(moving))
+        other = self.filed("Another finding")
+        under = self.ask(
+            other,
+            pending.Proposal("parent", {"parent": self.id(proposed)}, f"move {other}"),
+            point="task_in_goal",
+            purpose="task",
+        )
+        self.assertEqual("the goal is not accepted", self.applies(under))
+
+    def test_a_cancel_applies_while_nothing_new_or_changed_stands_in_what_it_closes(
+        self,
+    ) -> None:
+        goal = self.filed("Goal to cancel", kind="goal", by=calls.browser())
+        first = self.filed("First under it", parent=goal, by=calls.browser())
+        self.filed("Second under it", parent=goal, by=calls.browser())
+        row = self.row(goal)
+        waiting = self.ask(
+            goal,
+            pending.Proposal(
+                "transition",
+                {"state": "cancelled"},
+                f"cancel {goal}",
+                seen=pending.cancel_seen(self.conn, row),
+            ),
+            point="cancel_outside",
+            purpose="cancel",
+        )
+        self.assertIsNone(self.applies(waiting))
+        # Work that left the list does not stand in the way.
+        self.person(
+            "/api/planning/work-item/apply",
+            id=first,
+            summary={"done": "Not needed", "next": "Nothing"},
+            transition={"state": "cancelled", "reason": "covered elsewhere"},
+        )
+        self.assertIsNone(self.applies(waiting))
+        # New work under it does.
+        self.filed("Third under it", parent=goal, by=calls.browser())
+        self.assertEqual("the work it cancels changed since", self.applies(waiting))
+
+    def test_a_condition_applies_while_each_step_it_changes_stands_as_asked(self) -> None:
+        goal = self.filed("Goal with conditions", kind="goal", by=calls.browser())
+        self.person("/api/planning/work-item/apply", id=goal, checklist=["X", "Y"])
+        steps = service.get_work_item(self.conn, goal)["checklist"]
+        waiting = self.ask(
+            goal,
+            pending.Proposal(
+                "checklist",
+                {"remove": [steps[0]["id"]]},
+                "remove a step",
+                proposed={
+                    "removed": [{"id": steps[0]["id"], "text": "X"}],
+                    "rewritten": [{"id": steps[1]["id"], "from": "Y", "to": "Y, said better"}],
+                },
+            ),
+            point="condition",
+            purpose="condition",
+        )
+        self.assertIsNone(self.applies(waiting))
+        # The owner rewrites the step the action would rewrite.
+        self.person("/api/planning/work-item/apply", id=goal, checklist=["X", "Y2"])
+        self.assertEqual("a step it changes was changed since", self.applies(waiting))
+
+    def test_putting_off_a_goal_applies_while_it_is_accepted(self) -> None:
+        accepted = self.filed("Accepted", kind="goal", by=calls.browser())
+        proposed = self.filed("Proposed", kind="goal")
+        defer = pending.Proposal("defer", {"until": "2026-12-01T00:00:00Z"}, "put it off")
+        self.assertIsNone(self.applies(self.ask(accepted, defer, point="goal_defer")))
+        self.assertEqual(
+            "it is not accepted", self.applies(self.ask(proposed, defer, point="goal_defer"))
+        )
+
+    def test_a_goals_close_applies_while_it_awaits_confirmation(self) -> None:
+        goal = self.filed("Goal closing", kind="goal", by=calls.browser())
+        task = self.filed("Its one task", parent=goal, by=calls.browser())
+        close = pending.Proposal("transition", {"state": "done"}, f"close {goal}")
+        waiting = self.ask(goal, close, point="goal_close", purpose="confirm")
+        self.assertEqual("it no longer awaits confirmation", self.applies(waiting))
+        self.person(
+            "/api/planning/work-item/apply",
+            id=task,
+            summary={"done": "Done", "next": "Nothing"},
+            transition={"state": "done"},
+        )
+        self.assertIsNone(self.applies(waiting))
+
+
+class EndTests(Harness):
+    def setUp(self) -> None:
+        super().setUp()
+        self.survivor = self.filed("The one that stays")
+        self.merged = self.filed("Its duplicate")
+        self.waiting = self.ask(
+            self.merged,
+            pending.Proposal("transition", {"state": "cancelled"}, "cancel the duplicate"),
+            point="cancel_outside",
+            purpose="cancel",
+        )
+        with calls.bind(AGENT, "create_work_item_request"):
+            self.plain = requests.create(
+                self.conn, self.merged, kind="question", prompt="Which road?", fields=FIELDS
+            )["request_id"]
+        self.conn.commit()
+
+    def test_a_merge_drops_the_action_and_ends_its_question_where_it_was(self) -> None:
+        self.person(
+            "/api/planning/work-item/merge", id=self.survivor, items=[self.merged], reason="one"
+        )
+        row = self.action(self.waiting.action)
+        self.assertEqual(("dropped", self.id(self.merged)), (row["outcome"], row["work_item_id"]))
+        self.assertEqual(
+            ["cancel_outside: merged into ALPHA-1"], self.events(self.merged, "action_dropped")
+        )
+        question = self.request(self.waiting.question)
+        self.assertEqual(
+            ("expired", "item_cancelled", self.id(self.merged)),
+            (question["status"], question["expired_reason"], question["work_item_id"]),
+        )
+        self.assertIn(self.waiting.question, self.events(self.merged, "request_expired"))
+        # The question about the work itself moves to the survivor and waits there.
+        plain = self.request(self.plain)
+        self.assertEqual(
+            ("pending", self.id(self.survivor)), (plain["status"], plain["work_item_id"])
+        )
+        # What the person's merge said of the duplicate: the dropped action beside the
+        # withdrawn question, the one told as news, not as where the work stands.
+        told = {
+            entry["kind"]
+            for entry in person_events.since_last_agent_write(self.conn, self.id(self.merged))
+        }
+        self.assertLessEqual({"action_dropped", "question_withdrawn"}, told)
+        self.assertNotIn("action_dropped", person_events.WORK_KINDS)
+
+    def test_a_close_drops_the_action_and_its_question_ends_as_the_item_closed(self) -> None:
+        self.person(
+            "/api/planning/work-item/apply",
+            id=self.merged,
+            summary={"done": "Not needed", "next": "Nothing"},
+            transition={"state": "cancelled", "reason": "not needed"},
+        )
+        self.assertEqual("dropped", self.action(self.waiting.action)["outcome"])
+        self.assertEqual(
+            ["cancel_outside: the item closed in cancelled"],
+            self.events(self.merged, "action_dropped"),
+        )
+        self.assertEqual(
+            ("expired", "item_cancelled"),
+            tuple(
+                self.request(self.waiting.question)[name] for name in ("status", "expired_reason")
+            ),
+        )
+
+    def test_a_delete_takes_the_action_and_its_questions_with_the_item(self) -> None:
+        identity = self.id(self.merged)
+        with calls.bind(calls.browser(), "/api/planning/work-item/delete"):
+            service.delete_work_item(self.conn, self.merged)
+        self.conn.commit()
+        for table in ("pending_actions", "work_item_requests"):
+            found = self.conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE work_item_id = ?", (identity,)
+            ).fetchone()[0]
+            self.assertEqual(0, found, table)
+
+
+if __name__ == "__main__":
+    unittest.main()
