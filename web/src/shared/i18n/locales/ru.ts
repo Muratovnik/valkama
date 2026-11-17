@@ -88,7 +88,7 @@ export const ru = {
         system: 'Система',
       },
     },
-    scope: { label: 'Рабочая область', global: 'Глобально' },
+    scope: { label: 'Рабочая область', global: 'Глобально', resource: 'Ресурс' },
     bindings: {
       mapped: 'Связан',
       missing: 'Не найден',

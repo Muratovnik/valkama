@@ -148,7 +148,7 @@ const selectedResourceValue = computed(() =>
         <ChoiceSelect
           :model-value="selectedResourceValue"
           :options="resourceOptions"
-          :label="t('platform.scope.label')"
+          :label="t('platform.scope.resource')"
           :empty-label="t('platform.planning.empty')"
           @update:model-value="(value) => emit('resource', value)"
         />

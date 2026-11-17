@@ -88,7 +88,7 @@ export const en = {
         system: 'System',
       },
     },
-    scope: { label: 'Operating scope', global: 'Global' },
+    scope: { label: 'Operating scope', global: 'Global', resource: 'Resource' },
     bindings: {
       mapped: 'Mapped',
       missing: 'Not found',

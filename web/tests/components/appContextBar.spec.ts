@@ -57,7 +57,7 @@ function mountBar(moduleId: string, props: Partial<BarProps> = {}) {
               platform: {
                 bindings: { mapped: 'Mapped' },
                 planning: { empty: 'No resources' },
-                scope: { global: 'Global', label: 'Scope' },
+                scope: { global: 'Global', label: 'Scope', resource: 'Resource' },
               },
               settings: {
                 emptyOptions: 'No options',
@@ -69,10 +69,11 @@ function mountBar(moduleId: string, props: Partial<BarProps> = {}) {
         }),
       ],
       stubs: {
-        // A choice says the options it offers, each by its name.
+        // A choice says the options it offers, each by its name, under the name it is read by.
         ChoiceSelect: {
-          props: ['options'],
-          template: '<ul data-choice><li v-for="one in options">{{ one.label }}</li></ul>',
+          props: ['options', 'label'],
+          template:
+            '<ul data-choice :aria-label="label"><li v-for="one in options">{{ one.label }}</li></ul>',
         },
       },
     },
@@ -91,6 +92,13 @@ describe('AppContextBar manifest-owned project resources', () => {
       SCOPES,
       ['planning-space-1', 'planning-space-2'],
     ])
+  })
+
+  it('names each choice by what it chooses, so the two are not read as one', () => {
+    const names = mountBar('planning')
+      .findAll('[data-choice]')
+      .map((choice) => choice.attributes('aria-label'))
+    expect(names).toEqual(['Scope', 'Resource'])
   })
 
   it('hides Planning resources from modules whose manifests do not own them', () => {
