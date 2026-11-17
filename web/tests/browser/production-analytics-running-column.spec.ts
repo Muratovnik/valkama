@@ -20,25 +20,10 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { task } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record } from './analyticsPage.ts'
-import { at, NOW, serveLive, settled, watchPage } from './liveDouble.ts'
+import { NOW, serveLive, settled, watchPage } from './liveDouble.ts'
+import { WORK } from './served/analyticsRunningColumn.ts'
 import { test } from './test.ts'
-
-const FIX = task(1, 'Fix the import')
-const SHIP = task(2, 'Ship the release')
-
-/** Work in the live hour, earlier today, yesterday and on days of the past four weeks. */
-const WORK: TimedStretch[] = [
-  { at: at(13, 40), group: { work_item: FIX }, spend: { seconds: 240 } },
-  { at: at(14, 20), group: { work_item: SHIP }, spend: { seconds: 180 } },
-  { at: at(9, 0), group: { work_item: FIX }, spend: { seconds: 3600 } },
-  { at: new Date(2026, 10, 10, 11), group: { work_item: SHIP }, spend: { seconds: 5400 } },
-  { at: new Date(2026, 10, 9, 10), group: { work_item: FIX }, spend: { seconds: 3600 } },
-  { at: new Date(2026, 9, 20, 10), group: { work_item: SHIP }, spend: { seconds: 1800 } },
-]
-
 /** The newest record read: three minutes before the moment of the view, so three have no data. */
 const LAST_EVENT = new Date(NOW.getTime() - 3 * 60_000)
 

@@ -12,58 +12,22 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { shot } from './boardPage.ts'
-import { IN_VSCODE, openPlanFor } from './openSessionFixtures.ts'
+import { openPlanFor } from './openSessionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { blockedWorkItem, spaceScope, workItemRef } from './planningFixtures.ts'
+import {
+  agent,
+  ENDED_PARENT,
+  LIVE_PARENT,
+  LONG_LABEL,
+  NO_PARENT,
+  rowsOf,
+  twentySeven,
+  underOneParent,
+} from './served/agents.ts'
 import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
 import { drawnLines } from './textLines.ts'
-
-const LONG_LABEL =
-  'Проверить экспорт и журналы на утечку метки при параллельных запусках субагентов'
-
-const agent = (index: number, overrides = {}) => ({
-  agent_id: `agent${String(index).padStart(11, '0')}`,
-  session_id: '6f1c2a8e-0000-4000-8000-000000000001',
-  agent_type: 'general-purpose',
-  label: index === 0 ? LONG_LABEL : '',
-  started_at: '2026-08-13T08:00:00Z',
-  last_activity_at: '2026-08-13T08:29:00Z',
-  ended_at: null,
-  steps: [],
-  link: 'claim',
-  coordinator_items: 19,
-  ...overrides,
-})
-
-const placed = { agent: null, family: 'claude' }
-const LIVE_PARENT = {
-  ...placed,
-  session: IN_VSCODE,
-  state: 'live',
-  opened_in: 'ide',
-  opened_host: 'vscode',
-}
-/** A parent the fixtures' plan does not name, which it answers as a desktop app's session. */
-const ENDED_PARENT = {
-  ...placed,
-  session: '77777777-0000-4000-8000-000000000002',
-  state: 'ended',
-  opened_in: 'app',
-  opened_host: 'claude-desktop',
-}
-const NO_PARENT = {
-  session: null,
-  agent: null,
-  family: '',
-  state: 'none',
-  opened_in: '',
-  opened_host: '',
-}
-
-/** Rows in the order the read gives them, each under the parent named at its place. */
-const rowsOf = (...parents: object[]) =>
-  parents.map((executor, index) => agent(index, { executor, label: `Agent number ${index}` }))
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
@@ -119,7 +83,7 @@ for (const width of [1440, 390]) {
       page,
     }) => {
       await page.setViewportSize({ width, height: 900 })
-      const agents = Array.from({ length: 27 }, (_, index) => agent(index))
+      const agents = twentySeven()
       await installBackend(page, {
         agents: () => agents,
         closedWith: closed ? 'The export carries no label.' : undefined,
@@ -195,11 +159,7 @@ test('rows with no session to open have no head and no button, and their facts s
 test('a group says its ambiguity once as a range of its rows, and a row keeps its count in its tooltip', async ({
   page,
 }) => {
-  const agents = [
-    agent(0, { executor: LIVE_PARENT, coordinator_items: 13 }),
-    agent(1, { executor: LIVE_PARENT, coordinator_items: 19 }),
-    agent(2, { executor: LIVE_PARENT, link: 'exact', coordinator_items: null }),
-  ]
+  const agents = underOneParent()
   await installBackend(page, { agents: () => agents, openPlan: openPlanFor })
   await page.goto(CARD)
   const section = await openAgents(page)

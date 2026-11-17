@@ -13,20 +13,13 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { task, value } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
-import { at, NOW, serveLive, settled, watchPage } from './liveDouble.ts'
+import { NOW, serveLive, settled, watchPage } from './liveDouble.ts'
+import { DAYS, HOUR, TODAY } from './served/analyticsBar.ts'
 import { test } from './test.ts'
 
 const nowAddress = pageAt({ period: 'now' })
-
-/** Two stretches of work in the live hour. */
-const HOUR: TimedStretch[] = [
-  { at: at(13, 50), group: { work_item: task(1, 'Fix') }, spend: { seconds: 600 } },
-  { at: at(14, 20), group: { work_item: task(2, 'Read') }, spend: { seconds: 300 } },
-]
 
 /** How far the middle of a box stands from the middle of another, down the page. */
 const offCentre = (box: number[] | null | undefined, other: number[] | null | undefined) =>
@@ -164,22 +157,6 @@ test('on a phone the bar is three rows, its periods one row, and the rail right 
   await expect(page.getByRole('tooltip')).toContainText(`${said} · `)
 })
 
-/** An hour's work this morning and some in the hour running; yesterday, before and after now. */
-const TODAY: TimedStretch[] = [
-  { at: at(9, 10), group: { work_item: task(1, 'Fix') }, spend: { seconds: 1800 } },
-  { at: at(14, 10), group: { work_item: task(2, 'Read') }, spend: { seconds: 600 } },
-  {
-    at: new Date(2026, 10, 10, 10),
-    group: { work_item: task(1, 'Fix') },
-    spend: { seconds: 900 },
-  },
-  {
-    at: new Date(2026, 10, 10, 20),
-    group: { work_item: task(1, 'Fix') },
-    spend: { seconds: 7200 },
-  },
-]
-
 /** The hour columns of the overview's chart: each one's start, and whether it is hatched. */
 const hours = (page: Page) =>
   page.evaluate(() =>
@@ -252,20 +229,7 @@ test('«Today» is its hours 0 to 23, the running one hatched, against the same 
   })
 })
 
-/** Two days of work under two models in two projects. */
-const DAYS: TimedStretch[] = [
-  {
-    at: new Date(2026, 10, 9, 10),
-    group: { work_item: task(1, 'One'), model: value('model-a'), project: value('alpha') },
-    spend: { seconds: 3600 },
-  },
-  {
-    at: new Date(2026, 10, 10, 10),
-    group: { work_item: task(2, 'Two'), model: value('model-b'), project: value('beta') },
-    spend: { seconds: 3600 },
-  },
-]
-/** A newest record hours old: 6 h 44 min before now. */
+/** The newest record of the owner's report: 6 h 44 min before now. */
 const OLD = new Date(NOW.getTime() - (6 * 60 + 44) * 60_000)
 
 /** Filters of none to four values, each a chip. */

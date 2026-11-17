@@ -9,7 +9,8 @@
 import { expect } from '@playwright/test'
 
 import { wayReviewFields, WAYS_PROMPT } from '../support/reviewWays.ts'
-import { asked, openQuestion } from './questionBackend.ts'
+import { asked } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 /** The ladder in `tokens.css`, in pixels: a step between rows is one of its rungs. */

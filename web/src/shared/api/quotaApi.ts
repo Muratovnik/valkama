@@ -13,7 +13,7 @@ import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 import { readAccountAliases } from '@/shared/lib/accountAliases.ts'
 import type { AccountAliases } from '@/shared/lib/accountAliases.ts'
 
-const settingsSchema = strictObject({ poll: z.boolean() })
+export const settingsSchema = strictObject({ poll: z.boolean() })
 
 export type QuotaSettings = z.infer<typeof settingsSchema>
 
@@ -45,7 +45,7 @@ export function saveQuotaSettings(settings: QuotaSettings): Promise<QuotaSetting
 }
 
 const NAMES_PATH = '/api/quota/account-names'
-const namesSchema = strictObject({ names: plainObject })
+export const namesSchema = strictObject({ names: plainObject })
 
 /** The server's own words for a refusal of a write, where it gave any. */
 function refusalOf(payload: unknown): string | null {

@@ -40,6 +40,7 @@ import {
   emptySpaceRef,
   globalScope,
   now,
+  planningReadModel,
   planningReadyFor,
   shellSpaceFor,
   spaceRef,
@@ -48,6 +49,7 @@ import {
 } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { improvementProfile, signalSummary } from './platformFixtures.ts'
+import { itemAnswer, withoutPlace } from './servedAnswers.ts'
 import { skillMatrixPayload, skillsPayload } from './skillsFixtures.ts'
 
 export type BackendOptions = {
@@ -379,24 +381,27 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
                     index === 0 ? { ...step, text: stepText } : step,
                   ),
                 }
-          const answered = (options.card?.(stepped as Record<string, unknown>) ??
-            stepped) as typeof stepped
+          // A preview reads the item as the space's list carries it: the brief contract
+          // refuses the full card.
+          const answered = (
+            url.searchParams.get('brief') === 'true'
+              ? withoutPlace(
+                  planningReadModel.work_items.find(
+                    (row) => row.reference === requestedReference,
+                  ) ?? {},
+                )
+              : (options.card?.(stepped as Record<string, unknown>) ?? stepped)
+          ) as typeof stepped
           platformReads.push(`${path}?${url.searchParams.toString()}`)
-          return fulfill({
-            interface_version: 'valkama-planning-work-item',
-            scope,
-            work_item_ref: exactRef,
-            state: {
-              interface_version: 'valkama-ui-state',
-              status: 'ready',
-              payload: {
-                work_item:
-                  requestedScopeId === attachedDataScopeId
-                    ? { ...answered, title: `Attached: ${answered.title}` }
-                    : answered,
-              },
-            },
-          })
+          return fulfill(
+            itemAnswer(
+              scope,
+              exactRef,
+              requestedScopeId === attachedDataScopeId
+                ? { ...answered, title: `Attached: ${answered.title}` }
+                : answered,
+            ),
+          )
         },
 
         '/api/modules/skills/detail': () => {

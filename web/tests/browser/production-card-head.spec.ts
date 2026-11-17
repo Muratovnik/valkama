@@ -7,7 +7,9 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
+import { READ_DOWN_GOAL } from './served/cards.ts'
+import { itemAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 /**
@@ -312,33 +314,10 @@ for (const width of [1440, 390]) {
 test('a read-down goal has no action in its bar and its reason goes with the facts', async ({
   page,
 }) => {
-  const goal = {
-    ...workItem,
-    kind: 'goal',
-    open: true,
-    container_state: null,
-    acceptance: null,
-    started_at: null,
-    waits_for: [],
-    claim: null,
-    claim_ref: '',
-    description: Array.from({ length: 40 }, (_, index) => `Paragraph ${index + 1}.`).join(
-      String.fromCodePoint(10, 10),
-    ),
-  }
   const drawer = await openLongCard(page, 390, (opened) =>
     opened.route('**/api/modules/planning/work-item?*', (route) =>
       route.fulfill({
-        json: {
-          interface_version: 'valkama-planning-work-item',
-          scope: spaceScope,
-          work_item_ref: workItemRef,
-          state: {
-            interface_version: 'valkama-ui-state',
-            status: 'ready',
-            payload: { work_item: goal },
-          },
-        },
+        json: itemAnswer(spaceScope, workItemRef, READ_DOWN_GOAL),
       }),
     ),
   )

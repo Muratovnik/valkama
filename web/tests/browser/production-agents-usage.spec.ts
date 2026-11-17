@@ -6,22 +6,18 @@
  */
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
 
-import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
-
-import {
-  NO_TOKENS,
-  noUsage,
-  PARENT_SESSION,
-  richUsage,
-  sessionUsage,
-  usageAnswer,
-} from '../fixtures/usage.ts'
-import { CARD, named, openAgents, serve } from './agentsUsagePage.ts'
-import { installBackend } from './backend.ts'
+import { noUsage, richUsage, usageAnswer } from '../fixtures/usage.ts'
+import { CARD, openAgents, serve, serveGoal } from './agentsUsagePage.ts'
 import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
+import {
+  emptySession,
+  extremeUsage,
+  goalWhole,
+  noCacheWriteUsage,
+  unpricedUsage,
+} from './served/agentsUsage.ts'
 import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
 
@@ -43,7 +39,7 @@ test('the tab counts the session’s own run with the agents the record names', 
 })
 
 test('the head says the whole, and each figure says what it counts', async ({ page }) => {
-  await serve(page, richUsage({ tokens: { ...richUsage().tokens, cache_write_1h: null } }))
+  await serve(page, noCacheWriteUsage())
   await page.goto(CARD)
   const section = await openAgents(page)
   const head = section.locator('.work-usage-figures')
@@ -69,7 +65,7 @@ test('the head says the whole, and each figure says what it counts', async ({ pa
 })
 
 test('a cost that leaves models out says which, and is marked incomplete', async ({ page }) => {
-  await serve(page, richUsage({ unpriced_models: ['model-with-no-price'] }))
+  await serve(page, unpricedUsage())
   await page.goto(CARD)
   const section = await openAgents(page)
   await expect(section.locator('.work-usage-figures')).toContainText('Cost ≈\u{A0}$240.67+')
@@ -93,17 +89,7 @@ test('the session’s head says its whole and what bound to no item', async ({ p
 })
 
 test('a session nothing was read for has no totals and no zeros', async ({ page }) => {
-  await serve(
-    page,
-    richUsage(),
-    sessionUsage({
-      elapsed_seconds: 0,
-      agent_seconds: 0,
-      tokens: NO_TOKENS,
-      estimated_api_cost_usd: null,
-      by_item: [],
-    }),
-  )
+  await serve(page, richUsage(), emptySession())
   await page.goto(CARD)
   const section = await openAgents(page)
   await expect(section.locator('.agent')).toHaveCount(2)
@@ -171,69 +157,8 @@ test('a later read that fails keeps the numbers, says so and reads again on requ
   await expect(section.locator('.work-usage')).toBeVisible()
 })
 
-/**
- * The runs under a goal's children. Its whole read counts them, and no row of its own names
- * them: their share stands under their titles in the chain.
- */
-const CHILD_RUNS: ItemUsage['agents'] = [
-  {
-    session_id: PARENT_SESSION,
-    agent_id: 'a3a79fc900000000',
-    seconds: 9520,
-    tokens: NO_TOKENS,
-    estimated_api_cost_usd: 20,
-    unpriced_tokens: 0,
-  },
-  {
-    session_id: PARENT_SESSION,
-    agent_id: 'a58241d000000000',
-    seconds: 10_000,
-    tokens: NO_TOKENS,
-    estimated_api_cost_usd: 21,
-    unpriced_tokens: 0,
-  },
-]
-
-/**
- * A goal card: the whole scope answers `goal`, the item's own runs answer `item`, and a null
- * answer fails that read.
- */
-async function serveGoal(page: Page, whole: ItemUsage, own: () => ItemUsage | null) {
-  const asked: string[] = []
-  await installBackend(page, {
-    agents: () => [named],
-    card: (read) => ({ ...read, kind: 'goal' }),
-  })
-  await page.route('**/api/planning/work-item/usage?*', (route) => {
-    const scope = new URL(route.request().url()).searchParams.get('scope') ?? ''
-    asked.push(scope)
-    const usage = scope === 'tree' ? whole : own()
-    return usage
-      ? route.fulfill({
-          contentType: 'application/json',
-          body: JSON.stringify(usageAnswer(usage)),
-        })
-      : route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
-  })
-  await page.route('**/api/planning/session/usage?*', (route) =>
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify(usageAnswer(sessionUsage())),
-    }),
-  )
-  return asked
-}
-
 test('a goal’s tab lists its own agents, and its counter counts only them', async ({ page }) => {
-  const asked = await serveGoal(
-    page,
-    richUsage({
-      scope: 'tree',
-      agent_seconds: 60_000,
-      agents: [...richUsage().agents, ...CHILD_RUNS],
-    }),
-    () => richUsage(),
-  )
+  const asked = await serveGoal(page, goalWhole(), () => richUsage())
   await page.goto(CARD)
   await expect(page.locator('.drawer .inspector-tabs').getByRole('tab').nth(1)).toHaveText(
     'Agents 2',
@@ -259,15 +184,7 @@ test('a goal whose own runs did not read says so on the tab and reads them on re
 }, info) => {
   await page.setViewportSize({ width: 390, height: 900 })
   let answering = false
-  await serveGoal(
-    page,
-    richUsage({
-      scope: 'tree',
-      agent_seconds: 60_000,
-      agents: [...richUsage().agents, ...CHILD_RUNS],
-    }),
-    () => (answering ? richUsage() : null),
-  )
+  await serveGoal(page, goalWhole(), () => (answering ? richUsage() : null))
   await page.goto(CARD)
   const section = await openAgents(page)
   // The whole still stands; the rows stand without their figures, and say why.
@@ -295,23 +212,7 @@ test('a goal whose own runs did not read says so on the tab and reads them on re
 for (const width of [390, 1280]) {
   test(`a long list with extreme numbers stands whole at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 900 })
-    const many = Array.from({ length: 40 }, (_, index) => ({
-      session_id: PARENT_SESSION,
-      agent_id: `run${String(index).padStart(13, '0')}`,
-      seconds: index === 0 ? 1 : 3_600_000 - index,
-      tokens: { ...NO_TOKENS, input: 9_000_000_000, output: index },
-      estimated_api_cost_usd: 13_000.55,
-      unpriced_tokens: 0,
-    }))
-    await serve(
-      page,
-      richUsage({
-        elapsed_seconds: 3_600_000,
-        agent_seconds: 7_200_000,
-        estimated_api_cost_usd: 13_000.55,
-        agents: many,
-      }),
-    )
+    await serve(page, extremeUsage())
     await page.goto(CARD)
     const section = await openAgents(page)
     await expect(section.locator('.agent')).toHaveCount(41)

@@ -10,7 +10,7 @@ import { drawnColours } from './contrast.ts'
 import { openCard } from './editorPage.ts'
 import { expectDateHeld } from './metaLine.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { asked, openQuestion, QUESTION_ID } from './questionBackend.ts'
+import { asked, openQuestion, QUESTION_ID } from './questionPage.ts'
 import { test } from './test.ts'
 import { reply, root, SETTLED, talkedOn } from './threadFixtures.ts'
 

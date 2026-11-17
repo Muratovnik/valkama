@@ -3,9 +3,7 @@ import type { Locator, Page } from '@playwright/test'
 import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
 import { requestEntry, requestList } from '../support/inputRequests.ts'
-import { openCard } from './editorPage.ts'
 import { spaceRef, workItem, workItemRef } from './planningFixtures.ts'
-import { installStreamDouble } from './streamDouble.ts'
 
 type Request = InputRequestEntry['request']
 
@@ -239,25 +237,6 @@ export const QUESTION_ID = '44444444-4444-4444-8444-444444444444'
 export const asked = (change: Partial<Request> = {}) =>
   question({ request_id: QUESTION_ID, prompt: ROUTE_PROMPT, fields: [routeField], ...change })
 
-/**
- * A card open on these questions, with the stream under the test's hand. `prepare` adds
- * routes of the test's own, over the backend's, before the page first asks.
- */
-export async function openQuestion(
-  page: Page,
-  entries: InputRequestEntry[],
-  prepare?: () => Promise<unknown>,
-) {
-  let requests: Awaited<ReturnType<typeof installQuestions>> | undefined
-  let stream: Awaited<ReturnType<typeof installStreamDouble>> | undefined
-  const opened = await openCard(page, async () => {
-    requests = await installQuestions(page, entries)
-    stream = await installStreamDouble(page)
-    await prepare?.()
-  })
-  if (!requests || !stream) throw new Error('Not installed')
-  return { ...opened, requests, stream, card: opened.drawer.locator('.request-card') }
-}
 export const send = (scope: Locator) => scope.getByRole('button', { name: 'Send', exact: true })
 
 /**

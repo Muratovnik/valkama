@@ -16,7 +16,6 @@ import {
   anyOf,
   chips,
   field,
-  labelledSpace,
   menu,
   menuLabels,
   openFacet,
@@ -25,6 +24,7 @@ import {
   words,
 } from './filterPage.ts'
 import { spaceScope } from './planningFixtures.ts'
+import { oneLabelSpace } from './served/filter.ts'
 import { test } from './test.ts'
 
 const pick = (page: Page, label: string) =>
@@ -233,11 +233,7 @@ test('the highlight stays on a value picked by its text as the list grows back',
 })
 
 test('with one label in the space there is nothing to combine, and no choice', async ({ page }) => {
-  const items = labelledSpace().map((item) => ({
-    ...item,
-    labels: item.reference === 'MAIN-402' ? ['ui'] : [],
-  }))
-  await openSpace(page, { items })
+  await openSpace(page, { items: oneLabelSpace() })
   await openFacet(page, 'Label')
   await expect(page.getByRole('option', { name: 'ui', exact: true })).toBeVisible()
   await expect(anyOf(page)).toHaveCount(0)

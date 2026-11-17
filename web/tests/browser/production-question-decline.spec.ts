@@ -11,7 +11,8 @@ import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
 import { asRoot } from '../support/threads.ts'
 import { centre } from './boardPage.ts'
-import { openQuestion, question, send } from './questionBackend.ts'
+import { question, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import {
   answeredElsewhere,
   choices,

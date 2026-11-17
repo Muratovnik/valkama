@@ -12,47 +12,15 @@ import type { Locator, Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { serveUsage, task, value } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
+import { serveUsage } from '../fixtures/analytics.ts'
 import { quotaAt } from '../fixtures/quota.ts'
 import { pageAt, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { globalScope } from './planningFixtures.ts'
+import { MAIN_ID, SIDE_ID, WORLD } from './served/analyticsNames.ts'
 import { test } from './test.ts'
 
 const NOW = new Date(2026, 10, 11, 14, 30)
-const on = (day: number) => new Date(2026, 10, day, 10)
-
-const MAIN_ID = 'f0f0f0f0-1111-4222-8333-444455556666'
-const SIDE_ID = '9c0de5b1-2222-4333-8444-555566667777'
-const MAIN = value(MAIN_ID)
-const SIDE = value(SIDE_ID)
-
-const session = (id: string, family: string, title: string | null) => ({
-  id,
-  unknown: false,
-  family,
-  opened_in: '',
-  opened_host: '',
-  title,
-})
-const RAIL = session('1a2b3c4d-0000-4000-8000-000000000001', 'claude', 'Fix the rail')
-const REVIEW = session('5e6f7a8b-0000-4000-8000-000000000002', 'claude', 'Review the overview')
-const CODEX = session('9f8e7d6c-0000-4000-8000-000000000003', 'codex', null)
-
-/** Three sessions over three days, on the main account but for the codex one. */
-const WORLD: TimedStretch[] = [
-  { executor: RAIL, account: MAIN, seconds: 5 * 3600 },
-  { executor: REVIEW, account: MAIN, seconds: 3 * 3600 },
-  { executor: CODEX, account: SIDE, seconds: 3600 },
-].flatMap(({ executor, account, seconds }, index) =>
-  [0, 1, 2].map((day) => ({
-    at: on(9 + day),
-    group: { executor, account, work_item: task(index + 1, `Task ${index + 1}`) },
-    spend: { seconds, tokens: 1000, cost: 1 },
-  })),
-)
-
 /** A label that is only hex characters: the start of an id, said for a value with no name. */
 const HEX_ONLY = /^[\da-f]{6,}$/u
 

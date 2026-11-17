@@ -2,9 +2,9 @@
  * The quiet lines of a card's talk, read off the built page in both languages from a phone's
  * width to a laptop's, by the words each line draws.
  *
- * A question's answer says who gave it in a phrase, «Answered by agent kolo». The phrase is one
+ * A question's answer says who gave it in a phrase, «Answered by agent worker-b». The phrase is one
  * unit: the time keeps its line only beside the whole of it. On the 14ch a name is owed it broke
- * inside itself beside the time, «Answered by agent» over «kolo», and at ru 390 inside the name.
+ * inside itself beside the time, «Answered by agent» over «worker-b», and at ru 390 inside the name.
  *
  * A thread's mark says who resolved it, when and the decision, a dot between. A line of it ends
  * and starts with a fact, never a dot, and the decision shares the date's line only whole: one
@@ -18,7 +18,8 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { frames } from './frames.ts'
-import { asked, openQuestion, routeField } from './questionBackend.ts'
+import { asked, routeField } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 import { expectUnitHeld, seenLines } from './textLines.ts'
 import { SETTLED, talkedOn } from './threadFixtures.ts'

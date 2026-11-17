@@ -17,7 +17,7 @@ const resultSchema = z.object({
   claim_ref: z.string().max(200),
 })
 
-const searchSchema = z.object({
+export const searchSchema = z.object({
   interface_version: z.literal('valkama-planning-api'),
   work_items: z.array(resultSchema).max(50),
 })

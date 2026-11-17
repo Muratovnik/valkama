@@ -13,24 +13,9 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { task, value } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record, serve, TASK_REPORT } from './analyticsPage.ts'
+import { TASKS } from './served/analyticsOneScroll.ts'
 import { test } from './test.ts'
-
-/** Forty-four tasks over the three days of the week so far, each its own share of the time. */
-const TASKS: TimedStretch[] = Array.from({ length: 44 }, (_, index) => ({
-  at: new Date(2026, 10, 9 + (index % 3), 10),
-  group: {
-    work_item: task(
-      index + 1,
-      `Read the planning documents through the board reader, ${index + 1}`,
-    ),
-    account: value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f'),
-  },
-  spend: { seconds: (45 - index) * 1800, tokens: (45 - index) * 90_000, cost: 45 - index },
-}))
-
 const SIZES = [
   [1280, 800],
   [1440, 900],

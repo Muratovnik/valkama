@@ -9,6 +9,7 @@ import { largeChainHere, serve, showChain } from './chainFixtures.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { blockedWorkItem, spaceRef, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
+import { sixtyEvents } from './served/cardParts.ts'
 import { pressWhereItStands } from './stuckPress.ts'
 import { test } from './test.ts'
 
@@ -251,14 +252,7 @@ for (const width of [1440, 390]) {
   }) => {
     await page.setViewportSize({ width, height: 500 })
     // A long Activity as well as a long Overview: nothing to clamp the scroll between them.
-    const events = Array.from({ length: 60 }, (_, index) => ({
-      action: 'claimed',
-      author: `agent-${index}`,
-      at: `2026-08-13T08:${String(index).padStart(2, '0')}:00Z`,
-      detail: '',
-      identity: { agent_id: null, session_id: null, source: null, state: 'unconfirmed' },
-    }))
-    await installBackend(page, { events, longRead: true })
+    await installBackend(page, { events: sixtyEvents(), longRead: true })
     await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
     await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
     const drawer = page.locator('.drawer')

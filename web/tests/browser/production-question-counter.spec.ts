@@ -10,7 +10,8 @@ import type { Locator, Page } from '@playwright/test'
 import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
 import { box } from './editorPage.ts'
-import { asked, openQuestion, routeField, send } from './questionBackend.ts'
+import { asked, routeField, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const POLL = 30_000

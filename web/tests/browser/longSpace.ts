@@ -6,7 +6,7 @@
 import type { Page } from '@playwright/test'
 
 import { planningReadModel } from './planningFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 
 export const identity = (n: number) =>
   `00000000-0000-4000-8000-${String(5000 + n).padStart(12, '0')}`
@@ -82,24 +82,25 @@ export async function serveSpace(
     states = [],
   }: { answered?: Promise<void>; states?: readonly object[] } = {},
 ) {
-  const declared = states.length ? { ...workflow, states: [...STATES, ...states] } : workflow
   await page.route('**/api/planning?*', async (route) => {
     await answered
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body)
-      Object.assign(response.body, {
-        workflow: declared,
-        work_items: items,
-        links,
-        stale_claims: [],
-      })
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
+    await route.fulfill(
+      spaceAnswer(new URL(route.request().url()).searchParams, longRead(items, links, states)),
+    )
   })
 }
+
+/** What the read lays over the model: these items and links, in the workflow `states` extend. */
+export const longRead = (
+  items: object[],
+  links: object[] = [],
+  states: readonly object[] = [],
+) => ({
+  workflow: states.length ? { ...workflow, states: [...STATES, ...states] } : workflow,
+  work_items: items,
+  links,
+  stale_claims: [],
+})
 
 /** Two frames with nothing left to do: every observer has answered. */
 export const stillFrames = (page: Page) =>

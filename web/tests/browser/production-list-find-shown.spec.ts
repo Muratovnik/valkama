@@ -13,55 +13,11 @@ import type { Page } from '@playwright/test'
 import { installBackend } from './backend.ts'
 import { openList } from './boardPage.ts'
 import { picture } from './graphPixels.ts'
-import { barOf, expectCurrentIn, listOf, marksOf, row, yellowIn } from './listFindPage.ts'
+import { barOf, expectCurrentIn, listOf, marksOf, yellowIn } from './listFindPage.ts'
 import type { Box, Mark } from './listFindPage.ts'
-import { identity, serveSpace, stillFrames } from './longSpace.ts'
+import { serveSpace, stillFrames } from './longSpace.ts'
+import { short, SHORT_STATES, shortLinks, shortWithoutL } from './served/listFind.ts'
 import { test } from './test.ts'
-
-/** A cancelled state, which the long space's workflow is given after its own six. */
-const CANCELLED = {
-  category: 'cancelled',
-  is_terminal: true,
-  key: 'cancelled',
-  name: 'Cancelled',
-  state_id: identity(950),
-}
-
-/**
- * What the rows the words are read from carry beyond a title: labels past the
- * two a row shows, folding into «+2»; a holder; steps done of all; a blocker;
- * and a cancelled state with the holder it had.
- */
-const DRESSED: Record<number, object> = {
-  0: {
-    checklist: ['Draft', 'Review', 'Ship'].map((text, at) => ({
-      claimed_by: '',
-      done: at === 0,
-      done_by: at === 0 ? 'codex' : '',
-      by_previous_holder: false,
-      id: identity(960 + at),
-      text,
-    })),
-    claim_ref: 'codex (session 7f3a)',
-    labels: ['frontend', 'keyboard', 'search', 'quarterly'],
-  },
-  1: { claim_ref: '', last_claim_ref: 'claude (session 9c1d)', state: CANCELLED, open: false },
-}
-/** The row that waits on an open one. */
-const WAITS = { blocked: 3, on: 5 }
-
-/** A list short enough to draw every row: «quartz» in three, every seventh row urgent. */
-const short = (): object[] =>
-  Array.from({ length: 120 }, (_, index) =>
-    row(index, {
-      ...(index % 7 === 3 ? { priority: 'high' } : {}),
-      ...([5, 60, 110].includes(index) ? { title: `Quartz sample ${index}` } : {}),
-      ...DRESSED[index],
-    }),
-  )
-const shortLinks = () => [
-  { from: identity(1000 + WAITS.on), kind: 'blocks', to: identity(1000 + WAITS.blocked) },
-]
 
 /** The matches a reader sees: a term in the text the rows draw where it has room to show. */
 const shownCount = (page: Page, term: string) =>
@@ -112,7 +68,7 @@ async function openShort(page: Page, locale: string, width: number, items = shor
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page)
-  await serveSpace(page, items, shortLinks(), { states: [{ ...CANCELLED, position: 6 }] })
+  await serveSpace(page, items, shortLinks(), { states: SHORT_STATES })
   await openList(page)
   await stillFrames(page)
   await page.locator('.work-item-list tbody .list-open').first().focus()
@@ -195,10 +151,7 @@ test('a sort and a filter move the list no more with the find open than with it 
   page,
 }) => {
   // The last twenty rows but the one with «quartz» have no «l» in their title.
-  const items = short().map((item, index) =>
-    index >= 100 && index !== 110 ? { ...item, title: 'Other one' } : item,
-  )
-  const { count, field } = await openShort(page, 'en', 1440, items)
+  const { count, field } = await openShort(page, 'en', 1440, shortWithoutL())
   await field.fill('quartz')
   await page.keyboard.press('Enter')
   await expect(count).toHaveText('2 of 3')

@@ -19,7 +19,8 @@ import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
 import { wayReviewFields, WAYS_PROMPT } from '../support/reviewWays.ts'
 import { drawnBox } from './edges.ts'
-import { asked, openQuestion, send } from './questionBackend.ts'
+import { asked, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 type Locale = 'en' | 'ru'

@@ -5,10 +5,10 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { branchedChain } from '../fixtures/chainMap.ts'
-import { asRoot } from '../support/threads.ts'
 import { installBackend } from './backend.ts'
 import { largeChainHere, serve, showChain } from './chainFixtures.ts'
-import { now, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
+import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
+import { thirtyRemarks } from './served/cardParts.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
@@ -127,18 +127,7 @@ test('Back on a slow chain moves to the place though the browser has moved the c
   // A discussion stands below the chain, so the card shown early is tall enough to read in.
   // The chain then arrives above what is on screen and the browser keeps that in view: the
   // scroller moves with nobody at it, and it is no sign of a reader who has moved on.
-  const discussion = Array.from({ length: 30 }, (_, index) => ({
-    id: index + 1,
-    kind: 'comment',
-    ...asRoot,
-    author: 'codex',
-    at: now,
-    body: `Remark ${index + 1}.`,
-    report: null,
-    checklist_item_id: null,
-    checklist_item_text: null,
-  }))
-  const { back, body, drawer, place, reference } = await leftFromDepth(page, discussion)
+  const { back, body, drawer, place, reference } = await leftFromDepth(page, thirtyRemarks())
   await holdChain(page, 1000)
   await pressWhereItStands(page, back)
   await expect(drawer.locator('.drawer-frame-tabs')).toBeVisible()

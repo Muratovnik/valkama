@@ -12,22 +12,10 @@ import type { Page } from '@playwright/test'
 import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { task } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record, serve, serveTask } from './analyticsPage.ts'
-import { worked } from './overviewPage.ts'
 import { workItem, workItemRef } from './planningFixtures.ts'
+import { WORLD } from './served/analyticsCardOverlay.ts'
 import { test } from './test.ts'
-
-/** The task the store holds, worked on this week and the week before, beside another one. */
-const HELD = task(264, workItem.title)
-const WORLD: TimedStretch[] = [
-  worked(9, HELD, ['model-a', 'main', 'alpha'], 5),
-  worked(10, task(2, 'Write the release notes'), ['model-b', 'subagent', 'beta'], 3),
-  worked(11, HELD, ['model-a', 'main', 'alpha'], 1),
-  worked(2, HELD, ['model-a', 'main', 'alpha'], 2),
-]
-
 /** A period other than the page's own default, so that keeping it says something. */
 const VIEW = { period: 'weeks4' }
 const PAGE = pageAt(VIEW)

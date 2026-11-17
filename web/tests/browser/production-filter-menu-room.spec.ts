@@ -8,51 +8,9 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { boardSpace } from './boardFixtures.ts'
 import { boxOf, field, menu, openFacet, openSpace } from './filterPage.ts'
-import { identity } from './planningFixtures.ts'
+import { onlyLabelSpace, realSpace, workflowOf } from './served/filter.ts'
 import { test } from './test.ts'
-
-const CATEGORIES = [
-  'triage',
-  'deferred',
-  'ready',
-  'active',
-  'review',
-  'completed',
-  'blocked',
-  'cancelled',
-]
-
-/** A workflow of so many states, walking the eight categories over and over. */
-const workflowOf = (count: number) => ({
-  workflow_id: identity(700),
-  name: 'Default',
-  initial_state_id: identity(900),
-  states: Array.from({ length: count }, (_, index) => {
-    const category = CATEGORIES[index % CATEGORIES.length]
-    return {
-      state_id: identity(900 + index),
-      key: `state-${index}`,
-      name: `State ${index}`,
-      category,
-      is_terminal: category === 'completed' || category === 'cancelled',
-      position: index,
-    }
-  }),
-  transitions: [],
-})
-
-const LABELS = Array.from({ length: 60 }, (_, index) => `label-${String(index).padStart(2, '0')}`)
-const HOLDERS = Array.from({ length: 12 }, (_, index) => `agent-${index}`)
-
-/** The board's work, carrying the labels and held by the holders, an item at most twenty each. */
-const realSpace = () =>
-  boardSpace().map((item, index) => ({
-    ...item,
-    labels: LABELS.slice((index % 3) * 20, (index % 3) * 20 + 20),
-    claim_ref: HOLDERS[index % HOLDERS.length],
-  }))
 
 async function openMenu(page: Page, width: number, height: number, states = 8) {
   await openSpace(page, { height, items: realSpace(), width, workflow: workflowOf(states) })
@@ -219,8 +177,12 @@ test('walking down with the arrows, the highlighted row is never under the head'
 })
 
 test('a space with fewer than two labels has no choice', async ({ page }) => {
-  const items = boardSpace().map((item, index) => ({ ...item, labels: index ? [] : ['only'] }))
-  await openSpace(page, { height: 420, items, width: 1280, workflow: workflowOf(7) })
+  await openSpace(page, {
+    height: 420,
+    items: onlyLabelSpace(),
+    width: 1280,
+    workflow: workflowOf(7),
+  })
   await openFacet(page, 'Label')
   await expect(choices(page)).toHaveCount(0)
 })

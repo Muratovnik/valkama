@@ -8,35 +8,17 @@ import type { Locator, Page } from '@playwright/test'
 import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { boardSpace } from './boardFixtures.ts'
 import type { Brief } from './boardFixtures.ts'
 import { boardRoute } from './boardPage.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { filterSpace } from './served/filter.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 
-const LABELS: Record<string, string[]> = {
-  'MAIN-402': ['ui', 'board'],
-  'MAIN-403': ['ui'],
-  'MAIN-404': ['board'],
-  'MAIN-405': ['api'],
-}
-
-/** Both labels on 402, one each on 403 and 404, another label on 405. */
-export const labelledSpace = (): Brief[] =>
-  boardSpace().map((item) => ({ ...item, labels: LABELS[item.reference] ?? [] }))
-
-async function serveSpace(page: Page, items: Brief[] = labelledSpace(), workflow?: unknown) {
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      response.body.work_items = items as never[]
-      if (workflow) response.body.workflow = workflow as never
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+async function serveSpace(page: Page, items?: Brief[], workflow?: unknown) {
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(
+      spaceAnswer(new URL(route.request().url()).searchParams, filterSpace(items, workflow)),
+    ),
+  )
 }
 
 /** The flat board, or the view the state names, over the labelled space. */

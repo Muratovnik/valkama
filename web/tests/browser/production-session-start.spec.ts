@@ -16,7 +16,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { launchedSessionId } from './executionFixtures.ts'
 import { frames } from './frames.ts'
-import { openQuestion } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
 
@@ -182,8 +182,8 @@ for (const locale of ['en', 'ru'] as const)
     await setUp(page, locale, 1280)
     const opened = await openQuestion(page, [])
     opened.backend.item.events.push(
-      event(`kolo (session ${KNOWN})`, '2026-10-24T10:00:00Z', KNOWN),
-      event(`elko (session ${SESSION})`, '2026-10-24T09:00:00Z', SESSION),
+      event(`worker-b (session ${KNOWN})`, '2026-10-24T10:00:00Z', KNOWN),
+      event(`worker-a (session ${SESSION})`, '2026-10-24T09:00:00Z', SESSION),
     )
     await page.reload()
     await opened.drawer.getByRole('tab', { name: EVENTS[locale] }).click()
@@ -197,8 +197,8 @@ for (const locale of ['en', 'ru'] as const)
       return family
     })
     for (const [name, whole] of [
-      ['kolo', KNOWN],
-      ['elko', SESSION],
+      ['worker-b', KNOWN],
+      ['worker-a', SESSION],
     ] as const) {
       const start = author(name)
       await expect(start).toHaveText(whole.slice(0, 13))
@@ -206,9 +206,9 @@ for (const locale of ['en', 'ru'] as const)
       await expect(start).toHaveCSS('font-family', mono)
     }
     // A link only to a session the server knows, which says the whole id as well.
-    await expect(author('kolo').getByRole('button')).toHaveAttribute(
+    await expect(author('worker-b').getByRole('button')).toHaveAttribute(
       'data-tooltip',
       new RegExp(KNOWN, 'u'),
     )
-    await expect(author('elko').locator('a')).toHaveCount(0)
+    await expect(author('worker-a').locator('a')).toHaveCount(0)
   })

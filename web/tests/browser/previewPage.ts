@@ -6,84 +6,18 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page, Route } from '@playwright/test'
 
-import type { WorkItem, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { boardId } from '../fixtures/board.ts'
 import { asRoot } from '../support/threads.ts'
 import { installBackend } from './backend.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
-import {
-  blockedWorkItem,
-  doneState,
-  now,
-  planningReadModel,
-  spaceRef,
-  spaceScope,
-} from './planningFixtures.ts'
+import { now, spaceScope } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
+import { SPACE, spaceModel } from './served/preview.ts'
+import type { Brief } from './served/preview.ts'
+import { briefAnswer } from './servedAnswers.ts'
 import { installStreamDouble } from './streamDouble.ts'
-
-type Brief = (typeof planningReadModel.work_items)[number]
-
-const blocked = planningReadModel.work_items[1] as Brief
-
-/** An item of the space, by the number it reads as. */
-export const held = (number: number, title: string, change: Partial<WorkItemBrief> = {}) =>
-  ({
-    ...blocked,
-    work_item_id: boardId(number),
-    reference: `MAIN-${number}`,
-    number,
-    title,
-    ...change,
-  }) as Brief
-
-const STEP = (done: boolean, index: number) => ({
-  id: boardId(500 + index),
-  text: `Step ${index + 1}`,
-  done,
-  claimed_by: '',
-  done_by: '',
-  by_previous_holder: false,
-})
-
-/** What the open space holds besides the fixture's own two, one fact to each. */
-export const SPACE: readonly Brief[] = [
-  held(12, 'Keep the reader in place when a card closes', {
-    claim_ref: 'claude (session f5f838f4-74fc-4a1b-9c2d-0123456789ab)',
-    claim_state: 'live',
-    checklist: [STEP(true, 0), STEP(false, 1), STEP(false, 2)],
-    updated_at: '2026-11-03T22:40:00Z',
-  } as Partial<WorkItemBrief>),
-  held(13, 'Waits for the contract', { workable: false }),
-  held(14, 'A closed one', {
-    state: doneState,
-    open: false,
-    closed_at: '2026-11-02T18:05:00Z',
-    last_claim_ref: 'claude',
-  } as Partial<WorkItemBrief>),
-  held(15, 'An abandoned claim', {
-    claim_ref: 'codex (session 019e2b7c-5d1a-7c3e-9a10-0123456789ab)',
-    claim_state: 'stale',
-  } as Partial<WorkItemBrief>),
-  held(16, 'Ж'.repeat(200), { kind: 'goal', priority: 'urgent' }),
-]
-
-const WAITING_LINK = {
-  from: blockedWorkItem.work_item_id,
-  to: boardId(13),
-  kind: 'blocks',
-  reference: blockedWorkItem.reference,
-  is_terminal: false,
-}
-
-/** The space's read model with these items in it, as a read and a stream frame carry it. */
-export const spaceModel = (items: readonly Brief[]) => ({
-  ...structuredClone(planningReadModel),
-  work_items: [...planningReadModel.work_items, ...items],
-  links: [...planningReadModel.links, WAITING_LINK],
-})
 
 /** A report on the card that names every item of the space, for the pointer to walk. */
 const REPORT = [
@@ -178,24 +112,6 @@ export interface BriefReads {
   answer: (next: (route: Route, reference: string) => Promise<void> | void) => void
 }
 
-/** The envelope of a brief read that found the item, at the scope of the space it was read in. */
-export function briefAnswer(item: Brief, space = spaceRef) {
-  // A place in the queue is the list's: one item's own answer carries none.
-  const record = Object.fromEntries(Object.entries(item).filter(([key]) => key !== 'queue_order'))
-  return {
-    json: {
-      interface_version: 'valkama-planning-work-item',
-      scope: { kind: 'space', space_ref: space },
-      work_item_ref: { space_ref: space, reference: item.reference },
-      state: {
-        interface_version: 'valkama-ui-state',
-        status: 'ready',
-        payload: { work_item: record },
-      },
-    },
-  }
-}
-
 export const refusal = (status: number) => ({ status, json: { error: { code: 'refused' } } })
 
 /** Answer the brief read from `items`; a reference it does not hold is a 404. */
@@ -238,3 +154,6 @@ export async function openHub(
   await expect(reference(dialog, 'MAIN-12')).toBeVisible()
   return { dialog, reads }
 }
+
+export { held, SPACE, spaceModel } from './served/preview.ts'
+export { briefAnswer } from './servedAnswers.ts'

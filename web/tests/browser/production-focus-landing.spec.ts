@@ -17,7 +17,9 @@ import { openFromCard } from './documentFocusMoves.ts'
 import { openCard } from './editorPage.ts'
 import { frames } from './frames.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
-import { asked, openQuestion, send } from './questionBackend.ts'
+import { asked, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
+import { nineSteps } from './served/cardParts.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
 
@@ -171,15 +173,10 @@ for (const input of INPUTS) {
     await page.addInitScript(() => localStorage.setItem('valkama-locale', 'en'))
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 1280, height: 700 })
-    const checklist = Array.from({ length: 9 }, (_, index) => ({
-      id: `123e4567-e89b-42d3-a456-4266141742${String(index).padStart(2, '0')}`,
-      text: `The step number ${index + 1}`,
-      done: index < 2,
-      claimed_by: '',
-      done_by: '',
-      by_previous_holder: false,
-    }))
-    await installBackend(page, { longRead: true, card: (read) => ({ ...read, checklist }) })
+    await installBackend(page, {
+      longRead: true,
+      card: (read) => ({ ...read, checklist: nineSteps() }),
+    })
     await page.goto(
       serializePlatformRoute({
         module_id: 'planning',

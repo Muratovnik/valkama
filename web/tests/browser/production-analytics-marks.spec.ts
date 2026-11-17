@@ -14,11 +14,10 @@ import type { Page } from '@playwright/test'
 import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { task } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record, serve, serveTask } from './analyticsPage.ts'
-import { openOverview, worked, WORLD } from './overviewPage.ts'
+import { openOverview, WORLD } from './overviewPage.ts'
 import { workItem, workItemRef } from './planningFixtures.ts'
+import { HELD_WORLD } from './served/analyticsMarks.ts'
 import { test } from './test.ts'
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
@@ -209,15 +208,6 @@ test('with no line over the plot, the drawing field at 1440×900 takes the room 
   // The section's field: the height it had while a line of words stood over the plot.
   expect(section).toBeGreaterThanOrEqual(160)
 })
-
-/** The task the store holds, worked on this week and the week before, beside another one. */
-const HELD = task(264, workItem.title)
-const HELD_WORLD: TimedStretch[] = [
-  worked(9, HELD, ['model-a', 'main', 'alpha'], 5),
-  worked(10, task(2, 'Write the release notes'), ['model-b', 'subagent', 'beta'], 3),
-  worked(11, HELD, ['model-a', 'main', 'alpha'], 1),
-  worked(2, HELD, ['model-a', 'main', 'alpha'], 2),
-]
 
 /** A period other than the page's own default, so that keeping it says something. */
 const VIEW = { by: 'work_item', period: 'weeks4' }

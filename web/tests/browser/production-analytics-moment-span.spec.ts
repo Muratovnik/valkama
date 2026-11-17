@@ -12,24 +12,11 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { task } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { at, NOW, serveLive } from './liveDouble.ts'
+import { TODAY } from './served/analyticsMomentSpan.ts'
 import { test } from './test.ts'
-
-/**
- * Work today inside the span, from 10:00 to 13:00, beside work earlier and later, and some in
- * the three hours right before it, which the span is compared with.
- */
-const TODAY: TimedStretch[] = [
-  { at: at(7, 30), group: { work_item: task(1, 'Fix') }, spend: { seconds: 900 } },
-  { at: at(6, 40), group: { work_item: task(1, 'Fix') }, spend: { seconds: 3600 } },
-  { at: at(10, 20), group: { work_item: task(1, 'Fix') }, spend: { seconds: 1800 } },
-  { at: at(12, 40), group: { work_item: task(2, 'Read') }, spend: { seconds: 600 } },
-  { at: at(13, 30), group: { work_item: task(2, 'Read') }, spend: { seconds: 3600 } },
-]
-
 /**
  * «Today» and three of its hours, with what else the address holds: the section on show, where the
  * screen is too narrow for the list of sections beside it.

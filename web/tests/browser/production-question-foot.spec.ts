@@ -19,7 +19,8 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { expectStripOnColumn } from './confirmStrip.ts'
-import { asked, openQuestion } from './questionBackend.ts'
+import { asked } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { centre, expectRow, expectStep, near } from './requestRow.ts'
 import { test } from './test.ts'
 

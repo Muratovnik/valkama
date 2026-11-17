@@ -11,10 +11,10 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
-import { openOverview, TASKS, worked, WORLD } from './overviewPage.ts'
+import { openOverview, WORLD } from './overviewPage.ts'
+import { MODELS } from './served/analyticsOverview.ts'
 import { test } from './test.ts'
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
@@ -295,17 +295,6 @@ test('a single day stands as its hours beside the day before', async ({ page }, 
   await expect(days.locator('.period-before')).toHaveCount(1)
   await page.screenshot(shot(info, 'analytics-overview-day-1440x900.png'))
 })
-
-/**
- * Three models this week: two of hours, named as clients name them, and one of seconds, whose
- * figure is the longest words of the card.
- */
-const MODELS: TimedStretch[] = [
-  worked(9, TASKS[0], ['claude-sonnet-5-5', 'main', 'alpha'], 3),
-  worked(10, TASKS[1], ['claude-opus-5-5', 'main', 'alpha'], 2),
-  { ...worked(11, TASKS[2], ['gpt-6.1-sol', 'main', 'alpha'], 0), spend: { seconds: 30 } },
-  worked(2, TASKS[0], ['claude-sonnet-5-5', 'main', 'alpha'], 1),
-]
 
 test('a card’s figure is as wide as itself, and the name of its row takes the rest', async ({
   page,

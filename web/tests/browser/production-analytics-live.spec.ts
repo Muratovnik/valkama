@@ -17,29 +17,10 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { task } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record } from './analyticsPage.ts'
 import { at, NOW, serveLive, settled, watchPage } from './liveDouble.ts'
+import { HOUR_OF_WORK } from './served/analyticsLive.ts'
 import { test } from './test.ts'
-
-const FIX = task(1, 'Fix the import')
-const READ = task(2, 'Read the planning documents')
-const SHIP = task(3, 'Ship the release')
-
-/**
- * Work in whole minutes inside the live hour, so the chart's figures add up as minutes; work in
- * the hour before it to compare with; and work earlier that day, which no read of «now» counts.
- */
-const HOUR_OF_WORK: TimedStretch[] = [
-  { at: at(13, 35, 10), group: { work_item: FIX }, spend: { seconds: 300 } },
-  { at: at(13, 50, 30), group: { work_item: READ }, spend: { seconds: 600 } },
-  { at: at(14, 5), group: { work_item: FIX }, spend: { seconds: 120 } },
-  { at: at(14, 29, 5), group: { work_item: SHIP }, spend: { seconds: 60 } },
-  { at: at(12, 45), group: { work_item: FIX }, spend: { seconds: 900 } },
-  { at: at(9, 0), group: { work_item: READ }, spend: { seconds: 7200 } },
-]
-
 /** The minutes of the live hour's work above, which the page's figures must say. */
 const LIVE_MINUTES = (300 + 600 + 120 + 60) / 60
 

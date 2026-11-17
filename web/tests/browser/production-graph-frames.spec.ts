@@ -14,7 +14,8 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { broadRead, looseSpace } from './served/graphs.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 /** The broad space's item whose only link is to its own goal, and that goal. */
@@ -26,22 +27,10 @@ function loneItem() {
 
 /** The suite's space, holding the broad space's work, workflow and links. */
 async function serveBroadSpace(page: Page) {
-  const { model } = broadSpace()
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = model.workflow
-      body.work_items = model.work_items
-      body.links = model.links
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, broadRead())),
+  )
 }
 
 for (const width of [1500, 390]) {
@@ -297,26 +286,10 @@ for (const width of [1500, 390]) {
 
 /** The suite's space holding only open work under no goal, too much of it to start open. */
 async function serveLooseSpace(page: Page) {
-  const { model } = broadSpace()
-  const loose = model.work_items
-    .filter((item) => item.parent_id === null && !WORK_ITEM_TREE.isContainer(item))
-    .filter((item) => !item.state?.is_terminal)
-    .slice(0, 25)
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = model.workflow
-      body.work_items = loose
-      body.links = []
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, looseSpace())),
+  )
 }
 
 /** Press «Zoom out» until the field draws its overview. */

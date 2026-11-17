@@ -9,13 +9,12 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 
 import { DEFAULT_VIEW, readAddress } from '@/shared/api/analyticsAddress.ts'
-import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 
-import { usageAnswer } from '../fixtures/analytics.ts'
 import { ORG_A, whoUsage } from '../fixtures/usage.ts'
 import { CARD, openAgents, serve } from './agentsUsagePage.ts'
 import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
+import { noWorkThisWeek, sixItems } from './served/agentsUsage.ts'
 import { test } from './test.ts'
 
 interface Box {
@@ -109,14 +108,7 @@ test('the tab opens Analytics filtered to the item, over the days of its work', 
   await page.route('**/api/analytics/usage?*', (route) => {
     const query = new URL(route.request().url()).searchParams
     asked.push(query)
-    const answer = usageAnswer({
-      first: new Date(2026, 10, 9),
-      days: 3,
-      end: new Date(2026, 10, 11, 14, 30),
-      groupBy: [query.get('group_by') as UsageDimension],
-      stretches: [],
-    })
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(answer) })
+    return route.fulfill({ json: noWorkThisWeek(query) })
   })
   await page.goto(CARD)
   const section = await openAgents(page)
@@ -253,17 +245,7 @@ for (const width of [1440, 1024, 390]) {
     await page.setViewportSize({ width, height: 1000 })
     // Six items do not fit in the page's address, so the link opens the goal's own work.
     const usage = whoUsage()
-    const [own] = usage.by_item
-    await serve(page, {
-      ...usage,
-      by_item: [
-        own,
-        ...Array.from({ length: 5 }, (_, index) => ({
-          ...own,
-          work_item_id: `7d3e9a10-0000-4000-8000-00000000000${index + 1}`,
-        })),
-      ],
-    })
+    await serve(page, sixItems(usage))
     await page.goto(CARD)
     const section = await openAgents(page)
     const link = section.getByRole('link', { name: 'Open its own work in Analytics' })

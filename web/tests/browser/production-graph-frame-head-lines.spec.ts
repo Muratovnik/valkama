@@ -10,89 +10,20 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-
-import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { AMONG_MANY, identity, linesSpace, SPACE, TITLED } from './served/graphFrameHeadLines.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 test.use({ locale: 'ru-RU' })
 
-const { model } = broadSpace()
-const identity = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
-
-function stateOf(key: string): NonNullable<WorkItemBrief['state']> {
-  const found = model.work_items.find((entry) => entry.state?.key === key)
-  if (!found?.state) throw new Error(`the broad space has no item in ${key}`)
-  return found.state
-}
-
-function item(n: number, key: string, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief {
-  return {
-    ...model.work_items[0],
-    work_item_id: identity(n),
-    reference: `MAIN-${n}`,
-    number: n,
-    title: `Item ${n}`,
-    kind: 'task',
-    open: true,
-    container_state: null,
-    acceptance: null,
-    started_at: null,
-    waits_for: [],
-    parent_id: null,
-    state: stateOf(key),
-    claim_ref: '',
-    claim_state: null,
-    ...overrides,
-  }
-}
-
-const goal = (n: number, title: string) => item(n, 'dev', { kind: 'goal', title })
-const under = (parent: number, from: number, keys: readonly string[]) =>
-  keys.map((key, index) => item(from + index, key, { parent_id: identity(parent) }))
-
-/** Open goals whose titles take one, two and three lines, each over the same two tasks. */
-const TITLED = { 1: 1, 10: 2, 20: 3 } as const
-const SPACE: WorkItemBrief[] = [
-  goal(1, 'Connect the release'),
-  ...under(1, 2, ['todo', 'done']),
-  goal(10, 'Reconcile the release notes with the installer'),
-  ...under(10, 11, ['todo', 'done']),
-  goal(20, 'Reconcile the release notes with what the installer actually ships to the desktop'),
-  ...under(20, 21, ['todo', 'done']),
-  // Folded, with every group in its counts and what the fold hides under its edge.
-  goal(40, 'Crowded'),
-  ...under(40, 100, [
-    ...Array.from({ length: 30 }, () => 'done'),
-    ...Array.from({ length: 25 }, () => 'review'),
-    'blocked',
-    'dev',
-  ]),
-  // A goal nothing was filed under, and the work under none.
-  item(60, 'review', { kind: 'goal', title: 'Plan the next release' }),
-  ...Array.from({ length: 3 }, (_, index) => item(400 + index, 'todo')),
-]
-
 async function openField(page: Page, width: number, items = SPACE) {
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = model.workflow
-      body.work_items = items
-      body.links = []
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, linesSpace(items))),
+  )
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
 }
@@ -228,10 +159,6 @@ for (const width of [1280, 390]) {
 }
 
 /** The same space among enough other goals that its whole field is zoomed out. */
-const AMONG_MANY: WorkItemBrief[] = [
-  ...SPACE,
-  ...Array.from({ length: 90 }, (_, index) => item(1000 + index, 'review', { kind: 'goal' })),
-]
 
 /**
  * Where the grown rows of a band end, and where its edge starts: read in the layout's own

@@ -9,7 +9,8 @@ import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
 import { frames } from './frames.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { broadRead } from './served/graphs.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 
 export const broadModel = broadSpace().model
 
@@ -17,20 +18,9 @@ export const broadModel = broadSpace().model
 export async function openBroadField(page: Page, width: number, height = 900) {
   await page.setViewportSize({ width, height })
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = broadModel.workflow
-      body.work_items = broadModel.work_items
-      body.links = broadModel.links
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, broadRead())),
+  )
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
 }

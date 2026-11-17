@@ -5,17 +5,13 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { boardId } from '../fixtures/board.ts'
 import { installBackend } from './backend.ts'
-import { planningReadModel, spaceScope, workItem } from './planningFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
-import { briefAnswer } from './previewPage.ts'
-
-export const KINDS = ['bug', 'goal', 'improvement', 'task'] as const
-export type Kind = (typeof KINDS)[number]
+import { spaceScope } from './planningFixtures.ts'
+import { GOAL, KIND_SPACE, kindCard } from './served/kindColors.ts'
+import type { Kind } from './served/kindColors.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 
 /** The kinds' default colours, in the form a computed style reports them. */
 export const DEFAULTS: Record<Kind, string> = {
@@ -25,26 +21,6 @@ export const DEFAULTS: Record<Kind, string> = {
   task: 'rgb(180, 198, 224)',
 }
 
-type Brief = (typeof planningReadModel.work_items)[number]
-const blocked = planningReadModel.work_items[1] as Brief
-
-/** One item of the space, by the number it reads as. */
-const held = (number: number, kind: Kind, change: Partial<WorkItemBrief> = {}) =>
-  ({
-    ...blocked,
-    work_item_id: boardId(number),
-    reference: `MAIN-${number}`,
-    number,
-    title: `A ${kind} to read`,
-    kind,
-    // Workable, so nothing is withheld: the row it copies is withheld as not ready.
-    workable: true,
-    withheld: [],
-    claim_ref: '',
-    claim_state: null,
-    ...change,
-  }) as Brief
-
 const REFERENCE: Record<Kind, string> = {
   bug: 'MAIN-902',
   goal: 'MAIN-901',
@@ -52,37 +28,15 @@ const REFERENCE: Record<Kind, string> = {
   task: 'MAIN-904',
 }
 
-const GOAL = boardId(901)
-
-/** The goal with a bug, an improvement and a task under it, and a loose goal on the board. */
-const SPACE = [
-  held(901, 'goal', { kind: 'goal' }),
-  held(902, 'bug', { parent_id: GOAL }),
-  held(903, 'improvement', { parent_id: GOAL }),
-  held(904, 'task', { parent_id: GOAL }),
-]
-
 /** A server for that space: its read model, and a card for whichever item is asked for. */
 export async function serveKinds(page: Page) {
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.work_items = SPACE
-      body.links = []
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
-  await page.route('**/api/modules/planning/work-item?*', async (route) => {
-    const wanted = new URL(route.request().url()).searchParams.get('reference')
-    const brief = SPACE.find((item) => item.reference === wanted) ?? (SPACE[0] as Brief)
-    await route.fulfill(briefAnswer({ ...workItem, ...brief, links: [] } as unknown as Brief))
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, KIND_SPACE)),
+  )
+  await page.route('**/api/modules/planning/work-item?*', (route) =>
+    route.fulfill(kindCard(new URL(route.request().url()).searchParams.get('reference'))),
+  )
 }
 
 const planningRoute = (view: string, state: Record<string, string> = {}) =>
@@ -196,3 +150,5 @@ export async function watchFirstGlyph(page: Page, kind: Kind) {
   }, kind)
   return () => page.evaluate(() => (window as unknown as { firstGlyph?: string }).firstGlyph)
 }
+
+export { type Kind, KINDS } from './served/kindColors.ts'

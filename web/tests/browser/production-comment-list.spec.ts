@@ -20,7 +20,8 @@ import {
   openList,
   OPTIONS,
 } from './commentListBackend.ts'
-import { asked, openQuestion } from './questionBackend.ts'
+import { asked } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const WORDS = {

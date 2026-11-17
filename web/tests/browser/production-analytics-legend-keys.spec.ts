@@ -20,44 +20,11 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import type { UsageGroupValue } from '@/shared/api/analyticsApi.ts'
-
-import { noTask, task, unknownTask, value } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { frames } from './frames.ts'
 import { WORLD as OVERVIEW_WORLD } from './overviewPage.ts'
+import { SECTION_WORLD } from './served/analyticsLegendKeys.ts'
 import { test } from './test.ts'
-
-const HOUR = 3600
-
-/** A stretch of a task's work under a model, `hours` long, on a day of November. */
-const stretch = (
-  day: number,
-  workItem: UsageGroupValue,
-  model: UsageGroupValue,
-  hours: number,
-): TimedStretch => ({
-  at: new Date(2026, 10, day, 10),
-  group: { work_item: workItem, model },
-  spend: { seconds: hours * HOUR, tokens: hours * 100_000, cost: hours * 2 },
-})
-
-const UNKNOWN_MODEL: UsageGroupValue = { id: null, unknown: true }
-
-/**
- * This week to Wednesday: three tasks, work on no task and work nobody can place, under two
- * models and one nobody knows, so each section's legend holds keys that act and one that does not.
- */
-const SECTION_WORLD: TimedStretch[] = [
-  stretch(9, task(1, 'Import the plans'), value('model-a'), 5),
-  stretch(9, noTask, value('model-b'), 3),
-  stretch(10, task(2, 'Write the notes'), value('model-b'), 4),
-  stretch(10, unknownTask, UNKNOWN_MODEL, 1),
-  stretch(11, task(3, 'Sort the crashes'), value('model-a'), 2),
-  stretch(11, noTask, value('model-a'), 1.5),
-]
-
 const LEGENDS = [
   { name: "the task section's", world: SECTION_WORLD, address: pageAt({ by: 'work_item' }) },
   { name: "the model section's", world: SECTION_WORLD, address: pageAt({ by: 'model' }) },

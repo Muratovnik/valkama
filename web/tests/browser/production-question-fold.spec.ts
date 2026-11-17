@@ -6,15 +6,8 @@ import { expect } from '@playwright/test'
 
 import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
-import {
-  asked,
-  openQuestion,
-  question,
-  QUESTION_ID,
-  ROUTE_ASKED,
-  routeField,
-  send,
-} from './questionBackend.ts'
+import { asked, question, QUESTION_ID, ROUTE_ASKED, routeField, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const RESOLVED = '2026-10-24T10:30:00Z'

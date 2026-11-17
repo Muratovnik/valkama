@@ -10,7 +10,8 @@ import type { Locator, Page } from '@playwright/test'
 import { recommendedAnswer, REVIEW_PROMPT, reviewFields } from '../support/reviewQuestion.ts'
 import { box } from './editorPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { asked, openQuestion, send } from './questionBackend.ts'
+import { asked, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 // Playwright hides scrollbars, and one that arrives narrows what it scrolls on a real screen.
@@ -50,7 +51,7 @@ const coveredBy = (card: Locator) =>
   })
 
 const WRAPPED_TITLE =
-  'Checks and skill texts for the release line, the hooks of every client and the words of the review'
+  'Readings and alarm texts for the rain gauge, the sensors of every mast and the words of the manual'
 
 /** A title's first line, as drawn: a Range over its first text node, not the box around it. */
 const firstLine = (title: Locator) =>

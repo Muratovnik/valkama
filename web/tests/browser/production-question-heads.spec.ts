@@ -11,7 +11,8 @@ import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputReq
 
 import { REVIEW_PROMPT, reviewFields } from '../support/reviewQuestion.ts'
 import { box } from './editorPage.ts'
-import { asked, openQuestion, routeField } from './questionBackend.ts'
+import { asked, routeField } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const LIST = /^(?:Needs my answer|Ждут моего ответа)/u

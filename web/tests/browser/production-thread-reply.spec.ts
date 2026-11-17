@@ -12,7 +12,8 @@ import { openCard } from './editorPage.ts'
 import { launchedSessionId } from './executionFixtures.ts'
 import { frames } from './frames.ts'
 import { sessionHead } from './metaLine.ts'
-import { asked, openQuestion } from './questionBackend.ts'
+import { asked } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
 
@@ -172,7 +173,7 @@ for (const locale of ['en', 'ru'] as const)
  */
 async function openHeads(page: Page, locale: Locale, width: number) {
   await setUp(page, locale, width)
-  const opened = await openQuestion(page, [asked({ author: `kolo (session ${SESSION})` })])
+  const opened = await openQuestion(page, [asked({ author: `worker-b (session ${SESSION})` })])
   opened.backend.item.comments.push(...talkedWith())
   await page.reload()
   const { drawer, card } = opened

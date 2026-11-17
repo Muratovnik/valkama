@@ -9,7 +9,8 @@ import type { Page } from '@playwright/test'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 
-import { asked, openQuestion, question, routeField, send, wordsField } from './questionBackend.ts'
+import { asked, question, routeField, send, wordsField } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const TOUCHED = '77777777-7777-4777-8777-777777777771'

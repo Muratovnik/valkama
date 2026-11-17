@@ -9,27 +9,10 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { noTask, task } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
+import { task } from '../fixtures/analytics.ts'
 import { openReport, record, serve } from './analyticsPage.ts'
+import { FOLDED, RANKED, RANKING } from './served/analyticsColour.ts'
 import { test } from './test.ts'
-
-const HOUR = 3600
-const RANKING = [3, 1, 2, 4]
-
-const RANKED: TimedStretch[] = [
-  ...RANKING.map((number, rank) => ({
-    at: new Date(2026, 10, 9 + (rank % 3), 10),
-    group: { work_item: task(number, `Task ${number}`) },
-    spend: { seconds: (5 - rank) * HOUR, tokens: (5 - rank) * 1000 },
-  })),
-  {
-    at: new Date(2026, 10, 10, 12),
-    group: { work_item: noTask },
-    spend: { seconds: 8 * HOUR, tokens: 8000 },
-  },
-]
-
 /** The computed fill of every mark that draws `key`: tile part, section bar, day legend key. */
 const colours = async (page: Page, key: string) => {
   const [tile, bar, legend] = await page.evaluate(
@@ -77,23 +60,6 @@ test('at 1440px a task is one colour in its tile, its bar and the day chart', as
   expect(none.legend).not.toBeNull()
   expect(hues.has(none.legend ?? '')).toBe(false)
 })
-
-/**
- * Seven tasks, so two fold into «other», and work on no task larger than any of them: the day
- * chart stacks the five tasks, then no task, then the rest, each part of the stack on its own.
- */
-const FOLDED: TimedStretch[] = [
-  ...[1, 2, 3, 4, 5, 6, 7].map((number) => ({
-    at: new Date(2026, 10, 11, 9),
-    group: { work_item: task(number, `Task ${number}`) },
-    spend: { seconds: (9 - number) * HOUR, tokens: 1000 },
-  })),
-  {
-    at: new Date(2026, 10, 11, 12),
-    group: { work_item: noTask },
-    spend: { seconds: 20 * HOUR, tokens: 1000 },
-  },
-]
 
 /** The day chart's legend, in its order: each key and its swatch's fill. */
 const legendKeys = (page: Page) =>

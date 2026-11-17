@@ -17,30 +17,19 @@ import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import { broadSpace, liveWorkFor } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { broadRead, twoItems } from './served/graphs.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 /** The suite's space, whose n-th read (from 0) carries `liveOn(n)` as its live work. */
 async function serveSpace(page: Page, liveOn: (read: number) => Record<string, LiveWork>) {
-  const { model } = broadSpace()
   let reads = 0
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = model.workflow
-      body.work_items = model.work_items
-      body.links = model.links
-      body.live_work = liveOn(reads)
-      reads += 1
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(
+      spaceAnswer(new URL(route.request().url()).searchParams, () => broadRead(liveOn(reads++))),
+    ),
+  )
 }
 
 /** The rail's refresh, until the space's read it sends has answered. */
@@ -84,21 +73,6 @@ for (const motion of ['paused', 'running'] as const) {
     await expect(page.locator('.vue-flow__edge.graph-edge.live').first()).toBeAttached()
     expect(await strokeTransition(page)).toBe(0)
   })
-}
-
-/** The broad space's item linked only to its goal, and a working item under another goal. */
-function twoItems() {
-  const { lone, model } = broadSpace()
-  if (!lone) throw new Error('the broad space holds a lone item')
-  const elsewhere = model.work_items.find(
-    (item) =>
-      !item.state?.is_terminal &&
-      item.kind !== 'goal' &&
-      item.parent_id !== null &&
-      item.parent_id !== lone.goal.work_item_id,
-  )
-  if (!elsewhere) throw new Error('the broad space holds work under another goal')
-  return { lone: lone.item, elsewhere }
 }
 
 /** The field narrowed by a search to the lone item, with one item working. */

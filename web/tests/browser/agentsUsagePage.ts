@@ -20,7 +20,7 @@ export const CARD = serializePlatformRoute({
 })
 
 /** The one agent the record names, the same run the read counts first. */
-export const named = {
+const named = {
   agent_id: 'agent00000000000',
   session_id: PARENT_SESSION,
   agent_type: 'general-purpose',
@@ -49,4 +49,34 @@ export async function openAgents(page: Page) {
   const tab = page.locator('.drawer .inspector-tabs').getByRole('tab', { name: /^Agents \d+$/u })
   await tab.click()
   return page.locator('.drawer .agents')
+}
+
+/**
+ * A goal card: the whole scope answers `whole`, the item's own runs answer `own`, and a null
+ * answer fails that read.
+ */
+export async function serveGoal(page: Page, whole: ItemUsage, own: () => ItemUsage | null) {
+  const asked: string[] = []
+  await installBackend(page, {
+    agents: () => [named],
+    card: (read) => ({ ...read, kind: 'goal' }),
+  })
+  await page.route('**/api/planning/work-item/usage?*', (route) => {
+    const scope = new URL(route.request().url()).searchParams.get('scope') ?? ''
+    asked.push(scope)
+    const usage = scope === 'tree' ? whole : own()
+    return usage
+      ? route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify(usageAnswer(usage)),
+        })
+      : route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+  })
+  await page.route('**/api/planning/session/usage?*', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(usageAnswer(sessionUsage())),
+    }),
+  )
+  return asked
 }
