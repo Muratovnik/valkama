@@ -952,8 +952,9 @@ news waits for the upgrade.
 After a resume or a compaction an agent goes on with the work it holds, but its
 context no longer says where that work stood, and without help it reads each
 item again to find out. `valkama hook <client> session-start` answers such a
-start with a short note instead: what the agent holds, each item's state and
-next condition, and a last line saying that the note stands for that read.
+start with a short note instead: what the agent holds, each item's state, next
+condition and project root, and a last line saying that the note stands for that
+read.
 
 - **When.** Only when the input's `source` is `resume` or `compact`. `startup`,
   `clear` and `fork` open a session with a new id, which holds nothing, so they
@@ -978,6 +979,7 @@ Valkama now: this session holds 4 open items; the 3 it wrote to last:
 - MAIN-12 «Widen the check», Dev. Next condition 2/5: «Add the probe for the second client». 3 open threads; 1 new answer. Stage MAIN-3 of goal MAIN-1.
 - MAIN-14 «Retire the old reader», Dev, held by a condition. Next condition 1/4: «Measure the cold start».
 - MAIN-9 «Draft the release note», Blocked. All 3 conditions ticked. 1 open question. Goal MAIN-1.
+Root of these items: ../main.
 Current: read an item only for what this note leaves out.
 ```
 
@@ -1001,7 +1003,18 @@ Each item's line says:
   after the recipient's newest write on the item, every answered one when it
   wrote nothing there. A count of zero is left out;
 - `Stage MAIN-3 of goal MAIN-1.` for an item in a stage, and `Goal MAIN-1.` for
-  one directly under a goal.
+  one directly under a goal;
+- `Root ../main (+1).`: the first of the roots a claim of the item names in
+  `project_roots`, so its space's default project when the item changes it, and
+  how many others follow. The root stands relative to the input's `cwd`, with
+  `/` between its parts, and as the registry records it when there is no `cwd`
+  or no relative way leads there, such as another drive. A root that is not
+  `mapped` is named by its project and status, as in `alpha (missing)`. There is
+  no root when the item has no project, and none when the root is the `cwd`
+  itself: the session already works there.
+
+When every item shown names the same root, the root stands once, in the line
+`Root of these items: ../main.` after the items.
 
 ### How long it is
 
@@ -1011,7 +1024,10 @@ For each count it tries titles of at most 60, 44 and 32 characters with next
 conditions of at most 72, 52 and 36, and one item also gets 20 and 24. It takes
 the first version that fits. Inside a field every run of whitespace is one
 space, so a field never breaks a line; a field that is cut ends with `…`; a
-state is at most 20 characters; and a number past 999 is `999+`.
+state is at most 20 characters; and a number past 999 is `999+`. A root is at
+most 40 characters: a longer one keeps its last parts that fit after `…/`, or
+only the end of a last part that alone is too long, after `…`; with its `(+N)`
+it is at most 48.
 
 ### When there is no note
 
@@ -1031,8 +1047,8 @@ then.
 
 ### What it reads
 
-The store, opened read-only and only at the schema this build writes. The note
-writes nothing, and it neither reads nor moves the places
+The store, opened read-only and only at the schema this build writes, and the
+project registry, once for every item. The note writes nothing, and it neither reads nor moves the places
 [the notices keep](#where-each-agents-place-is-kept), so news that arrived
 before or after the compaction is still told at the next tool call. The planning
 modules the note reads with are loaded only for a start it answers; a tool call

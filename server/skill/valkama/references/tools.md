@@ -263,8 +263,12 @@ outside 1 to 1000.
 answer with too: `reference`, `title`, `kind`, `priority`, `state` (`key`,
 `name`, `category`; null for an accepted open goal or stage), `open`,
 `container_state`, `acceptance`, `started_at`, `waits_for`, `workable`,
-`claim_ref`, `claim_state`, `last_claim_ref`, `closed_at`, `labels`, `source`,
-`revision`, `created_at`, `updated_at`, `url`, `parent` (a reference or null),
+`projects` (the projects the item changes, each with its `project_id`, the
+registry's `display_name`, null while the registry does not record it, and its
+`source`: `named`, `commits` or `migrated`; a goal's or stage's are those of
+every task under it), `claim_ref`, `claim_state`, `last_claim_ref`,
+`closed_at`, `labels`, `source`, `revision`, `created_at`, `updated_at`, `url`,
+`parent` (a reference or null),
 `description` whole, `checklist` (each step's `id`, `text` and `done`, and
 `claimed_by` and `done_by` when they are set), `summary` when there is one, and
 `parts`: each other part the item has, with its size. A part with nothing in it
@@ -472,12 +476,15 @@ gives `replies`, the question's whole thread, oldest first.
 
 `merge_work_items` takes `id` (the survivor), `items` (1 to 20), and optionally
 `reason`, `force`, `expected_revision` (the survivor's) and `author`. What
-moves: steps, discussion threads whole, questions with their replies, refs the
-survivor lacks, and links in their own direction; `moved.comments` counts the
-comment rows, replies included. What stays on a merged item: its history,
-reports with their threads, description, labels and parent. Each merged item is linked `duplicates` to the
-survivor, summarised, released and closed in its cancelled state. Refused,
-writing nothing: the survivor in `items`, an item named twice, another space,
-a closed item, a merged item with children, more than 100 steps in all, a
-workflow with no reachable cancelled state, or an item another session holds
-without `force`.
+moves: steps (their ids, ticks and step claims kept), discussion threads whole,
+questions with their replies, refs the survivor lacks, links in their own
+direction, and projects (a project more than one of them names keeps the
+strongest source: named, then commits, then migrated); `moved.comments` counts
+the comment rows, replies included. A list goes with the comment it stands
+under. What stays on a merged item: its history, reports with their threads and
+lists, description, labels and parent. Each merged item is linked `duplicates`
+to the survivor, gets a summary naming it, is released and closes in its
+cancelled state. Refused, writing nothing: the survivor in `items`, an item
+named twice, another space, a closed item, a goal or stage with a task, a merged
+item with children, more than 100 steps in all, a workflow with no reachable
+cancelled state, or an item another session holds without `force`.
