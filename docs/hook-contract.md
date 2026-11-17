@@ -666,13 +666,25 @@ owner (see [a question asked of an agent session](connection-contract.md#a-quest
   an hour; one another session asks counts among them. The line names the request,
   its fields and how to answer:
   `- question asked of this session at <time> by Valkama (asks for your answer): «<prompt>» — answer with answer_work_item_request id=<request_id>; fields: choice choice: agree, object; why text`,
-  each field as its id, its type and the ids of its options. Whatever else becomes
+  each field as its id, its type and the ids of its options. An agent's request
+  names who asked as `by agent <agent> of session <session>`. Whatever else becomes
   of the request, a withdrawal or a change, reaches it at its next tool call, and
   wakes nothing.
-- **The session that asked** hears what another session made of it, the answer
-  included, on the item's own path, as it hears the answer to any question it asked.
-  Its own subagent's asking is no question to the owner, so it gets no
+- **The session that asked** hears what another session made of it on the item's
+  own path, as it hears the answer to any question it asked. The answer is the one
+  it waits for: it [wakes](#when-another-sessions-news-wakes) the session, counting
+  among the six wakes an hour, and reads
+  `- your question answered at <time> by agent <agent> of session <session>: choice=object, why=<text>`,
+  unquoted, each field by its id and each chosen option by its id (several as
+  `[a, b]`, an own variant and a comment after the value, then `note: <text>`). A
+  decline or a change of the answer reaches it at its next tool call and wakes
+  nothing. Its own subagent's asking is no question to the owner, so it gets no
   [`by your agent`](#another-agent-sessions-news) line of it.
+- **How often.** A session asks one other session at most 3 times an hour; the
+  fourth request is refused with `ask_limit` before anything is written (see
+  [how an agent asks](connection-contract.md#a-question-asked-of-an-agent-session)).
+  Beyond that, the session asked is woken at most six times an hour by other
+  agents, as for any of their news.
 - **Nobody else** hears any of it: not the holders of the item or its followers, not
   the sessions working under its goal, and not the person.
 
@@ -752,6 +764,7 @@ its orchestrator once when it idles, or continue its turn once at `Stop`:
 | a [blocker closed](#another-agent-sessions-news) by another session or a person | the holders of the item it blocked | once per close |
 | since 3.0, a [record of Valkama's](#valkamas-own-records) of a kind that asks for a session; no kind does yet | whoever hears the item, through the tree too | once; not counted among the six an hour |
 | since 3.0, a [question asked of the session](#asked-of-a-session) | that session | once; one Valkama asked is not counted among the six an hour |
+| since 3.0, the answer to a [question the session asked of another](#asked-of-a-session) | the session that asked | once |
 
 - **Once.** What woke a session, or continued its turn, is told then and moves the
   place past it, so it never wakes again; all the other sessions' news waiting for

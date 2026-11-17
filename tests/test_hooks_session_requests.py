@@ -19,8 +19,9 @@ from __future__ import annotations
 import re
 import unittest
 
+from server import mcp_surface
 from server.hooks import notify
-from server.planning import calls, requests
+from server.planning import api, calls, model, requests
 from tests.test_hooks_tree_notices import (
     A1,
     AS_A1,
@@ -165,7 +166,9 @@ class AskedOfASessionTests(Asked):
         )
         told = self.hook(A)
         assert told is not None, "the session that asked hears the answer"
-        self.assertRegex(told, rf"\n- question_answered at \S+ by agent {B1} of session {B}: «")
+        self.assertRegex(
+            told, rf"\n- your question answered at \S+ by agent {B1} of session {B}: choice=agree\n"
+        )
         self.assertIsNone(self.hook(B), "its own subagent's answer is no news to B")
         self.nothing_for(E, F, C)
 
@@ -185,6 +188,71 @@ class AskedOfASessionTests(Asked):
         self.assertNotIn("asks for your answer", told)
         self.nothing_for(E, F, C)
         self.assertIsNone(self.hook(A), "nor does A hear its own subagent withdraw it")
+
+
+class AgentAsksTests(Asked):
+    """An agent asks another session with the tool, as `create_work_item_request` takes it."""
+
+    def asked_by_tool(self, *sessions: str) -> dict:
+        made = self.agent(
+            "create_work_item_request",
+            AS_A1,
+            id=self.t3,
+            kind="question",
+            prompt=PROMPT,
+            fields=[CHOICE, WHY],
+            addressees=list(sessions),
+        )
+        [entry] = made["requests"]
+        return requests.get(self.conn, entry["request_id"])
+
+    def test_the_answer_wakes_the_session_that_asked(self) -> None:
+        """O18, the hook's part: a1 of A asks B on T3, which A holds; B's subagent answers."""
+
+        asked = self.asked_by_tool(B)
+        status, text = self.watch(B)
+        self.assertEqual(notify.WAKE_STATUS, status, "B's watcher leaves with the request")
+        self.assertRegex(text, asked_line(f"agent {A1} of session {A}", asked["request_id"]))
+        with self.assertRaises(model.PlanningError) as refused:
+            mcp_surface.call_tool(
+                self.conn,
+                "answer_work_item_request",
+                {
+                    "id": asked["request_id"],
+                    "answers": {"choice": "agree"},
+                    "expected_revision": asked["revision"],
+                },
+                meta=AS_C,
+            )
+        self.conn.rollback()
+        self.assertEqual("not_addressed", api.error_response(refused.exception)[1]["error"]["code"])
+        self.agent(
+            "answer_work_item_request",
+            AS_B1,
+            id=asked["request_id"],
+            answers={"choice": "object", "why": "T2 keeps the old parser"},
+            expected_revision=asked["revision"],
+        )
+        status, text = self.watch(A)
+        self.assertEqual(notify.WAKE_STATUS, status, "the answer wakes the session that asked")
+        self.assertIn(
+            f"\n- your question answered at {self.answered_at(asked)} by agent {B1} of session"
+            f" {B}: choice=object, why=T2 keeps the old parser\n",
+            text,
+        )
+        self.assertNotIn("the reply awaited", text)
+        self.assertIsNone(self.hook(A), "once")
+        self.nothing_for(E, F, C)
+        self.assertEqual([], requests.open_rows(self.conn), "nor does the owner hear of it")
+
+    def answered_at(self, asked: dict) -> str:
+        return str(
+            self.conn.execute(
+                "SELECT created_at FROM work_item_events WHERE action = 'request_answered'"
+                " AND detail = ?",
+                (asked["request_id"],),
+            ).fetchone()[0]
+        )
 
 
 class ListTests(Asked):

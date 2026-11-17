@@ -915,7 +915,8 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str, row: 
     An answer reads as it stands now, as an edit does: a change says what differs
     between the current answer and the version it replaced, row by row, whichever
     change of a window it is. Two whole answers of a review do not fit in one event.
-    `row` is the request's prompt, fields, answers and comment.
+    The answer of a session asked reads by field and option ids instead.
+    `row` is the request's prompt, fields, answers, comment and addressee.
     """
 
     if action not in ("request_answered", "request_changed"):
@@ -926,6 +927,9 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str, row: 
         return ""
     from . import request_model
 
+    if action == "request_answered" and row[4] is not None:
+        # Only the session that asked hears this answer, and it reads it by its own ids.
+        return request_model.session_answer_text(fields, stored)
     listed = row[3] is not None
     answer = request_model.answer_text(fields, stored, listed=listed)
     if action == "request_answered":

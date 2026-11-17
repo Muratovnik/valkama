@@ -144,6 +144,8 @@ def error_response(error: BaseException) -> tuple[int, dict]:
         return 409, {"error": {"code": "workflow_guard", "message": str(error)}}
     if isinstance(error, model.MentionLimitError):
         return 429, {"error": {"code": "mention_limit", "message": str(error)}}
+    if isinstance(error, model.AskLimitError):
+        return 429, {"error": {"code": "ask_limit", "message": str(error)}}
     if isinstance(error, model.NotAddressedError):
         return 403, {"error": {"code": "not_addressed", "message": str(error)}}
     if isinstance(error, model.NotAskerError):
@@ -883,10 +885,43 @@ def _request_fields(payload: Mapping[str, object], allowed: set[str]) -> None:
 
 
 def _create_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """A question to the owner, or with `addressees` one to each agent session named.
+
+    A request asked of a session binds to no execution and no session of its item:
+    those say whose work a question to the owner is about, and the session asked is
+    named instead.
+    """
+
     _request_fields(
         payload,
-        {"id", "kind", "prompt", "fields", "author", "execution_id", "session_id", "expires_at"},
+        {
+            "id",
+            "kind",
+            "prompt",
+            "fields",
+            "author",
+            "execution_id",
+            "session_id",
+            "expires_at",
+            "addressees",
+        },
     )
+    if "addressees" in payload:
+        if payload.get("execution_id") is not None or payload.get("session_id") is not None:
+            raise model.PlanningError(
+                "addressees asks agent sessions, and execution_id and session_id bind a"
+                " question to the owner; send one or the other"
+            )
+        return requests.ask_from_agent(
+            conn,
+            _text(payload, "id"),
+            addressees=payload["addressees"],
+            kind=_field(payload, "kind"),
+            prompt=_field(payload, "prompt"),
+            fields=_field(payload, "fields"),
+            expires_at=_optional_text(payload, "expires_at"),
+            author=_author(payload),
+        )
     return requests.create(
         conn,
         _text(payload, "id"),

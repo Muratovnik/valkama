@@ -264,6 +264,14 @@ class MentionLimitError(PlanningError):
     """
 
 
+class AskLimitError(PlanningError):
+    """A session asked one other session as often as an hour allows.
+
+    Its own code, as `MentionLimitError` has: the request is well formed and would be
+    accepted later, or asked once with every field it needs.
+    """
+
+
 class NotAddressedError(PlanningError):
     """A request asked of an agent session, answered or declined by any other caller.
 

@@ -1696,6 +1696,70 @@ class RequestFieldRefusalTests(WireCallTestCase):
                 self.assertEqual(field["id"], read["fields"][0]["id"])
 
 
+class AskingSessionsTests(WireCallTestCase):
+    """`create_work_item_request` with `addressees` asks other agent sessions on the wire."""
+
+    ASKED = "019a3c2e-0000-7c11-9e0f-2f4b6d8a1c3e"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reference = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="Asks a session"
+        )["reference"]
+        self.conn.commit()
+        held = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Held")
+        self.conn.commit()
+        self.answer("claim_work_item", {"id": held["reference"]}, {"sessionId": self.ASKED})
+
+    def asking(self) -> dict:
+        return {
+            "id": self.reference,
+            "kind": "question",
+            "prompt": "Keep the parser?",
+            "fields": [
+                {"id": "keep", "label": "Keep", "type": "boolean", "required": True, "options": []}
+            ],
+            "addressees": [self.ASKED],
+        }
+
+    def test_the_tool_says_when_to_ask_a_session_and_when_to_comment(self) -> None:
+        [tool] = [
+            tool for tool in planning_tools.TOOLS if tool["name"] == "create_work_item_request"
+        ]
+        schema = tool["inputSchema"]["properties"]["addressees"]
+        self.assertEqual(
+            ("array", 1, 5, {"type": "string"}),
+            (schema["type"], schema["minItems"], schema["maxItems"], schema["items"]),
+        )
+        for said in (
+            "addressees asks other agent sessions instead of the person",
+            "its answer wakes you",
+            "at most 3 times an hour by yours (ask_limit)",
+            "Ask for an answer in fields before you go on; for a free exchange write a comment"
+            " with awaits_reply.",
+        ):
+            self.assertIn(said, tool["description"])
+
+    def test_a_proved_session_asks_and_the_answer_names_each_request(self) -> None:
+        made = self.answer("create_work_item_request", self.asking(), {"sessionId": self.SESSION})
+        [entry] = made["requests"]
+        self.assertEqual(self.ASKED, entry["addressee"])
+        read = self.answer("get_work_item_request", {"id": entry["request_id"]})
+        self.assertEqual((self.ASKED, "pending"), (read["addressee"], read["status"]))
+
+    def test_a_call_that_proved_no_session_asks_nobody(self) -> None:
+        error = self.refusal("create_work_item_request", self.asking())
+        self.assertEqual("invalid_request", error["code"])
+        self.assertIn("proved none", error["message"])
+
+    def test_the_fourth_ask_within_the_hour_is_refused_with_ask_limit(self) -> None:
+        for _turn in range(3):
+            self.answer("create_work_item_request", self.asking(), {"sessionId": self.SESSION})
+        error = self.refusal("create_work_item_request", self.asking(), {"sessionId": self.SESSION})
+        self.assertEqual("ask_limit", error["code"])
+        self.assertIn(f"session {self.ASKED} was asked 3 times", error["message"])
+
+
 class ApplyWorkItemChangesTests(WireCallTestCase):
     """Several writes to one item in one call: in a fixed order, and all or nothing."""
 

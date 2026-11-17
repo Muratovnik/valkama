@@ -3588,6 +3588,38 @@ the fields of any question. A session asked must be known, live, a top-level one
 not the caller's own; one that is not is refused with `invalid_request`, naming
 the session, and nothing is written.
 
+**How an agent asks.** `create_work_item_request` with `addressees`, a list of 1 to
+5 top-level session ids, as `participants`, `subscribers` and holders name them,
+asks those sessions instead of the owner: one request each, in one write, with the
+`kind`, `prompt`, `fields` and `expires_at` of the call. The session that asked is
+the one the call proved, whichever of its agents made it. The answer names each
+request and the session it asks:
+
+```json
+{"requests": [{"request_id": "…", "addressee": "019a3c2e-…"}]}
+```
+
+The interface writes through the same route
+(`POST /api/planning/work-item/request`) and is refused like any call that proved
+no agent session. Refused before anything is written, the message naming the
+session where there is one:
+
+| Case | Refusal |
+| --- | --- |
+| a call that proved no agent session, the interface's or an unconfirmed one | `invalid_request` |
+| a session that is not known, has ended or has been quiet longer than a lease lasts | `invalid_request`, naming the session |
+| the caller's own session, or a subagent's rather than a top-level one | `invalid_request`, naming the session |
+| a session named twice, more than 5, or none | `invalid_request` |
+| `execution_id` or `session_id` beside `addressees`: those bind a question to the owner | `invalid_request` |
+| a closed item | `invalid_request`, as for any request |
+| a fourth request from one session to one other within an hour | `ask_limit` (429): `session <id> was asked 3 times in the last hour by this session; write once there, or wait` |
+
+The hour counts the requests asked of that session whose confirmed call names the
+asking session, its subagents included; a refused call asked nothing and counts
+toward no hour, and Valkama's own requests count toward none. The batch's
+`questions` ask the owner only: an entry with `addressees` is refused there as an
+unknown field.
+
 **Who answers.** Only a call whose session a client proved and that is the
 `addressee` answers it, changes the answer or declines it, from that session's
 conversation or any of its subagents. Only the session that asked, from any of its

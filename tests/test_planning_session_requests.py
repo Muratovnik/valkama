@@ -46,9 +46,9 @@ class Harness(unittest.TestCase):
         self.space = str(service.create_planning_space(self.conn, name="Crew")["key"])
         self.conn.commit()
         self.goal = self.item("G", "goal")
-        s1 = self.item("S1", "stage", self.goal)
+        self.s1 = self.item("S1", "stage", self.goal)
         s2 = self.item("S2", "stage", self.goal)
-        self.t1 = self.item("T1", parent=s1)
+        self.t1 = self.item("T1", parent=self.s1)
         self.t2 = self.item("T2", parent=s2)
         self.claim(self.t1, E)
         self.claim(self.t2, B)
@@ -318,6 +318,147 @@ class AskRefusalTests(Harness):
         self.assertEqual(
             0, self.conn.execute("SELECT COUNT(*) FROM work_item_requests").fetchone()[0]
         )
+
+
+ASK = "/api/planning/work-item/request"
+C = "c0000000-0000-4000-8000-00000000000c"
+D = "d0000000-0000-4000-8000-00000000000d"
+
+
+class AgentAskTests(Harness):
+    """An agent asks another session through `create_work_item_request` with `addressees`.
+
+    The tool and the interface write through one route; the expectations come from the
+    contract of that tool: one request for each session named, refusals that name the
+    session, and at most three requests from one session to one other within the hour.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.t3 = self.item("T3", parent=self.s1)
+        self.claim(self.t3, A, A2)
+        self.claim(self.item("U"), C)
+
+    def asking(self, *asked: str, **extra: object) -> dict:
+        return {
+            "id": self.t3,
+            "kind": "question",
+            "prompt": "Which parser does T2 keep?",
+            "fields": [CHOICE],
+            "addressees": list(asked),
+            **extra,
+        }
+
+    def test_an_agent_asks_another_session(self) -> None:
+        """O18, the server's part: a1 asks B on T3, which A holds."""
+
+        made = self.post(ASK, self.asking(B), A, A1)
+        self.assertEqual(200, made["http"], made)
+        [entry] = made["requests"]
+        self.assertEqual({"request_id", "addressee"}, set(entry))
+        self.assertEqual(B, entry["addressee"])
+        record = requests.get(self.conn, entry["request_id"])
+        self.assertEqual(
+            (B, "pending", self.t3, A),
+            (
+                record["addressee"],
+                record["status"],
+                record["reference"],
+                requests._asker(self.conn, entry["request_id"]),
+            ),
+            "asked of B, and A, the session of the agent that called, asked it",
+        )
+        refused = self.answer(record, C)
+        self.assertEqual((403, "not_addressed"), (refused["http"], refused["code"]))
+        answered = self.answer(record, B, B1)
+        self.assertEqual(
+            (200, "answered", {"choice": "agree"}),
+            (answered["http"], answered["status"], answered["answers"]),
+            "B's subagent answers for B",
+        )
+        self.assertEqual([], requests.open_rows(self.conn), "nothing waits for the owner")
+        self.assertEqual([], requests.list_page(self.conn, reference=self.t3)["requests"])
+
+    def test_a_decision_asks_as_a_question_does(self) -> None:
+        made = self.post(ASK, self.asking(B, E, kind="decision"), A, A1)
+        self.assertEqual([B, E], [entry["addressee"] for entry in made["requests"]])
+        for entry in made["requests"]:
+            self.assertEqual("decision", requests.get(self.conn, entry["request_id"])["kind"])
+
+    def test_an_agent_ask_refused_names_why(self) -> None:
+        """O19: A and B live, D ended, C quiet past its lease."""
+
+        self.claim(self.item("V"), D)
+        self.end(D)
+        self.conn.execute(
+            "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now','-15 days')"
+            " WHERE id = ?",
+            (C,),
+        )
+        own_agent = sessions.subagent_session_id(A, A1)
+        self.conn.execute(
+            "INSERT INTO sessions(id, client, parent_session_id, agent_id)"
+            " VALUES(?, 'claude-code', ?, ?)",
+            (own_agent, A, A1),
+        )
+        self.conn.commit()
+        nobody = "f0000000-0000-4000-8000-00000000000f"
+        six = [f"{index}0000000-0000-4000-8000-000000000000" for index in range(1, 7)]
+        unproved = calls.Identity(state=calls.UNCONFIRMED, source=calls.MCP, session_id=A)
+        for body, caller, says in (
+            (self.asking(B), None, "this call proved none"),
+            (self.asking(B), unproved, "this call proved none"),
+            (self.asking(A), A, f"session {A} is your own"),
+            (self.asking(own_agent), A, f"session {own_agent} is a subagent's"),
+            (self.asking(D), A, f"session {D} has ended or gone quiet"),
+            (self.asking(C), A, f"session {C} has ended or gone quiet"),
+            (self.asking(nobody), A, f"no session {nobody}"),
+            (self.asking(B, B), A, f"session {B} is named twice"),
+            (self.asking(*six), A, "at most 5 sessions"),
+            (self.asking(), A, "at least one agent session"),
+            (self.asking(B, session_id=A), A, "execution_id and session_id"),
+        ):
+            with self.subTest(says=says):
+                refused = self.post_as(body, caller)
+                self.assertEqual((400, "invalid_request"), (refused["http"], refused["code"]))
+                self.assertIn(says, refused["message"])
+        self.assertEqual(
+            0,
+            self.conn.execute("SELECT COUNT(*) FROM work_item_requests").fetchone()[0],
+            "no refusal wrote a request",
+        )
+        for turn in range(3):
+            with self.subTest(ask=turn + 1):
+                self.assertEqual(200, self.post(ASK, self.asking(B), A, A1)["http"])
+        limited = self.post(ASK, self.asking(B), A, A2)
+        self.assertEqual((429, "ask_limit"), (limited["http"], limited["code"]))
+        self.assertIn(f"session {B} was asked 3 times in the last hour", limited["message"])
+        self.assertEqual(
+            200,
+            self.post(ASK, self.asking(E), A, A1)["http"],
+            "the limit is of one session asking one other",
+        )
+        self.assertEqual(
+            200,
+            self.post(ASK, self.asking(B), E)["http"],
+            "and another session asks B as before",
+        )
+
+    def post_as(self, body: dict, caller: calls.Identity | str | None) -> dict:
+        """The route as a session, the person (None) or a call that proved nothing."""
+
+        if not isinstance(caller, calls.Identity):
+            return self.post(ASK, body, caller)
+        try:
+            with calls.bind(caller, "test"):
+                answer = api.handle_post(self.conn, ASK, body)
+        except model.PlanningError as error:
+            self.conn.rollback()
+            status, refusal = api.error_response(error)
+            return {"http": status, **refusal["error"]}
+        self.conn.commit()
+        assert answer is not None
+        return {"http": answer[0], **answer[1]}
 
 
 class OwnerTests(Harness):

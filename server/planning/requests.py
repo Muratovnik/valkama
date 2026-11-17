@@ -19,6 +19,22 @@ from . import calls, leases, model, questions, read_model, request_model, servic
 
 #: How many questions a read of one item carries; `questions.total` says the rest.
 ITEM_QUESTIONS = 5
+#: How many sessions an agent's call asks at once (`addressees`).
+MOST_ADDRESSEES = 5
+#: How often one session may ask one other session within the hour.
+MOST_ASKS_PER_HOUR = 3
+
+#: The requests one session's confirmed calls asked of one other session within the last
+#: hour, counted by their `request_created` events: from the requests asked of that
+#: session, each event found among its item's.
+_ASKED_THIS_HOUR = (
+    "SELECT COUNT(*) FROM work_item_requests r"
+    " JOIN work_item_events e ON e.work_item_id = r.work_item_id"
+    " AND e.action = 'request_created' AND e.detail = r.request_id"
+    " JOIN execution_events c ON c.id = e.call_id"
+    " WHERE r.addressee = ? AND c.session_id = ? AND c.identity_state = ?"
+    " AND e.created_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 hour')"
+)
 
 
 @contextlib.contextmanager
@@ -587,16 +603,20 @@ def ask_sessions(
     fields: object,
     expires_at: object = None,
     author: str | None = None,
+    kind: object = "question",
 ) -> list[dict]:
     """Ask agent sessions instead of the owner: one request on the item for each, in one write.
 
-    Each is a question with these fields, asked of one top-level session, written by
-    the call in progress, which is who asked. Refused, naming the session, when one
-    is unknown, has ended or gone quiet past its lease, is the caller's own, is a
-    subagent's rather than a top-level one, or is named twice; and when none is
-    named. A refusal writes nothing.
+    Each is a question (or a `kind` of `decision`) with these fields, asked of one
+    top-level session, written by the call in progress, which is who asked. Refused,
+    naming the session, when one is unknown, has ended or gone quiet past its lease,
+    is the caller's own, is a subagent's rather than a top-level one, or is named
+    twice; and when none is named. An agent session that asked one session
+    `MOST_ASKS_PER_HOUR` times in the last hour is refused with `AskLimitError`;
+    Valkama's own asking counts toward no hour. A refusal writes nothing.
     """
 
+    parsed_kind = model.enum_field(kind, frozenset({"question", "decision"}), "kind")
     parsed_prompt = model.multiline_field(prompt, "prompt", limit=8000)
     if not parsed_prompt:
         raise model.PlanningError("prompt is required")
@@ -615,7 +635,7 @@ def ask_sessions(
                 (
                     identity,
                     item["work_item_id"],
-                    "question",
+                    parsed_kind,
                     parsed_prompt,
                     model.dumps(parsed_fields),
                     model.actor(author),
@@ -666,7 +686,68 @@ def _addressees(conn: sqlite3.Connection, sessions: object) -> list[str]:
                 f"session {session} has ended or gone quiet past its lease, and would not answer"
             )
         asked.append(session)
+    # The limit comes after every session is known to be one that may be asked, so a
+    # list that names one wrongly is refused for that, as a well-formed one is not.
+    for session in asked if own is not None else []:
+        found = conn.execute(_ASKED_THIS_HOUR, (session, own, calls.CONFIRMED)).fetchone()
+        if int(found[0]) >= MOST_ASKS_PER_HOUR:
+            raise model.AskLimitError(
+                f"session {session} was asked {MOST_ASKS_PER_HOUR} times in the last hour by"
+                " this session; write once there, or wait"
+            )
     return asked
+
+
+def ask_from_agent(
+    conn: sqlite3.Connection,
+    reference: str,
+    *,
+    addressees: object,
+    kind: object,
+    prompt: object,
+    fields: object,
+    expires_at: object = None,
+    author: str | None = None,
+) -> dict:
+    """An agent's `create_work_item_request` with `addressees`: `ask_sessions` in its call.
+
+    Only a call that proved an agent session asks one, since the session that asked
+    is who withdraws it and whom its answer wakes; the interface and an unproved call
+    are refused. At most `MOST_ADDRESSEES` sessions at once. The answer names each
+    request and the session it asks.
+    """
+
+    identity = calls.current()
+    if (
+        identity is None
+        or identity.state != calls.CONFIRMED
+        or identity.session_id is None
+        or not calls.from_agent()
+    ):
+        raise model.PlanningError(
+            "addressees asks other agent sessions, and only a call that proved its agent"
+            " session asks one; this call proved none"
+        )
+    if not isinstance(addressees, list) or not addressees:
+        raise model.PlanningError("addressees names at least one agent session to ask")
+    if len(addressees) > MOST_ADDRESSEES:
+        raise model.PlanningError(f"addressees names at most {MOST_ADDRESSEES} sessions")
+    asked = ask_sessions(
+        conn,
+        reference,
+        sessions=addressees,
+        kind=kind,
+        prompt=prompt,
+        fields=fields,
+        expires_at=expires_at,
+        author=author,
+    )
+    return {
+        "requests": [
+            {"request_id": record["request_id"], "addressee": record["addressee"]}
+            for record in asked
+        ]
+    }
 
 
 def _check_closer(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> None:

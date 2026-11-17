@@ -1081,7 +1081,12 @@ TOOLS.extend(
             "Create a typed question or decision on an item. The fields of one question fit in"
             " 64 KiB as stored. A review is a verdict field per proposal, its steps or ways in"
             " a field under it, and a group per area. Does not change workflow or execution"
-            " lifecycle.",
+            " lifecycle. addressees asks other agent sessions instead of the person: up to"
+            f" {requests.MOST_ADDRESSEES} top-level session ids, as participants, subscribers"
+            " and holders name them. Each gets its own request, which wakes it; its answer"
+            f" wakes you. A session is asked at most {requests.MOST_ASKS_PER_HOUR} times an"
+            " hour by yours (ask_limit). Ask for an answer in fields before you go on; for a"
+            " free exchange write a comment with awaits_reply.",
             WRITES,
             {
                 "id": WORK_ITEM_REFERENCE,
@@ -1097,6 +1102,14 @@ TOOLS.extend(
                 "execution_id": _STR,
                 "session_id": _STR,
                 "expires_at": _STR,
+                "addressees": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": requests.MOST_ADDRESSEES,
+                    "items": _STR,
+                    "description": "Top-level agent session ids to ask instead of the person;"
+                    " the answer is requests, each request_id with its addressee.",
+                },
             },
             ["id", "kind", "prompt", "fields"],
         ),

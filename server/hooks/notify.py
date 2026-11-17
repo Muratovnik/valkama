@@ -904,7 +904,9 @@ def _owed(conn: sqlite3.Connection, item: str, entries: list[dict], session_id: 
     only what another session or a person made of it; the session asked hears it through
     the tree's news (`_feed`), and nobody else hears it, its holders and those who follow
     the item included. Its asking by this session's own subagent is no question to the
-    owner, so the orchestrator gets no line of it either.
+    owner, so the orchestrator gets no line of it either. Its answer is the one the
+    session that asked waits for: it wakes it (`answers`) and reads as its answer
+    (`answered_you`).
     """
 
     from ..planning import person_events
@@ -919,6 +921,8 @@ def _owed(conn: sqlite3.Connection, item: str, entries: list[dict], session_id: 
             asker = person_events.author_of(conn, item, found)
             if asker is None or asker[0] != session_id:
                 continue
+            if found["kind"] == "question_answered":
+                found["answers"] = found["answered_you"] = True
         kept.append(found)
     return kept
 
@@ -1903,12 +1907,22 @@ def _line(entry: dict) -> str:
     """One entry's line: what it is, when, whose, what it asks and what was said.
 
     A request asked of this session says so instead of its kind, and how to answer it:
-    its id and its fields, each with its type and the ids of its options.
+    its id and its fields, each with its type and the ids of its options. The answer to
+    a request this session asked of another says so too, and gives it unquoted, by the
+    ids of its fields and options.
     """
 
     said = " ".join(str(entry.get("text", "")).split())
-    kind = "question asked of this session" if entry.get("asked_of_you") else entry["kind"]
+    kind = (
+        "question asked of this session"
+        if entry.get("asked_of_you")
+        else "your question answered"
+        if entry.get("answered_you")
+        else entry["kind"]
+    )
     line = f"- {kind} at {entry['at']}{_where(entry)}{_flags(entry)}"
+    if entry.get("answered_you"):
+        return f"{line}: {said}" if said else line
     quoted = f": {_quote(said)}" if said else ""
     if not entry.get("asked_of_you"):
         return line + quoted
@@ -1952,7 +1966,8 @@ def _folded(entry: dict) -> str:
 
 def _flags(entry: dict) -> str:
     """What a line asks of the reader, or answers: a wait for a reply, its answer, or the
-    answer of this session to a request asked of it."""
+    answer of this session to a request asked of it. The answer to this session's own
+    request says what it is in its kind instead."""
 
     flags = [
         said
@@ -1961,7 +1976,7 @@ def _flags(entry: dict) -> str:
             ("answers", "the reply awaited"),
             ("asked_of_you", "asks for your answer"),
         )
-        if entry.get(key)
+        if entry.get(key) and not (key == "answers" and entry.get("answered_you"))
     ]
     return f" ({', '.join(flags)})" if flags else ""
 

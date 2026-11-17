@@ -399,40 +399,6 @@ option of it (a verdict's word under a verdict); it leaves `group` out or repeat
 its parent's, and it is shown and answered only while the parent's answer holds
 that option. The fields of one question fit in 64 KiB as stored.
 
-### A review of many points
-
-A review of many points is one `verdict` field per proposal: the owner
-accepts it, puts it off or rejects it, and may comment on it or give an own
-variant. The steps or the ways of a point are a field `under` it,
-`{"field": "p4", "option": "accept"}`, which stands right after it and is shown
-and answered only while the point is accepted; a `group` per area replaces a
-field per executor. Everything the owner chooses from is an option: never a step
-in a label or a description, never `p4a` in a field shared by several points.
-Put `recommended`, with its `why`, wherever you have one: a button drafts from it.
-Two points, one with its steps and one with its way:
-
-```json
-[{"id": "p4", "label": "P4 Checks: false alarms", "type": "verdict", "required": false,
-  "options": [], "group": "Checks", "recommended": "accept",
-  "why": "All fourteen false alarms came from one rule."},
- {"id": "p4-steps", "label": "Steps", "type": "multi_choice", "required": true,
-  "under": {"field": "p4", "option": "accept"},
-  "options": [{"id": "p4a", "label": "Mark the refusals, then narrow the rule", "recommended": true,
-               "why": "The marks show which cases the narrower rule must keep."},
-              {"id": "p4b", "label": "Skip the check on an intermediate stop"}]},
- {"id": "p13", "label": "P13 A 400-line limit for .vue files", "type": "verdict",
-  "required": false, "options": [], "group": "Web code", "recommended": "accept",
-  "why": "Six files passed 400 lines this month."},
- {"id": "p13-way", "label": "How", "type": "choice", "required": true,
-  "under": {"field": "p13", "option": "accept"},
-  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true,
-               "why": "The rule already exists; no file moves."},
-              {"id": "split_first", "label": "Split the files first"}]}]
-```
-
-A field `under` a later field, a field under another, or an option its parent
-lacks is refused, naming the field and how to put it right.
-
 `answer_work_item_request` takes `id`, `answers` (field id to answer),
 `expected_revision` and optionally `own` (field id to an own variant, at most 8000
 characters), `field_notes` (field id to a comment, at most 2000 characters),
@@ -525,6 +491,56 @@ interface.
 first, each with `version`, its parts, `answered_by`, `answered_at` and
 `by_person`), `by_person` and the rest of the record. `get_work_item_request` also
 gives `replies`, the question's whole thread, oldest first.
+
+### A review of many points
+
+A review of many points is one `verdict` field per proposal: the owner
+accepts it, puts it off or rejects it, and may comment on it or give an own
+variant. The steps or the ways of a point are a field `under` it,
+`{"field": "p4", "option": "accept"}`, which stands right after it and is shown
+and answered only while the point is accepted; a `group` per area replaces a
+field per executor. Everything the owner chooses from is an option: never a step
+in a label or a description, never `p4a` in a field shared by several points.
+Put `recommended`, with its `why`, wherever you have one: a button drafts from it.
+Two points, one with its steps and one with its way:
+
+```json
+[{"id": "p4", "label": "P4 Checks: false alarms", "type": "verdict", "required": false,
+  "options": [], "group": "Checks", "recommended": "accept",
+  "why": "All fourteen false alarms came from one rule."},
+ {"id": "p4-steps", "label": "Steps", "type": "multi_choice", "required": true,
+  "under": {"field": "p4", "option": "accept"},
+  "options": [{"id": "p4a", "label": "Mark the refusals, then narrow the rule", "recommended": true,
+               "why": "The marks show which cases the narrower rule must keep."},
+              {"id": "p4b", "label": "Skip the check on an intermediate stop"}]},
+ {"id": "p13", "label": "P13 A 400-line limit for .vue files", "type": "verdict",
+  "required": false, "options": [], "group": "Web code", "recommended": "accept",
+  "why": "Six files passed 400 lines this month."},
+ {"id": "p13-way", "label": "How", "type": "choice", "required": true,
+  "under": {"field": "p13", "option": "accept"},
+  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true,
+               "why": "The rule already exists; no file moves."},
+              {"id": "split_first", "label": "Split the files first"}]}]
+```
+
+A field `under` a later field, a field under another, or an option its parent
+lacks is refused, naming the field and how to put it right.
+
+### Asking another session
+
+`create_work_item_request` with `addressees` (1 to 5 top-level session ids, as
+`participants`, `subscribers` and holders name them) asks those sessions instead of
+the owner: one request each, with the call's `kind`, `prompt`, `fields` and
+`expires_at`, and the answer is `{"requests": [{"request_id": "…", "addressee":
+"…"}]}`. Your session is the one that asked, whichever of its agents called. Each
+request wakes the session it asks; its answer wakes yours as `your question answered
+… by agent <id> of session <id>: <field>=<value>, …`, by the ids you sent. Refused
+with `invalid_request`, naming the session where there is one: a call that proved
+no agent session, an unknown session, one that ended or went quiet past its lease,
+your own, a subagent's, one named twice, more than 5 or none, and `execution_id` or
+`session_id` beside `addressees`. A session asks one other at most 3 times an hour:
+the fourth is refused with `ask_limit`. The batch's `questions` take no
+`addressees`.
 
 ## Merging
 

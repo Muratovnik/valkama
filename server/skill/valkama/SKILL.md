@@ -225,6 +225,15 @@ waits for whoever takes the item), the item is closed, or the call proved no
 session. Naming the item written on, or an item twice, is refused. Tell an item
 only with news for the work there.
 
+**Asking another session.** When you need another session's answer before you go
+on — a choice, a yes or no — ask it: `create_work_item_request` with `addressees`
+(its session id, from `participants`, `subscribers` or the holder) and fields. The
+request wakes that session, and its answer wakes you. Ask only a session that is
+working: an ended one is refused, and so are your own session and a subagent. A
+session is asked at most 3 times an hour by yours (`ask_limit`): ask once with
+every field you need. For a free exchange, write a comment with `awaits_reply`
+instead.
+
 **Resolved threads.** The batch's `resolutions` mark a thread's root resolved
 with a one-line decision, and `reopen: true` removes the mark, up to 100 roots in
 one call. Mark a thread only on the owner's decision, for example while reviewing
