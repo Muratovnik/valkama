@@ -2147,7 +2147,11 @@ def shown_language(conn: sqlite3.Connection) -> str:
 
 
 def deliver(
-    client: str, event: str, payload: dict, environ: Mapping[str, str] | None = None
+    client: str,
+    event: str,
+    payload: dict,
+    environ: Mapping[str, str] | None = None,
+    lead: str = "",
 ) -> bytes | None:
     """The answer to one delivery hook, or None when there is nothing to tell.
 
@@ -2158,22 +2162,28 @@ def deliver(
 
     An orchestrator also gets the lines of `shown`, in the owner's alert language,
     read from the connection already open and only when there is news. A Codex
-    input with any `agent_id` is a subagent's and gets nothing, read or moved.
+    input with any `agent_id` is a subagent's and gets no notice, read or moved.
+
+    `lead` is text that goes before the notice in the same answer, whether there
+    is news or not: the lines about the commits this call made. The notice then
+    keeps to what is left of the client's bound.
     """
 
     hook_event = DELIVERY_EVENTS.get(client, {}).get(event)
+    if hook_event is None:
+        return None
     session_id = _text(payload.get("session_id"))
     named = payload.get("hook_event_name")
-    if hook_event is None or session_id is None or named not in (None, hook_event):
-        return None
+    if session_id is None or named not in (None, hook_event):
+        return _lead(hook_event, lead)
     if client == "codex" and payload.get("agent_id") not in (None, ""):
         # Even one too long to be a name: taken for the orchestrator, it would be
         # handed the session's news and move the session's places past it.
-        return None
+        return _lead(hook_event, lead)
     agent_id = _text(payload.get("agent_id"))
     store, enabled = settings(environ)
     if store is None:
-        return None
+        return _lead(hook_event, lead)
     state = state_directory(store, create=enabled)
     idle = (
         os.path.join(state, recipient_key(session_id, None) + ".idle")
@@ -2208,10 +2218,24 @@ def deliver(
     if idle and hook_event == "Stop" and not news:
         _touch(idle)
     if not news:
-        return None
+        return _lead(hook_event, lead)
     characters = CLIENT_CHARACTERS.get(client, MOST_CHARACTERS)
+    if lead:
+        characters -= len(lead) + len(_LEAD_BREAK)
     text, told = notice(news, orchestrator=agent_id is None, wake=False, characters=characters)
+    if lead:
+        text = lead + _LEAD_BREAK + text
     return output(hook_event, text, shown(told, language) if language else None)
+
+
+#: What stands between the lead and the notice after it.
+_LEAD_BREAK = "\n\n"
+
+
+def _lead(hook_event: str, lead: str) -> bytes | None:
+    """The answer that carries the lead alone, or None without one."""
+
+    return output(hook_event, lead) if lead else None
 
 
 def _touch(path: str) -> None:

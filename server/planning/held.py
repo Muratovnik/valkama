@@ -1,8 +1,10 @@
 """Which open work items one agent session holds, for a reader showing it beside that session.
 
-Two readers ask it: `held_by_session`, behind `GET /api/planning/held`, and
-`held_for_note`, the facts a session's resume note tells it of the work it holds.
-Both take the holds by one rule. `lost_since_last_call` gives the note the other
+Its readers: `held_by_session`, behind `GET /api/planning/held`;
+`held_for_note`, the facts a session's resume note tells it of the work it holds;
+and `held_by_holder` and `held_by_agents`, the work one holder of a session holds,
+which decides the item a commit of that session goes to (`commits`). All take the
+holds by one rule. `lost_since_last_call` gives the note the other
 side: what the lease expiry took from the session since its last call.
 
 A session holds an item while the item's claim, or a step of its checklist that
@@ -25,6 +27,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 
 from ..projects import project_registry
 from . import (
@@ -233,24 +236,72 @@ def lost_since_last_call(
     return list(lost.values())
 
 
+@read_model.whole_store_read()
+def held_by_holder(
+    conn: sqlite3.Connection, session: object, agent: str | None
+) -> list[sqlite3.Row]:
+    """The open items one holder of a session holds, by the rule of `held_by_session`.
+
+    The holder is the agent `agent` of the session, or with None the session's
+    own holder, whose label names no agent: `codex (session S)` and not
+    `codex agent A (session S)`. A label that is a name and no session's holds
+    for nobody here. Each row is the item's, with its space's `space_key`, most
+    recently changed first. Read-only.
+    """
+
+    session = _required(session)
+    wanted = calls.label_id(agent) if agent else None
+    suffix = subscriptions.holder_suffix(session, agent or None)
+    return [row for row, _held_as in _holds(conn, suffix, lambda label: _agent(label) == wanted)]
+
+
+@read_model.whole_store_read()
+def held_by_agents(conn: sqlite3.Connection, session: object) -> list[sqlite3.Row]:
+    """The open items an agent of the session holds, by its claim or a step: what the
+    session's own holder holds alone is left out. Rows as `held_by_holder` gives them.
+    Read-only."""
+
+    session = _required(session)
+    suffix = subscriptions.holder_suffix(session)
+    return [
+        row for row, _held_as in _holds(conn, suffix, lambda label: _agent(label) not in ("", None))
+    ]
+
+
+def _agent(label: str) -> str | None:
+    """The agent a session's holder label names: None for the session's own, "" for a
+    label that is no session's."""
+
+    ids = calls.holder_ids(label)
+    return "" if ids is None else ids[1]
+
+
 def _required(session: object) -> str:
     if not isinstance(session, str) or not session.strip():
         raise model.PlanningError("session is required")
     return session
 
 
-def _holds(conn: sqlite3.Connection, suffix: str) -> list[tuple[sqlite3.Row, str]]:
-    """Each open item a label ending in `suffix` holds, and how: the one rule of holding."""
+def _holds(
+    conn: sqlite3.Connection, suffix: str, mine: Callable[[str], bool] | None = None
+) -> list[tuple[sqlite3.Row, str]]:
+    """Each open item a label ending in `suffix` holds, and how: the one rule of holding.
+
+    `mine` narrows the labels that count to the ones it accepts.
+    """
 
     # The SQL finds every candidate; the label rule decides, because a suffix
     # inside a step's text or a done step's holder is not a hold.
     rows = conn.execute(_OPEN_ITEMS, (suffix, suffix)).fetchall()
     found = []
     for row in rows:
-        lease = leases.lease(conn, row) if subscriptions.holds_claim(row, suffix) else None
+        claimed = subscriptions.holds_claim(row, suffix) and (
+            mine is None or mine(str(row["claim_ref"]))
+        )
+        lease = leases.lease(conn, row) if claimed else None
         if lease is not None and lease.state != leases.STALE:
             held_as = CLAIM
-        elif _holds_standing_step(conn, row, suffix):
+        elif _holds_standing_step(conn, row, suffix, mine):
             held_as = STEP
         else:
             continue
@@ -258,12 +309,17 @@ def _holds(conn: sqlite3.Connection, suffix: str) -> list[tuple[sqlite3.Row, str
     return found
 
 
-def _holds_standing_step(conn: sqlite3.Connection, row: sqlite3.Row, suffix: str) -> bool:
+def _holds_standing_step(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    suffix: str,
+    mine: Callable[[str], bool] | None = None,
+) -> bool:
     """Whether an open step of the item is held under `suffix` by a lease not gone stale."""
 
     for step in model.checklist(row["checklist"]):
         holder = str(step["claimed_by"] or "")
-        if not step["done"] and holder.endswith(suffix):
+        if not step["done"] and holder.endswith(suffix) and (mine is None or mine(holder)):
             return leases.of_step(conn, row, holder).state != leases.STALE
     return False
 

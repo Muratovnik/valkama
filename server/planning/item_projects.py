@@ -42,6 +42,7 @@ from . import model
 #: The sources a project comes to an item by, strongest first.
 SOURCES = model.PROJECT_SOURCES
 NAMED = SOURCES[0]
+COMMITS = SOURCES[1]
 #: The most projects one item names.
 MAX_PROJECTS = 20
 _PROJECT_ID_LIMIT = 160
@@ -510,6 +511,15 @@ def _put(conn: sqlite3.Connection, work_item_id: str, project_id: str, source: s
             "UPDATE work_item_projects SET source = ? WHERE work_item_id = ? AND project_id = ?",
             (source, work_item_id, project_id),
         )
+
+
+def put_from_commit(conn: sqlite3.Connection, work_item_id: str, project_id: str) -> None:
+    """The project of a commit attached to a task, with the source `commits`.
+
+    A project the task names stays `named`: the stronger source wins.
+    """
+
+    _put(conn, work_item_id, project_id, COMMITS)
 
 
 def differs(conn: sqlite3.Connection, work_item_id: str, projects: Sequence[str]) -> bool:

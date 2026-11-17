@@ -105,8 +105,19 @@ WORK_KINDS = frozenset(
 #: person's edit of the labels, which is told as the edit its call row names.
 #: `accepted`: the basis of an acceptance, beside the write that accepted the item.
 #: `child_left`: a child's move out of this container, told on the child itself.
+#: `commit_attached` and `commit_detached`: the session that made the commit is told by
+#: its own hook answer, and a person sees the commit on the card.
 NOT_TOLD = frozenset(
-    {"created", "execution_attached", "overridden", "labels_changed", "accepted", "child_left"}
+    {
+        "created",
+        "execution_attached",
+        "overridden",
+        "labels_changed",
+        "accepted",
+        "child_left",
+        "commit_attached",
+        "commit_detached",
+    }
 )
 #: The kinds of Valkama's own records that ask for a session: one wakes it, as a person's
 #: act does, and waits on a goal or stage nobody works on for the next session that takes
