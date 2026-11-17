@@ -277,7 +277,9 @@ condition's id, the summary, and `parts`, which lists every other part the item
 has with its count and size. Read a part by name in
 `parts` when the work needs it: `comments` for the discussion, `events` for who
 did what, `claim` for the lease and when it lapses, `links`, `refs`,
-`questions`, `mentions`, `sessions`, `images`, `subscribers`. `unresolved`,
+`questions` (its `addressed_open` counts the open requests asked of agent
+sessions), `mentions`, `sessions`, `images`, `subscribers`, and on a goal or
+stage `participants`, the sessions working on it. `unresolved`,
 `thread` and `comments_after` read the comments alone, and `events: <n>` the
 newest n events. To refresh part of a long description, read `parts: sections`
 for its keys and sizes, then `section` with the keys you need. After a resume or
@@ -285,7 +287,10 @@ a compaction the session start may bring a Valkama note: what you hold, each
 item's state, its next condition and the root of its project. A step a lapsed
 holder ticked stands there `(to confirm)`, not as ticked, and the line
 `No longer held by you` names the items whose claim or step the sweep released
-since your last call: claim one again before working it.
+since your last call: claim one again before working it. To your conversation,
+not a subagent, the line `Waiting for your answer` names the items with a
+request asked of your session still open: `list_work_item_requests` with
+`addressed: true` reads them.
 
 How the comments part pages and what each comment carries is in
 [every mode](references/tools.md#reading-an-item). A reply to a

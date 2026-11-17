@@ -335,7 +335,7 @@ is left out.
 | --- | --- | --- |
 | `comments` | `count`, `threads`, `unresolved`, `chars` | `comments` as the table below says, `comments_total` (every row), `threads_total` (the roots), `unresolved_total` (the roots without the mark) and `truncated` |
 | `events` | `count`, `chars` | `events`, the 10 newest oldest first, or the newest `events: <n>`; `events_total` and `events_truncated` |
-| `questions` | `count`, `open` | `questions` as [Requests](#requests) says |
+| `questions` | `count`, `open` and `addressed_open`, the open requests asked of agent sessions | `questions` as [Requests](#requests) says |
 | `mentions` | `count` | `mentions`, the 50 newest texts on other items that named this one, oldest first, each with `in` (`comment`, `report`, `summary` or `description`), `from`, `quote`, `author`, `by_person` and `at`; `mentions_total` |
 | `claim` | `count`, 1 while it is held | `claim`, the lease: `holder`, `state`, `session_id`, `agent_id`, `source`, `acquired_at`, `last_seen` and `expires_at`, the time it lapses unless the session shows a sign of life; null while nobody holds it |
 | `sections` | `count`, for a description longer than 2,000 characters | `sections`, as below |
@@ -521,7 +521,9 @@ agent session stays out of them, and `addressed_open` counts the open ones.
 `answered_after` (an ISO timestamp with a timezone), `limit`, `offset`, `full` and
 `addressed`, and its page says `truncated` and `next_offset`. `addressed: true`
 lists the open requests asked of your own session; answer each with
-`answer_work_item_request`, from your conversation or a subagent. A request asked of
+`answer_work_item_request`, from your conversation or a subagent. After a resume or a
+compaction the session's Valkama note names their items, the item of the newest
+request first, in `Waiting for your answer: …`; a subagent's note does not. A request asked of
 a session is answered only by that session (`not_addressed` refuses anyone else)
 and withdrawn only by the session that asked (`not_asker`); while the session asked
 has ended or gone quiet, it reads expired with `session_gone`. The question a move

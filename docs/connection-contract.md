@@ -4191,7 +4191,11 @@ any request.
 **Who is told.** Where Valkama's client hooks are installed, the asking wakes the
 session asked, and what becomes of the request reaches that session and the one that
 asked, nobody else: see
-[asked of a session](hook-contract.md#asked-of-a-session).
+[asked of a session](hook-contract.md#asked-of-a-session). That news is told
+once; while a request still waits, the session asked finds its item again in the
+line `Waiting for your answer: …` of its
+[resume note](hook-contract.md#the-resume-note) after a resume or a compaction,
+and none of its subagents does.
 
 ### Steps from a comment
 

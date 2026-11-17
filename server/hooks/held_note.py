@@ -11,8 +11,11 @@ Who is told. The orchestrator, a hook input without `agent_id`, is told what its
 session holds, its agents' holds with it; a subagent only what its own label
 holds. After the held items a line names the items the recipient lost to the
 lease expiry since its last call (`planning.held.lost_since_last_call`), a
-subagent only its own. `compose` can also set a line of requests waiting for an
-answer, but nothing in this build reads them, so `note` passes none.
+subagent only its own. The orchestrator is also told the items with an open
+request asked of its session (`planning.requests.waiting_items`): a notice tells
+of a request once, and the note neither reads nor moves the places notices keep,
+so a request told before a compaction would otherwise not come back while it
+still waits for the answer.
 
 Where. Each item's first project root, the one a launch from it takes, stands
 relative to the folder the session runs in, and not at all when it is that
@@ -64,7 +67,7 @@ def answer(payload: dict, environ: Mapping[str, str] | None = None) -> bytes | N
 
     No note when the start is not a resume or a compaction, notices are off, the
     store is protected, missing, at another schema or cannot be opened to read,
-    or the recipient has nothing to be told.
+    or the recipient holds nothing, lost nothing and has no request waiting.
     """
 
     if payload.get("source") not in SOURCES or payload.get("hook_event_name") not in (
@@ -101,15 +104,15 @@ def note(
 ) -> str | None:
     """The note for `session`, or one `agent` of it, run in `cwd`; None when it has nothing to tell."""
 
-    from ..planning import held
+    from ..planning import held, requests
 
-    # No reader of the requests addressed to a session exists in this build: the
-    # note is given none.
     return compose(
         held.held_for_note(conn, session, agent),
         agent=agent is not None,
         cwd=cwd,
         lost=held.lost_since_last_call(conn, session, agent),
+        # A request is asked of the session, which its orchestrator answers for.
+        waiting=requests.waiting_items(conn, session) if agent is None else (),
     )
 
 
