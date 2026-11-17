@@ -13,6 +13,10 @@ holds. The note tells the held items alone: `compose` can also set a line of
 holds lost and a line of requests waiting for an answer after them, but nothing
 in this build reads either, so `note` passes neither.
 
+Where. Each item's first project root, the one a launch from it takes, stands
+relative to the folder the session runs in, and not at all when it is that
+folder; one line names it when every item shown has the same.
+
 How long. At most `MOST_CHARACTERS` of text, by construction: the note tries up
 to `MOST_TASKS` items and fewer, each at `LEVELS` of shorter fields, and takes
 the first that fits. The last way of one item at `LAST_LEVEL` fits whatever the
@@ -46,6 +50,8 @@ LEVELS = ((60, 72, 3), (44, 52, 2), (32, 36, 1))
 #: The level tried after the others when one item is named.
 LAST_LEVEL = (20, 24, 1)
 MOST_STATE = 20
+#: The most characters of a root, cut from the left; its `(+N)` adds at most 8.
+MOST_ROOT = 40
 MOST_COUNT = 999
 CUT = "…"
 #: The last line: the note is what a read of the held item would have told.
@@ -76,33 +82,43 @@ def answer(payload: dict, environ: Mapping[str, str] | None = None) -> bytes | N
     conn = _open(path)
     if conn is None:
         return None
+    cwd = payload.get("cwd")
     try:
-        text = note(conn, session, _text(payload.get("agent_id")))
+        text = note(
+            conn,
+            session,
+            _text(payload.get("agent_id")),
+            cwd=cwd if isinstance(cwd, str) and cwd else None,
+        )
     finally:
         conn.close()
     return None if text is None else notify.output(HOOK_EVENT, text)
 
 
-def note(conn: sqlite3.Connection, session: str, agent: str | None = None) -> str | None:
-    """The note for `session`, or for one `agent` of it, or None when it holds nothing."""
+def note(
+    conn: sqlite3.Connection, session: str, agent: str | None = None, *, cwd: str | None = None
+) -> str | None:
+    """The note for `session`, or one `agent` of it, run in `cwd`; None when it holds nothing."""
 
     from ..planning import held
 
     # No reader of the holds lost since a call, or of the requests addressed to
     # a session, exists in this build: the note is given none.
-    return compose(held.held_for_note(conn, session, agent), agent=agent is not None)
+    return compose(held.held_for_note(conn, session, agent), agent=agent is not None, cwd=cwd)
 
 
 def compose(
     items: Sequence[dict],
     *,
     agent: bool,
+    cwd: str | None = None,
     lost: Sequence[str] = (),
     waiting: Sequence[str] = (),
 ) -> str | None:
     """The note's text from `held.held_for_note` items, or None when it has nothing to say.
 
-    `lost` names the items the recipient no longer holds and `waiting` those with
+    `cwd` is the folder the session runs in: each item's root stands relative to
+    it, and an item whose root it is names none. `lost` names the items the recipient no longer holds and `waiting` those with
     a request waiting for its answer, each newest first. A subagent is not told
     `waiting`: a request is addressed to its session, which the orchestrator
     answers for.
@@ -113,9 +129,17 @@ def compose(
     if not items and not lost and not waiting:
         return None
     text = ""
+    roots = [_root(item["roots"], cwd) for item in items[:MOST_TASKS]]
     for shown, (title, condition, references) in _ways(len(items)):
         lines = [_header(len(items), shown, agent)]
-        lines.extend(_task_line(item, title, condition) for item in items[:shown])
+        named = roots[:shown]
+        shared = named[0] if shown > 1 and named[0] and len(set(named)) == 1 else None
+        lines.extend(
+            _task_line(item, title, condition, None if shared else root)
+            for item, root in zip(items[:shown], named, strict=True)
+        )
+        if shared:
+            lines.append(f"Root of these items: {shared}.")
         if lost:
             lines.append(_references_line("No longer held by you", lost, references))
         if waiting:
@@ -149,8 +173,8 @@ def _header(held: int, shown: int, agent: bool) -> str:
     return f"Valkama now: {holder} holds {_count(held)} open items; the {shown} it wrote to last:"
 
 
-def _task_line(item: dict, most_title: int, most_condition: int) -> str:
-    """One held item: its reference, title, state, next condition, counts and containers."""
+def _task_line(item: dict, most_title: int, most_condition: int, root: str | None) -> str:
+    """One held item: its reference, title, state, next condition, counts, containers and root."""
 
     from ..planning import held
 
@@ -190,7 +214,73 @@ def _task_line(item: dict, most_title: int, most_condition: int) -> str:
         parts.append(f"Stage {item['stage']} of goal {item['goal']}.")
     elif item["goal"]:
         parts.append(f"Goal {item['goal']}.")
+    if root:
+        parts.append(f"Root {root}.")
     return " ".join(parts)
+
+
+def _root(roots: Sequence[Mapping[str, object]], cwd: str | None) -> str | None:
+    """The first of `roots` as the note names it, with how many others follow, or None.
+
+    A `mapped` root stands relative to `cwd`, and is not named when it is `cwd`;
+    any other is `<project_id> (<status>)`, its id cut to fit. At most 48
+    characters with the `(+N)`.
+    """
+
+    if not roots:
+        return None
+    first = roots[0]
+    status = str(first["status"])
+    if status == "mapped":
+        root = str(first["root"])
+        if cwd is not None and _folder(root) == _folder(cwd):
+            return None
+        shown = _cut_left(_relative(root, cwd), MOST_ROOT)
+    else:
+        mark = f" ({status})"
+        shown = _cut(first["project_id"], MOST_ROOT - len(mark)) + mark
+    others = len(roots) - 1
+    return shown + (f" (+{_count(others)})" if others else "")
+
+
+def _folder(path: str) -> str:
+    import os
+
+    return os.path.normcase(os.path.normpath(path))
+
+
+def _relative(root: str, cwd: str | None) -> str:
+    """`root` from `cwd`, with `/` between its parts; as it is when no way leads there."""
+
+    import os
+
+    shown = root
+    if cwd is not None:
+        try:
+            shown = os.path.relpath(root, cwd)
+        except ValueError:
+            # Another drive: no relative way leads there.
+            shown = root
+    # A path keeps its spaces; only a line break or a tab would split the note's line.
+    shown = "".join(" " if char.isspace() else char for char in shown)
+    return shown.replace(os.sep, "/")
+
+
+def _cut_left(path: str, most: int) -> str:
+    """`path` cut from the left at a `/` to `most` characters, after `…/`."""
+
+    if len(path) <= most:
+        return path
+    kept = ""
+    for part in reversed(path.split("/")):
+        longer = f"{part}/{kept}" if kept else part
+        if len(CUT) + 1 + len(longer) > most:
+            break
+        kept = longer
+    if not kept:
+        # Its last part alone is too long: that part's end, after the mark.
+        return CUT + path[-(most - len(CUT)) :]
+    return f"{CUT}/{kept}"
 
 
 def _references_line(lead: str, references: Sequence[str], most: int) -> str:

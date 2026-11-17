@@ -24,9 +24,11 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from ..projects import project_registry
 from . import (
     acknowledgements,
     calls,
+    item_projects,
     item_tree,
     leases,
     model,
@@ -111,6 +113,8 @@ def held_for_note(
       when it wrote none; `to_confirm`, the steps a previous holder ticked;
     - `stage` and `goal`: the nearest container over the item when it is a stage,
       and the topmost one, by reference, or null;
+    - `roots`: the item's `item_projects.project_roots`, as a claim answers with
+      them, from one read of the registry for every item;
     - `last_write`: the id of the recipient's newest confirmed write call on the
       item, or null.
 
@@ -130,13 +134,16 @@ def held_for_note(
             _LAST_WRITES, (session, calls.KIND, calls.CONFIRMED, agent, agent)
         ).fetchall()
     }
+    listing = project_registry.read_registry()
     items = []
     for row, held_as in held:
-        write = writes.get(str(row["work_item_id"]))
+        identity = str(row["work_item_id"])
+        write = writes.get(identity)
         items.append(
             {
                 **_item(conn, row, held_as),
                 **_note_facts(conn, row, suffix, None if write is None else str(write["at"])),
+                "roots": item_projects.project_roots(conn, identity, listing=listing),
                 "last_write": None if write is None else int(write["id"]),
             }
         )
