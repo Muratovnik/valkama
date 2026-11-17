@@ -26,8 +26,7 @@ import subprocess
 import sys
 import threading
 from collections.abc import Mapping
-from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 #: What every child of the server is started with. A listener started at login runs
 #: under `pythonw.exe`, which has no console for a child to share, so Windows would open
@@ -35,12 +34,13 @@ from typing import Any
 NO_WINDOW: int = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
-@dataclass(frozen=True)
-class TextResult:
+class TextResult(NamedTuple):
     """A finished child process whose streams were decoded, not guessed.
 
     The three field names match `subprocess.CompletedProcess` so a call site
-    reads the same after moving here.
+    reads the same after moving here. A named tuple rather than a dataclass:
+    `dataclasses` costs the Git commit hook, which runs Git through here after
+    every commit an agent makes, a tenth of its time.
     """
 
     returncode: int
