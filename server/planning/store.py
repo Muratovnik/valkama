@@ -150,6 +150,69 @@ DEFERRALS_UNTIL_ITEM_INDEX = (
     " ON work_item_deferrals(until_item_id) WHERE until_item_id IS NOT NULL"
 )
 
+#: The keys of the owner's participation setting (`planning.participation` says what
+#: each means and which values it takes): the points and switches a set gives, then
+#: the numbers beside them.
+PARTICIPATION_KEYS = (
+    "queue",
+    "finding",
+    "proposed_goal",
+    "task_in_goal",
+    "decision",
+    "cancel_outside",
+    "cancel_shared",
+    "condition",
+    "goal_close",
+    "goal_defer",
+    "triage_reminder",
+    "triage_age_days",
+    "triage_count",
+    "lease_quiet_days",
+    "recent_close_minutes",
+)
+_PARTICIPATION_KEY_SQL = ",".join(f"'{key}'" for key in PARTICIPATION_KEYS)
+#: The owner's participation setting, one row per value set: without a space the common
+#: value, with one that space's own. A key with no row takes the value above it, and
+#: above the common one the default set the code holds, so a store with no row reads as
+#: that set. The value is text, checked by its key in the code; `call_id` is the
+#: person's call that wrote it. It goes with its space.
+PARTICIPATION_SETTINGS = f"""CREATE TABLE IF NOT EXISTS participation_settings(
+    planning_space_id TEXT REFERENCES planning_spaces(planning_space_id) ON DELETE CASCADE,
+    key TEXT NOT NULL CHECK(key IN ({_PARTICIPATION_KEY_SQL})),
+    value TEXT NOT NULL,
+    call_id INTEGER REFERENCES execution_events(id),
+    updated_at TEXT NOT NULL
+)"""
+#: One value per scope and key; the common scope is the one without a space.
+PARTICIPATION_SETTINGS_SCOPE = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS participation_settings_scope"
+    " ON participation_settings(ifnull(planning_space_id, ''), key)"
+)
+#: The owner's rules of a label, in the same two scopes: `ready` 1 makes a finding with
+#: the label ready at once, 0 refuses in a space the common rule, null takes the rule
+#: above; `description` says what the label means. A row holds at least one of them.
+LABEL_SETTINGS = """CREATE TABLE IF NOT EXISTS label_settings(
+    planning_space_id TEXT REFERENCES planning_spaces(planning_space_id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    ready INTEGER CHECK(ready IN (0, 1)),
+    description TEXT,
+    call_id INTEGER REFERENCES execution_events(id),
+    updated_at TEXT NOT NULL,
+    CHECK(ready IS NOT NULL OR description IS NOT NULL)
+)"""
+LABEL_SETTINGS_SCOPE = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS label_settings_scope"
+    " ON label_settings(ifnull(planning_space_id, ''), label)"
+)
+#: Both tables and their indexes, as a fresh store and the work-model migration create them.
+PARTICIPATION = (
+    PARTICIPATION_SETTINGS,
+    PARTICIPATION_SETTINGS_SCOPE,
+    LABEL_SETTINGS,
+    LABEL_SETTINGS_SCOPE,
+)
+_PARTICIPATION = "".join(f"{statement};\n" for statement in PARTICIPATION)
+
 
 _ACCEPTED_SQL = ",".join(f"'{category}'" for category in model.ACCEPTED_CATEGORIES)
 
@@ -453,7 +516,7 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {DEFERRALS};
 {DEFERRALS_UNTIL_AT_INDEX};
 {DEFERRALS_UNTIL_ITEM_INDEX};
-
+{_PARTICIPATION}
 {_ITEM_PROJECTS}
 """
 
@@ -873,6 +936,8 @@ SCHEMA_TABLES = (
     "work_item_confirmations",
     "work_item_deferrals",
     "work_item_projects",
+    "participation_settings",
+    "label_settings",
 )
 
 

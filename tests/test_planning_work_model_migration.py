@@ -29,9 +29,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import cli, store, store_backups, store_steps
 from server.planning import images as planning_images
+from server.planning import participation, words
 from server.planning import service as planning_service
 from server.planning import store as planning_store
-from server.planning import words
 from server.planning import work_model_migration as migration
 from server.store_identity.refs import planning_space_entity
 from tests import registry_fixtures, schema9, schema17
@@ -44,12 +44,13 @@ T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [*(f"M{number}" for number in range(16)), "deferred-items", "history-actions"]
+STEP_NAMES = [*(f"M{number}" for number in range(16)), "deferred-items", "history-actions", "participation"]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(1, 16)),
     *(f"P{number}" for number in range(18, 31)),
     "deferred-items",
+    "participation",
     "second-run",
     "recovery-point",
 ]
@@ -844,8 +845,17 @@ class MigratedStoreTests(StoreCase):
         self.assertEqual(
             {
                 "no-old-waiting": {"rows": 0},
-                "request-shapes": {"refused": ["scope 'other'", "delivered_call without delivered_at"]},
-                "fresh-tables": {"added": ["work_item_deferrals", "work_item_waiting_notices"]},
+                "request-shapes": {
+                    "refused": ["scope 'other'", "delivered_call without delivered_at"]
+                },
+                "fresh-tables": {
+                    "added": [
+                        "label_settings",
+                        "participation_settings",
+                        "work_item_deferrals",
+                        "work_item_waiting_notices",
+                    ]
+                },
             },
             details,
         )
@@ -988,6 +998,69 @@ class MigratedStoreTests(StoreCase):
             entry for entry in self.report["postconditions"] if entry["name"] == "deferred-items"
         ]
         self.assertEqual((True, {"rows": 0, "deferred": 0}), (found["passed"], found["detail"]))
+
+    def test_participation_starts_at_the_default_set(self) -> None:
+        """Both tables come empty and declared as a fresh store declares them, and every
+        space reads each point and switch at the default set."""
+
+        declared = {
+            str(row[0]): str(row[1])
+            for row in self.read(
+                "SELECT name, tbl_name FROM sqlite_master"
+                " WHERE tbl_name IN ('participation_settings', 'label_settings')"
+            )
+        }
+        self.assertEqual(
+            {
+                "participation_settings": "participation_settings",
+                "participation_settings_scope": "participation_settings",
+                "label_settings": "label_settings",
+                "label_settings_scope": "label_settings",
+            },
+            declared,
+        )
+        for table in ("participation_settings", "label_settings"):
+            self.assertEqual(0, self.read(f"SELECT COUNT(*) FROM {table}")[0][0], table)
+        default = {
+            "queue": "on",
+            "finding": "human",
+            "proposed_goal": "human",
+            "task_in_goal": "agent",
+            "decision": "human",
+            "cancel_outside": "agent",
+            "cancel_shared": "human",
+            "condition": "human",
+            "goal_close": "agent",
+            "goal_defer": "agent",
+            "triage_reminder": "on",
+        }
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        settings = participation.load(conn)
+        spaces = [
+            str(row[0]) for row in conn.execute("SELECT planning_space_id FROM planning_spaces")
+        ]
+        self.assertEqual(3, len(spaces))
+        for space in spaces:
+            self.assertEqual(default, settings.chosen(space), space)
+            self.assertEqual("default", participation.set_of(settings.chosen(space)))
+        steps = {step["name"]: step for step in self.report["steps"]}
+        self.assertEqual(
+            (True, {"tables_created": ["participation_settings", "label_settings"]}),
+            (steps["participation"]["needed"], steps["participation"]["result"]),
+        )
+        [found] = [
+            entry for entry in self.report["postconditions"] if entry["name"] == "participation"
+        ]
+        self.assertEqual((True, {"set": "default"}), (found["passed"], found["detail"]))
+        # `fresh-shape` held both to a fresh store's declaration, and a second run takes no step.
+        held = {
+            entry["name"]: (entry["passed"], entry["detail"])
+            for entry in self.report["postconditions"]
+            if entry["name"] in ("fresh-shape", "second-run")
+        }
+        self.assertTrue(held["fresh-shape"][0])
+        self.assertEqual((True, {"steps_needed_again": []}), held["second-run"])
 
     def test_a_second_run_changes_nothing_and_says_the_migration_ran(self) -> None:
         backups = sorted(os.listdir(os.path.join(self.directory.name, "backups")))
@@ -1679,6 +1752,11 @@ FAULTS = (
         " WHERE request_id = 'kept-request'",
     ),
     fault("fresh-tables", "CREATE TABLE stray_rows(id INTEGER PRIMARY KEY)"),
+    fault(
+        "participation",
+        "INSERT INTO participation_settings(planning_space_id, key, value, updated_at)"
+        " SELECT planning_space_id, 'finding', 'agent', 'x' FROM planning_spaces WHERE key = 'WM'",
+    ),
     fault("awaiting-rows", "UPDATE work_item_confirmations SET left_at = since"),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
