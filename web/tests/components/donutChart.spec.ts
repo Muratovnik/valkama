@@ -129,8 +129,8 @@ describe('the ring of shares', () => {
       // The rest's figure is the sum of its parts, as the caller formats it.
       ['Other, 2 more', '30 min · 6%'],
     ])
-    // The legend prints them, so its entries repeat them in no hint.
-    expect(chart.get('[data-series="high"]').attributes('data-tooltip')).toBeUndefined()
+    // The legend prints them, so an entry's one hint is its name, whole while it is cut.
+    expect(chart.get('[data-series="high"]').attributes('data-tooltip')).toBe('high')
     expect(chart.get('.donut-ring').text()).toBe('')
     expect(chart.find('text').exists()).toBe(false)
   })

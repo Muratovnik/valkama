@@ -12,6 +12,12 @@
  * line, each figure at the end of its line in the quiet ink, ending where the others end: a
  * column of numbers to read down beside the names.
  *
+ * A name takes one line, as wide as the legend at most, and ends in an ellipsis where it is cut; it
+ * is cut from its end, so the start that tells it apart, a task's reference, stays. The entry's
+ * hint says it whole while it is cut, or, where the entry has no hint of its own, is the name
+ * whole over the cut one. Broken wherever a letter fell, a task's title took two lines an entry
+ * and a session's title four, «Valkama: проектирова / ние системы агентов».
+ *
  * An entry is a mark of its chart: its hint says what the name does not (`hints`, by series key,
  * `outline` for the mark of the period compared with), under its name beside its swatch where the
  * caller draws it so (`markHints.ts`). It names a series rather than standing for a value, so it
@@ -77,8 +83,17 @@ const keyAttrs = (one: PeriodSeries) =>
       }
     : {}
 
-/** What an entry says that its name does not, by its series' key. */
-const hintOf = (key: string) => props.hints?.get(key)
+/**
+ * What an entry says that its name does not, by its series' key; with nothing to say, its name
+ * whole while it is cut.
+ */
+function hintOf(key: string): TooltipValue {
+  const hint = props.hints?.get(key)
+  if (hint !== undefined) return hint
+  const words =
+    key === 'outline' ? props.outline : props.series.find((one) => one.key === key)?.label
+  return { text: null, words }
+}
 /** The figure an entry gives at the end of its line; none in a legend of names. */
 const figureOf = (key: string) => props.figures?.get(key)
 </script>
@@ -114,7 +129,7 @@ const figureOf = (key: string) => props.figures?.get(key)
         />
         <span
           :id="nameId(one)"
-          class="chart-key-name"
+          class="chart-key-name one-line"
           >{{ one.label }}</span
         >
       </component>
@@ -152,7 +167,7 @@ const figureOf = (key: string) => props.figures?.get(key)
           class="chart-outline"
           aria-hidden="true"
         />
-        <span class="chart-key-name">{{ outline }}</span>
+        <span class="chart-key-name one-line">{{ outline }}</span>
       </span>
     </li>
   </ul>
@@ -179,6 +194,7 @@ const figureOf = (key: string) => props.figures?.get(key)
 .chart-entry {
   display: flex;
   min-width: 0;
+  max-inline-size: 100%;
   min-block-size: var(--space-6);
 }
 
@@ -226,7 +242,7 @@ const figureOf = (key: string) => props.figures?.get(key)
 }
 
 .chart-key-name {
-  overflow-wrap: anywhere;
+  flex: 0 1 auto;
 }
 
 /* The tick of the period compared with, as the plot draws it: a short line, an edge in the
