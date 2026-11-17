@@ -11,10 +11,23 @@
  *   its first letter on theirs, and run on to `EDGE` short of the window's right edge, wrapping
  *   by words only where they do not fit there (`placeWhole`, drawn by `WholeText`). On one line
  *   it covers its own line and nothing over or under it, in a list as anywhere.
- * - In a list, every other hint stands aside of it, its top level with its row's: a list of rows down
- *   (`data-hint-list="rows"`: the rail, a ranking's bars, the Analytics rail and the list view's
- *   table) puts it past the list's own edge, clear of every row; a list of rows across
- *   (`data-hint-list="columns"`, a chart's periods) puts it beside its row.
+ * - A hint that speaks for a point of a chart, as a reading of a step line does, stands at the
+ *   top right of the point's mark, as a chart's hint stands at the point pointed at: its bottom
+ *   left corner `OFFSET` past the mark's right edge and over its top. Where the chart's frame
+ *   (`data-hint-frame`, else the window) has no room for it on the right it stands at the top
+ *   left, mirrored, and where the window has no room over the mark, under it at the same side.
+ *   The element marks the point it holds, `data-hint-point`, so a point's whole area is its
+ *   element's: a reading takes the pointer on the whole step it holds and on its mark. Placed as a
+ *   detail is, under the step, the hint stood under the plot over the moments named there.
+ * - In a list, every other hint stands aside of it: a list of rows down (`data-hint-list="rows"`:
+ *   the rail, a ranking's bars, the Analytics rail and the list view's table) puts it past the
+ *   list's own edge, clear of every row, its top level with its row's; a list of rows across
+ *   (`data-hint-list="columns"`, a chart's periods) puts it beside the bar its row draws
+ *   (`data-hint-bar`, a period's stack), `OFFSET` from the bar's edge, its top level with the bar's.
+ *   A period is as wide as its share of the plot and its stack narrower, in its middle: beside
+ *   the period, a day of two days had its hint at the plot's top some 300px from its stack. A row
+ *   whose bar is not drawn, a period of nothing, has the hint at the row's top. Where neither side
+ *   has room, as in a phone's narrow chart, it stands over the bar, centred on it.
  * - A list of rows wide enough to hold a hint (`data-hint-list="wide-rows"`: the settings sheet, a
  *   card's checklist) puts it inside the element's own row, beside the element on the side of
  *   the row with more room, as a control at a row's end has on its left: over the row's own label
@@ -38,9 +51,10 @@
  * flips a hint below its element to above it where the window has no room below.
  *
  * Along a list of columns every column asks the same: whether a hint as wide as `WIDEST` fits
- * beside it inside the chart's frame (`data-hint-frame`, else the window). So every period of a
- * chart puts its hint on the right, and only the periods past where the right has no room put it
- * on the left: the side changes once along the chart. Asked by each hint's own width, the side
+ * beside its bar inside the chart's frame (`data-hint-frame`, else the window). So every period of
+ * a chart puts its hint on the right, and only the periods past where the right has no room put it
+ * on the left: the side changes once along the chart, since every bar stands in the middle of its
+ * period. A point asks by its hint's own width, as a row's hint does. Asked by each hint's own width, the side
  * jumped from one period to the next wherever a wider hint stood beside a narrower one. A frame
  * with that room on neither side of a period, as a chart of a few wide days has, gives it the
  * roomier side of the window, as a hint outside a chart has: narrowed to the frame, a hint of
@@ -50,8 +64,11 @@ import type { TooltipKind } from '@/shared/ui/tooltipAnchors.ts'
 
 export type HintSide = 'top' | 'right' | 'bottom' | 'left'
 
-/** Where along its side a hint stands: centred on what it is placed against, or level with its start. */
-export type HintAlign = 'center' | 'start'
+/**
+ * Where along its side a hint stands: centred on what it is placed against, or level with its
+ * start or its end.
+ */
+export type HintAlign = 'center' | 'start' | 'end'
 
 /**
  * How a list's rows run, as its container declares in `data-hint-list`: down, across, or down
@@ -98,6 +115,8 @@ export interface HintSetting {
    * top and bottom where it keeps them wholly inside (`inside`); in a list of wide rows, the row.
    */
   frame?: (Pick<Box, 'left' | 'right'> & { inside?: Pick<Box, 'bottom' | 'top'> }) | null
+  /** The mark of the point the element's hint speaks for (`data-hint-point`), as drawn. */
+  point?: Box | null
 }
 
 export interface HintPlace {
@@ -105,6 +124,8 @@ export interface HintPlace {
   /** The hint stands against the aside box rather than its element. */
   aside: boolean
   side: HintSide
+  /** The side of its point's mark the hint stands over, at its corner (`data-hint-point`). */
+  corner?: 'left' | 'right'
   /** The edge of the frame that keeps it inside (`data-hint-frame="inside"`) it stands against. */
   inside?: 'top' | 'bottom'
   /** How wide the hint is drawn at most where it stands, in px, where not `WIDEST`. */
@@ -118,12 +139,32 @@ export function placeHint(setting: HintSetting): HintPlace {
   const { asked, kind, list } = setting
   if (asked?.side === 'top' || asked?.side === 'bottom') return { ...asked, aside: false }
   if (asked) return { ...beside(setting, asked.side, asked.align), aside: false }
+  if (setting.point) return atPoint(setting.point, setting)
   const { frame } = setting
   if (list === 'columns' && frame?.inside)
     return within(setting.aside, { ...frame, ...frame.inside })
   if (list === 'wide-rows') return inRow(setting)
   if (list) return beside(setting, 'right', 'start')
   return { align: kind === 'name' ? 'center' : 'start', aside: false, side: 'bottom' }
+}
+
+/**
+ * A hint at a corner of its point's mark: over it, its start `OFFSET` past the mark's right edge,
+ * where the frame holds it there, else its end `OFFSET` short of the mark's left edge; the sides
+ * and the narrowing as beside a row (`beside`), and over the mark, centred, where neither side
+ * has room. It stands against the corner's edge as its side `top` (`cornerEdge`), so the library
+ * that keeps a hint in the window sets it under the mark where the window has no room over it.
+ */
+function atPoint(point: Box, setting: HintSetting): HintPlace {
+  const place = beside({ ...setting, aside: point, list: null }, 'right', 'start')
+  if (!place.aside) return place
+  const corner = place.side === 'left' ? 'left' : 'right'
+  return {
+    ...place,
+    align: corner === 'right' ? 'start' : 'end',
+    corner,
+    side: 'top',
+  }
 }
 
 /** A hint inside the frame `column` stands in: at the edge away from it, as wide as the frame. */
@@ -244,7 +285,12 @@ const LISTS: readonly HintList[] = ['rows', 'columns', 'wide-rows']
  * whether it keeps them wholly inside.
  */
 function frameOf(container: HTMLElement, list: HintList): HintSetting['frame'] {
-  const frame = list === 'columns' ? container.closest<HTMLElement>('[data-hint-frame]') : null
+  return list === 'columns' ? frameAround(container) : null
+}
+
+/** The frame of the nearest `data-hint-frame` around `element`, and whether it keeps hints inside. */
+function frameAround(element: HTMLElement): HintSetting['frame'] {
+  const frame = element.closest<HTMLElement>('[data-hint-frame]')
   if (!frame) return null
   const { bottom, left, right, top } = frame.getBoundingClientRect()
   return { inside: frame.dataset.hintFrame === 'inside' ? { bottom, top } : undefined, left, right }
@@ -310,17 +356,63 @@ export interface HintReference {
 }
 
 /**
- * The box a hint aside of `element`'s list stands against: past the list's edge, beside the row,
- * or, in a list of wide rows, beside the element inside its row.
+ * The box a hint aside of `element`'s list stands against: past the list's edge, beside the bar
+ * its row draws, or, in a list of wide rows, beside the element inside its row.
  */
 function asideBox(element: HTMLElement, container: HTMLElement, list: HintList): DOMRect {
-  const row = hintRowOf(element, container, list).getBoundingClientRect()
-  const across = {
-    'columns': row,
-    'rows': container.getBoundingClientRect(),
-    'wide-rows': element.getBoundingClientRect(),
-  }[list]
-  return new DOMRect(across.left, row.top, across.width, row.height)
+  const row = hintRowOf(element, container, list)
+  if (list === 'columns') return barBox(row)
+  const own = row.getBoundingClientRect()
+  const across =
+    list === 'rows' ? container.getBoundingClientRect() : element.getBoundingClientRect()
+  return new DOMRect(across.left, own.top, across.width, own.height)
+}
+
+/**
+ * The bar a row of a list of columns draws (`data-hint-bar`), as a chart's period draws its
+ * stack: its edges across, and its top where it is drawn; the row's top where it is not, as a
+ * period of nothing or with no data yet. A row that names no bar is its own.
+ */
+function barBox(row: HTMLElement): DOMRect {
+  const own = row.getBoundingClientRect()
+  const bar = row.querySelector('[data-hint-bar]')?.getBoundingClientRect()
+  if (!bar) return own
+  return bar.height >= 1 ? bar : new DOMRect(bar.left, own.top, bar.width, own.height)
+}
+
+/**
+ * The edge a hint at a corner of a point's mark stands against as its side `top`: a line as tall
+ * as the mark, `OFFSET` past its right edge or short of its left, so the hint's start or end stands
+ * there and its bottom, or under the mark its top, `OFFSET` from the mark.
+ */
+function cornerEdge(point: Element, corner: 'left' | 'right'): DOMRect {
+  const mark = point.getBoundingClientRect()
+  const at = corner === 'right' ? mark.right + OFFSET : mark.left - OFFSET
+  return new DOMRect(at, mark.top, 0, mark.height)
+}
+
+/** Where the hint of `element` stands that speaks for the point it holds (`data-hint-point`). */
+function pointPlaceOf(
+  element: HTMLElement,
+  point: Element,
+  setting: Pick<HintSetting, 'kind' | 'rem' | 'width' | 'window'>,
+): HintPlace & { reference: HintReference } {
+  const place = placeHint({
+    ...setting,
+    aside: element.getBoundingClientRect(),
+    frame: frameAround(element),
+    list: null,
+    point: point.getBoundingClientRect(),
+  })
+  const { corner } = place
+  return {
+    ...place,
+    reference: {
+      contextElement: element,
+      getBoundingClientRect: () =>
+        corner ? cornerEdge(point, corner) : point.getBoundingClientRect(),
+    },
+  }
 }
 
 /** The frame of the hint of `element` in its list: its chart's, or its own row in a wide one. */
@@ -340,6 +432,9 @@ export function hintPlaceOf(
   width: number,
 ): HintPlace & { reference: HTMLElement | HintReference } {
   const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+  const inner = document.documentElement.clientWidth
+  const point = asked ? null : element.querySelector('[data-hint-point]')
+  if (point) return pointPlaceOf(element, point, { kind, rem, width, window: inner })
   const declared = asked ? null : hintListOf(element)
   const aside = declared
     ? asideBox(element, declared.container, declared.list)
@@ -352,7 +447,7 @@ export function hintPlaceOf(
     list: declared?.list ?? null,
     rem,
     width,
-    window: document.documentElement.clientWidth,
+    window: inner,
   })
   if (!declared) return { ...place, reference: element }
   const { container, list } = declared
@@ -365,7 +460,8 @@ export function hintPlaceOf(
         getBoundingClientRect: () => frameEdge(container, inside),
       },
     }
-  if (!place.aside) return { ...place, reference: element }
+  // Over its element where neither side has room; a column's over the bar its row draws.
+  if (!place.aside && list !== 'columns') return { ...place, reference: element }
   return {
     ...place,
     reference: {

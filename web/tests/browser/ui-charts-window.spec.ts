@@ -136,13 +136,15 @@ for (const colorScheme of ['light', 'dark'] as const)
     await expect(table.locator('tbody tr').first()).toContainText('62%')
   })
 
-/** The step line as drawn: its path, its marks against the field, and the boxes of its parts. */
+/** The step line as drawn: its path, its marks against its drawing, and the boxes of its parts. */
 function stepLine(page: Page) {
   return page.evaluate(() => {
     const figure = document.querySelector('[data-harness="step"] .step-line')
     const field = figure?.querySelector('.step-field')
     if (!figure || !field) throw new Error('the step line is not drawn')
-    const area = field.getBoundingClientRect()
+    // The drawing the readings are placed on: the field less the inset that keeps a mark at 0 %
+    // and one at the top whole inside it.
+    const area = (figure.querySelector('.step-svg') ?? field).getBoundingClientRect()
     const plot = figure.querySelector('.step-plot')?.getBoundingClientRect() ?? area
     const { height } = figure.getBoundingClientRect()
     return {
@@ -211,6 +213,58 @@ for (const colorScheme of ['light', 'dark'] as const)
     expect(pointed.height).toBe(before.height)
     await expect(page.locator('[data-harness="step-table"] tbody tr')).toHaveCount(4)
   })
+
+/**
+ * Where the first reading's hint stands against its mark, pointed at in its middle with the
+ * page scrolled until the mark's top stands `top` pixels under the window's: the room from the
+ * mark's right edge to the hint's left, and from the mark's top to the hint's bottom, or from
+ * its bottom to the hint's top where the hint stands under it.
+ */
+async function firstReadingHint(page: Page, top: number) {
+  const figure = page.locator('[data-harness="step"] .step-line')
+  const mark = figure.locator('.step-mark').first()
+  const box = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
+  await page.evaluate((by) => window.scrollBy(0, by), box.top - top)
+  await page.mouse.move(1, 1)
+  await expect(page.locator('.tooltip-hint')).toHaveCount(0)
+  const at = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
+  await page.mouse.move(at.left + at.width / 2, at.top + at.height / 2)
+  await expect(page.getByRole('tooltip')).toHaveText('11:30, 10%, the poll')
+  return page.evaluate(() => {
+    const hint = document.querySelector('.tooltip-hint')?.getBoundingClientRect()
+    const drawn = document
+      .querySelector('[data-harness="step"] .step-mark')
+      ?.getBoundingClientRect()
+    if (!hint || !drawn) throw new Error('no hint or no mark')
+    return {
+      across: hint.left - drawn.right,
+      over: drawn.top - hint.bottom,
+      under: hint.top - drawn.bottom,
+    }
+  })
+}
+
+test('a reading’s hint stands at the top right of its mark, and at its bottom right with no room over it', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1024, height: 600 })
+  await page.goto(HARNESS)
+  const figure = page.locator('[data-harness="step"] .step-line')
+  await figure.scrollIntoViewIfNeeded()
+  await figure.getByRole('radio', { name: 'Whole window' }).click()
+  const roomy = await firstReadingHint(page, 300)
+  const cramped = await firstReadingHint(page, 12)
+  await testInfo.attach('reading-hint-corners', {
+    body: JSON.stringify({ roomy, cramped }, null, 2),
+    contentType: 'application/json',
+  })
+  // 6px past the mark's right edge and over its top (`OFFSET`); under it 6px where the window
+  // has no room over it.
+  expect(Math.abs(roomy.across - 6), 'across, with room over it').toBeLessThan(1)
+  expect(Math.abs(roomy.over - 6), 'over it').toBeLessThan(1)
+  expect(Math.abs(cramped.across - 6), 'across, with no room over it').toBeLessThan(1)
+  expect(Math.abs(cramped.under - 6), 'under it').toBeLessThan(1)
+})
 
 test('in a forced palette a window bar and a step line keep their marks in the palette’s inks', async ({
   page,

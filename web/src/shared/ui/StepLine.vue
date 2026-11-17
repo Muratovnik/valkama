@@ -20,10 +20,11 @@
  * span shown are named under the plot (`moment`).
  *
  * No line stands over the plot. Each reading is a mark with its own hint (`markHints.ts`): the
- * whole step it holds, from its moment to the next reading, is what the pointer points at, so a
- * reader aims at a moment and not at a dot, and the readings are one stop for Tab, walked with the
- * arrows, each saying itself in its hint and as its name. The hint lies over the page, so pointing
- * moves nothing. Every reading is also in the figure's name and in its table twin
+ * whole step it holds, from its moment to the next reading, and its mark are what the pointer
+ * points at, so a reader aims at a moment and not at a dot, and the readings are one stop for Tab,
+ * walked with the arrows, each saying itself in its hint and as its name. The hint lies over the
+ * page at the top right of the reading's mark, the point it speaks for (`data-hint-point`,
+ * `hintPlacement.ts`), so pointing moves nothing. Every reading is also in the figure's name and in its table twin
  * (`StepLineTable`). The drawing stretches to its host's width, so its lines keep their width
  * (`vector-effect`) and every word and mark is HTML over it rather than SVG text or circles the
  * stretch would distort. A forced palette draws the lines in its inks.
@@ -83,10 +84,12 @@ const evenLine = computed(() => ({
 /** A place across the plot as a share of its box. */
 const across = (at: number) => `${(stepX(frame.value, at) / STEP_WIDTH) * 100}%`
 
-/** Where a mark stands over the plot, as shares of its box. */
+/**
+ * How far down the drawing a mark stands, as a share of its height: the mark stands in its
+ * reading's step, at the step's start, and the drawing in the field less its inset.
+ */
 const markStyle = (point: StepPoint) => ({
-  insetInlineStart: across(point.at),
-  insetBlockStart: `${(stepY(frame.value, point.value) / STEP_HEIGHT) * 100}%`,
+  '--step-down': stepY(frame.value, point.value) / STEP_HEIGHT,
 })
 
 /** Where the step a reading shown holds ends: at the next reading, or at `end` for the last. */
@@ -192,6 +195,7 @@ function stand(index: number) {
   <figure
     class="step-line"
     :aria-label="label"
+    data-hint-frame
   >
     <div class="step-head">
       <SegmentedControl
@@ -262,16 +266,8 @@ function stand(index: number) {
             :d="path"
           />
         </svg>
-        <span
-          v-for="(point, index) in readings.inside"
-          :key="point.key"
-          class="step-mark"
-          aria-hidden="true"
-          :class="markClass(index)"
-          :data-key="point.key"
-          :style="markStyle(point)"
-        />
         <!-- A reading is a picture of its moment and value, walked with the arrows as one stop. -->
+        <!-- Its mark is the point its hint speaks for, and takes the pointer for it. -->
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
         <span
           v-for="(point, index) in readings.inside"
@@ -290,7 +286,14 @@ function stand(index: number) {
           @blur="pointed = null"
           @keydown="move"
           @keyup="keys.release"
-        />
+          ><span
+            class="step-mark"
+            aria-hidden="true"
+            :class="markClass(index)"
+            :data-key="point.key"
+            :style="markStyle(point)"
+            data-hint-point
+        /></span>
         <span
           v-if="framing"
           class="axis-frame step-span"
@@ -385,8 +388,14 @@ function stand(index: number) {
   font-variant-numeric: tabular-nums;
 }
 
-/* The plot a frame is dragged along: nothing in it is text a press would select. */
+/* The plot a frame is dragged along: nothing in it is text a press would select. The drawing
+   stands inset in it by half a mark as it is drawn when pointed at, ring and all, so a mark at 0 %
+   and one at the top stand whole inside the plot, and in the step that takes the pointer for it:
+   drawn to the plot's edge, the mark of a reading at 0 % hung half under the floor, and there the
+   pointer found no reading. */
 .step-field {
+  --step-inset: calc(var(--space-2) * 0.75 + var(--space-hair));
+
   position: relative;
   block-size: var(--space-24);
   user-select: none;
@@ -404,9 +413,11 @@ function stand(index: number) {
 }
 
 .step-svg {
+  position: absolute;
+  inset: var(--step-inset) auto auto 0;
   display: block;
   inline-size: 100%;
-  block-size: 100%;
+  block-size: calc(100% - 2 * var(--step-inset));
   overflow: visible;
 }
 
@@ -439,9 +450,14 @@ function stand(index: number) {
   }
 }
 
-/* A reading: a mark in the line's hue, ringed in the ground so marks that meet stay apart. */
+/* A reading: a mark in the line's hue, ringed in the ground so marks that meet stay apart, at
+   the start of its step and as far down as the drawing puts its value (`--step-down`). */
 .step-mark {
+  --step-down: 0;
+
   position: absolute;
+  inset-block-start: calc(var(--step-inset) + (100% - 2 * var(--step-inset)) * var(--step-down));
+  inset-inline-start: 0;
   inline-size: var(--space-2);
   block-size: var(--space-2);
   background: var(--color-series-1);

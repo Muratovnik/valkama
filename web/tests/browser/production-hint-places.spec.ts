@@ -10,7 +10,8 @@
  * over the rows above and under it. A list of rows down (the rail) puts every hint past its edge,
  * so a hint there stands over no part of the list, and so do a ranking's bars, whose hint stood
  * under its row and over the rows after it; the chart's periods are a list of rows across,
- * whose hint stands beside its own column, over the periods after it by the place they chose.
+ * whose hint stands beside its own stack, the column drawn, over the rest of its period and the
+ * periods after it by the place they chose.
  * The settings and a card's checklist are lists of wide rows, whose hint stands inside its own
  * row and over no other (`production-hint-row.spec.ts` measures how near).
  */
@@ -52,12 +53,17 @@ interface List {
   across: boolean
   /** The list of rows down, or the row of a list across, that holds an element. */
   holder: string
+  /**
+   * In a list across, what its row draws for the element, as a period its stack: the hint stands
+   * beside it, over the rest of the row and the element that takes the pointer for it.
+   */
+  drawn?: string
   /** In a list of wide rows, each of its rows. */
   row?: string
 }
 
 const RAIL: List = { across: false, holder: '.app-nav-shell' }
-const PERIODS: List = { across: true, holder: '.period-slot' }
+const PERIODS: List = { across: true, holder: '.period-slot', drawn: '.period-stack' }
 const RANKING: List = { across: false, holder: '.ranked-grid' }
 const STEPS: List = { across: false, holder: '.checklist', row: '.step-row' }
 const SETTINGS: List = { across: false, holder: '.settings-general-sheet', row: '.settings-row' }
@@ -83,21 +89,23 @@ function placedAt([[x, y], list]: [[number, number], List | null]): Placed | nul
     Math.min(shown.right, box.right) - Math.max(shown.left, box.left) > 1 &&
     Math.min(shown.bottom, box.bottom) - Math.max(shown.top, box.top) > 1
   const holder = list ? anchor.closest(list.holder) : null
+  const drawn = list?.drawn ? (holder?.querySelector(list.drawn) ?? null) : null
+  const against = drawn ?? holder
   const own = list?.row ? anchor.closest(list.row) : null
   const others = list?.row && holder ? [...holder.querySelectorAll(list.row)] : []
   return {
     element: `${anchor.classList[0] ?? anchor.tagName.toLowerCase()}.${anchor.dataset.tooltipKind ?? ''}`,
     listCovered: list?.row
       ? others.some((row) => row !== own && covers(row.getBoundingClientRect()))
-      : holder !== null && covers(holder.getBoundingClientRect()),
-    ownCovered: covers(anchor.getBoundingClientRect()),
+      : against !== null && covers(against.getBoundingClientRect()),
+    ownCovered: covers((drawn ?? anchor).getBoundingClientRect()),
   }
 }
 
 /** What a hint in `list` stood over that it must not. */
 function overWhat(list: List | null) {
   if (list?.row) return 'another row of its list'
-  return list?.across ? 'its own column' : 'the rows of its list'
+  return list?.across ? 'its own stack' : 'the rows of its list'
 }
 
 /** Points at every element with a hint inside `where` and lists each hint that covers what it must not. */
@@ -208,9 +216,7 @@ for (const width of [1440, 1024]) {
       expect(placed.covered).toEqual([])
     })
 
-    test('no hint of the Analytics day chart covers its element or its own column', async ({
-      page,
-    }) => {
+    test('no hint of the Analytics day chart covers its own stack', async ({ page }) => {
       const days = await openDays(page, width)
       const chart = await sweep(page, days.locator('.period-bars'), PERIODS)
       expect(chart.placed.length).toBeGreaterThan(2)

@@ -297,6 +297,36 @@ test('a list with no room on either side for 12rem puts the hint above its eleme
   assert.equal(placeHint(setting({ aside: box(200, 1240), list: 'rows', width: 150 })).aside, true)
 })
 
+test('a point’s hint stands at its mark’s top right, else top left, else over it', () => {
+  // A mark from 594 to 606 in a chart's frame from 100 to 1000; a hint 200px wide.
+  const point = box(594, 606, 140, 152)
+  const frame = { left: 100, right: 1000 }
+  const atPoint = (over: Partial<HintSetting>) =>
+    placeHint(setting({ aside: box(594, 900, 120, 216), frame, point, ...over }))
+  // 1000 - 606 - 6 = 388 on the right.
+  assert.deepEqual(atPoint({}), { align: 'start', aside: true, corner: 'right', side: 'top' })
+  // 700 - 606 - 6 = 88 on the right, 594 - 6 - 100 = 488 on the left: the left, mirrored.
+  assert.deepEqual(atPoint({ frame: { left: 100, right: 700 } }), {
+    align: 'end',
+    aside: true,
+    corner: 'left',
+    side: 'top',
+  })
+  // Asked by its own width, as a row's hint: 88px hold a hint 80px wide on the right.
+  assert.equal(atPoint({ frame: { left: 100, right: 700 }, width: 80 }).corner, 'right')
+  // A frame with room on neither side, 88px each: the window's roomier side, as beside a row,
+  // 1440 - 8 - 606 - 6 = 820 on the right against 594 - 6 - 8 = 580 on the left.
+  assert.equal(atPoint({ frame: { left: 500, right: 700 } }).corner, 'right')
+  // A window with no 12rem on either side of the mark: over it, centred.
+  assert.deepEqual(
+    atPoint({ frame: null, point: box(190, 202, 140, 152), width: 400, window: 390 }),
+    { align: 'center', aside: false, side: 'top' },
+  )
+  // A registered exception's side wins over the point.
+  const asked = { align: 'center', side: 'bottom' } as const
+  assert.deepEqual(atPoint({ asked }), { ...asked, aside: false })
+})
+
 test('a side a registered exception writes is kept, against its element, list or not', () => {
   const asked = { align: 'center', side: 'top' } as const
   assert.deepEqual(placeHint(setting({ asked, list: 'rows' })), { ...asked, aside: false })

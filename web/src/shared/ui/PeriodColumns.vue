@@ -20,8 +20,9 @@
  * over the page, so pointing moves nothing. A period is one place for the pointer: its whole
  * height and its half of the gap to each neighbour, its segments and the ground between them
  * (`data-tooltip-area`), so crossing it never swaps one hint for another. Its hint says each
- * series' share of it too, stands beside its column at the plot's top, to the right where there
- * is room, and stays put while focus climbs into its segments; a segment has none of its own, and
+ * series' share of it too, stands beside its stack, the column drawn (`data-hint-bar`), its top
+ * level with the stack's, to the right where there is room, and stays put while the pointer
+ * crosses the period and focus climbs into its segments; a segment has none of its own, and
  * marks its series' row in the period's hint while the pointer or focus is on it
  * (`data-tooltip-row`). The hint draws its shares bare where the chart says how (`formatPart`).
  * The time axis keeps its names apart, measured in the axis's own font (`dayTicks`).
@@ -291,7 +292,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
         @follow="(key, event) => emit('follow', key, event)"
         @select="(key) => emit('series', key)"
       />
-      <!-- The chart's frame: a period's hint stands beside its column inside it. -->
+      <!-- The chart's frame: a period's hint stands beside its stack inside it. -->
       <div
         ref="frame"
         class="period-frame"
@@ -330,7 +331,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
               :class="gridClass(tick)"
               :style="levelOf(tick)"
             />
-            <!-- The periods are a list of rows across: a period's hint stands beside its column. -->
+            <!-- The periods are a list of rows across: a period's hint stands beside its stack. -->
             <div
               class="period-bars"
               data-hint-list="columns"
@@ -361,6 +362,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                   class="period-stack"
                   :class="{ 'period-incomplete': one.column.incomplete }"
                   :style="heightOf(one.total)"
+                  data-hint-bar
                 >
                   <component
                     :is="markTag(segment.series, 'span')"

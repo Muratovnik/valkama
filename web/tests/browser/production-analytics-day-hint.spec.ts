@@ -9,10 +9,14 @@
  * another, so every crossing swapped both the words and the place, and the gap between two days
  * belonged to neither.
  *
- * The hint stands beside the day's column — to its right, or to its left where the window has no
- * room there — at the same height for every day, so moving to the next day moves it sideways only,
- * and it covers nothing of the day it speaks for: at 1440 and 1280 pixels and at the narrowest
- * window that opens the days as a plot. Along four weeks of days it stays inside the chart's frame
+ * The hint stands beside the day's stack, the column drawn, 6 pixels from its edge — to its
+ * right, or to its left where the chart's frame has no room there — with its top level with the
+ * stack's, so it moves with the stack from one day to the next and covers nothing of it: at 1440
+ * and 1280 pixels and at the narrowest window that opens the days as a plot. At 360 pixels, where
+ * the plot is chosen over the table, it stands beside the stack where the window holds it, else
+ * over the stack, 6 pixels over its top. It never runs out of the window. Beside the day's slot, the
+ * whole place the pointer takes for it, a day of a two-day chart had its hint at the plot's top
+ * some 300 pixels from its stack. Along four weeks of days it stays inside the chart's frame
  * and on the right up to the days past which the right has no room, then on the left: its side
  * changes once, at 1440 pixels, where the chart fits its frame, and at 1024, where it scrolls.
  * Each day once chose by its own hint's width, so the side jumped from one day to the next. The keyboard shows the same hint on the day and on its
@@ -42,6 +46,9 @@ import { test } from './test.ts'
  * their table (`useNarrowCharts`); one pixel less opens the table.
  */
 const NARROWEST = 664
+
+/** The room between a hint and the stack it stands against (`OFFSET` in `hintPlacement.ts`). */
+const OFFSET = 6
 
 const WIDTHS = [1440, 1280, NARROWEST]
 
@@ -82,6 +89,22 @@ function crossing(parts: Parts, gapEnd: number) {
     { name: 'out of the top of the stack', x: across, y: (field.top + stack.top) / 2 },
     { name: 'to its edge in the gap before the next day', x: gapEnd, y: middleOf(field).y },
   ]
+}
+
+/**
+ * Where a day's hint stands against its stack: on which side, how far from it — from its edge on
+ * that side, or from its top where the hint stands over it — how far its top stands from the
+ * stack's where it stands beside it, and whether it stays inside the window `width` wide.
+ */
+function besideStack(hint: Shown['box'], parts: Parts, width: number) {
+  const place = placeOf(hint, parts)
+  const over = place.side === 'neither'
+  return {
+    ...place,
+    gap: over ? parts.stack.top - hint.bottom : place.apart,
+    level: over ? 0 : place.below,
+    inside: hint.left >= 0 && hint.right <= width,
+  }
 }
 
 /** The day to cross: one with room over its stack, and a day after it. */
@@ -170,9 +193,9 @@ for (const width of WIDTHS)
       .not.toEqual([next.text])
     const opening = await settledHint(page)
     const place = {
-      day: placeOf(first.box, parts),
-      next: placeOf(next.box, nextParts),
-      first: placeOf(opening.box, firstParts),
+      day: besideStack(first.box, parts, width),
+      next: besideStack(next.box, nextParts, width),
+      first: besideStack(opening.box, firstParts, width),
     }
     await record(info, `day-hint-${width}`, {
       index,
@@ -204,15 +227,40 @@ for (const width of WIDTHS)
     expect(next.text, 'the next day says its own words').not.toBe(first.text)
 
     for (const [day, where] of Object.entries(place)) {
-      expect(where.side, `${day}: beside its column`).not.toBe('neither')
-      expect(where.level, `${day}: level with its column`).toBe(true)
-      expect(where.covers, `${day}: over none of its day`).toBe(false)
+      expect(where.side, `${day}: beside its stack`).not.toBe('neither')
+      expect(where.covers, `${day}: over none of its stack`).toBe(false)
+      expect(Math.abs(where.gap - OFFSET), `${day}: ${OFFSET}px from its stack`).toBeLessThan(1)
+      expect(Math.abs(where.level), `${day}: level with its stack's top`).toBeLessThan(1)
+      expect(where.inside, `${day}: inside the window`).toBe(true)
     }
-    // The same height for every day: the next day moves the hint sideways only.
-    expect(Math.abs(next.box.top - first.box.top), 'the same height').toBeLessThanOrEqual(0.5)
-    expect(Math.abs(opening.box.top - first.box.top), 'the same height').toBeLessThanOrEqual(0.5)
     expect(place.first.side, 'the first day: to the right, where there is room').toBe('right')
   })
+
+test('in a window 360px wide a day’s hint stands beside its stack or over it, inside the window', async ({
+  page,
+}, info) => {
+  const width = 360
+  const days = await openDays(page, width)
+  const count = await days.locator('.period-slot').count()
+  const placed: ReturnType<typeof besideStack>[] = []
+  for (let index = 0; index < count; index += 1) {
+    const parts = await dayParts(page, index)
+    await page.mouse.move(0, 0)
+    await expect(page.locator('.tooltip-hint')).toHaveCount(0)
+    await page.mouse.move(middleOf(parts.column).x, parts.field.top + 2, { steps: 4 })
+    const shown = await settledHint(page)
+    placed.push(besideStack(shown.box, parts, width))
+  }
+  await record(info, 'day-hint-360', placed)
+  expect(placed.length, 'days pointed at').toBeGreaterThan(1)
+  // Beside its stack where the window holds 12rem there, else over it, 6px over its top; a hint
+  // taller than the window's room under the stack's top is lifted inside the window.
+  for (const [index, where] of placed.entries()) {
+    expect(where.covers, `day ${index}: over none of its stack`).toBe(false)
+    expect(Math.abs(where.gap - OFFSET), `day ${index}: ${OFFSET}px from it`).toBeLessThan(1)
+    expect(where.inside, `day ${index}: inside the window`).toBe(true)
+  }
+})
 
 /** Four weeks of the task section: twenty-eight days. */
 const WEEKS = pageAt({ period: 'weeks4', by: 'work_item' })

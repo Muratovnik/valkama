@@ -156,7 +156,7 @@ for (const width of [1440, 1024])
       expect(level, `${row.series}: level with the first line`).toBeLessThanOrEqual(3)
     }
     expect(grid.cut, 'nothing in the hint cut').toBe(false)
-    // Beside its column and over none of its day, as the estimate of its width placed it.
+    // Beside its stack and over none of it, as the estimate of its width placed it.
     const place = placeOf(grid.box, parts)
     expect(place.side).not.toBe('neither')
     expect(place.covers).toBe(false)

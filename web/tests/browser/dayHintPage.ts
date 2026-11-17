@@ -124,17 +124,22 @@ const overlaps = (one: Box, other: Box) =>
   one.top < other.bottom &&
   other.top < one.bottom
 
-/** Where a hint stands against the day's column: beside it, and over none of it. */
+/**
+ * Where a hint stands against the day's stack, the column drawn: on which side of it, how far
+ * from its edge on that side, how far its top stands under the stack's, and whether it covers any
+ * of the stack. The day's slot, the place the pointer takes for it, is wider than its stack: a hint
+ * beside the slot stood up to 300px from the stack of a day of two.
+ */
 export function placeOf(hint: Box, parts: Parts) {
-  const { column, slot, stack } = parts
+  const { stack } = parts
   let side = 'neither'
-  if (hint.left >= column.right) side = 'right'
-  else if (hint.right <= column.left) side = 'left'
+  if (hint.left >= stack.right) side = 'right'
+  else if (hint.right <= stack.left) side = 'left'
   return {
     side,
-    // Beside means level with the column too, not over the plot or under it.
-    level: hint.top < column.bottom && hint.bottom > column.top,
-    covers: overlaps(hint, column) || overlaps(hint, slot) || overlaps(hint, stack),
+    apart: side === 'left' ? stack.left - hint.right : hint.left - stack.right,
+    below: hint.top - stack.top,
+    covers: overlaps(hint, stack),
   }
 }
 
@@ -173,11 +178,17 @@ export const dayWithIdleSegment = (page: Page) =>
 export const pastTheDelay = (page: Page) =>
   page.evaluate(() => new Promise((done) => setTimeout(done, 800)))
 
-/** The days of the task section, drawn as a plot at `width`: of this week, unless `address` says. */
+/**
+ * The days of the task section, drawn as a plot at `width`: of this week, unless `address` says.
+ * A page too narrow to open them as a plot (`NARROWEST` in the day-hint spec) opens their table,
+ * and the plot is chosen there, as a reader chooses it.
+ */
 export async function openDays(page: Page, width: number, answer?: Answer, address = TASK_REPORT) {
   await serve(page, answer)
   const analytics = await openReport(page, width, address)
   const days = analytics.locator('.spending-days')
+  if ((await days.getAttribute('data-shown')) === 'table')
+    await days.getByRole('radio', { name: 'Chart' }).check()
   await expect(days).toHaveAttribute('data-shown', 'chart')
   // The plot in the middle of the window, so a hint has room over and under it.
   await days

@@ -97,16 +97,15 @@ const place = shallowRef<ReturnType<typeof hintPlaceOf> | null>(null)
 /**
  * The pointer and a press go through the hint rather than onto it: a hint focus a key brought
  * stands over every control the keyboard reaches, a chart period's follows the pointer along
- * the plot, standing beside its column over the periods that come next, and one inside its
+ * the plot, standing beside its column over the periods that come next, one at a corner of a
+ * point's mark stands over the plot and the steps of the readings after it, and one inside its
  * element's frame stands over what the frame holds, the next period of a small chart among it.
  * Every other hint the pointer raised can be entered.
  */
 const passedThrough = computed(() => {
   const now = mine.value
-  return (
-    now !== null &&
-    (now.by === 'focus' || inTooltipArea(now.anchor) || place.value?.inside !== undefined)
-  )
+  const over = place.value?.inside !== undefined || place.value?.corner !== undefined
+  return now !== null && (now.by === 'focus' || inTooltipArea(now.anchor) || over)
 })
 /** The shown element's own words are cut, so its hint says them first. */
 const whole = ref(false)
