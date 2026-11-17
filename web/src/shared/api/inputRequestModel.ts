@@ -178,10 +178,12 @@ const detailSchema = strictObject({
 
 const listSchema = strictObject({
   interface_version: z.literal('valkama-planning-requests'),
-  items: boundedList(entrySchema, 100),
+  // One page; `fetchInputRequests` reads every page into one list.
+  items: boundedList(entrySchema, 200),
   // One source per registered project, and the registry counts none.
   coverage: z.array(planningCoverageSchema),
-  limit: positiveInt().max(100),
+  limit: positiveInt().max(200),
+  total: positiveInt(true),
   has_more: z.boolean(),
 })
 

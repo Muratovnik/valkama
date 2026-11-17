@@ -42,11 +42,33 @@ WRITE_PATHS = frozenset(
 )
 
 
-def _limit(parameters: Mapping[str, list[str]], default: int) -> int:
+#: The most results a search answers with: its web schema holds it to the same.
+SEARCH_CEILING = 100
+
+
+def _limit(parameters: Mapping[str, list[str]], default: int, ceiling: int) -> int:
+    """The page size a read asked for, from 1 to the read's own `ceiling`."""
+
     raw = parameters.get("limit", [str(default)])
-    if len(raw) != 1 or not raw[0].isdigit() or not 1 <= int(raw[0]) <= 100:
-        raise api.PlanningHttpError(400, "invalid_request", "limit must be between 1 and 100")
+    if len(raw) != 1 or not _digits(raw[0]) or not 1 <= int(raw[0]) <= ceiling:
+        raise api.PlanningHttpError(
+            400, "invalid_request", f"limit must be between 1 and {ceiling}"
+        )
     return int(raw[0])
+
+
+def _offset(parameters: Mapping[str, list[str]]) -> int:
+    """Where a page starts: how many of the sorted results come before it."""
+
+    raw = parameters.get("offset", ["0"])
+    if len(raw) != 1 or not _digits(raw[0]) or int(raw[0]) > model.MAX_COUNT:
+        raise api.PlanningHttpError(400, "invalid_request", "offset must be a non-negative integer")
+    return int(raw[0])
+
+
+def _digits(text: str) -> bool:
+    # ASCII only: `isdigit` alone passes "²", which `int` then refuses.
+    return text.isascii() and text.isdigit()
 
 
 def _target(routing: PlanningRouting, space_ref: dict, reference: str) -> dict:
@@ -85,7 +107,7 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
     if set(parameters) - {"q", "limit"} or "q" not in parameters:
         raise api.PlanningHttpError(400, "invalid_request", "search requires q and optional limit")
     query = model.text_field(_one(parameters, "q"), "query", limit=200)
-    limit = _limit(parameters, 50)
+    limit = _limit(parameters, 50, SEARCH_CEILING)
     items: list[dict] = []
     coverage: list[dict] = []
     seen: set[tuple[str, str, str]] = set()
@@ -326,13 +348,23 @@ def request_detail(routing: PlanningRouting, parameters: Mapping[str, list[str]]
 
 
 def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
-    limit = _limit(parameters, 100)
+    """One page of the questions of every source, or of one space or item, newest first.
+
+    Each source is read whole, so the page is cut from the sorted list of all of them
+    and `total` counts them all; the answer stays one page however many there are,
+    and a reader takes the next from `offset` while `has_more` says so.
+    """
+
+    limit = _limit(parameters, 100, requests.PAGE)
+    offset = _offset(parameters)
     status = _one(parameters, "status") if "status" in parameters else None
     if status is not None:
         model.enum_field(
             status, frozenset({"pending", "answered", "declined", "expired"}), "status"
         )
-    scoped = {key: value for key, value in parameters.items() if key not in {"limit", "status"}}
+    scoped = {
+        key: value for key, value in parameters.items() if key not in {"limit", "offset", "status"}
+    }
     scope_kind = _one(scoped, "scope_kind")
     reference = None
     if scope_kind == "global":
@@ -346,7 +378,6 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
     items: list[dict] = []
     coverage: list[dict] = []
     seen: set[tuple[str, str]] = set()
-    more = False
     for space_ref in resources:
         # A global read names why a source was skipped; an exact one refuses
         # below with the routing's own answer instead.
@@ -362,17 +393,7 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
         try:
             with routing.planning_store(_store_parameters(space_ref)) as (conn, _key):
                 _capability(conn)
-                # Without an item this is what waits for the person, and a list on a
-                # comment waits for nobody: it is read with its item, under its comment.
-                found = requests.list_requests(
-                    conn,
-                    space=space_ref["space_key"],
-                    status=status,
-                    limit=limit + 1,
-                    reference=reference,
-                    lists=reference is not None,
-                )
-                more = more or len(found) > limit
+                found = _every_request(conn, space_ref["space_key"], status, reference)
                 for record in found:
                     identity = (space_ref["data_scope_id"], record["request_id"])
                     if identity not in seen:
@@ -394,11 +415,39 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
     )
     return {
         "interface_version": "valkama-planning-requests",
-        "items": items[:limit],
+        "items": items[offset : offset + limit],
         "coverage": coverage,
         "limit": limit,
-        "has_more": more or len(items) > limit,
+        "total": len(items),
+        "has_more": offset + limit < len(items),
     }
+
+
+def _every_request(
+    conn: sqlite3.Connection, space: str, status: str | None, reference: str | None
+) -> list[dict]:
+    """Every request of one space the filters keep, read a page at a time.
+
+    Without an item this is what waits for the person, and a list on a comment
+    waits for nobody: it is read with its item, under its comment.
+    """
+
+    found: list[dict] = []
+    offset = 0
+    while True:
+        page = requests.list_page(
+            conn,
+            space=space,
+            status=status,
+            reference=reference,
+            lists=reference is not None,
+            limit=requests.PAGE,
+            offset=offset,
+        )
+        found.extend(page["requests"])
+        if page["next_offset"] is None:
+            return found
+        offset = int(page["next_offset"])
 
 
 def request_command(routing: PlanningRouting, path: str, payload: dict) -> dict:
