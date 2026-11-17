@@ -16,7 +16,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { SPENT_WORLD } from '../fixtures/quotaSpent.ts'
-import { openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { openPanel, openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { test } from './test.ts'
 
@@ -165,11 +165,7 @@ function legendLayout(chart: Locator) {
 /** Opens a section at a width and finds `where` in it: a narrow page opens on its list of sections. */
 async function openSection(page: Page, width: number, by: string, where: string) {
   await page.setViewportSize({ width, height: 1000 })
-  await page.goto(pageAt({ by }))
-  const analytics = page.locator('.analytics-page')
-  await analytics.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
-  if (!(await analytics.locator('.analytics-panel').isVisible()))
-    await analytics.locator('.analytics-rail [aria-current="page"]').click()
+  await openPanel(page, pageAt({ by }))
   const block = page.locator(`.analytics-panel ${where}`).first()
   await expect(block).toBeVisible()
   return block

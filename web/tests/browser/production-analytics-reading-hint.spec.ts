@@ -16,7 +16,7 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { pageAt, record, serve } from './analyticsPage.ts'
+import { openPanel, pageAt, record, serve } from './analyticsPage.ts'
 import { test } from './test.ts'
 
 /** The room between a hint and what it stands against (`OFFSET` in `hintPlacement.ts`). */
@@ -33,11 +33,7 @@ interface Box {
 async function openFiveHours(page: Page, width: number) {
   await serve(page)
   await page.setViewportSize({ width, height: 1000 })
-  await page.goto(pageAt({ by: 'quota_five_hour' }))
-  // A narrow page opens on its list of sections, and the section is chosen there.
-  const entry = page.locator('.analytics-rail-entry[data-section="quota_five_hour"]')
-  await page.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
-  if (!(await page.locator('.analytics-panel').isVisible())) await entry.click()
+  await openPanel(page, pageAt({ by: 'quota_five_hour' }))
   const panel = page.locator('.quota-panel')
   await expect(panel.locator('.quota-account')).toHaveCount(4)
   await panel.getByRole('radio', { name: 'Chart' }).check()

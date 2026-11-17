@@ -32,10 +32,10 @@ import {
   record,
   scrolledNames,
   serve,
-  tabWalk,
   UNRECORDED_BETWEEN,
 } from './analyticsPage.ts'
 import type { Answer } from './analyticsPage.ts'
+import { tabWalk } from './analyticsTabWalk.ts'
 import { shot } from './boardPage.ts'
 import { drawAllLined, drawLined, LINED_SHOWN } from './drawnViews.ts'
 import { expectNoSilentClipping } from './overflow.ts'

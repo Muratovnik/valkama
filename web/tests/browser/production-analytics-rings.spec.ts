@@ -16,7 +16,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { pageAt, record, serve } from './analyticsPage.ts'
+import { openPanel, pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { sectorBand } from './ringBand.ts'
 import { test } from './test.ts'
@@ -55,12 +55,8 @@ const ring = (page: Page) => page.locator('.analytics-panel .donut-chart').first
 async function openRing(page: Page, state: Record<string, string>, width: number) {
   await serve(page, WEEK)
   await page.setViewportSize({ width, height: 900 })
-  await page.goto(pageAt(state))
   // A phone opens on the rail: its chosen section is a press away.
-  const analytics = page.locator('.analytics-page')
-  await analytics.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
-  if (!(await analytics.locator('.analytics-panel').isVisible()))
-    await analytics.locator('.analytics-rail [aria-current="page"]').click()
+  await openPanel(page, pageAt(state))
   // A narrow page starts on the table; the ring is a press away.
   const section = page.locator('.analytics-panel .chart-section').first()
   await expect(section).toBeVisible()

@@ -15,7 +15,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { isSpendRead, SPENT_WORLD } from '../fixtures/quotaSpent.ts'
-import { pageAt, record, serve, shortfalls } from './analyticsPage.ts'
+import { openPanel, pageAt, record, serve, shortfalls } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
@@ -29,17 +29,10 @@ const accountNamed = (page: Page, name: string) =>
 const blockOf = (page: Page, name: string) =>
   accountNamed(page, name).locator('.quota-window[data-window="five_hour"] .window-spend')
 
-/**
- * Opens the five hours' panel: where the window is too narrow for the rail beside it, the address
- * opens the list of sections, and the section is chosen there, as a reader would.
- */
+/** Opens the five hours' panel, from the list of sections where a narrow window shows it first. */
 async function openFiveHours(page: Page) {
-  await page.goto(FIVE_HOURS)
-  const panel = page.locator('.quota-panel')
-  await page.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
-  if (!(await panel.isVisible()))
-    await page.locator('.analytics-rail [data-section="quota_five_hour"]').click()
-  await expect(panel).toBeVisible()
+  await openPanel(page, FIVE_HOURS)
+  await expect(page.locator('.quota-panel')).toBeVisible()
 }
 
 /** Settled: the panel has its accounts and every block has its answer or its failure. */
