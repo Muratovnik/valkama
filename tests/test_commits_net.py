@@ -104,6 +104,15 @@ class NetCase(RuleCase):
         lines = answer.get("warnings", [])
         self.assertFalse([line for line in lines if line.startswith("These commits")])
 
+    def line(self, commit: str) -> str:
+        """The warning that names one commit to the agent."""
+
+        return (
+            "These commits in the card's repositories were made since the card was taken and no"
+            f" hook reported them: {PROJECT} {commit[:9]}. Attach the ones that belong here with"
+            " the commits group."
+        )
+
     def committed_at(self, commit: str) -> str:
         found = self.place.git(self.place.repository, "log", "-1", "--format=%cI", commit)
         return found.stdout.decode("ascii").strip()
@@ -130,12 +139,7 @@ class NamedTests(NetCase):
         )
         self.assertNotIn("unreported_total", answer)
         self.assertNotIn("unreported_unread", answer)
-        self.assertIn(
-            "These commits in the card's repositories were made while you held it and no hook"
-            f" reported them: {PROJECT} {c[:9]}. Attach the ones that belong here with the"
-            " commits group.",
-            answer["warnings"],
-        )
+        self.assertIn(self.line(c), answer["warnings"])
         self.assertEqual([], self.attached(), "the net attaches nothing")
         self.assertEqual("review", answer["state"]["key"])
 
@@ -256,15 +260,22 @@ class WindowTests(NetCase):
         self.says_nothing(self.close(t3, acceptance="assignment"))
 
 
-class InterfaceTests(NetCase, ApiCase):
-    def test_a_close_in_the_interface_names_them_too(self) -> None:
-        t1 = self.task("Window", PROJECT)
+class WhoseCloseTests(NetCase, ApiCase):
+    def test_only_an_agents_close_runs_the_net(self) -> None:
+        """S holds T1 and T2 of `alpha`, and commits c with no record in their window: the
+        agent's close of T1 names c, a person's close of T2 in the interface does not."""
+
+        t1, t2 = self.task("Agent", PROJECT), self.task("Person", PROJECT)
         self.claim(t1)
+        self.claim(t2)
         c = self.made("c", 30)
         status, body = self.http(
-            "/api/planning/work-item/transition", {"id": t1, "state": "review"}
+            "/api/planning/work-item/transition", {"id": t2, "state": "review"}
         )
         self.assertEqual(200, status, body)
-        self.assertEqual([c], [commit["hash"] for commit in body["unreported_commits"]])
         self.assertEqual("review", body["state"]["key"])
+        self.says_nothing(body)
+        answer = self.close(t1)
+        self.assertEqual([c], self.named(answer))
+        self.assertIn(self.line(c), answer["warnings"])
         self.assertEqual([], self.attached())

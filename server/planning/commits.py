@@ -51,9 +51,9 @@ On no card. A session's commit that no item holds and no rewrite replaced waits
 on the list `unattached` reads, by a project or by the projects the registry
 binds to a space, until someone attaches it.
 
-The net at a close. A move into review or completed reads, before it ends the
-claim, when the work began (`window_start`); once the write commits, the surface
-that committed it asks the card's repositories for the commits made since then
+The net at a close. An agent's move into review or completed reads, before it
+ends the claim, when the work began (`window_start`); once the write commits, the
+MCP surface asks the card's repositories for the commits made since then
 that no hook reported (`unreported`), and the answer names them. Nothing is
 attached: a person's commit, or one of a client without a session, may be among
 them, and the agent attaches the ones that belong with the `commits` group.
@@ -746,9 +746,11 @@ def closes() -> Iterator[list[Window]]:
     """Collect the windows of the closes written inside, for `with_unreported` once the
     write commits.
 
-    A surface opens it around one write it commits itself; a transition outside it
-    leaves nothing, so a write whose caller commits later never looks for commits.
-    A write that fails leaves the block with its windows unread.
+    The MCP surface opens it around an agent's write, which it commits itself; a
+    transition outside it leaves nothing, so a person's close in the interface,
+    whose answer and words are for a person, and a write whose caller commits
+    later never look for commits. A write that fails leaves the block with its
+    windows unread.
     """
 
     found: list[Window] = []
@@ -899,8 +901,8 @@ def _unreported_fields(named: list[dict], unread: list[str]) -> dict[str, Any]:
         if len(named) > len(shown):
             names.append(f"{len(named) - len(shown)} more")
         found["line"] = (
-            "These commits in the card's repositories were made while you held it and no hook"
-            f" reported them: {_listed(names)}. Attach the ones that belong here with the"
+            "These commits in the card's repositories were made since the card was taken and no"
+            f" hook reported them: {_listed(names)}. Attach the ones that belong here with the"
             " commits group."
         )
     if unread:

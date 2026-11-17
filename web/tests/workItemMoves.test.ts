@@ -30,30 +30,3 @@ test('a move without both ends, or with a field it does not have, is refused', (
     expect(() => validateWorkItemRecord({ ...structuredClone(workItem), started })).toThrow()
   }
 })
-
-test('a close that names commits no hook reported parses, each field to its shape', () => {
-  const commit = {
-    repository: 'alpha',
-    hash: 'a'.repeat(40),
-    subject: 'feat: by hand',
-    committed_at: '2026-11-20T10:31:02+03:00',
-  }
-  const closed = validateWorkItemRecord({
-    ...structuredClone(workItem),
-    unreported_commits: [commit],
-    unreported_total: 23,
-    unreported_unread: ['beta'],
-  })
-  expect(closed.unreported_commits).toEqual([commit])
-  expect(closed.unreported_total).toBe(23)
-  expect(closed.unreported_unread).toEqual(['beta'])
-  for (const named of [
-    Array.from({ length: 21 }, () => commit),
-    [{ ...commit, hash: 'a'.repeat(9) }],
-    [{ ...commit, label: '' }],
-  ]) {
-    expect(() =>
-      validateWorkItemRecord({ ...structuredClone(workItem), unreported_commits: named }),
-    ).toThrow()
-  }
-})
