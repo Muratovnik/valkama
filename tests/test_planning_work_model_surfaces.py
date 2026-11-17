@@ -294,6 +294,9 @@ HTTP_WRITES: dict[str, list[Args]] = {
             S2=None,
         ),
     ],
+    "/api/planning/work-item/defer": [
+        _with(_ids(id="z"), until="2099-01-01", reason="waits for the vendor")
+    ],
     "/api/planning/work-item/claim": [_ids(id="b")],
     "/api/planning/work-item/claim-ready": [lambda _case: {"space": KEY}],
     "/api/planning/work-item/checklist": [_with(_ids(id="b"), items=[{"text": "Another"}])],
