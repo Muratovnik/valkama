@@ -66,8 +66,18 @@ test('canvas visualizations use the same semantic colors as component states', (
   // second active state gets the same one. The colour is the token a component
   // state of that tone paints with, as tokens.css resolves it; the literal itself
   // is what `npm run tokens:sync` writes, so the palette is not repeated here.
-  for (const category of ['backlog', 'queued', 'active', 'review', 'completed', 'blocked']) {
-    const { tone } = statePresentation('work-item-state', category)
+  // The tone each category reads in is the rule's: moving is blue, finished green,
+  // review the amber of a decision, blocked red, and where work waits says nothing.
+  const tones = {
+    backlog: 'neutral',
+    queued: 'neutral',
+    active: 'info',
+    review: 'warning',
+    completed: 'success',
+    blocked: 'danger',
+  } as const
+  for (const [category, tone] of Object.entries(tones)) {
+    assert.equal(statePresentation('work-item-state', category).tone, tone, category)
     assert.equal(
       stateColor('work-item-state', category).toLowerCase(),
       token(SEMANTIC_TONE_TOKENS[tone]).toLowerCase(),
