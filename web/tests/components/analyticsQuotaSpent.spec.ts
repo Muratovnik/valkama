@@ -34,6 +34,7 @@ import {
   SPENT_WORLD as WORLD,
 } from '../fixtures/quotaSpent.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { seriesEntries } from '../support/legend.ts'
 
 const WORK_SEAT = seatOf(WORK)
 const NIGHT_SEAT = seatOf(NIGHT)
@@ -68,7 +69,6 @@ const radio = (within: Found | VueWrapper, label: string) => {
   if (!found) throw new Error(`no choice ${label}`)
   return found
 }
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const openFiveHours = () => mountAnalytics({ routeState: { by: 'quota_five_hour' } })
 
@@ -201,9 +201,10 @@ describe('where a window went', () => {
     expect(block().find('.ranked-bars').exists()).toBe(false)
     // The bars' figures and shares, each at the end of its legend line, no words on a sector.
     expect(
-      block()
-        .findAll('.chart-entry')
-        .map((one) => [one.get('.chart-key-name').text(), plain(one.get('.chart-figure').text())]),
+      seriesEntries(block()).map((one) => [
+        one.get('[data-series]').text(),
+        plain(one.get('.chart-figure').text()),
+      ]),
     ).toEqual([
       ['Atlas', '≈ $9.00 · 69%'],
       ['Beacon', '≈ $3.00 · 23%'],
@@ -258,10 +259,15 @@ describe('the states of what used a window', () => {
   })
 
   it('says it is waiting once the wait has lasted, and then what it read', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
     const reads = stubAnalyticsReads((query) => (isSpend(query) ? 'hold' : usage(query)), quota)
     const page = await openFiveHours()
     expect(blockOf(page, 'Work').get('.window-spend-body').text()).toBe('')
-    await wait(LOADING_DELAY_MS + 50)
+    vi.advanceTimersByTime(LOADING_DELAY_MS - 1)
+    await page.vm.$nextTick()
+    expect(blockOf(page, 'Work').get('.window-spend-body').text()).toBe('')
+    vi.advanceTimersByTime(1)
+    await page.vm.$nextTick()
     const waiting = blockOf(page, 'Work')
     expect(waiting.attributes('data-state')).toBe('loading')
     expect(waiting.get('.window-spend-body').text()).toBe('Loading')
@@ -269,7 +275,12 @@ describe('the states of what used a window', () => {
     expect(accountNamed(page, 'Work').get('.quota-window-lead').text()).toBe('62% used · fresh')
     for (const held of reads.held) held.release(usage(held.query))
     await flushPromises()
-    await wait(LOADING_MIN_SHOWN_MS + 50)
+    // What it read waits for the minimum the wait was shown for, then takes its place.
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS - 1)
+    await page.vm.$nextTick()
+    expect(blockOf(page, 'Work').attributes('data-state')).toBe('loading')
+    vi.advanceTimersByTime(1)
+    await page.vm.$nextTick()
     expect(blockOf(page, 'Work').attributes('data-state')).toBe('spent')
   })
 

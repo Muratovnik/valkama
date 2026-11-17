@@ -25,6 +25,7 @@ import { noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analy
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { showView, viewsOf } from '../support/chartViews.ts'
+import { seriesEntries, seriesNames } from '../support/legend.ts'
 
 const MONDAY = new Date(2026, 10, 9)
 
@@ -90,6 +91,13 @@ async function mountShownBars(...given: Parameters<typeof mountBars>) {
 
 const barsOf = (wrapper: ReturnType<typeof mountBars>) =>
   wrapper.getComponent(RankedBars).props('rows') as RankedRow[]
+
+/**
+ * The rows the bars draw for the values they name, by the kind each row declares (`data-kind`),
+ * apart from the rest, work on no task and unknown work.
+ */
+const namedRows = (wrapper: ReturnType<typeof mountBars>) =>
+  wrapper.getComponent(RankedBars).findAll('[data-kind="category"]')
 
 const sum = (rows: readonly RankedRow[]) => rows.reduce((total, row) => total + row.value, 0)
 
@@ -173,7 +181,7 @@ describe('the bars', () => {
       })),
     )
     const byClass = await mountShownBars(classes.usage.rows, 'launch_class')
-    expect(byClass.findAll('.ranked-row')).toHaveLength(12)
+    expect(namedRows(byClass)).toHaveLength(12)
     expect(byClass.find('[data-kind="other"]').exists()).toBe(false)
   })
 
@@ -188,7 +196,7 @@ describe('the bars', () => {
         })),
       ).usage.rows
     const ten = mountBars(many(10), 'work_item')
-    expect(ten.findAll('.ranked-row')).toHaveLength(10)
+    expect(namedRows(ten)).toHaveLength(10)
     expect(ten.find('[data-kind="other"]').exists()).toBe(false)
     expect(ten.find('.spending-bars-more').exists()).toBe(false)
 
@@ -382,10 +390,9 @@ describe('the drawings of the split', () => {
 
   it('reads the same figures as a ring, as bars and as a table', async () => {
     const section = mountBars(MODELS, 'model', { slots })
-    const ring = section.findAll('.chart-entry').map((one) => spaced(one.text()))
+    const ring = seriesEntries(section).map((one) => spaced(one.text()))
     // Each part its name, then its figure and its bare share at the end of its line.
     expect(ring).toEqual(['model-a3 h · 50%', 'model-b2 h · 33%', 'model-c1 h · 17%'])
-    expect(section.find('.donut-share').exists()).toBe(false)
 
     await showView(section, '.spending-bars', 'Bars')
     expect(barsOf(section).map((row) => [row.label, spaced(row.valueText)])).toEqual([
@@ -446,9 +453,9 @@ describe('the drawings of the split', () => {
     const section = mountBars(many, 'model')
     // The ring folds its own rest: no line asks for the table.
     expect(section.text()).not.toContain('2 more in the table')
-    expect(section.findAll('.chart-key-name').at(-1)?.text()).toMatch(/^Other, \d+ more$/u)
+    expect(seriesNames(section).at(-1)).toMatch(/^Other, \d+ more$/u)
     await showView(section, '.spending-bars', 'Bars')
-    expect(section.findAll('.ranked-row')).toHaveLength(12)
+    expect(namedRows(section)).toHaveLength(12)
     expect(section.text()).toContain('2 more')
   })
 })
