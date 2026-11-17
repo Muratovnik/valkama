@@ -188,12 +188,18 @@ function move(event: KeyboardEvent) {
    to be the other way round — a 44px segment inside a 2px inset — so the track
    stood 48px next to a 44px button and the two never lined up in any toolbar
    they shared. A control that wraps another control cannot size the inner one
-   and stay the same height as its neighbours. */
+   and stay the same height as its neighbours.
+
+   It is never wider than what holds it: where its words do not fit on one line, as a
+   window's «To now and the forecast | Whole window» in a phone's column, a segment's
+   words wrap and the track grows taller. Kept on one line, they ran 35px past the
+   window's edge and the last segment was cut. */
 .segmented {
   display: inline-flex;
   flex: 0 0 auto;
   gap: var(--space-half);
   min-height: var(--size-control-height);
+  max-inline-size: 100%;
   padding: var(--space-half);
   background: var(--color-surface-muted);
   border-radius: var(--radius-control);
@@ -211,12 +217,13 @@ function move(event: KeyboardEvent) {
    so a track keeps its exact declared height whichever it is. */
 .segmented-option {
   flex-grow: var(--segmented-option-grow, 0);
+  min-width: 0;
   min-height: calc(var(--size-control-height) - 2 * var(--space-half));
-  padding: 0 var(--space-5);
+  padding: var(--space-1) var(--space-5);
   border: 0;
   color: var(--color-text-muted);
   font: var(--font-control);
-  white-space: nowrap;
+  text-wrap: balance;
   background: transparent;
 
   /* A corner drawn inside another corner is the outer one less the space

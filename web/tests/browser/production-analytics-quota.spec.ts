@@ -16,6 +16,7 @@ import type { Page } from '@playwright/test'
 
 import { pageAt, record, serve } from './analyticsPage.ts'
 import { routeState, shot } from './boardPage.ts'
+import { drawLined } from './drawnViews.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
@@ -187,3 +188,31 @@ for (const colorScheme of ['light', 'dark'] as const)
         .screenshot(shot(info, `quota-week-${width}-${colorScheme}.png`))
       await record(info, `quota ${width} ${colorScheme}`, { sections, parts: still.length })
     })
+
+for (const width of [390, 1440])
+  test(`at ${width}px every switch of a drawn window stands inside the window`, async ({
+    page,
+  }, info) => {
+    // A narrow page opens on the table; drawn, a window's switches once ran past its edge.
+    await serve(page)
+    await page.setViewportSize({ width, height: 1000 })
+    await page.goto(pageAt())
+    for (const section of ['quota_five_hour', 'quota_week']) {
+      await choose(page, section)
+      await settled(page)
+      await drawLined(page.locator('.chart-section').first())
+      const past = await page.locator('.quota-window').evaluateAll((windows) =>
+        windows.flatMap((window) => {
+          const edge = window.getBoundingClientRect().right
+          return [...window.querySelectorAll('.segmented')]
+            .map((one) => one.getBoundingClientRect().right - edge)
+            .filter((beyond) => beyond > 1)
+            .map((beyond) => `${(window as HTMLElement).dataset.window}: ${Math.round(beyond)}px`)
+        }),
+      )
+      expect(past, `${section}: switches past their window`).toEqual([])
+      await page
+        .locator('.analytics-panel')
+        .screenshot(shot(info, `quota-drawn-${section}-${width}.png`))
+    }
+  })
