@@ -480,6 +480,72 @@ class OwnerTests(Harness):
             [entry["pending_questions"] for entry in held.held_by_session(self.conn, B)["items"]],
         )
 
+    def test_neither_a_closed_question_a_request_asked_of_a_session_nor_a_list_is_one(
+        self,
+    ) -> None:
+        """One condition says what a question to the owner is, for every reader of it."""
+
+        with self.acting(A, A1):
+            closed = requests.create(
+                self.conn, self.t2, kind="question", prompt="Which way?", fields=[TEXT]
+            )
+            tools.OPS["apply_work_item_changes"](
+                self.conn,
+                {
+                    "id": self.t2,
+                    "comment": {
+                        "body": "Findings",
+                        "list": {"label": "Pick", "options": [{"id": "a", "label": "A"}]},
+                    },
+                },
+            )
+        answered = self.post(
+            "/api/planning/request/answer",
+            {
+                "id": closed["request_id"],
+                "expected_revision": closed["revision"],
+                "answers": {"answer": "this way"},
+            },
+            None,
+        )
+        self.assertEqual(200, answered["http"])
+        kinds = self.conn.execute(
+            "SELECT status, addressee IS NOT NULL, comment_id IS NOT NULL FROM work_item_requests"
+            " WHERE work_item_id = ? ORDER BY rowid",
+            (self.work_item_id(self.t2),),
+        ).fetchall()
+        self.assertEqual(
+            [("pending", 1, 0), ("pending", 1, 0), ("answered", 0, 0), ("pending", 0, 1)],
+            [tuple(row) for row in kinds],
+            "the three cases stand on the item",
+        )
+        t2 = self.work_item_id(self.t2)
+
+        def owners() -> list[str]:
+            return [
+                str(row[0])
+                for row in self.conn.execute(
+                    "SELECT r.work_item_id FROM work_item_requests r WHERE "
+                    + questions.OWNER_QUESTION
+                )
+            ]
+
+        self.assertEqual([], owners())
+        self.assertEqual([], questions.open_rows(self.conn))
+        self.assertEqual(frozenset(), questions.asked(self.conn, items=[t2]))
+        card = tools.OPS["get_work_item"](self.conn, {"id": self.t2})
+        assert isinstance(card, dict)
+        self.assertNotIn("question", card["withheld"], "the queue holds nothing up for them")
+        # An open question to the owner is one, by the same condition and every reader.
+        with self.acting(A, A1):
+            requests.create(self.conn, self.t2, kind="question", prompt="And now?", fields=[TEXT])
+        self.assertEqual([t2], owners())
+        self.assertEqual([t2], [str(row["work_item_id"]) for row in questions.open_rows(self.conn)])
+        self.assertEqual(frozenset({t2}), questions.asked(self.conn, items=[t2]))
+        card = tools.OPS["get_work_item"](self.conn, {"id": self.t2})
+        assert isinstance(card, dict)
+        self.assertIn("question", card["withheld"])
+
     def test_the_items_questions_leave_it_out_and_count_the_open_ones(self) -> None:
         with self.acting(A, A1):
             mine = requests.create(
