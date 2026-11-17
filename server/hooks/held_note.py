@@ -9,9 +9,10 @@ open a session with a new id, which holds nothing, and get no note.
 
 Who is told. The orchestrator, a hook input without `agent_id`, is told what its
 session holds, its agents' holds with it; a subagent only what its own label
-holds. The note tells the held items alone: `compose` can also set a line of
-holds lost and a line of requests waiting for an answer after them, but nothing
-in this build reads either, so `note` passes neither.
+holds. After the held items a line names the items the recipient lost to the
+lease expiry since its last call (`planning.held.lost_since_last_call`), a
+subagent only its own. `compose` can also set a line of requests waiting for an
+answer, but nothing in this build reads them, so `note` passes none.
 
 Where. Each item's first project root, the one a launch from it takes, stands
 relative to the folder the session runs in, and not at all when it is that
@@ -98,13 +99,18 @@ def answer(payload: dict, environ: Mapping[str, str] | None = None) -> bytes | N
 def note(
     conn: sqlite3.Connection, session: str, agent: str | None = None, *, cwd: str | None = None
 ) -> str | None:
-    """The note for `session`, or one `agent` of it, run in `cwd`; None when it holds nothing."""
+    """The note for `session`, or one `agent` of it, run in `cwd`; None when it has nothing to tell."""
 
     from ..planning import held
 
-    # No reader of the holds lost since a call, or of the requests addressed to
-    # a session, exists in this build: the note is given none.
-    return compose(held.held_for_note(conn, session, agent), agent=agent is not None, cwd=cwd)
+    # No reader of the requests addressed to a session exists in this build: the
+    # note is given none.
+    return compose(
+        held.held_for_note(conn, session, agent),
+        agent=agent is not None,
+        cwd=cwd,
+        lost=held.lost_since_last_call(conn, session, agent),
+    )
 
 
 def compose(

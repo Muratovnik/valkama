@@ -442,6 +442,11 @@ class PropertyTests(unittest.TestCase):
             condition = item["next_condition"]
             self.check_cut(following.group(3), condition["text"], 72)
             self.assertEqual(condition["flagged"], following.group(4) is not None)
+        # The steps a previous holder ticked are counted apart, as steps to confirm.
+        confirm = re.search(r"(?:\. |; )(\d+\+?) to confirm[.;]", line)
+        self.assertEqual(bool(item["to_confirm"]), confirm is not None, line)
+        if confirm is not None:
+            self.assertEqual(cap(item["to_confirm"]), confirm.group(1))
         return None if root is None else root.group(1)
 
     def check_root(self, shown: str | None, roots: list[dict], where: str) -> None:
@@ -649,6 +654,34 @@ class RecipientTests(unittest.TestCase):
         items = held.held_for_note(self.conn, SESSION)
         to_session = str(held_note.compose(items, agent=False, lost=["NT-90"], waiting=["NT-91"]))
         self.assertIn("Waiting for your answer: NT-91.", to_session)
+
+    def test_each_recipient_is_told_its_own_losses(self) -> None:
+        mine = self.item("The session's own")
+        self.claim(SESSION, mine)
+        agents_own = self.item("The subagent's")
+        self.claim(SESSION, agents_own, thread=CHILD)
+        theirs = self.item("Another session's")
+        self.claim(OTHER, theirs)
+        for session in (SESSION, OTHER):
+            self.conn.execute(
+                "UPDATE sessions SET status = 'ended',"
+                " ended_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-13 hours') WHERE id = ?",
+                (session,),
+            )
+        self.assertEqual(3, service.expire_leases(self.conn))
+        self.conn.commit()
+
+        def lost(text: str | None) -> str:
+            assert text is not None
+            return text.splitlines()[1]
+
+        self.assertEqual(f"No longer held by you: {agents_own}.", lost(self.told(SESSION, CHILD)))
+        self.assertEqual(
+            f"No longer held by you: {agents_own} and {mine}.", lost(self.told(SESSION))
+        )
+        self.assertEqual(f"No longer held by you: {theirs}.", lost(self.told(OTHER)))
+        self.assertIsNone(self.told(SESSION, SIBLING))
+        self.assertIsNone(self.told(STRANGER))
 
     def test_the_note_reads_the_store_without_writing_it(self) -> None:
         reference = self.item("Held", ("one", "two"))
