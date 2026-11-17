@@ -6,9 +6,11 @@ import tempfile
 import unittest
 from unittest import mock
 
-from server import store
+from server import mcp_surface, store
+from server.planning import api as planning_api
 from server.planning import calls, model, service, views
 from server.planning import store as planning_store
+from tests.planning_fixtures import standing_in
 
 #: Accepted work, in the ready state the take-next queue gives work from.
 READY = {"state": "ready", "acceptance": "assignment"}
@@ -301,6 +303,94 @@ class PlanningDomainTests(unittest.TestCase):
         self.assertEqual(["blocker"], forced["overridden"])
         actions = [event["action"] for event in forced["events"]]
         self.assertEqual(["created", "accepted", "transitioned", "overridden"], actions)
+
+    def test_a_blocks_link_leaves_the_blocked_state_to_a_stated_reason(self) -> None:
+        # Blocked is set by hand for a cause outside Valkama; work that waits on an
+        # item is linked and stays where it is.
+        waiting = self.item("Waits on another", **READY)
+        first = self.item("Comes first", **READY)
+        service.link_work_items(self.conn, first["reference"], waiting["reference"], "blocks")
+        for reason in ("", "   "):
+            with self.subTest(reason=reason):
+                with self.assertRaises(model.WorkflowGuardError) as refusal:
+                    service.transition_work_item(
+                        self.conn, waiting["reference"], "blocked", reason=reason
+                    )
+                self.assertEqual(
+                    f"[blocker] {waiting['reference']} needs a stated reason to be blocked:"
+                    " blocking by hand is for a cause outside Valkama; an item that waits on"
+                    " another is linked blocks and stays where it is",
+                    str(refusal.exception),
+                )
+                stands = service.get_work_item(self.conn, waiting["reference"])
+                self.assertEqual("ready", stands["state"]["category"])
+
+        blocked = service.transition_work_item(
+            self.conn, waiting["reference"], "blocked", reason="the vendor ships the fix first"
+        )
+        self.assertEqual("blocked", blocked["state"]["category"])
+        self.assertEqual([], blocked.get("overridden", []))
+
+    def test_a_new_item_is_never_created_in_review_blocked_or_a_closed_state(self) -> None:
+        # Entering those asks for what a creation does not carry, so it is refused
+        # unforced to agent and person alike, and nothing is spent.
+        def counts() -> tuple[int, int]:
+            return (
+                int(self.conn.execute("SELECT COUNT(*) FROM work_items").fetchone()[0]),
+                int(
+                    self.conn.execute(
+                        "SELECT next_number FROM planning_spaces WHERE key = ?",
+                        (self.space["key"],),
+                    ).fetchone()[0]
+                ),
+            )
+
+        def create(who: str, **payload: object) -> dict:
+            arguments = {"space": self.space["key"], "title": f"Filed by {who}", **payload}
+            if who == "agent":
+                answer = mcp_surface.call_tool(
+                    self.conn, "create_work_item", arguments, meta={"sessionId": "s-agent"}
+                )
+            else:
+                with calls.bind(calls.browser(), "/api/planning/work-items"):
+                    found = planning_api.handle_post(
+                        self.conn, "/api/planning/work-items", arguments
+                    )
+                assert found is not None
+                answer = found[1]
+            assert isinstance(answer, dict)
+            return answer
+
+        workflow = service.get_planning_space(self.conn, self.space["key"])["workflow"]
+        names = {state["key"]: state["name"] for state in workflow["states"]}
+        for who in ("agent", "person"):
+            for state in ("review", "blocked", "done", "cancelled"):
+                with self.subTest(who=who, state=state):
+                    before = counts()
+                    with self.assertRaises(model.WorkflowGuardError) as refusal:
+                        create(who, state=state, acceptance="assignment")
+                    status, body = planning_api.error_response(refusal.exception)
+                    shown = names[state]
+                    self.assertEqual(
+                        (
+                            409,
+                            "workflow_guard",
+                            f"[new_item] the new item cannot be created in {shown}: create"
+                            " it, then move it there with transition, which carries what that"
+                            " move needs (to_check, reason, summary)",
+                        ),
+                        (status, body["error"]["code"], body["error"]["message"]),
+                    )
+                    self.assertEqual(before, counts())
+            for payload, category in (
+                ({"state": "triage"}, "triage"),
+                ({"state": "ready", "acceptance": "assignment"}, "ready"),
+                ({"acceptance": "assignment", "claim": True}, "active"),
+            ):
+                with self.subTest(who=who, created=category):
+                    created = create(who, **payload)
+                    stands = service.get_work_item(self.conn, str(created["reference"]))
+                    self.assertEqual(category, stands["state"]["category"])
 
     # -- claims and revisions ------------------------------------------------
 
@@ -822,13 +912,7 @@ class PlanningDomainTests(unittest.TestCase):
         done_blocker = self.item("Finished")
         cancelled_blocker = self.item("Not needed")
         other_space = service.create_planning_space(self.conn, name="Other Space", key="OTH")
-        foreign = service.create_work_item(
-            self.conn,
-            space=other_space["key"],
-            title="Elsewhere",
-            state="review",
-            acceptance="assignment",
-        )
+        foreign = standing_in(self.conn, "review", space=other_space["key"], title="Elsewhere")
         for blocker in (open_blocker, done_blocker, cancelled_blocker, foreign):
             service.link_work_items(self.conn, blocker["reference"], blocked["reference"], "blocks")
         self.close(done_blocker["reference"], "done")
@@ -910,13 +994,7 @@ class PlanningDomainTests(unittest.TestCase):
 
         blocked = self.item("Blocked from elsewhere", **READY)
         other_space = service.create_planning_space(self.conn, name="Other Space", key="OTH")
-        foreign = service.create_work_item(
-            self.conn,
-            space=other_space["key"],
-            title="Elsewhere",
-            state="review",
-            acceptance="assignment",
-        )
+        foreign = standing_in(self.conn, "review", space=other_space["key"], title="Elsewhere")
         service.link_work_items(self.conn, foreign["reference"], blocked["reference"], "blocks")
         service.link_work_items(self.conn, foreign["reference"], blocked["reference"], "relates-to")
 

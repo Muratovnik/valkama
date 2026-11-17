@@ -21,8 +21,15 @@ Finding = tuple[str, str]
 
 #: The guards `force` does not carry: past them the store would hold what the work
 #: model has no place for — a container at work, accepted work with no basis, a
-#: task at work with nobody holding it, or a deferral with no condition to end it.
-UNFORCED = frozenset({"goal_or_stage", "container_state", "deferred", "acceptance", "executor"})
+#: task at work with nobody holding it, a deferral with no condition to end it, or
+#: a new item standing where only a move with its reason or summary leads.
+UNFORCED = frozenset(
+    {"goal_or_stage", "container_state", "deferred", "acceptance", "executor", "new_item"}
+)
+
+#: Where a new item is never created: the move there carries what entering asks for
+#: — what the owner is to check, the reason, the summary — and a creation has none.
+MOVED_INTO_ONLY = ("review", "blocked", "completed", "cancelled")
 
 
 def refuse(refusals: list[Finding], force: bool) -> None:
@@ -46,13 +53,24 @@ def placement(
 
     `current` is None for an item being created. `basis` is the acceptance the item
     has or the write gives it. These refusals hold however the item gets there —
-    created, moved or started by a claim — and none of them is forced.
+    created, moved or started by a claim — and none of them is forced. A new item
+    asked to stand in review, blocked or a closed state is refused that alone: the
+    move it is told to make there meets the rest.
     """
 
     found: list[Finding] = []
     container = item["kind"] == model.CONTAINER_KIND
     category = str(target["category"])
     was = None if current is None else str(current["category"])
+    if was is None and category in MOVED_INTO_ONLY:
+        return [
+            (
+                "new_item",
+                f"{reference} cannot be created in {target['name']}: create it, then move it"
+                " there with transition, which carries what that move needs (to_check,"
+                " reason, summary)",
+            )
+        ]
     if container and category in model.TASK_ONLY_CATEGORIES:
         found.append(
             (
@@ -209,22 +227,17 @@ def findings(
         spoke = person_spoke(conn, item, reference)
         if spoke:
             refusals.append(("person_spoke", spoke))
-    if target["category"] == "blocked" and entering:
-        blocker = conn.execute(
-            "SELECT 1 FROM work_item_links l"
-            " JOIN work_items i ON i.work_item_id = l.from_id"
-            " JOIN workflow_states s ON s.state_id = i.state_id"
-            " WHERE l.to_id = ? AND l.kind = 'blocks' AND s.is_terminal = 0 LIMIT 1",
-            (item["work_item_id"],),
-        ).fetchone()
-        if blocker is None and not reason.strip():
-            refusals.append(
-                (
-                    "blocker",
-                    f"{reference} cannot be blocked without a cause: link the blocking"
-                    " item, or state a reason for an external blocker",
-                )
+    if target["category"] == "blocked" and entering and not reason.strip():
+        # Blocked is set by hand for a cause outside Valkama. Work that waits on
+        # another item is linked `blocks` and stays where it is, showing waits_for.
+        refusals.append(
+            (
+                "blocker",
+                f"{reference} needs a stated reason to be blocked: blocking by hand is for a"
+                " cause outside Valkama; an item that waits on another is linked blocks and"
+                " stays where it is",
             )
+        )
     return refusals, warnings
 
 

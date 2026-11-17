@@ -19,6 +19,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -44,7 +45,7 @@ from server.planning import model as planning_model
 from server.planning import read_model as planning_read_model
 from server.planning import service as planning_service
 from server.planning import tools as planning_tools
-from tests.planning_fixtures import basis_for, bulk_items
+from tests.planning_fixtures import bulk_items, standing_in
 
 SPACE_NAME = "Wire Surface"
 SPACE_KEY = "WIR"
@@ -2343,6 +2344,18 @@ class ServerInstructionTests(unittest.TestCase):
             )
         )
 
+    def test_the_texts_name_no_planning_item_or_anchor_but_their_examples(self) -> None:
+        # What an agent reads is published: an item number or plan anchor of the
+        # project's own planning would be a private trace. MAIN-n and the two
+        # placeholder anchors are the examples the texts teach with.
+        texts = {"instructions": mcp_surface.PLANNING_INSTRUCTIONS}
+        texts.update((tool["name"], json.dumps(tool)) for tool in planning_tools.TOOLS)
+        for name, text in texts.items():
+            with self.subTest(text=name):
+                numbers = set(re.findall(r"\b[A-Z][A-Z0-9]+-\d+\b", text))
+                self.assertEqual(set(), {n for n in numbers if not n.startswith(("MAIN-", "SHA-"))})
+                self.assertLessEqual(set(re.findall(r"kb:[\w-]+", text)), {"kb:xxxx", "kb:a7f3"})
+
     def test_the_text_reads_an_item_by_parts_and_names_no_whole_record(self) -> None:
         # `full` left get_work_item, and a verbose write answers with the card.
         text = mcp_surface.PLANNING_INSTRUCTIONS
@@ -2807,13 +2820,8 @@ class ChainToolTests(WireCallTestCase):
             ("review", "review"),
             ("claimed", "ready"),
         ):
-            self.children[name] = planning_service.create_work_item(
-                self.conn,
-                space=SPACE_KEY,
-                title=name,
-                state=state,
-                parent=self.root,
-                **basis_for(state),
+            self.children[name] = standing_in(
+                self.conn, state, space=SPACE_KEY, title=name, parent=self.root
             )["reference"]
         # A claim starts its item: the active child is the one taken.
         planning_service.claim_work_item(self.conn, self.children["active"], author="worker")
@@ -2826,13 +2834,8 @@ class ChainToolTests(WireCallTestCase):
         )
         # Enough closed children on distinct days for the series to be cut.
         for day in range(1, 33):
-            done = planning_service.create_work_item(
-                self.conn,
-                space=SPACE_KEY,
-                title=f"done {day}",
-                state="done",
-                parent=self.root,
-                acceptance="assignment",
+            done = standing_in(
+                self.conn, "done", space=SPACE_KEY, title=f"done {day}", parent=self.root
             )
             stamp = f"{date(2026, 7, 31) + timedelta(days=day)}T08:00:00Z"
             self.conn.execute(

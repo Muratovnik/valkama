@@ -511,9 +511,17 @@ class ReviewTests(EmitHarness):
         self.settle()
         self.assertEqual([], self.shown)
 
-    def test_an_item_created_in_review_is_review_already(self) -> None:
-        reference = self.item("Filed in review", state="review")
-        self.agent("apply_work_item_changes", id=reference, transition={"state": "review"})
+    def test_a_creation_refused_in_review_is_nothing(self) -> None:
+        # Work reaches review only by a move, which is what a toast tells of.
+        with self.assertRaises(planning_model.WorkflowGuardError) as refusal:
+            self.agent(
+                "create_work_item",
+                space="MAIN",
+                title="Filed in review",
+                state="review",
+                acceptance="assignment",
+            )
+        self.assertIn("[new_item]", str(refusal.exception))
         self.settle()
         self.assertEqual([], self.shown)
 

@@ -671,7 +671,9 @@ def create_work_item(
     an agent's stays in triage unless it names `acceptance`. Accepted work stands
     in ready, and a goal or stage accepted at once stands in the service state:
     `created` names no state for it, and `accepted` and `opened` follow. A named
-    state is held to the refusals a move there meets (`transitions.placement`).
+    state is held to the refusals a move there meets (`transitions.placement`),
+    and review, blocked and the closed states are refused (`new_item`): the move
+    there carries what entering asks for.
     `projects` names the projects a task changes, each `named`
     (`item_projects`); a goal or stage names none. `space` may be left out: the
     item then lies where `item_projects.placement` puts it.

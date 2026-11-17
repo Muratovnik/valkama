@@ -845,9 +845,11 @@ class CreationTests(WriteCase):
         for fields, said in (
             ({"state": "dev"}, "[executor]"),
             ({"state": "deferred"}, "[deferred]"),
-            ({"state": "review"}, "[acceptance]"),
-            ({"kind": "goal", "state": "done"}, "[container_state]"),
-            ({"kind": "goal", "state": "review"}, "[goal_or_stage]"),
+            ({"state": "ready"}, "[acceptance]"),
+            ({"kind": "goal", "state": "dev"}, "[goal_or_stage]"),
+            # Review, blocked and the closed states are reached by a move only.
+            ({"state": "review"}, "[new_item]"),
+            ({"kind": "goal", "state": "done"}, "[new_item]"),
         ):
             with self.subTest(fields=fields):
                 self.refused(lambda fields=fields: self.create(title="Placed", **fields), said)

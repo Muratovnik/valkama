@@ -16,7 +16,7 @@ from unittest import mock
 
 from server import mcp_surface, store
 from server.planning import model, service
-from tests.planning_fixtures import basis_for
+from tests.planning_fixtures import basis_for, standing_in
 
 
 class StateNameTests(unittest.TestCase):
@@ -87,12 +87,15 @@ class StateNameTests(unittest.TestCase):
         # Two review states make `review` an ambiguous category, but it is also
         # a key, and the key is the more specific name.
         self.add_state("qa", "review")
-        created = self.item(state="review")
-        self.assertEqual("review", created["state"]["key"])
+        created = self.item(state="ready")
+        moved = service.transition_work_item(self.conn, created["reference"], "review")
+        self.assertEqual("review", moved["state"]["key"])
 
     def test_a_category_two_states_share_is_refused_naming_both(self) -> None:
         self.add_state("pairing", "active")
-        created = self.item(state="review")
+        created = standing_in(
+            self.conn, "review", space=self.space["key"], title="Name a state", author="tester"
+        )
         with self.assertRaises(model.PlanningError) as refusal:
             service.transition_work_item(
                 self.conn, created["reference"], "active", acceptance="assignment"

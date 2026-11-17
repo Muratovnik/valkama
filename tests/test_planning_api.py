@@ -10,6 +10,7 @@ from server import http_surface, store
 from server.planning import api as planning_api
 from server.planning import exact_api as planning_exact_api
 from server.planning import model, service
+from tests.planning_fixtures import standing_in
 
 
 class PlanningApiTests(unittest.TestCase):
@@ -114,12 +115,8 @@ class PlanningApiTests(unittest.TestCase):
     def test_the_whole_read_model_keeps_queues_and_graph_beyond_the_list_limit(self) -> None:
         for number in range(1000):
             service.create_work_item(self.conn, space="QA", title=f"Triage {number}")
-        review = service.create_work_item(
-            self.conn, space="QA", title="Review me", state="review", acceptance="assignment"
-        )
-        blocked = service.create_work_item(
-            self.conn, space="QA", title="Blocked", state="blocked", acceptance="assignment"
-        )
+        review = standing_in(self.conn, "review", space="QA", title="Review me")
+        blocked = standing_in(self.conn, "blocked", space="QA", title="Blocked")
         assigned = service.create_work_item(
             self.conn, space="QA", title="Assigned", state="ready", acceptance="assignment"
         )
