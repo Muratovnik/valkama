@@ -226,7 +226,8 @@ EVENT_ACTIONS = (
     # it, in the same call: why, as `date 2026-12-01` or `completed MAIN-12`.
     "returned",
     # A task made a goal or stage, or one made a task again, by the call that converted
-    # it: `task -> stage`, then `; leftover MAIN-15` and `; projects dropped: …` when so.
+    # it: `task -> stage`, then `; leftover MAIN-15: 2 steps` and `; projects dropped: …`
+    # when so.
     "converted",
     # A step a checklist edit left out, or the text a step repeated by its id with
     # another text had: that text's first 120 characters.

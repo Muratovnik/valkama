@@ -205,7 +205,7 @@
           },
           {
             "action": "converted",
-            "detail": "bug -> goal; leftover MAIN-24",
+            "detail": "bug -> goal; leftover MAIN-24: 0 steps",
             "author": "agent",
             "at": "2026-01-02T03:04:05Z",
             "identity": {

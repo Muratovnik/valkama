@@ -213,7 +213,7 @@ describe('the server fixtures', () => {
       ['Found', true],
       ['Fix', false],
     ])
-    expect(goal.events.at(-1)?.detail).toMatch(/^bug -> goal; leftover MAIN-\d+$/u)
+    expect(goal.events.at(-1)?.detail).toMatch(/^bug -> goal; leftover MAIN-\d+: 0 steps$/u)
   })
 
   it('carry what a path in a text can come to', () => {
