@@ -300,6 +300,10 @@ force, and the gates hold each:
   committed so a clone serves the built UI with no build step; rebuild it
   whenever `web/src` changes and include it in the next incremental local
   commit after a coherent task-owned green boundary.
+- Test fixtures, comments and titles carry no value from a live store or the
+  owner's own records: no figure, name or id. A case found on live data is
+  rebuilt from made-up values, and its comment says the case, not where it was
+  found.
 - Commit subjects are Conventional Commits with the Angular type set: `build`,
   `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`,
   `test`, an optional lowercase scope, and `!` for a break. A merge commit's
