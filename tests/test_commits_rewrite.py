@@ -177,6 +177,7 @@ class AmendTests(RewriteCase):
         self.attach(t2, self.made("two", session=False))
         self.git("reset", "-q", "--hard", old)
         new = self.amended()
+        records = {path: path.read_bytes() for path in self.place.everywhere()}
         self.assertEqual(self.moved(old, new), self.taken(), "the event is no news")
         self.assertEqual(
             [
@@ -186,8 +187,9 @@ class AmendTests(RewriteCase):
             sorted(self.rewrites()),
         )
         self.assertEqual([], [event for event in self.rewrites() if event[0] == t2])
-        stdout, _ = self.claude(**{"duration_ms": 600_000})
-        self.assertEqual(b"", stdout, "taken again, the record moves nothing")
+        for path, content in records.items():
+            path.write_bytes(content)
+        self.assertEqual("", self.taken(), "taken again, the records move nothing")
         self.assertEqual(2, len(self.rewrites()), "one per card and pair")
 
     def test_an_amend_of_an_unknown_commit_is_the_session_s_commit(self) -> None:
