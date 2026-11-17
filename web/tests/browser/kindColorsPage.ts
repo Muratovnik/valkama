@@ -37,7 +37,9 @@ const held = (number: number, kind: Kind, change: Partial<WorkItemBrief> = {}) =
     number,
     title: `A ${kind} to read`,
     kind,
+    // Workable, so nothing is withheld: the row it copies is withheld as not ready.
     workable: true,
+    withheld: [],
     claim_ref: '',
     claim_state: null,
     ...change,

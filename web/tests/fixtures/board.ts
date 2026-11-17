@@ -49,6 +49,11 @@ export function boardItem(
   state: BoardStateKey = 'backlog',
   overrides: Partial<WorkItemRow> = {},
 ): WorkItemRow {
+  // Workable exactly when nothing is withheld, as the server says it: an override of
+  // one alone takes the other along, so no row reads as both given and withheld.
+  const workable =
+    overrides.workable ??
+    (overrides.withheld ? overrides.withheld.length === 0 : state === 'backlog' || state === 'todo')
   return {
     work_item_id: boardId(n),
     planning_space_id: boardId(800),
@@ -73,8 +78,8 @@ export function boardItem(
     acceptance: null,
     started_at: null,
     waits_for: [],
-    workable: state === 'backlog' || state === 'todo',
-    withheld: state === 'backlog' || state === 'todo' ? [] : ['not_ready'],
+    workable,
+    withheld: workable ? [] : ['not_ready'],
     lapsed_claim: null,
     comment_count: 0,
     queue_order: null,

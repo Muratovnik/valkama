@@ -71,6 +71,8 @@ test.beforeEach(async ({ page }) => {
               started_at: null,
               waits_for: [],
               workable: false,
+              withheld: ['not_ready'],
+              lapsed_claim: null,
               checklist: [],
               revision: 1,
               created_at: new Date().toISOString(),
