@@ -38,6 +38,17 @@ function writtenNames(): Map<string, string[]> {
   return names
 }
 
+/** Where a `transform` puts a shape: its move and its one scale, however the numbers are written. */
+function placement(transform = '') {
+  const moved = /translate\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)\s*\)/u.exec(transform)
+  const scaled = /scale\(\s*(-?[\d.]+)\s*\)/u.exec(transform)
+  return {
+    x: Number(moved?.[1] ?? 0),
+    y: Number(moved?.[2] ?? 0),
+    scale: Number(scaled?.[1] ?? 1),
+  }
+}
+
 describe('a glyph drawn as a plain element', () => {
   it.each<[string, Component]>([
     ['kind-bug', Bug],
@@ -74,10 +85,12 @@ describe('a glyph drawn as a plain element', () => {
 
   // A client's mark is its vendor's filled shapes among outlines: they take the glyph's colour
   // and nothing of the vendor's, and stand in the field a Lucide outline keeps clear.
+  // The field is the 20 units from 2 to 22: a 24-unit mark and a 100-unit one are moved to its
+  // corner and scaled to it, and a mark drawn about the field's middle is only scaled.
   it.each([
-    ['cursor', 1, 'translate(2 2) scale(0.8333)'],
-    ['vscode', 1, 'translate(2 2) scale(0.2)'],
-    ['codex', 3, 'scale(1.2)'],
+    ['cursor', 1, { x: 2, y: 2, scale: 20 / 24 }],
+    ['vscode', 1, { x: 2, y: 2, scale: 20 / 100 }],
+    ['codex', 3, { x: 0, y: 0, scale: 1.2 }],
   ])('draws the %s mark in the glyph colour, placed in the outlines field', (name, count, fit) => {
     const svg = mount({ render: () => iconGlyph(name, { size: 24 }) }).get('svg')
     const shapes = svg.findAll('*')
@@ -87,7 +100,10 @@ describe('a glyph drawn as a plain element', () => {
       expect(shape.attributes('d')).toMatch(/^M-?[.\d]+.{40,}$/su)
       expect(shape.attributes('fill')).toBe('currentColor')
       expect(shape.attributes('stroke')).toBe('none')
-      expect(shape.attributes('transform')).toBe(fit)
+      const placed = placement(shape.attributes('transform'))
+      expect(placed.x, 'x').toBeCloseTo(fit.x, 3)
+      expect(placed.y, 'y').toBeCloseTo(fit.y, 3)
+      expect(placed.scale, 'scale').toBeCloseTo(fit.scale, 3)
     }
     expect(svg.html()).not.toMatch(/#[\da-f]{3,6}\b|rgb\(|url\(|<mask|<filter|gradient/iu)
   })
