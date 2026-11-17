@@ -67,7 +67,7 @@ exception or a silent absence.
 
 ## Module list
 
-The server declares `planning`, `analytics`, `memory`, and `settings` in its
+The server declares `planning`, `analytics`, `decisions`, `memory`, and `settings` in its
 code, and that list is the whole answer: no store row records it and nothing
 changes it at runtime. `GET /api/modules` and the MCP tool `list_platform_modules` return
 each module's manifest inside a registration that keeps the wire's `state`,
@@ -85,6 +85,12 @@ opening with `POST /api/analytics/uses`. All four are described in
 `connection-contract.md`. Improvements, Skills, and standalone Sessions registrations,
 pages, and APIs are retired, as are the flow-metrics Analytics dashboards and
 exports that an earlier build registered under the same id.
+
+`decisions` (Agent decisions) is the destination for the decisions agents took.
+It reads the `planning.decisions` model, served as `GET /api/planning/decisions`,
+at both operating levels: every space at Global, the exact space at Space. It
+has no screen yet, so the shell shows it as an unavailable view until that screen
+arrives.
 
 A store does not record the list. Store schema 9 dropped the
 `platform_modules` rows an earlier build wrote, their audit in
