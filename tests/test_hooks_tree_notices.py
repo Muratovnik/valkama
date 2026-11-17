@@ -60,6 +60,8 @@ AS_B = {"sessionId": B}
 AS_C = {"sessionId": C}
 AS_D = {"sessionId": D}
 AS_E = {"sessionId": E}
+E1 = "0e000000-0000-4000-8000-0000000000e1"
+AS_E1 = {"sessionId": E, "threadId": E1}
 AS_F = {"sessionId": F}
 CREATE = "/api/planning/work-items"
 COMMENT = "/api/planning/work-item/comment"
@@ -365,7 +367,7 @@ class DeferredGoalTests(Harness):
     """G is put off and comes back; everyone working under it hears both once.
 
     A holds `a` under G, a subagent of B holds a step of T1 under S1, C follows G and D holds
-    U under H; E puts G off. Valkama brings it back at the time as its own call: an hour
+    U under H; E, or E's subagent e1, puts G off. Valkama brings it back at the time as its own call: an hour
     on, well inside the quiet period, so every claim under G still holds when it comes.
     """
 
@@ -385,12 +387,66 @@ class DeferredGoalTests(Harness):
         self.agent("claim_work_item", AS_D, id=self.u)
         self.settle(A, B, C, D, E)
 
-    def put_off(self, by_person: bool) -> None:
+    def put_off(self, by_person: bool, meta: object = AS_E) -> None:
         defer = {"until": self.until, "reason": self.WHY}
         if by_person:
             self.person("/api/planning/work-item/apply", id=self.goal, defer=defer)
         else:
-            self.agent("apply_work_item_changes", AS_E, id=self.goal, defer=defer)
+            self.agent("apply_work_item_changes", meta, id=self.goal, defer=defer)
+
+    def bring_back(self) -> None:
+        with mock.patch.object(leases, "utc_now", lambda: self.come):
+            done = sweep.run_pass(self.conn)
+        self.assertEqual({sweep.RETURNS: 1}, done.changed)
+
+    def test_a_subagent_putting_the_goal_off_is_its_coordinators_short_line(self) -> None:
+        """The work under G hears the subagent as another session's agent; its own
+        coordinator hears it as its agent's write, in one line with no quote, and the
+        subagent nothing. Neither works on G, so neither hears it come back."""
+
+        self.put_off(by_person=False, meta=AS_E1)
+        line = (
+            rf"\n- status at \S+ by agent {E1} of session {E}: «deferred: until {self.until}:"
+            rf" {self.WHY}\. {re.escape(person_events.DEFERRED_WORK)}»\n"
+        )
+        for session in (A, B, C):
+            with self.subTest(session=session):
+                self.assertEqual((0, ""), self.watch(session, alive=1.0), "no wake")
+                self.assertRegex(self.hook(session) or "", line)
+                self.assertIsNone(self.hook(session), "once")
+        self.assertIsNone(self.hook(D), "D works under H")
+        self.assertIsNone(self.subagent(E, E1), "the subagent's own write")
+        self.assertIsNone(self.hook(E, "stop"), "its agent's write continues no turn")
+        told = self.hook(E)
+        assert told is not None, "the coordinator hears its agent's write"
+        self.assertIn(f"\n{self.line(self.goal)}\n- status at ", told)
+        self.assertRegex(told, rf"\n- status at \S+ by your agent {E1}\n")
+        self.assertNotIn(self.WHY, told, "no quote: the agent's report carries it")
+        self.assertIsNone(self.hook(E), "once")
+        self.bring_back()
+        back = rf"\n- status at \S+ by Valkama: «triage: returned, date {self.until}»"
+        for session in (A, B, C):
+            with self.subTest(returned=session):
+                self.assertRegex(self.hook(session) or "", back)
+        for session, agent in ((D, None), (E, None), (E, E1)):
+            with self.subTest(after_return=(session, agent)):
+                self.assertIsNone(self.subagent(session, agent))
+
+    def subagent(self, session: str, agent: str | None) -> str | None:
+        """What the hook tells `agent` of `session`, or the session itself without one."""
+
+        payload = (
+            {"session_id": session}
+            if agent is None
+            else {
+                "session_id": session,
+                "agent_id": agent,
+            }
+        )
+        answer = notify.deliver("claude", "post-tool-use", payload, self.environ)
+        if answer is None:
+            return None
+        return str(json.loads(answer)["hookSpecificOutput"]["additionalContext"])
 
     def test_an_agent_putting_the_goal_off_tells_everyone_under_it_once_without_a_wake(
         self,
@@ -410,9 +466,7 @@ class DeferredGoalTests(Harness):
                 self.assertIsNone(self.hook(session), "once")
         self.assertIsNone(self.hook(D), "D works under H")
         self.assertIsNone(self.hook(E), "E's own write")
-        with mock.patch.object(leases, "utc_now", lambda: self.come):
-            done = sweep.run_pass(self.conn)
-        self.assertEqual({sweep.RETURNS: 1}, done.changed)
+        self.bring_back()
         back = rf"\n- status at \S+ by Valkama: «triage: returned, date {self.until}»"
         for session in (A, B, C):
             with self.subTest(returned=session):
