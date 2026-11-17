@@ -160,6 +160,13 @@ from the release the launcher pins, and `launcher install` keeps it in step. It
 edits no client configuration; see
 [`SERVICE.md`](SERVICE.md#install-the-skill).
 
+To have Valkama attach the commits an agent makes to the task it holds, install
+its Git hook too ([details](#the-git-commit-hook)):
+
+```bash
+python valkama.py git-hook install
+```
+
 ### 4. Check that it worked
 
 Restart the client, then ask it to list Planning spaces. In Claude Code:
@@ -255,6 +262,7 @@ python valkama.py <command> [options]
 | `summary [--space KEY]` | a short Planning-space report, meant for session hooks |
 | `released --space KEY --repo PATH --range A..B [--json]` | list the open work items whose attached commits went into a release range, and how each was found: `hash` (the commit is in the range), `patch-id` (the same change arrived under another hash), or one of two weak matches: `changed-patch` (the commit is outside the range and not in the history before it, and a commit in the range has its subject with another patch) and `subject` (the object is gone and the subject recorded for it is that of a commit in the range). Only the commits of the project registered at `--repo` are compared, and those attached with no repository by their hash. A hint to check by hand when closing a release: partly released work shows too, an item with no attached commit cannot, and it changes neither the store nor the repository |
 | `hook CLIENT EVENT` | record one client hook event from stdin without a running server; see [Client hooks](#client-hooks) |
+| `git-hook install\|status\|uninstall [--json] [--launcher-directory DIR]` | install, inspect or remove Valkama's Git commit hook in the global Git configuration; see [The Git commit hook](#the-git-commit-hook) |
 | `runtime` | print this checkout's backend and static identity |
 | `projects list\|add\|update\|remove\|bind\|check\|apply\|doctor\|rollback\|upgrade\|downgrade\|import` | manage the local project inventory and its projection; see [Project registry](#project-registry) |
 | `config [--json]` | every setting, the layer it came from, and the value in use |
@@ -484,9 +492,10 @@ python valkama.py setup
 ```
 
 It reports what this installation has — Python, Git, a verified stable launcher,
-and whether each agent client runs that launcher with its required author and
-UTF-8 environment — and prints the exact command sequence for anything missing
-or stale. It changes nothing until you add `--apply`.
+whether each agent client runs that launcher with its required author and
+UTF-8 environment, and whether [the Git commit hook](#the-git-commit-hook) is
+installed for that launcher — and prints the exact command sequence for anything
+missing or stale. It changes nothing until you add `--apply`.
 
 It never edits `~/.claude.json` or `~/.codex/config.toml`. Both clients own
 their registration through their own CLI, so this reads through `claude mcp get`
@@ -1220,6 +1229,55 @@ again, or were refused by reason, and what share of the usage segments, and of
 their seconds, names the organization they ran for. The fields, the spool format, the session
 rules and the archive's retention are in
 [the client hook contract](docs/hook-contract.md).
+
+## The Git commit hook
+
+Valkama attaches each commit an agent's shell makes to the task that agent's
+session holds. It learns of the commit from Git hooks it keeps in the global Git
+configuration, the file `git config --global` writes:
+
+```
+valkama git-hook install
+valkama git-hook status
+valkama git-hook uninstall
+```
+
+`install` writes three hooks, `valkama-commit` for `post-commit`,
+`valkama-rewrite` for `post-rewrite` and `valkama-merge` for `post-merge`, each
+as `hook.<name>.command` and `hook.<name>.event`. It needs the stable launcher
+and refuses without it: each command runs the launcher's shim on the
+interpreter its manifest records, so the hooks follow the pinned release.
+`launcher install` rewrites the command of each hook that is there; if that
+fails, its answer names the failure in `git_hook_error` and the launcher stays
+installed. Nothing else in the file is read for a decision or changed: not
+`core.hooksPath`, not the hook directory, not another program's hooks.
+`uninstall` removes the three sections whole, which leaves the file as it was
+before the install when nothing else changed it. Remove the hooks before
+`launcher uninstall`, or they keep running a shim that is gone.
+
+Git runs these hooks in addition to the hook directory's scripts. Each command
+first checks that the environment names a Claude Code or Codex session, so a
+commit made outside one — yours, a build's — ends in the shell Git started and
+never starts Python. Inside a session, a commit to a repository registered in
+the [project registry](#project-registry) leaves one small JSON record: the
+repository and its project, each commit's hash, parents, subject and time, the
+old and new hashes of an amend or a rebase, and the client's session ids;
+never a file's content or a diff. The record goes to `commits/` beside the
+store, or to `valkama/commits/` in the repository's Git directory when the
+store's directory takes no file. The client's next hook takes it into the store
+and deletes it; a record no hook took for an hour is taken by the planning
+sweep. The hook prints nothing and always exits 0. To switch one hook off in
+one repository: `git config hook.valkama-commit.enabled false`.
+
+`status` reads each hook as `installed`, `missing`, `stale` (a command or event
+other than the current launcher's), `disabled` (`hook.<name>.enabled` is false
+in the global file) or `unsupported` (Git does not list it in `git hook list`:
+this Git runs no hooks from its configuration), and counts the records waiting
+with the directories they wait in; `--json` gives the fields `global_file`,
+`hooks`, `records` and `record_directories`. `doctor` reports the hooks and the
+records that waited for over an hour or were set aside in `commits/rejected/`,
+and `setup` offers the install. Which task a commit goes to, and what the agent
+is told, is in [the client hook contract](docs/hook-contract.md#commits).
 
 ## The desktop app and the tray
 
