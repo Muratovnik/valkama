@@ -255,7 +255,9 @@ onUnmounted(release)
  * The keyboard equivalent is Escape. A press leaves focus in the surface until it closes,
  * for the keys that read it. At 42% of a near-black it dimmed the canvas by about a step of
  * the grey ramp, which is the distance between two ordinary surfaces, so a dialog looked
- * like one more panel: it has to read as out of reach, not merely tinted.
+ * like one more panel: it has to read as out of reach, not merely tinted. It carries
+ * `data-overlay-scrim`, so whatever asks where a press lands names it by what it is rather
+ * than by the classes it is drawn with.
  *
  * Every host keeps its scrim for as long as it stands, covered or not, so each layer dims
  * what is under it and a layer arriving or leaving only moves that by its own fade. Only the
@@ -297,6 +299,7 @@ onUnmounted(release)
         <div
           v-if="interactive"
           class="overlay-scrim"
+          data-overlay-scrim
           @click="pressOnScrim"
           @mousedown.prevent
         />

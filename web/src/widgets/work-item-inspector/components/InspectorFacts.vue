@@ -33,6 +33,10 @@
  * space: the states the item may move to and its parent's reference. Until then the state is
  * the menu it will be, naming only where the item is, and the parent's row stands with its
  * label and no value, so neither moves anything when the space answers.
+ *
+ * Each row says which fact it is in `data-fact`: the facet's id, or `subscribers` for the
+ * sessions that follow the item. A reader of the rows finds them by what they are, not by
+ * how they are drawn.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -280,6 +284,7 @@ defineExpose({ actionCell })
       <div
         v-if="facet === 'state'"
         class="card-row card-facts"
+        data-fact="state"
       >
         <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.state') }}</span>
         <div class="card-row-value">
@@ -337,6 +342,7 @@ defineExpose({ actionCell })
       <div
         v-else-if="facet === 'priority'"
         class="card-row"
+        data-fact="priority"
       >
         <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.priority') }}</span>
         <div class="card-row-value">
@@ -377,6 +383,7 @@ defineExpose({ actionCell })
       <div
         v-else-if="facet === 'labels' && labelsShown"
         class="card-row"
+        data-fact="labels"
       >
         <span class="card-row-label">{{ t('workItem.labels') }}</span>
         <div class="card-row-value">
@@ -390,7 +397,10 @@ defineExpose({ actionCell })
         </div>
       </div>
       <template v-else-if="facet === 'holder'">
-        <div class="card-row card-holder">
+        <div
+          class="card-row card-holder"
+          data-fact="holder"
+        >
           <span class="card-row-label card-holder-label">{{ holderLabel }}</span>
           <div class="card-row-value card-holder-value">
             <!-- A session's link says the holder in its own hint; a bare name carries it here. -->
@@ -444,6 +454,7 @@ defineExpose({ actionCell })
         <div
           v-if="followers.length"
           class="card-row card-subscribers"
+          data-fact="subscribers"
         >
           <span class="card-row-label">{{ t('workItem.head.subscribers') }}</span>
           <p class="card-row-value card-subscriber-list">
@@ -465,6 +476,7 @@ defineExpose({ actionCell })
       <div
         v-else-if="facet === 'parent' && parentRow"
         class="card-row"
+        data-fact="parent"
       >
         <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.parent') }}</span>
         <div class="card-row-value">

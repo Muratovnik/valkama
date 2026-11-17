@@ -18,7 +18,8 @@
  * the same glyph at the same size, held still, with what it means — at work, asking
  * a person in the middle of a turn, waiting with the turn over, holding the item
  * while at work on others, silent for over a day. The card's own word is short, and
- * «спрашивает» and «ждёт» are two waits a reader has to tell apart.
+ * «спрашивает» and «ждёт» are two waits a reader has to tell apart. Each sign's entry says
+ * which sign it names in `data-sign`.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
