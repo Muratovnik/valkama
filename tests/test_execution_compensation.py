@@ -348,7 +348,7 @@ class LaunchCompensationTests(unittest.TestCase):
         self.assertFalse(os.path.exists(second_runtime))
         self.assertEqual([], lifecycle.reap_launches(self.conn))
 
-    def test_old_delivery_cannot_move_a_newer_running_attempt_to_review(self) -> None:
+    def test_an_old_delivery_does_not_end_a_newer_running_attempt(self) -> None:
         class Process:
             pid = 42
             stdout = None
@@ -412,9 +412,8 @@ class LaunchCompensationTests(unittest.TestCase):
             [second["execution_id"]],
             [item["execution_id"] for item in lifecycle.reap_launches(self.conn)],
         )
-        self.assertEqual(
-            "review", planning.get_work_item(self.conn, self.reference)["state"]["key"]
-        )
+        # The newer attempt ends on its own delivery, which moves nothing either.
+        self.assertEqual("dev", planning.get_work_item(self.conn, self.reference)["state"]["key"])
         self.assertEqual([], lifecycle.reap_launches(self.conn))
 
 

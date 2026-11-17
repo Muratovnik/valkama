@@ -30,6 +30,8 @@ UPDATE = "/api/planning/work-item/update"
 COMMENT = "/api/planning/work-item/comment"
 QUESTION = {"kind": "question", "prompt": "Which path?", "fields": FIELDS}
 SUMMARY = {"done": "The change", "next": "Nothing"}
+#: A move into review: it asks the owner what to check.
+REVIEW = {"state": "review", "to_check": "The path chosen"}
 
 
 class BatchCase(ThreadTestCase):
@@ -475,14 +477,14 @@ class AskingAndClosingTests(BatchCase):
         self.assertEqual(before, self.untouched())
 
     def test_a_batch_that_asks_and_completes_is_refused_and_writes_nothing(self) -> None:
-        # Which refusal meets an agent here is the guard on a close over an open
-        # question to the owner; whichever it is, nothing of the batch stands.
+        # An agent meets the guard on a close over an open question to the owner first,
+        # the question its own batch asked included, and nothing of the batch stands.
         before = self.untouched()
-        with self.assertRaises((model.PlanningError, api.PlanningHttpError)):
-            mcp_surface.run_tool_call(
-                self.conn, BATCH, {"id": self.ref, **self.closing("done")}, meta=AGENT
-            )
-        self.conn.commit()
+        error = self.refused_batch(**self.closing("done"))
+        self.assertEqual(
+            ("workflow_guard", {"group": "transition", "index": 0}), (error["code"], error["step"])
+        )
+        self.assertIn("[question]", error["message"])
         self.assertEqual(before, self.untouched())
 
     def test_a_person_who_asks_and_closes_in_one_write_is_refused_the_same(self) -> None:
@@ -508,12 +510,12 @@ class AskingAndClosingTests(BatchCase):
     def test_force_does_not_carry_it_through(self) -> None:
         # force overrides a guard; here there is nothing to override, only a question to lose.
         before = self.untouched()
-        error = self.refused_batch(**self.closing("done", force=True))
+        error = self.refused_batch(**self.closing("cancelled", force=True))
         self.assertEqual("invalid_request", error["code"])
         self.assertEqual(before, self.untouched())
 
     def test_a_batch_that_asks_and_moves_to_review_keeps_the_question_open(self) -> None:
-        answer = self.apply(claim=True, questions=[QUESTION], transition={"state": "review"})
+        answer = self.apply(claim=True, questions=[QUESTION], summary=SUMMARY, transition=REVIEW)
         self.assertEqual("review", answer["state"]["key"])
         [asked] = answer["applied"]["questions"]
         self.assertEqual(
@@ -522,9 +524,14 @@ class AskingAndClosingTests(BatchCase):
 
     def test_a_close_with_no_question_in_it_stands_as_the_single_transition_does(self) -> None:
         # Only a question this very call asks is lost unseen: one asked before has
-        # had its chance, and the close ends it, saying the item was done.
+        # had its chance, and the person's close ends it, saying the item was done. An
+        # agent's close waits for the owner's answer instead (the question guard).
         asked = self.question()
-        answer = self.apply(claim=True, summary=SUMMARY, transition={"state": "done"})
+        path = "/api/planning/work-item/apply"
+        with calls.bind(calls.browser(), path):
+            payload = {"id": self.ref, "summary": SUMMARY, "transition": {"state": "done"}}
+            answer = api.handle_post(self.conn, path, payload)[1]  # type: ignore[index]
+        self.conn.commit()
         self.assertEqual("done", answer["state"]["key"])
         closed = self.agent("get_work_item_request", id=asked)
         self.assertEqual(
@@ -743,7 +750,7 @@ class OrderTests(BatchCase):
 
         answer = self.apply(
             author="one",
-            transition={"state": "review"},
+            transition=REVIEW,
             summary=SUMMARY,
             questions=[QUESTION],
             resolutions=[{"comment_id": root, "resolution": "Settled"}],
@@ -751,7 +758,7 @@ class OrderTests(BatchCase):
             links=[{"other": other, "kind": "relates-to"}],
             refs=[{"kind": "commit", "value": "abc1234"}],
             checklist_ticks=[{"item_id": step}],
-            checklist={"items": ["one", "two"]},
+            checklist={"items": ["one", {"text": "two", "done": True}]},
             update={"title": "Renamed"},
             claim=True,
         )
@@ -763,12 +770,15 @@ class OrderTests(BatchCase):
                 "transitioned",
                 "checklist_replaced",
                 "checklist_completed",
+                "checklist_completed",
                 "linked",
                 "comment_resolved",
                 "request_created",
                 "summarized",
                 "transitioned",
                 "released",
+                # The question the move into review asks, after the move.
+                "request_created",
             ],
             self.actions()[recorded:],
         )
@@ -781,8 +791,11 @@ class OrderTests(BatchCase):
         self.assertEqual(
             comments, [entry["comment_id"] for entry in applied["comments"]], "every new comment"
         )
+        review = applied["transition"]["review_request_id"]
         [request] = [
-            event["detail"] for event in record["events"] if event["action"] == "request_created"
+            event["detail"]
+            for event in record["events"]
+            if event["action"] == "request_created" and event["detail"] != review
         ]
         self.assertEqual([{"request_id": request, "revision": 0}], applied["questions"])
         self.assertEqual(
@@ -852,7 +865,7 @@ class AllOrNothingTests(BatchCase):
         return {
             "claim": True,
             "update": {"title": "Renamed"},
-            "checklist": {"items": ["one", "two"]},
+            "checklist": {"items": ["one", {"text": "two", "done": True}]},
             "checklist_ticks": [{"item_id": self.step}],
             "refs": [{"kind": "commit", "value": "abc1234"}],
             "links": [{"other": self.other, "kind": "relates-to"}],
@@ -860,7 +873,7 @@ class AllOrNothingTests(BatchCase):
             "resolutions": [{"comment_id": self.root, "resolution": "Settled"}],
             "questions": [QUESTION, QUESTION, QUESTION],
             "summary": SUMMARY,
-            "transition": {"state": "review"},
+            "transition": REVIEW,
             **wrong,
         }
 

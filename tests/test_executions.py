@@ -19,6 +19,7 @@ import sys
 import tempfile
 import time
 import unittest
+from datetime import timedelta
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,6 +31,7 @@ from server.executions import artifacts
 from server.executions import lifecycle as executions
 from server.executions import results as execution_results
 from server.executions import service as execution_service
+from server.planning import leases, sweep
 from server.planning import model as planning_model
 from server.planning import service as planning
 from server.planning import views as planning_views
@@ -105,6 +107,23 @@ class LaunchHarness(unittest.TestCase):
     def packet(self, reference: str, **overrides) -> dict:
         return {"work_item": reference, "client": "claude", "repo": self.repo, **overrides}
 
+    def deliver(self, reference: str) -> None:
+        """The structured result of an attempt that delivered what it was asked."""
+
+        runner.RUNNER._running[reference].capture.append(
+            json.dumps(
+                {
+                    "structured_output": {
+                        "outcome": "complete",
+                        "expected_effect": "change_required",
+                        "delivery": "owned change",
+                        "oracle": "focused tests passed",
+                        "unresolved": "none",
+                    }
+                }
+            )
+        )
+
 
 class LaunchLifecycleTests(LaunchHarness):
     """Launching is a store operation first: nothing may be handed out twice."""
@@ -168,28 +187,52 @@ class LaunchLifecycleTests(LaunchHarness):
         row = sessions.session_context(self.conn, started["client_session_id"])
         self.assertEqual("ended", row["status"])
 
-    def test_a_finished_launch_moves_its_item_to_review(self) -> None:
+    def test_a_finished_launch_leaves_its_item_where_its_agent_left_it(self) -> None:
+        # Work enters review only with what the owner is to check, which the agent
+        # that did it asks: the launch's end moves nothing and says so in its note.
         reference = self.item("finish me")
         executions.launch_work_item(self.conn, self.packet(reference))
-        runner.RUNNER._running[reference].capture.append(
-            json.dumps(
-                {
-                    "structured_output": {
-                        "outcome": "complete",
-                        "expected_effect": "change_required",
-                        "delivery": "owned change",
-                        "oracle": "focused tests passed",
-                        "unresolved": "none",
-                    }
-                }
-            )
+        prompt = " ".join(self.spawned[0][0])
+        self.assertIn(
+            "When the work is done, move the item to review with to_check, what the owner is"
+            " to check: the launch does not move it.",
+            prompt,
+            "the result contract tells the agent",
         )
+        self.deliver(reference)
         self.processes[0].code = 0
         ended = executions.reap_launches(self.conn)
         self.assertEqual([reference], [item["reference"] for item in ended])
+        self.assertEqual([], [key for key in ended[0] if "review" in key], "no move is reported")
         detail = planning.get_work_item(self.conn, reference)
-        self.assertEqual("review", detail["state"]["key"])
+        self.assertEqual("dev", detail["state"]["key"])
         self.assertIn("outcome=complete", detail["comments"][-1]["body"])
+        self.assertEqual("runner", detail["comments"][-1]["author"])
+
+    def test_a_task_its_launch_left_at_work_goes_back_to_ready_when_its_claim_lapses(
+        self,
+    ) -> None:
+        reference = self.item("left at work")
+        executions.launch_work_item(self.conn, self.packet(reference))
+        started = planning.get_work_item(self.conn, reference)["started_at"]
+        self.assertIsNotNone(started)
+        self.deliver(reference)
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        self.conn.commit()
+        ended = leases.utc_now()
+        # The launch's claim is its own, proved by no session: it lapses with the item's
+        # silence, not with the session the launch ran.
+        for after, state in (
+            (leases.ENDED_GRACE + timedelta(minutes=1), "dev"),
+            (leases.QUIET_PERIOD + timedelta(minutes=1), "ready"),
+        ):
+            with mock.patch.object(leases, "utc_now", return_value=ended + after):
+                sweep.run_pass(self.conn)
+            detail = planning.get_work_item(self.conn, reference)
+            self.assertEqual(state, detail["state"]["key"], after)
+        self.assertEqual("", detail["claim_ref"])
+        self.assertEqual(started, detail["started_at"], "it stays started")
 
     def test_zero_exit_without_structured_delivery_does_not_advance(self) -> None:
         reference = self.item("empty success")
@@ -545,9 +588,9 @@ class ReapLoopTests(unittest.TestCase):
     """The loop that owes every later cycle must survive one that failed.
 
     It runs as a bare daemon thread with no supervisor, and it owns three
-    things: reaping, the move to review a finished launch earns, and every
-    change notification an open stream is waiting on. One uncaught exception
-    used to end all three for the life of the process.
+    things: reaping, the alert a failed launch owes, and every change
+    notification an open stream is waiting on. One uncaught exception used to
+    end all three for the life of the process.
     """
 
     def test_a_raising_reap_is_reported_and_the_loop_keeps_publishing(self) -> None:
@@ -576,7 +619,7 @@ class ReapLoopTests(unittest.TestCase):
 class ReaperPassTests(LaunchHarness):
     """The pass the listener's loop makes, not only the verb beneath it."""
 
-    def test_a_pass_records_the_ending_and_moves_the_item_to_review(self) -> None:
+    def test_a_pass_records_the_ending_and_leaves_the_item_at_work(self) -> None:
         reference = self.item("finish me")
         executions.launch_work_item(self.conn, self.packet(reference))
         runner.RUNNER._running[reference].capture.append(
@@ -599,7 +642,7 @@ class ReaperPassTests(LaunchHarness):
         self.assertEqual("", reported.getvalue(), "the ending recorded without a complaint")
         self.assertEqual([reference], [item["reference"] for item in ended])
         detail = planning.get_work_item(self.conn, reference)
-        self.assertEqual("review", detail["state"]["key"])
+        self.assertEqual("dev", detail["state"]["key"])
         self.assertIn("outcome=complete", detail["comments"][-1]["body"])
         self.assertFalse(self.conn.in_transaction)
 
@@ -1040,7 +1083,7 @@ with open(os.path.join(os.getcwd(), "delivered.txt"), "w", encoding="utf-8") as 
 
         runner.RUNNER = runner.Runner(spawn=spawn)
 
-    def test_a_delivered_attempt_moves_the_item_to_review_with_its_evidence(self) -> None:
+    def test_a_delivered_attempt_records_its_evidence_and_leaves_the_item_at_work(self) -> None:
         completed = processes.run_text(["git", "-C", self.repo, "init", "-b", "main"])
         if completed.returncode != 0:
             raise unittest.SkipTest("git is unavailable here")
@@ -1089,7 +1132,7 @@ with open(os.path.join(os.getcwd(), "delivered.txt"), "w", encoding="utf-8") as 
         self.assertEqual("high", answer["argv"][answer["argv"].index("--effort") + 1])
 
         item = planning.get_work_item(self.conn, reference)
-        self.assertEqual("review", item["state"]["key"], "a delivery moves the work on")
+        self.assertEqual("dev", item["state"]["key"], "the agent moves the work on, not the end")
         attempt = execution_service.executions_for_work_item(self.conn, str(item["work_item_id"]))[
             0
         ]

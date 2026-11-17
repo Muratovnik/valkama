@@ -34,6 +34,10 @@ ROOT = Path(__file__).resolve().parent.parent
 #: Codex proves its session in `_meta`, the shortest door in a test.
 AGENT = {"sessionId": "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"}
 FIELD = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
+#: What a move into review sends besides its state: the closing summary it needs, and
+#: what the owner is to check, which becomes the owner's question on the item.
+SUMMARY = {"done": "the order is set", "next": "nothing"}
+TO_CHECK = "Read the rollout order against the plan."
 LONG = 60.0
 STDIO_META = {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}
 
@@ -117,6 +121,17 @@ class EmitHarness(unittest.TestCase):
         )
         assert isinstance(answer, dict)
         return answer
+
+    def to_review(self, reference: str | None = None, **groups: object) -> object:
+        """An agent's move into review, with what that move needs, and any other groups."""
+
+        return self.agent(
+            "apply_work_item_changes",
+            id=reference or self.ref,
+            summary=SUMMARY,
+            transition={"state": "review", "to_check": TO_CHECK},
+            **groups,
+        )
 
     def settle(self) -> None:
         """Let the window end and what it held be delivered."""
@@ -331,13 +346,16 @@ class WhoWroteTests(EmitHarness):
         self.settle()
         self.assertEqual([], self.shown)
 
-    def test_a_person_moving_an_item_to_review_raises_nothing(self) -> None:
-        with calls.bind(calls.browser(), "/api/planning/work-item/transition"):
-            api.handle_post(
-                self.conn, "/api/planning/work-item/transition", {"id": self.ref, "state": "review"}
-            )
-            self.conn.commit()
+    def test_a_person_refused_review_raises_nothing(self) -> None:
+        # A person does not ask themselves what to check, so their move into review is
+        # refused, and a refusal is news to nobody.
+        path = "/api/planning/work-item/transition"
+        with calls.bind(calls.browser(), path):
+            with self.assertRaises(planning_model.WorkflowGuardError) as refusal:
+                api.handle_post(self.conn, path, {"id": self.ref, "state": "review"})
+            self.conn.rollback()
             emit.after_write(self.conn)
+        self.assertIn("[review_question]", str(refusal.exception))
         self.settle()
         self.assertEqual([], self.shown)
 
@@ -372,10 +390,10 @@ class CoalescingTests(EmitHarness):
         self.settle()
         self.assertEqual([self.ref, self.ref], [message["tag"] for message in self.shown])
 
-    def test_the_open_question_outranks_a_move_to_review_on_the_same_item(self) -> None:
+    def test_the_open_question_outranks_a_move_into_review_on_the_same_item(self) -> None:
         alert_settings.write(self.conn, {"locale": "en"})
         self.ask()
-        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
+        self.to_review()
         self.settle()
 
         (message,) = self.shown
@@ -409,9 +427,9 @@ class SettingsTests(EmitHarness):
 
     def test_a_review_alert_turned_off_raises_nothing(self) -> None:
         alert_settings.write(self.conn, {"events": {"review": False}})
-        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
+        self.to_review()
         self.settle()
-        self.assertEqual([], self.shown)
+        self.assertEqual([], self.shown, "the question of review raises no question toast")
 
     def test_turned_off_still_takes_a_toast_back(self) -> None:
         answer = self.ask()
@@ -441,7 +459,7 @@ class PresenceTests(EmitHarness):
         self.assertEqual([(self.work_item_id(self.ref), True)], self.asked)
 
     def test_a_review_alert_does_not_count_the_panel_of_questions(self) -> None:
-        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
+        self.to_review()
         self.settle()
         self.assertEqual([(self.work_item_id(self.ref), False)], self.asked)
         self.assertEqual(1, len(self.shown))
@@ -488,23 +506,31 @@ class NoListenerTests(unittest.TestCase):
 
 
 class ReviewTests(EmitHarness):
-    def test_a_move_to_review_is_one_toast(self) -> None:
-        self.agent(
-            "apply_work_item_changes",
-            id=self.ref,
-            transition={"state": "review", "reason": "ready"},
-        )
+    def test_a_move_into_review_is_one_review_toast_and_no_question_toast(self) -> None:
+        # The move asks the owner what to check, and the move is the news.
+        alert_settings.write(self.conn, {"locale": "en"})
+        self.to_review()
         self.settle()
         (message,) = self.shown
         self.assertEqual(self.ref, message["tag"])
+        self.assertIn("ready for review", message["xml"])
+        self.assertNotIn("your answer is needed", message["xml"])
+
+    def test_another_question_in_the_same_batch_is_a_question_toast(self) -> None:
+        alert_settings.write(self.conn, {"locale": "en"})
+        self.to_review(questions=[{"kind": "question", "prompt": "Which?", "fields": [FIELD]}])
+        self.settle()
+        (message,) = self.shown
+        self.assertIn("your answer is needed", message["xml"])
+        self.assertIn(": 2<", message["xml"], "it counts both open questions")
 
     def test_a_move_inside_a_batch_counts(self) -> None:
-        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
+        self.to_review()
         self.settle()
         self.assertEqual([self.ref], [message["tag"] for message in self.shown])
 
     def test_review_to_review_is_nothing(self) -> None:
-        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
+        self.to_review()
         self.settle()
         self.shown.clear()
         self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})

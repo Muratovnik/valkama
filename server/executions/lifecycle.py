@@ -34,15 +34,6 @@ from . import results
 from . import service as execution_service
 from .drivers import capabilities_for
 
-#: An accepted delivery moves to the first state a review happens in. It is not
-#: a terminal state: the work has finished being written, not finished being
-#: checked, and a terminal state needs a summary the runner cannot write.
-_REVIEW_CATEGORY = "review"
-#: A launch runs from a state somebody works inside, so that is the only place a
-#: reaped launch may move an item from. A starting launch reaches it through its
-#: claim, which starts an item that was merely queued.
-_ACTIVE_CATEGORY = "active"
-
 
 def launch_work_item(conn: sqlite3.Connection, payload: dict) -> dict:
     """Start a work item on an agent: claim it, spawn the client, record it.
@@ -295,7 +286,7 @@ def stop_work_item(conn: sqlite3.Connection, reference: str) -> dict:
 
 
 def reap_launches(conn: sqlite3.Connection) -> list[dict]:
-    """Record every launch that ended: session status, a note, and a review move.
+    """Record every launch that ended: its session status and a note on its item.
 
     One launch per pass of the loop, isolated. Every item in `ended` has already
     been handed over by the runner and is gone from its registry, so nothing will
@@ -320,7 +311,6 @@ def _record_ending(conn: sqlite3.Connection, item: dict) -> None:
     result = item["result"]
     reference = str(item["reference"])
     failed = result["outcome"] in results.FAILED_OUTCOMES
-    accepted = result["outcome"] in ("complete", "expected_no_change")
     session_identity = item["client_session_id"] or item["launch_id"]
     op_ingest_session_event(
         conn,
@@ -369,28 +359,13 @@ def _record_ending(conn: sqlite3.Connection, item: dict) -> None:
             ),
         )
         conn.commit()
+    # The ending moves nothing. Work goes to review only with the question of what the
+    # owner is to check, which the agent that did it asks; the result contract tells it
+    # so. A task the agent left at work waits for its lease to lapse, with this note.
     planning_service.comment_work_item(
         conn, reference, _note(item, result, failed), author="runner"
     )
-    conn.commit()  # the transition below starts its own
-    if accepted:
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            # A completed launch may be reaped after a newer launch has already
-            # started on the same item. Its delivery closes its own attempt,
-            # but must not move the newer attempt's active work to review.
-            work_item = planning_service.get_work_item(conn, reference)
-            newer_open = conn.execute(
-                "SELECT 1 FROM executions WHERE work_item_id = ? AND ended_at IS NULL LIMIT 1",
-                (str(work_item["work_item_id"]),),
-            ).fetchone()
-            moved = newer_open is None and _move_to_review(conn, reference)
-            conn.commit()  # finish this attempt before the next session-end ingest
-            if moved:
-                item["moved_to_review"] = True
-        except Exception:
-            conn.rollback()
-            raise
+    conn.commit()  # finish this attempt before the next session-end ingest
 
 
 def _report_ending_failure(conn: sqlite3.Connection, item: dict, failure: BaseException) -> None:
@@ -583,38 +558,6 @@ def _note(item: dict, result: dict, failed: bool) -> str:
     if failed and item["detail"]:
         note += f"\nclient detail: {item['detail']}"
     return note
-
-
-def _move_to_review(conn: sqlite3.Connection, reference: str) -> bool:
-    """Move an item the launch was working on into review, if the workflow allows.
-
-    The state is asked of the workflow by category rather than named, so a space
-    that calls its review state something else still receives the move, and a
-    workflow with no review state at all simply gets none. Whether it moved is the
-    answer: only that move tells the owner anything new.
-    """
-
-    record = planning_service.get_work_item(conn, reference)
-    if record["state"]["category"] != _ACTIVE_CATEGORY:
-        return False
-    target = _first_state(conn, record, _REVIEW_CATEGORY)
-    if target is None:
-        return False
-    try:
-        planning_service.transition_work_item(conn, reference, target, author="runner")
-    except planning_model.WorkflowGuardError:
-        return False  # a guard knows better than the runner does
-    return True
-
-
-def _first_state(conn: sqlite3.Connection, record: dict, category: str) -> str | None:
-    row = conn.execute(
-        "SELECT s.key FROM workflow_states s"
-        " JOIN work_items w ON w.workflow_id = s.workflow_id"
-        " WHERE w.work_item_id = ? AND s.category = ? ORDER BY s.position LIMIT 1",
-        (str(record["work_item_id"]), category),
-    ).fetchone()
-    return str(row[0]) if row is not None else None
 
 
 __all__ = ["launch_work_item", "reap_launches", "stop_work_item"]

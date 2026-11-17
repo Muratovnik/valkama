@@ -122,7 +122,9 @@ def contract_prompt(prompt: str, expected_effect: str, review_mode: str) -> str:
         + f"The packet expected_effect is {expected_effect!r}; repeat it exactly. "
         + "Use complete only when every owned output and required oracle is satisfied; "
         + "use expected_no_change only when the packet permits a no-op and the oracle proves it. "
-        + "A zero exit code alone is not delivery."
+        + "A zero exit code alone is not delivery. "
+        + "When the work is done, move the item to review with to_check, what the owner is"
+        + " to check: the launch does not move it."
         + (
             f" This is {review_mode}; return its typed review_verdict and a "
             "disposition for every finding."

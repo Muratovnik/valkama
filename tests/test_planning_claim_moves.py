@@ -205,14 +205,30 @@ class ClaimStartsWorkTests(ClaimMoveTestCase):
         status, answer = api.handle_post(  # type: ignore[misc]
             self.conn,
             "/api/planning/work-item/apply",
-            {"id": reference, "author": "agent", "claim": True, "transition": {"state": "review"}},
+            {
+                "id": reference,
+                "author": "agent",
+                "claim": True,
+                "summary": {"done": "it", "next": "nothing"},
+                "transition": {"state": "review", "to_check": "it"},
+            },
         )
         self.assertEqual(200, status)
         self.assertEqual({"from": "triage", "to": "dev"}, answer["started"])
         self.assertEqual("review", answer["state"]["key"])
-        # Review takes the holder away in the move that puts the task there.
+        # Review takes the holder away in the move that puts the task there, and asks
+        # the owner what to check.
         self.assertEqual(
-            ["created", "claimed", "accepted", "transitioned", "transitioned", "released"],
+            [
+                "created",
+                "claimed",
+                "accepted",
+                "transitioned",
+                "summarized",
+                "transitioned",
+                "released",
+                "request_created",
+            ],
             [e[0] for e in self.events(reference)],
         )
 
