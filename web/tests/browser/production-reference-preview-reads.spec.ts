@@ -27,6 +27,9 @@ import { test } from './test.ts'
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
+  // A card's delays run on this clock (`cardsAfterTheDelay`, `coolDown`), so a loaded machine
+  // moves no verdict; until a test moves it, it keeps the wall clock's pace.
+  await page.clock.install()
 })
 
 /**
@@ -103,9 +106,8 @@ test('a quick answer never says it is reading; a slow one does, then replaces it
   page,
 }) => {
   // On the wall clock a loaded machine made the quick answer slow, and the card was
-  // right to say it was reading. The page's own time moves here only when the test
-  // moves it, so a quick answer is one that comes before the wait ends.
-  await page.clock.install()
+  // right to say it was reading. The page's own time, installed in `beforeEach`, moves here
+  // only when the test moves it, so a quick answer is one that comes before the wait ends.
   const { dialog, reads } = await openHub(page)
   await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000)
   await page.evaluate(() => {
@@ -199,7 +201,7 @@ for (const [name, answer, words] of [
     await page.mouse.move(5, 5)
     await expect(card(page)).toHaveCount(0)
     reads.answer((route) => route.fulfill(briefAnswer(ITEM)))
-    await coolDown()
+    await coolDown(page)
     await rest(page, reference(dialog, 'MAIN-12'))
     await expect(card(page)).toContainText('Keep the reader in place')
     expect(reads.asked).toHaveLength(2)
@@ -233,7 +235,7 @@ test('every line of the card reads at 4.5:1 on the surface it really floats on',
   for (const name of ['MAIN-12', 'MAIN-13', 'MAIN-14', 'MAIN-15', 'MAIN-16']) {
     await page.mouse.move(5, 5)
     await expect(card(page)).toHaveCount(0)
-    await coolDown()
+    await coolDown(page)
     await rest(page, reference(entry, name))
     await expect(card(page)).toContainText(name)
     // Measured settled: the first frames are still fading in.

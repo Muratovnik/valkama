@@ -17,7 +17,6 @@ import {
   middle,
   openHub,
   openReported,
-  pause,
   reference,
   rest,
   watchOpening,
@@ -26,6 +25,9 @@ import { test } from './test.ts'
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
+  // A card's delays run on this clock (`cardsAfterTheDelay`, `coolDown`), so a loaded machine
+  // moves no verdict; until a test moves it, it keeps the wall clock's pace.
+  await page.clock.install()
 })
 
 /** The button's description in the accessibility tree, as the browser computed it. */
@@ -117,11 +119,26 @@ test('a Tab that scrolls the reference into view keeps the card it opens', async
   const where = () => link.evaluate((element) => element.getBoundingClientRect().top)
   const before = await where()
   expect(before).toBeGreaterThan(900)
+  // The scroll that brings the reference into view ends a frame or two after it moves it; the
+  // card is read once the scroller holding the reference has said so.
+  const landed = link.evaluate(
+    (element) =>
+      new Promise<void>((resolve) => {
+        const ended = (event: Event) => {
+          const { target } = event
+          const scroller = target instanceof Document ? target.documentElement : target
+          if (!(scroller instanceof Node) || !scroller.contains(element)) return
+          if (element.getBoundingClientRect().top >= innerHeight) return
+          removeEventListener('scrollend', ended, true)
+          resolve()
+        }
+        addEventListener('scrollend', ended, true)
+      }),
+  )
   await tabTo(page, link)
   await expect.poll(where).toBeLessThan(900)
+  await landed
   const shown = card(page)
-  // A scroll lands within a frame or two; give it the time and read the card after it.
-  await pause(300)
   await expect(shown).toBeVisible()
   await expect(shown).toContainText('MAIN-12')
   await expect(shown).toBeInViewport()
@@ -247,7 +264,7 @@ test('focus given back to a reference the pointer rests on brings no card; the p
   await expect(finder).toBeVisible()
   await expect(shown).toHaveCount(0)
   // Past the moment the next card would open at once, so what comes is what the rest brings.
-  await coolDown()
+  await coolDown(page)
   const opening = watchOpening(page)
   await page.keyboard.press('Escape')
   await expect(finder).toHaveCount(0)
@@ -302,7 +319,7 @@ test('a focus move that is not a Tab shows no card, under the pointer or not', a
 
   // Dismissed under the pointer, then given focus by a script: still dismissed.
   await page.keyboard.press('Tab')
-  await coolDown()
+  await coolDown(page)
   await rest(page, link)
   await expect(card(page)).toBeVisible()
   await page.keyboard.press('Escape')
