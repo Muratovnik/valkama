@@ -12,11 +12,8 @@ import type { TimedStretch } from '../fixtures/analytics.ts'
 import { quotaAt } from '../fixtures/quota.ts'
 import { serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
-
-/** Wednesday afternoon, five seconds into a minute: the live hour runs from 13:31. */
-export const NOW = new Date(2026, 10, 11, 14, 30, 5)
-export const at = (hour: number, minute: number, second = 0) =>
-  new Date(2026, 10, 11, hour, minute, second)
+import { NOW } from './liveClock.ts'
+export { at, NOW } from './liveClock.ts'
 
 /** The browser double: the work it holds, which a test may change, and every query it was asked. */
 export interface Double {

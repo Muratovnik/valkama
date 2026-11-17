@@ -12,19 +12,10 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record } from './analyticsPage.ts'
-import { at, serveLive } from './liveDouble.ts'
-import { TASKS, worked, WORLD } from './overviewPage.ts'
+import { serveLive } from './liveDouble.ts'
+import { WEEK_AND_HOUR } from './served/analyticsOverviewFit.ts'
 import { test } from './test.ts'
-
-/** The overview's week, and work in the live hour, so every period has a chart. */
-const WEEK_AND_HOUR: TimedStretch[] = [
-  ...WORLD,
-  { ...worked(11, TASKS[0], ['model-a', 'main', 'alpha'], 0.5), at: at(13, 50) },
-  { ...worked(11, TASKS[1], ['model-b', 'subagent', 'alpha'], 0.25), at: at(14, 20) },
-]
-
 /** How far the panel scrolls, how far its content reaches past its visible edge, the field. */
 const panelFit = (page: Page) =>
   page.evaluate(() => {

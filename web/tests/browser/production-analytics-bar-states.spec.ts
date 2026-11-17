@@ -18,23 +18,10 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { task } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record } from './analyticsPage.ts'
-import { at, NOW, serveLive } from './liveDouble.ts'
+import { NOW, serveLive } from './liveDouble.ts'
+import { DAYS } from './served/analyticsBarStates.ts'
 import { test } from './test.ts'
-
-/** Two days of work this week, and some in the live hour. */
-const DAYS: TimedStretch[] = [
-  { at: at(13, 50), group: { work_item: task(1, 'One') }, spend: { seconds: 600 } },
-  { at: new Date(2026, 10, 9, 10), group: { work_item: task(1, 'One') }, spend: { seconds: 3600 } },
-  {
-    at: new Date(2026, 10, 10, 10),
-    group: { work_item: task(2, 'Two') },
-    spend: { seconds: 3600 },
-  },
-]
-
 /** A preset, a live period, and the reader's own span of days. */
 const PERIODS = {
   week: {},

@@ -14,21 +14,11 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { task } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
-import { at, NOW, serveLive } from './liveDouble.ts'
+import { NOW, serveLive } from './liveDouble.ts'
+import { TODAY } from './served/analyticsZoom.ts'
 import { test } from './test.ts'
-
-/** Work today inside the three hours from ten, and around them. */
-const TODAY: TimedStretch[] = [
-  { at: at(7, 30), group: { work_item: task(1, 'Fix') }, spend: { seconds: 900 } },
-  { at: at(10, 20), group: { work_item: task(1, 'Fix') }, spend: { seconds: 1800 } },
-  { at: at(12, 40), group: { work_item: task(2, 'Read') }, spend: { seconds: 600 } },
-  { at: at(13, 30), group: { work_item: task(2, 'Read') }, spend: { seconds: 3600 } },
-]
-
 const TODAY_ADDRESS = pageAt({ period: 'today' })
 /** The three hours from ten, as the page's own period. */
 const SPAN_ADDRESS = pageAt({ period: 'custom', from: '2026-11-11T10:00', to: '2026-11-11T13:00' })

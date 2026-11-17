@@ -11,7 +11,7 @@
  * and the route tables that compose answers (the backend double among them) are
  * driven as the page asks them, under the arguments the specs give them.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { routedPage } from './browser/routeDriver.ts'
 import { served as kindColorsServed } from './browser/served/kindColors.ts'
@@ -21,6 +21,11 @@ import { checkServed } from './browser/servedContracts.ts'
 import type { Served } from './browser/servedContracts.ts'
 import { backendReads, backendRoutes } from './browser/servedRoutes.ts'
 import type { DrivenRoutes } from './browser/servedRoutes.ts'
+
+// The records live outside Playwright: a module that loads it at run time fails this file.
+vi.mock('@playwright/test', () => {
+  throw new Error('a served record module loads @playwright/test at run time')
+})
 
 /**
  * What a driven route table answers the page's reads with, each answer a record. A read

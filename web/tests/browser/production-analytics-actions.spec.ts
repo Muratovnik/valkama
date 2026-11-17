@@ -21,8 +21,6 @@ import type { Locator, Page } from '@playwright/test'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { task, unknownTask, value } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import {
   boxes,
   expectNamesInView,
@@ -39,39 +37,10 @@ import {
 import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { globalScope, workItem, workItemRef } from './planningFixtures.ts'
+import { WORLD } from './served/analyticsActions.ts'
 import { test } from './test.ts'
 
 const WIDTHS = [1440, 1024, 390]
-const on = (day: number) => new Date(2026, 10, day, 10)
-
-/**
- * Three days of work: another task under model-b on Monday, the task the backend holds under
- * model-a on Tuesday, and work nobody can place on Wednesday; the task again a week before.
- */
-const IMPORT = task(264, 'Import the planning documents')
-const WORLD: TimedStretch[] = [
-  {
-    at: on(10),
-    group: { work_item: IMPORT, model: value('model-a') },
-    spend: { seconds: 7200, tokens: 2_000_000, cost: 20 },
-  },
-  {
-    at: on(9),
-    group: { work_item: task(2, 'Write the release notes'), model: value('model-b') },
-    spend: { seconds: 3600, tokens: 1_000_000, cost: 10 },
-  },
-  {
-    at: on(11),
-    group: { work_item: unknownTask, model: { id: null, unknown: true } },
-    spend: { seconds: 1800, tokens: 10_000, cost: 1 },
-  },
-  {
-    at: on(2),
-    group: { work_item: IMPORT, model: value('model-a') },
-    spend: { seconds: 3600, tokens: 500_000, cost: 5 },
-  },
-]
-
 /** A phone shows the section, not the list of sections, at each address of a walk. */
 const shownAt = (width: number, state: Record<string, string>) =>
   width < NARROW_FRAME ? { ...state, open: 'section' } : state

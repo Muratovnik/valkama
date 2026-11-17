@@ -25,24 +25,10 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { task } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record } from './analyticsPage.ts'
-import { at, NOW, serveLive } from './liveDouble.ts'
+import { NOW, serveLive } from './liveDouble.ts'
+import { DAYS } from './served/analyticsBarRoom.ts'
 import { test } from './test.ts'
-
-/** Two days of work this week, and some in the live hour. */
-const DAYS: TimedStretch[] = [
-  { at: at(13, 50), group: { work_item: task(1, 'One') }, spend: { seconds: 600 } },
-  { at: at(14, 20), group: { work_item: task(2, 'Two') }, spend: { seconds: 300 } },
-  { at: new Date(2026, 10, 9, 10), group: { work_item: task(1, 'One') }, spend: { seconds: 3600 } },
-  {
-    at: new Date(2026, 10, 10, 10),
-    group: { work_item: task(2, 'Two') },
-    spend: { seconds: 3600 },
-  },
-]
-
 /**
  * Where the age the freshness shows is drawn, how wide its words are, and every box that would
  * hide what it covers: each around it up to the bar that does not show what overflows it, and the

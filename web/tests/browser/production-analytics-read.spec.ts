@@ -14,29 +14,17 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { serveUsage, task } from '../fixtures/analytics.ts'
+import { serveUsage } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { quotaAt } from '../fixtures/quota.ts'
-import { LONG_TAIL, openReport, pageAt, record, serve, serveQuota } from './analyticsPage.ts'
+import { openReport, pageAt, record, serve, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
-import { at, NOW as LIVE_NOW, serveLive, settled, watchPage } from './liveDouble.ts'
+import { NOW as LIVE_NOW, serveLive, settled, watchPage } from './liveDouble.ts'
+import { LIVE_WORK, WORLD } from './served/analyticsRead.ts'
 import { test } from './test.ts'
 
 /** Wednesday afternoon, the moment `openReport`'s week is read at. */
 const NOW = new Date(2026, 10, 11, 14, 30)
-
-/**
- * Twenty-five tasks of an hour each this week, and a long day three weeks back that the past four
- * weeks hold and this week does not, so the two periods say different figures.
- */
-const WORLD: TimedStretch[] = [
-  ...LONG_TAIL,
-  {
-    at: new Date(2026, 9, 20, 10),
-    group: { work_item: task(1, 'Task 1') },
-    spend: { seconds: 36_000, tokens: 5000, cost: 4 },
-  },
-]
 
 /** How the double answers: from its work, refusing every read, or holding each until let go. */
 interface Switch {
@@ -152,12 +140,6 @@ for (const width of [390, 1024, 1440, 1920]) {
     await record(info, `read-failed-${width}`, { before, after })
   })
 }
-
-/** One minute of work in the live hour, so its summary says a figure. */
-const LIVE_WORK: TimedStretch[] = [
-  { at: at(14, 5), group: { work_item: task(1, 'Fix the import') }, spend: { seconds: 300 } },
-  { at: at(13, 50), group: { work_item: task(2, 'Ship it') }, spend: { seconds: 600 } },
-]
 
 test('«Now» keeps its summary through a minute of failing ticks, and the next tick reads again', async ({
   page,
