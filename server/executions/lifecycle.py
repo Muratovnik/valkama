@@ -82,7 +82,9 @@ def _launch_reserved(
             raise planning_model.container_unheld()
         resume_session_id = _resumable_session(conn, record, packet.client) if packet.resume else ""
         state_before = str(record["state"]["key"])
-        claim_before = str(record["claim_ref"] or "")
+        # The claim as it stood, with the call that took it: a launch that never
+        # started puts it back as it was, confirmed or not.
+        claim_before = planning_service.claim_of(conn, reference)
         # Put off, the item stands on a condition the claim below takes away with the
         # move out; a launch that never started puts it back with the state.
         deferred_before = planning_service.deferral_of(conn, reference)
@@ -484,7 +486,7 @@ def _restore(
     conn: sqlite3.Connection,
     reference: str,
     state: str,
-    claim: str,
+    claim: planning_service.PriorClaim | None,
     launched: dict,
     actor: str,
     execution_id: str,
@@ -495,10 +497,11 @@ def _restore(
 ) -> None:
     """Compensate only the unchanged launch-owned item, with the write lock held.
 
-    The launch's own release is made in the launch's call, since only the session
-    its claim names holds it; a session the claim opened is ended, because its
-    process never ran. An item the launch took out of deferred goes back with
-    `deferred`, the condition it stood there on.
+    A claim the launch took over goes back with the call that took it, so it is
+    as confirmed as it was. The launch's own release is made in the launch's call,
+    since only the session its claim names holds it; a session the claim opened is
+    ended, because its process never ran. An item the launch took out of deferred
+    goes back with `deferred`, the condition it stood there on.
     """
 
     conn.execute("BEGIN IMMEDIATE")
@@ -517,21 +520,13 @@ def _restore(
                 author=actor,
                 expected_revision=int(launched["revision"]),
                 deferred=deferred,
+                claim=claim,
             )
-            # The state was put back above, so neither claim write may move
-            # it: a claim would start it again and a release would requeue it.
-            # A move out of work has already let the launch's claim go, and a
-            # second release would only write a second, empty `released`.
-            if claim:
-                planning_service.claim_work_item(
-                    conn,
-                    reference,
-                    author=claim,
-                    force=True,
-                    expected_revision=int(restored["revision"]),
-                    move_state=False,
-                )
-            elif restored["claim_ref"] == actor:
+            # The state was put back above, so the release may not move it: it
+            # would requeue it. A move out of work has already let the launch's
+            # claim go, and a second release would only write a second, empty
+            # `released`.
+            if claim is None and restored["claim_ref"] == actor:
                 with session.proving():
                     planning_service.claim_work_item(
                         conn,
