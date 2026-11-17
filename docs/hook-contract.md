@@ -2104,8 +2104,11 @@ A rewrite is not decided: it carries what was decided for the old commit. For
 each pair whose old commit Valkama knows, the new commit gets a row with the old
 commit's session and agent, unless it has one, the old commit's attachments move
 to it, and the old commit is marked as rewritten to it. A squash unites the
-attachments of its old commits on the new one. A card's projects stay as they
-are: the repository is the same. When the old commit is unknown nothing is
+attachments of its old commits on the new one. The new commit of a pair is
+always live: a mark it carries goes, so a rewrite back -- two amends at a pinned
+committer time that make the first commit again -- returns that commit to its
+cards and hides the one between. A pair whose old and new hash are one changes
+nothing. A card's projects stay as they are: the repository is the same. When the old commit is unknown nothing is
 recorded for the pair: after an amend the new commit is the session's own, and
 its `post-commit` decides it; a rebase of commits nobody reported is no new work.
 A commit that a rewrite later in the same batch replaces is recorded without a

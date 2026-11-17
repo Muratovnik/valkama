@@ -373,16 +373,21 @@ def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str
     The new commit gets a row with the old one's session and agent unless it has
     one, the old one's attachments move to it (several old ones of a squash unite
     there), and the old one is marked `rewritten_to` it, once: a mark already set
-    stays, so taking the record again changes nothing. A card's projects stay as
-    they are, the repository being the same. An old commit Valkama does not know
-    gives nothing: after an amend its new commit is the session's own and its
-    `post-commit` decides it, and a rebase of commits nobody reported is no new work.
+    stays, so taking the record again changes nothing. The new commit is always
+    live: a mark it carries goes, so a rewrite back, which makes an earlier commit
+    again, returns that commit to its cards and hides the one it replaced. A pair
+    of one hash changes nothing. A card's projects stay as they are, the
+    repository being the same. An old commit Valkama does not know gives nothing:
+    after an amend its new commit is the session's own and its `post-commit`
+    decides it, and a rebase of commits nobody reported is no new work.
     """
 
     project_id = str(record["project_id"])
     details = {str(commit["hash"]): commit for commit in record["commits"]}
     changed = False
     for pair in record["rewritten"]:
+        if pair["from"] == pair["to"]:
+            continue
         old = _known(conn, project_id, pair["from"])
         if old is None or pair["to"] not in details:
             continue
@@ -408,6 +413,9 @@ def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str
                 "UPDATE commits SET rewritten_to = ? WHERE commit_id = ?",
                 (new_id, old["commit_id"]),
             )
+            changed = True
+        if new is not None and new["rewritten_to"] is not None:
+            conn.execute("UPDATE commits SET rewritten_to = NULL WHERE commit_id = ?", (new_id,))
             changed = True
         if moved > 0:
             changed = True

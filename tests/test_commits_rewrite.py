@@ -159,6 +159,44 @@ class AmendTests(RewriteCase):
         self.assertEqual([(t1, new, "server", "valkama")], self.attached())
         self.assertEqual({new: None}, self.rewritten())
 
+    def test_a_rewrite_back_returns_the_first_commit(self) -> None:
+        """Two amends at a pinned committer time: the second makes the first commit again."""
+
+        pinned = {
+            "GIT_COMMITTER_DATE": "2026-11-20T10:00:00Z",
+            "GIT_AUTHOR_DATE": "2026-11-20T10:00:00Z",
+        }
+        t1 = self.task("Held", PROJECT)
+        self.claim(t1)
+        (self.repository / "one.txt").write_text("one", encoding="utf-8")
+        self.git("add", "one.txt")
+        self.git("commit", "-qm", "feat: one", **pinned)
+        first = self.place.head()
+        self.taken()
+        (self.repository / "amended.txt").write_text("amended", encoding="utf-8")
+        self.git("add", "amended.txt")
+        self.git("commit", "-q", "--amend", "--no-edit", **pinned)
+        second = self.place.head()
+        self.git("rm", "-q", "amended.txt")
+        self.git("commit", "-q", "--amend", "--no-edit", **pinned)
+        self.assertEqual(first, self.place.head(), "the second amend made the first commit again")
+        self.assertEqual(f"{self.moved(first, second)}\n{self.moved(second, first)}", self.taken())
+        self.assertEqual([(t1, first, "server", "valkama")], self.attached())
+        self.assertEqual({first: None, second: first}, self.rewritten())
+        card = self.tool("get_work_item", id=t1, parts="commits")
+        self.assertEqual([first], [commit["hash"] for commit in card["commits"]])
+        self.assertEqual([], self.waiting(), "the second commit is hidden")
+        written = self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        self.git("commit", "-q", "--amend", "--no-edit", **pinned)
+        self.assertEqual(first, self.place.head(), "an amend that changes nothing: c -> c")
+        self.assertEqual("", self.taken(), "a pair of one hash changes nothing")
+        self.assertEqual([(t1, first, "server", "valkama")], self.attached())
+        self.assertEqual({first: None, second: first}, self.rewritten())
+        self.assertEqual(
+            written, self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        )
+        self.assertEqual([], self.place.everywhere())
+
 
 class RebaseTests(RewriteCase):
     """A rebase moves the links, a squash unites them, and foreign commits stay out."""
