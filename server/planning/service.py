@@ -186,7 +186,9 @@ def list_work_items(
     `other_spaces` makes `space` a read of that space: its items, and the items of
     other spaces that name one of the projects the registry binds to it, each record
     marked with `other_space`, the `{key, name}` of the space it lies in, or None
-    for the space's own. With `project` too, another space's item is kept only when
+    for the space's own. The space's queue never gives another space's item, so
+    its `withheld` adds `outside_space` and its `queue_order` is null, though its
+    own space's queue may give it. With `project` too, another space's item is kept only when
     that project is one of the space's. Without it `space` keeps the space's items
     alone, which is what a reader that accounts for a space's items, an export,
     asks for.
@@ -282,18 +284,27 @@ def list_work_items(
     closed = read_model.closings(conn, rows)
     lapsed = read_model.lapsed_claims(conn, rows)
     projects = item_projects.of_items(conn, rows)
-    found = [
-        read_model.present(conn, row, closed=closed, lapsed=lapsed, tree=tree, projects=projects)
-        | {"queue_order": places.get(str(row["work_item_id"]))}
-        for row in rows
-    ]
-    if marked:
-        for row, record in zip(rows, found, strict=True):
+    # A read of one space asks another space's item of that space's queue, which
+    # never gives it: its record says `outside_space`, and it has no place there.
+    read_space = space_id if marked else None
+    found = []
+    for row in rows:
+        record = read_model.present(
+            conn,
+            row,
+            closed=closed,
+            lapsed=lapsed,
+            tree=tree,
+            projects=projects,
+            read_space=read_space,
+        )
+        outside = marked and str(row["planning_space_id"]) != space_id
+        record["queue_order"] = None if outside else places.get(str(row["work_item_id"]))
+        if marked:
             record["other_space"] = (
-                None
-                if str(row["planning_space_id"]) == space_id
-                else {"key": row["space_key"], "name": row["space_name"]}
+                {"key": row["space_key"], "name": row["space_name"]} if outside else None
             )
+        found.append(record)
     return found
 
 

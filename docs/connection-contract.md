@@ -188,7 +188,10 @@ takes the same `parent` parameter. An unknown `parent` is refused with
 read that space: its items, and the items of other spaces that name one of the
 projects the registry binds to it. Each item of such a read carries
 `other_space`, the `{key, name}` of the space it lies in, or `null` for the
-space's own; a compact row carries it only for another space's item. They take
+space's own; a compact row carries it only for another space's item. The
+space's queue never gives another space's item: its `withheld` adds
+`outside_space` and its `queue_order` is `null`, though the queue of its own
+space may give it. They take
 `project` too, a project id: the list keeps the items that name that project,
 in every space unless `space` is given. With `space`, it keeps that space's
 items that name it, and other spaces' items that name it when it is one of the
@@ -308,7 +311,7 @@ model; the card's `state` has no `is_terminal`:
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
 | `workable` | whether its space's take-next queue may give it now: `withheld` is empty. It is the rule `claim_ready_work_item` takes work by |
-| `withheld` | why the queue does not give it, as codes in this order: `goal_or_stage` (a goal or stage, which has no other code), `not_ready` (not in a `ready` state), `held` (a claim, or a claimed step), `waits` (an unfinished blocker), `question` (an open question to the owner), `no_start` (in a `ready` state its workflow leads nowhere into work from), `ancestor_triage` and `ancestor_deferred` (a goal or stage over it stands there), `ancestor_waits` (a goal or stage over it has an unfinished blocker), `ancestor_closed` (a goal or stage over it is closed while it is open). Empty exactly when `workable` |
+| `withheld` | why the queue does not give it, as codes in this order: `goal_or_stage` (a goal or stage, which has no other code), `not_ready` (not in a `ready` state), `held` (a claim, or a claimed step), `waits` (an unfinished blocker), `question` (an open question to the owner), `no_start` (in a `ready` state its workflow leads nowhere into work from), `ancestor_triage` and `ancestor_deferred` (a goal or stage over it stands there), `ancestor_waits` (a goal or stage over it has an unfinished blocker), `ancestor_closed` (a goal or stage over it is closed while it is open), `outside_space` (a read of another space holds it, for a project of that space it names: that space's queue never gives it). Empty exactly when `workable` |
 | `projects` | the projects it changes, by `project_id`: each with the registry's `display_name` (`null` while the registry does not record it) and its `source`, `named`, `commits` or `migrated` (see [The projects an item changes](#the-projects-an-item-changes)). A goal's or stage's are those of every task under it |
 
 Four other answers carry only some of these fields:

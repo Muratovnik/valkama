@@ -5,6 +5,8 @@ nothing unfinished blocks it, no question to the owner waits on it, its workflow
 leads from where it stands into work, and no goal or stage over it is in triage
 or deferred, closed, or waiting on a blocker. `withheld` says which of those fail,
 as codes in one fixed order, and an item is `workable` exactly when it names none.
+A read of one space that holds another space's item, for a project of the space
+read it names, adds `outside_space`: the queue of the space read never gives it.
 
 The rule has this one form, over facts a read loaded in bulk (`item_tree.Tree`),
 so the queue and every record answer it the same way: the queue gives the items a
@@ -64,10 +66,19 @@ CODES = (
     "ancestor_waits",
     #: A goal or stage over it is closed while it is open.
     "ancestor_closed",
+    #: A read of another space holds it, for a project of that space it names: the
+    #: queue of the space read never gives it, whatever its own space's queue does.
+    "outside_space",
 )
 
 
-def withheld(conn: sqlite3.Connection, row: sqlite3.Row, tree: item_tree.Tree) -> list[str]:
+def withheld(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    tree: item_tree.Tree,
+    *,
+    read_space: str | None = None,
+) -> list[str]:
     """Why the queue of its space does not give this item; empty when it does.
 
     `row` is the item's own, and `tree` holds its facts and those of every item
@@ -77,6 +88,10 @@ def withheld(conn: sqlite3.Connection, row: sqlite3.Row, tree: item_tree.Tree) -
     already says it is not given, and coming back to work from review or
     blocked is not starting it. That fact is the one that may cost a query,
     for one task's record, which loads no workflow (`states.start_state`).
+
+    `read_space` is the space a read of one space is of, by id: an item of
+    another space it holds is asked of that space's queue, and adds
+    `outside_space`. Without it the item is asked of its own space's queue.
     """
 
     identity = str(row["work_item_id"])
@@ -107,6 +122,8 @@ def withheld(conn: sqlite3.Connection, row: sqlite3.Row, tree: item_tree.Tree) -
         found.append("ancestor_waits")
     if not node.closed and any(ancestor.closed for ancestor in over):
         found.append("ancestor_closed")
+    if read_space is not None and str(row["planning_space_id"]) != read_space:
+        found.append("outside_space")
     return found
 
 

@@ -933,6 +933,77 @@ class SessionSpaceTests(ScopeCase):
         self.assertEqual("", str(service.get_work_item(self.conn, rover.refs["r"])["claim_ref"]))
 
 
+class OtherSpaceTests(QueueCase):
+    """Another space's task a read of one space holds."""
+
+    def two(self) -> tuple[Tree, Tree]:
+        """ALPHA, whose project is `alpha`, and ROVER, whose one ready task names `alpha`."""
+
+        alpha, rover = Tree(self.conn, "ALPHA"), Tree(self.conn, "ROVER")
+        self.register(("alpha", alpha, True))
+        rover.add("r", state="ready")
+        self.name_projects(rover, "r", "alpha")
+        return alpha, rover
+
+    def test_a_read_of_one_space_withholds_another_space_s_task_its_own_queue_gives(
+        self,
+    ) -> None:
+        alpha, rover = self.two()
+        reference = rover.refs["r"]
+        board = views.planning_payload(self.conn, space=alpha.key)["work_items"]
+        for read in (
+            service.list_work_items(self.conn, space=alpha.key, other_spaces=True, limit=None),
+            board,
+        ):
+            (row,) = read
+            self.assertEqual(
+                (
+                    reference,
+                    {"key": "ROVER", "name": "Space ROVER"},
+                    ["outside_space"],
+                    False,
+                    None,
+                ),
+                (
+                    row["reference"],
+                    row["other_space"],
+                    row["withheld"],
+                    row["workable"],
+                    row["queue_order"],
+                ),
+            )
+        # An agent's compact row of ALPHA says why ALPHA's queue does not give it.
+        (compact,) = mcp_surface.call_tool(self.conn, "list_work_items", {"space": alpha.key})[
+            "work_items"
+        ]
+        self.assertEqual(["outside_space"], compact["withheld"])
+        self.assertNotIn("queue_order", compact)
+        # Its own space's read and record give it, with nothing withheld.
+        (own,) = service.list_work_items(self.conn, space=rover.key, other_spaces=True, limit=None)
+        self.assertEqual(([], 1, None), (own["withheld"], own["queue_order"], own["other_space"]))
+        self.assertEqual([], service.get_work_item(self.conn, reference)["withheld"])
+        self.assertIsNone(service.claim_ready_work_item(self.conn, space=alpha.key, author="agent"))
+        taken = service.claim_ready_work_item(self.conn, space=rover.key, author="agent")
+        assert taken is not None
+        self.assertEqual(reference, taken["reference"])
+
+    def test_the_graph_of_one_space_marks_another_space_s_task_not_workable(self) -> None:
+        alpha, rover = self.two()
+        ready = f"  class {rover.refs['r'].replace('-', '_')} ready"
+        graph = views.graph_payload(self.conn, space=alpha.key)
+        (node,) = graph["nodes"]
+        self.assertEqual((rover.refs["r"], False), (node["reference"], node["workable"]))
+        self.assertEqual({"key": "ROVER", "name": "Space ROVER"}, node["other_space"])
+        self.assertNotIn(ready, views.graph_mermaid(graph))
+        # The node stands on its row of the board's feed, which says why.
+        (row,) = views.planning_payload(self.conn, space=alpha.key)["work_items"]
+        self.assertIn("outside_space", row["withheld"])
+        graph = views.graph_payload(self.conn, space=rover.key)
+        (node,) = graph["nodes"]
+        self.assertTrue(node["workable"])
+        self.assertIn(ready, views.graph_mermaid(graph).splitlines())
+
+
 class ClaimByNumberTests(QueueCase):
     """A claim by number takes work of any space, whatever the session's."""
 

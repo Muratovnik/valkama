@@ -827,6 +827,7 @@ def present(
     lapsed: Mapping[str, dict] | None = None,
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
+    read_space: str | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
 
@@ -845,7 +846,9 @@ def present(
     itself. `tree` is what such a read
     loaded of its spaces (`item_tree.of_spaces`); absent, the item loads what is
     under it. `projects` is what `item_projects.of_items` read for such a read in
-    one walk; absent, the item reads its own.
+    one walk; absent, the item reads its own. `read_space` is the space, by id, a
+    read of one space is of, which `withheld` asks another space's item by
+    (`queue.withheld`).
 
     `state` is what `states.public_state` makes of the item's state: null for an
     accepted open container, which says what it derives as `container_state`
@@ -853,7 +856,14 @@ def present(
     """
 
     record, lease = _record(
-        conn, row, full=full, closed=closed, lapsed=lapsed, tree=tree, projects=projects
+        conn,
+        row,
+        full=full,
+        closed=closed,
+        lapsed=lapsed,
+        tree=tree,
+        projects=projects,
+        read_space=read_space,
     )
     identity = str(row["work_item_id"])
     if not full:
@@ -909,6 +919,7 @@ def _record(
     lapsed: Mapping[str, dict] | None = None,
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
+    read_space: str | None = None,
 ) -> tuple[dict, leases.Lease | None]:
     """What the brief record, the full one and the card share, and the lease it read.
 
@@ -977,7 +988,7 @@ def _record(
     record["waits_for"] = facts.waits_for(identity)
     # The take-next queue's own rule (`queue.withheld`): the queue gives exactly
     # what reads workable, and the codes say why anything else is not given.
-    record["withheld"] = queue.withheld(conn, row, facts)
+    record["withheld"] = queue.withheld(conn, row, facts, read_space=read_space)
     record["workable"] = not record["withheld"]
     if lapsed is not None:
         record["lapsed_claim"] = lapsed.get(identity)
