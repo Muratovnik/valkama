@@ -222,8 +222,10 @@ def convert(
         )
         left, dropped = (None, []) if plan is None else plan.leave(conn, row, author)
         detail = f"{was} -> {word}"
-        if left is not None:
-            detail += f"; leftover {left}"
+        if left is not None and plan is not None:
+            # How many steps went is the conversion's fact, as a split records it: the
+            # task it left keeps changing after.
+            detail += f"; leftover {left}: {len(plan.moved)} steps"
         if dropped:
             detail += f"; projects dropped: {_listed(dropped, len(detail))}"
         service.log_converted(conn, identity, detail, author)

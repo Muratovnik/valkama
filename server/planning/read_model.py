@@ -917,8 +917,9 @@ _CONDITIONS_CHANGED = (
 )
 #: How a `split_off` detail names the part and how many steps it took.
 _SPLIT_OFF = re.compile(r"^(?P<to>\S+): (?P<count>\d+) steps$")
-#: How a `converted` detail names the task it left (`split.convert`).
-_LEFTOVER = re.compile(r"; leftover (?P<to>[A-Z][A-Z0-9]*-\d+)")
+#: How a `converted` detail names the task it left and how many steps went there
+#: (`split.convert`).
+_LEFTOVER = re.compile(r"; leftover (?P<to>[A-Z][A-Z0-9]*-\d+): (?P<count>\d+) steps")
 
 
 def conditions_changed(conn: sqlite3.Connection, identity: str) -> dict | None:
@@ -926,9 +927,9 @@ def conditions_changed(conn: sqlite3.Connection, identity: str) -> dict | None:
 
     `removed` holds the text of each step an edit took off and the former text of each
     step reworded by its id (`checklist_removed`, cut to 120 characters); `moved` each
-    item that took steps away with their work: a part split off it with how many
-    (`split_off`), and the task a conversion left, with the steps that task holds now,
-    since a conversion records which task and not how many. None when nothing of the
+    item that took steps away with their work: a part split off it (`split_off`) and the
+    task a conversion left (`converted`), each with how many steps went, as its history
+    recorded it then. None when nothing of the
     kind is in the history, which counts from this build on. The full record carries
     it, and the answers of entering review and of completing name it; the card does not.
     """
@@ -947,20 +948,10 @@ def conditions_changed(conn: sqlite3.Connection, identity: str) -> dict | None:
             continue
         left = _LEFTOVER.search(text)
         if left is not None:
-            moved.append({"to": left["to"], "count": _steps_of(conn, left["to"])})
+            moved.append({"to": left["to"], "count": int(left["count"])})
     if not removed and not moved:
         return None
     return {"removed": removed, "moved": moved}
-
-
-def _steps_of(conn: sqlite3.Connection, reference: str) -> int:
-    """How many steps the item `reference` holds, or 0 when it is gone."""
-
-    try:
-        row = item_row(conn, reference)
-    except model.WorkItemNotFoundError:
-        return 0
-    return len(model.checklist(row["checklist"]))
 
 
 def _put_off(conn: sqlite3.Connection, identity: str, state: Mapping | None) -> dict:

@@ -3149,7 +3149,8 @@ expected_revision?, author?}`. `to` is `stage` for a task under a parent and
   withdrawn.
 
 The item records `converted` with the detail `task -> stage`, then `; leftover
-MAIN-15` and `; projects dropped: alpha` when so. The answer adds `converted:
+MAIN-15: 2 steps`, how many steps went to the new task, and `; projects dropped:
+alpha` when so. The answer adds `converted:
 {from, to, leftover, projects_dropped}`, `from` and `to` the kinds, `leftover`
 the new task's reference or null; over MCP the acknowledgement carries it, and
 `applied.convert` says `kind`, `state` (null for a goal or stage accepted and

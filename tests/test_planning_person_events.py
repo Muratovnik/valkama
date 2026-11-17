@@ -159,7 +159,7 @@ class WhatCountsTests(Harness):
         told = self.window()
         self.assertEqual(["released", "status", "converted"], [event["kind"] for event in told])
         leftover = service.get_work_item(self.conn, self.ref)["reference"]
-        self.assertRegex(told[-1]["text"], r"^task -> goal; leftover [A-Z]+-\d+$")
+        self.assertRegex(told[-1]["text"], r"^task -> goal; leftover [A-Z]+-\d+: 0 steps$")
         self.assertNotIn(leftover, told[-1]["text"])
         self.assertEqual("converted", person_events.KINDS["converted"])
         self.assertNotIn("converted", person_events.WORK_KINDS)

@@ -386,7 +386,8 @@ class ConvertingTests(ConvertingTree):
         self.assertEqual(1, self.count("work_item_refs", "work_item_id", t))
         self.assertEqual(1, self.count("work_item_requests", "work_item_id", t))
         self.assertEqual(
-            [f"bug -> stage; leftover {left}"], [d for d, *_ in self.events(t, "converted")]
+            [f"bug -> stage; leftover {left}: 0 steps"],
+            [d for d, *_ in self.events(t, "converted")],
         )
         self.assertEqual([holder], [d for d, *_ in self.events(t, "released")])
         self.assertEqual({B_SESSION, COORDINATOR}, set(self.followers(t)))
@@ -913,11 +914,18 @@ class SplittingTests(ConvertingTree):
         self.assertEqual(changed, self.record(t)["conditions_changed"])
 
     def test_a_conversion_that_left_work_names_the_task_it_left(self) -> None:
+        """How many steps went is what the conversion moved, whatever that task holds later."""
+
         t = self.made("t", parent=self.goal, steps=["u1", "u2"])
         self.agent("claim_work_item", AS_A, id=t)
         self.convert(AS_A, t, to="stage", leftover={"steps": [self.steps(t)["u2"]["id"]]})
         [left] = self.under(t)
+        moved = {"removed": [], "moved": [{"to": left, "count": 1}]}
+        self.assertEqual(moved, self.record(t)["conditions_changed"])
+        self.person(APPLY, id=left, checklist=["u2", "v1", "v2"])
+        self.assertEqual(3, len(self.steps(left)))
+        self.assertEqual(moved, self.record(t)["conditions_changed"], "as it was converted")
         self.assertEqual(
-            {"removed": [], "moved": [{"to": left, "count": 1}]},
-            self.record(t)["conditions_changed"],
+            [f"task -> stage; leftover {left}: 1 steps"],
+            [detail for detail, *_ in self.events(t, "converted")],
         )
