@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from unittest import mock
 
 from server import store
-from server.planning import api, calls, model, participation, service, tools
+from server.planning import api, calls, model, participation, questions, service, tools
 from server.planning import store as planning_store
 from tests.planning_fixtures import standing_in
 
@@ -430,6 +430,158 @@ class LabelTests(Harness):
         with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK"):
             self.conn.execute("INSERT INTO label_settings(label, updated_at) VALUES('flow', 'x')")
         self.conn.rollback()
+
+
+class FindingTests(Harness):
+    """A finding, a task an agent files under no accepted goal: it lies in triage
+    whatever the point `finding` says, and the rule of a label accepts it on
+    `label_rule` when the write that files it, or puts that label on it, carries the
+    label."""
+
+    def file(self, key: str = "ALPHA", **arguments: object) -> dict:
+        with calls.bind(AGENT, "create_work_item"):
+            answer = tools.OPS["create_work_item"](
+                self.conn, {"space": key, "title": "A finding", **arguments}
+            )
+        self.conn.commit()
+        assert isinstance(answer, dict)
+        return service.get_work_item(self.conn, str(answer["reference"]))
+
+    def edit(self, reference: str, identity: calls.Identity, **update: object) -> dict:
+        with calls.bind(identity, "apply_work_item_changes"):
+            api.handle_post(
+                self.conn, "/api/planning/work-item/apply", {"id": reference, "update": update}
+            )
+        self.conn.commit()
+        return service.get_work_item(self.conn, reference)
+
+    def where(self, card: dict) -> tuple[str, str | None]:
+        acceptance = card["acceptance"]
+        return card["state"]["category"], None if acceptance is None else acceptance["basis"]
+
+    def accepted(self, reference: str) -> list[str]:
+        return [
+            str(row[0])
+            for row in self.conn.execute(
+                "SELECT e.detail FROM work_item_events e JOIN work_items w"
+                " ON w.work_item_id = e.work_item_id JOIN planning_spaces p"
+                " ON p.planning_space_id = w.planning_space_id"
+                " WHERE e.action = 'accepted' AND p.key || '-' || w.number = ? ORDER BY e.id",
+                (reference,),
+            )
+        ]
+
+    def decided(self) -> list[tuple[str, str, str]]:
+        return [
+            (str(row[0]), str(row[1]), str(row[2]))
+            for row in self.conn.execute(
+                "SELECT d.point, p.key || '-' || w.number, d.what FROM agent_decisions d"
+                " JOIN work_item_events e ON e.id = d.event_id"
+                " JOIN work_items w ON w.work_item_id = e.work_item_id"
+                " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+                " ORDER BY d.event_id"
+            )
+        ]
+
+    def test_a_finding_lands_in_triage_at_any_setting(self) -> None:
+        for mode in ("agent", "human"):
+            with self.subTest(finding=mode):
+                self.person(space="ALPHA", key="finding", value=mode)
+                self.assertEqual(mode, participation.load(self.conn).mode(self.space, "finding"))
+                card = self.file()
+                self.assertEqual(("triage", None), self.where(card))
+                self.assertNotIn("waits_for_owner", card)
+        self.assertEqual([], self.decided())
+
+    def test_the_space_overrides_the_general_and_the_label_both(self) -> None:
+        self.person(space=None, key="finding", value="human")
+        self.person(space="ALPHA", key="finding", value="agent")
+        self.person(space=None, label="flow", ready=True, description=None)
+        self.person(space="ALPHA", label="flow", ready=False, description=None)
+        self.person(space=None, label="docs", ready=True, description=None)
+        settings = participation.load(self.conn)
+        self.assertEqual(
+            ("agent", "human"),
+            (settings.mode(self.space, "finding"), settings.mode(self.other, "finding")),
+        )
+        flow = self.file(labels=["flow"])
+        self.assertEqual(("triage", None), self.where(flow))
+        docs = self.file(labels=["ui", "docs"])
+        elsewhere = self.file("BETA", labels=["docs"])
+        # BETA would ask the owner about a finding, and the rule takes it all the same.
+        for card in (docs, elsewhere):
+            self.assertEqual(("ready", "label_rule"), self.where(card))
+            self.assertEqual(["label_rule: docs"], self.accepted(card["reference"]))
+        self.assertEqual(
+            [
+                ("finding", docs["reference"], f"accepted {docs['reference']} by the label docs"),
+                (
+                    "finding",
+                    elsewhere["reference"],
+                    f"accepted {elsewhere['reference']} by the label docs",
+                ),
+            ],
+            self.decided(),
+        )
+
+    def test_a_label_put_on_a_finding_accepts_it_by_its_rule(self) -> None:
+        lying = self.file(labels=["docs"])
+        self.person(space=None, label="docs", ready=True, description=None)
+        # Switching the rule on takes nothing that already lies in triage.
+        self.assertEqual(
+            ("triage", None), self.where(service.get_work_item(self.conn, lying["reference"]))
+        )
+        # An edit that leaves the label as it was takes nothing either.
+        self.assertEqual(
+            ("triage", None), self.where(self.edit(lying["reference"], AGENT, labels_add=["ui"]))
+        )
+        # The agent's edit that puts the label on accepts it, and is the agent's decision.
+        agents = self.file(labels=["ui"])
+        self.assertEqual(
+            ("ready", "label_rule"),
+            self.where(self.edit(agents["reference"], AGENT, labels_add=["docs"])),
+        )
+        # The person's edit accepts it too, by the same rule, and decides nothing for an agent.
+        persons = self.file()
+        self.assertEqual(
+            ("ready", "label_rule"),
+            self.where(self.edit(persons["reference"], calls.browser(), labels=["docs"])),
+        )
+        self.assertEqual(
+            [("finding", agents["reference"], f"accepted {agents['reference']} by the label docs")],
+            self.decided(),
+        )
+        self.assertEqual(["label_rule: docs"], self.accepted(persons["reference"]))
+
+    def test_a_finding_whose_group_waits_on_the_owner_is_left_to_the_answer(self) -> None:
+        self.person(space=None, label="docs", ready=True, description=None)
+        with calls.bind(AGENT, "create_work_item"):
+            group = service.create_work_item(
+                self.conn, space="ALPHA", title="A group of findings", kind="goal"
+            )
+            questions.ask(
+                self.conn,
+                str(group["work_item_id"]),
+                kind="question",
+                prompt="Take these findings on?",
+                fields=[],
+                author="claude",
+                purpose="triage",
+            )
+        self.conn.commit()
+        under = self.file(labels=["docs"], parent=group["reference"])
+        self.assertEqual(("triage", None), self.where(under))
+        moved_in = self.file(labels=["ui"], parent=group["reference"])
+        self.assertEqual(
+            ("triage", None),
+            self.where(self.edit(moved_in["reference"], AGENT, labels_add=["docs"])),
+        )
+        # Beside the group, under no question, the same label takes it.
+        beside = self.file(labels=["docs"])
+        self.assertEqual(("ready", "label_rule"), self.where(beside))
+        # A goal is no finding the rule takes.
+        goal = self.file(kind="goal", labels=["docs"])
+        self.assertIsNone(goal["acceptance"])
 
 
 class QueueTests(Harness):

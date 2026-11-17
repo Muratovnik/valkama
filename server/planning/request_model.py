@@ -114,6 +114,26 @@ def goal_fields(*, recommend: bool) -> list[dict]:
     return [choice, until, cancels]
 
 
+#: The answer about a task in a goal that keeps it out of the goal.
+TASK_OUT = "out"
+
+
+def task_fields(*, moving: bool) -> list[dict]:
+    """The fields of the question about a task an agent files in an accepted goal, or
+    moves there (`moving`). Under the ids put-off work asks with, `do` takes it on in the
+    goal, `later` puts it off under the goal until `until`, `out` keeps it out of the
+    goal and `drop` cancels it; the agent asks for `do`."""
+
+    choice, until, _cancels = (dict(field) for field in RETURN_FIELDS)
+    choice["options"] = [
+        {"id": RETURN_DO, "label": "Take it on", "recommended": True},
+        {"id": RETURN_LATER, "label": "Put it off"},
+        {"id": TASK_OUT, "label": "Leave it where it was" if moving else "Move it out of the goal"},
+        {"id": RETURN_DROP, "label": "Drop it"},
+    ]
+    return [choice, until]
+
+
 MAX_NOTE = 8000
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each

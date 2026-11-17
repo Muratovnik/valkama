@@ -717,11 +717,8 @@ UNTIL = "2026-11-18"
 CAME = datetime(2026, 11, 18, 0, 0, 1, tzinfo=UTC)
 
 
-class ProposedGoalTests(Harness):
-    """A goal an agent files with no parent, and a goal that comes back from being put
-    off: by the owner's setting of its space the agent's decision stands, as the basis
-    `agent` marked in the summary of decisions, or the owner is asked the question
-    `goal`, whose answers `do`, `later` and `drop` take it on, put it off or cancel it."""
+class SettingHarness(Harness):
+    """Scenarios at a setting of the space, at a fixed clock, through the agent's tools."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -734,14 +731,12 @@ class ProposedGoalTests(Harness):
         participation.write_set(self.conn, self.space, name)
         self.conn.commit()
 
-    def propose(self, title: str = "A goal of the agent's own", **arguments: object) -> dict:
-        """The agent files a goal with no parent through its tool, and the answer."""
+    def tool(self, name: str, **arguments: object) -> dict:
+        """The agent's call of a planning tool, and its answer."""
 
         try:
-            with calls.bind(AGENT, "create_work_item"):
-                answer = tools.OPS["create_work_item"](
-                    self.conn, {"space": "ALPHA", "title": title, "kind": "goal", **arguments}
-                )
+            with calls.bind(AGENT, name):
+                answer = tools.OPS[name](self.conn, arguments)
         except BaseException:
             self.conn.rollback()
             raise
@@ -765,6 +760,18 @@ class ProposedGoalTests(Harness):
         """The questions waiting for the owner's answer, everywhere."""
 
         return [str(row["request_id"]) for row in questions.open_rows(self.conn)]
+
+
+class ProposedGoalTests(SettingHarness):
+    """A goal an agent files with no parent, and a goal that comes back from being put
+    off: by the owner's setting of its space the agent's decision stands, as the basis
+    `agent` marked in the summary of decisions, or the owner is asked the question
+    `goal`, whose answers `do`, `later` and `drop` take it on, put it off or cancel it."""
+
+    def propose(self, title: str = "A goal of the agent's own", **arguments: object) -> dict:
+        """The agent files a goal with no parent through its tool, and the answer."""
+
+        return self.tool("create_work_item", space="ALPHA", title=title, kind="goal", **arguments)
 
     # -- the goal an agent proposes ---------------------------------------------------
 
@@ -968,6 +975,171 @@ class ProposedGoalTests(Harness):
         self.assertEqual(
             participation.AGENT, participation.load(self.conn).mode(self.space, "proposed_goal")
         )
+
+
+class TaskInGoalTests(SettingHarness):
+    """A task an agent files in an accepted goal, or moves there: by the owner's setting
+    of its space it is accepted with the goal, `inherited` and marked `task_in_goal` in
+    the summary of decisions, or the owner is asked the question `task`, whose answers
+    `do`, `later`, `out` and `drop` take it on, put it off under the goal, keep it out of
+    the goal or cancel it. The goal is the owner's, so it stands accepted."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.goal = self.filed("The owner's goal", kind="goal", by=calls.browser())
+
+    def file_in_goal(self, title: str, **more: object) -> dict:
+        return self.tool("create_work_item", space="ALPHA", title=title, parent=self.goal, **more)
+
+    def ready_elsewhere(self, title: str) -> str:
+        """A ready task the owner filed outside the goal."""
+
+        task = self.filed(title, by=calls.browser())
+        self.assertEqual("ready", self.card(task)["state"]["category"])
+        return task
+
+    def test_a_task_in_an_accepted_goal_is_inherited(self) -> None:
+        answer = self.file_in_goal("Work inside the goal")
+        task = str(answer["reference"])
+        card = self.card(task)
+        self.assertEqual(
+            ("ready", "inherited", self.id(self.goal)),
+            (card["state"]["category"], card["acceptance"]["basis"], card["parent_id"]),
+        )
+        self.assertNotIn("waits_for_owner", answer)
+        self.assertEqual(([], []), (self.waiting_on(task), self.owners_list()))
+        # A finding the agent moves into the goal is filed there, and summarised the same way.
+        finding = self.filed("A finding")
+        moved = self.tool("apply_work_item_changes", id=finding, update={"parent": self.goal})
+        self.assertNotIn("waits_for_owner", moved)
+        self.assertEqual(
+            ("ready", "inherited"),
+            (self.card(finding)["state"]["category"], self.card(finding)["acceptance"]["basis"]),
+        )
+        self.assertEqual(
+            [
+                ("task_in_goal", finding, f"accepted {finding} under {self.goal}"),
+                ("task_in_goal", task, f"accepted {task} under {self.goal}"),
+            ],
+            self.decided(),
+        )
+        marked = [
+            str(row[0])
+            for row in self.conn.execute(
+                "SELECT e.action FROM agent_decisions d JOIN work_item_events e"
+                " ON e.id = d.event_id ORDER BY e.id"
+            )
+        ]
+        self.assertEqual(["accepted", "accepted"], marked)
+        # A ready task moved in was accepted before: nothing is decided, nothing marked.
+        ready = self.ready_elsewhere("Ready elsewhere")
+        self.tool("apply_work_item_changes", id=ready, update={"parent": self.goal})
+        self.assertEqual(self.id(self.goal), self.card(ready)["parent_id"])
+        self.assertEqual(2, len(self.decided()))
+
+    def manual_tasks(self) -> tuple[dict, dict, str]:
+        """At the manual set: the answer filing a task in the goal, the answer moving the
+        ready task u there, and u."""
+
+        self.at(participation.MANUAL)
+        filed = self.file_in_goal("A new task in the goal")
+        moving = self.ready_elsewhere("Ready task u")
+        moved = self.tool("apply_work_item_changes", id=moving, update={"parent": self.goal})
+        return filed, moved, moving
+
+    def test_manual_work_asks_for_every_task_in_a_goal(self) -> None:
+        filed, moved, moving = self.manual_tasks()
+        task = str(filed["reference"])
+        card = self.card(task)
+        self.assertEqual(
+            ("triage", None, self.id(self.goal)),
+            (card["state"]["category"], card["acceptance"], card["parent_id"]),
+        )
+        [action] = self.waiting_on(task)
+        self.assertEqual(
+            {
+                "action": action.id,
+                "point": "task_in_goal",
+                "question": filed["waits_for_owner"]["question"],
+                "what": f"accepted {task} under {self.goal}",
+            },
+            filed["waits_for_owner"],
+        )
+        question = self.request(filed["waits_for_owner"]["question"])
+        self.assertEqual(
+            ("task", action.id, None, "pending"),
+            (question["purpose"], question["action_id"], question["addressee"], question["status"]),
+        )
+        [choice, until] = json.loads(question["fields_json"])
+        self.assertEqual(
+            [("do", True), ("later", False), ("out", False), ("drop", False)],
+            [(option["id"], bool(option.get("recommended"))) for option in choice["options"]],
+        )
+        self.assertEqual(("until", "later"), (until["id"], until["under"]["option"]))
+        # The ready task moved under the goal stays where it was, and waits on its own question.
+        card = self.card(moving)
+        self.assertEqual(("ready", None), (card["state"]["category"], card["parent_id"]))
+        waits = moved["waits_for_owner"]
+        self.assertEqual(
+            ("task_in_goal", f"moved {moving} under {self.goal}"), (waits["point"], waits["what"])
+        )
+        self.assertEqual("task", self.request(waits["question"])["purpose"])
+        self.assertEqual(
+            [filed["waits_for_owner"]["question"], waits["question"]], self.owners_list()
+        )
+        self.assertEqual("parent", self.waiting_on(moving)[0].kind)
+        # Filed with a link, the task still says what it waits for.
+        linked = self.file_in_goal("A linked task", links=[{"other": task, "kind": "relates-to"}])
+        self.assertEqual("task_in_goal", linked["waits_for_owner"]["point"])
+        # Nothing the agent decided alone: the summary of decisions stays empty.
+        self.assertEqual([], self.decided())
+
+    def test_the_four_answers_to_a_task_in_a_goal(self) -> None:
+        filed, moved, moving = self.manual_tasks()
+        taken = str(filed["reference"])
+        outside = self.file_in_goal("A task that belongs elsewhere")
+        dropped = self.file_in_goal("A task nobody needs")
+        out_task, drop_task = str(outside["reference"]), str(dropped["reference"])
+        answered = {
+            taken: self.answer(filed["waits_for_owner"]["question"], "do"),
+            moving: self.answer(moved["waits_for_owner"]["question"], "later", until=UNTIL),
+            out_task: self.answer(outside["waits_for_owner"]["question"], "out"),
+            drop_task: self.answer(dropped["waits_for_owner"]["question"], "drop"),
+        }
+        self.assertEqual(
+            {taken: "carried_out", moving: "declined", out_task: "declined", drop_task: "declined"},
+            {reference: record["carried_out"] for reference, record in answered.items()},
+        )
+        goal = self.id(self.goal)
+        do = self.card(taken)
+        self.assertEqual(
+            ("ready", "inherited", goal),
+            (do["state"]["category"], do["acceptance"]["basis"], do["parent_id"]),
+        )
+        later = self.card(moving)
+        self.assertEqual(
+            ("deferred", None, goal),
+            (later["state"]["category"], later["acceptance"], later["parent_id"]),
+        )
+        self.assertTrue(later["deferred"]["until"].startswith(UNTIL), later["deferred"])
+        out = self.card(out_task)
+        self.assertEqual(
+            ("triage", None, None),
+            (out["state"]["category"], out["acceptance"], out["parent_id"]),
+        )
+        self.assertIn(
+            ("discovered-from", self.goal),
+            {(link["kind"], link["reference"]) for link in out["links"]},
+        )
+        drop = self.card(drop_task)
+        self.assertEqual(("cancelled", goal), (drop["state"]["category"], drop["parent_id"]))
+        self.assertEqual("cancelled: owner: not needed", self.events(drop_task, "transitioned")[-1])
+        # Every action ended with its answer, and the owner's answers are not the agent's.
+        self.assertEqual(
+            [], [self.waiting_on(reference) for reference in answered if self.waiting_on(reference)]
+        )
+        self.assertEqual([], self.owners_list())
+        self.assertEqual([], self.decided())
 
 
 if __name__ == "__main__":

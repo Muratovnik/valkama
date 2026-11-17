@@ -35,6 +35,7 @@ from . import (
     read_model,
     request_model,
     service,
+    split,
     states,
     waiting,
     words,
@@ -1216,10 +1217,12 @@ def _drop(
     *,
     done: str,
     then: str,
+    reason: str | None = None,
 ) -> None:
     """Cancel the item the owner's answer drops, with the answer's `cancels` for a goal
     or stage with open work under it, writing a summary that keeps what it says was
-    done, or else says `done`, and what comes next, `then`."""
+    done, or else says `done`, and what comes next, `then`. The cancel's reason is
+    `reason`, or else the note when it fits."""
 
     reference = read_model.reference(conn, item)
     said = model.summary(item["summary"], required=False)
@@ -1233,7 +1236,7 @@ def _drop(
         conn,
         reference,
         key,
-        reason=_said(note, key),
+        reason=_said(note, key) if reason is None else reason,
         author=author,
         cancels=answers.get(request_model.RETURN_CANCELS) or None,
     )
@@ -1296,6 +1299,80 @@ CARRIERS["proposed_goal"] = Carrier(
         request_model.RETURN_DROP: pending.DECLINED,
     },
     _goal,
+)
+
+
+#: The reason a task the owner's answer drops is cancelled with.
+TASK_DROPPED = "owner: not needed"
+#: The reason a task the owner's answer moves out of its goal leaves with, when the
+#: answer's note does not fit it.
+TASK_OUT = "the owner moved it out when asked whether to take it on"
+#: The most characters of the owner's note a task moved out leaves with as its reason.
+_OUT_REASON_LIMIT = 200
+
+
+def _task(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about a task an agent filed in an accepted goal, lying there in
+    triage, or one it moved there, which stayed where it was (an action of kind `parent`).
+
+    `do` takes it on in the goal: a task lying there moves to its first ready state,
+    `inherited` as filing it there would make it, and a moved one is moved there now,
+    accepted from triage the same way. `later` puts it off under the goal until the
+    answer's `until`, a moved one moved there first. `out` takes a task lying there out
+    of the goal to triage (`split.move_out`), linked as discovered from the goal, and
+    leaves a moved one where it was. `drop` cancels it, as `owner: not needed`.
+    """
+
+    item = read_model.item_by_id(conn, action.work_item_id)
+    reference = read_model.reference(conn, item)
+    goal = read_model.reference(conn, read_model.item_by_id(conn, str(action.params["parent"])))
+    moving = action.kind == "parent"
+    given = answers.get(request_model.REVIEW_ANSWER)
+    if moving and given in (request_model.RETURN_DO, request_model.RETURN_LATER):
+        service.update_work_item(conn, reference, parent=goal, author=author)
+    if given == request_model.RETURN_DO and not moving:
+        key = _first_state(conn, item, "ready")
+        service.transition_work_item(conn, reference, key, reason=_said(note, key), author=author)
+    elif given == request_model.RETURN_LATER:
+        service.defer_work_item(
+            conn,
+            reference,
+            until=answers.get(request_model.RETURN_UNTIL),
+            reason=note if note and len(note) <= service.PUT_OFF_REASON_LIMIT else GOAL_LATER,
+            author=author,
+        )
+    elif given == request_model.TASK_OUT and not moving:
+        reason = note if note and len(note) <= _OUT_REASON_LIMIT else TASK_OUT
+        split.move_out(conn, reference, reason=reason, author=author)
+        service.link_work_items(conn, reference, goal, "discovered-from", author=author)
+    elif given == request_model.RETURN_DROP:
+        _drop(
+            conn,
+            item,
+            answers,
+            note,
+            author,
+            done="Nothing: it was not taken on.",
+            then=GOAL_DROPPED_NEXT,
+            reason=TASK_DROPPED,
+        )
+
+
+CARRIERS["task_in_goal"] = Carrier(
+    {
+        request_model.RETURN_DO: pending.CARRIED_OUT,
+        request_model.RETURN_LATER: pending.DECLINED,
+        request_model.TASK_OUT: pending.DECLINED,
+        request_model.RETURN_DROP: pending.DECLINED,
+    },
+    _task,
 )
 
 
