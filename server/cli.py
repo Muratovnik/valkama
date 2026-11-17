@@ -8,6 +8,7 @@
   status                   read-only source, data and launcher status
   launcher ...             install, inspect and supervise the stable service command
   skill ...                install, inspect or remove the Valkama skill for each client
+  git-hook ...             install, inspect and remove the Git commit hook
   runtime                  canonical backend/static identity for this checkout
   summary [--space KEY]    short planning-space report for session hooks
   released --space --repo --range
@@ -50,7 +51,7 @@ from .hooks import ingest
 from .hooks.statusline import INTERFACE as STATUSLINE_INTERFACE
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
-from .ops import adapter_check, configuration, doctor, export, setup, skills
+from .ops import adapter_check, configuration, doctor, export, git_hook, setup, skills
 from .planning import item_projects_map
 from .planning import model as planning_model
 from .planning import views as planning_views
@@ -397,6 +398,12 @@ def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace)
             result = {**result, "skills": skills.refresh(options.directory)}
         except (OSError, skills.SkillError) as error:
             result = {**result, "skills": [], "skills_error": str(error)}
+        # The Git hook follows it the same way: a hook that is there gets the
+        # command of the launcher just installed, and a failure is said, not raised.
+        try:
+            result = {**result, "git_hook": git_hook.refresh(options.directory)}
+        except git_hook.GitHookError as error:
+            result = {**result, "git_hook_error": str(error)}
     launcher_queries.print_document(result)
 
 
@@ -440,6 +447,38 @@ def _skill_main(parser: argparse.ArgumentParser, options: argparse.Namespace) ->
         isinstance(entry, dict) and entry.get("action") == "refused" for entry in clients
     ):
         raise SystemExit(1)
+
+
+def _git_hook_parser(commands: argparse._SubParsersAction) -> None:
+    # `git-hook run` is what Git starts; `valkama.py` and the launcher's shim answer it
+    # before this module is imported, so it has no parser here.
+    command = commands.add_parser(
+        "git-hook",
+        help="install, inspect and remove the Git commit hook",
+    )
+    actions = command.add_subparsers(dest="git_hook_action", required=True)
+    for name in ("install", "status", "uninstall"):
+        action = actions.add_parser(name)
+        action.add_argument("--json", action="store_true")
+        if name != "uninstall":
+            action.add_argument("--launcher-directory", default=None)
+
+
+def _git_hook_main(parser: argparse.ArgumentParser, options: argparse.Namespace) -> None:
+    try:
+        if options.git_hook_action == "install":
+            result = git_hook.install(options.launcher_directory)
+        elif options.git_hook_action == "uninstall":
+            result = git_hook.uninstall()
+        else:
+            result = git_hook.status(options.launcher_directory)
+    except git_hook.GitHookError as error:
+        parser.error(str(error))
+    print(
+        json.dumps(result, ensure_ascii=False, indent=1)
+        if options.json
+        else git_hook.render(result)
+    )
 
 
 def _export_main(options: argparse.Namespace) -> None:
@@ -691,6 +730,7 @@ def main(argv: list[str] | None = None) -> None:
     status.add_argument("--launcher-directory", default=None)
     _launcher_parser(commands)
     _skill_parser(commands)
+    _git_hook_parser(commands)
     commands.add_parser(
         "runtime",
         help="print the canonical backend/static identity for the local checkout",
@@ -934,6 +974,8 @@ def main(argv: list[str] | None = None) -> None:
         _launcher_main(parser, options)
     elif options.command == "skill":
         _skill_main(parser, options)
+    elif options.command == "git-hook":
+        _git_hook_main(parser, options)
     elif options.command == "runtime":
         runtime_main()
     elif options.command == "projects":
