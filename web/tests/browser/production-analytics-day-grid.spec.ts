@@ -71,10 +71,12 @@ const gridOf = (page: Page, index: number) =>
       },
     )
     const slot = document.querySelectorAll('.spending-days .period-slot')[at]
+    // A segment's hue, not its paint: the pointer on its day lifts the paint of every segment,
+    // and the hue a mark carries is its fill as well as its background.
     const hues = Object.fromEntries(
       [...(slot?.querySelectorAll<HTMLElement>('.period-segment') ?? [])].map((segment) => [
         segment.dataset.series,
-        getComputedStyle(segment).backgroundColor,
+        getComputedStyle(segment).fill,
       ]),
     )
     const { left, top, right, bottom } = hint?.getBoundingClientRect() ?? new DOMRect()

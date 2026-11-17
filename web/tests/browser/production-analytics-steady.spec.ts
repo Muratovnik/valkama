@@ -16,6 +16,7 @@ import type { Page } from '@playwright/test'
 import { noTask, task, unknownTask, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, record, serve } from './analyticsPage.ts'
+import { drawAllLined } from './drawnViews.ts'
 import { test } from './test.ts'
 
 const WIDTHS = [1440, 1024]
@@ -116,10 +117,7 @@ for (const width of WIDTHS)
     // Tall enough that nothing scrolls: a move is a move, not the window following the pointer.
     await page.setViewportSize({ width, height: 3200 })
     // Each section drawn as its chart, whichever the width of the panel opened it as.
-    for (const section of await analytics.locator('.chart-section').all()) {
-      await section.getByRole('radio', { name: 'Chart' }).click()
-      await expect(section).toHaveAttribute('data-shown', 'chart')
-    }
+    await drawAllLined(analytics)
     const columns = page.locator('.spending-days .period-column')
     const bars = page.locator('.spending-bars .ranked-line')
     await expect(columns).toHaveCount(3)

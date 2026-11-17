@@ -1,15 +1,15 @@
 /**
- * The sections whose few values split one whole draw them as a ring, in the real app over the
- * browser double: agent time by effort and by environment while the section is not split, and the
- * tokens by kind. The oracle is the requirement: the ring is drawn with a legend naming its parts
+ * The sections whose values split one whole open on a ring, in the real app over the browser
+ * double: agent time by effort and by environment while the section is not split, and the tokens
+ * by kind. The oracle is the requirement: the ring is drawn with a legend naming its parts
  * in its order, five sectors at most with the smaller past them folded into one rest; a sector
  * pointed at or reached with the keyboard shows one hint with its figure and share; the section's
  * «Table» shows every value as before; split by a second dimension, the section draws its pairs as
  * ranked bars again; a sector of a value pressed narrows the view to it; a sector reached from the
  * keyboard shows its focus ring, in the forced palette's highlight there, and a pointer press shows
  * none. At 1440 and 360 pixels the
- * ring stands inside its column, its legend clear of it, and no share written on a sector lies on
- * another or past the ring. Each run prints what it measured and keeps a picture of each section.
+ * ring stands inside its column and its legend clear of it, and no words stand on a sector. Each
+ * run prints what it measured and keeps a picture of each section.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -18,6 +18,7 @@ import { value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
+import { sectorBand } from './ringBand.ts'
 import { test } from './test.ts'
 
 /** A stretch of agent work on a day of the week so far, at an effort, in an environment. */
@@ -60,10 +61,10 @@ async function openRing(page: Page, state: Record<string, string>, width: number
   await analytics.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
   if (!(await analytics.locator('.analytics-panel').isVisible()))
     await analytics.locator('.analytics-rail [aria-current="page"]').click()
-  // A narrow page starts on the table; the chart is a press away.
+  // A narrow page starts on the table; the ring is a press away.
   const section = page.locator('.analytics-panel .chart-section').first()
   await expect(section).toBeVisible()
-  const chart = section.getByRole('radio', { name: 'Chart', exact: true })
+  const chart = section.getByRole('radio', { name: 'Ring', exact: true })
   if (!(await chart.isChecked())) await chart.click()
   await expect(ring(page).locator('.donut-sector').first()).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
@@ -71,9 +72,8 @@ async function openRing(page: Page, state: Record<string, string>, width: number
 }
 
 /**
- * Where the ring, its legend, its shares and its column stand: whether the ring and the legend
- * stand inside the column and clear of each other, and whether any share lies past the ring or
- * on another share.
+ * Where the ring, its legend and its column stand: whether the ring and the legend stand inside
+ * the column and clear of each other, and whether any words stand on the ring.
  */
 function layout(section: Locator) {
   return section.evaluate((column) => {
@@ -97,18 +97,13 @@ function layout(section: Locator) {
     const own = box(column)
     const ringBox = box(column.querySelector('.donut-ring'))
     const legend = box(column.querySelector('.chart-legend'))
-    const shares = [...column.querySelectorAll('.donut-share')].map((one) => box(one))
     const entries = [...column.querySelectorAll('.chart-entry')].map((one) => box(one))
     return {
       ringSize: Math.round(ringBox.right - ringBox.left),
       ringInColumn: inside(ringBox, own),
       legendInColumn: inside(legend, own),
       legendClearOfRing: !meet(legend, ringBox),
-      shares: shares.length,
-      sharesInRing: shares.every((one) => inside(one, ringBox)),
-      sharesApart: shares.every((one, at) =>
-        shares.slice(at + 1).every((other) => !meet(one, other)),
-      ),
+      wordsOnRing: column.querySelector('.donut-ring')?.textContent ?? '',
       entriesApart: entries.every((one, at) =>
         entries.slice(at + 1).every((other) => !meet(one, other)),
       ),
@@ -116,22 +111,14 @@ function layout(section: Locator) {
   })
 }
 
-/**
- * The middle of the share written on the ring's largest sector: a point in that sector's band,
- * where the middle of its box would be the ring's hole or another sector.
- */
-async function largestBand(chart: Locator) {
-  const share = await chart.locator('.donut-share').first().boundingBox()
-  if (!share) throw new Error('the largest sector says no share')
-  return { x: share.x + share.width / 2, y: share.y + share.height / 2 }
-}
+/** The middle of the band of the ring's largest sector, where its hint stands. */
+const largestBand = (chart: Locator) => sectorBand(chart.locator('.donut-sector').first())
 
 const SOUND = {
   ringInColumn: true,
   legendInColumn: true,
   legendClearOfRing: true,
-  sharesInRing: true,
-  sharesApart: true,
+  wordsOnRing: '',
   entriesApart: true,
 }
 
@@ -158,7 +145,7 @@ test('agent time by effort is a ring of five sectors at most, with a legend, a h
   await expect(hint).toContainText('high')
   await expect(hint).toContainText('6 h')
   await expect(hint).toContainText('47% of the total')
-  // It stands at the top right of the middle of the sector's band, where its share is written,
+  // It stands at the top right of the middle of the sector's band,
   // as a chart's hint stands at its point: its bottom left corner 6px past it and over it.
   await expect(async () => {
     const placed = await hint.boundingBox()
@@ -181,7 +168,6 @@ test('agent time by effort is a ring of five sectors at most, with a legend, a h
   const measured = await layout(section)
   await record(info, 'ring effort 1440', measured)
   expect(measured).toMatchObject(SOUND)
-  expect(measured.shares).toBeGreaterThan(0)
   await section.screenshot(shot(info, 'ring-effort-1440.png'))
 
   // Its table lists every effort, the two the ring folds among them, as it did.
@@ -233,7 +219,7 @@ test('agent time by environment is a ring whose sector narrows the view to its v
 })
 
 for (const width of [1440, 360])
-  test(`at ${width} pixels the rings stand inside their column with their shares apart`, async ({
+  test(`at ${width} pixels the rings stand inside their column with no words on them`, async ({
     page,
   }, info) => {
     const effort = await openRing(page, { by: 'effort' }, width)

@@ -3,7 +3,8 @@
  * rule: the counted kinds add up to the «Tokens» figure, the cache reads and the reasoning stand
  * apart from that sum, and an answer without its period before has no column for it and says so.
  * Its chart is a ring of the counted kinds alone, each in its kind's hue, the kinds apart named
- * with their figures beside it and no part of its whole.
+ * with their figures beside it and no part of its whole; switched to ranked bars, the same kinds
+ * in the same hues, each bar's share a share of the counted kinds alone.
  */
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -12,6 +13,7 @@ import TokenKindsPanel from '@/pages/analytics/components/TokenKindsPanel.vue'
 
 import { serveUsage, task } from '../fixtures/analytics.ts'
 import { analyticsI18n } from '../support/analyticsReads.ts'
+import { showView, viewsOf } from '../support/chartViews.ts'
 
 /** A week of three days, a task a day, compared with the week before when `compare` is set. */
 function usageOf(compare: boolean) {
@@ -104,6 +106,45 @@ describe('the ring of the tokens by kind', () => {
     expect(ring.findAll('.donut-note').map((one) => one.text())).toEqual([
       'Cache read60M',
       'Reasoning600K',
+    ])
+  })
+
+  it('opens on the ring, and as bars ranks the same kinds, their shares of the counted tokens', async () => {
+    const panel = mountPanel(true)
+    expect(viewsOf(panel, '.kinds-bars')).toEqual({
+      offered: ['Ring', 'Bars', 'Table'],
+      shown: 'Ring',
+    })
+    const shares = panel
+      .findAll('.kinds-bars .chart-figure')
+      .map((one) => one.text().split(' · ')[1])
+
+    await showView(panel, '.kinds-bars', 'Bars')
+    const bars = panel.get('.kinds-bars .ranked-bars')
+    expect(
+      bars
+        .findAll('.ranked-list:not(.ranked-rest) .ranked-row')
+        .map((row) => [
+          row.get('.ranked-label').text(),
+          row.get('.ranked-bar').attributes('data-slot'),
+        ]),
+    ).toEqual([
+      ['Input', '1'],
+      ['Output', '4'],
+      ['Cache write, 5 min', '2'],
+    ])
+    // The kinds apart close the bars by name and figure, with no bar and in no share.
+    expect(bars.findAll('.ranked-rest .ranked-row').map((row) => row.text())).toEqual([
+      'Cache read60M',
+      'Reasoning600K',
+    ])
+    const hinted = bars
+      .findAll('.ranked-list:not(.ranked-rest) .ranked-line')
+      .map((line) => line.attributes('data-tooltip'))
+    expect(hinted.map((hint, at) => hint?.includes(`${shares[at]} of the total`))).toEqual([
+      true,
+      true,
+      true,
     ])
   })
 })

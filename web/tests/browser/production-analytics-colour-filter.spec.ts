@@ -18,6 +18,7 @@ import { value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { hues } from './analyticsHues.ts'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { drawLined } from './drawnViews.ts'
 import { test } from './test.ts'
 
 const HOUR = 3600
@@ -91,6 +92,7 @@ for (const locale of ['en', 'ru'] as const) {
     }, info) => {
       await openReport(page, 1440, pageAt({ by: 'model' }))
       await page.setViewportSize({ width: 1440, height: 900 })
+      await drawLined(page.locator('.spending-bars'))
       const tile = page.locator('[data-section="model"] .mini-share-part')
       await expect(tile.first()).toBeVisible()
       await expect(page.locator('.spending-bars .ranked-label').first()).toHaveText(OPUS)

@@ -35,6 +35,7 @@ import type { Locator, Page } from '@playwright/test'
 import { value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { NOW, openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { drawLined } from './drawnViews.ts'
 import { hint as hintUp } from './hintFramesPage.ts'
 import { pairNames } from './pairNames.ts'
 import { test } from './test.ts'
@@ -380,6 +381,7 @@ for (const locale of ['en', 'ru'] as const)
     await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
     await serve(page, WORLD)
     await openReport(page, 1280, pageAt({ by: 'model' }))
+    await drawLined(page.locator('.spending-bars'))
     const models = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']
     await expect(page.locator(PLACES.bars)).toHaveText(models)
     for (const [where, selector] of Object.entries(CONTROLS)) {

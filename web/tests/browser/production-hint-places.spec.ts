@@ -26,6 +26,7 @@ import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
 import { openCard } from './cardHeadPage.ts'
 import { openDays } from './dayHintPage.ts'
+import { drawAllLined } from './drawnViews.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
 import { projectScope } from './planningFixtures.ts'
 import { openSteps } from './stepsPage.ts'
@@ -228,8 +229,7 @@ for (const width of [1440, 1024]) {
     }) => {
       await openDays(page, width)
       // Each section drawn as its chart, whichever the width of the panel opened it as.
-      for (const section of await page.locator('.chart-section').all())
-        await section.getByRole('radio', { name: 'Chart' }).click()
+      await drawAllLined(page)
       const ranking = page.locator('.spending-bars .ranked-grid')
       await expect(ranking.locator('.ranked-line')).not.toHaveCount(0)
       await ranking.evaluate((list) => list.scrollIntoView({ block: 'center', inline: 'nearest' }))
