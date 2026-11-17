@@ -6,7 +6,9 @@
  * that hatches a period still running names the hatch after the series (`hatch`), beside a
  * hatched swatch, so the texture never has to be guessed; and a chart that marks a period it is
  * compared with names that mark last (`outline`), beside a short line in the ink the plot draws
- * it in at the height that period reached. Neither key acts.
+ * it in at the height that period reached. Neither key acts, and neither is a series: each is a
+ * key of a mark (`chart-mark`, `data-mark`), never a `chart-key` with a series' key, so whatever
+ * reads the series reads them alone and no series' key can meet a mark's.
  *
  * A legend given a figure for its entries (`figures`), as a ring's is, lists down, an entry a
  * line, each figure at the end of its line in the quiet ink, ending where the others end: a
@@ -145,33 +147,33 @@ const figureOf = (key: string) => props.figures?.get(key)
     </li>
     <li
       v-if="hatch"
-      class="chart-entry"
+      class="chart-entry chart-entry-mark"
     >
       <span
-        class="chart-key"
-        data-series="hatch"
+        class="chart-mark"
+        data-mark="hatch"
       >
         <span
           class="chart-hatch hatched"
           aria-hidden="true"
         />
-        <span class="chart-key-name">{{ hatch }}</span>
+        <span class="chart-mark-name one-line">{{ hatch }}</span>
       </span>
     </li>
     <li
       v-if="outline"
-      class="chart-entry"
+      class="chart-entry chart-entry-mark"
     >
       <span
         v-tooltip.detail="hintOf('outline')"
-        class="chart-key"
-        data-series="outline"
+        class="chart-mark"
+        data-mark="outline"
       >
         <span
           class="chart-outline"
           aria-hidden="true"
         />
-        <span class="chart-key-name one-line">{{ outline }}</span>
+        <span class="chart-mark-name one-line">{{ outline }}</span>
       </span>
     </li>
   </ul>
@@ -225,7 +227,8 @@ const figureOf = (key: string) => props.figures?.get(key)
 /* An entry that acts is a line of the legend, not a control standing in it: the same box and
    words as one that does not, with the pointer's hand. A button takes no control's row height:
    «No task», which acts only as one, stood 40 pixels tall among the 17 of its neighbours' links. */
-.chart-key {
+.chart-key,
+.chart-mark {
   display: inline-flex;
   gap: var(--space-2);
   align-items: center;
@@ -248,7 +251,8 @@ const figureOf = (key: string) => props.figures?.get(key)
   }
 }
 
-.chart-key-name {
+.chart-key-name,
+.chart-mark-name {
   flex: 0 1 auto;
 }
 

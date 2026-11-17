@@ -80,12 +80,14 @@ async function legendKeys(page: Page) {
     // helper would not be in scope here.
     // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
     const hundredth = (figure: number) => Math.round(figure * 100) / 100
-    return [...document.querySelectorAll<HTMLElement>('.spending-days .chart-key')].map((key) => {
+    return [
+      ...document.querySelectorAll<HTMLElement>('.spending-days :is(.chart-key, .chart-mark)'),
+    ].map((key) => {
       const box = key.getBoundingClientRect()
       const after = getComputedStyle(key, '::after')
       const reach = (side: string) =>
         after.content === 'none' ? 0 : Math.max(0, -Number.parseFloat(side) || 0)
-      const words = key.querySelector('.chart-key-name') ?? key
+      const words = key.querySelector(':is(.chart-key-name, .chart-mark-name)') ?? key
       const range = document.createRange()
       range.selectNodeContents(words)
       const said = range.getBoundingClientRect()

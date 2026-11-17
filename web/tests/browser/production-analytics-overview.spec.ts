@@ -135,7 +135,7 @@ test('the chart outlines the period before on its own scale, in the legend, the 
   const days = panel.locator('.spending-days')
   // Monday the 2nd held twelve hours, more than this Monday: the scale reaches past it.
   await expect(days.locator('.period-before')).toHaveCount(3)
-  await expect(days.locator('.chart-key[data-series="outline"]')).toHaveText('period before')
+  await expect(days.locator('.chart-mark[data-mark="outline"]')).toHaveText('period before')
   await expect(days.locator('.period-scale')).toContainText('15')
   const heights = await days.locator('.period-slot').evaluateAll((slots) =>
     slots.map((slot) => {

@@ -126,7 +126,7 @@ describe('period columns that open nothing', () => {
 
   it('names the hatch in the legend while a running period is drawn, and only then', () => {
     const running = mountColumns()
-    const key = running.get('.chart-key[data-series="hatch"]')
+    const key = running.get('.chart-mark[data-mark="hatch"]')
     expect(key.text()).toBe('in progress')
     expect(key.get('.chart-hatch').classes()).toContain('hatched')
     // The key only shows: no link, no button, no focus.
@@ -134,7 +134,7 @@ describe('period columns that open nothing', () => {
     expect(key.attributes('tabindex')).toBeUndefined()
 
     const over = mountColumns({ columns: finished })
-    expect(over.find('.chart-key[data-series="hatch"]').exists()).toBe(false)
+    expect(over.find('.chart-mark[data-mark="hatch"]').exists()).toBe(false)
     expect(over.findAll('.hatched')).toHaveLength(0)
     // The legend is still there for its two series: the key is gone, not the legend.
     expect(over.findAll('.chart-key')).toHaveLength(2)
@@ -144,7 +144,7 @@ describe('period columns that open nothing', () => {
     const one = [series[0] as PeriodSeries]
     expect(
       mountColumns({ series: one })
-        .findAll('.chart-key')
+        .findAll(':is(.chart-key, .chart-mark)')
         .map((key) => key.text()),
     ).toEqual(['ci', 'in progress'])
     const over = mountColumns({

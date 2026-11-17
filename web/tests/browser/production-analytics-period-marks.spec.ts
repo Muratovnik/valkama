@@ -235,7 +235,7 @@ test('in a forced palette the tick keeps its overhang in the palette’s ink', a
 /** The hatch's key in the day chart's legend: its words and its swatch's mask, if it is there. */
 const hatchKey = (page: Page) =>
   page.evaluate(() => {
-    const key = document.querySelector('.spending-days .chart-key[data-series="hatch"]')
+    const key = document.querySelector('.spending-days .chart-mark[data-mark="hatch"]')
     const swatch = key?.querySelector('.chart-hatch')
     return key && swatch
       ? {
