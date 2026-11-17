@@ -78,6 +78,9 @@ days without an event on the item. An open question to the owner there stops
 the count; your steps lapse with your claim. Take a stale claim over without
 `force`, a live one only on an instruction that says so. An ended session keeps
 its claims 12 hours: resuming makes them `live`, and the queue leaves them.
+A launch that assigns or resumes its agent's session claims for that session
+(`source: launch`): what the agent left at work goes back to the queue 12 hours
+after the session ends.
 An item's `lapsed_claim` names whose claim lapsed, why and when, until the next claim.
 `release: true` gives an item back and returns it from the active state to a
 ready one, unless a checklist step of it is still claimed; a blocked one stays.

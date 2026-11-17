@@ -254,6 +254,23 @@ def client_argv(
         raise LaunchError(str(error)) from error
 
 
+def session_identity(packet: LaunchPacket, resume_session_id: str = "") -> str:
+    """The session a launch will run under, known before its process exists; blank when not.
+
+    A resume runs under the session it resumes. A fresh run of a client that takes
+    its identity from its launcher runs under one minted here; a client that mints
+    its own announces it only once it runs. Asked of the capability rather than of
+    the client's name: whether the identity is chosen here or announced later is
+    exactly what that field says, and a name test is a second answer that can drift.
+    """
+
+    if resume_session_id:
+        return resume_session_id
+    if drivers.capabilities_for(packet.client).assigns_session_identity:
+        return str(uuid.uuid4())
+    return ""
+
+
 def worktree_path(repo: str, reference: str) -> str:
     """Sibling directory, never inside the repository it checks out."""
     parent = os.path.dirname(os.path.abspath(repo))
@@ -612,6 +629,7 @@ class Runner:
         directory: tuple[str, dict] | None = None,
         reservation: object | None = None,
         added_dirs: Sequence[str] = (),
+        session_id: str = "",
     ) -> dict:
         """Spawn one client for this work item.
 
@@ -621,7 +639,9 @@ class Runner:
         computations that agree by luck. A caller that has none resolves it here.
         `added_dirs` are the directories the client may reach beside it, on the
         runs its driver takes them on; under WSL each is translated as the
-        directory it runs in is.
+        directory it runs in is. `session_id` is the identity a caller took from
+        `session_identity` before the process existed, for the same reason; a
+        caller that has none leaves it to this launch.
         """
 
         if reservation is None:
@@ -636,6 +656,7 @@ class Runner:
                     directory=directory,
                     reservation=owned,
                     added_dirs=added_dirs,
+                    session_id=session_id,
                 )
         with self._lock:
             if self._starting.get(reference) is not reservation:
@@ -647,12 +668,11 @@ class Runner:
         if not packet.resume and resume_session_id:
             raise LaunchError("a resume session id was supplied for a fresh launch")
         launch_id = f"launch-{uuid.uuid4().hex[:12]}"
-        client_session_id = resume_session_id
-        # Asked of the capability rather than of the client's name: whether the
-        # identity is chosen here or announced later is exactly what this field
-        # says, and a name test here is a second answer that can drift from it.
-        if capabilities.assigns_session_identity and not client_session_id:
-            client_session_id = str(uuid.uuid4())
+        if session_id and packet.resume and session_id != resume_session_id:
+            raise LaunchError("a resume runs under the session it resumes")
+        if session_id and not packet.resume and not capabilities.assigns_session_identity:
+            raise LaunchError(f"{packet.client} announces its own session; none can be assigned")
+        client_session_id = session_id or session_identity(packet, resume_session_id)
         runtime = None
         schema_path = ""
         result_path = ""

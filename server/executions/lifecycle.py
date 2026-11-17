@@ -24,8 +24,11 @@ import contextlib
 import json
 import sqlite3
 import sys
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
-from .. import runner
+from .. import runner, sessions
+from ..planning import calls as planning_calls
 from ..planning import item_projects
 from ..planning import model as planning_model
 from ..planning import service as planning_service
@@ -79,13 +82,22 @@ def _launch_reserved(
         resume_session_id = _resumable_session(conn, record, packet.client) if packet.resume else ""
         state_before = str(record["state"]["key"])
         claim_before = str(record["claim_ref"] or "")
-        planning_service.claim_work_item(
-            conn,
-            reference,
-            author=actor,
-            force=bool(payload.get("force")),
-            start_reason="launched",
+        session = _LaunchSession.of(
+            conn, packet, runner.session_identity(packet, resume_session_id)
         )
+        # The reservation proves no launch of this item runs here any more, so an
+        # earlier launch's claim is this one's to take over, though its end awaits
+        # the next reap and its session still reads live.
+        earlier = (record.get("claim") or {}).get("source") == planning_calls.LAUNCH
+        with session.proving():
+            planning_service.claim_work_item(
+                conn,
+                reference,
+                author=actor,
+                force=bool(payload.get("force")) or earlier,
+                start_reason="launched",
+            )
+        session.open(conn)
         launched = planning_service.get_work_item(conn, reference)
         execution_service.open_execution(
             conn,
@@ -121,7 +133,17 @@ def _launch_reserved(
         # SQLite). No process exists yet. Discard any partial baseline write
         # before compensation starts its own guarded transaction.
         conn.rollback()
-        _restore(conn, reference, state_before, claim_before, launched, actor, execution_id, error)
+        _restore(
+            conn,
+            reference,
+            state_before,
+            claim_before,
+            launched,
+            actor,
+            execution_id,
+            error,
+            session,
+        )
         raise
 
     try:
@@ -135,12 +157,23 @@ def _launch_reserved(
             directory=directory,
             reservation=reservation,
             added_dirs=[root["root"] for root in added],
+            session_id=session.session_id,
         )
     except runner.LaunchError as error:
         # A process that never started must not leave a phantom executor or a
         # false move into an active state. The launch-owned revision decides
         # whether restoring the prior state and claim is still safe.
-        _restore(conn, reference, state_before, claim_before, launched, actor, execution_id, error)
+        _restore(
+            conn,
+            reference,
+            state_before,
+            claim_before,
+            launched,
+            actor,
+            execution_id,
+            error,
+            session,
+        )
         raise
 
     session_identity = started["client_session_id"] or started["launch_id"]
@@ -450,8 +483,14 @@ def _restore(
     actor: str,
     execution_id: str,
     error: BaseException,
+    session: _LaunchSession,
 ) -> None:
-    """Compensate only the unchanged launch-owned item, with the write lock held."""
+    """Compensate only the unchanged launch-owned item, with the write lock held.
+
+    The launch's own release is made in the launch's call, since only the session
+    its claim names holds it; a session the claim opened is ended, because its
+    process never ran.
+    """
 
     conn.execute("BEGIN IMMEDIATE")
     try:
@@ -483,14 +522,16 @@ def _restore(
                     move_state=False,
                 )
             elif restored["claim_ref"] == actor:
-                planning_service.claim_work_item(
-                    conn,
-                    reference,
-                    author=actor,
-                    release=True,
-                    expected_revision=int(restored["revision"]),
-                    move_state=False,
-                )
+                with session.proving():
+                    planning_service.claim_work_item(
+                        conn,
+                        reference,
+                        author=actor,
+                        release=True,
+                        expected_revision=int(restored["revision"]),
+                        move_state=False,
+                    )
+        session.close_unstarted(conn)
         unresolved = (
             "nothing ran; the prior state and claim were restored"
             if owned
@@ -517,6 +558,65 @@ def _restore(
     except Exception:
         conn.rollback()
         raise
+
+
+@dataclass(frozen=True)
+class _LaunchSession:
+    """The session a launch's claim names, and whether the claim opened it.
+
+    The launch proves that session (`calls.launch`) when it knows it before the
+    process exists, assigned or resumed (`runner.session_identity`): the claim is
+    then a lease of the session, live while it runs and released
+    `leases.ENDED_GRACE` after it ends, and the session opens and ends under that
+    one id. A client that announces its own identity names none yet, and its claim
+    stays unconfirmed, as every claim was before leases.
+    """
+
+    session_id: str
+    client: str
+    #: Whether the session was not open before the claim: the launch opened it, so a
+    #: launch that never started ends it again.
+    opens: bool
+
+    @classmethod
+    def of(
+        cls, conn: sqlite3.Connection, packet: runner.LaunchPacket, session_id: str
+    ) -> _LaunchSession:
+        row = conn.execute("SELECT status FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        opens = bool(session_id) and (row is None or row[0] != "active")
+        return cls(session_id, packet.client, opens)
+
+    def proving(self) -> contextlib.AbstractContextManager[None]:
+        """Make the writes inside this block the launch's call for its session, if it has one."""
+
+        if not self.session_id:
+            return contextlib.nullcontext()
+        return planning_calls.bind(planning_calls.launch(self.session_id, self.client), _TOOL)
+
+    def open(self, conn: sqlite3.Connection) -> None:
+        """Open the session in the claim's transaction, so the claim reads `live` from the start.
+
+        A resumed session that ended or failed would read `stale`, and the sweep could
+        release the claim before the process exists; `session_start` records the
+        start itself once it runs.
+        """
+
+        if self.opens:
+            sessions.transition(conn, self.session_id, "start", at=_now(), client=self.client)
+
+    def close_unstarted(self, conn: sqlite3.Connection) -> None:
+        """End the session this launch opened and never ran."""
+
+        if self.opens:
+            sessions.transition(conn, self.session_id, "end", at=_now())
+
+
+#: The tool a launch's own call is recorded under.
+_TOOL = "launch_work_item"
+
+
+def _now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _start_note(packet: runner.LaunchPacket, started: dict, resumed_from: str) -> str:
