@@ -275,6 +275,24 @@ class WorkflowGuardError(PlanningError):
     """A transition the workflow does not permit, or permits only with force."""
 
 
+class CancelListError(WorkflowGuardError):
+    """A goal or stage cancelled with open work under it, without the list's token or with
+    a stale one: the refusal carries the list of what the cancel would close.
+
+    Its own code and body (`api.error_response`): the caller reads `cancels`, what would
+    be cancelled, and `dependents`, the open work outside that waits on it, and sends the
+    same move with `cancels` set to `list_token` to cancel it all.
+    """
+
+    def __init__(
+        self, message: str, cancels: list[dict], dependents: list[dict], list_token: str
+    ) -> None:
+        super().__init__(message)
+        self.cancels = cancels
+        self.dependents = dependents
+        self.list_token = list_token
+
+
 class MentionLimitError(PlanningError):
     """A session named one item in `mentions` as often as an hour allows.
 
@@ -557,6 +575,17 @@ def edited_labels(
         raise PlanningError(f"{both[0]!r} is named in both labels_add and labels_remove")
     kept = [label for label in current if label not in removing]
     return labels(kept + [label for label in adding if label not in kept])
+
+
+def outward_kind(kind: object, parent_id: object) -> str:
+    """The kind a reader sees: a container is a goal, or a stage under a parent.
+
+    Every place a kind leaves the server from a row reads it through this.
+    """
+
+    if kind == CONTAINER_KIND:
+        return "stage" if parent_id else "goal"
+    return str(kind)
 
 
 def human_id(key: str, number: int) -> str:

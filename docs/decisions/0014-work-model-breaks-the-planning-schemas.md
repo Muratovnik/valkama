@@ -89,6 +89,11 @@ and no compatibility layer.
      at any depth, is open (`children`), and `force` does not carry it;
    - the ending of a launch moves its item nowhere: an outcome `complete` or
      `expected_no_change` no longer moves it from its active state to `review`;
+   - a cancel of a goal or stage with open work under it, which used to pass, is
+     refused with `cancel_list` and the list of what would close, and the
+     `transition` group and its HTTP write take `cancels`, that list's token,
+     which cancels the work under it in the same write; that answer's
+     `released` is then a list of `{reference, holder}`;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -165,6 +170,7 @@ and no compatibility layer.
 | an agent answering, declining or changing the answer of any question to the owner | leave a question with a `purpose` to the owner; only the session that asked withdraws it |
 | completing a goal or stage with open work under it | close, cancel or move out what is open under it; completing it then is the confirmation |
 | a launch that ends `complete` moves its item to `review` | the launched agent moves it to `review` with `to_check` |
+| cancelling a goal or stage with open work under it in one move | the move, refused with `cancel_list`; then the same move with `cancels` set to its `list_token` |
 
 ## Consequences
 

@@ -26,7 +26,8 @@ CARD = frozenset(
     {
         "reference", "title", "kind", "priority", "revision", "created_at", "updated_at",
         "labels", "source", "state", "open", "container_state", "acceptance", "started_at",
-        "waits_for", "workable", "withheld", "projects", "claim_ref", "claim_state",
+        "waits_for", "cancelled_blockers", "workable", "withheld", "projects", "claim_ref",
+        "claim_state",
         "last_claim_ref", "closed_at", "lapsed_claim", "url", "parent", "description",
         "checklist", "summary",
     }
@@ -377,6 +378,50 @@ class ConfirmationPartTests(CardCase):
         self.assertNotIn("confirmation", self.read()["parts"])
         self.assertNotIn("confirmation", self.http())
         self.assertNotIn("confirmation", self.read(parts=["confirmation"]))
+
+
+class CancelledBlockerTests(CardCase):
+    """An open item linked `blocks` from one that was cancelled."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.blocker = self.item("Never done")
+        self.ref = self.item("Waited")
+        self.agent(
+            "apply_work_item_changes",
+            id=self.blocker,
+            links=[{"other": self.ref, "kind": "blocks"}],
+            summary={"done": "Not needed", "next": "Nothing"},
+            transition={"state": "cancelled"},
+        )
+
+    def test_the_card_names_it_as_the_full_record_does(self) -> None:
+        card = self.read()
+        self.assertEqual([self.blocker], card["cancelled_blockers"])
+        self.assertEqual([], card["waits_for"])
+        self.assertEqual([self.blocker], self.http()["cancelled_blockers"])
+        placed = set(read_model.CARD_FIELDS) | set(read_model.PARTS) | set(read_model.OFF_CARD)
+        self.assertEqual(set(), set(self.http(sessions="true")) - placed)
+
+    def test_it_lasts_while_the_link_stands_and_only_on_open_work(self) -> None:
+        self.agent(
+            "apply_work_item_changes",
+            id=self.blocker,
+            links=[{"other": self.ref, "kind": "blocks", "remove": True}],
+        )
+        self.assertNotIn("cancelled_blockers", self.read())
+        self.agent(
+            "apply_work_item_changes",
+            id=self.blocker,
+            links=[{"other": self.ref, "kind": "blocks"}],
+        )
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            summary={"done": "Not needed either", "next": "Nothing"},
+            transition={"state": "cancelled"},
+        )
+        self.assertNotIn("cancelled_blockers", self.read())
 
 
 class SizeTests(unittest.TestCase):

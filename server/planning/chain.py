@@ -129,7 +129,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 "work_item_id": identity,
                 "reference": model.human_id(key, int(row["number"])),
                 "title": row["title"],
-                "kind": read_model.outward_kind(row["kind"], row["parent_id"]),
+                "kind": model.outward_kind(row["kind"], row["parent_id"]),
                 "state": states.public_state(
                     {
                         "key": row["state_key"],
@@ -158,7 +158,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
             "work_item_id": root_id,
             "reference": model.human_id(key, int(root["number"])),
             "title": root["title"],
-            "kind": read_model.outward_kind(root["kind"], root["parent_id"]),
+            "kind": model.outward_kind(root["kind"], root["parent_id"]),
             "has_children": root_id in children,
             "totals": totals,
         },

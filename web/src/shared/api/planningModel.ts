@@ -120,6 +120,8 @@ const workItemBriefShape = {
   started_at: boundedText(ISO, 96).nullable(),
   /** The open items that block it, by reference. */
   waits_for: boundedList(boundedText(WORK_ITEM_REFERENCE, 20), 500),
+  /** The cancelled items still linked to block it; only on open work, and only when there are any. */
+  cancelled_blockers: boundedList(boundedText(WORK_ITEM_REFERENCE, 20), 500).optional(),
   claim_ref: actor(),
   claim_state: claimStateField(),
   parent_id: boundedText(UUID, 36).nullable(),
@@ -443,6 +445,8 @@ const workItemSchema = recordObject({
   requeued: stateMoveSchema.optional(),
   // The holder whose claim a close ended.
   released: holderField().optional(),
+  // The open items a close left with nothing open blocking them.
+  freed: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
   // The goals and stages a write left with nothing open under them.
   awaiting_confirmation: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
 })

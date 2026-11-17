@@ -138,6 +138,13 @@ describe('a record of the work model', () => {
     delete unflagged.by_previous_holder
     expect(() => validateWorkItemBrief({ ...brief(), checklist: [unflagged] })).toThrow()
   })
+
+  it('reads the cancelled items still linked to block it, which only some records carry', () => {
+    const read = validateWorkItemBrief({ ...brief(), cancelled_blockers: ['MAIN-5'] })
+    expect([read.cancelled_blockers, read.waits_for]).toEqual([['MAIN-5'], []])
+    expect(validateWorkItemBrief(brief()).cancelled_blockers).toBeUndefined()
+    expect(() => validateWorkItemBrief({ ...brief(), cancelled_blockers: ['main 5'] })).toThrow()
+  })
 })
 
 describe('the tree of work', () => {

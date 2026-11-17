@@ -33,18 +33,33 @@ What a confirmer reads is the `confirmation` part of the container (`confirmatio
 the children cancelled and moved out, each with its reason, and how many steps the
 container has to check, 0 meaning its description is what to check against.
 
+- **The cancel list.** Cancelling a goal or stage cancels the open work under it, at
+  any depth, so the caller sees that work first: `cancel_list` builds what the cancel
+  would close (`cancels`) and the open work outside it that waits on it
+  (`dependents`), and `token` fingerprints the two. The service refuses a cancel sent
+  without that token, or with one the list no longer has, with the list
+  (`model.CancelListError`), and cancels exactly that list when the token matches. The
+  token holds nothing on the server: it is the list's own content, so the same list
+  gives the same token to an agent, the interface and the owner, and an edit of a
+  title, a description or a comment leaves it as it was.
+- **Freed work.** A close says which open items it left with nothing open blocking
+  them (`freed`), and an open item still linked `blocks` to a cancelled one says so
+  in its `cancelled_blockers` (`item_tree`).
+
 This module sits below the read model and the service, as `questions` does: the
 service and `read_model` call it, and it imports neither (nor `requests`, `split` or
 `sweep`; `pyproject.toml` holds the direction). Later parts of closing extend it here:
-the cancel list and its token, the confirmation question and its sweep step.
+the confirmation question and its sweep step.
 """
 
 from __future__ import annotations
 
 import contextlib
 import contextvars
+import hashlib
+import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 
 from . import calls, item_tree, leases, model, questions, subscriptions
@@ -256,8 +271,7 @@ def _segment(label: str, references: list[str], shown: int) -> str:
 def _enter(conn: sqlite3.Connection, identity: str) -> str:
     """The container came to wait: its row, its follower and Valkama's record of it."""
 
-    found = conn.execute(_REFERENCE, (identity,)).fetchone()
-    reference = model.human_id(str(found[0]), int(found[1]))
+    reference = _reference_of(conn, identity)
     container = conn.execute(
         "SELECT work_item_id, checklist FROM work_items WHERE work_item_id = ?", (identity,)
     ).fetchone()
@@ -332,3 +346,228 @@ def _moved_out(conn: sqlite3.Connection, identity: str) -> list[dict]:
         for reference, reason in left.items()
         if reference not in held
     ]
+
+
+# -- the cancel list ------------------------------------------------------------------
+
+#: The refusal of a cancel whose list the caller has not confirmed.
+CANCEL_LIST = "cancel_list"
+#: How many hexadecimal digits of the list's SHA-256 its token keeps.
+TOKEN_DIGITS = 16
+#: How a dependent waits on what the cancel closes: linked `blocks` to it.
+BLOCKS = "blocks"
+
+#: Every item under one, at any depth, with what its row of the list and its place in
+#: the tree need. `UNION` keeps each once, so a cycle in a damaged store ends.
+_UNDER = (
+    "WITH RECURSIVE under(id) AS (SELECT work_item_id FROM work_items WHERE parent_id = ?"
+    " UNION SELECT w.work_item_id FROM under u JOIN work_items w ON w.parent_id = u.id)"
+    " SELECT i.*, p.key AS space_key, s.key AS state_key, s.name AS state_name,"
+    " s.category AS state_category FROM under u JOIN work_items i ON i.work_item_id = u.id"
+    " JOIN workflow_states s ON s.state_id = i.state_id"
+    " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
+)
+#: The open items the items named block, as one JSON array, with the one blocking each.
+_BLOCKED = (
+    "SELECT t.work_item_id, t.title, t.kind, t.parent_id, p.key, t.number, bp.key, b.number"
+    " FROM work_item_links l JOIN work_items t ON t.work_item_id = l.to_id"
+    " JOIN workflow_states ts ON ts.state_id = t.state_id"
+    " JOIN planning_spaces p ON p.planning_space_id = t.planning_space_id"
+    " JOIN work_items b ON b.work_item_id = l.from_id"
+    " JOIN planning_spaces bp ON bp.planning_space_id = b.planning_space_id"
+    " WHERE l.kind = 'blocks' AND ts.is_terminal = 0"
+    " AND l.from_id IN (SELECT value FROM json_each(?))"
+)
+#: Of the open items the items named block, those nothing open blocks any more.
+_FREED = (
+    "SELECT DISTINCT p.key, t.number FROM work_item_links l"
+    " JOIN work_items t ON t.work_item_id = l.to_id"
+    " JOIN workflow_states ts ON ts.state_id = t.state_id"
+    " JOIN planning_spaces p ON p.planning_space_id = t.planning_space_id"
+    " WHERE l.kind = 'blocks' AND ts.is_terminal = 0"
+    " AND l.from_id IN (SELECT value FROM json_each(?))"
+    " AND NOT EXISTS (SELECT 1 FROM work_item_links o"
+    "  JOIN work_items b ON b.work_item_id = o.from_id"
+    "  JOIN workflow_states bs ON bs.state_id = b.state_id"
+    "  WHERE o.kind = 'blocks' AND o.to_id = t.work_item_id AND bs.is_terminal = 0)"
+    " ORDER BY p.key, t.number"
+)
+
+
+@dataclass(frozen=True)
+class CancelList:
+    """What cancelling one goal or stage would close, and the token that confirms it."""
+
+    #: The goal's or stage's own reference.
+    reference: str
+    #: The open items under it, at any depth, in number order: `reference`, `title`,
+    #: `kind`, `state` (null for an accepted open goal or stage) with `container_state`,
+    #: and `holder`, who holds the item or a step of it, empty when nobody does.
+    cancels: list[dict]
+    #: The open items outside the list that wait on it or on the goal or stage itself:
+    #: `reference`, `title`, `kind`, `waits_on` and `how`.
+    dependents: list[dict]
+    token: str
+    #: The rows of what it cancels, deepest first: the order the cancel closes them in,
+    #: so that a goal or stage is cancelled once nothing under it is open.
+    rows: list[sqlite3.Row]
+
+    def refusal(self, stale: bool) -> model.CancelListError:
+        """The refusal that hands the caller this list; `stale` for a token it no longer has."""
+
+        said = (
+            f"the work under {self.reference} changed since that list_token"
+            if stale
+            else f"{self.reference} has {len(self.cancels)} open item(s) under it, and"
+            " cancelling it cancels them all"
+        )
+        return model.CancelListError(
+            f"[{CANCEL_LIST}] {said}: read the list, then send the same transition with"
+            f" cancels set to list_token {self.token}",
+            self.cancels,
+            self.dependents,
+            self.token,
+        )
+
+    def released(self) -> list[dict]:
+        """Each claim the cancel ends, on an item or a step of it: `reference`, `holder`."""
+
+        return [
+            {"reference": entry["reference"], "holder": holder}
+            for entry in self.cancels
+            for holder in entry["holder"]
+        ]
+
+
+def cancel_list(conn: sqlite3.Connection, row: sqlite3.Row) -> CancelList | None:
+    """What cancelling the goal or stage `row` would close; None with nothing open under it.
+
+    At most five statements, however much is under it: the items under it, the goal's
+    or stage's reference, the tree that says what each goal or stage under it derives,
+    and what the list blocks.
+    """
+
+    identity = str(row["work_item_id"])
+    under = conn.execute(_UNDER, (identity,)).fetchall()
+    found = [entry for entry in under if entry["state_category"] not in model.TERMINAL_CATEGORIES]
+    if not found:
+        return None
+    tree = item_tree.below(conn, [identity])
+    depth = _depths(identity, under)
+    found.sort(key=lambda entry: int(entry["number"]))
+    cancels = [
+        _cancel_row(entry, tree.container_state(str(entry["work_item_id"]))) for entry in found
+    ]
+    dependents = _dependents(conn, {identity, *(str(entry["work_item_id"]) for entry in found)})
+    return CancelList(
+        reference=_reference_of(conn, identity),
+        cancels=cancels,
+        dependents=dependents,
+        token=token(cancels, dependents),
+        rows=sorted(
+            found, key=lambda entry: (-depth[str(entry["work_item_id"])], int(entry["number"]))
+        ),
+    )
+
+
+def token(cancels: list[dict], dependents: list[dict]) -> str:
+    """The list's fingerprint: what is cancelled, where it stands and who holds it, and
+    what waits on it and how.
+
+    Titles, kinds, descriptions and comments are not in it: editing them changes nothing
+    the cancel does. A new item under the goal or stage, another holder or another state
+    changes it.
+    """
+
+    projection = {
+        "cancels": sorted(
+            [entry["reference"], _token_state(entry), sorted(entry["holder"])] for entry in cancels
+        ),
+        "dependents": sorted(
+            [entry["reference"], entry["waits_on"], entry["how"]] for entry in dependents
+        ),
+    }
+    text = json.dumps(projection, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(text.encode("ascii")).hexdigest()[:TOKEN_DIGITS]
+
+
+def freed(conn: sqlite3.Connection, closed: Iterable[str]) -> list[str]:
+    """The open items the items `closed` blocked that nothing open blocks any more."""
+
+    named = json.dumps(sorted(set(closed)))
+    return [model.human_id(str(key), int(number)) for key, number in conn.execute(_FREED, (named,))]
+
+
+def _cancel_row(entry: sqlite3.Row, derived: str | None) -> dict:
+    accepted = entry["state_category"] == model.SERVICE_CATEGORY
+    state = {
+        "key": entry["state_key"],
+        "name": entry["state_name"],
+        "category": entry["state_category"],
+    }
+    return {
+        "reference": model.human_id(str(entry["space_key"]), int(entry["number"])),
+        "title": entry["title"],
+        "kind": model.outward_kind(entry["kind"], entry["parent_id"]),
+        "state": None if accepted else state,
+        "container_state": derived,
+        "holder": _holders(entry),
+    }
+
+
+def _holders(entry: sqlite3.Row) -> list[str]:
+    """Who holds the item and who holds a step of it, each once, sorted."""
+
+    found = {str(entry["claim_ref"])} if entry["claim_ref"] else set()
+    steps = model.checklist(entry["checklist"])
+    found |= {str(step["claimed_by"]) for step in steps if step["claimed_by"]}
+    return sorted(found)
+
+
+def _token_state(entry: dict) -> str:
+    """Where an item of the list stands for its token: its state's key, or what it derives."""
+
+    if entry["state"] is None:
+        return str(entry["container_state"])
+    return str(entry["state"]["key"])
+
+
+def _depths(root: str, under: list[sqlite3.Row]) -> dict[str, int]:
+    """How far below `root` each item stands, 1 for its children."""
+
+    parents = {str(entry["work_item_id"]): str(entry["parent_id"]) for entry in under}
+    depths: dict[str, int] = {}
+    for identity in parents:
+        steps, current = 0, identity
+        # The climb ends at the root, or after as many steps as there are items, which
+        # only a cycle in a damaged store would take.
+        while current != root and current in parents and steps <= len(parents):
+            steps, current = steps + 1, parents[current]
+        depths[identity] = steps
+    return depths
+
+
+def _dependents(conn: sqlite3.Connection, closing: set[str]) -> list[dict]:
+    """The open items outside `closing` that a member of it blocks, one row per blocker."""
+
+    found = []
+    for identity, title, kind, parent_id, key, number, blocker_key, blocker in conn.execute(
+        _BLOCKED, (json.dumps(sorted(closing)),)
+    ):
+        if str(identity) in closing:
+            continue
+        found.append(
+            {
+                "reference": model.human_id(str(key), int(number)),
+                "title": title,
+                "kind": model.outward_kind(kind, parent_id),
+                "waits_on": model.human_id(str(blocker_key), int(blocker)),
+                "how": BLOCKS,
+            }
+        )
+    return sorted(found, key=lambda entry: (entry["reference"], entry["waits_on"]))
+
+
+def _reference_of(conn: sqlite3.Connection, identity: str) -> str:
+    found = conn.execute(_REFERENCE, (identity,)).fetchone()
+    return model.human_id(str(found[0]), int(found[1]))

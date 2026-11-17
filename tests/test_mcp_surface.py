@@ -611,6 +611,31 @@ class DispatchTests(McpSurfaceTestCase):
         self.assertEqual("workflow_guard", result["structuredContent"]["error"]["code"])
         self.assertIn("executor", result["structuredContent"]["error"]["message"])
 
+    def test_a_cancel_refused_with_its_list_carries_the_list(self) -> None:
+        goal = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="goal", kind="goal"
+        )
+        task = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="under it", parent=goal["reference"]
+        )
+        self.conn.commit()
+        result = self.call(
+            "apply_work_item_changes",
+            {
+                "id": goal["reference"],
+                "summary": {"done": "Not needed", "next": "Nothing"},
+                "transition": {"state": "cancelled"},
+            },
+        )
+        self.assertTrue(result["isError"])
+        error = result["structuredContent"]["error"]
+        self.assertEqual("cancel_list", error["code"])
+        self.assertEqual([task["reference"]], [entry["reference"] for entry in error["cancels"]])
+        self.assertEqual([], error["dependents"])
+        self.assertRegex(error["list_token"], r"^[0-9a-f]{16}$")
+        self.assertEqual(result["structuredContent"], self.payload(result))
+        self.assertTrue(planning_service.get_work_item(self.conn, goal["reference"])["open"])
+
     def check_compact_json(self, text: str) -> None:
         """One line, no padding after separators, and still the same document."""
 

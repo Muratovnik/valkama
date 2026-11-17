@@ -223,7 +223,7 @@ def other_space_ends(conn: sqlite3.Connection, identities: Iterable[str]) -> lis
             "work_item_id": str(row["work_item_id"]),
             "reference": model.human_id(str(row["space_key"]), int(row["number"])),
             "title": row["title"],
-            "kind": outward_kind(row["kind"], row["parent_id"]),
+            "kind": model.outward_kind(row["kind"], row["parent_id"]),
             "state": states.public_state(row) if row["category"] is not None else None,
             "space": {"key": row["space_key"], "name": row["space_name"]},
         }
@@ -244,17 +244,6 @@ def blocked(conn: sqlite3.Connection, work_item_id: str) -> bool:
         ).fetchone()
         is not None
     )
-
-
-def outward_kind(kind: object, parent_id: object) -> str:
-    """The kind a reader sees: a container is a goal, or a stage under a parent.
-
-    Every place a kind leaves the server from a row reads it through this.
-    """
-
-    if kind == model.CONTAINER_KIND:
-        return "stage" if parent_id else "goal"
-    return str(kind)
 
 
 def acceptance(row: sqlite3.Row) -> dict | None:
@@ -941,7 +930,7 @@ def _record(
         "reference": reference(conn, row),
         "number": int(row["number"]),
         "title": row["title"],
-        "kind": outward_kind(row["kind"], row["parent_id"]),
+        "kind": model.outward_kind(row["kind"], row["parent_id"]),
         "priority": row["priority"],
         "state": None if shown is None else {"state_id": state["state_id"], **shown},
         "open": not state["is_terminal"],
@@ -990,6 +979,10 @@ def _record(
     record["container_state"] = facts.container_state(identity)
     record["started_at"] = facts.started_at(identity)
     record["waits_for"] = facts.waits_for(identity)
+    # Only when there is one: a cancelled item it was linked to wait for.
+    cancelled_blockers = facts.cancelled_blockers(identity)
+    if cancelled_blockers:
+        record["cancelled_blockers"] = cancelled_blockers
     # The take-next queue's own rule (`queue.withheld`): the queue gives exactly
     # what reads workable, and the codes say why anything else is not given.
     record["withheld"] = queue.withheld(conn, row, facts, read_space=read_space)
@@ -1039,6 +1032,7 @@ CARD_FIELDS = (
     "acceptance",
     "started_at",
     "waits_for",
+    "cancelled_blockers",
     "workable",
     "withheld",
     "projects",

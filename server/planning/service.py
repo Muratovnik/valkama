@@ -918,7 +918,7 @@ def _edited_kind(row: sqlite3.Row, kind: str) -> str:
 
     named = model.public_kind(kind)
     container = row["kind"] == model.CONTAINER_KIND
-    if container and named == read_model.outward_kind(row["kind"], row["parent_id"]):
+    if container and named == model.outward_kind(row["kind"], row["parent_id"]):
         return model.CONTAINER_KIND
     if container or named not in model.TASK_KINDS:
         raise model.PlanningError(
@@ -1039,6 +1039,7 @@ def transition_work_item(
     author: str | None = None,
     acceptance: object = None,
     to_check: object = None,
+    cancels: object = None,
 ) -> dict:
     """Move an item to a state; the order of work places it there (`queue.list_key`).
 
@@ -1064,6 +1065,11 @@ def transition_work_item(
     (`requests.carry_out`); the answer names it as `review_request_id`. The question
     lasts while the item stays in review: any other way out ends it, a close as a
     close ends every request and any other move as withdrawn.
+
+    Cancelling a goal or stage with open work under it cancels that work too, so it is
+    refused with the list of what would close until `cancels` names that list's token
+    (`closing.cancel_list`, `_cancel_under`); `force` does not carry it. A close names
+    the open items it left with nothing open blocking them as `freed`.
     """
 
     return _transition(
@@ -1076,6 +1082,7 @@ def transition_work_item(
         author=author,
         acceptance=acceptance,
         to_check=to_check,
+        cancels=cancels,
     )
 
 
@@ -1127,6 +1134,7 @@ def _transition(
     acceptance: object = None,
     spared: frozenset[str] = frozenset(),
     to_check: object = None,
+    cancels: object = None,
 ) -> dict:
     """`transition_work_item`, sparing the refusals named in `spared`."""
 
@@ -1154,6 +1162,8 @@ def _transition(
     )
     refusals = [finding for finding in refusals if finding[0] not in spared]
     transitions.refuse(refusals, force)
+    # Past every other refusal, so the list it hands over is the last thing in the way.
+    cancelling = _cancel_listing(conn, row, current, target, cancels)
     updates = ["state_id = ?"]
     parameters: list[object] = [str(target["state_id"])]
     updates += _accepting(row, target, gives, parameters)
@@ -1176,6 +1186,8 @@ def _transition(
     closing.note(conn, row["parent_id"], author)
     if row["kind"] == model.CONTAINER_KIND:
         closing.note(conn, identity, author)
+    if cancelling is not None:
+        warnings += _cancel_under(conn, cancelling, note, author)
     _write(conn, row, updates, parameters)
     if gives is not None:
         _log(conn, identity, "accepted", gives, author)
@@ -1227,7 +1239,131 @@ def _transition(
         answer["overridden"] = overridden
     if asked is not None:
         answer["review_request_id"] = asked
+    closed = [identity]
+    if cancelling is not None:
+        # A goal or stage is never held: what the cancel released is the work under it.
+        answer["cancelled"] = [entry["reference"] for entry in cancelling.listing.cancels]
+        answer["released"] = cancelling.listing.released()
+        closed += [str(found["work_item_id"]) for found in cancelling.listing.rows]
+    if target["is_terminal"] and not current["is_terminal"]:
+        answer["freed"] = closing.freed(conn, closed)
+    for name in ("released", "freed"):
+        if name in answer and not answer[name]:
+            del answer[name]
     return answer
+
+
+def _cancel_listing(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    current: sqlite3.Row,
+    target: sqlite3.Row,
+    cancels: object,
+) -> _Cancelling | None:
+    """The list a cancel of a goal or stage closes, once `cancels` confirms it; else None.
+
+    A goal or stage with open work under it is refused with the list until `cancels`
+    is the token of the list the server builds now: none sent, or one of a list that
+    changed since, and the refusal hands over the list as it stands. One with nothing
+    open under it is cancelled alone, as a task is, and a token sent for it confirms
+    a list that has emptied. An item under it whose workflow cannot be cancelled from
+    where it stands refuses the whole cancel, before any list is handed over. Sent
+    with any other move, `cancels` is refused rather than dropped.
+    """
+
+    cancelling = (
+        row["kind"] == model.CONTAINER_KIND
+        and target["category"] == "cancelled"
+        and current["category"] != "cancelled"
+    )
+    if not cancelling:
+        if cancels is not None:
+            raise model.PlanningError(
+                "cancels goes with cancelling a goal or stage, whose list it confirms; a move"
+                f" to {target['name']} of {read_model.reference(conn, row)} cancels no list:"
+                " leave it out"
+            )
+        return None
+    sent = None if cancels is None else model.text_field(cancels, "cancels", limit=64)
+    listing = closing.cancel_list(conn, row)
+    if listing is None:
+        return None
+    targets = []
+    for found in listing.rows:
+        target_state = states.cancel_state(conn, found)
+        if target_state is None:
+            raise model.WorkflowGuardError(
+                f"[transition] {read_model.reference(conn, found)} is under"
+                f" {listing.reference} and cannot be cancelled from where it stands: its"
+                " workflow has no transition to a cancelled state; move it where one leads"
+            )
+        targets.append(target_state)
+    if sent != listing.token:
+        raise listing.refusal(stale=sent is not None)
+    return _Cancelling(listing, targets)
+
+
+@dataclasses.dataclass(frozen=True)
+class _Cancelling:
+    """A confirmed cancel list, and the cancelled state each of its rows moves to."""
+
+    listing: closing.CancelList
+    targets: list[sqlite3.Row]
+
+
+#: What a cancel of a goal or stage does not ask of the work under it: the guard holds
+#: for the item the caller named, and the cancel closes the rest with it.
+_CASCADE_SPARES = frozenset({"person_spoke"})
+
+
+def _cancel_under(
+    conn: sqlite3.Connection, cancelling: _Cancelling, why: str, author: str | None
+) -> list[str]:
+    """Cancel every open item under a goal or stage, deepest first, each with its summary.
+
+    Each moves to the first cancelled state its workflow reaches, with the reason
+    `cancelled with MAIN-3`, through the one transition path: its claims end, its
+    questions end as cancelled. An item without a summary gets one that says so; one
+    with a summary keeps what it did and says nothing comes next. The new summary is
+    a new report, and the one before stays in the comments. `why`, the reason the goal
+    or stage was cancelled for, is each summary's `why` when there is one.
+    """
+
+    warnings: list[str] = []
+    served = cancelling.listing.reference
+    reason = f"cancelled with {served}"
+    for found, target in zip(cancelling.listing.rows, cancelling.targets, strict=True):
+        identity = str(found["work_item_id"])
+        set_summary(conn, identity, _cancelled_summary(found, served, why), author=author)
+        moved = _transition(
+            conn,
+            identity,
+            str(target["state_id"]),
+            reason=reason,
+            author=author,
+            spared=_CASCADE_SPARES,
+        )
+        warnings += moved["warnings"]
+    return warnings
+
+
+def _cancelled_summary(row: sqlite3.Row, served: str, why: str) -> dict:
+    """The summary an item cancelled with the goal or stage `served` closes with."""
+
+    said = model.summary(row["summary"], required=False)
+    if said is None or not str(said.get("done") or "").strip():
+        summary = {
+            "done": f"Cancelled with {served}.",
+            "next": "Nothing: the goal or stage it served was cancelled.",
+        }
+    else:
+        summary = {
+            "done": str(said["done"]),
+            "next": f"Nothing: cancelled with {served}, the goal or stage it served.",
+        }
+    if why:
+        summary["why"] = why
+    return summary
 
 
 def _to_check(value: object, into_review: bool, target: sqlite3.Row) -> str:

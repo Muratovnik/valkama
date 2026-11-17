@@ -20,6 +20,8 @@ and none of them open.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import tempfile
 import unittest
@@ -439,6 +441,317 @@ class NoStepsTests(Tree):
         self.assertTrue(detail.endswith("no steps: check it against its description"), detail)
         self.assertEqual("no steps: check it against its description", detail)
         self.assertEqual(0, self.confirmation(goal)["steps"])
+
+
+class CancelListTests(Tree):
+    """Cancelling a goal or stage with open work under it, in two calls.
+
+    The tree of row 8: under G, S1 holds a (at work, held by A), b (ready) and d (done),
+    and S2, which holds c (triage); x, outside G, waits on b by a `blocks` link. The
+    list and its token are what the work model's rule for a cancel says, read here from
+    the store and the answer: the token's projection is built in this test from the
+    contract's definition, not taken from the server.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.s1 = self.made("S1", "stage", self.goal)
+        self.s2 = self.made("S2", "stage", self.s1)
+        self.a = self.made("a", parent=self.s1)
+        self.b = self.made("b", parent=self.s1)
+        self.d = self.made("d", parent=self.s1)
+        self.c = str(
+            self.person(CREATE, space="MAIN", title="c", parent=self.s2, state="triage")[
+                "reference"
+            ]
+        )
+        self.x = self.made("x")
+        self.person(APPLY, id=self.b, links=[{"other": self.x, "kind": "blocks"}])
+        self.close(AS_B, self.d)
+        self.agent("claim_work_item", AS_A, id=self.a)
+        self.holder = str(service.get_work_item(self.conn, self.a)["claim_ref"])
+        # A has read what the person did on G before it cancels it.
+        self.agent("apply_work_item_changes", AS_A, id=self.goal, comment={"body": "Reading it"})
+
+    def cancel_goal(self, **transition: object) -> dict:
+        return self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=self.goal,
+            summary={"done": "Not needed", "next": "Nothing", "why": "the plan changed"},
+            transition={"state": "cancelled", "reason": "the plan changed", **transition},
+        )
+
+    def refused(self, **transition: object) -> dict:
+        """The refusal's body as both surfaces send it, with nothing of the call kept."""
+
+        with self.assertRaises(api.PlanningHttpError) as caught:
+            self.cancel_goal(**transition)
+        status, body = api.error_response(caught.exception)
+        self.assertEqual(409, status)
+        error = dict(body["error"])
+        self.assertEqual("cancel_list", error["code"])
+        return error
+
+    def written(self) -> tuple:
+        """What a write leaves: every item's revision, state and summary, and each trail."""
+
+        items = self.conn.execute(
+            "SELECT work_item_id, revision, state_id, summary, claim_ref FROM work_items"
+            " ORDER BY work_item_id"
+        ).fetchall()
+        counts = [
+            self.conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("work_item_events", "work_item_comments", "work_item_requests")
+        ]
+        return tuple(tuple(row) for row in items), tuple(counts)
+
+    def state(self, reference: str) -> str | None:
+        record = service.get_work_item(self.conn, reference)
+        return None if record["state"] is None else str(record["state"]["category"])
+
+    def expected_token(self, cancels: list[dict], dependents: list[dict]) -> str:
+        """The token as the contract defines it: 16 hex digits of the SHA-256 of the projection."""
+
+        projection = {
+            "cancels": sorted(
+                [
+                    entry["reference"],
+                    entry["container_state"] if entry["state"] is None else entry["state"]["key"],
+                    sorted(entry["holder"]),
+                ]
+                for entry in cancels
+            ),
+            "dependents": sorted(
+                [entry["reference"], entry["waits_on"], entry["how"]] for entry in dependents
+            ),
+        }
+        text = json.dumps(projection, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        return hashlib.sha256(text.encode("ascii")).hexdigest()[:16]
+
+    def test_the_first_call_is_refused_with_the_list_and_writes_nothing(self) -> None:
+        """The item put off until a, which the case names among the dependents, is not
+        here: no write puts work off yet."""
+
+        before = self.written()
+        error = self.refused()
+        self.assertEqual(before, self.written(), "the refused call wrote nothing")
+        cancels = error["cancels"]
+        self.assertEqual(
+            [self.s1, self.s2, self.a, self.b, self.c], [entry["reference"] for entry in cancels]
+        )
+        by = {entry["reference"]: entry for entry in cancels}
+        self.assertEqual(
+            {"S1": "stage", "S2": "stage", "a": "task", "b": "task", "c": "task"},
+            {entry["title"]: entry["kind"] for entry in cancels},
+        )
+        self.assertEqual(
+            (None, "in_progress"), (by[self.s1]["state"], by[self.s1]["container_state"])
+        )
+        self.assertEqual(
+            (None, "not_started"), (by[self.s2]["state"], by[self.s2]["container_state"])
+        )
+        self.assertEqual(
+            {self.a: "active", self.b: "ready", self.c: "triage"},
+            {ref: by[ref]["state"]["category"] for ref in (self.a, self.b, self.c)},
+        )
+        self.assertEqual({"key", "name", "category"}, set(by[self.a]["state"]))
+        self.assertEqual([self.holder], by[self.a]["holder"])
+        self.assertEqual([], by[self.b]["holder"])
+        self.assertEqual(
+            [
+                {
+                    "reference": self.x,
+                    "title": "x",
+                    "kind": "task",
+                    "waits_on": self.b,
+                    "how": "blocks",
+                }
+            ],
+            error["dependents"],
+        )
+        self.assertEqual(self.expected_token(cancels, error["dependents"]), error["list_token"])
+        self.assertIn(error["list_token"], error["message"])
+        self.assertEqual({"group": "transition", "index": 0}, error["step"])
+
+    def test_force_does_not_carry_it_and_a_person_meets_it_too(self) -> None:
+        before = self.written()
+        self.refused(force=True)
+        with self.assertRaises(api.PlanningHttpError) as caught:
+            self.person(APPLY, id=self.goal, summary=DONE, transition={"state": "cancelled"})
+        self.conn.rollback()
+        self.assertEqual("cancel_list", api.error_response(caught.exception)[1]["error"]["code"])
+        self.assertEqual(before, self.written())
+
+    def test_the_second_call_with_the_token_cancels_the_list(self) -> None:
+        """The list but for the item put off until a, which no write puts off yet."""
+
+        token = self.refused()["list_token"]
+        answer = self.cancel_goal(cancels=token)
+        moved = answer["applied"]["transition"]
+        self.assertEqual([self.s1, self.s2, self.a, self.b, self.c], moved["cancelled"])
+        self.assertEqual([{"reference": self.a, "holder": self.holder}], moved["released"])
+        self.assertEqual([self.x], moved["freed"])
+        for reference in (self.goal, self.s1, self.s2, self.a, self.b, self.c):
+            with self.subTest(item=reference):
+                self.assertEqual("cancelled", self.state(reference))
+        self.assertEqual("completed", self.state(self.d))
+        goal = f"cancelled with {self.goal}"
+        for reference in (self.s1, self.s2, self.a, self.b, self.c):
+            with self.subTest(summary=reference):
+                record = service.get_work_item(self.conn, reference)
+                self.assertEqual(
+                    {
+                        "done": f"Cancelled with {self.goal}.",
+                        "next": "Nothing: the goal or stage it served was cancelled.",
+                        "why": "the plan changed",
+                    },
+                    {name: record["summary"][name] for name in ("done", "next", "why")},
+                )
+                self.assertEqual("", record["claim_ref"])
+                self.assertTrue(
+                    [event for event in record["events"] if event["action"] == "transitioned"
+                     and event["detail"].endswith(f": {goal}")],
+                    "its move says it was cancelled with the goal",
+                )  # fmt: skip
+        self.assertEqual(self.holder, service.get_work_item(self.conn, self.a)["last_claim_ref"])
+        x = service.get_work_item(self.conn, self.x)
+        self.assertEqual(([self.b], []), (x["cancelled_blockers"], x["waits_for"]))
+        self.assertTrue(x["open"])
+
+    def test_the_deepest_go_first_so_each_stage_closes_with_nothing_open_under_it(self) -> None:
+        self.cancel_goal(cancels=self.refused()["list_token"])
+        order = [
+            str(row[0])
+            for row in self.conn.execute(
+                "SELECT i.title FROM work_item_events e JOIN work_items i"
+                " ON i.work_item_id = e.work_item_id WHERE e.action = 'transitioned'"
+                " AND e.detail LIKE ? ORDER BY e.id",
+                (f"%: cancelled with {self.goal}",),
+            )
+        ]
+        self.assertEqual(["c", "S2", "a", "b", "S1"], order)
+        self.holds()
+
+    def test_a_list_that_changed_is_refused_with_the_new_one(self) -> None:
+        token = self.refused()["list_token"]
+        e = self.made("e", parent=self.s1)
+        before = self.written()
+        error = self.refused(cancels=token)
+        self.assertEqual(before, self.written(), "nothing was cancelled")
+        self.assertIn(e, [entry["reference"] for entry in error["cancels"]])
+        self.assertNotEqual(token, error["list_token"])
+        self.assertIn("changed", error["message"])
+        self.cancel_goal(cancels=error["list_token"])
+        self.assertEqual("cancelled", self.state(e))
+
+    def test_a_comment_and_a_new_title_leave_the_token_as_it_was(self) -> None:
+        token = self.refused()["list_token"]
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=self.a,
+            update={"title": "a, renamed", "description": "Now described"},
+            comment={"body": "still on it"},
+        )
+        self.cancel_goal(cancels=token)
+        self.assertEqual("cancelled", self.state(self.a))
+
+    def test_another_holder_or_another_state_changes_the_token(self) -> None:
+        token = self.refused()["list_token"]
+        self.agent("claim_work_item", AS_B, id=self.a, force=True)
+        held = self.refused(cancels=token)
+        self.assertNotEqual(token, held["list_token"])
+        self.person(APPLY, id=self.c, transition={"state": "ready"})
+        moved = self.refused(cancels=held["list_token"])
+        self.assertNotEqual(held["list_token"], moved["list_token"])
+        self.assertEqual(
+            "ready", {e["reference"]: e for e in moved["cancels"]}[self.c]["state"]["key"]
+        )
+
+    def test_cancels_goes_only_with_cancelling_a_goal_or_stage(self) -> None:
+        self.agent("apply_work_item_changes", AS_A, id=self.b, comment={"body": "Reading it"})
+        with self.assertRaises(api.PlanningHttpError) as caught:
+            self.agent(
+                "apply_work_item_changes",
+                AS_A,
+                id=self.b,
+                summary=DONE,
+                transition={"state": "cancelled", "cancels": "0123456789abcdef"},
+            )
+        self.assertIn("cancels goes with cancelling a goal or stage", str(caught.exception))
+        self.assertEqual("ready", self.state(self.b))
+
+    def test_work_that_cannot_be_cancelled_refuses_the_whole_cancel(self) -> None:
+        workflow = service.get_work_item(self.conn, self.b)
+        row = self.conn.execute(
+            "SELECT workflow_id, state_id FROM work_items WHERE work_item_id = ?",
+            (workflow["work_item_id"],),
+        ).fetchone()
+        self.conn.execute(
+            "DELETE FROM workflow_transitions WHERE workflow_id = ? AND from_state_id = ?"
+            " AND to_state_id IN (SELECT state_id FROM workflow_states WHERE category = 'cancelled')",
+            (row[0], row[1]),
+        )
+        self.conn.commit()
+        before = self.written()
+        with self.assertRaises(api.PlanningHttpError) as caught:
+            self.cancel_goal()
+        self.assertIn("[transition]", str(caught.exception))
+        self.assertIn(self.b, str(caught.exception))
+        self.assertEqual(before, self.written())
+
+    def test_a_summary_it_had_keeps_what_was_done(self) -> None:
+        self.person(APPLY, id=self.b, summary={"done": "half done", "next": "rest"})
+        reports = len(self.reports(self.b))
+        self.cancel_goal(cancels=self.refused()["list_token"])
+        b = service.get_work_item(self.conn, self.b)
+        self.assertEqual(
+            {
+                "done": "half done",
+                "next": f"Nothing: cancelled with {self.goal}, the goal or stage it served.",
+                "why": "the plan changed",
+            },
+            {name: b["summary"][name] for name in ("done", "next", "why")},
+        )
+        kept = self.reports(self.b)
+        self.assertEqual(reports + 1, len(kept), "the new summary is a new report")
+        self.assertIn({"done": "half done", "next": "rest"}, [dict(r) for r in kept])
+        a = service.get_work_item(self.conn, self.a)
+        self.assertEqual(f"Cancelled with {self.goal}.", a["summary"]["done"])
+
+    def reports(self, reference: str) -> list[dict]:
+        return [
+            {name: value for name, value in json.loads(row[0]).items() if name in ("done", "next")}
+            for row in self.conn.execute(
+                "SELECT report FROM work_item_comments WHERE work_item_id = ? AND report != ''"
+                " ORDER BY id",
+                (self.identity(reference),),
+            )
+        ]
+
+
+class SingleCancelTests(Tree):
+    def test_a_task_is_cancelled_in_one_call_and_names_what_it_freed(self) -> None:
+        b = self.made("b")
+        x = self.made("x")
+        other = self.made("other")
+        y = self.made("y")
+        self.person(
+            APPLY, id=b, links=[{"other": x, "kind": "blocks"}, {"other": y, "kind": "blocks"}]
+        )
+        self.person(APPLY, id=other, links=[{"other": y, "kind": "blocks"}])
+        answer = self.cancel(b)
+        self.assertEqual([x], answer["applied"]["transition"]["freed"])
+        self.assertNotIn("cancelled", answer["applied"]["transition"])
+        self.assertEqual([other], service.get_work_item(self.conn, y)["waits_for"])
+
+    def test_a_goal_with_nothing_open_under_it_is_cancelled_in_one_call(self) -> None:
+        a = self.made("a", parent=self.goal)
+        self.cancel(a)
+        answer = self.cancel(self.goal)
+        self.assertNotIn("cancelled", answer["applied"]["transition"])
+        self.assertFalse(service.get_work_item(self.conn, self.goal)["open"])
 
 
 class WakeTests(Harness):

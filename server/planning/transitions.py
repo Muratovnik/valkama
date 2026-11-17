@@ -25,7 +25,8 @@ Finding = tuple[str, str]
 #: new item standing where only a move with its reason or summary leads, open work
 #: under a goal or stage that is done, or work in review with nothing for the owner
 #: to answer — or an agent would go over the owner's open question, where
-#: withdrawing its own question is its way out.
+#: withdrawing its own question is its way out, or cancel work under a goal or stage
+#: it was never shown (`cancel_list`, which the service refuses with the list).
 UNFORCED = frozenset(
     {
         "goal_or_stage",
@@ -37,6 +38,7 @@ UNFORCED = frozenset(
         "children",
         "question",
         "review_question",
+        "cancel_list",
     }
 )
 #: How many of the open items under a goal or stage its `children` refusal names.
