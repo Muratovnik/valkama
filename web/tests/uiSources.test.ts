@@ -12,7 +12,6 @@ import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import { FINGER_QUERY_OWNER } from '../scripts/ui-system/finger.mjs'
 import { ONE_LINE_OWNER } from '../scripts/ui-system/one-line.mjs'
 import { REVEAL_OWNER } from '../scripts/ui-system/reveal.mjs'
 import { collectVueSources } from '../scripts/ui-system/sources.mjs'
@@ -20,7 +19,8 @@ import { collectVueSources } from '../scripts/ui-system/sources.mjs'
 // Owners from two layers, and one file of each kind the walk keeps (.css, .vue, .ts).
 const KNOWN = [
   REVEAL_OWNER,
-  FINGER_QUERY_OWNER,
+  // The finger query's owner, which the viewport-query guard names.
+  'shared/ui/reach.css',
   ONE_LINE_OWNER,
   'app/App.vue',
   'shared/lib/uiSystem.ts',
