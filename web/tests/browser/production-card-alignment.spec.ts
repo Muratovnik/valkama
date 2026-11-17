@@ -130,33 +130,48 @@ for (const locale of ['ru', 'en'] as const) {
 }
 
 /**
- * The baseline of each row's name and of the words of its value on the value's first line: the
- * priority, the state and the question, the first labels, the holder and the parent.
+ * Each fact's row (`data-fact`), with the baseline of its name and of the words its value draws
+ * on the value's first line: the priority, the state and the question, the first labels, the
+ * holder and the parent. A word is any run of text the value draws, whatever element holds it;
+ * one drawn a pixel wide is only read out.
  */
 function factBaselines(page: Page) {
   return page.evaluate(() => {
     const canvas = document.createElement('canvas').getContext('2d')
     if (!canvas) throw new Error('no canvas')
-    const WORDS =
-      '.state-label, .card-question-word, .facet-word:not(.facet-word-hidden), .card-parent-link a, .open-action-name, .card-holder-name, .chip-face'
-    const measure = (word: Element) => {
+    const measure = (word: Node) => {
       const range = document.createRange()
       range.selectNodeContents(word)
-      const style = getComputedStyle(word)
+      const host = word instanceof Element ? word : word.parentElement
+      if (!host) throw new Error('a word outside the page')
+      const style = getComputedStyle(host)
       canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
-      const { top } = range.getBoundingClientRect()
-      return { baseline: top + canvas.measureText('H').fontBoundingBoxAscent, top }
+      const { height, top, width } = range.getBoundingClientRect()
+      return { baseline: top + canvas.measureText('H').fontBoundingBoxAscent, height, top, width }
     }
-    return [...document.querySelectorAll('.drawer .card-row')].map((row) => {
+    const drawnWords = (value: Element) => {
+      const walker = document.createTreeWalker(value, NodeFilter.SHOW_TEXT)
+      const words: Node[] = []
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const { height, width } = measure(node)
+        if (node.textContent?.trim() && width > 1 && height > 1) words.push(node)
+      }
+      return words
+    }
+    return [...document.querySelectorAll<HTMLElement>('.drawer [data-fact]')].map((row) => {
       const label = row.querySelector('.card-row-label')
-      const words = [...row.querySelectorAll(`.card-row-value :is(${WORDS})`)]
-      if (!label || words.length === 0) throw new Error(`no words in ${row.className}`)
+      const value = row.querySelector('.card-row-value')
+      const words = value ? drawnWords(value) : []
+      if (!label || words.length === 0) throw new Error(`no words in the ${row.dataset.fact} row`)
       const firstLine = measure(words[0]).top
       const onFirstLine = words.filter((word) => Math.abs(measure(word).top - firstLine) < 12)
-      return [label, ...onFirstLine].map((word) => ({
-        baseline: measure(word).baseline,
-        text: word.textContent?.trim() ?? '',
-      }))
+      return {
+        fact: row.dataset.fact ?? '',
+        words: [label, ...onFirstLine].map((word) => ({
+          baseline: measure(word).baseline,
+          text: word.textContent?.trim() ?? '',
+        })),
+      }
     })
   })
 }
@@ -167,14 +182,22 @@ for (const locale of ['ru', 'en'] as const) {
       page,
     }) => {
       await openCard(page, locale, width, FULL_HEAD)
-      const lines = await factBaselines(page)
-      console.info(`facts ${locale} ${width}px`, JSON.stringify(lines))
+      const rows = await factBaselines(page)
+      console.info(`facts ${locale} ${width}px`, JSON.stringify(rows))
       // The priority, the state and «Answer», the labels, the holder and the parent, each with
       // its name, in the registry's order; «Answer» is short enough to stay on the state's line
       // on a phone.
-      expect(lines).toHaveLength(5)
-      expect(lines[1]).toHaveLength(3)
-      for (const [first, ...rest] of lines)
+      expect(rows.map(({ fact }) => fact)).toEqual([
+        'priority',
+        'state',
+        'labels',
+        'holder',
+        'parent',
+      ])
+      expect(rows[1]?.words.map(({ text }) => text)).toEqual(
+        locale === 'ru' ? ['Состояние', 'Проверка', 'Ответить'] : ['State', 'Review', 'Answer'],
+      )
+      for (const [first, ...rest] of rows.map(({ words }) => words))
         for (const other of rest)
           expect(
             Math.abs(other.baseline - first.baseline),

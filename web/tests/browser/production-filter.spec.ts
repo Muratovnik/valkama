@@ -52,15 +52,22 @@ for (const width of [1440, 1024]) {
         height: head.getBoundingClientRect().height,
         oneLine:
           Math.max(...boxes.map((box) => box.top)) < Math.min(...boxes.map((box) => box.bottom)),
-        last: tools.at(-1)?.className ?? '',
+        tools: boxes.length,
+        end: Math.max(...boxes.map((box) => box.right)),
       }
     })
+    expect(geometry.tools, 'the controls of the row').toBeGreaterThan(1)
     expect(geometry.oneLine, 'one row of controls').toBe(true)
     expect(geometry.height).toBeLessThanOrEqual(84)
     // The field has room for its whole hint here.
     await expect(field(page)).toHaveAttribute('placeholder', 'Filter: reference, title…')
     // The one primary action ends the row.
-    expect(geometry.last).toContain('workspace-action')
+    const primary = await page
+      .getByRole('button', { name: 'New work item', exact: true })
+      .boundingBox()
+    expect(Math.abs((primary?.x ?? 0) + (primary?.width ?? 0) - geometry.end)).toBeLessThanOrEqual(
+      0.5,
+    )
     // A filter does not make the bar taller.
     await field(page).fill('MAIN')
     await expect(page.locator('.workspace-figures')).toContainText('Reset')
