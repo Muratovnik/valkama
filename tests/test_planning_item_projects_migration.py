@@ -18,7 +18,6 @@ import json
 import os
 import sqlite3
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -26,7 +25,7 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import cli, processes, store
-from server.planning import item_projects, words
+from server.planning import words
 from server.store_identity.refs import planning_space_entity
 from tests import registry_fixtures, schema17
 from tests.test_planning_work_model_migration import (
@@ -213,53 +212,6 @@ class PreconditionTests(StoreCase):
         self.assertFalse(os.path.exists(os.path.join(self.directory.name, "backups")))
 
 
-class CommitProjectsTests(unittest.TestCase):
-    """The project a commit value belongs to, asked of Git in the registered roots."""
-
-    def setUp(self) -> None:
-        self.home = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.addCleanup(self.home.cleanup)
-        roots = os.path.join(self.home.name, "roots")
-        self.alone = repository(os.path.join(roots, "alpha"), "alpha")
-        self.shared = repository(os.path.join(roots, "beta"), "beta")
-        git(roots, "clone", "--quiet", os.path.join(roots, "beta"), os.path.join(roots, "gamma"))
-        self.projects = [
-            {"project_id": name, "canonical_root": os.path.join(roots, name)}
-            for name in ("alpha", "beta", "gamma", "plain")
-        ]
-        os.makedirs(os.path.join(roots, "plain"))
-
-    def test_each_value_resolves_to_its_one_project_or_to_none(self) -> None:
-        values = [
-            self.alone,
-            self.alone[:7].upper(),
-            f"beta@{self.alone[:9]}",
-            f"Gamma {self.alone[:9]}",
-            f"elsewhere@{self.alone[:9]}",
-            self.shared[:10],
-            "0" * 40,
-            f"main {self.alone[:7]} (merged)",
-            "https://example.invalid/commit/1",
-        ]
-        self.assertEqual(
-            {
-                self.alone: "alpha",
-                self.alone[:7].upper(): "alpha",
-                f"beta@{self.alone[:9]}": "beta",
-                f"Gamma {self.alone[:9]}": "gamma",
-            },
-            item_projects.commit_projects(values, self.projects),
-        )
-
-    def test_nothing_to_ask_asks_no_repository(self) -> None:
-        with mock.patch.object(processes, "run_text") as run:
-            self.assertEqual(
-                {"alpha@1234567": "alpha"},
-                item_projects.commit_projects(["alpha@1234567", "a range"], self.projects),
-            )
-        run.assert_not_called()
-
-
 #: Labels and commits of the tasks of `WM`, and of one container, added to the store
 #: the migration's tests build. `@ALONE` stands for the commit only `work-model`
 #: holds, `@SHARED` for one two repositories hold.
@@ -281,8 +233,8 @@ class MapItemsTests(StoreCase):
     def setUp(self) -> None:
         super().setUp()
         roots = os.path.join(self.directory.name, "roots")
-        alone = repository(os.path.join(roots, "work-model"), "work model")
-        shared = repository(os.path.join(roots, "atlas"), "atlas")
+        alone = self.alone = repository(os.path.join(roots, "work-model"), "work model")
+        shared = self.shared = repository(os.path.join(roots, "atlas"), "atlas")
         git(roots, "clone", "--quiet", os.path.join(roots, "atlas"), os.path.join(roots, "kept"))
         entries = [
             bound(self.directory.name, "KEEP", "kept", default=True),
@@ -363,11 +315,19 @@ class MapItemsTests(StoreCase):
             (DATA_SCOPE, "valkama-item-projects", 1),
             (document["data_scope_id"], document["format"], document["version"]),
         )
+        # The fingerprint: every item id, sorted, then every commit ref by id, item and text.
         identities = sorted(str(row[0]) for row in self.read("SELECT work_item_id FROM work_items"))
-        self.assertEqual(
-            hashlib.sha256("".join(f"{i}\n" for i in identities).encode()).hexdigest(),
-            document["items_digest"],
+        refs = self.read(
+            "SELECT id, work_item_id, value FROM work_item_refs WHERE kind = 'commit' ORDER BY id"
         )
+        self.assertEqual(3, len(refs))
+        lines = [f"{i}\n" for i in identities] + [
+            json.dumps([row[0], row[1], row[2]]) + "\n" for row in refs
+        ]
+        self.assertEqual(
+            hashlib.sha256("".join(lines).encode()).hexdigest(), document["items_digest"]
+        )
+        self.assertEqual([row[0] for row in refs], [r["ref"] for r in document["commit_refs"]])
 
         def named(*projects: str, source: str = "named") -> list[dict]:
             return [{"project_id": project, "source": source} for project in projects]
@@ -471,6 +431,23 @@ class MapItemsTests(StoreCase):
                 reference,
             )
         self.assertFalse([row for row in held if row[0] == self.ids["WM-1"]])
+        # The commit refs became the commits the projects came from, and left.
+        attached = {
+            (str(row[0]), row[1], str(row[2]), str(row[3]))
+            for row in self.read(
+                "SELECT a.work_item_id, c.project_id, c.hash, a.attached_by FROM work_item_commits a"
+                " JOIN commits c ON c.commit_id = a.commit_id"
+            )
+        }
+        self.assertEqual(
+            {
+                (self.ids["WM-5"], "rover", "1234567", "migrated"),
+                (self.ids["WM-8"], "work-model", self.alone, "migrated"),
+                (self.ids["WM-9"], None, self.shared[:12], "migrated"),
+            },
+            attached,
+        )
+        self.assertEqual([], self.read("SELECT id FROM work_item_refs WHERE kind = 'commit'"))
         labels = {reference: json.loads(self.item(reference)["labels"]) for reference in LABELLED}
         self.assertEqual(
             {
@@ -534,8 +511,12 @@ class MapItemsTests(StoreCase):
         self.assertFalse(os.path.exists(self.output))
 
     def test_a_migrated_store_needs_no_file(self) -> None:
+        # The store holds commit refs, which only the file the command writes describes.
+        self.map_items()
+        self.file = self.output
         self.migrate()
-        code, _ = self.command("projects", "map-items", "--output", self.output)
+        again = os.path.join(self.directory.name, "again.json")
+        code, _ = self.command("projects", "map-items", "--output", again)
         self.assertIn("needs no item projects file", str(code))
 
 

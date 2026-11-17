@@ -43,11 +43,11 @@ T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [f"M{number}" for number in range(15)]
+STEP_NAMES = [f"M{number}" for number in range(16)]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(1, 16)),
-    *(f"P{number}" for number in range(18, 27)),
+    *(f"P{number}" for number in range(18, 32)),
     "second-run",
     "recovery-point",
 ]
@@ -1351,6 +1351,27 @@ FAULTS = (
         "INSERT INTO commits(project_id, hash, reported_at)"
         " VALUES('alpha', 'abcdef0', '2026-01-02T03:04:05Z')",
     ),
+    fault(
+        "no-commit-refs",
+        "INSERT INTO work_item_refs(work_item_id, kind, value) VALUES(?, 'commit', 'abcdef0')",
+        lambda ids: (ids["WM-9"],),
+    ),
+    fault(
+        "other-refs",
+        "INSERT INTO work_item_refs(work_item_id, kind, value) VALUES(?, 'url', 'https://x.invalid')",
+        lambda ids: (ids["WM-9"],),
+    ),
+    fault(
+        "commits-attached",
+        "INSERT INTO commits(project_id, hash, reported_at)"
+        " VALUES('alpha', 'abcdef0', '2026-01-02T03:04:05Z')",
+    ),
+    fault(
+        "commit-projects",
+        "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+        " VALUES(?, 'stray', 'commits')",
+        lambda ids: (ids["WM-9"],),
+    ),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
     fault(
@@ -1565,7 +1586,8 @@ CLAUSE_FAULTS: tuple[
                 (),
             )
         ],
-        ["row-counts"],
+        # A commit attached to nothing, which the commits' own postcondition sees too.
+        ["row-counts", "commits-attached"],
     ),
     (
         "row-counts",
