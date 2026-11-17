@@ -141,10 +141,12 @@ for (const locale of ['en', 'ru'] as const) {
     expect(path(page)).toBe(SPLIT)
     await expect(page.locator('.spending-table tbody th')).toHaveText(PAIRS)
 
-    // Back takes the split away: the section's own values again.
+    // Back takes the split away: the section's own values again, a whole its ring draws.
     await page.goBack()
     await expect.poll(() => path(page)).toBe(MODEL)
-    await expect(page.locator('.spending-bars .ranked-label').first()).toHaveText('claude-opus-5-5')
+    await expect(page.locator('.spending-bars .chart-key-name').first()).toHaveText(
+      'claude-opus-5-5',
+    )
     const back = await page.locator('.spending-table tbody th').allInnerTexts()
     expect(back.some((name) => name.includes(' · '))).toBe(false)
   })

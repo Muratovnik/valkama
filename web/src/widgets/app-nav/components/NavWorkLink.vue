@@ -66,7 +66,7 @@ const goalStyle = computed(() => ({ '--nav-row-goal-letters': `${props.goal?.len
     <span class="nav-row-words">
       <template v-if="goal">
         <span
-          v-tooltip:right.clipped="goal"
+          v-tooltip.clipped="goal"
           class="nav-row-goal trimmed-word one-line"
           :style="goalStyle"
           >{{ goal }}</span
@@ -78,7 +78,7 @@ const goalStyle = computed(() => ({ '--nav-row-goal-letters': `${props.goal?.len
         >
       </template>
       <span
-        v-tooltip:right.clipped="title"
+        v-tooltip.clipped="title"
         class="nav-row-title trimmed-word one-line"
         >{{ title }}</span
       >
@@ -92,7 +92,7 @@ const goalStyle = computed(() => ({ '--nav-row-goal-letters': `${props.goal?.len
           name="agent"
           :size="12"
         /><span
-          v-tooltip:right.clipped="meta.word"
+          v-tooltip.clipped="meta.word"
           class="trimmed-word"
           >{{ meta.word }}</span
         >
@@ -100,7 +100,7 @@ const goalStyle = computed(() => ({ '--nav-row-goal-letters': `${props.goal?.len
     </span>
     <span
       v-if="detail"
-      v-tooltip:right.clipped="detail"
+      v-tooltip.clipped="detail"
       class="nav-row-detail one-line"
       aria-hidden="true"
       >{{ detail }}</span

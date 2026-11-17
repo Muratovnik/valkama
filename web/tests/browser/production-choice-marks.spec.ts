@@ -16,6 +16,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { openFacet, openSpace } from './filterPage.ts'
+import { wholeText, wholeTextOnTop } from './hintFramesPage.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -178,6 +179,8 @@ test('a long state in the card’s state menu ends in an ellipsis inside its row
     }
   })
   expect(drawn).toEqual({ cut: true, ending: 'ellipsis', inside: true })
+  // Under the pointer its whole words are laid over the cut ones, over the menu that holds them.
   await word.hover()
-  await expect(page.getByRole('tooltip')).toContainText(LONG_STATE)
+  await expect(wholeText(page)).toHaveText(LONG_STATE)
+  expect(await wholeTextOnTop(page), 'the whole state over the menu').toBe(true)
 })

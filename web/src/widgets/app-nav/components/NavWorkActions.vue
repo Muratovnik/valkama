@@ -15,7 +15,7 @@ const { t } = useI18n()
 <template>
   <div class="work-actions">
     <button
-      v-tooltip:right.clipped="t('finder.trigger')"
+      v-tooltip.clipped="t('finder.trigger')"
       class="work-action"
       type="button"
       aria-keyshortcuts="Control+k Meta+k"
@@ -33,7 +33,7 @@ const { t } = useI18n()
       >
     </button>
     <button
-      v-tooltip:right.clipped="t('requests.title')"
+      v-tooltip.clipped="t('requests.title')"
       class="work-action"
       type="button"
       @click="emit('requests')"

@@ -6,10 +6,11 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { chainResponse } from '../fixtures/chain.ts'
-import { spaceScope } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { withChain } from './served/chains.ts'
 import { spaceAnswer } from './servedAnswers.ts'
 
@@ -42,6 +43,22 @@ export async function showChain(page: Page) {
   await page.locator('.drawer').getByRole('tab', { name: 'Chain', exact: true }).focus()
   await page.keyboard.press('Enter')
   await expect(page.locator('.drawer section.chain')).toBeVisible()
+}
+
+/** The card of the suite's item on its Chain tab, or on the graph's, and the chain section on it. */
+export async function openChainCard(page: Page, view?: 'graph') {
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: spaceScope,
+      entity: planningWorkItemEntity(workItemRef),
+      ...(view ? { state: { view } } : {}),
+    }),
+  )
+  await showChain(page)
+  const section = page.locator('.drawer section.chain')
+  await expect(section).toBeVisible()
+  return section
 }
 
 /** What the address's module state says, decoded. */
@@ -86,6 +103,13 @@ export async function pointAtWorkUnderWay(page: Page, section: Locator, word: Lo
     await new Promise((done) => setTimeout(done, 100))
     if (await word.count()) return
   }
+}
+
+/** A chain whose every member is under `title`, so whichever the pointer lands on says it. */
+export function retitledChain<Value>(chain: Value, title: string): Value {
+  return JSON.parse(
+    JSON.stringify(chain).replaceAll(/"title":"[^"]*"/gu, `"title":${JSON.stringify(title)}`),
+  ) as Value
 }
 
 export { largeChainHere, longChainHere, smallChain } from './served/chains.ts'

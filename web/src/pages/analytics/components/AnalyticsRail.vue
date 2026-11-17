@@ -102,7 +102,12 @@ defineExpose({ focusSelected })
     :class="{ 'analytics-rail-whole': list }"
     :aria-label="label"
   >
-    <ul class="analytics-rail-list">
+    <!-- A list of rows: a tile's hint stands past the rail's edge, level with its entry,
+         rather than under its bar and over the entry after it. -->
+    <ul
+      class="analytics-rail-list"
+      data-hint-list="rows"
+    >
       <li
         v-for="section in entries"
         :key="section.value"

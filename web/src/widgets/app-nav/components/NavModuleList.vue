@@ -102,7 +102,7 @@ function currentState(module: ModuleManifest) {
       class="nav-entry"
     >
       <button
-        v-tooltip:right.clipped="moduleTitle(module)"
+        v-tooltip.clipped="moduleTitle(module)"
         type="button"
         class="nav-item"
         :class="[`module-${module.module_id}`, { 'has-fold': folds(module) }]"
@@ -127,7 +127,7 @@ function currentState(module: ModuleManifest) {
       <button
         v-if="disclosure && folds(module)"
         :id="disclosure.id"
-        v-tooltip:right.name="disclosure.label"
+        v-tooltip.name="disclosure.label"
         class="nav-entry-fold"
         type="button"
         :aria-expanded="disclosure.expanded"

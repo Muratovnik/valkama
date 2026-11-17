@@ -88,14 +88,11 @@ const meta = computed(() => {
   font-variant-numeric: tabular-nums;
 }
 
-/* A word wider than the tip breaks inside, as a title does everywhere else: unbroken, the
-   two clamped lines cut it at the tip's edge with no ellipsis to say it goes on. */
+/* The tip names its task whole: it follows the pointer and can be neither hovered nor
+   focused, so a title it cut could never be read whole from it. A word wider than the tip
+   breaks inside, as a title does everywhere else, rather than run past its edge. */
 .branch-tip-title {
-  display: -webkit-box;
   overflow-wrap: anywhere;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .branch-tip-meta {

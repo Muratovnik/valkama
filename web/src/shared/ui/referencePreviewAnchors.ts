@@ -3,9 +3,8 @@
  *
  * A popup per reference cost more to mount than a long report can afford, so a
  * reference carries nothing but this directive: it files what the reference shows
- * and marks the element, and `ReferencePreview` finds the element under the pointer
- * or the focus from listeners of its own. The mark is also what the popup library's
- * hover rule reads to let the pointer cross from one reference to another.
+ * and marks the element, and the hint manager finds the element under the pointer or
+ * the focus by that mark for `ReferencePreview`.
  */
 import type { Directive } from 'vue'
 
@@ -18,7 +17,6 @@ function file(element: HTMLElement, preview: ReferencePreview | undefined) {
   if (preview) previews.set(element, preview)
   else previews.delete(element)
   element.toggleAttribute('data-reference-preview', Boolean(preview))
-  element.toggleAttribute('data-grace-area-trigger', Boolean(preview))
   if (!preview) gone?.(element)
 }
 

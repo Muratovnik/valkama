@@ -11,6 +11,7 @@ import type { ElkNode, ElkPoint } from 'elkjs/lib/elk-api'
 import { frameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import type { FrameProjectionInput } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import {
+  drawnEnds,
   MARGIN,
   NO_PARENT_FRAME,
   NODE_HEIGHT,
@@ -40,10 +41,13 @@ export interface RoutedEdge {
   id: string
   /** `blocks` when any link behind it blocks. */
   kind: PlanningEdge['kind']
-  /** The links it stands for. */
+  /** The links it stands for, as they are stored. */
   links: readonly { from: string; to: string }[]
   points: ElkPoint[]
-  /** The drawn ends: a card's id or a frame's id. */
+  /**
+   * The drawn ends: a card's id or a frame's id, the way `drawnEnds` runs — a
+   * discovery from the work it was found in, against its stored order.
+   */
   source: string
   target: string
 }
@@ -125,8 +129,9 @@ export function graphFitViewOptions(): GraphFitViewOptions {
 
 /**
  * Convert one routed dependency into a Vue Flow edge descriptor.
- * The source and target are never swapped for layout convenience: Vue Flow
- * keeps native handles while the edge renders the layout engine's bend points.
+ * The source and target are the routed edge's drawn ends and are never swapped
+ * here for layout convenience: Vue Flow keeps native handles while the edge
+ * renders the layout engine's bend points.
  */
 export function flowEdge(
   edge: RoutedEdge,
@@ -266,7 +271,8 @@ export async function layout(
   const present = new Set(nodes.map((node) => node.work_item_id))
   const visible = source.edges
     .filter((edge) => edge.kind !== 'parent' && present.has(edge.from) && present.has(edge.to))
-    .sort((left, right) => edgeKey(left).localeCompare(edgeKey(right)))
+    .map((link) => ({ id: edgeKey(link), link, ...drawnEnds(link) }))
+    .sort((left, right) => left.id.localeCompare(right.id))
   if (!nodes.length) {
     return { nodes: [], frames: [], edges: [], width: MARGIN * 2, height: MARGIN * 2 }
   }
@@ -293,18 +299,18 @@ export async function layout(
       height: NODE_HEIGHT,
       layoutOptions: { 'elk.portConstraints': 'FIXED_SIDE' },
       ports: visible.flatMap((edge) => [
-        ...(edge.from === node.work_item_id
-          ? [{ id: `${edgeKey(edge)}:out`, layoutOptions: { 'elk.port.side': 'EAST' } }]
+        ...(edge.source === node.work_item_id
+          ? [{ id: `${edge.id}:out`, layoutOptions: { 'elk.port.side': 'EAST' } }]
           : []),
-        ...(edge.to === node.work_item_id
-          ? [{ id: `${edgeKey(edge)}:in`, layoutOptions: { 'elk.port.side': 'WEST' } }]
+        ...(edge.target === node.work_item_id
+          ? [{ id: `${edge.id}:in`, layoutOptions: { 'elk.port.side': 'WEST' } }]
           : []),
       ]),
     })),
     edges: visible.map((edge) => ({
-      id: edgeKey(edge),
-      sources: [`${edgeKey(edge)}:out`],
-      targets: [`${edgeKey(edge)}:in`],
+      id: edge.id,
+      sources: [`${edge.id}:out`],
+      targets: [`${edge.id}:in`],
     })),
   }
   const result = await engine.layout(graph)
@@ -323,15 +329,14 @@ export async function layout(
       frameId: node.parent_id ?? NO_PARENT_FRAME,
     }
   })
-  const edges = visible.map((edge): RoutedEdge => {
-    const sections = routes.get(edgeKey(edge))?.sections
+  const edges = visible.map(({ id, link, ...ends }): RoutedEdge => {
+    const sections = routes.get(id)?.sections
     if (!sections?.length) throw new Error('Incomplete graph route')
     return {
-      id: edgeKey(edge),
-      source: edge.from,
-      target: edge.to,
-      kind: edge.kind,
-      links: [{ from: edge.from, to: edge.to }],
+      id,
+      ...ends,
+      kind: link.kind,
+      links: [{ from: link.from, to: link.to }],
       points: sections.flatMap((section) => [
         section.startPoint,
         ...(section.bendPoints ?? []),

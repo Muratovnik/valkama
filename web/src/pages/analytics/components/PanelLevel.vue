@@ -20,6 +20,12 @@
  * side where both read well (`pair`), or as many side by side as keep `columnMin` (`fit`); a part
  * that must take the whole width says so on its own root. A group may stand on a surface of its
  * own.
+ *
+ * A heading that changes while the level stands, as a chart's names the page's measure, keeps the
+ * room of every heading it takes in turn (`titles`): the others stand unseen in its place, so the
+ * row is as wide and as tall as the widest and the controls beside it wrap alike whichever stands.
+ * The switch over the tasks' chart once took a line of its own under the agents' time and none
+ * under the tokens, and choosing a measure moved the table under it.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -52,6 +58,8 @@ const props = withDefaults(
     surface?: boolean
     /** The heading's words; a heading with more than words takes the `heading` slot. */
     title?: string
+    /** Every heading the level takes in turn, `title` among them, whose room the row keeps. */
+    titles?: readonly string[]
   }>(),
   {
     as: 'section',
@@ -62,6 +70,7 @@ const props = withDefaults(
     surface: false,
     bodyLabel: undefined,
     about: () => [],
+    titles: () => [],
   },
 )
 
@@ -82,6 +91,10 @@ const headed = computed(() => props.title !== '' || Boolean(slots.heading))
 const headingAs = useLevelHeading(() => headed.value)
 /** The «ⓘ» stands at a heading: a level with no heading has no line for it to end. */
 const caveats = computed(() => (headed.value ? props.about : []))
+/** The other headings the level takes in turn, each held unseen in the heading's place. */
+const rivals = computed(() =>
+  props.title ? [...new Set(props.titles)].filter((other) => other !== props.title) : [],
+)
 </script>
 
 <template>
@@ -104,6 +117,25 @@ const caveats = computed(() => (headed.value ? props.about : []))
       >
         <slot name="heading" />
       </component>
+      <span
+        v-else-if="title && rivals.length"
+        class="level-title"
+      >
+        <component
+          :is="headingAs"
+          v-slash-breaks="title"
+          class="level-heading"
+          :class="`heading-${level}`"
+        />
+        <span
+          v-for="rival in rivals"
+          :key="rival"
+          v-slash-breaks="rival"
+          class="level-title-room"
+          aria-hidden="true"
+          :class="`heading-${level}`"
+        />
+      </span>
       <component
         :is="headingAs"
         v-else-if="title"
@@ -193,6 +225,23 @@ const caveats = computed(() => (headed.value ? props.about : []))
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* The heading and the others it takes in turn in one cell, those unseen: the cell is as wide and
+   as tall as the widest of them, whichever stands. */
+.level-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+
+  > * {
+    grid-area: 1 / 1;
+  }
+}
+
+.level-title-room {
+  overflow-wrap: anywhere;
+  visibility: hidden;
 }
 
 /* The «ⓘ» ends the heading's line, centred on it in the heading's own font (`LineEnd`, the

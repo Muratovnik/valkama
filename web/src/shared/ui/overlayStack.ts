@@ -121,12 +121,13 @@ export const overlayTop = () => owners.value.at(-1)?.id ?? null
  * A popup open on the page: the control that owns it says it is expanded, as WAI-ARIA has
  * a combobox and every control with a popup say (Reka's menus, selects and comboboxes, and
  * a field driving a list of its own), or Reka's floating content says it is open. A
- * tooltip or a hover preview is no popup: its state is `delayed-open` or `instant-open`.
+ * hint or a reference's card is no popup: its surface, open as it is, says it is a hint's
+ * (`data-hint-surface`).
  */
 const OPEN_POPUP = [
   '[role="combobox"][aria-expanded="true"]',
   '[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"]',
-  '[data-reka-popper-content-wrapper] > [data-state="open"]',
+  '[data-reka-popper-content-wrapper] > [data-state="open"]:not([data-hint-surface])',
 ].join(', ')
 
 /**
@@ -136,6 +137,28 @@ const OPEN_POPUP = [
  */
 export const popupOpen = () =>
   typeof document !== 'undefined' && document.querySelector(OPEN_POPUP) !== null
+
+/**
+ * The surface of a popup open on the page: Reka's floating content that is no hint's (a menu, a
+ * choice list, a combobox's list), on its way in or standing, and a panel a press pinned open
+ * (`data-popup-surface`, as `InfoTip`'s). A control that says it is expanded names no surface:
+ * the command palette's field is always expanded, over a list that is the palette itself.
+ */
+const POPUP_SURFACE = [
+  '[data-reka-popper-content-wrapper] > :not([data-hint-surface]):not([data-state="closed"])',
+  '[data-popup-surface]',
+].join(', ')
+
+/**
+ * Whether `element` stands under an open popup, outside every popup open on the page: one
+ * surface speaks at a time, so an open menu or a pinned help silences the hints under it, and
+ * the hints of its own rows still speak.
+ */
+export function underPopup(element: Element): boolean {
+  if (typeof document === 'undefined') return false
+  const surfaces = [...document.querySelectorAll(POPUP_SURFACE)]
+  return surfaces.length > 0 && !surfaces.some((surface) => surface.contains(element))
+}
 
 /** Remove only this lease; stale releases cannot dismiss or unlock another host. */
 export function releaseOverlayOwnership(lease: OverlayOwnership | null): void {

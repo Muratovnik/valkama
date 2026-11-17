@@ -190,7 +190,7 @@ async function roundTheTrap(page: Page, surface: Locator, key: string) {
         const ofReference = [...node.querySelectorAll('[aria-describedby]')].some((reference) =>
           (reference.getAttribute('aria-describedby') ?? '')
             .split(' ')
-            .some((id) => id && card?.querySelector(`[id="${id}"]`)),
+            .some((id) => id && document.querySelector(`[data-reference-description][id="${id}"]`)),
         )
         return {
           held: node.contains(active) || Boolean(card && ofReference),

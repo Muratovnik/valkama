@@ -56,7 +56,9 @@ const seconds = () => z.number().nonnegative()
 const moment = () => boundedText(MOMENT, 96)
 /**
  * The answer's own moment, once it names an instant, as UTC with a `Z`: the one grammar the page
- * state checks (`platformUiState`). The same instant, so every time the page draws is unchanged.
+ * state checks (`platformUiState`). The same instant, but no longer at the answer's offset, so a
+ * reader that says a time at the offset of this moment or dates one against its day takes the
+ * answer's `utc_offset` back first (`QuotaPanel`).
  */
 const utcMoment = () =>
   moment().transform((value, context) => {

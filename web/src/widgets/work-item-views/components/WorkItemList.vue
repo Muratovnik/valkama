@@ -239,6 +239,7 @@ const said = (item: WorkItemBrief) =>
       <table
         class="list-table"
         v-bind="tableAttrs"
+        data-hint-list="rows"
       >
         <caption class="visually-hidden">
           {{

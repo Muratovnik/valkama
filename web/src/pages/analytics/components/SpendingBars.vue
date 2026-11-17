@@ -12,8 +12,16 @@
  * each bar is a pair, «claude-opus-5-5 · high», ranked, coloured and folded as a value is; it acts
  * as its first value does.
  *
- * It lists the first twelve values; past them one line says how many more there are and, pressed,
- * asks for the table, sent out as `more`, since the table lists them all (`SpendingTableLink`).
+ * The bars list the first twelve values, and so does the table; past them one line says how many
+ * more there are and, pressed, asks for the section's full table, sent out as `more`, since that
+ * table lists them all (`SpendingTableLink`).
+ *
+ * The values split one whole, so a person can draw them as a ring instead (`DonutChart`): each
+ * value a sector in its hue, named while its hue stays apart from the others' and the smaller
+ * folded into one rest, which leaves no value to the table. Which drawing the section opens on is
+ * `firstSplitView`'s: the ring, but the bars by task. Split by a second dimension, its pairs are
+ * ranked bars alone, since a ring of a pair each would tell the pairs of one value apart by hue
+ * alone.
  *
  * A bar acts as its value does (`useRankedLines`): by task, a task's bar is a link to it; a value
  * the read can filter by — work with no task, or any value of another dimension it can — is a
@@ -27,11 +35,16 @@ import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import SpendingTableLink from '@/pages/analytics/components/SpendingTableLink.vue'
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import { firstSplitView } from '@/pages/analytics/utils/splitView.ts'
+import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
 import { breakdownOf, measureOf, rankedLines } from '@/pages/analytics/utils/usageFigures.ts'
 
+import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
+import DonutChart from '@/shared/ui/DonutChart.vue'
+import type { DonutWords } from '@/shared/ui/DonutChart.vue'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
 
@@ -57,6 +70,10 @@ const { t } = useI18n()
 const words = useSpendingWords()
 
 const title = computed(() => words.chartTitle(props.measure, props.by, props.across))
+/** The title under every measure, whose room its heading row keeps. */
+const titles = computed(() =>
+  MEASURES.map((each) => words.chartTitle(each, props.by, props.across)),
+)
 
 const all = computed(() =>
   rankedLines(
@@ -66,23 +83,21 @@ const all = computed(() =>
     Number.POSITIVE_INFINITY,
   ),
 )
-const lines = computed(() => all.value.slice(0, LISTED))
+/** The drawings offered: a ring or the bars, and the bars alone for pairs. */
+const views = computed<SplitView[]>(() => (props.across ? ['bars'] : ['ring', 'bars']))
+const first = computed(() => firstSplitView(props.by))
 /** What every value adds up to, listed or not: what each bar's hint says its share of. */
 const whole = computed(() =>
   all.value.reduce((sum, line) => sum + (measureOf(props.measure, line.spent) ?? 0), 0),
 )
-/** How many values the list leaves to the table; none while it lists them all. */
-const unlisted = computed(() => all.value.length - lines.value.length)
+/** How many values the list and its table leave to the section's table. */
+const unlisted = computed(() => Math.max(0, all.value.length - LISTED))
 const moreWords = computed(() =>
   t('analytics.panel.bars.more', { count: unlisted.value }, unlisted.value),
 )
-const {
-  rows: bars,
-  follow,
-  select,
-} = useRankedLines({
+const ranked = useRankedLines({
   by: () => props.by,
-  lines: () => lines.value,
+  lines: () => all.value,
   measure: () => props.measure,
   narrow: (value, label) => emit('narrow', value, label),
   more: (line) => ({
@@ -90,6 +105,10 @@ const {
     slot: props.slots.get(line.key) ?? 'other',
   }),
 })
+const { follow, select } = ranked
+/** The ring folds its own rest, so it is handed every value; the list and its table the first. */
+const parts = computed(() => ranked.rows.value)
+const bars = computed(() => parts.value.slice(0, LISTED))
 
 /** A breakdown with no row is a period that spent nothing, in whatever measure it is drawn. */
 const barWords = computed(() => ({
@@ -97,17 +116,37 @@ const barWords = computed(() => ({
   value: words.measure(props.measure),
   empty: t('analytics.bars.empty'),
 }))
+const ringWords = computed<DonutWords>(() => ({
+  empty: t('analytics.bars.empty'),
+  rest: (count) => t('analytics.values.other', { count }, count),
+}))
+const formatValue = (amount: number) => words.scale(props.measure, amount)
 </script>
 
 <template>
   <ChartSection
     class="spending-bars"
     :title="title"
+    :titles="titles"
     :narrow="narrow"
     :notice="notice"
+    :views="views"
+    :first="first"
   >
-    <template #chart>
+    <template #chart="{ view }">
+      <DonutChart
+        v-if="view === 'ring'"
+        :label="title"
+        :rows="parts"
+        :words="ringWords"
+        :format-value="formatValue"
+        :format-part="words.share"
+        :format-share="words.markShare"
+        @follow="follow"
+        @select="select"
+      />
       <RankedBars
+        v-else
         :label="title"
         :rows="bars"
         :words="barWords"
@@ -118,7 +157,7 @@ const barWords = computed(() => ({
         @select="select"
       />
       <SpendingTableLink
-        v-if="unlisted"
+        v-if="unlisted && view !== 'ring'"
         class="spending-bars-more"
         @press="emit('more')"
       >

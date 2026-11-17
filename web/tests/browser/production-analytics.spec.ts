@@ -32,11 +32,12 @@ import {
   record,
   scrolledNames,
   serve,
-  tabWalk,
   UNRECORDED_BETWEEN,
 } from './analyticsPage.ts'
 import type { Answer } from './analyticsPage.ts'
+import { tabWalk } from './analyticsTabWalk.ts'
 import { shot } from './boardPage.ts'
+import { drawAllLined, drawLined, LINED_SHOWN } from './drawnViews.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
@@ -72,7 +73,7 @@ for (const width of [1440, 1024, 390]) {
     // has the page to itself instead, and its charts their room.
     const narrow = width < 1024
     for (const section of await analytics.locator('.chart-section').all())
-      await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : 'chart')
+      await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : LINED_SHOWN)
 
     // The day not over yet and the change of accounts are each said where their day is read, in
     // its row of the table or in its day's hint on the chart; no word stands under a name.
@@ -361,7 +362,7 @@ for (const width of [1440, 390]) {
   test(`a chart of one value stands whole at ${width}px`, async ({ page }, info) => {
     await serve(page, ONE_VALUE)
     const analytics = await openReport(page, width)
-    await analytics.locator('.spending-bars').getByRole('radio', { name: 'Chart' }).click()
+    await drawLined(analytics.locator('.spending-bars'))
     await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(1)
     const measured = await bars(page)
     await record(info, `analytics one value ${width}`, measured)
@@ -377,7 +378,7 @@ for (const width of [1440, 390]) {
     await serve(page, LONG_TAIL)
     const analytics = await openReport(page, width)
     for (const part of ['.spending-bars', '.spending-multiples'])
-      await analytics.locator(part).getByRole('radio', { name: 'Chart' }).click()
+      await drawLined(analytics.locator(part))
     await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(12)
     await expect(analytics.locator('.spending-bars-more')).toHaveText('13 more — in the table')
     const measured = await bars(page)
@@ -399,10 +400,7 @@ for (const width of [1440, 1024])
     await serve(page)
     const analytics = await openReport(page, width)
     // Each section drawn as its chart first, whichever the width of the panel opened it as.
-    for (const section of await analytics.locator('.chart-section').all()) {
-      await section.getByRole('radio', { name: 'Chart' }).click()
-      await expect(section).toHaveAttribute('data-shown', 'chart')
-    }
+    await drawAllLined(analytics)
     const chart = await measure(page)
     const charted = await bars(page)
     for (const section of await analytics.locator('.chart-section').all()) {

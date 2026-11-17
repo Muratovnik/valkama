@@ -24,6 +24,7 @@ import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { noTask, serveUsage, task, unknownTask, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { showView } from '../support/chartViews.ts'
 import { rowHeadings } from '../support/rowHeadings.ts'
 
 vi.mock('@/shared/api/analyticsUses.ts', () => ({ reportAnalyticsUse: vi.fn() }))
@@ -225,6 +226,7 @@ describe('a value pressed on the Analytics page', () => {
     ]
     const reads = stubAnalyticsReads((query) => serveUsage(world, query))
     const host = await mountPage({ by: 'launch_class' })
+    await showView(host, '.spending-bars', 'Bars')
     const own = host.findAll('.spending-bars button.ranked-line')
     expect(own).toHaveLength(1)
     await own[0]?.trigger('click')
@@ -240,6 +242,7 @@ describe('what is not a control', () => {
   it('leaves unknown work as a line by model and by task, and a deleted task by task', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const byModel = await mountPage({ by: 'model' })
+    await showView(byModel, '.spending-bars', 'Bars')
     const lines = byModel.findAll('.spending-bars .ranked-line')
     const plain = lines.filter((line) => line.element.tagName === 'DIV')
     expect(plain.map((line) => line.get('.ranked-label').text())).toEqual(['Unknown'])
@@ -277,10 +280,7 @@ describe('what is not a control', () => {
 })
 
 /** Shows a chart of the page as its table, by its own control. */
-async function showTable(host: VueWrapper, section: string) {
-  const option = host.findAll(`${section} .segmented-option`).find((one) => one.text() === 'Table')
-  await option?.trigger('click')
-}
+const showTable = (host: VueWrapper, section: string) => showView(host, section, 'Table')
 
 /** The row headings of a table whose names are the given ones, in that order. */
 const headingsOf = (host: VueWrapper, section: string, names: string[]) =>

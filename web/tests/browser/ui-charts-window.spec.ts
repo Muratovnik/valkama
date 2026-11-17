@@ -6,9 +6,10 @@
  * the tick stand apart from each other and the fill from the ground by a contrast a reader can see
  * — a contrast of lightness, so the bar reads in grayscale too; a window that is not fresh is
  * hatched and a fresh one is not; no word is cut. The step line draws only flat and upright
- * strokes, a mark at each reading where its moment and value put it, and the reading under the
- * pointer says itself in a hint over the plot without moving anything, with no line over the plot.
- * A forced palette draws them in its inks.
+ * strokes, a mark at each reading where its moment and value put it, painted only for the reading
+ * under the pointer or the keyboard's focus, and that reading says itself in a hint over the plot
+ * without moving anything, with no line over the plot. A forced palette draws them in its inks,
+ * the focused reading too.
  * Each theme attaches what it measured.
  */
 import { expect } from '@playwright/test'
@@ -136,13 +137,15 @@ for (const colorScheme of ['light', 'dark'] as const)
     await expect(table.locator('tbody tr').first()).toContainText('62%')
   })
 
-/** The step line as drawn: its path, its marks against the field, and the boxes of its parts. */
+/** The step line as drawn: its path, its marks against its drawing, and the boxes of its parts. */
 function stepLine(page: Page) {
   return page.evaluate(() => {
     const figure = document.querySelector('[data-harness="step"] .step-line')
     const field = figure?.querySelector('.step-field')
     if (!figure || !field) throw new Error('the step line is not drawn')
-    const area = field.getBoundingClientRect()
+    // The drawing the readings are placed on: the field less the inset that keeps a mark at 0 %
+    // and one at the top whole inside it.
+    const area = (figure.querySelector('.step-svg') ?? field).getBoundingClientRect()
     const plot = figure.querySelector('.step-plot')?.getBoundingClientRect() ?? area
     const { height } = figure.getBoundingClientRect()
     return {
@@ -212,6 +215,108 @@ for (const colorScheme of ['light', 'dark'] as const)
     await expect(page.locator('[data-harness="step-table"] tbody tr')).toHaveCount(4)
   })
 
+/**
+ * Which readings of the harness's step line paint their dot, by their place: a dot the browser
+ * draws, neither hidden nor transparent. A reading at rest keeps its mark, unpainted, since its
+ * hint stands at the mark and the mark takes the pointer for its reading.
+ */
+const paintedDots = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('[data-harness="step"] .step-mark')].flatMap(
+      (mark, index) =>
+        mark.checkVisibility({ opacityProperty: true, visibilityProperty: true }) ? [index] : [],
+    ),
+  )
+
+// A dot on every reading made a busy window a chain of dots over its own line.
+test('a step line paints no reading’s dot at rest, only the one pointed at or focused by a key', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 1400 })
+  await page.goto(HARNESS)
+  const figure = page.locator('[data-harness="step"] .step-line')
+  await figure.scrollIntoViewIfNeeded()
+  const whole = figure.getByRole('radio', { name: 'Whole window' })
+  await whole.click()
+  await page.mouse.move(1, 1)
+  const reach = figure.locator('.step-reach')
+  await expect(figure.locator('.step-mark')).toHaveCount(4)
+  expect(await paintedDots(page), 'at rest').toEqual([])
+  // The pointer on a reading's step paints that reading's dot alone; away from it, none.
+  await reach.nth(1).hover()
+  await expect(page.getByRole('tooltip')).toHaveText('12:15, 22%, the poll')
+  expect(await paintedDots(page), 'the second pointed at').toEqual([1])
+  await page.mouse.move(1, 1)
+  expect(await paintedDots(page), 'the pointer gone').toEqual([])
+  // Tab from the switch lands on the latest reading and paints its dot; the pointer passing over
+  // another reading and away leaves it painted while it holds the focus.
+  await whole.focus()
+  await page.keyboard.press('Tab')
+  await expect(reach.nth(3)).toBeFocused()
+  expect(await paintedDots(page), 'the latest focused').toEqual([3])
+  await reach.nth(0).hover()
+  expect(await paintedDots(page), 'the latest focused, the first pointed at').toEqual([0, 3])
+  await page.mouse.move(1, 1)
+  expect(await paintedDots(page), 'the latest still focused').toEqual([3])
+  await page.keyboard.press('ArrowLeft')
+  await expect(reach.nth(2)).toBeFocused()
+  expect(await paintedDots(page), 'walked to the third').toEqual([2])
+  await page.keyboard.press('Shift+Tab')
+  expect(await paintedDots(page), 'the focus gone').toEqual([])
+})
+
+/**
+ * Where the first reading's hint stands against its mark, pointed at in its middle with the
+ * page scrolled until the mark's top stands `top` pixels under the window's: the room from the
+ * mark's right edge to the hint's left, and from the mark's top to the hint's bottom, or from
+ * its bottom to the hint's top where the hint stands under it.
+ */
+async function firstReadingHint(page: Page, top: number) {
+  const figure = page.locator('[data-harness="step"] .step-line')
+  const mark = figure.locator('.step-mark').first()
+  const box = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
+  await page.evaluate((by) => window.scrollBy(0, by), box.top - top)
+  await page.mouse.move(1, 1)
+  await expect(page.locator('.tooltip-hint')).toHaveCount(0)
+  const at = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
+  await page.mouse.move(at.left + at.width / 2, at.top + at.height / 2)
+  await expect(page.getByRole('tooltip')).toHaveText('11:30, 10%, the poll')
+  return page.evaluate(() => {
+    const hint = document.querySelector('.tooltip-hint')?.getBoundingClientRect()
+    const drawn = document
+      .querySelector('[data-harness="step"] .step-mark')
+      ?.getBoundingClientRect()
+    if (!hint || !drawn) throw new Error('no hint or no mark')
+    return {
+      across: hint.left - drawn.right,
+      over: drawn.top - hint.bottom,
+      under: hint.top - drawn.bottom,
+    }
+  })
+}
+
+test('a reading’s hint stands at the top right of its mark, and at its bottom right with no room over it', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1024, height: 600 })
+  await page.goto(HARNESS)
+  const figure = page.locator('[data-harness="step"] .step-line')
+  await figure.scrollIntoViewIfNeeded()
+  await figure.getByRole('radio', { name: 'Whole window' }).click()
+  const roomy = await firstReadingHint(page, 300)
+  const cramped = await firstReadingHint(page, 12)
+  await testInfo.attach('reading-hint-corners', {
+    body: JSON.stringify({ roomy, cramped }, null, 2),
+    contentType: 'application/json',
+  })
+  // 6px past the mark's right edge and over its top (`OFFSET`); under it 6px where the window
+  // has no room over it.
+  expect(Math.abs(roomy.across - 6), 'across, with room over it').toBeLessThan(1)
+  expect(Math.abs(roomy.over - 6), 'over it').toBeLessThan(1)
+  expect(Math.abs(cramped.across - 6), 'across, with no room over it').toBeLessThan(1)
+  expect(Math.abs(cramped.under - 6), 'under it').toBeLessThan(1)
+})
+
 test('in a forced palette a window bar and a step line keep their marks in the palette’s inks', async ({
   page,
 }) => {
@@ -248,4 +353,24 @@ test('in a forced palette a window bar and a step line keep their marks in the p
   expect(paints.trackEdge).toBe(paints.canvasText)
   expect(paints.path).toBe(paints.canvasText)
   expect(paints.mark).toBe(paints.canvasText)
+  // The reading a key stands on still shows: its dot painted in the palette's ink, and its step
+  // ringed in the palette's own colour for the focus.
+  const figure = page.locator('[data-harness="step"] .step-line')
+  await figure.getByRole('radio', { name: 'Whole window' }).focus()
+  await page.keyboard.press('Tab')
+  const focused = figure.locator('.step-reach').nth(3)
+  await expect(focused).toBeFocused()
+  expect(await paintedDots(page), 'the focused reading').toEqual([3])
+  const shown = await focused.evaluate((reach) => {
+    const ring = getComputedStyle(reach)
+    const mark = reach.querySelector('.step-mark')
+    return {
+      ring: ring.outlineStyle,
+      ringWidth: Number.parseFloat(ring.outlineWidth),
+      mark: mark ? getComputedStyle(mark).backgroundColor : '',
+    }
+  })
+  expect(shown.mark).toBe(paints.canvasText)
+  expect(shown.ring).toBe('solid')
+  expect(shown.ringWidth).toBeGreaterThan(0)
 })

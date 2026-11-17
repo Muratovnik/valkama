@@ -124,6 +124,11 @@ and no compatibility layer.
      `GET /api/commit?repository=<id>&hash=<hash>` shows an attached commit
      from its project's repository instead, and the handshake says that
      Valkama attaches the commits a session makes;
+   - a step claim the lease expiry releases is a `checklist_released` event
+     whose detail is the step's text alone, as every other release of a step
+     reads, where 2.9 wrote `<reason>: <step text>`; the reason is recorded only
+     in the `released` of a claim released with it and in a move back to the
+     queue;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -209,6 +214,7 @@ and no compatibility layer.
 | `refs: [{"kind": "commit", "value": "…"}]` | `commits: [{"repository": "<project id>", "hash": "…"}]` |
 | a card's commits among its `refs` | its `commits` |
 | `GET /api/ref?kind=commit&value=…&space=…` | `GET /api/commit?repository=<project id>&hash=…` |
+| the reason before the step's text in an expired step's `checklist_released` | the step's text alone; the reason in a `released` or a move back that went with it |
 
 ## Consequences
 

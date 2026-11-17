@@ -482,7 +482,10 @@ session alone for 12 hours after its end, so a resumed session reads `live` agai
 with its claims in place: until then `claim_ready_work_item` does not hand the
 item out and a server start does not release it. The history names why a claim
 was released: `session-ended`, `session-missing` or `lease-expired`, the last for
-3 quiet days. The release marks every step the lapsed holder ticked
+3 quiet days. A step's claim lapses with its session by the same rules, and
+releasing a lapsed claim releases the steps its session holds there, each written
+as `checklist_released` with the step's text; a hold of the session making the
+call stays. The release marks every step the lapsed holder ticked
 `by_previous_holder`, at work or blocked, until a tick confirms it, and the
 item's `lapsed_claim` (`holder`, `reason`, `at`) names that release until the
 next claim. After a resume or a compaction the session's Valkama note names such

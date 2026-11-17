@@ -132,18 +132,27 @@ export const NARROW_FRAME = 1200
 export const TASK_REPORT = pageAt({ by: 'work_item' })
 
 /**
- * Opens the page at `width` and waits for the report: its tiles and its days; the report of the
- * task section unless an address is given. A window too narrow for the rail beside the panel
- * opens on the list of sections unless the address says otherwise, and the section the address
- * names is chosen there, as a reader would.
+ * Opens the page at an address and reaches the panel of the section it names, whatever that
+ * panel holds. A window too narrow for the rail beside the panel opens on the list of sections
+ * unless the address says otherwise, and the section the address names is chosen there, as a
+ * reader would.
  */
-export async function openReport(page: Page, width: number, address = TASK_REPORT) {
-  await page.setViewportSize({ width, height: 1000 })
+export async function openPanel(page: Page, address: string) {
   await page.goto(address)
   const analytics = page.locator('.analytics-page')
   await analytics.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
   if (!(await analytics.locator('.analytics-panel').isVisible()))
     await analytics.locator('.analytics-rail [aria-current="page"]').click()
+  return analytics
+}
+
+/**
+ * Opens the page at `width` and waits for the report: its tiles and its days; the report of the
+ * task section unless an address is given (`openPanel`).
+ */
+export async function openReport(page: Page, width: number, address = TASK_REPORT) {
+  await page.setViewportSize({ width, height: 1000 })
+  const analytics = await openPanel(page, address)
   await expect(analytics.locator('.tile-figure[data-measure="time"]')).toBeVisible()
   await expect(analytics.locator('.spending-days')).toBeVisible()
   return analytics
@@ -365,49 +374,4 @@ export function expectBarsInTracks(measured: Awaited<ReturnType<typeof bars>>) {
   for (const [index, bar] of measured.bars.entries())
     expect(bar.width).toBeLessThanOrEqual(measured.tracks[index]?.width ?? 0)
   expect(Math.max(...measured.bars.map((bar) => bar.width))).toBeGreaterThan(0)
-}
-
-/**
- * What Tab stands on in the page, in order, until it leaves it: each control marked first, so
- * the walk names what it reached and what it never did. A group of radios is one stop, its
- * chosen option; the arrows move inside it.
- */
-export async function tabWalk(page: Page) {
-  const controls = await page.evaluate(() => {
-    for (const marked of document.querySelectorAll<HTMLElement>('[data-stop]'))
-      delete marked.dataset.stop
-    const all = document.querySelectorAll<HTMLElement>(
-      '.analytics-page :is(a[href], button, input, select, textarea, summary, [tabindex])',
-    )
-    const stops = [...all].filter(
-      (element) =>
-        element.tabIndex >= 0 &&
-        !element.matches(':disabled') &&
-        // Shown, and not in a closed disclosure, whose content the browser skips.
-        element.checkVisibility({ visibilityProperty: true }),
-    )
-    for (const [index, element] of stops.entries()) element.dataset.stop = String(index)
-    return stops.length
-  })
-  await page.locator('body').focus()
-  const reached = new Set<string>()
-  for (let press = 0; press < 200 && reached.size < controls; press += 1) {
-    await page.keyboard.press('Tab')
-    const stop = await page.evaluate(
-      () => (document.activeElement as HTMLElement | null)?.dataset.stop ?? null,
-    )
-    if (stop !== null) reached.add(stop)
-  }
-  /** The controls Tab never stood on, by what they say, so a failure names them. */
-  const missed = await page.evaluate(
-    (seen) =>
-      [...document.querySelectorAll<HTMLElement>('[data-stop]')]
-        .filter((element) => !seen.includes(element.dataset.stop ?? ''))
-        .map(
-          (element) =>
-            `${element.tagName.toLowerCase()}.${element.className} ${element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40) ?? ''}`,
-        ),
-    [...reached],
-  )
-  return { controls, reached: reached.size, missed }
 }

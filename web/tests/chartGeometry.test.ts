@@ -287,7 +287,7 @@ describe('a change at the start of a period', () => {
     const [first, , third] = columns
     assert.ok(first && third)
     assert.equal(
-      periodHint(third, words, String),
+      periodHint(third, { words, formatValue: String }).text,
       'd3: total 3\nAccount change: A → A, B\nLimit reset\nAccount B 2\nAccount A 1',
     )
     assert.equal(
@@ -295,6 +295,6 @@ describe('a change at the start of a period', () => {
       'd3: total 3; Account A 1, Account B 2. Account change: A → A, B. Limit reset',
     )
     assert.deepEqual(columnNotes(third, words), ['Account change: A → A, B', 'Limit reset'])
-    assert.equal(periodHint(first, words, String), 'd1: total 1\nAccount A 1')
+    assert.equal(periodHint(first, { words, formatValue: String }).text, 'd1: total 1\nAccount A 1')
   })
 })

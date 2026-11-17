@@ -2505,12 +2505,15 @@ def _hand_back(
 
 
 def _unheld_at_work(current: sqlite3.Row, claim_ref: str, checklist: object) -> bool:
-    """Whether a task stands at work with nobody holding it or any of its steps."""
+    """Whether a task stands at work with nobody holding it or any open step of it.
+
+    A done step is nobody's hold, though a store an earlier build wrote may keep its holder.
+    """
 
     return (
         current["category"] == "active"
         and not claim_ref
-        and not any(step["claimed_by"] for step in model.checklist(checklist))
+        and not any(step["claimed_by"] and not step["done"] for step in model.checklist(checklist))
     )
 
 
@@ -2552,7 +2555,9 @@ def expire_leases(
     its end, one no session proved after its item's quiet. An open question to
     the owner on the item stops the count of silence for every hold there. A
     lease in its grace waits for its session to come back, since nobody asked
-    for that item in particular. An item another writer changed in the meantime
+    for that item in particular. A hold of the session making the call stays, as
+    `claim_work_item` keeps it: the call is that session's heartbeat, though
+    nothing has written it yet. An item another writer changed in the meantime
     is left to it. With `limit`, it stops after releasing on that many items, by
     number, and leaves the rest to the next call.
     """
@@ -2592,10 +2597,12 @@ def lapsed_holds(
     query = with_clauses(
         "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
+    mine = calls.confirmed_session()
     for row in conn.execute(query + " ORDER BY i.number", parameters).fetchall():
         asked = leases.question_stands(conn, row)
         lease = leases.lease(conn, row, asked=asked)
-        claim = lease if lease is not None and leases.lapsed(lease) else None
+        lapsed = lease is not None and leases.lapsed(lease) and not _calling(lease, mine)
+        claim = lease if lapsed else None
         steps = _lapsed_steps(conn, row, claim, asked=asked)
         if claim is None and not steps:
             continue
@@ -2620,11 +2627,12 @@ def _lapsed_steps(
 
     A lapsed one, and, beside a claim being released, every step of the same
     holder: the lease is the session's, so what lapses for its claim lapses for
-    its steps.
+    its steps. A step of the session making the call stays, as its claim does.
     """
 
     if asked is None:
         asked = leases.question_stands(conn, row)
+    mine = calls.confirmed_session()
     found: dict[str, leases.Lease] = {}
     read: dict[str, leases.Lease] = {}
     for step in model.checklist(row["checklist"]):
@@ -2634,9 +2642,17 @@ def _lapsed_steps(
         if holder not in read:
             read[holder] = leases.of_step(conn, row, holder, asked=asked)
         held = read[holder]
+        if _calling(held, mine):
+            continue
         if leases.lapsed(held) or (claim is not None and _same_holder(held, claim)):
             found[str(step["id"])] = held
     return found
+
+
+def _calling(lease: leases.Lease, session: str | None) -> bool:
+    """Whether `lease` is the session's making the call: its call is its heartbeat."""
+
+    return session is not None and lease.session_id == session
 
 
 def _same_holder(step: leases.Lease, claim: leases.Lease) -> bool:

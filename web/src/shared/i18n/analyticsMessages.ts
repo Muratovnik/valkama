@@ -95,6 +95,8 @@ export const analyticsMessages = {
       shown: {
         label: 'Show {chart} as',
         chart: 'Chart',
+        ring: 'Ring',
+        bars: 'Bars',
         table: 'Table',
       },
       measures: {
@@ -288,6 +290,8 @@ export const analyticsMessages = {
       shown: {
         label: 'Показать «{chart}» как',
         chart: 'График',
+        ring: 'Кольцо',
+        bars: 'Полосы',
         table: 'Таблица',
       },
       measures: {

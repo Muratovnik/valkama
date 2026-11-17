@@ -94,16 +94,21 @@ describe('v-tooltip for assistive technology', () => {
     expect(described(button).slice(1)).toEqual(['Still no connection. Refresh now'])
   })
 
-  it('reads its side, its kind and dynamic text, and an empty text is no hint', async () => {
+  it('reads its kind and dynamic text, a side only where one is written, and an empty text is no hint', async () => {
     const { values, wrapper } = host(
       '<a href="#" v-tooltip:right.clipped="name"><b>{{ name }}</b></a><span v-tooltip.detail="{ text: hint, clipped: cut }">s</span>',
       { name: 'MAIN · A space with a long name', hint: 'Why', cut: false },
     )
     const link = wrapper.get('a').element
     const span = wrapper.get('span').element
-    expect(tooltipOf(link)).toMatchObject({ side: 'right', kind: 'clipped', clipped: true })
+    // A side is an exception the UI-system guard registers; a hint that writes none asks for none.
+    expect(tooltipOf(link)).toMatchObject({
+      asked: { align: 'center', side: 'right' },
+      kind: 'clipped',
+      clipped: true,
+    })
     expect(tooltipOf(span)).toMatchObject({
-      side: 'top',
+      asked: null,
       kind: 'detail',
       clipped: false,
       text: 'Why',

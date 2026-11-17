@@ -5,9 +5,8 @@
  * choice of what the charts below draw: one radio group, each tile a segment, the chosen one
  * pressed, and marked by a check beside its name as well as by its ground. The tokens say what
  * they count — what was processed anew, by kind — and the cache reads they leave apart. The
- * change and each note keep one line, so the three tiles stand one height at every width; a
- * tile's hint says it whole — its name, figure, change and notes — while any of them is cut,
- * and the tile's name says it all too.
+ * change and each note keep one line, so the three tiles stand one height at every width; a line
+ * cut short says itself whole over its own place (`clipped`), as every cut text does.
  *
  * Beside each figure its measure stands step by step over the period the main chart draws — its
  * days, the hours of a single day, the minutes of the live hour — as a small trend
@@ -42,7 +41,6 @@ import { changeOf } from '@/pages/analytics/utils/usageFigures.ts'
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage } from '@/shared/api/analyticsApi.ts'
-import { sentences } from '@/shared/lib/sentences.ts'
 import MiniTrend from '@/shared/ui/MiniTrend.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -100,7 +98,6 @@ const tiles = computed(() =>
     const said = rateOf(value)
     // The line per hour as its hint takes it: what it is of, and its own words.
     const rate = said ? { text: said.detail, words: said.line } : null
-    const rateWhole = said ? `${said.detail}: ${said.line}` : ''
     return {
       value,
       label,
@@ -110,7 +107,6 @@ const tiles = computed(() =>
       direction: change.direction,
       rate,
       notes,
-      whole: sentences([label, figure, change.words, rateWhole, ...notes]),
     }
   }),
 )
@@ -128,10 +124,7 @@ const tileOf = (value: Measure) => byValue.value.get(value)
     :options="tiles"
   >
     <template #option="{ option, chosen }">
-      <span
-        v-tooltip.clipped="tileOf(option.value)?.whole"
-        class="tile-body"
-      >
+      <span class="tile-body">
         <span class="tile-name">
           {{ option.label }}
           <VIcon
@@ -143,6 +136,7 @@ const tileOf = (value: Measure) => byValue.value.get(value)
         </span>
         <span class="tile-lead">
           <span
+            v-tooltip.clipped="tileOf(option.value)?.figure"
             class="tile-figure one-line"
             :data-measure="option.value"
             >{{ tileOf(option.value)?.figure }}</span
@@ -156,6 +150,7 @@ const tileOf = (value: Measure) => byValue.value.get(value)
           </span>
         </span>
         <span
+          v-tooltip.clipped="tileOf(option.value)?.change"
           class="tile-change one-line"
           :data-direction="tileOf(option.value)?.direction"
           >{{ tileOf(option.value)?.change }}</span
@@ -169,6 +164,7 @@ const tileOf = (value: Measure) => byValue.value.get(value)
         <span
           v-for="note in tileOf(option.value)?.notes"
           :key="note"
+          v-tooltip.clipped="note"
           class="tile-note one-line"
           >{{ note }}</span
         >
@@ -182,7 +178,7 @@ const tileOf = (value: Measure) => byValue.value.get(value)
   inline-size: 100%;
 }
 
-/* What a tile says, its whole box: the hint stands on all of it, whichever line is cut. */
+/* What a tile says: its name, its figure and trend, its change and its notes, a line each. */
 .tile-body {
   display: grid;
   gap: var(--space-1);

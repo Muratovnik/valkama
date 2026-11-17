@@ -27,6 +27,9 @@ RETIRED_FIELD_PREFIX = "card"
 # A README describes a directory rather than one piece of work, so it carries
 # no lifecycle of its own.
 EXEMPT_NAMES = {"README.md", "index.md"}
+# A guide describes how to use the product as it is now, and changes with it
+# the way the README does, rather than belonging to one piece of work.
+GUIDES = DOCS / "guides"
 FENCE = "---"
 # Frontmatter is a handful of lines; a fence that has not closed by here is a
 # horizontal rule in prose, not an unterminated header.
@@ -100,7 +103,7 @@ class DocsLifecycleTests(unittest.TestCase):
     def test_every_document_declares_status(self) -> None:
         problems: list[str] = []
         for path in sorted(DOCS.rglob("*.md")):
-            if path.name in EXEMPT_NAMES:
+            if path.name in EXEMPT_NAMES or path.is_relative_to(GUIDES):
                 continue
             problem = lifecycle_problem(path.read_text(encoding="utf-8"))
             if problem:
@@ -179,6 +182,7 @@ class ProductModelDocsTests(unittest.TestCase):
             PRODUCT_MODEL,
             DOCS / "platform-contract.md",
             DOCS / "improvements-contract.md",
+            *sorted(GUIDES.glob("*.md")),
         )
         for path in current_contracts:
             text = path.read_text(encoding="utf-8")

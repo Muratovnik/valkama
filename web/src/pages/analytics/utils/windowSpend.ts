@@ -93,6 +93,8 @@ export function spendQuery(
 export interface WindowSpent {
   /** The account's work by the breakdown, the costliest first, the rest folded into one line. */
   lines: SpendingLine[]
+  /** Every line of it, the costliest first and none folded, for a ring that folds its own rest. */
+  parts: SpendingLine[]
   /** All of the account's work in the span: what each line's share is a share of. */
   total: Spent
   /** Its organization's work with no account known, never counted to it; null for none. */
@@ -113,6 +115,7 @@ export function windowSpent(usage: Usage, seat: string, by: SpendBy): WindowSpen
   const apart = sum(usage.rows.filter((row) => row.group.seat?.unknown === true))
   return {
     lines: rankedLines(own, by, 'cost', LISTED),
+    parts: rankedLines(own, by, 'cost', Number.POSITIVE_INFINITY),
     total: sum(own),
     unplaced: spentAnything(apart) ? apart : null,
   }
