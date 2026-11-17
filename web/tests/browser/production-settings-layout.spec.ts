@@ -211,7 +211,12 @@ test('the diagnostics rows stack their two cells at 390px', async ({ page }) => 
     .locator('.health-passed-row, .installation-health .health-technical-row')
     .evaluateAll((all) =>
       all.map((row) => {
-        const [first, second] = [...row.children].map((cell) => cell.getBoundingClientRect())
+        // A row's two cells: a technical row's term and value, a passed check's state and
+        // what it found.
+        const cell = (selector: string) => row.querySelector(selector)?.getBoundingClientRect()
+        const first = cell('dt, [data-dimension]')
+        const second = cell('dd, .health-passed-detail')
+        if (!first || !second) throw new Error(`${row.className}: a cell is missing`)
         return { row: row.className, apart: Math.round(Math.abs(second.left - first.left)) }
       }),
     )

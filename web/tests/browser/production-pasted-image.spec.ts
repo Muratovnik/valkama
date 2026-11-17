@@ -111,10 +111,14 @@ test('a pasted picture is sent, named in the comment and drawn in it at a bounde
   // At the default window and at a phone's, where the card stands across all of it.
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 800 })
-    const geometry = await thumb.evaluate((image: HTMLImageElement) => {
+    // The press is the button that opens the picture, measured itself; the room is the
+    // paragraph the picture stands in.
+    const geometry = await open.evaluate((button) => {
+      const image = button.querySelector('img')
+      const paragraph = button.closest('p')
+      if (!image || !paragraph) throw new Error('The picture stands in no paragraph')
       const own = image.getBoundingClientRect()
-      const press = image.parentElement?.getBoundingClientRect() ?? own
-      const paragraph = image.closest('p') ?? image.parentElement?.parentElement ?? image
+      const press = button.getBoundingClientRect()
       const room = paragraph.getBoundingClientRect()
       const words = document.createRange()
       const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT)

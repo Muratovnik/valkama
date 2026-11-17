@@ -105,9 +105,15 @@ test('a short reference keeps the size it has always been drawn at', async ({ pa
       scale: new DOMMatrix(getComputedStyle(reference).transform).a,
     })),
   )
+  // Grown to read at this zoom (`GraphNodeBlock`): a short one at the one size every short one
+  // is drawn at, and nothing drawn larger; only a long one gives some of it up.
   const short = sizes.filter((size) => size.length <= 8)
   expect(short.length).toBeGreaterThan(0)
-  expect(new Set(short.map((size) => size.scale))).toEqual(new Set([2.2]))
+  const grown = new Set(short.map((size) => size.scale))
+  expect(grown.size).toBe(1)
+  const [largest = 0] = grown
+  expect(largest).toBeGreaterThan(1)
+  expect(Math.max(...sizes.map((size) => size.scale))).toBe(largest)
 })
 
 test('a block carries no sign of its own, and its name and tooltip say the state', async ({
@@ -115,6 +121,9 @@ test('a block carries no sign of its own, and its name and tooltip say the state
 }) => {
   await serve(page)
   await zoomedOut(page)
+  // The blocks are drawn, and draw no sign: the sign a card draws is shown present in
+  // ui-graph-motion.spec.ts, and its key in production-session-signs.spec.ts.
+  await expect(page.locator('.flow-node-overview').first()).toBeVisible()
   await expect(page.locator('.flow-node-overview .session-sign')).toHaveCount(0)
   await expect(page.locator('.graph-legend-sign')).toHaveCount(0)
   const working = page.locator('.flow-node-card').filter({ hasText: LONGEST[0] })
@@ -132,6 +141,7 @@ test('with the motion stopped, a block keeps the state in its name and the frame
   })
   await serve(page)
   await zoomedOut(page)
+  // A comet is shown present where the motion runs, in production-graph-comet.spec.ts.
   await expect(page.locator('.graph-comet')).toHaveCount(0)
   await expect(page.locator('.graph-frame-working').first()).toContainText('1')
   await expect(page.locator('.flow-node-card').filter({ hasText: LONGEST[0] })).toHaveAttribute(

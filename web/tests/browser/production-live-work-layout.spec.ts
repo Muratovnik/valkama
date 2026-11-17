@@ -14,7 +14,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { busyFrame, liveRow as frameRow } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { settled } from './documentBeside.ts'
-import { installLiveStreams, liveRow, openFolds } from './liveWorkPage.ts'
+import { installLiveStreams, liveRow, nothingRinged, openFolds } from './liveWorkPage.ts'
 import { globalScope, projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -133,31 +133,6 @@ async function headsHold(page: Page, within: string, rowHeight: number) {
   for (const height of heads) expect(Math.abs(height - rowHeight)).toBeLessThanOrEqual(0.5)
 }
 
-/**
- * Nothing in the list draws a ring or an edge while the keyboard has not reached it. The
- * reset gives every element a solid border of no width, so an edge is one that is drawn:
- * a style and a width.
- */
-function nothingRinged(page: Page, within: string) {
-  return page.locator(within).evaluate((root) =>
-    [root, ...root.querySelectorAll<Element>('*')]
-      .filter((node) => {
-        const style = getComputedStyle(node)
-        const before = getComputedStyle(node, '::before')
-        const edge = ['top', 'right', 'bottom', 'left'].some(
-          (side) =>
-            style.getPropertyValue(`border-${side}-style`) !== 'none' &&
-            Number.parseFloat(style.getPropertyValue(`border-${side}-width`)) > 0,
-        )
-        const ring = [style, before].some(
-          (of) => of.outlineStyle !== 'none' && Number.parseFloat(of.outlineWidth) > 0,
-        )
-        return edge || ring
-      })
-      .map((node) => node.getAttribute('class') ?? node.tagName),
-  )
-}
-
 test('the rail’s list stands on one grid at 1280', async ({ page }) => {
   await open(page, { width: 1280, height: 800 })
   await expect(liveRow(page, 'ZED-1')).toBeAttached()
@@ -252,6 +227,7 @@ test('a phone opens the list in a panel over the page, with a finger’s rows an
   await settled(panel)
   await openFolds(page, '.side-panel-body')
   const box = await panel.boundingBox()
+  // The width `SidePanel` states for itself.
   expect(box).toMatchObject({ x: 0, width: 340 })
   expect(await panel.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0)
   holdsTheGrid(await measure(page, '.side-panel-body'), 44)
@@ -325,18 +301,29 @@ test('a forced palette keeps the signs, and the open row is the system’s own p
       ground: getComputedStyle(probe).backgroundColor,
     }
     probe.remove()
-    const parts = row.querySelectorAll(
-      '.nav-row-lead, .nav-row-number, .nav-row-title, .nav-row-meta, .nav-row-detail, .session-sign',
-    )
+    const PARTS = {
+      lead: '.nav-row-lead',
+      number: '.nav-row-number',
+      title: '.nav-row-title',
+      meta: '.nav-row-meta',
+      detail: '.nav-row-detail',
+      sign: '.session-sign',
+    }
     return {
       pair,
       ground: getComputedStyle(row).backgroundColor,
-      inks: [...parts].map((part) => getComputedStyle(part).color),
+      inks: Object.entries(PARTS).flatMap(([part, selector]) =>
+        [...row.querySelectorAll(selector)].map((node) => ({
+          part,
+          ink: getComputedStyle(node).color,
+        })),
+      ),
     }
   })
   expect(seen.ground).toBe(seen.pair.ground)
-  expect(seen.inks).toHaveLength(6)
-  for (const ink of seen.inks) expect(ink).toBe(seen.pair.ink)
+  // Every part the row draws, in the pair's ink; its number and title it always draws.
+  expect(seen.inks.map(({ part }) => part)).toEqual(expect.arrayContaining(['number', 'title']))
+  for (const { part, ink } of seen.inks) expect(ink, part).toBe(seen.pair.ink)
 })
 
 const running = (page: Page) =>

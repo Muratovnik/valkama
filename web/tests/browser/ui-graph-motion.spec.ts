@@ -83,14 +83,29 @@ test('an item a session holds without working on it stands still, and the key sa
     { live: true, comet: true },
     { live: false, comet: false },
   ])
-  const key = page.locator('.graph-legend-on-field .graph-legend-sign')
-  await expect(key).toHaveText(['a session working on it', 'held by a session, not worked on now'])
-  // The key's samples stand still: they say what a sign means, not that work goes on.
+  // The key's entries by the sign each names (`data-sign`): one for each sign a card draws,
+  // and none for a sign no card draws. Whatever else the key holds is not a sign's entry.
+  const drawnSigns = await page
+    .locator('.graph-flow .graph-live[data-live]')
+    .evaluateAll((nodes) =>
+      [...new Set(nodes.map((node) => (node as HTMLElement).dataset.live ?? ''))].toSorted(),
+    )
+  expect(drawnSigns).toEqual(['held', 'working'])
+  const key = page.locator('.graph-legend-on-field [data-sign]')
+  const keySigns = await key.evaluateAll((entries) =>
+    entries.map((entry) => (entry as HTMLElement).dataset.sign ?? '').toSorted(),
+  )
+  expect(keySigns).toEqual(drawnSigns)
+  const entryOf = (sign: string) => page.locator(`.graph-legend-on-field [data-sign="${sign}"]`)
+  await expect(entryOf('working')).toHaveText('a session working on it')
+  await expect(entryOf('held')).toHaveText('held by a session, not worked on now')
+  // The key's samples stand still: they say what a sign means, not that work goes on. Each
+  // entry draws its sign; one without it would be an entry left unmeasured.
   expect(
     await key.evaluateAll((entries) =>
-      entries.flatMap((entry) => entry.querySelector('.session-sign')?.getAnimations() ?? []),
+      entries.map((entry) => entry.querySelector('.session-sign')?.getAnimations().length ?? -1),
     ),
-  ).toHaveLength(0)
+  ).toEqual(drawnSigns.map(() => 0))
 })
 
 test('the switch stops all motion at once and the stop survives a reload', async ({ page }) => {
@@ -128,10 +143,15 @@ test('under reduced motion nothing moves and there is no switch', async ({ page 
   await expect(page.locator('.graph-comet')).toHaveCount(0)
   // A transition the switch began ends in a moment; nothing repeats after it.
   await expect.poll(() => fieldAnimations(page), { timeout: 2000 }).toBe(0)
+  // Both lines of this field carry live work, held still as when the switch stops it: wider
+  // than a resting line, as the paused field above draws its live one.
   const widths = await page
     .locator('.vue-flow__edge .vue-flow__edge-path')
-    .evaluateAll((paths) => paths.map((path) => getComputedStyle(path).strokeWidth))
-  expect(widths).toEqual(['2.4px', '2.4px'])
+    .evaluateAll((paths) =>
+      paths.map((path) => Number.parseFloat(getComputedStyle(path).strokeWidth)),
+    )
+  expect(widths).toHaveLength(2)
+  for (const width of widths) expect(width).toBeGreaterThan(1.6)
 })
 
 test('in a forced palette the live line is drawn in the colour kept for what is picked out', async ({

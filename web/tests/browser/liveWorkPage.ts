@@ -143,3 +143,36 @@ export const liveRow = (page: Page, reference: string, within = '.nav-work-list'
   page.locator(`${within} .nav-row`, {
     has: page.locator(`.nav-row-link[aria-label^="${reference} "]`),
   })
+
+/**
+ * Nothing in the list draws a ring or an edge while the keyboard has not reached it. The
+ * reset gives every element a solid border of no width, so an edge is one that is drawn:
+ * a style and a width.
+ */
+export function nothingRinged(page: Page, within: string) {
+  return page.locator(within).evaluate((root) => {
+    // The focus ring's colour as the page resolves it: a ring drawn as a shadow is one too.
+    const probe = document.createElement('i')
+    probe.style.color = 'var(--color-focus-ring)'
+    document.body.append(probe)
+    const focusRing = getComputedStyle(probe).color
+    probe.remove()
+    return [root, ...root.querySelectorAll<Element>('*')]
+      .filter((node) => {
+        const style = getComputedStyle(node)
+        const before = getComputedStyle(node, '::before')
+        const edge = ['top', 'right', 'bottom', 'left'].some(
+          (side) =>
+            style.getPropertyValue(`border-${side}-style`) !== 'none' &&
+            Number.parseFloat(style.getPropertyValue(`border-${side}-width`)) > 0,
+        )
+        const ring = [style, before].some(
+          (of) =>
+            (of.outlineStyle !== 'none' && Number.parseFloat(of.outlineWidth) > 0) ||
+            of.boxShadow.includes(focusRing),
+        )
+        return edge || ring
+      })
+      .map((node) => node.getAttribute('class') ?? node.tagName)
+  })
+}
