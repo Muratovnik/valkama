@@ -747,6 +747,22 @@ class _Scenario:
             "planning-search": found,
         }
 
+    def volumes(self) -> dict[str, object]:
+        """What stands in the space and in its project, over the days around today."""
+
+        today = datetime.now(UTC).date()
+        period = {
+            "from": (today - timedelta(days=7)).isoformat(),
+            "to": (today + timedelta(days=2)).isoformat(),
+            "utc_offset": "180",
+        }
+        return {
+            "volumes-space": self.http(f"/api/planning/volumes?{self.scope(**period)}"),
+            "volumes-project": self.http(
+                f"/api/planning/volumes?{self.scope(project_id=PROJECT, **period)}"
+            ),
+        }
+
     def open_plans(self) -> dict[str, object]:
         """What a click is told to do: each form of a plan, for the files `documents` wrote."""
 
@@ -949,6 +965,8 @@ class _Scenario:
             "request-session-gone": self.session_gone(),
             **self.put_off(),
             **self.converted(),
+            # After every item above, so it counts the space as the answers left it.
+            **self.volumes(),
         }
 
 

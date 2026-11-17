@@ -54,6 +54,7 @@ class PlanningApiTests(unittest.TestCase):
                 "/api/planning/search",
                 "/api/planning/session/usage",
                 "/api/planning/spaces",
+                "/api/planning/volumes",
                 "/api/planning/work-item",
                 "/api/planning/work-item/chain",
                 "/api/planning/work-item/usage",

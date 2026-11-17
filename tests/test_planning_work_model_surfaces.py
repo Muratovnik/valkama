@@ -70,6 +70,8 @@ MARKER = "Marker-of-the-service-state"
 KEY = "OR"
 PROJECT = "or"
 SESSION = "019a3c2e-7777-7c11-9e0f-2f4b6d8a1c3e"
+#: Days around the hours the tree's facts are placed at, for a read over a period.
+VOLUMES_PERIOD = {"from": "2026-11-19", "to": "2026-11-22", "utc_offset": "0"}
 
 #: The writes that change which goals and stages stand accepted and open.
 ACCEPTING = frozenset(
@@ -261,6 +263,10 @@ HTTP_READS: dict[str, list[Args]] = {
     "/api/planning/commits/unattached": [
         _q(lambda _case: {"space": KEY}),
         _q(lambda _case: {"project": PROJECT}),
+    ],
+    "/api/planning/volumes": [
+        _q(lambda _case: {"scope_kind": "global", **VOLUMES_PERIOD}),
+        lambda case: _exact_read(case, **VOLUMES_PERIOD),
     ],
 }
 HTTP_WRITES: dict[str, list[Args]] = {

@@ -1,0 +1,77 @@
+{
+  "interface_version": "valkama-planning-api",
+  "volumes": {
+    "scope": {
+      "kind": "space",
+      "space_ref": {
+        "data_scope_id": "00000000-0000-4000-8000-000000000004",
+        "space_key": "MAIN"
+      },
+      "project_ref": {
+        "project_id": "example-project"
+      }
+    },
+    "period": {
+      "from": "2026-01-02T03:04:05+03:00",
+      "to": "2026-01-02T03:04:05+03:00",
+      "utc_offset": 180
+    },
+    "measured_from": "2026-01-02T03:04:05.000Z",
+    "counts": {
+      "categories": [
+        {
+          "category": "triage",
+          "tasks": 0,
+          "containers": 0,
+          "oldest": null
+        },
+        {
+          "category": "deferred",
+          "tasks": 0,
+          "containers": 0,
+          "oldest": null
+        },
+        {
+          "category": "ready",
+          "tasks": 1,
+          "containers": 0,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000039",
+            "reference": "MAIN-12",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "active",
+          "tasks": 0,
+          "containers": 0,
+          "oldest": null
+        },
+        {
+          "category": "review",
+          "tasks": 0,
+          "containers": 0,
+          "oldest": null
+        },
+        {
+          "category": "completed",
+          "tasks": 0,
+          "containers": 0,
+          "oldest": null
+        },
+        {
+          "category": "blocked",
+          "tasks": 0,
+          "containers": 0,
+          "oldest": null
+        },
+        {
+          "category": "cancelled",
+          "tasks": 0,
+          "containers": 0,
+          "oldest": null
+        }
+      ]
+    }
+  }
+}

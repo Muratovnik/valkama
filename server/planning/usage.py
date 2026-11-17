@@ -547,6 +547,12 @@ def micro(moment: dt.datetime) -> int:
     return (moment - EPOCH) // _MICRO
 
 
+def at(moment: int, zone: dt.tzinfo) -> str:
+    """A moment held in microseconds since the epoch, written as a time in the caller's zone."""
+
+    return (EPOCH + dt.timedelta(microseconds=moment)).astimezone(zone).isoformat()
+
+
 def _moment(text: str, name: str, zone: dt.tzinfo) -> int:
     """A date as the start of that day in the caller's zone, or a time with its own offset."""
 

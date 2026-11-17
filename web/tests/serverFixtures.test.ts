@@ -47,6 +47,7 @@ import {
   validatePlanningWorkItemBriefPayload,
   validatePlanningWorkItemPayload,
 } from '@/shared/api/platformPlanningPayload.ts'
+import { validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 const STEP_KINDS = [
@@ -103,6 +104,8 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'requests.json': validateInputRequestList,
   'usage-item.json': validateItemUsageAnswer,
   'usage-session.json': validateSessionUsageAnswer,
+  'volumes-project.json': validateVolumesAnswer,
+  'volumes-space.json': validateVolumesAnswer,
 }
 /** What only an agent reads: the MCP answers, which no web schema describes. */
 const agentOnly = new Set([

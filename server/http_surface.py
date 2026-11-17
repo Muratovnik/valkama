@@ -484,7 +484,9 @@ def _publishes(notify: _Notify | None, path: str) -> bool:
 
 
 def _planning_read(call: _Call) -> _Answer | None:
-    if {"data_scope_id", "space_key"} & call.parameters.keys():
+    # A read that names its scope exactly answers it itself; the rest take the read model's.
+    exact = {"data_scope_id", "space_key"} & call.parameters.keys()
+    if exact and call.path not in planning_api.SCOPED_READS:
         if call.path != "/api/planning":
             raise planning_api.PlanningHttpError(
                 400, "invalid_request", "Exact scope is supported by the Planning model read"
