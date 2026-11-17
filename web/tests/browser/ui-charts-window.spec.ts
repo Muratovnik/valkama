@@ -79,15 +79,17 @@ function windowBars(page: Page) {
         // The tick crosses the bar, standing over and under it.
         crosses: ticked ? ticked.top < along.top && ticked.bottom > along.bottom : null,
         mask: fill ? getComputedStyle(fill).maskImage : null,
-        // Each part of the tail: where it starts and ends along the track, in whole percents and
-        // in pixels from the fill's end or the part before, and whether it is hatched.
+        // Each part of the tail: where its run starts and where it ends along the track, in
+        // whole percents, the run starting where the fill or the part before ends; the ground
+        // between them in pixels; and whether it is hatched.
         tail: tail.map((part, index) => {
           const drawn = part.getBoundingClientRect()
           const before = index === 0 ? filled : tail[index - 1]?.getBoundingClientRect()
+          const gap = before ? drawn.left - before.right : 0
           return {
-            from: share(drawn.left - along.left),
+            from: share(drawn.left - gap - along.left),
             to: share(drawn.right - along.left),
-            gap: before ? Math.round((drawn.left - before.right) * 10) / 10 : null,
+            gap: before ? Math.round(gap * 10) / 10 : null,
             inside:
               drawn.left >= along.left - 0.5 &&
               drawn.right <= along.right + 0.5 &&
@@ -145,7 +147,7 @@ for (const colorScheme of ['light', 'dark'] as const)
       expect(bar.mask, `${bar.case}: the fill`).toBe('none')
     // The tail, hatched inside the track: from 2px past the fill to the slower pace's end, and
     // 2px on to the faster's; from the track's start at 0 %; to its end where the window runs
-    // out; none past 100 % or with no figure. Each end within a percent of its share.
+    // out; none past 100 % or with no figure. Each end at its share, to the whole percent.
     const tails = Object.fromEntries(
       bars.map((bar) => [bar.case, bar.tail.map(({ from, to, gap }) => [from, to, gap])]),
     )
@@ -157,8 +159,8 @@ for (const colorScheme of ['light', 'dark'] as const)
       over: [],
       zero: [[0, 12, null]],
       stale: [
-        [88, 98, 2],
-        [98, 100, 2],
+        [88, 97, 2],
+        [97, 100, 2],
       ],
       runs: [[74, 100, 2]],
       none: [],

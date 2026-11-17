@@ -51,7 +51,7 @@ export const windowBars = [
     used: 88,
     even: 86,
     silent: true,
-    forecast: { low: 97.5, high: 100 },
+    forecast: { low: 97, high: 100 },
   },
   {
     case: 'runs',

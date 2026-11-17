@@ -28,11 +28,14 @@ import { test } from './test.ts'
 
 const HOUR = 3_600_000
 
-/** What each window draws, by account and window: its tail's parts, in whole percents of the track. */
+/**
+ * What each window draws, by account and window: its fill and its tail's parts, to the half percent
+ * of the track, each part from where its run starts — where the fill or the part before ends.
+ */
 interface Drawn {
   /** Whether the step line runs a corridor, and the places past its readings it points at. */
   corridor: boolean
-  /** The fill's length in whole percents, or null for none; whether it is solid. */
+  /** Where the fill ends, or null for none. */
   fill: number | null
   places: string[]
   /** Whether the forecast's line leads with the hatch's swatch. */
@@ -77,13 +80,13 @@ const WEEKS: Record<string, Drawn> = {
     corridor: true,
     places: ['now', 'reset'],
   },
-  'Work week_model': { fill: 13, tail: [], swatch: false, corridor: false, places: ['now'] },
+  'Work week_model': { fill: 12.5, tail: [], swatch: false, corridor: false, places: ['now'] },
   // Silent, its share as solid as a fresh one's, and a range that may run out, cut at the end.
   '7e6d5c4b week': {
     fill: 88,
     tail: [
-      [88, 98],
-      [98, 100],
+      [88, 97.5],
+      [97.5, 100],
     ],
     swatch: true,
     corridor: true,
@@ -105,7 +108,10 @@ const WEEKS: Record<string, Drawn> = {
   },
 }
 
-/** Each drawn window: its account and kind, its lead, its fill, its tail and its forecast's line. */
+/**
+ * Each drawn window: its account and kind, its lead, its fill, its tail with the ground before each
+ * part in pixels, and its forecast's line.
+ */
 const windowsOf = (page: Page) =>
   page.locator('.quota-window').evaluateAll((windows) =>
     windows.map((window) => {
@@ -113,7 +119,11 @@ const windowsOf = (page: Page) =>
       const track = window.querySelector('.window-track')?.getBoundingClientRect()
       const fill = window.querySelector('.window-fill')
       const width = track?.width || 1
-      const share = (at: number) => Math.round(((at - (track?.left ?? 0)) / width) * 100)
+      // To the half percent, so a share such as 12.5 % reads as itself and not as a rounding.
+      const share = (at: number) => Math.round(((at - (track?.left ?? 0)) / width) * 200) / 2
+      const parts = [...window.querySelectorAll('.window-ahead')].map((part) =>
+        part.getBoundingClientRect(),
+      )
       return {
         key: `${account?.textContent?.trim() ?? ''} ${(window as HTMLElement).dataset.window ?? ''}`,
         lead: (window.querySelector('.quota-window-lead')?.textContent ?? '')
@@ -122,15 +132,21 @@ const windowsOf = (page: Page) =>
         state: (window as HTMLElement).dataset.state ?? '',
         fill: fill ? share(fill.getBoundingClientRect().right) : null,
         solid: !fill || getComputedStyle(fill).maskImage === 'none',
-        tail: [...window.querySelectorAll('.window-ahead')].map((part) => {
-          const { left, right, top, bottom } = part.getBoundingClientRect()
+        tail: parts.map(({ left, right, top, bottom }, index) => {
+          const before = index === 0 ? fill?.getBoundingClientRect() : parts[index - 1]
+          const gap = before ? left - before.right : 0
           const inside =
             track !== undefined &&
             left >= track.left - 0.5 &&
             right <= track.right + 0.5 &&
             top >= track.top - 0.5 &&
             bottom <= track.bottom + 0.5
-          return { from: share(left), to: share(right), inside }
+          return {
+            from: share(left - gap),
+            to: share(right),
+            gap: before ? Math.round(gap * 10) / 10 : null,
+            inside,
+          }
         }),
         forecast: (window.querySelector('[data-fact="forecast"]')?.textContent ?? '')
           .replaceAll(/\s+/gu, ' ')
@@ -192,14 +208,15 @@ const AIM = {
 
 /**
  * Points at each place past each line's readings, at its mark's height, and says where its hint
- * stood against its mark and the line's head, and whether anything moved.
+ * stood against its mark and the line's head, and whether anything moved. Each line stands in the
+ * middle of the window first: at the window's edge the hint is moved to stay inside it.
  */
 async function pointAtPlaces(page: Page, lines: LineAhead[]) {
   const strays: string[] = []
   for (const [at, line] of lines.entries())
     for (const { kind } of line.places) {
       const figure = page.locator('.quota-window .step-line').nth(at)
-      await figure.scrollIntoViewIfNeeded()
+      await figure.evaluate((node) => node.scrollIntoView({ block: 'center' }))
       const still = JSON.stringify(await boxes(page))
       const target = figure.locator(`[data-target="${kind}"]`)
       const reach = (await target.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 }
@@ -271,12 +288,17 @@ for (const lang of ['en', 'ru'] as const)
           // The share spent is solid, silent or fresh; a silent window says for how long.
           expect(one.solid, `${one.key}: its fill solid`).toBe(true)
           expect(one.lead, `${one.key}: its state`).toMatch(states[one.state] ?? /^$/u)
-          // Every part of the tail inside the track; the forecast after the hatch's key wherever
-          // there is one; the legend names the corridor where one is drawn.
+          // Every part of the tail inside the track, 2px of ground past the fill or the part
+          // before; the forecast after the hatch's key wherever there is one; the legend names
+          // the corridor where one is drawn.
           expect(
             one.tail.every(({ inside }) => inside),
             `${one.key}: its tail in its track`,
           ).toBe(true)
+          expect(
+            one.tail.map(({ gap }) => gap),
+            `${one.key}: the ground before each part`,
+          ).toEqual(one.tail.map((_, index) => (index === 0 && one.fill === null ? null : 2)))
           expect(one.forecast.startsWith(`${words.forecastKey} · `), `${one.key}: the key`).toBe(
             one.forecast !== words.forecast.none,
           )
