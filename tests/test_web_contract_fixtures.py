@@ -257,9 +257,14 @@ class _Scenario:
         conn = store.connect()
         try:
             with calls.bind(who(creator, "a7c3e9f1d2b4a608"), "create_work_item"):
+                # Filed on the owner's word, so the work under it is accepted and taken.
                 goal = str(
                     service.create_work_item(
-                        conn, space=SPACE, title="Goal with participants", kind="goal"
+                        conn,
+                        space=SPACE,
+                        title="Goal with participants",
+                        kind="goal",
+                        acceptance="assignment",
                     )["reference"]
                 )
             stage = service.create_work_item(

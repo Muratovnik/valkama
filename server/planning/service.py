@@ -904,23 +904,13 @@ def _ruling_label(
     return ruled
 
 
-#: Whether a question to the owner about a group of findings stands open on any of the
-#: items of a JSON array.
-_GROUP_ASKED = (
-    "SELECT 1 FROM work_item_requests r WHERE r.purpose = 'triage' AND "  # noqa: S608 - constant text
-    + questions.OWNER_QUESTION
-    + " AND r.work_item_id IN (SELECT value FROM json_each(?)) LIMIT 1"
-)
-
-
 def _grouped(conn: sqlite3.Connection, parent_id: str | None) -> bool:
-    """Whether a goal or stage over the item, from `parent_id` up, waits on the owner's
-    question about its group of findings."""
+    """Whether a goal or stage over a task in triage, from `parent_id` up, waits on the
+    owner's question about its group of findings: the question whether to do the task
+    that `questions.acceptance_asked` names, asked as a group's (`triage`)."""
 
-    if parent_id is None:
-        return False
-    chain = [identity for identity, _kind, _category in item_tree.above(conn, parent_id)]
-    return conn.execute(_GROUP_ASKED, (json.dumps(chain),)).fetchone() is not None
+    under = {"work_item_id": None, "parent_id": parent_id, "acceptance": None}
+    return questions.acceptance_asked(conn, under, purposes=("triage",)) is not None
 
 
 def _accepted_detail(basis: str, ruled: str | None) -> str:
@@ -1263,6 +1253,40 @@ def _moved_into_goal(
     if category in (*model.TERMINAL_CATEGORIES, "deferred"):
         return None
     return participation.load(conn).mode(str(row["planning_space_id"]), "task_in_goal")
+
+
+def _accepted_in_goal(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    current: sqlite3.Row,
+    gives: str | None,
+    named: str | None,
+) -> str | None:
+    """Who decides on a task an agent moves out of triage into accepted work under goals
+    and stages all accepted and open, on no one's word, `agent` or `human` by the
+    owner's setting of its space (`task_in_goal`); None for any other move.
+
+    Such a move accepts it `inherited` (`gives`), as filing it there does. The agent's
+    `assignment` is the owner's word and passes; a claim by number meets no gate.
+    """
+
+    if gives != "inherited" or named is not None or not calls.from_agent():
+        return None
+    if row["kind"] == model.CONTAINER_KIND or current["category"] != "triage":
+        return None
+    return participation.load(conn).mode(str(row["planning_space_id"]), "task_in_goal")
+
+
+def _decides(current: sqlite3.Row, target: sqlite3.Row) -> bool:
+    """Whether a move takes an item out of triage or deferred, where the owner may be asked
+    whether to do it, into another category without closing it: a person's such move is
+    their answer (`_taken_by_owner`), and a close ends the questions as it closes."""
+
+    return (
+        current["category"] in model.UNACCEPTED_CATEGORIES
+        and target["category"] != current["category"]
+        and not target["is_terminal"]
+    )
 
 
 def _accept_by_label(
@@ -1776,10 +1800,18 @@ def transition_work_item(
     `gated` says the move is the caller's own write, as a surface takes it, which meets
     the owner's setting of the space: an agent's cancel of an item filed outside its
     own work is the owner's to make where `cancel_outside` says `human`, and then it
-    is not made but waits for their answer (`_cancel_point`, `waits_for_owner`). The
+    is not made but waits for their answer (`_cancel_point`, `waits_for_owner`). So is
+    an agent's move of a task in triage into accepted work under goals and stages all
+    accepted and open, where `task_in_goal` says `human`: the task stays in triage and
+    the question `task` asks about it; left to the agent, the acceptance is marked in
+    the summary of decisions, as is an assignment an agent names. The
     writes Valkama composes, the cancel an owner's answer carries out among them, are
     not gated. `following` names the owner's answered question, on the item or over
     it, that the cancel follows from: it needs no question and reads no setting.
+
+    While the owner is asked whether to do an item, an agent moves it out of triage or
+    deferred only to a cancel (`acceptance_question`); a person's move out is their
+    answer, and the question on the item ends withdrawn (`_taken_by_owner`).
     """
 
     return _transition(
@@ -1945,6 +1977,16 @@ def _transition(
     if point == participation.HUMAN:
         # Checked as the cancel would be made now, it is the owner's to make: it waits.
         return _ask_about_cancel(conn, row, target, note, author, warnings)
+    in_goal = _accepted_in_goal(conn, row, current, gives, named) if gated else None
+    if in_goal == participation.HUMAN:
+        # Checked as the move would be made now, taking the task on is the owner's: it
+        # stays in triage under its goal and waits for the answer.
+        waits = _ask_about_task(conn, identity, str(row["parent_id"]), author)
+        answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+        answer["warnings"] = warnings
+        answer["waits_for_owner"] = waits.answer()
+        return answer
+    decided = _owners_questions(conn, row) if _decides(current, target) else []
     updates = ["state_id = ?"]
     parameters: list[object] = [str(target["state_id"])]
     updates += _accepting(row, target, gives, parameters)
@@ -1972,7 +2014,15 @@ def _transition(
         warnings += _cancel_under(conn, cancelling, note, author, returned)
     _write(conn, row, updates, parameters)
     if gives is not None:
-        _log(conn, identity, "accepted", _accepted_detail(gives, ruled), author)
+        accepted = _log(conn, identity, "accepted", _accepted_detail(gives, ruled), author)
+        # The agent's word that the owner gave the work, and a task it took on inside
+        # accepted goals where the setting left that to it, are the owner's to read.
+        said = {model.NAMED_BASIS: "assignment"}.get(gives)
+        if in_goal == participation.AGENT:
+            said = "task_in_goal"
+        if said is not None and calls.from_agent():
+            decisions.mark(conn, accepted, said, _accepted_what(conn, identity))
+    _taken_by_owner(conn, decided, author)
     if opened:
         # Entering the service state names no state: it is the goal's or stage's opening.
         _log(conn, identity, "opened", note, author)
@@ -2749,6 +2799,7 @@ def claim_work_item(
                 f"{read_model.reference(conn, row)} is already held by {held};"
                 " pass force to take the work over"
             )
+        decided = _owners_questions(conn, row)
         try:
             _hold(conn, row, label, start.updates, start.parameters)
         except model.RevisionConflictError:
@@ -2761,6 +2812,7 @@ def claim_work_item(
         else:
             _log(conn, identity, "claimed", "", author)
         _started(conn, identity, start, author, start_reason)
+        _taken_by_owner(conn, decided, author)
         waiting.deliver(conn, row)
     overridden = record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
@@ -2782,8 +2834,9 @@ def _holdable(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
     One refusal for every way in -- a claim, the queue, a batch, a creation that
     claims, HTTP and a launch -- before anything is written. A goal or stage is
     never held; an item in review waits on the owner's answer, and a closed one is
-    reopened before anybody works it again. An agent does not take put-off work the
-    owner is asked whether to do (`acceptance_question`).
+    reopened before anybody works it again. An agent does not take work the owner is
+    asked whether to do, on the item or over an item with no basis
+    (`questions.acceptance_asked`, `acceptance_question`).
     """
 
     if row["kind"] == model.CONTAINER_KIND:
@@ -2798,15 +2851,46 @@ def _holdable(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
         raise model.WorkflowGuardError(
             f"[closed] {read_model.reference(conn, row)} is closed; reopen it first"
         )
-    asked = deferral.asked(conn, str(row["work_item_id"])) if category == "deferred" else None
-    if asked is not None and calls.from_agent():
+    if not calls.from_agent():
+        # A person's claim is their answer (`_taken_by_owner`).
+        return
+    asked = questions.acceptance_asked(conn, row)
+    if asked is not None:
         # Taking it would start it on an assignment the owner has not given: whether
-        # it is to be done is the question. A person's claim is their answer.
+        # it is to be done is the question.
         raise model.WorkflowGuardError(
             f"[acceptance_question] the owner has not decided whether"
-            f" {read_model.reference(conn, row)} is to be done (question {asked}): take it"
-            " after the answer"
+            f" {read_model.reference(conn, row)} is to be done"
+            f" (question {asked['request_id']}): take it after the answer"
         )
+
+
+#: Why the write waiting on a question whether to do an item no longer waits, when a
+#: person takes the item or moves it on: the detail of its `action_dropped`.
+TAKEN_BY_OWNER = "taken by the owner"
+
+
+def _owners_questions(conn: sqlite3.Connection, row: sqlite3.Row) -> list[sqlite3.Row]:
+    """The questions whether to do the item that a person's claim or move of it answers,
+    read before the write moves it: those on the item itself (`questions.acceptance_on`).
+    A question over it stays, and an agent's write answers none."""
+
+    if calls.from_agent():
+        return []
+    return questions.acceptance_on(conn, row)
+
+
+def _taken_by_owner(conn: sqlite3.Connection, asked: list[sqlite3.Row], author: str | None) -> None:
+    """End the questions a person's claim or move answered (`_owners_questions`): each is
+    withdrawn, and a write waiting on one is dropped as taken by the owner."""
+
+    for question in asked:
+        action = pending.of_request(question)
+        identity = str(question["work_item_id"])
+        if action is not None:
+            found = pending.get(conn, action)
+            pending.end(conn, found, pending.DROPPED, author=author, why=TAKEN_BY_OWNER)
+        questions.end(conn, identity, "withdrawn", author, purpose=str(question["purpose"]))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -2874,10 +2958,20 @@ def _started(
     """The history of the start a claim wrote with its holder: the basis, then the move.
 
     A start out of deferred ends the condition it stood there on, as any move out does.
+    An acceptance an agent's claim makes alone is marked in the summary of decisions:
+    the assignment it takes the work on, and, inside goals and stages all accepted, a
+    task in triage nobody triaged, whatever the setting `task_in_goal` says, since a
+    claim by number meets no gate (`task_in_goal`).
     """
 
     if start.gives is not None:
-        _log(conn, identity, "accepted", start.gives, author)
+        accepted = _log(conn, identity, "accepted", start.gives, author)
+        untriaged = start.current is not None and start.current["category"] == "triage"
+        point = {model.NAMED_BASIS: "assignment", "inherited": "task_in_goal"}.get(start.gives)
+        if point == "task_in_goal" and not untriaged:
+            point = None
+        if point is not None and calls.from_agent():
+            decisions.mark(conn, accepted, point, _accepted_what(conn, identity))
     if start.target is not None:
         _log(conn, identity, "transitioned", f"{start.target['key']}: {reason}", author)
     if start.current is not None and start.current["category"] == "deferred":

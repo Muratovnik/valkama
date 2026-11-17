@@ -17,7 +17,6 @@ from collections.abc import Mapping
 
 from . import (
     calls,
-    deferral,
     item_tree,
     leases,
     model,
@@ -35,7 +34,7 @@ Finding = tuple[str, str]
 #: under a goal or stage that is done, or work in review with nothing for the owner
 #: to answer — or an agent would go over the owner's open question, where
 #: withdrawing its own question is its way out, or decide for the owner whether work
-#: put off is to be done (`acceptance_question`), or cancel work under a goal or stage
+#: in triage or put off is to be done (`acceptance_question`), or cancel work under a goal or stage
 #: it was never shown (`cancel_list`, which the service refuses with the list).
 UNFORCED = frozenset(
     {
@@ -281,7 +280,7 @@ def findings(
     asked = owner_question(conn, item, current, target, reference)
     if asked:
         refusals.append(("question", asked))
-    undecided = return_question(conn, item, current, target, reference)
+    undecided = acceptance_question(conn, item, current, target, reference)
     if undecided:
         refusals.append(("acceptance_question", undecided))
     if closing:
@@ -403,31 +402,33 @@ def converting_question(conn: sqlite3.Connection, item: sqlite3.Row, reference: 
     )
 
 
-def return_question(
+def acceptance_question(
     conn: sqlite3.Connection,
     item: sqlite3.Row,
     current: sqlite3.Row,
     target: sqlite3.Row,
     reference: str,
 ) -> str:
-    """What stops an agent's move of put-off work the owner is asked about.
+    """What stops an agent's move of work the owner is asked whether to do.
 
-    Whether work that came back under goals and stages all accepted is to be done
-    is the owner's question (`deferral.RETURN`): a move out of deferred, or putting
-    it off again, would answer it for them. Only a cancel goes before the answer, and
-    ends the question as it closes; a person's move is their answer.
+    Whether work in triage or put off is to be done is the owner's question while it
+    is open on the item, or over an item with no basis (`questions.acceptance_asked`):
+    a move out, or putting it off again, would answer it for them, and so would a move
+    that names an assignment. Only a cancel goes before the answer, and ends the
+    question as it closes; a person's move is their answer.
     """
 
-    if current["category"] != "deferred" or target["category"] == "cancelled":
+    if current["category"] not in model.UNACCEPTED_CATEGORIES:
         return ""
-    if not calls.from_agent():
+    if target["category"] == "cancelled" or not calls.from_agent():
         return ""
-    asked = deferral.asked(conn, str(item["work_item_id"]))
+    asked = questions.acceptance_asked(conn, item)
     if asked is None:
         return ""
     return (
-        f"the owner has not decided whether {reference} is to be done (question {asked}):"
-        " wait for the answer; only a cancel moves it before then"
+        f"the owner has not decided whether {reference} is to be done"
+        f" (question {asked['request_id']}): wait for the answer; only a cancel moves it"
+        " before then"
     )
 
 

@@ -37,9 +37,10 @@ is complete on its own.
   back answered by it (`[decision]`), a launch that no longer moves its item
   to review, a cancel of a goal or stage with open work under it (`cancel_list`, `cancels`), a parent cleared only by
   `move_out` and never under an unaccepted goal (`[parent]`), work put off
-  only by `defer` and brought back by itself (`deferred`, `returned`,
-  `acceptance_question`), the step's text alone as the detail of an expired
-  step's `checklist_released`, and the retired words
+  only by `defer` and brought back by itself (`deferred`, `returned`), work
+  the owner is asked whether to do or take up again (`acceptance_question`),
+  the step's text alone as the detail of an expired step's
+  `checklist_released`, and the retired words
   refused on input — for spaces and projects — the registry formats 2 and 4, a
   space without `project_id`, an optional `space` on `create_work_item`, the
   scope `space` and the module levels — and for reading an item by parts — the

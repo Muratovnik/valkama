@@ -688,7 +688,10 @@ class PlanningCompactReadTests(unittest.TestCase):
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
         service.create_planning_space(self.conn, name="Quality", key="QA")
-        self.epic = self.call("create_work_item", space="QA", title="Umbrella", kind="goal")
+        # Filed on the owner's word, so the work under it is accepted and taken.
+        self.epic = self.call(
+            "create_work_item", space="QA", title="Umbrella", kind="goal", acceptance="assignment"
+        )
         self.child = self.call(
             "create_work_item",
             space="QA",
@@ -729,7 +732,7 @@ class PlanningCompactReadTests(unittest.TestCase):
                 # The call carried no identity, so nothing confirms the holder.
                 "claim_state": "unconfirmed",
                 # Why the queue does not give it; a row it gives says its place instead.
-                "withheld": ["not_ready", "held", "ancestor_triage"],
+                "withheld": ["not_ready", "held"],
             },
             rows[self.child["reference"]],
         )
