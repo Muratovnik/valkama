@@ -59,6 +59,13 @@
  * stretches to its host's width, so its lines keep their width (`vector-effect`) and every word,
  * mark and hatch is HTML over it rather than SVG the stretch would distort. A forced palette draws
  * the lines, the hatch and the marks in its inks.
+ *
+ * What a reader of the page selects it by: the figure is `data-chart="steps"`; its regions are
+ * `data-region` — `head` (`StepLineHead`), `plot`, the `field` the marks stand in, the `drawing`
+ * of its lines and the `axis`, whose two ends are `data-moment` `from` and `to`; its marks are
+ * `data-mark` — the readings' `line`, each `reading`'s dot inside its stretch (`data-reading`,
+ * its order), each `place`'s ring inside its stretch (`data-target`, `now` or `reset`) and the
+ * forecast's `corridor`.
  */
 import { computed, nextTick, ref } from 'vue'
 
@@ -273,6 +280,7 @@ function stand(index: number) {
 <template>
   <figure
     class="step-line"
+    data-chart="steps"
     :aria-label="label"
     data-hint-frame
   >
@@ -286,7 +294,10 @@ function stand(index: number) {
       :even="even"
       @choose="span.choose"
     />
-    <div class="step-plot">
+    <div
+      class="step-plot"
+      data-region="plot"
+    >
       <span
         class="step-top"
         aria-hidden="true"
@@ -295,6 +306,7 @@ function stand(index: number) {
       <div
         ref="field"
         class="step-field"
+        data-region="field"
       >
         <p
           v-if="!points.length"
@@ -304,6 +316,7 @@ function stand(index: number) {
         </p>
         <svg
           class="step-svg"
+          data-region="drawing"
           preserveAspectRatio="none"
           focusable="false"
           aria-hidden="true"
@@ -329,6 +342,7 @@ function stand(index: number) {
           <path
             v-if="path"
             class="step-path"
+            data-mark="line"
             vector-effect="non-scaling-stroke"
             :d="path"
           />
@@ -336,6 +350,7 @@ function stand(index: number) {
         <span
           v-if="corridorClip"
           class="step-ahead hatched"
+          data-mark="corridor"
           aria-hidden="true"
           :style="{ clipPath: corridorClip }"
         />
@@ -362,6 +377,7 @@ function stand(index: number) {
           ><span
             class="step-mark"
             aria-hidden="true"
+            data-mark="reading"
             :class="markClass(index)"
             :data-key="point.key"
             :style="markStyle(point)"
@@ -389,6 +405,7 @@ function stand(index: number) {
           ><span
             class="step-target-mark"
             aria-hidden="true"
+            data-mark="place"
             :class="[PLACE_MARK[target.kind], markClass(stopOf(index))]"
             :style="targetMark(target)"
             data-hint-mark
@@ -404,9 +421,10 @@ function stand(index: number) {
     <div
       class="step-axis"
       aria-hidden="true"
+      data-region="axis"
     >
-      <span>{{ moment(shown.from) }}</span>
-      <span>{{ moment(shown.to) }}</span>
+      <span data-moment="from">{{ moment(shown.from) }}</span>
+      <span data-moment="to">{{ moment(shown.to) }}</span>
     </div>
   </figure>
 </template>

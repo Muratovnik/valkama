@@ -6,7 +6,8 @@
  * when the reset is, and when the window runs out before it. It is the line's accessible
  * equivalent and stands beside it or instead of it; every reading the line draws is a row here,
  * and so is its forecast. Where the line stands now is no row: the window's own lines say its
- * latest reading in words beside this table.
+ * latest reading in words beside this table. Each row is `data-key`: a reading's key, and
+ * `forecast` for the forecast's.
  */
 import { computed } from 'vue'
 

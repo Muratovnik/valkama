@@ -10,7 +10,8 @@
  * comes or goes. The switch stands inside the row (`fit`): in a phone's column its words wrap
  * rather than run past the window's edge, and so do the legend's keys, each whole, rather than
  * run past the plot. A span chosen is sent out as `choose`; the line owns which span it shows
- * (`useStepSpan`).
+ * (`useStepSpan`). The row is the line's `data-region="head"`; the forecast's key is
+ * `data-key="ahead"`.
  */
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import type { StepScope } from '@/shared/ui/useStepSpan.ts'
@@ -35,7 +36,10 @@ const emit = defineEmits<{ choose: [scope: StepScope] }>()
 </script>
 
 <template>
-  <div class="step-head">
+  <div
+    class="step-head"
+    data-region="head"
+  >
     <SegmentedControl
       v-if="switched"
       class="step-views"

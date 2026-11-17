@@ -5,7 +5,8 @@ import ChartTable from '@/shared/ui/ChartTable.vue'
  * steady use would stand now, its state with how long it has been silent, and its forecast, each
  * in words. It is the bars' accessible equivalent and stands beside them or instead of them;
  * every figure a bar draws, its hatched forecast too, is a cell here. A row is one window of one
- * account, so no cell adds two of them.
+ * account, so no cell adds two of them. Each row is `data-key`, its window's key, and its
+ * forecast's cell `data-cell="forecast"`.
  */
 import type { WindowRow, WindowWords } from '@/shared/ui/windowGeometry.ts'
 

@@ -27,6 +27,11 @@
  * how far past it the source read. Presentational: nothing in it acts, nothing in it moves under
  * the pointer, and its box is the same whatever the figures, so new figures move nothing around
  * it.
+ *
+ * What a reader of the page selects it by: its marks are `data-mark` — the `track`, which is its
+ * picture (`role="img"`, named by `label`, `data-used` the share spent), the `fill`, each part
+ * of the tail `ahead` (`data-part`, `near` and `far`) and the `tick`; its words beside it are
+ * `data-words`, `value` and `note`.
  */
 import { computed } from 'vue'
 
@@ -103,18 +108,21 @@ const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
     <span
       class="window-track"
       role="img"
+      data-mark="track"
       :aria-label="label"
       :data-used="usedMark"
     >
       <span
         v-if="fill"
         class="window-fill"
+        data-mark="fill"
         :style="fill"
       />
       <span
         v-for="part in ahead"
         :key="part.key"
         class="window-ahead hatched"
+        data-mark="ahead"
         :class="{ 'window-ahead-start': part.start, 'window-ahead-end': part.end }"
         :data-part="part.key"
         :style="aheadStyle(part)"
@@ -122,6 +130,7 @@ const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
       <span
         v-if="tick"
         class="window-tick"
+        data-mark="tick"
         :style="tick"
       />
     </span>
@@ -130,10 +139,15 @@ const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
       class="window-words"
       aria-hidden="true"
     >
-      <span class="window-value">{{ value }}</span>
+      <span
+        class="window-value"
+        data-words="value"
+        >{{ value }}</span
+      >
       <span
         v-if="note"
         class="window-note"
+        data-words="note"
         >{{ note }}</span
       >
     </span>

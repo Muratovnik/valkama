@@ -30,6 +30,10 @@
  * What used the window is the work Valkama recorded on the account since the window's start, by
  * its API price estimate, on an axis of its own. A window that names no start has no span to read
  * it over, and shows none.
+ *
+ * What a reader of the page selects it by: the window is `data-window`, its kind, with its state
+ * in `data-state`; each line of its facts is `data-fact` (`forecast`, `reset`, `even`,
+ * `latest`), and the forecast's key of the hatch is `data-mark="hatch"`.
  */
 import { computed } from 'vue'
 import { Translation, useI18n } from 'vue-i18n'
@@ -229,6 +233,7 @@ const readingsCaption = computed(() =>
             <span
               v-if="fact.swatch"
               class="quota-window-swatch hatched"
+              data-mark="hatch"
               aria-hidden="true"
             />{{ fact.text }}
           </li>
