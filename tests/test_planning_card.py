@@ -343,8 +343,11 @@ class SizeTests(unittest.TestCase):
         counts["claim"] = {"count": 1}
         contents = read_model.table_of_contents(counts)
         self.assertEqual(list(read_model.PARTS[1:]), list(contents))
-        # Thirteen parts with the commits: 482 for twelve, and 30 for `"commits":{"count":…}`.
-        self.assertLessEqual(len(compact(contents)), 520)
+        # The twelve parts the card's table first had: 482.
+        twelve = {name: value for name, value in contents.items() if name != "commits"}
+        self.assertLessEqual(len(compact(twelve)), 490)
+        # What the commits part adds to it, `,"commits":{"count":…}`: 30.
+        self.assertLessEqual(len(compact(contents)) - len(compact(twelve)), 30)
         step = {
             "id": str(uuid.uuid4()),
             "text": "",
