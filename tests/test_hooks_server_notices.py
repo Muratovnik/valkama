@@ -9,8 +9,8 @@ The expectations come from the hook contract: a record Valkama makes in a call o
 own is told as `by Valkama`, in the block that is not the person's, to whoever hears the
 item whole, to a recipient that held it at its last read once more, and through the tree
 to whoever works under the goal. It wakes nobody unless its kind is one that asks for a
-session (`person_events.SERVER_ASKS`, empty for now), and then it wakes as a person's act
-does. A write the server makes inside an agent's call is that agent's.
+session (`person_events.SERVER_ASKS`: a goal or stage awaiting confirmation), and then
+it wakes as a person's act does. A write the server makes inside an agent's call is that agent's.
 """
 
 from __future__ import annotations

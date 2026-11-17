@@ -105,7 +105,8 @@ def run_pass(
 def _apply(conn: sqlite3.Connection, step: Step) -> int:
     conn.execute("BEGIN IMMEDIATE")
     try:
-        with calls.bind(calls.valkama(), step.name):
+        # A step is one write: what it changes under a goal or stage settles at its end.
+        with calls.bind(calls.valkama(), step.name), service.marking(conn):
             changed = step.apply(conn)
         conn.commit()
     except BaseException:

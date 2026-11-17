@@ -72,12 +72,14 @@ def _moved(item: dict) -> dict:
     `started` is a claim moving unstarted work into the active state; `requeued`
     a release putting work under way back in the queue; `released` the holder
     whose claim a move into a terminal state ended; `warnings` what the move's
-    guards had to say, or why an item that should have moved did not.
+    guards had to say, or why an item that should have moved did not;
+    `awaiting_confirmation` the goals and stages the write left with nothing open
+    under them, which now wait for their confirmation.
     """
 
     return {
         name: item[name]
-        for name in ("started", "requeued", "released", "warnings")
+        for name in ("started", "requeued", "released", "warnings", "awaiting_confirmation")
         if item.get(name)
     }
 
@@ -135,7 +137,7 @@ def merged(item: dict, _arguments: Mapping[str, object]) -> dict:
     """The survivor, and what each merged item handed it before it closed."""
 
     answer = {**_base(item), "merged": item["merged"]}
-    for name in ("warnings", "overridden"):
+    for name in ("warnings", "overridden", "awaiting_confirmation"):
         if item.get(name):
             answer[name] = item[name]
     return answer

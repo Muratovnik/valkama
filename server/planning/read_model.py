@@ -33,6 +33,7 @@ from . import (
     states,
     subscriptions,
 )
+from . import closing as closing_rules
 
 
 @contextlib.contextmanager
@@ -907,6 +908,9 @@ def present(
     record["mentions"], record["mentions_total"] = mentions_of(conn, identity, HTTP_MENTIONS)
     # Who follows it without holding it, for the card to name.
     record["subscribers"] = subscriptions.subscribers(conn, identity)
+    # What its confirmer checks, only while it awaits confirmation.
+    if record["container_state"] == closing_rules.AWAITING:
+        record["confirmation"] = closing_rules.confirmation(conn, row)
     return record
 
 
@@ -1003,7 +1007,9 @@ def _record(
 #: The parts an item is read by, in the order its table of contents names them.
 #: `card` is the item itself; every other part is the field of that name in its
 #: full record, but `sections`, which divides the description, and `participants`,
-#: which only a goal or a stage has.
+#: which only a goal or a stage has. `confirmation` is a goal's or stage's only while
+#: it awaits confirmation (`closing.confirmation`), and the table names it then even
+#: with nothing cancelled or moved out under it: the wait itself is what to read.
 PARTS = (
     "card",
     "comments",
@@ -1018,6 +1024,7 @@ PARTS = (
     "claim",
     "sections",
     "participants",
+    "confirmation",
 )
 #: The card's fields, in the order it carries them. A card carries each one its
 #: record has, so a field the record gains reaches the card once it is named here.
@@ -1125,12 +1132,23 @@ def card(
     shown = {name: found[name] for name in CARD_FIELDS if name in found}
     if shown["summary"] is None:
         del shown["summary"]
+    awaiting = record["container_state"] == closing_rules.AWAITING
     shown["parts"] = table_of_contents(
         {
             **part_counts(conn, str(row["work_item_id"]), lease),
             "sections": {"count": sections.card_count(str(row["description"]))},
             **(counted or {}),
-        }
+            **(
+                {
+                    "confirmation": {
+                        "count": closing_rules.counted(closing_rules.confirmation(conn, row))
+                    }
+                }
+                if awaiting
+                else {}
+            ),
+        },
+        standing=("confirmation",) if awaiting else (),
     )
     return shown
 
@@ -1159,20 +1177,24 @@ def _parent_reference(conn: sqlite3.Connection, parent_id: object) -> str | None
     return model.human_id(str(found[0]), int(found[1]))
 
 
-def table_of_contents(counts: Mapping[str, Mapping[str, int]]) -> dict:
+def table_of_contents(
+    counts: Mapping[str, Mapping[str, int]], *, standing: Iterable[str] = ()
+) -> dict:
     """Every part an item has but the card, in the order of `PARTS`, each with its counts.
 
-    A part with nothing in it is left out, so the card names only what there is to read.
-    The questions part has something in it when only a request asked of an agent
-    session is open, which its `count` of the owner's questions leaves out.
+    A part with nothing in it is left out, so the card names only what there is to read,
+    but a part named `standing`, which is there to read whatever it counts. The
+    questions part has something in it when only a request asked of an agent session is
+    open, which its `count` of the owner's questions leaves out.
     """
 
+    kept = frozenset(standing)
     return {
         name: dict(counts[name])
         for name in PARTS
         if name != "card"
         and name in counts
-        and any(int(value) > 0 for value in counts[name].values())
+        and (name in kept or any(int(value) > 0 for value in counts[name].values()))
     }
 
 

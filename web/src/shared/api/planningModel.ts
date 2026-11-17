@@ -7,6 +7,7 @@
  * lane would make Kanban the model again.
  */
 
+import { confirmationSchema } from '@/shared/api/confirmationModel.ts'
 import {
   blankable,
   boundedList,
@@ -432,6 +433,8 @@ const workItemSchema = recordObject({
   subscribers: z.array(subscriberSchema).optional(),
   // Who works on a goal or a stage: only the HTTP reads of one item carry it.
   participants: boundedList(participantSchema, 50).optional(),
+  // What a goal's or stage's confirmer checks, only while it awaits confirmation.
+  confirmation: confirmationSchema.optional(),
   // A transition answers with these; a plain read does not.
   warnings: z.array(serverText()).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),
@@ -440,6 +443,8 @@ const workItemSchema = recordObject({
   requeued: stateMoveSchema.optional(),
   // The holder whose claim a close ended.
   released: holderField().optional(),
+  // The goals and stages a write left with nothing open under them.
+  awaiting_confirmation: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
 })
 
 const workflowSchema = strictObject({

@@ -286,6 +286,28 @@ def above(conn: sqlite3.Connection, identity: str) -> list[tuple[str, str, str]]
     ]
 
 
+#: The open items under one, at any depth, by reference in number order: open as the
+#: rule reads it, in a state of any category but completed and cancelled.
+_OPEN_UNDER = (
+    "WITH RECURSIVE under(id) AS (SELECT work_item_id FROM work_items WHERE parent_id = ?"
+    " UNION SELECT w.work_item_id FROM under u JOIN work_items w ON w.parent_id = u.id)"
+    " SELECT p.key, i.number FROM under u JOIN work_items i ON i.work_item_id = u.id"
+    " JOIN workflow_states s ON s.state_id = i.state_id"
+    " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
+    " WHERE s.category NOT IN ('completed', 'cancelled')"
+    " ORDER BY i.number"
+)
+
+
+def open_under(conn: sqlite3.Connection, identity: str) -> list[str]:
+    """Every open item under `identity`, at any depth, by reference: what keeps it from closing."""
+
+    return [
+        model.human_id(str(key), int(number))
+        for key, number in conn.execute(_OPEN_UNDER, (identity,))
+    ]
+
+
 def accepted_chain(conn: sqlite3.Connection, parent_id: str | None) -> bool:
     """Whether an item under `parent_id` stands in accepted open containers all the way up.
 

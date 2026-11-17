@@ -2663,7 +2663,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
                 {"parts": "history"},
                 "unknown part 'history'; parts are card, comments, events, links, refs,"
                 " questions, mentions, sessions, images, subscribers, claim, sections,"
-                " participants",
+                " participants, confirmation",
             ),
             (
                 {"parts": ["card"], "thread": root},

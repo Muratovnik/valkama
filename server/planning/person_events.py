@@ -91,6 +91,8 @@ KINDS = {
     "request_changed": "question_changed",
     # A person's words about this item, written on another one in a comment's `mentions`.
     "mentioned": "mentioned",
+    # Nothing under a goal or stage is open any more: it waits for its confirmation.
+    "awaiting_confirmation": "awaiting_confirmation",
 }
 #: The kinds that say where the work stands: its state changed, it got its summary, it
 #: was left without a holder or changed holders, it came to wait for the owner or
@@ -110,10 +112,9 @@ NOT_TOLD = frozenset(
 )
 #: The kinds of Valkama's own records that ask for a session: one wakes it, as a person's
 #: act does, and waits on a goal or stage nobody works on for the next session that takes
-#: work there (`waiting`). Empty: a lease that ran out, the one record Valkama makes on
-#: its own today, is told at the next tool call. A stage that adds a record which must
-#: wake names its kind here.
-SERVER_ASKS: frozenset[str] = frozenset()
+#: work there (`waiting`). A goal or stage awaiting its confirmation asks to be confirmed,
+#: which is the point of saying so; a lease that ran out is told at the next tool call.
+SERVER_ASKS: frozenset[str] = frozenset({"awaiting_confirmation"})
 
 #: The call that edits an item's fields, and those fields' columns by the name
 #: `calls.call_id` records. The one place a name read back from a row meets SQL.

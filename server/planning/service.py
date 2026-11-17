@@ -17,13 +17,16 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import dataclasses
+import functools
 import json
 import sqlite3
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from typing import TypeVar, cast
 
 from . import agents as planning_agents
 from . import (
     calls,
+    closing,
     images,
     item_projects,
     item_tree,
@@ -67,6 +70,23 @@ MAX_SEARCH_PAGE = 200
 #: The columns a space is read by, named: a store another build wrote answers a
 #: missing one with `StoreSchemaError` rather than with a record lacking a field.
 _SPACE_COLUMNS = "planning_space_id, name, key, provider_kind, launch_place, updated_at"
+
+
+_Write = TypeVar("_Write", bound=Callable[..., dict])
+
+
+def _marked(write: _Write) -> _Write:
+    """A write of the service inside its own marks: its answer names what came to wait."""
+
+    @functools.wraps(write)
+    def run(conn: sqlite3.Connection, *args: object, **kwargs: object) -> dict:
+        with marking(conn) as entered:
+            answer = write(conn, *args, **kwargs)
+        if entered:
+            answer[closing.AWAITING] = entered
+        return answer
+
+    return cast(_Write, run)
 
 
 def _space_record(row: sqlite3.Row) -> dict:
@@ -648,6 +668,7 @@ def _parent_row(
     return parent_row
 
 
+@_marked
 def create_work_item(
     conn: sqlite3.Connection,
     *,
@@ -713,6 +734,7 @@ def create_work_item(
     transitions.refuse(refusals, False)
     item_id = model.new_id()
     number = store.next_number(conn, space_id)
+    closing.note(conn, parent_id, author)
     starts = stored_kind != model.CONTAINER_KIND and target["category"] in model.STARTING_CATEGORIES
     conn.execute(
         "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,"
@@ -778,6 +800,7 @@ def _placed_space(
     return named if named is not None and str(named["key"]) == key else _space_row(conn, key)
 
 
+@_marked
 def update_work_item(
     conn: sqlite3.Connection,
     reference: str,
@@ -847,6 +870,10 @@ def update_work_item(
         parameters.append(moved_to)
         if row["parent_id"] is not None and str(row["parent_id"]) != moved_to:
             left = str(row["parent_id"])
+        if str(row["parent_id"]) != str(moved_to):
+            # The container it leaves and the one it joins each derive from it.
+            closing.note(conn, row["parent_id"], author)
+            closing.note(conn, moved_to, author)
     reprojected = changes is not None and item_projects.differs(
         conn, str(row["work_item_id"]), changes
     )
@@ -911,6 +938,7 @@ def _edited(row: sqlite3.Row, updates: list[str], parameters: list[object]) -> s
     return ",".join(changed) or None
 
 
+@_marked
 def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
     # Under the lock, so a child created meanwhile is counted here and refused
     # in words, rather than met by the DELETE as a raw FOREIGN KEY failure.
@@ -924,6 +952,9 @@ def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
         )
     identity = str(row["work_item_id"])
     pictures = images.held(conn, identity)
+    # Its parent derives from the children it has; the row of a container awaiting
+    # confirmation goes with it.
+    closing.note(conn, row["parent_id"])
     conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (identity,))
     # The rows went with the item; a file no other item holds goes once this commits.
     images.release(conn, pictures)
@@ -1075,6 +1106,7 @@ def put_back_after_launch(
     )
 
 
+@_marked
 def _transition(
     conn: sqlite3.Connection,
     reference: str,
@@ -1123,6 +1155,11 @@ def _transition(
             step["claimed_by"] = ""
         updates.append("checklist = ?")
         parameters.append(model.dumps(steps))
+    # Whether the item is open, or a goal or stage stands accepted and open, is what
+    # its parent derives from, and a goal or stage derives from it too.
+    closing.note(conn, row["parent_id"], author)
+    if row["kind"] == model.CONTAINER_KIND:
+        closing.note(conn, identity, author)
     _write(conn, row, updates, parameters)
     if gives is not None:
         _log(conn, identity, "accepted", gives, author)
@@ -1263,8 +1300,10 @@ def _cascade(
             continue
         parameters: list[object] = [str(target["state_id"])]
         updates = ["state_id = ?", *_accepting(child, target, basis, parameters)]
-        _write(conn, child, updates, parameters)
         found = str(child["work_item_id"])
+        if container:
+            closing.note(conn, found, author)
+        _write(conn, child, updates, parameters)
         _log(conn, found, "accepted", basis, author)
         if container:
             _log(conn, found, "opened", "", author)
@@ -1473,23 +1512,49 @@ _UNSETTLED: contextvars.ContextVar[dict[str, tuple[str | None, str]] | None] = (
 
 
 @contextlib.contextmanager
-def one_write(conn: sqlite3.Connection) -> Iterator[None]:
-    """Hold the holder rule to the end of several steps that are one write.
+def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
+    """Hold the holder rule and the container marks to the end of several steps that are one write.
 
     A batch is one write: a task at work that lost its last holder in one step and
     went to review in the next went from work to review, not by way of ready. So
     inside this block `_settle` only notes the item, and the end of the block
-    settles each item once, as the last step left it.
+    settles each item once, as the last step left it. The goals and stages the steps
+    changed the work under are settled after that, once (`marking`), and the list
+    this yields names, after the block, those that came to await confirmation.
+
+    A block inside another joins it: the outer block's end settles both, and the
+    inner one's list stays empty.
     """
 
-    pending: dict[str, tuple[str | None, str]] = {}
-    token = _UNSETTLED.set(pending)
-    try:
-        yield
-    finally:
-        _UNSETTLED.reset(token)
-    for identity, (author, reason) in pending.items():
-        _hand_back(conn, identity, author, reason)
+    with marking(conn) as entered:
+        if _UNSETTLED.get() is not None:
+            yield entered
+            return
+        pending: dict[str, tuple[str | None, str]] = {}
+        token = _UNSETTLED.set(pending)
+        try:
+            yield entered
+        finally:
+            _UNSETTLED.reset(token)
+        for identity, (author, reason) in pending.items():
+            _hand_back(conn, identity, author, reason)
+
+
+@contextlib.contextmanager
+def marking(conn: sqlite3.Connection) -> Iterator[list[str]]:
+    """The container marks of one write (`closing.frame`), without the holder rule's wait.
+
+    Every write route opens it, and so does every write here that changes the work
+    under a goal or stage, so no path passes it by; one inside another joins it. At
+    the end of the outermost the marked containers enter or leave the wait for their
+    confirmation, the words left on one that stopped waiting go (`waiting.drop`), and
+    the list this yields names the references of those that came to wait.
+    """
+
+    with closing.frame(conn) as settled:
+        yield settled.entered
+    for identity in settled.left:
+        waiting.drop(conn, identity)
 
 
 def _settle(
@@ -2233,6 +2298,7 @@ def link_work_items(
 MAX_MERGE_ITEMS = 20
 
 
+@_marked
 def merge_work_items(
     conn: sqlite3.Connection,
     reference: str,
@@ -2279,7 +2345,7 @@ def merge_work_items(
             f"{read_model.reference(conn, survivor)} would hold {total} checklist steps;"
             f" a checklist holds at most {model.MAX_CHECKLIST}"
         )
-    closing = []
+    cancels = []
     for row in merged:
         target = states.cancel_state(conn, row)
         if target is None:
@@ -2287,7 +2353,7 @@ def merge_work_items(
                 f"{read_model.reference(conn, row)} cannot close as a duplicate: its workflow"
                 " has no cancelled state it can move to"
             )
-        closing.append(target)
+        cancels.append(target)
     note = model.text_field(reason, "reason", limit=512, required=False)
     conn.execute("SAVEPOINT planning_merge")
     try:
@@ -2295,7 +2361,7 @@ def merge_work_items(
             conn,
             survivor,
             steps,
-            list(zip(merged, moving, closing, strict=True)),
+            list(zip(merged, moving, cancels, strict=True)),
             overridden=overridden,
             spoke=spoke,
             note=note,

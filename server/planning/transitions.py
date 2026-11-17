@@ -15,17 +15,28 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping
 
-from . import calls, leases, model, person_events
+from . import calls, item_tree, leases, model, person_events
 
 Finding = tuple[str, str]
 
 #: The guards `force` does not carry: past them the store would hold what the work
 #: model has no place for — a container at work, accepted work with no basis, a
-#: task at work with nobody holding it, a deferral with no condition to end it, or
-#: a new item standing where only a move with its reason or summary leads.
+#: task at work with nobody holding it, a deferral with no condition to end it,
+#: a new item standing where only a move with its reason or summary leads, or open
+#: work under a goal or stage that is done.
 UNFORCED = frozenset(
-    {"goal_or_stage", "container_state", "deferred", "acceptance", "executor", "new_item"}
+    {
+        "goal_or_stage",
+        "container_state",
+        "deferred",
+        "acceptance",
+        "executor",
+        "new_item",
+        "children",
+    }
 )
+#: How many of the open items under a goal or stage its `children` refusal names.
+NAMED_OPEN = 5
 
 #: Where a new item is never created: the move there carries what entering asks for
 #: — what the owner is to check, the reason, the summary — and a creation has none.
@@ -227,6 +238,10 @@ def findings(
         spoke = person_spoke(conn, item, reference)
         if spoke:
             refusals.append(("person_spoke", spoke))
+    if target["category"] == "completed" and entering and item["kind"] == model.CONTAINER_KIND:
+        under = children(conn, item, reference)
+        if under:
+            refusals.append(("children", under))
     if target["category"] == "blocked" and entering and not reason.strip():
         # Blocked is set by hand for a cause outside Valkama. Work that waits on
         # another item is linked `blocks` and stays where it is, showing waits_for.
@@ -239,6 +254,25 @@ def findings(
             )
         )
     return refusals, warnings
+
+
+def children(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+    """What stops a goal or stage from completing: the open work under it, at any depth.
+
+    Done means nothing under it is open, an item in triage or deferred included: when
+    the last item closes it comes to await confirmation, and completing it then is
+    the confirmation. Forcing it would leave open work under work that is done.
+    """
+
+    found = item_tree.open_under(conn, str(item["work_item_id"]))
+    if not found:
+        return ""
+    named = ", ".join(found[:NAMED_OPEN])
+    more = f" and {len(found) - NAMED_OPEN} more" if len(found) > NAMED_OPEN else ""
+    return (
+        f"{reference} has {len(found)} open item(s) under it: {named}{more}; close, cancel or"
+        " move out what is open under it, and it awaits confirmation once nothing is"
+    )
 
 
 def previous_holder(reference: str, checklist: list[dict]) -> str:

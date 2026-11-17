@@ -140,6 +140,15 @@ class WhatCountsTests(Harness):
         )
         self.assertLessEqual(person_events.WORK_KINDS, set(person_events.KINDS.values()))
 
+    def test_the_one_record_of_valkamas_that_asks_for_a_session_is_a_wait_for_confirmation(
+        self,
+    ) -> None:
+        """A goal or stage left with nothing open under it wakes whoever closed its last item."""
+
+        self.assertEqual({"awaiting_confirmation"}, set(person_events.SERVER_ASKS))
+        self.assertEqual("awaiting_confirmation", person_events.KINDS["awaiting_confirmation"])
+        self.assertNotIn("awaiting_confirmation", person_events.WORK_KINDS)
+
     def test_the_browser_and_kind_spellings_are_the_call_rows_own(self) -> None:
         self.assertEqual(calls.BROWSER, person_events.BROWSER)
         self.assertEqual(calls.VALKAMA, person_events.VALKAMA)

@@ -56,6 +56,13 @@ otherwise cascade into them:
   in, with no event, as does one that stored `task_closed`. One that had already
   lapsed, past its deadline or on an execution that ended, ends as it lapsed,
   `deadline` or `execution_closed`.
+- **confirmations** creates the table of the goals and stages awaiting confirmation
+  (`work_item_confirmations`) and gives a row to each accepted open one that, after
+  the steps above, has nothing open under it: the wait begins at the migration, with
+  no call, no question and no event, and no session follows it. The service's first
+  write under such a container, or its confirmation, takes it from there.
+- **history-actions** gives the events table the CHECK of every action this build declares, when
+  `items` left one out: `items` widens it already, so on a 2.9 store the step has nothing to do.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -63,10 +70,10 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
-The postconditions `fresh-shape` to `second-run` and `store-identity` to `requests-ended` are checked after the steps, inside the
+The postconditions `fresh-shape` to `second-run` and `store-identity` to `awaiting-rows` are checked after the steps, inside the
 same transaction, `second-run` last; `store` adds `recovery-point`, the recovery point. `row-counts` compares the
-row counts of the tables `oracle` counted and of the projects `item-projects` fills; `fresh-tables` holds every
-other table to being empty and declared by a fresh store.
+row counts of the tables `oracle` counted, of the projects `item-projects` fills and of the rows `confirmations`
+writes; `fresh-tables` holds every other table to being empty and declared by a fresh store.
 """
 
 from __future__ import annotations
@@ -81,6 +88,7 @@ from typing import Any
 
 from .. import store_steps
 from ..store_steps import Context, Postcondition, Step, UnmetError
+from . import closing as closing_rules
 from . import item_tree, model, questions, read_model, words, work_model_probes
 from . import store as planning_store
 
@@ -1753,6 +1761,84 @@ def _check_requests(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError(f"{_REQUESTS} has not taken its new shape, or one waits on a closed item")
 
 
+# -- goals and stages awaiting confirmation ------------------------------------
+
+_CONFIRMATIONS = "work_item_confirmations"
+
+
+def _confirmation_rows(conn: sqlite3.Connection) -> set[str] | None:
+    """The containers that hold a confirmation row, or None while the table is missing."""
+
+    if (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (_CONFIRMATIONS,)
+        ).fetchone()
+        is None
+    ):
+        return None
+    return {str(row[0]) for row in conn.execute("SELECT work_item_id FROM work_item_confirmations")}
+
+
+def _confirmations_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    held = _confirmation_rows(conn)
+    return held is None or held != closing_rules.awaiting(conn)
+
+
+def _create_confirmations(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`confirmations`: the table, and a row since the migration for each container that awaits."""
+
+    created = _confirmation_rows(conn) is None
+    conn.execute(planning_store.CONFIRMATIONS)
+    added = sorted(closing_rules.awaiting(conn) - (_confirmation_rows(conn) or set()))
+    conn.executemany(
+        "INSERT INTO work_item_confirmations(work_item_id, since) VALUES(?, ?)",
+        [(identity, context.now) for identity in added],
+    )
+    references = _references(conn)
+    return {
+        "table_created": created,
+        "awaiting": sorted(references.get(identity, identity) for identity in added),
+    }
+
+
+def _check_confirmations(conn: sqlite3.Connection, context: Context) -> None:
+    if _confirmations_needed(conn, context):
+        raise UnmetError(f"{_CONFIRMATIONS} does not hold one row for each container that awaits")
+
+
+# -- `history-actions`: the actions the history takes --------------------------------------------
+
+
+def _actions_missing(conn: sqlite3.Connection) -> list[str]:
+    """The declared actions the events table's CHECK does not name."""
+
+    found = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'work_item_events'").fetchone()
+    declared = "" if found is None else str(found[0])
+    return [action for action in model.EVENT_ACTIONS if f"'{action}'" not in declared]
+
+
+def _actions_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return bool(_actions_missing(conn))
+
+
+def _widen_actions(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`history-actions`: the CHECK of every declared action, the table rebuilt with its rows."""
+
+    del context
+    missing = _actions_missing(conn)
+    planning_store.widen_event_actions(conn)
+    return {"added": missing}
+
+
+def _check_actions(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    missing = _actions_missing(conn)
+    if missing:
+        raise UnmetError(f"the events table refuses the actions {missing}")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1798,6 +1884,14 @@ STEPS = (
         _requests_needed,
         _check_requests,
     ),
+    Step(
+        "confirmations",
+        "goals and stages awaiting confirmation",
+        _create_confirmations,
+        _confirmations_needed,
+        _check_confirmations,
+    ),
+    Step("history-actions", "the actions the history takes", _widen_actions, _actions_needed, _check_actions),
 )
 
 
@@ -1896,12 +1990,16 @@ def _expected_counts(oracle: Oracle) -> dict[str, int]:
     expected["work_item_events"] += sum(oracle.events.values())
     expected["work_item_projects"] = expected.get("work_item_projects", 0) + oracle.item_projects
     expected["platform_ui_prefs"] = expected.get("platform_ui_prefs", 0) - len(oracle.dropped_prefs)
+    # `confirmations` gives a row to each accepted open container that awaits confirmation.
+    expected[_CONFIRMATIONS] = sum(
+        1 for state in oracle.derived.values() if state == closing_rules.AWAITING
+    )
     return expected
 
 
 def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
-    """The tables `oracle` counted and the projects `item-projects` fills hold the rows foreseen; any other
-    table is `fresh-tables`'s."""
+    """The tables `oracle` counted, the projects `item-projects` fills and the rows `confirmations` writes hold the rows
+    foreseen; any other table is `fresh-tables`'s."""
 
     oracle = _oracle(context)
     counts = _counts(conn)
@@ -2561,6 +2659,36 @@ def _holds_requests_ended(conn: sqlite3.Connection, context: Context) -> Mapping
     }
 
 
+def _holds_awaiting_rows(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """A row stands for each container that awaits confirmation and for no other, each
+    waiting since the migration, with no call, no question and no departure."""
+
+    held = {
+        str(row[0]): (str(row[1]), row[2], row[3], row[4])
+        for row in conn.execute(
+            "SELECT work_item_id, since, call_id, request_id, left_at FROM work_item_confirmations"
+        )
+    }
+    awaiting = closing_rules.awaiting(conn)
+    references = _references(conn)
+    expected = (context.now, None, None, None)
+    found = [
+        f"{references.get(identity, identity)} awaits confirmation with no row"
+        for identity in sorted(awaiting - set(held))
+    ]
+    found += [
+        f"{references.get(identity, identity)} holds a row and does not await confirmation"
+        for identity in sorted(set(held) - awaiting)
+    ]
+    found += [
+        f"the row of {references.get(identity, identity)} reads {values}, not {expected}"
+        for identity, values in sorted(held.items())
+        if values != expected
+    ]
+    _unmet(found, "goals and stages awaiting confirmation")
+    return {"rows": len(held)}
+
+
 def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
@@ -2597,6 +2725,7 @@ POSTCONDITIONS = (
     ),
     Postcondition("no-closed-waits", "no request waits on a closed item or says task_closed", _p28),
     Postcondition("requests-ended", "a close ended the requests foreseen, each by its item's category", _p29),
+    Postcondition("awaiting-rows", "a row for each goal or stage awaiting confirmation", _p30),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 
