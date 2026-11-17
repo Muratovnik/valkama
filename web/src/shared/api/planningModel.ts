@@ -21,6 +21,7 @@ import {
 import { executorSchema } from '@/shared/api/executorModel.ts'
 import { itemProjectsField } from '@/shared/api/itemProjectsModel.ts'
 import { liveWorkMapSchema } from '@/shared/api/liveWorkModel.ts'
+import { DECISION_POINTS } from '@/shared/api/planningDecisionPoints.ts'
 import {
   EVENT_ACTIONS,
   EVENT_DETAIL_MAX,
@@ -345,6 +346,8 @@ const eventSchema = strictObject({
   author: actor(),
   at: boundedText(ISO, 96),
   identity: eventIdentitySchema,
+  /** The decision point an agent's own decision marked this event with; absent on any other. */
+  point: z.enum(DECISION_POINTS).optional(),
 }).refine((event) => event.action === 'labels_changed' || event.detail.length <= EVENT_DETAIL_MAX, {
   message: 'expected a detail of at most 512 characters',
   path: ['detail'],
