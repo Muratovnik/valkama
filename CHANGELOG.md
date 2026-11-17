@@ -29,6 +29,14 @@ checkouts are therefore distinguishable even at the same version.
   labels a project now carries and refuses to start, before any write, on a registry
   that is not format 4, a space whose project is not bound to it, two spaces of one
   name or a file of another store or state.
+- **The migration carries commit refs over as commits.** `map-items` reads each commit
+  ref's text — a hash, `project@hash`, a commit address, or a note naming several
+  hashes, of which the start of a range and the hash after `base` or `from` are
+  skipped — and records its commits with their projects in the file's `commit_refs`;
+  a task's projects from commits come from the same records. The migration attaches
+  those commits to the ref's item, makes another address a `url` ref, drops a text
+  without a hash and removes every commit ref, refusing first a file whose records do
+  not match the store's refs.
 
 ### Changed
 

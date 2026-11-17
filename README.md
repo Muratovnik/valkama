@@ -664,17 +664,31 @@ valkama projects map-items --output item-projects.json
 ```
 
 `map-items` reads a copy of the store, the registry and the registered repositories,
-and writes nothing else. For each task its commits decide first: a value
-`project@hash` names a registered project, and a bare hash belongs to the one
-registered repository holding it. Without such a commit, a label equal to the id of
-a project bound to the task's space names that project, and `--label LABEL=PROJECT`
+and writes nothing else. It reads the text of each commit ref for the commits it
+names: every hash of 7 to 64 hex digits, except the left end of a range `X..Y` and
+the hash right after `base`, `from`, `onto` or `от`, which name where work started.
+An address `…/<name>/commit/<hash>` (or GitLab's `…/<name>/-/commit/<hash>`) reads as
+`<name>@<hash>`. A hash with a registered project's id before it (`project@hash`,
+`project hash`, `project:hash`, `owner/project@hash`) belongs to that project;
+otherwise it belongs to the one registered repository holding it, and with none or
+several it is kept without a project. Another address becomes a `url` ref, and a
+text naming no hash is dropped. The file holds one record of each commit ref under
+`commit_refs`: its commits as project and hash, with the subject and time Git gave,
+the hashes it skipped, and whether it becomes a `url` ref or is dropped. Set `drop`
+on a record, or take a commit out of it, to carry less.
+
+For each task its commits decide first: it takes the registered projects of its
+commits. Without such a commit, a label equal to the id of a project bound to the
+task's space names that project, and `--label LABEL=PROJECT`
 carries another label in any space, provided its words are words of the project's
 id. A task with neither keeps its space's project. A carried label leaves the task,
 and the project's id still finds it in a search. The command prints the tasks it
 counted by space and by source, each task whose label names another project than
-its commits, and each task holding the label of a project of another space: read
-the file before migrating, and add a project where it is right. It refuses a file
-that already exists.
+its commits, and each task holding the label of a project of another space. Under
+`commit_refs` it prints the commits by project and those without one, the refs that
+become `url` refs, those dropped and those that skipped a hash, and each commit two
+refs of one item label differently. Read the file before migrating, and add a
+project where it is right. It refuses a file that already exists.
 
 Then stop every process that holds the store -- the listener and every agent
 client, since each one runs its own server -- and run:
@@ -686,15 +700,22 @@ valkama migrate work-model --item-projects item-projects.json
 It migrates the configured store (`store` or `VALKAMA_DB`). First it checks, only
 reading, that the registry is format 4 and binds each space's project to it, that no
 two spaces share a name, and that the file belongs to this store as it is now and
-names registered projects only; a store holding work items needs the file. A
-refusal names what to run, and nothing is written. Before its first write
-it takes a verified snapshot labelled `pre3.0` in `backups/` beside the store, with
+names registered projects only, holds a well-formed record of every commit ref, and
+derives a task's project from commits only when it carries one of them; a store
+holding work items needs the file. A refusal names what to run, and nothing is
+written. Before its first write it takes a verified snapshot labelled `pre3.0` in `backups/` beside the store, with
 the pictures in a `.images` folder beside it, and then runs every step and checks
 every postcondition in one transaction: a step that fails or a postcondition that
 does not hold rolls all of it back and leaves the store at 17. The command prints a
 JSON report with the time and result of each step and postcondition and of the
 snapshot, and exits 1 when the run failed, naming what failed. A second run finds
 the store current and changes nothing.
+
+Among its steps, the migration attaches each commit a record carries to the ref's
+item, marked as carried over, and adds the `url` refs; several refs of one item
+naming one commit give one attachment, with the label, author and time of the first
+of them that has a label. A label gets the ref's text after it when that text is an
+address or a note rather than a hash. Every commit ref then leaves the store.
 
 `--dry-run` migrates a copy instead and only reads the store: `--into <directory>`
 keeps the copy and its snapshot there, and without it the copy goes when the run
