@@ -607,13 +607,18 @@ Work items relate to each other the way
 `blocks` link keeps unfinished dependencies out of `claim_ready_work_item`,
 which chooses and claims a ready item in one step. `discovered-from` records
 where work found en route came from, and `create_work_item` takes that link and
-the claim in the call that files the item. Blockers that are not work items stay
-comments.
+the claim in the call that files the item. A blocker that is not a work item is
+the stated reason of a move to `blocked`.
 
 Guards refuse a move the board could not honestly report: `dev` needs an
-executor, `done` needs every checklist item closed and a summary, `blocked`
-needs a stated reason. A refusal names its guard, and
-`force=true` carries the move through as a recorded override.
+executor, `review` and `done` need every checklist item closed and a summary,
+`blocked` needs a stated reason. A move into `review` also needs `to_check`, what
+the owner is to check, and asks it as a question that only the owner answers:
+accepting completes the item, returning it sends it back to `ready`. An agent
+does not complete an item, or take it out of review, while a question to the
+owner is open on it ([details](docs/connection-contract.md#review-asks-the-owner)).
+A refusal names its guard, and `force=true` carries the move through as a
+recorded override; it supplies no `to_check` and does not pass an open question.
 
 **Concurrent moves are resolved, not raced.** A drag sends the revision of the
 card as the board last read it. If an agent has moved or edited the card since,
@@ -835,8 +840,9 @@ The launch dialog records a delivery contract, not just a command: an
 
 Both clients get an enforced JSON result schema. The persisted outcome is one of
 `launch_failed`, `refused`, `expected_no_change`, `unexpected_no_change`,
-`partial` or `complete` — **exit code zero is not delivery.** Only `complete`, or
-an `expected_no_change` the contract allows, moves Dev to Review. A spawn failure
+`partial` or `complete` — **exit code zero is not delivery.** A launch moves
+nothing: the launched agent moves the item to Review with what the owner is to
+check when its work is done. A spawn failure
 restores the pre-launch lane and claim while they still belong to that launch.
 If someone changed the item meanwhile, their state is preserved and the failed
 attempt records why compensation was skipped.

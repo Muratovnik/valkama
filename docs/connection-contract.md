@@ -2185,7 +2185,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?, addressees?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
-| `transition` | `{state, reason?, force?, acceptance?}` | `/transition` |
+| `transition` | `{state, reason?, force?, acceptance?, to_check?}` | `/transition` |
 
 Each path in the last column is under `POST /api/planning/work-item`.
 
@@ -2250,9 +2250,11 @@ and closes the item with its `transition` is refused, `invalid_request` on the `
 `force` does not carry it: the close ends every request still pending on the item in
 the same write, so the question would be asked and ended unanswered at once. The
 refusal reads `transition: a question on an item this call closes would end
-unanswered in the same write: ask it in a call that leaves the item open`. A
-question asked by an earlier call does not stop this refusal's close; the close ends
-it, as below. A closed item takes no question, and `questions` is applied before
+unanswered in the same write: ask it in a call that leaves the item open`. An
+agent's call that asks the owner and completes the item meets the
+[`question` guard](#review-asks-the-owner) first, `workflow_guard` on the same step.
+A question asked by an earlier call does not stop a person's close, nor an agent's
+cancellation; the close ends it, as below. A closed item takes no question, and `questions` is applied before
 `transition`, so a call that reopens an item cannot also ask on it.
 
 The steps run inside one transaction. When one is refused, none of them is
@@ -2288,7 +2290,8 @@ hear the items an `update`'s description named stands beside `applied`, as
  "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1, "links": 1,
  "comments": [{"comment_id": 41, "reply_to": null, "reply_to_request": null}],
  "questions": [{"request_id": "…", "revision": 0}],
- "summary": {"summary_comment_id": 42}, "transition": {"state": "review"}}
+ "summary": {"summary_comment_id": 42},
+ "transition": {"state": "review", "review_request_id": "…"}}
 ```
 
 The batch is also the HTTP write `POST /api/planning/work-item/apply`, which
@@ -2843,8 +2846,9 @@ requeued task keeps its checklist, comments and history, and goes to `ready`,
 never back to `triage`, so the queue offers it before work nobody has accepted.
 
 `transition` sent beside `claim` in one `apply_work_item_changes` call applies
-after the claim's move: `{"claim": true, "transition": {"state": "review"}}`
-moves a task in `triage` to `dev` and then to `review`.
+after the claim's move: `{"claim": true, "summary": {…}, "transition": {"state":
+"review", "to_check": "…"}}` moves a task in `triage` with no open step to `dev` and
+then to `review`.
 
 ### A close ends the claims
 
@@ -2915,6 +2919,57 @@ the field is `null`.
 The card's own read says more about who that was: `last_claim_executor` is the
 same `executor` its claim, steps and agents carry, for the holder
 `last_claim_ref` names, with `state` `none` when there is no session to open.
+
+### Review asks the owner
+
+A move into a `review` state from a state of another category is an agent handing
+its result to the owner, so it needs what a close needs and says what to check:
+
+- every step done and a summary (`checklist`, `summary`), and no step marked
+  `by_previous_holder` (`previous_holder`); `force` carries these;
+- `to_check`, text of at most 8000 characters naming what the owner is to check.
+  Without it the move is refused with `review_question`, which `force` does not
+  carry. `to_check` on a move to any other state is refused with `invalid_request`.
+
+A move between two `review` states is no entry and asks nothing.
+
+The move asks the owner a question in the same write: `kind` `question`, purpose
+`review`, the `to_check` text as its prompt and one required choice field,
+`answer`, with the options `accept` (`Accept it`) and `return` (`Return it to
+work`). The transition's answer names it as `review_request_id`, in
+`applied.transition` of a batch too. The owner's alert for it is the review alert,
+not a question alert; another question asked in the same call still raises its own.
+
+Only a person answers it, in Valkama: an agent's answer is refused with
+`owner_only` (403). It is not declined and its answer is not changed, and an own
+variant is no answer to it: each is refused with `invalid_request`, the message
+starting `[purpose]`. The answer is carried out in the same write as the move it
+names, under the same guards, and a refused move refuses the answer: `accept`
+moves the item to the workflow's first `completed` state, `return` to its first
+`ready` state, with the answer's note as the move's reason when it fits. The
+answer's record says which as `carried_out`, `completed` or `ready`. Only the
+session that asked withdraws the question (`not_asker`, 403, for anyone else, a
+person included); the withdrawal, `expired` with `expired_reason: withdrawn`,
+returns the item to `ready` with the reason `review withdrawn`, and its record
+says `carried_out: ready`. A returned item keeps `started_at`.
+
+Leaving review by any other move ends the question: a close as
+[a close ends the claims](#a-close-ends-the-claims) says, and a move to an open
+state as `expired` with `expired_reason: withdrawn`.
+
+An agent waits for the owner's answer. An agent's move that completes an item, or
+that takes it out of `review` to anything but a `cancelled` state, is refused with
+the `question` guard while a question asked of the owner is open on the item, and
+`force` does not carry it: `[question] MAIN-12 has 1 open question(s) to the owner,
+and an agent does not complete it over them: wait for the owner's answer, or
+withdraw a question you asked`. A question asked of an agent session does not
+count, and a confirmation question does not hold a completion. A person's move is
+not held.
+
+A launch moves nothing. The ending of a launch writes its comment and leaves the
+item where its agent left it; the launched agent moves the item to `review` with
+`to_check` when the work is done. A task its launch left at work goes back to
+`ready` when the launch's claim lapses.
 
 ### What a person did reaches the agent
 
