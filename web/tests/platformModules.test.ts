@@ -34,10 +34,7 @@ const EXPECTED_SECONDARY_CONTEXTS: SecondaryKinds = {
     global: ['project', 'planning-space'],
     project: ['planning-space', 'work-item'],
   },
-  sessions: { global: ['execution', 'session'], project: [] },
   analytics: { global: ['work-item'], project: ['work-item'] },
-  improvements: { global: ['work-item', 'improvement-case'], project: [] },
-  skills: { global: ['skill'], project: ['skill'] },
   memory: { global: ['memory-resource'], project: ['memory-resource', 'work-item'] },
   settings: { global: ['work-item'], project: ['work-item'] },
 } as const
@@ -55,15 +52,7 @@ test('valkama-modules has exactly four registrations with both operating levels'
     assert.ok(module.semantics.global)
     assert.ok(module.semantics.project)
     assert.ok(module.states.global.supported.includes('loading'))
-    if (module.module_id === 'improvements') {
-      assert.deepEqual(module.states.project.supported, ['unavailable'])
-      assert.equal(
-        module.states.project.unsupported_reason,
-        'improvements_project_scope_unsupported',
-      )
-    } else {
-      assert.ok(module.states.project.supported.includes('permission-denied'))
-    }
+    assert.ok(module.states.project.supported.includes('permission-denied'))
   }
 })
 

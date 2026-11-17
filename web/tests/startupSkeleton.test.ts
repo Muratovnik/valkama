@@ -79,12 +79,36 @@ function styleOf(html: string): string {
   return style[1]
 }
 
-/** The rules that draw the skeleton, the page's own text and ground left out. */
+/**
+ * What the window draws and the index page does not: its own ground and the status
+ * line it prints over the skeleton while the server is found. Every other rule of
+ * either page is the skeleton, whatever its selector is called.
+ */
+const WINDOW_ONLY = new Set([
+  '*',
+  'html, body',
+  'body',
+  'h1',
+  'h1::before',
+  'p',
+  '.sk-status',
+  '@keyframes appear › from',
+  '@keyframes spin › to',
+  '@media (prefers-reduced-motion: reduce) › .sk-status',
+  '@media (prefers-reduced-motion: reduce) › h1::before',
+])
+/** Every rule both pages must draw alike: all of a page's rules but the window's own. */
 function skeletonRules(css: string): Record<string, string[]> {
   return Object.fromEntries(
-    [...rules(css)].filter(
-      ([key]) => /(^|› )\.sk(?!-status)/.test(key) || /^@media [^›]+› :root$/.test(key),
-    ),
+    [...rules(css)]
+      .filter(([key]) => !WINDOW_ONLY.has(key))
+      .map(([key, declarations]) => [
+        key,
+        // The index page takes its colour scheme from the application's stylesheet.
+        key === ':root'
+          ? declarations.filter((each) => !each.startsWith('color-scheme:'))
+          : declarations,
+      ]),
   )
 }
 
@@ -92,9 +116,14 @@ const RAIL = `--sk-rail: clamp(${NAV_MIN_WIDTH}px, var(--sk-chosen, ${NAV_DEFAUL
 
 test('the window and the index page draw the skeleton with the same rules and colours', () => {
   const literals = tokenLiterals()
-  const desktop = skeletonRules(
-    styleOf(startupPage.renderStartupPage({ phase: 'starting', locale: 'en' })),
-  )
+  const windowCss = styleOf(startupPage.renderStartupPage({ phase: 'starting', locale: 'en' }))
+  // The window's own rules are named exactly: one the window lost, or one the index page
+  // draws too, would leave a skeleton rule out of the comparison.
+  for (const key of WINDOW_ONLY) {
+    assert.ok(rules(windowCss).has(key), `the window no longer draws ${key}`)
+    assert.ok(!rules(styleOf(index)).has(key), `index.html draws ${key}: it is skeleton`)
+  }
+  const desktop = skeletonRules(windowCss)
   const browser = skeletonRules(
     styleOf(index).replaceAll(/var\((--color-[\w-]+)\)/g, (_match, token: string) => {
       const literal = literals.get(token)
