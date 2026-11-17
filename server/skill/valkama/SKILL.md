@@ -249,13 +249,13 @@ did what, `claim` for the lease and when it lapses, `links`, `refs`,
 newest n events. To refresh part of a long description, read `parts: sections`
 for its keys and sizes, then `section` with the keys you need. After a resume or
 a compaction the session start may bring a Valkama note: what you hold, each
-item's state, its next condition and the root of its project.
+item's state, its next condition and the root of its project. A step a lapsed
+holder ticked stands there `(to confirm)`, not as ticked, and the line
+`No longer held by you` names the items whose claim or step the sweep released
+since your last call: claim one again before working it.
 
-In the comments part each root carries `replies` and `last_reply`, so a reply
-in an old thread lifts it into the default read; while `truncated` is true, read
-on with `comments_after` set to the last id read
-([every mode](references/tools.md#reading-an-item)). Every comment carries
-`by_person`, true when it came through Valkama's interface. A reply to a
+How the comments part pages and what each comment carries is in
+[every mode](references/tools.md#reading-an-item). A reply to a
 question belongs to the question's thread, which `get_work_item_request` reads.
 A screenshot the owner pasted is listed in the `images` part, and
 `read_work_item_image` with the item's `id` and its `sha256` shows it to you.

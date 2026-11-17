@@ -1957,6 +1957,34 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertIn(form, tool["inputSchema"]["properties"]["checklist"]["description"])
         self.assertIn('{"items": [...], "force": true}', skill)
 
+    def test_the_item_read_and_the_texts_name_what_the_queue_and_the_sweep_leave(self) -> None:
+        [tool] = [tool for tool in mcp_surface.catalogue() if tool["name"] == "get_work_item"]
+        text = tool["description"]
+        # The lease's end is read in the claim part, so the sentence about it follows that part.
+        part = text.index("claim: the lease, with expires_at.")
+        self.assertGreater(text.index("claim.expires_at is when the claim lapses"), part)
+        for sentence in (
+            "workable says whether its space's queue may give it now and withheld why not",
+            "null while an open question to the owner stops that count.",
+            "A checklist step with by_previous_holder was ticked by a holder whose claim"
+            " lapsed: tick it again to confirm it before review or closing.",
+            "lapsed_claim names the holder whose claim the sweep released, why and when,"
+            " until the next claim.",
+        ):
+            self.assertIn(sentence, text)
+        # Claude Code cuts a tool's description past 4096 characters.
+        self.assertLessEqual(len(text), 4096)
+        for name in (
+            "server/skill/valkama/SKILL.md",
+            "server/skill/valkama/references/tools.md",
+            "docs/connection-contract.md",
+        ):
+            with open(os.path.join(ROOT, *name.split("/")), encoding="utf-8") as handle:
+                document = handle.read()
+            for word in ("withheld", "lapsed_claim", "by_previous_holder", "No longer held by you"):
+                with self.subTest(document=name, word=word):
+                    self.assertIn(word, document)
+
     def test_an_object_parameter_named_like_text_shows_its_form(self) -> None:
         """A bare-text value for an object parameter fails in the client, before this server.
 
