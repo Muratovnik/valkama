@@ -404,7 +404,9 @@ describe('the figures of the overview', () => {
     const radios = tiles.findAll('[role="radio"]')
     expect(radios.length).toBeGreaterThan(1)
     const checked = radios.map((one) =>
-      one.findAllComponents(VIcon).some((icon) => icon.props('name') === 'check'),
+      one
+        .findAllComponents(VIcon)
+        .some((icon: VueWrapper<InstanceType<typeof VIcon>>) => icon.props('name') === 'check'),
     )
     expect(checked).toEqual(radios.map((one) => one.attributes('aria-checked') === 'true'))
     expect(checked.filter(Boolean)).toHaveLength(1)

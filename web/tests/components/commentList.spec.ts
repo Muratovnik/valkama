@@ -226,7 +226,7 @@ describe('a list under a comment', () => {
       row
         .get('.comment-list-mark')
         .findAllComponents(VIcon)
-        .map((icon) => icon.props('name')),
+        .map((icon: VueWrapper<InstanceType<typeof VIcon>>) => icon.props('name')),
     )
     expect(marks).toEqual([['check'], [], ['check']])
     const line = listIn(wrapper).get('.request-state').text()
