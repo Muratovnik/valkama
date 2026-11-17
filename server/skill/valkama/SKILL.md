@@ -172,6 +172,8 @@ changes reach you at your next tool call. Other agents
 wake a session at most 6 times an hour; past that the news waits for your next
 tool call. After three notices on one item in an hour, other agents' news there is
 one line that counts it: read the item's `comments` part to see what they wrote.
+In Codex, news waits for your next prompt: nothing wakes an idle session or
+continues a turn, and a subagent's hooks tell nothing.
 
 When your work depends on an item you do not hold, one another agent is changing
 under you, subscribe to it with the batch's `subscribe: true` and hear its news as

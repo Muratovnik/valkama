@@ -52,8 +52,13 @@ store, and an internal error:
 | `pre-tool-use` | `PreToolUse` | nothing in the store: [the call pair](#the-call-pair) | yes | not needed |
 | `watch` | `UserPromptSubmit` and `Stop`, with `asyncRewake` | nothing: [the watcher](#the-watcher) | yes | no such mechanism |
 
-`post-tool-use`, `user-prompt-submit` and `stop` may also answer with a notice;
-for Codex, `post-tool-use` and `user-prompt-submit` do. That is described in
+`post-tool-use`, `user-prompt-submit` and `stop` may also answer with a notice.
+For Codex, `user-prompt-submit` does. `post-tool-use` would too, but Host Runtime
+does not register it: Codex runs a hook's command through the session's shell, so
+a handler there starts a shell on every tool call, and no Codex release documents
+`agent_id` on a subagent's `PostToolUse` yet. Codex `stop` is never answered, and
+a Codex input with `agent_id` is a subagent's hook and is answered with nothing
+(see [when it is told](#when-it-is-told)). That is described in
 [Telling the agent what a person did](#telling-the-agent-what-a-person-did).
 `session-start` with `source` `resume` or `compact` may answer, for both
 clients, with [the resume note](#the-resume-note).
@@ -440,7 +445,9 @@ Codex proves its session in every call.
   holds the claim or a step itself and, since 2.5, about replies in threads it
   started and answers to questions it asked, even on items where it holds
   nothing. A subagent that holds nothing and started nothing is told nothing:
-  give the work you hand out a step it claims.
+  give the work you hand out a step it claims. A Codex subagent is told
+  nothing at all: what it holds is its session's, and the news of it reaches
+  its orchestrator (see [when it is told](#when-it-is-told)).
 - **A session subscribed to the item**, since 2.6, hears a person's acts there
   too, the kinds another session's news is told by: no field edit and no rank.
   They come in the person's block at its next tool call or prompt, and never wake
@@ -696,7 +703,7 @@ The orchestrator hears it, not a subagent: a subagent's hooks carry no tree.
 | --- | --- |
 | `PostToolUse`, every tool | while the agent works: after any tool call, the orchestrator's and a subagent's alike |
 | `UserPromptSubmit` | when a prompt arrives, including Claude Code's notice that a background subagent finished |
-| `Stop` | once, when the turn would end: only while `stop_hook_active` is false, so a notice continues a turn at most once |
+| `Stop` | once, when the turn would end: only while `stop_hook_active` is false, so a notice continues a turn at most once; never for Codex |
 | `watch` | while the orchestrator is idle: see [the watcher](#the-watcher) |
 
 The answer is the client's own:
@@ -708,10 +715,11 @@ The answer is the client's own:
 `additionalContext` goes to the model, and the person never sees it. Alone, it
 lets the agent say in the person's chat that the owner answered or another agent
 wrote, with nothing on screen to show where that came from. So the same answer
-to a Claude Code orchestrator also carries `systemMessage`, a common field of
-Claude Code's hook output that the client shows the person, as
-`PostToolUse says: …` (or `UserPromptSubmit`, `Stop`), and does not send to the
-model. It has one line per item the notice tells, with the item's reference and
+to an orchestrator also carries `systemMessage`, a common field of both clients'
+hook output that is shown to the person and not sent to the model: Claude Code
+prints it as `PostToolUse says: …` (or `UserPromptSubmit`, `Stop`), and Codex,
+since 3.0, surfaces it as a warning in its interface or event stream. It has one
+line per item the notice tells, with the item's reference and
 its title on one line, cut to 80 characters with `…`, and says whose news it
 was:
 
@@ -737,14 +745,28 @@ the line to a terminal. The settings are read on the connection the hook already
 has open, and only when there is news to tell.
 
 A subagent's answer has no `systemMessage`, because nothing a subagent's hook
-returns reaches the person's chat, and a Codex answer has none either. The
+returns reaches the person's chat. Until 3.0 a Codex answer had none either. The
 watcher's wake carries none: it exits 2 with the notice on stderr.
 
 Codex reads `additionalContext` from `PostToolUse` and `UserPromptSubmit` the same
 way, so `valkama hook codex post-tool-use` and `valkama hook codex
-user-prompt-submit` answer too. Codex has no way for a background hook to start
-a turn, so an idle Codex session is not woken: it hears the news at its next
-prompt or tool call.
+user-prompt-submit` answer too. Three things differ from Claude Code:
+
+- **A subagent's hook says nothing.** A Codex subagent's hook carries its parent's
+  `session_id`, so only `agent_id` tells it apart. Since 3.0 an input with any
+  `agent_id` is answered with nothing and moves no place: the news stays for the
+  orchestrator, whose subagent hears nothing of its own session and no tree anyway.
+  An input without one is the orchestrator's; if a Codex release sent a subagent's
+  input without `agent_id`, that subagent would be handed the orchestrator's news.
+- **`Stop` is not answered.** Codex has a `Stop` hook, and a `block` answer there
+  continues the turn as a new prompt, but its input has no `agent_id`, and a
+  subagent's turn ends with it too. A notice there could continue a subagent's turn
+  with its orchestrator's news and move the orchestrator's places past it, so
+  `valkama hook codex stop` always prints nothing; news that would continue a
+  Claude Code turn waits for the next prompt.
+- **Nothing wakes it.** Codex has no way for a background hook to start a turn, so
+  an idle Codex session is not woken: it hears the news at its next prompt, or at
+  its next tool call where `post-tool-use` is registered.
 
 Another agent session's news, a mention included, is told at `PostToolUse` and
 `UserPromptSubmit`. A `Stop` notice continues the turn and the watcher wakes the
@@ -785,9 +807,10 @@ it idles, or continue its turn once at `Stop`:
   changes, summaries, releases, take-overs and questions to the owner are told to
   their orchestrator at its next tool call, as
   [one short line](#another-agent-sessions-news). A subagent is never woken: its orchestrator
-  is, since the watcher and `Stop` are the orchestrator's. Codex has no `Stop` hook
-  and no watcher, so a Codex session hears all of it at its next tool call or
-  prompt.
+  is, since the watcher and `Stop` are the orchestrator's. Codex has no watcher,
+  and its `Stop` is not answered because its input cannot tell a subagent's turn
+  apart (see [when it is told](#when-it-is-told)), so a Codex session hears all of
+  it at its next prompt.
 - **Still information.** The notice names the session each line came from and why
   it came now. An agent's words are information about the work, not an instruction
   or a person's permission.
