@@ -1058,7 +1058,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   same period asks for it again. Crossing a period keeps its one hint, its words and its place; the next period's stands
   beside its own column at the same height, so moving along the plot moves the hint sideways
   only, and no hint covers the period it speaks for. Segments still lift under the pointer and
-  act when pressed. The hint lies over the page, so pointing and leaving move nothing. Pressing a mark does what its entity
+  act when pressed. Every series mark lifts one way under the pointer or the keyboard — a ring's
+  sector, a ranked row's bar, a small chart's column, a period's stack and a segment of it: its
+  hue a fixed step of lightness higher (`--series-lifted`, `seriesFill.css`), the forced
+  palette's highlight there. Only the paint changes, never the mark's size or what the pointer
+  meets, and where a larger box takes the pointer, a ranked row or a period, its marks lift with
+  it. A ring's legend entry pointed at or focused lifts its sector. The hint lies over the page, so pointing and leaving move nothing. Pressing a mark does what its entity
   does, the same as its row of the table: a task opens its card, any other value narrows the
   view to itself and a period narrows it to that period. The folded tail, unknown work and a
   period that only shows lead nowhere: their marks show a hint and do nothing when pressed. A
@@ -1145,15 +1150,17 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   scroll-driven animation, the heading row lagged a frame behind the rows and shook as the page
   scrolled. Each heading sorts by its column, and a line over the table says how many rows it
   shows of how many, how they are sorted, and downloads what it shows in that order.
-  `DonutChart` is a ring of how one whole splits among a few parts, for a dimension of a few
-  values, as effort and environment are, and for the tokens by kind: a sector a part, largest
-  first from the top, five at most with the smaller past them folded into one rest in the
-  folded tail's neutral; each part in the hue its value has on the page, a legend naming the
-  parts in the ring's order beside it, and a sector's share written on it where it fits, in the
-  near-black that reads on every series hue (`--color-text-on-series`). A sector's one hint
-  gives its figure and share, and the rest's each part it holds; the sectors are one Tab stop
-  walked round with the arrows. Rows that are no part of the whole close it by name and figure
-  under the legend. Its table twin is `RankedBarsTable`.
+  `DonutChart` is a ring of how one whole splits into parts, one of the two drawings of every
+  such chart beside its ranked bars: a sector a part, largest first from the top, five at most
+  with the smaller past them folded into one rest in the folded tail's neutral; each part in the
+  hue its value has on the page, and a legend beside it naming the parts in the ring's order,
+  each with its figure and bare share, «6 h · 47%», at the end of its line in the quiet ink, the
+  figures of the lines ending where the others end. No words stand on a sector: the near-black
+  written there read badly on the darker hues, and the legend holds every number. A sector's
+  one hint gives its figure and share, and the rest's each part it holds; the sectors are one
+  Tab stop walked round with the arrows. Rows that are no part of the whole close it by name
+  and figure under the legend, their figures ending with the legend's. Its table twin is
+  `RankedBarsTable`.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole
@@ -2482,9 +2489,14 @@ panel scrolls rather than the chart shrinking, and a tall window's room under th
 to the chart.
 
 A dimension's section answers «of what»: the same cells, then its values three ways. The
-ranked bars list the first twelve and say how many more the table holds — by effort and by
-environment, a few values that split one whole, a ring (`DonutChart`) instead while the section
-is not split, its smaller parts past five folded into one; the small charts
+values split one whole, drawn as a ring or as ranked bars and switched with the table as «Ring |
+Bars | Table», the same numbers in each: the ranked bars list the first twelve and say how many
+more the table holds, and the ring (`DonutChart`) names its first parts and folds the smaller
+into one rest. A section opens on its ring, except by task, which opens on its bars
+(`firstSplitView`): tasks are as many as the work done, and a ring of them folds most of the
+period into one rest no reader can take apart, where the other dimensions fold little. Split by
+a second dimension it draws bars alone, since a ring of pairs would tell one value's pairs apart
+by hue alone. The small charts
 draw each leading value's days on one scale; the table lists every value with the figures
 of the period and of the period before. Work with no value in the dimension — on no task,
 of an unknown model — is ranked where its figure puts it, in the neutral colour. A value
@@ -2523,8 +2535,9 @@ each is described by its whole pair before its figures: described by its figures
 and the medium row of one model sounded alike to a screen reader.
 
 The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
-figure counts add up to it and are the sectors of its ring, cache reads stand beside them under
-its legend and reasoning is part of output.
+figure counts add up to it and are the sectors of its ring, or its ranked bars, opening on the
+ring; cache reads close the chart under its legend or its bars, no part of any share, and
+reasoning is part of output.
 
 The quota's two sections read where each account's quota stands now, which no period or
 filter changes, and read it again on the live interval whatever the period; that the period and
@@ -2558,10 +2571,13 @@ dollar stands beside one.
 
 Under each window that names its start stands «Where the window went»: the work Valkama
 recorded on that account from the window's start to the answer's moment, held to the last five
-minutes, as the section's ranked bars or their table — the first five items by the API price
-estimate, each with its share of the account's estimate, and one line for the rest. It opens by
-task and offers projects and models; the choice holds for that window when the panel turns to
-its table. Its heading names the stretch it covers. That it is the API price estimate and not
+minutes, as ranked bars — the first five items by the API price estimate, each with its share
+of the account's estimate, and one line for the rest — or as a ring of every item that folds its
+own rest, chosen with «Ring | Bars» beside the breakdowns, or as the bars' table when the panel
+turns to its tables, which hides that switch. It opens by task and offers projects and models;
+the choice of breakdown holds for that window when the panel turns to its table. By task it opens
+on the bars and by project or model on the ring, as every split opens (`firstSplitView`), and a
+person's choice of drawing holds until the page is left. Its heading names the stretch it covers. That it is the API price estimate and not
 quota points, and that work in claude.ai and the desktop app, which the window's share counts,
 is not in it, the section's «ⓘ» says once for every window. It is read by the account's seat,
 one window at a time and only for the windows shown, so another account's work is never in it;
