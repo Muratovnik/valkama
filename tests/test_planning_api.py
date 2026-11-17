@@ -46,6 +46,7 @@ class PlanningApiTests(unittest.TestCase):
             (
                 "/api/planning",
                 "/api/planning/activity",
+                "/api/planning/commits/unattached",
                 "/api/planning/decisions",
                 "/api/planning/graph",
                 "/api/planning/held",
@@ -163,8 +164,8 @@ class PlanningApiTests(unittest.TestCase):
         self.assertEqual(
             {
                 "acceptance", "checklist", "claim", "claim_ref", "claim_state", "closed_at",
-                "comments", "container_state", "created_at", "description", "events", "kind",
-                "labels", "lapsed_claim", "last_claim_ref", "links", "mentions",
+                "comments", "commits", "container_state", "created_at", "description", "events",
+                "kind", "labels", "lapsed_claim", "last_claim_ref", "links", "mentions",
                 "mentions_total", "number", "open", "parent_id", "planning_space_id",
                 "priority", "projects", "reference", "refs", "revision", "source",
                 "started_at", "state", "subscribers", "summary", "summary_comment_id",
@@ -253,7 +254,7 @@ class PlanningApiTests(unittest.TestCase):
         self.post("/api/planning/work-item/checklist/claim", id="QA-1", item_id=step, author="one")
         self.post("/api/planning/work-item/checklist/tick", id="QA-1", item_id=step, author="one")
         self.post(
-            "/api/planning/work-item/ref", id="QA-1", kind="commit", value="abc1234", author="one"
+            "/api/planning/work-item/ref", id="QA-1", kind="memory", value="abc1234", author="one"
         )
         self.post("/api/planning/work-item/comment", id="QA-1", body="a note", author="one")
         moved = self.post(
@@ -295,7 +296,7 @@ class PlanningApiTests(unittest.TestCase):
             source="docs/old.md#kb:old1",
         )
         self.post(
-            "/api/planning/work-item/ref", id=created["reference"], kind="commit", value="abc1234"
+            "/api/planning/work-item/ref", id=created["reference"], kind="memory", value="abc1234"
         )
         self.post("/api/planning/work-item/comment", id=created["reference"], body="keep this note")
         with_steps = self.post(
@@ -447,7 +448,7 @@ class PlanningApiTests(unittest.TestCase):
                 {
                     "id": item["reference"],
                     "claim": True,
-                    "refs": [{"kind": "commit", "value": "abc1234"}],
+                    "refs": [{"kind": "memory", "value": "abc1234"}],
                     "comment": {"body": "should vanish"},
                     "summary": {"done": "d", "next": "n"},
                     # The step stays open, so the closing transition is refused.

@@ -97,7 +97,7 @@ class FullItemCase(CardCase):
             id=self.ref,
             claim=True,
             checklist=["first", "second"],
-            refs=[{"kind": "commit", "value": "abc1234"}],
+            refs=[{"kind": "memory", "value": "abc1234"}],
             links=[{"other": other, "kind": "relates-to"}],
             comment={"body": "a root"},
             summary={"done": "half", "next": "the rest"},
@@ -120,6 +120,16 @@ class FullItemCase(CardCase):
             ],
         )
         images.store(self.conn, self.ref, png(1))
+        # A commit attached to it, as a migrated one is: no registry or repository is needed.
+        commit = self.conn.execute(
+            "INSERT INTO commits(project_id, hash, subject, reported_at)"
+            " VALUES ('alpha', ?, 'fix: one', '2026-11-17T09:00:00.000Z')",
+            ("abc1234" + "0" * 33,),
+        ).lastrowid
+        self.conn.execute(
+            "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by) VALUES (?,?,?)",
+            (service.get_work_item(self.conn, self.ref)["work_item_id"], commit, "migrated"),
+        )
         self.conn.commit()
 
     def full(self) -> dict:
@@ -537,7 +547,11 @@ class SizeTests(unittest.TestCase):
         self.assertEqual(
             [name for name in read_model.PARTS[1:] if name != "confirmation"], list(contents)
         )
-        self.assertLessEqual(len(compact(contents)), 490)
+        # The twelve parts the card's table first had: 482.
+        twelve = {name: value for name, value in contents.items() if name != "commits"}
+        self.assertLessEqual(len(compact(twelve)), 490)
+        # What the commits part adds to it, `,"commits":{"count":…}`: 30.
+        self.assertLessEqual(len(compact(contents)) - len(compact(twelve)), 30)
         self.assertLessEqual(len(compact(read_model.table_of_contents(confirmation))) - 1, 35)
         step = {
             "id": str(uuid.uuid4()),

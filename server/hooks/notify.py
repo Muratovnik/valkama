@@ -179,7 +179,6 @@ STALE_SECONDS = 86400.0
 _LOCK_ATTEMPTS = 25
 _LOCK_PAUSE = 0.02
 _PLAIN = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:-")
-_FILE_SAFE = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
 
 
 # --- input and output ---------------------------------------------------------
@@ -376,17 +375,16 @@ def holder_suffix(session_id: str, agent_id: str | None) -> str:
     return f" agent {label_id(agent_id)} {suffix}" if agent_id else suffix
 
 
-def _file_key(value: str) -> str:
-    if 0 < len(value) <= 128 and all(ch in _FILE_SAFE for ch in value):
-        return value
-    import hashlib
-
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
-
-
 def recipient_key(session_id: str, agent_id: str | None) -> str:
-    key = _file_key(session_id)
-    return f"{key}--{_file_key(agent_id)}" if agent_id else key
+    """The name of a recipient's place files; a session's commit records start with its key.
+
+    Imported here: the call pair loads this module and needs no record.
+    """
+
+    from .commit_records import file_key
+
+    key = file_key(session_id)
+    return f"{key}--{file_key(agent_id)}" if agent_id else key
 
 
 # --- what is new ----------------------------------------------------------------
@@ -756,26 +754,32 @@ def _handed(
     conn: sqlite3.Connection, session_id: str, after: int
 ) -> tuple[list[tuple[str, bool, list[tuple[int, dict]]]], int]:
     """The words left waiting that claims of this session took after the claim call `after`:
-    per row, the goal or stage, whether a subagent took them, and the words up to the claim,
-    with their calls; and the last claim call read.
+    per claim and goal or stage, whether a subagent took them, and the words it handed over,
+    with their calls (`waiting.containers_left`: a goal or stage with nothing left for the
+    session is not listed); and the last claim call read.
 
     The place is a claim's call, not a row's number: a row is numbered when it is left and
-    handed over later, so a row left before another can be handed after it. A store
-    without the rows yet hands nothing.
+    handed over later, so a row left before another can be handed after it. A claim that
+    took both rows of a goal or stage hands its words over once. A store without the rows
+    yet hands nothing.
     """
 
     import _sqlite3
 
-    from ..planning import person_events
+    from ..planning import waiting
 
     try:
         rows = conn.execute(_HANDED, (session_id, after)).fetchall()
     except _sqlite3.OperationalError:
         return [], after
-    found = []
+    claims: dict[tuple[str, int], list] = {}
     for item, start, call, agent in rows:
-        words = person_events.unheard(conn, str(item), int(start) - 1)
-        found.append((str(item), bool(agent), [pair for pair in words if pair[0] < int(call)]))
+        claim = claims.setdefault((str(item), int(call)), [int(start), bool(agent)])
+        claim[0] = min(claim[0], int(start))
+    found = []
+    for (item, call), (start, agent) in claims.items():
+        for _container, words in waiting.containers_left(conn, session_id, [(item, start)], call):
+            found.append((item, agent, words))
     return found, max([after, *(int(row[2]) for row in rows)])
 
 
@@ -2176,7 +2180,11 @@ def shown_language(conn: sqlite3.Connection) -> str:
 
 
 def deliver(
-    client: str, event: str, payload: dict, environ: Mapping[str, str] | None = None
+    client: str,
+    event: str,
+    payload: dict,
+    environ: Mapping[str, str] | None = None,
+    lead: str = "",
 ) -> bytes | None:
     """The answer to one delivery hook, or None when there is nothing to tell.
 
@@ -2187,22 +2195,28 @@ def deliver(
 
     An orchestrator also gets the lines of `shown`, in the owner's alert language,
     read from the connection already open and only when there is news. A Codex
-    input with any `agent_id` is a subagent's and gets nothing, read or moved.
+    input with any `agent_id` is a subagent's and gets no notice, read or moved.
+
+    `lead` is text that goes before the notice in the same answer, whether there
+    is news or not: the lines about the commits this call made. The notice then
+    keeps to what is left of the client's bound.
     """
 
     hook_event = DELIVERY_EVENTS.get(client, {}).get(event)
+    if hook_event is None:
+        return None
     session_id = _text(payload.get("session_id"))
     named = payload.get("hook_event_name")
-    if hook_event is None or session_id is None or named not in (None, hook_event):
-        return None
+    if session_id is None or named not in (None, hook_event):
+        return _lead(hook_event, lead)
     if client == "codex" and payload.get("agent_id") not in (None, ""):
         # Even one too long to be a name: taken for the orchestrator, it would be
         # handed the session's news and move the session's places past it.
-        return None
+        return _lead(hook_event, lead)
     agent_id = _text(payload.get("agent_id"))
     store, enabled = settings(environ)
     if store is None:
-        return None
+        return _lead(hook_event, lead)
     state = state_directory(store, create=enabled)
     idle = (
         os.path.join(state, recipient_key(session_id, None) + ".idle")
@@ -2237,10 +2251,24 @@ def deliver(
     if idle and hook_event == "Stop" and not news:
         _touch(idle)
     if not news:
-        return None
+        return _lead(hook_event, lead)
     characters = CLIENT_CHARACTERS.get(client, MOST_CHARACTERS)
+    if lead:
+        characters -= len(lead) + len(_LEAD_BREAK)
     text, told = notice(news, orchestrator=agent_id is None, wake=False, characters=characters)
+    if lead:
+        text = lead + _LEAD_BREAK + text
     return output(hook_event, text, shown(told, language) if language else None)
+
+
+#: What stands between the lead and the notice after it.
+_LEAD_BREAK = "\n\n"
+
+
+def _lead(hook_event: str, lead: str) -> bytes | None:
+    """The answer that carries the lead alone, or None without one."""
+
+    return output(hook_event, lead) if lead else None
 
 
 def _touch(path: str) -> None:

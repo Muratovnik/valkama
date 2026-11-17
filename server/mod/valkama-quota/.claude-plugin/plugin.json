@@ -2,5 +2,5 @@
   "name": "valkama-quota",
   "description": "Hands each Claude Code session's plan-limit reading to Valkama after a model response, as the quota source `mod`.",
   "author": { "name": "Nikolai Muratov" },
-  "license": "MIT"
+  "license": "Apache-2.0 with Commons Clause"
 }

@@ -120,6 +120,8 @@ WORK_KINDS = frozenset(
 #: person's edit of the labels, which is told as the edit its call row names.
 #: `accepted`: the basis of an acceptance, beside the write that accepted the item.
 #: `child_left`: a child's move out of this container, told on the child itself.
+#: `commit_attached`, `commit_detached` and `commit_rewritten`: the session that made the
+#: commit is told by its own hook answer, and a person sees the commit on the card.
 #: `returned`: why put-off work came back, beside the move that brought it, which is told.
 #: `split_from`: a part's origin, which says no more than its creation does.
 NOT_TOLD = frozenset(
@@ -132,6 +134,9 @@ NOT_TOLD = frozenset(
         "child_left",
         "returned",
         "split_from",
+        "commit_attached",
+        "commit_detached",
+        "commit_rewritten",
     }
 )
 #: What a goal or stage put off is told with, after the move's own words: the work

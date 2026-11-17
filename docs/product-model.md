@@ -55,7 +55,7 @@ An external Adapter's manifest has exactly four fields: the contract it speaks,
 its identity, its version, and the Capabilities it answers. A field the
 contract does not name is refused rather than ignored. Where the adapter runs
 is the owner's transport record, never part of the manifest; the
-[README](../README.md#external-adapters) describes the calls and the checks.
+[external adapters guide](guides/external-adapters.md) describes the calls and the checks.
 
 A Module uses the provider it is built with: Memory answers through its
 built-in Markdown provider for each registered project. No module selects among
@@ -141,7 +141,7 @@ or resumes the session; `session_end` records `ended` or `failed`;
 `turn_end` records waiting without ending the session; `attention` records a
 lifecycle attention reason. A failed terminal outcome remains until an explicit
 new start. The installation bearer and loopback requirements are documented in
-the [README](../README.md#local-http-security).
+[Local HTTP security](guides/http-security.md#browser-writes-and-the-installation-token).
 
 `GET /api/session?id=<id>` resolves an exact stored identity or unique prefix
 and returns its work item, client family, and project-root resolution; it exposes

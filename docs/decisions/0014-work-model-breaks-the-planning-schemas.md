@@ -116,6 +116,19 @@ and no compatibility layer.
      cancelled state, is refused with `acceptance_question`, which `force` does
      not carry. A close, a delete or a merge that brings work back answers
      with `returned`;
+   - a commit is attached to an item rather than written as a ref: the `refs`
+     group and `POST /api/planning/work-item/ref` refuse the kind `commit`,
+     naming the `commits` group, an item record's `refs` holds no commit, and
+     `GET /api/ref` refuses `kind=commit` and no longer reads `space`, which
+     only chose the repositories a commit was looked for in;
+     `GET /api/commit?repository=<id>&hash=<hash>` shows an attached commit
+     from its project's repository instead, and the handshake says that
+     Valkama attaches the commits a session makes;
+   - a step claim the lease expiry releases is a `checklist_released` event
+     whose detail is the step's text alone, as every other release of a step
+     reads, where 2.9 wrote `<reason>: <step text>`; the reason is recorded only
+     in the `released` of a claim released with it and in a move back to the
+     queue;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -159,8 +172,9 @@ and no compatibility layer.
    import`, which takes a former writer's inventory of format 1, read the former
    format, through one reader and one translation. What is kept is three files —
    the inventory, the projection and the one-write snapshot `rollback` restores
-   from — each with its SHA-256 or recorded as absent; an import onto a machine
-   with no registry keeps that absence the same way.
+   from — each with its SHA-256 or recorded as absent; every first write onto a
+   machine with no registry keeps that absence the same way, and an upgrade there
+   writes an empty registry.
 
 ## What a client does instead
 
@@ -197,6 +211,10 @@ and no compatibility layer.
 | moving accepted work under a goal or stage in triage or deferred | accept that goal or stage first, or move the item out |
 | `transition` into a deferred state | `defer` with `until` and `reason`; the work comes back by itself |
 | an agent claiming or moving work the owner is asked to take up again | wait for the owner's answer; only a cancel moves it before then |
+| `refs: [{"kind": "commit", "value": "…"}]` | `commits: [{"repository": "<project id>", "hash": "…"}]` |
+| a card's commits among its `refs` | its `commits` |
+| `GET /api/ref?kind=commit&value=…&space=…` | `GET /api/commit?repository=<project id>&hash=…` |
+| the reason before the step's text in an expired step's `checklist_released` | the step's text alone; the reason in a `released` or a move back that went with it |
 
 ## Consequences
 

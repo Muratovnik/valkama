@@ -262,12 +262,58 @@ class PlanningDomainTests(unittest.TestCase):
     def test_review_warns_without_evidence_instead_of_refusing(self) -> None:
         created = self.item("Land the planning domain")
         moved = self.reviewed(created["reference"])
-        self.assertEqual(["QA-1 enters Review with no session or commit ref"], moved["warnings"])
-        service.attach_ref(self.conn, created["reference"], "commit", "abc1234", author="tester")
+        self.assertEqual(
+            ["QA-1 enters Review with no session ref or attached commit"], moved["warnings"]
+        )
+        service.attach_ref(self.conn, created["reference"], "session", "s-1", author="tester")
         again = service.transition_work_item(
             self.conn, created["reference"], "ready", acceptance="assignment"
         )
         self.assertEqual([], again["warnings"])
+
+    def test_review_reads_the_attached_commits_and_no_other_ref(self) -> None:
+        created = self.item("Land the planning domain")
+        reference, identity = created["reference"], created["work_item_id"]
+        # A memory record or a url says nothing of who did the work.
+        service.attach_ref(self.conn, reference, "memory", "mem-1", author="tester")
+        service.attach_ref(self.conn, reference, "url", "https://example.test/1", author="tester")
+        commit = self.conn.execute(
+            "INSERT INTO commits(project_id, hash, reported_at)"
+            " VALUES ('alpha', 'abc1234', '2026-01-02T03:04:05Z')"
+        ).lastrowid
+        replaced = self.conn.execute(
+            "INSERT INTO commits(project_id, hash, reported_at)"
+            " VALUES ('alpha', 'abc1235', '2026-01-02T03:04:05Z')"
+        ).lastrowid
+        self.conn.execute(
+            "UPDATE commits SET rewritten_to = ? WHERE commit_id = ?", (commit, replaced)
+        )
+        self.conn.execute(
+            "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+            " VALUES (?, ?, 'manual')",
+            (identity, replaced),
+        )
+
+        def warnings(state: str) -> list[str]:
+            if state == "review":
+                return list(self.reviewed(reference)["warnings"])
+            return list(
+                service.transition_work_item(self.conn, reference, state, acceptance="assignment")[
+                    "warnings"
+                ]
+            )
+
+        # The commit a rewrite replaced is no longer the one the card shows.
+        self.assertEqual(
+            ["QA-1 enters Review with no session ref or attached commit"], warnings("review")
+        )
+        self.conn.execute(
+            "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+            " VALUES (?, ?, 'manual')",
+            (identity, commit),
+        )
+        warnings("ready")
+        self.assertEqual([], warnings("review"))
 
     def test_review_takes_a_confirmed_write_as_evidence_of_its_session(self) -> None:
         unconfirmed = self.item("Written by a call nobody can vouch for")
@@ -439,7 +485,7 @@ class PlanningDomainTests(unittest.TestCase):
     def test_updating_source_keeps_identity_trail_and_related_records(self) -> None:
         created = self.item("Land the planning domain", source="docs/old.md#kb:old1")
         with_steps = service.set_checklist(self.conn, created["reference"], ["write it"])
-        service.attach_ref(self.conn, created["reference"], "commit", "abc1234", author="tester")
+        service.attach_ref(self.conn, created["reference"], "memory", "abc1234", author="tester")
         service.comment_work_item(
             self.conn, created["reference"], "keep this note", author="tester"
         )

@@ -3,7 +3,9 @@
  * every value is a row, none folded, and work on no task and unknown work are rows of their own
  * after them, each with its own words, never merged; the adviser and each launch class are rows
  * of their own; each bar is handed its amount in the measure's units and the hue its value has on
- * the page, the neutral when it has none; and the bars shown add up to the tile's total.
+ * the page, the neutral when it has none; and the bars shown add up to the tile's total. The values
+ * split one whole, so the section draws them as a ring or as bars, opening on the bars by task and
+ * on the ring by any other dimension, and on the bars alone where a second dimension splits it.
  */
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -14,12 +16,14 @@ import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
+import DonutChart from '@/shared/ui/DonutChart.vue'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
 
 import { noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analytics.ts'
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { showView, viewsOf } from '../support/chartViews.ts'
 
 const MONDAY = new Date(2026, 10, 9)
 
@@ -74,6 +78,13 @@ function mountBars(
     props: { rows, by, measure, narrow, slots },
     global: { plugins: [analyticsI18n(locale)] },
   })
+}
+
+/** The section by a dimension that opens on its ring, turned to its bars as a reader turns it. */
+async function mountShownBars(...given: Parameters<typeof mountBars>) {
+  const wrapper = mountBars(...given)
+  await showView(wrapper, '.spending-bars', 'Bars')
+  return wrapper
 }
 
 const barsOf = (wrapper: ReturnType<typeof mountBars>) =>
@@ -137,7 +148,7 @@ describe('the bars', () => {
     expect(unpriced?.value).toBe(0)
   })
 
-  it('keep the adviser and every launch class as rows of their own, however small', () => {
+  it('keep the adviser and every launch class as rows of their own, however small', async () => {
     const roles = answer(
       ['role'],
       [
@@ -146,7 +157,7 @@ describe('the bars', () => {
         { day: 0, group: { role: value('advisor') }, spend: { seconds: 60 } },
       ],
     )
-    const byRole = mountBars(roles.usage.rows, 'role')
+    const byRole = await mountShownBars(roles.usage.rows, 'role')
     expect(byRole.findAll('.ranked-label').map((label) => label.text())).toEqual([
       'Main agent',
       'Subagent',
@@ -160,7 +171,7 @@ describe('the bars', () => {
         spend: { seconds: (index + 1) * 60 },
       })),
     )
-    const byClass = mountBars(classes.usage.rows, 'launch_class')
+    const byClass = await mountShownBars(classes.usage.rows, 'launch_class')
     expect(byClass.findAll('.ranked-row')).toHaveLength(12)
     expect(byClass.find('[data-kind="other"]').exists()).toBe(false)
   })
@@ -202,42 +213,52 @@ describe('the bars', () => {
     { by: 'work_item', locale: 'ru', none: 'Без задачи', unknown: 'Неизвестно' },
     { by: 'launch_class', locale: 'en', none: 'The session itself', unknown: 'Unknown' },
     { by: 'launch_class', locale: 'ru', none: 'Сама сессия', unknown: 'Неизвестно' },
-  ] as const)('name no value and unknown by $by in $locale', ({ by, locale, none, unknown }) => {
-    const rows = answer(
-      [by],
-      [
-        { day: 0, group: { [by]: CATEGORY[by] }, spend: { seconds: 7200 } },
-        { day: 0, group: { [by]: noTask }, spend: { seconds: 3600 } },
-        { day: 0, group: { [by]: unknownTask }, spend: { seconds: 1800 } },
-      ],
-    ).usage.rows
-    const shown = mountBars(rows, by, { locale })
-      .findAll('.ranked-row')
-      .map((row) => [row.attributes('data-kind'), row.get('.ranked-label').text()])
-    expect(shown).toEqual([
-      ['category', by === 'work_item' ? 'MAIN-1 One' : 'general'],
-      ['none', none],
-      ['unknown', unknown],
-    ])
-  })
+  ] as const)(
+    'name no value and unknown by $by in $locale',
+    async ({ by, locale, none, unknown }) => {
+      const rows = answer(
+        [by],
+        [
+          { day: 0, group: { [by]: CATEGORY[by] }, spend: { seconds: 7200 } },
+          { day: 0, group: { [by]: noTask }, spend: { seconds: 3600 } },
+          { day: 0, group: { [by]: unknownTask }, spend: { seconds: 1800 } },
+        ],
+      ).usage.rows
+      const bars = mountBars(rows, by, { locale })
+      if (by !== 'work_item')
+        await showView(bars, '.spending-bars', locale === 'en' ? 'Bars' : 'Полосы')
+      const shown = bars
+        .findAll('.ranked-row')
+        .map((row) => [row.attributes('data-kind'), row.get('.ranked-label').text()])
+      expect(shown).toEqual([
+        ['category', by === 'work_item' ? 'MAIN-1 One' : 'general'],
+        ['none', none],
+        ['unknown', unknown],
+      ])
+    },
+  )
 
-  it.each(['en', 'ru'] as const)('name every role by its name in %s, none unknown', (locale) => {
-    const rows = answer(
-      ['role'],
-      ['main', 'subagent', 'advisor'].map((role) => ({
-        day: 0,
-        group: { role: value(role) },
-        spend: { seconds: 60 },
-      })),
-    ).usage.rows
-    const bars = mountBars(rows, 'role', { locale })
-    expect(bars.findAll('.ranked-row').map((row) => row.attributes('data-kind'))).toEqual([
-      'category',
-      'category',
-      'category',
-    ])
-    expect(bars.text()).not.toMatch(/Unknown|Неизвестно|No task|Без задачи/u)
-  })
+  it.each(['en', 'ru'] as const)(
+    'name every role by its name in %s, none unknown',
+    async (locale) => {
+      const rows = answer(
+        ['role'],
+        ['main', 'subagent', 'advisor'].map((role) => ({
+          day: 0,
+          group: { role: value(role) },
+          spend: { seconds: 60 },
+        })),
+      ).usage.rows
+      const bars = mountBars(rows, 'role', { locale })
+      await showView(bars, '.spending-bars', locale === 'en' ? 'Bars' : 'Полосы')
+      expect(bars.findAll('.ranked-row').map((row) => row.attributes('data-kind'))).toEqual([
+        'category',
+        'category',
+        'category',
+      ])
+      expect(bars.text()).not.toMatch(/Unknown|Неизвестно|No task|Без задачи/u)
+    },
+  )
 
   it('read as a table on a narrow page, with the same rows', () => {
     const rows = answer(['work_item']).usage.rows
@@ -293,8 +314,8 @@ describe('the bars by account', () => {
     ],
   )
 
-  it('name each by the start of its id and keep the whole id for its hint and its table', () => {
-    const bars = mountBars(accounts.usage.rows, 'account')
+  it('name each by the start of its id and keep the whole id for its hint and its table', async () => {
+    const bars = await mountShownBars(accounts.usage.rows, 'account')
 
     expect(barsOf(bars).map((row) => [row.label, row.detail])).toEqual([
       ['3f9a1b2c', FIRST],
@@ -313,5 +334,120 @@ describe('the bars by account', () => {
         .findAll('th[scope="row"]')
         .map((name) => name.text()),
     ).toEqual([`3f9a1b2c${FIRST}`, `77de0a1c${SECOND}`, 'Unknown'])
+  })
+})
+
+/**
+ * The two drawings of the split and the table, switched in the section's heading. The oracle is
+ * the rule of `firstSplitView` as the owner set it: a ring, except where the parts are as many as
+ * the tasks, which open on their bars; a section split by a second dimension draws bars alone; a
+ * narrow page starts on the table; and every view reads the same figures.
+ */
+/** Text as it reads, the narrow spaces in a figure as plain ones. */
+const spaced = (text: string) => text.replaceAll(/\s+/gu, ' ')
+
+describe('the drawings of the split', () => {
+  const MODELS = answer(
+    ['model'],
+    [
+      { day: 0, group: { model: value('model-a') }, spend: { seconds: 3 * 3600 } },
+      { day: 1, group: { model: value('model-b') }, spend: { seconds: 2 * 3600 } },
+      { day: 2, group: { model: value('model-c') }, spend: { seconds: 3600 } },
+    ],
+  ).usage.rows
+  /** Each model's hue on the page, as the page hands them to the section. */
+  const slots = new Map<string, SeriesSlot>([
+    ['v:model-a', 1],
+    ['v:model-b', 2],
+    ['v:model-c', 3],
+  ])
+
+  it('opens a dimension of a few values on its ring and the tasks on their bars', () => {
+    const byModel = mountBars(MODELS, 'model')
+    expect(viewsOf(byModel, '.spending-bars')).toEqual({
+      offered: ['Ring', 'Bars', 'Table'],
+      shown: 'Ring',
+    })
+    expect(byModel.findComponent(DonutChart).exists()).toBe(true)
+    expect(byModel.findComponent(RankedBars).exists()).toBe(false)
+
+    const byTask = mountBars(answer(['work_item']).usage.rows, 'work_item')
+    expect(viewsOf(byTask, '.spending-bars')).toEqual({
+      offered: ['Ring', 'Bars', 'Table'],
+      shown: 'Bars',
+    })
+    expect(byTask.findComponent(DonutChart).exists()).toBe(false)
+  })
+
+  it('reads the same figures as a ring, as bars and as a table', async () => {
+    const section = mountBars(MODELS, 'model', { slots })
+    const ring = section.findAll('.chart-entry').map((one) => spaced(one.text()))
+    // Each part its name, then its figure and its bare share at the end of its line.
+    expect(ring).toEqual(['model-a3 h · 50%', 'model-b2 h · 33%', 'model-c1 h · 17%'])
+    expect(section.find('.donut-share').exists()).toBe(false)
+
+    await showView(section, '.spending-bars', 'Bars')
+    expect(barsOf(section).map((row) => [row.label, spaced(row.valueText)])).toEqual([
+      ['model-a', '3 h'],
+      ['model-b', '2 h'],
+      ['model-c', '1 h'],
+    ])
+    await showView(section, '.spending-bars', 'Table')
+    expect(
+      section
+        .getComponent(RankedBarsTable)
+        .findAll('tbody tr')
+        .map((row) => spaced(row.text())),
+    ).toEqual(['model-a3 h', 'model-b2 h', 'model-c1 h'])
+    // Back to the ring, which the reader chose last: the choice stands.
+    await showView(section, '.spending-bars', 'Ring')
+    expect(viewsOf(section, '.spending-bars').shown).toBe('Ring')
+  })
+
+  it('draws a section split by a second dimension as bars alone, and starts a narrow page on the table', async () => {
+    const split = mount(SpendingBars, {
+      props: {
+        rows: answer(
+          ['model', 'effort'],
+          [
+            {
+              day: 0,
+              group: { model: value('model-a'), effort: value('high') },
+              spend: { seconds: 60 },
+            },
+          ],
+        ).usage.rows,
+        by: 'model',
+        across: 'effort',
+        measure: 'time',
+        narrow: false,
+        slots: new Map<string, SeriesSlot>(),
+      },
+      global: { plugins: [analyticsI18n('en')] },
+    })
+    expect(viewsOf(split, '.spending-bars')).toEqual({ offered: ['Bars', 'Table'], shown: 'Bars' })
+    expect(split.findComponent(DonutChart).exists()).toBe(false)
+
+    const narrow = mountBars(MODELS, 'model', { narrow: true })
+    expect(viewsOf(narrow, '.spending-bars').shown).toBe('Table')
+    expect(narrow.findComponent(DonutChart).exists()).toBe(false)
+  })
+
+  it('leaves no value to the table under the ring, and the first twelve to the bars', async () => {
+    const many = answer(
+      ['model'],
+      Array.from({ length: 14 }, (_, index) => ({
+        day: 0,
+        group: { model: value(`model-${String(index).padStart(2, '0')}`) },
+        spend: { seconds: (14 - index) * 60 },
+      })),
+    ).usage.rows
+    const section = mountBars(many, 'model')
+    // The ring folds its own rest: no line asks for the table.
+    expect(section.text()).not.toContain('2 more in the table')
+    expect(section.findAll('.chart-key-name').at(-1)?.text()).toMatch(/^Other, \d+ more$/u)
+    await showView(section, '.spending-bars', 'Bars')
+    expect(section.findAll('.ranked-row')).toHaveLength(12)
+    expect(section.text()).toContain('2 more')
   })
 })

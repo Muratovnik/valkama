@@ -57,7 +57,7 @@ function press() {
 
 <template>
   <button
-    v-tooltip:right.name="t('session.open')"
+    v-tooltip.name="t('session.open')"
     class="nav-row-open reveal"
     type="button"
     :class="sized"

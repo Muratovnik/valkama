@@ -34,7 +34,10 @@ row's call on.
   client proved takes every open row on the containers over the task (`tree`) and
   in its space (`space`), in the claim's own transaction: a claim that is refused
   and rolled back leaves them open. The row records the session, its agent, the
-  call and the time; the agent reads the words in its answer (`delivered`).
+  call and the time; the agent reads the words in its answer (`delivered`). A
+  session hears each act once: a delivery gives one entry per container and leaves out
+  the acts that session already got through any row of that container, while both rows
+  stay as the record. A container with nothing left for the session is no entry.
 
 A row never lapses: words are not stale because nobody was there to hear them.
 A delivered one stays as the record of who got them, and a row goes with its item.
@@ -86,8 +89,14 @@ _DELIVER = (
     " (SELECT work_item_id FROM work_items WHERE planning_space_id = ?)))"
 )
 _DELIVERED = (
-    "SELECT n.work_item_id, n.from_call FROM work_item_waiting_notices n"
+    "SELECT n.work_item_id, n.from_call, n.delivered_session FROM work_item_waiting_notices n"
     " WHERE n.delivered_call = ? ORDER BY n.notice_id"
+)
+#: What a session got from a container's earlier rows: each row's first call up to the
+#: call that delivered it, every act between them having been in that delivery.
+_GOT = (
+    "SELECT from_call, delivered_call FROM work_item_waiting_notices"
+    " WHERE work_item_id = ? AND delivered_session = ? AND delivered_call < ?"
 )
 #: A delivered row that gave its session the act at a call: it started at or before
 #: that call and was delivered after it.
@@ -249,25 +258,70 @@ def deliver(conn: sqlite3.Connection, row: sqlite3.Row) -> int:
     ).rowcount
 
 
-def delivered(conn: sqlite3.Connection, call: int) -> list[dict]:
-    """The words the rows delivered by `call` hold, for the claiming agent's answer.
+def new_words(
+    conn: sqlite3.Connection, session_id: str, container: str, first: int, call: int
+) -> list[tuple[int, dict]]:
+    """The acts on `container` from call `first` that `session_id` has not had, before `call`.
 
-    One entry per row: the container's `reference` and `title`, and `said`, what
-    waits on it from the row's call on (`person_events.unheard`), in the entries of `from_person`,
-    the newest `person_events.MOST_SHOWN`, with `omitted` counting the earlier ones.
+    What waits (`person_events.unheard`), less the acts an earlier delivery of this
+    session already gave it through any row of the container (`_GOT`). Every reader of
+    delivered rows takes its words from here, so a session hears each act once.
+    """
+
+    covered = [
+        (int(start), int(end))
+        for start, end in conn.execute(_GOT, (container, session_id, call)).fetchall()
+    ]
+    return [
+        (act, entry)
+        for act, entry in person_events.unheard(conn, container, first - 1)
+        if act < call and not any(start <= act <= end for start, end in covered)
+    ]
+
+
+def containers_left(
+    conn: sqlite3.Connection, session_id: str, starts: Iterable[tuple[str, int]], call: int
+) -> list[tuple[str, list[tuple[int, dict]]]]:
+    """The containers in `starts`, each with its `new_words` before `call`, if any are left.
+
+    Every reader of delivered rows takes its containers from here: a container with
+    nothing left for the session is no entry in the claim's answer nor in the feed.
     """
 
     found = []
-    for work_item_id, from_call in conn.execute(_DELIVERED, (call,)).fetchall():
-        container = read_model.item_by_id(conn, str(work_item_id))
-        said = [
-            entry
-            for _call, entry in person_events.unheard(conn, str(work_item_id), int(from_call) - 1)
-        ]
+    for container, first in starts:
+        words = new_words(conn, session_id, container, first, call)
+        if words:
+            found.append((container, words))
+    return found
+
+
+def delivered(conn: sqlite3.Connection, call: int) -> list[dict]:
+    """The words the rows delivered by `call` hold, for the claiming agent's answer.
+
+    One entry per container that still has words left for the session, though a claim
+    can take both of its rows: the container's `reference` and `title`, and `said`, what
+    waits on it from the earliest of those rows on, less what this session already got
+    (`new_words`), in the entries of `from_person`, the newest `person_events.MOST_SHOWN`,
+    with `omitted` counting the earlier ones.
+    """
+
+    rows = conn.execute(_DELIVERED, (call,)).fetchall()
+    if not rows:
+        return []
+    session = str(rows[0][2])
+    starts: dict[str, int] = {}
+    for work_item_id, from_call, _session in rows:
+        container = str(work_item_id)
+        starts[container] = min(starts.get(container, int(from_call)), int(from_call))
+    found = []
+    for container, words in containers_left(conn, session, starts.items(), call):
+        said = [entry for _call, entry in words]
         shown = said[-person_events.MOST_SHOWN :]
+        item = read_model.item_by_id(conn, container)
         entry: dict = {
-            "reference": read_model.reference(conn, container),
-            "title": str(container["title"]),
+            "reference": read_model.reference(conn, item),
+            "title": str(item["title"]),
             "said": shown,
         }
         if len(said) > len(shown):

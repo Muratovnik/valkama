@@ -261,6 +261,10 @@ HTTP_READS: dict[str, list[Args]] = {
     "/api/planning/held": [_q(lambda _case: {"session": SESSION})],
     "/api/planning/participation": [_none, _q(lambda _case: {"space": KEY})],
     "/api/planning/decisions": [_none, _q(lambda _case: {"space": KEY, "point": "decision"})],
+    "/api/planning/commits/unattached": [
+        _q(lambda _case: {"space": KEY}),
+        _q(lambda _case: {"project": PROJECT}),
+    ],
 }
 HTTP_WRITES: dict[str, list[Args]] = {
     "/api/planning/spaces": [lambda _case: {"name": "Other", "key": "OX"}],
@@ -359,6 +363,10 @@ HTTP_WRITES: dict[str, list[Args]] = {
     ],
     "/api/planning/work-item/ref": [
         _with(_ids(id="S"), kind="url", value="https://example.invalid/stage")
+    ],
+    "/api/planning/work-item/commit": [
+        _with(_ids(reference="S"), repository=PROJECT, hash=lambda case: case.commits["b"]),
+        _with(_ids(reference="G"), repository=PROJECT, hash=lambda case: case.commits["G"]),
     ],
     "/api/planning/work-item/apply": [
         _with(_ids(id="G"), comment={"body": "A note"}, summary=SUMMARY),
@@ -469,7 +477,7 @@ PLACES: tuple[tuple[str, str, str, str], ...] = (
     ("builds", "server.planning.live_frame", "_item", "states.public_state("),
     ("builds", "server.planning.live_frame", "_Item", "accepted_open"),
     ("builds", "server.planning.live_frame", "_row", "container_state"),
-    ("builds", "server.released", "_open_commit_refs", "s.key, s.name, s.category, s.is_terminal"),
+    ("builds", "server.released", "_open_commits", "s.key, s.name, s.category, s.is_terminal"),
     ("builds", "server.released", "released_items", "states.public_state("),
     ("builds", "server.released", "render", "item['state']"),
     ("builds", "server.planning.views", "stale_claims", "states.public_state("),
@@ -524,6 +532,7 @@ class Surfaces(unittest.TestCase):
     report: int
     revision: int
     data_scope_id: str
+    commits: dict[str, str]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -583,7 +592,18 @@ class Surfaces(unittest.TestCase):
         for name in ("G", "S2", "H", "b"):
             cls._git("commit", "--allow-empty", "-m", f"feat: the work of {name}")
             commits[name] = cls._git("rev-parse", "HEAD")
-            service.attach_ref(conn, tree.refs[name], "commit", commits[name][:12])
+            # Attached as the project the registry places at the repository.
+            commit_id = conn.execute(
+                "INSERT INTO commits(project_id, hash, subject, reported_at)"
+                " VALUES (?, ?, ?, '2026-01-02T03:04:05Z')",
+                (PROJECT, commits[name], f"feat: the work of {name}"),
+            ).lastrowid
+            conn.execute(
+                "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+                " VALUES (?, ?, 'manual')",
+                (tree.ids[name], commit_id),
+            )
+        cls.commits = commits
         # The live frame shows what holds live work and what is pinned, and no session
         # holds anything here: pinned, the goal and its stages are its rows.
         for name in ("G", "S", "S2"):

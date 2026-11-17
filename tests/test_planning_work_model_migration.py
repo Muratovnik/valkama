@@ -33,6 +33,7 @@ from server.planning import images as planning_images
 from server.planning import service as planning_service
 from server.planning import store as planning_store
 from server.planning import work_model_migration as migration
+from server.projects import registry_owner
 from server.store_identity.refs import planning_space_entity
 from tests import registry_fixtures, schema9, schema17
 
@@ -48,6 +49,9 @@ STEP_NAMES = [
     *(f"M{number}" for number in range(16)),
     "deferred-items",
     "history-actions",
+    "commits",
+    "commit-refs",
+    "refs-without-commits",
     "participation",
     "agent-decisions",
     "pending-actions",
@@ -57,6 +61,7 @@ POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(1, 16)),
     *(f"P{number}" for number in range(18, 31)),
     "deferred-items",
+    *(f"P{number}" for number in range(31, 36)),
     "participation",
     "agent-decisions",
     "pending-actions",
@@ -591,8 +596,8 @@ class MigratedStoreTests(StoreCase):
         self.assertEqual(os.path.join(self.directory.name, "backups"), os.path.dirname(point))
         digest = hashlib.sha256(PICTURE).hexdigest()
         self.assertTrue(os.path.isfile(os.path.join(store_backups.images_beside(point), digest)))
-        # Restored as README says: the copy in the store's place opens as the store 2.9
-        # left, which this build refuses until the migration runs again.
+        # Restored as the store upgrades guide says: the copy in the store's place opens as
+        # the store 2.9 left, which this build refuses until the migration runs again.
         restored = os.path.join(self.directory.name, "restored", "valkama.sqlite3")
         os.makedirs(os.path.dirname(restored))
         shutil.copyfile(point, restored)
@@ -874,7 +879,59 @@ class MigratedStoreTests(StoreCase):
             details,
         )
 
-    def test_m15_gives_a_row_to_each_goal_or_stage_awaiting_confirmation(self) -> None:
+    def test_commits_creates_the_commit_tables_empty_and_shaped_as_a_fresh_store(self) -> None:
+        names = {
+            (str(row[0]), str(row[1]))
+            for row in self.read(
+                "SELECT type, name FROM sqlite_master"
+                " WHERE tbl_name IN ('commits', 'work_item_commits')"
+            )
+        }
+        self.assertLessEqual(
+            {
+                ("table", "commits"),
+                ("index", "commits_pair"),
+                ("index", "commits_session"),
+                ("table", "work_item_commits"),
+                ("index", "work_item_commits_by_commit"),
+            },
+            names,
+        )
+        [step] = [step for step in self.report["steps"] if step["name"] == "commits"]
+        self.assertEqual(
+            (True, {"tables_created": ["commits", "work_item_commits"]}),
+            (step["needed"], step["result"]),
+        )
+        details = {entry["name"]: entry["detail"] for entry in self.report["postconditions"]}
+        # `fresh-shape` compared their shape with a fresh store's and probed the hash CHECK;
+        # `row-counts` counts both, at nothing, and `fresh-tables` leaves them to it.
+        self.assertEqual(0, details["row-counts"]["tables"]["commits"])
+        self.assertEqual(0, details["row-counts"]["tables"]["work_item_commits"])
+        self.assertNotIn("commits", details["fresh-tables"]["added"])
+
+    def test_the_refs_are_rebuilt_to_take_no_commit_as_a_fresh_store(self) -> None:
+        [step] = [step for step in self.report["steps"] if step["name"] == "refs-without-commits"]
+        self.assertTrue(step["needed"])
+        self.assertEqual(
+            (["commit", "memory", "session", "url"], ["memory", "session", "url"]),
+            (step["result"]["kinds_before"], step["result"]["kinds"]),
+        )
+        details = {entry["name"]: entry["detail"] for entry in self.report["postconditions"]}
+        self.assertEqual(
+            {"commit_refs_left": 0, "kinds": ["memory", "session", "url"]},
+            details["no-commit-refs"],
+        )
+        conn = sqlite3.connect(self.path)
+        try:
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK constraint failed"):
+                conn.execute(
+                    "INSERT INTO work_item_refs(work_item_id, kind, value) VALUES(?, 'commit', ?)",
+                    (self.ids["WM-1"], "abcdef0"),
+                )
+        finally:
+            conn.close()
+
+    def test_confirmations_gives_a_row_to_each_goal_or_stage_awaiting_confirmation(self) -> None:
         """Every child of WM-18 is done: it awaits, since the migration, with no call."""
 
         rows = self.read(
@@ -1685,8 +1742,11 @@ class NeverPlannedStoreTests(StoreCase):
         self.addCleanup(self.directory.cleanup)
         self.path = os.path.join(self.directory.name, "valkama.sqlite3")
         schema17.build_2_9(self.path)
-        registry(self, self.directory.name, bound={})
+        self.set_registry()
         self.file = item_projects_file(self.path, self.directory.name)
+
+    def set_registry(self) -> None:
+        registry(self, self.directory.name, bound={})
 
     def assert_never_planned(self) -> None:
         self.assertEqual(
@@ -1744,6 +1804,24 @@ class NeverPlannedStoreTests(StoreCase):
                 "container",
             },
             {str(row[0]) for row in self.read("SELECT category FROM workflow_states")},
+        )
+
+
+class NoRegistryStoreTests(NeverPlannedStoreTests):
+    """The same store on a machine that never registered a project: no inventory and no
+    projection. `projects upgrade` writes the empty registry, and the migration reads it
+    as it reads one of a store that never had a space."""
+
+    def set_registry(self) -> None:
+        folder = os.path.join(self.directory.name, "localappdata")
+        os.makedirs(os.path.join(folder, "Valkama"))
+        patcher = mock.patch.dict(os.environ, {"LOCALAPPDATA": folder})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.assertTrue(
+            registry_owner.upgrade(
+                registry_owner.inventory_path(), registry_owner.projection_path()
+            )
         )
 
 
@@ -1915,6 +1993,27 @@ FAULTS = (
     ),
     fault("fresh-tables", "CREATE TABLE stray_rows(id INTEGER PRIMARY KEY)"),
     fault(
+        "row-counts",
+        "INSERT INTO commits(project_id, hash, reported_at)"
+        " VALUES('alpha', 'abcdef0', '2026-01-02T03:04:05Z')",
+    ),
+    fault(
+        "other-refs",
+        "INSERT INTO work_item_refs(work_item_id, kind, value) VALUES(?, 'url', 'https://x.invalid')",
+        lambda ids: (ids["WM-9"],),
+    ),
+    fault(
+        "commits-attached",
+        "INSERT INTO commits(project_id, hash, reported_at)"
+        " VALUES('alpha', 'abcdef0', '2026-01-02T03:04:05Z')",
+    ),
+    fault(
+        "commit-projects",
+        "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+        " VALUES(?, 'stray', 'commits')",
+        lambda ids: (ids["WM-9"],),
+    ),
+    fault(
         "participation",
         "INSERT INTO participation_settings(planning_space_id, key, value, updated_at)"
         " SELECT planning_space_id, 'finding', 'agent', 'x' FROM planning_spaces WHERE key = 'WM'",
@@ -2056,6 +2155,16 @@ P1_FAULTS = (
         "with {'category': 'backlog'} is taken, a fresh store refuses it",
     ),
     (
+        "the commits take a hash of six characters",
+        rebuilt("commits", "length(hash) BETWEEN 7 AND 64", "length(hash) BETWEEN 6 AND 64"),
+        "with {'hash': '000000'} is taken, a fresh store refuses it",
+    ),
+    (
+        "the commits take a hash in capitals",
+        rebuilt("commits", " AND hash NOT GLOB '*[^0-9a-f]*'", ""),
+        f"with {{'hash': '{'A' * 40}'}} is taken, a fresh store refuses it",
+    ),
+    (
         "a table holds a CHECK a fresh store does not declare",
         rebuilt(
             "work_item_refs", "value TEXT NOT NULL,", "value TEXT NOT NULL CHECK(value != ''),"
@@ -2125,6 +2234,32 @@ CLAUSE_FAULTS: tuple[
             )
         ],
         ["integrity", "no-old-waiting", "fresh-tables"],
+    ),
+    (
+        "row-counts",
+        "commits holds 1 rows, not 0",
+        lambda _ids: [
+            (
+                "INSERT INTO commits(project_id, hash, reported_at)"
+                " VALUES('alpha', 'abcdef0', '2026-01-02T03:04:05Z')",
+                (),
+            )
+        ],
+        # A commit attached to nothing, which the commits' own postcondition sees too.
+        ["row-counts", "commits-attached"],
+    ),
+    (
+        "row-counts",
+        "work_item_commits holds 1 rows, not 0",
+        lambda ids: [
+            (
+                "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+                " VALUES(?, 1, 'manual')",
+                (ids["WM-9"],),
+            )
+        ],
+        # The attachment names a commit no row holds, which the foreign keys see too.
+        ["row-counts", "integrity"],
     ),
     (
         "pending-actions",
@@ -2376,7 +2511,34 @@ class RollbackTests(StoreCase):
                 self.own_store()
                 self.assert_only(once(says, several(statements, self.ids)), failed, name, says)
 
-    def test_p16_refuses_a_step_a_second_run_would_take_again(self) -> None:
+    def test_no_commit_refs_refuses_refs_that_take_a_commit_again_and_hold_one(self) -> None:
+        widened = rebuilt("work_item_refs", "'memory',", "'commit','memory',")
+
+        def write(conn: sqlite3.Connection, context: store_steps.Context) -> None:
+            widened(conn, context)
+            conn.execute(
+                "INSERT INTO work_item_refs(work_item_id, kind, value) VALUES(?, 'commit', ?)",
+                (self.ids["WM-9"], "abcdef0"),
+            )
+
+        report = self.refused(once("the refs take a commit again", write))
+        # `fresh-shape` probes the retired kind, `row-counts` counts the row, `other-refs`
+        # finds it on its item and `second-run` sees the rebuild needed again.
+        self.assertEqual(
+            ["fresh-shape", "row-counts", "no-commit-refs", "other-refs", "second-run"],
+            report["failed"],
+        )
+        entry = next(
+            entry for entry in report["postconditions"] if entry["name"] == "no-commit-refs"
+        )
+        self.assertIn("1 refs of the kind commit are left", entry["error"])
+        self.assertIn(
+            "work_item_refs takes the kinds ['commit', 'memory', 'session', 'url'],"
+            " a fresh store ['memory', 'session', 'url']",
+            entry["error"],
+        )
+
+    def test_second_run_refuses_a_step_a_second_run_would_take_again(self) -> None:
         step = store_steps.Step("again", "always", again)
         self.assertIn("second-run", self.refused(step)["failed"])
 

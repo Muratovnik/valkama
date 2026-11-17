@@ -242,7 +242,7 @@ class LabelEditTests(BatchCase):
         # The card's strict reader refuses an item over an action or a detail it does not
         # expect, so the two lists and the two bounds move together.
         source = WEB_ACTIONS.read_text(encoding="utf-8")
-        listed = source.split("export const EVENT_ACTIONS = [", 1)[1].split("]", 1)[0]
+        listed = source.split("const EVENT_ACTIONS = [", 1)[1].split("]", 1)[0]
         self.assertEqual(set(model.EVENT_ACTIONS), set(re.findall(r"'([a-z_]+)'", listed)))
         bound = re.search(r"LABELS_DETAIL_MAX = ([\d_]+)", source)
         assert bound is not None

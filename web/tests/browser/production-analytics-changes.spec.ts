@@ -13,6 +13,7 @@ import type { Locator, Page } from '@playwright/test'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { NONE, SWITCHING, TWO } from './served/analyticsChanges.ts'
 import { test } from './test.ts'
+
 /** Opens the overview at a window size and waits for its chart of days to stand. */
 async function openOverview(page: Page, width: number, height: number, address = pageAt()) {
   await page.setViewportSize({ width, height })

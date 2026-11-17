@@ -15,7 +15,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { isSpendRead, SPENT_WORLD } from '../fixtures/quotaSpent.ts'
-import { pageAt, record, serve, shortfalls } from './analyticsPage.ts'
+import { openPanel, pageAt, record, serve, shortfalls } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
@@ -29,17 +29,10 @@ const accountNamed = (page: Page, name: string) =>
 const blockOf = (page: Page, name: string) =>
   accountNamed(page, name).locator('.quota-window[data-window="five_hour"] .window-spend')
 
-/**
- * Opens the five hours' panel: where the window is too narrow for the rail beside it, the address
- * opens the list of sections, and the section is chosen there, as a reader would.
- */
+/** Opens the five hours' panel, from the list of sections where a narrow window shows it first. */
 async function openFiveHours(page: Page) {
-  await page.goto(FIVE_HOURS)
-  const panel = page.locator('.quota-panel')
-  await page.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
-  if (!(await panel.isVisible()))
-    await page.locator('.analytics-rail [data-section="quota_five_hour"]').click()
-  await expect(panel).toBeVisible()
+  await openPanel(page, FIVE_HOURS)
+  await expect(page.locator('.quota-panel')).toBeVisible()
 }
 
 /** Settled: the panel has its accounts and every block has its answer or its failure. */
@@ -116,6 +109,9 @@ for (const colorScheme of ['light', 'dark'] as const)
       )
       await expect(blockOf(page, 'a1b2c3d4')).toHaveAttribute('data-state', 'unplaced')
       await expect(blockOf(page, 'a1b2c3d4')).toContainText('with the account unknown')
+      // A block with nothing to draw offers no view to draw it in.
+      for (const account of ['7e6d5c4b', 'a1b2c3d4'])
+        await expect(blockOf(page, account).getByRole('radio', { name: 'Ring' })).toHaveCount(0)
 
       // No dollar among the quota's shares, no quota share in a block, and each block under its
       // window's bar and readings, not beside them.
@@ -198,7 +194,9 @@ test('a block that waits says so once the wait has lasted, and one whose read fa
   await expect(work).toHaveAttribute('data-state', 'loading')
   await expect(work.locator('.window-spend-body')).toHaveText('Loading')
   // The window's own figures stand meanwhile.
-  await expect(accountNamed(page, 'Work').locator('.window-value').first()).toHaveText('62% used')
+  await expect(accountNamed(page, 'Work').locator('.quota-window-lead').first()).toHaveText(
+    '62% used · fresh',
+  )
   await page.locator('.analytics-panel').screenshot(shot(info, 'quota-spent-waiting.png'))
 
   answer = 'fail'

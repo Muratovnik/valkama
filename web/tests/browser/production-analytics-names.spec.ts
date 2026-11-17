@@ -16,6 +16,7 @@ import { serveUsage } from '../fixtures/analytics.ts'
 import { quotaAt } from '../fixtures/quota.ts'
 import { pageAt, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
+import { drawLined } from './drawnViews.ts'
 import { globalScope } from './planningFixtures.ts'
 import { MAIN_ID, SIDE_ID, WORLD } from './served/analyticsNames.ts'
 import { test } from './test.ts'
@@ -43,6 +44,8 @@ async function open(page: Page, state: Record<string, string> = {}) {
   await page.goto(pageAt(state))
   const analytics = page.locator('.analytics-page')
   await expect(analytics.locator('.tile-figure[data-measure="time"]')).toBeVisible()
+  // A section's names are read in its bars, whichever drawing it opens on.
+  if (state.by) await drawLined(analytics.locator('.spending-bars'))
   return analytics
 }
 

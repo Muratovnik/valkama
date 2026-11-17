@@ -1,53 +1,69 @@
 /*
  * The hue a series' mark is filled with, read by each chart as its own scoped style: a mark
  * carries `.series-fill` and the `data-slot` that `seriesSlots()` (`seriesColors.ts`) gave its
- * series. One place maps a slot to its token, so a ranked bar, a stacked segment and a legend's
- * swatch cannot disagree about which hue an account is.
+ * series. One place maps a slot to its token, so a ranked bar, a stacked segment, a ring's sector
+ * and a legend's swatch cannot disagree about which hue an account is. A box is painted by its
+ * background, a shape of a drawing (`DonutChart`) by its fill, both from the one hue.
+ *
+ * A mark under the pointer or the keyboard lifts, and every mark lifts to one paint: its hue
+ * raised by a fixed step of lightness (`--series-lifted`), which the chart paints the mark with
+ * where the mark is pointed at, focused, or stands in the larger box that takes the pointer — a
+ * ranked row, a period, a small chart's period. Only the paint changes, never the mark's size or
+ * what the pointer meets. The step is of lightness and not a share of the way to white, so it
+ * shows on the light greys as on the hues: a share of the way left the lighter grey a step no eye
+ * finds.
  *
  * A forced palette clears every fill, so a mark there names the palette's ink itself and keeps
- * the gaps between marks: the legend's order and the table say which series is which.
+ * the gaps between marks: the legend's order and the table say which series is which. A lifted
+ * mark takes the palette's highlight there.
  */
 .series-fill {
-  background: var(--color-series-1);
+  --series-hue: var(--color-series-1);
+  --series-lifted: oklch(from var(--series-hue) calc(l + 0.08) c h);
+
+  background: var(--series-hue);
+  fill: var(--series-hue);
 
   &[data-slot='2'] {
-    background: var(--color-series-2);
+    --series-hue: var(--color-series-2);
   }
 
   &[data-slot='3'] {
-    background: var(--color-series-3);
+    --series-hue: var(--color-series-3);
   }
 
   &[data-slot='4'] {
-    background: var(--color-series-4);
+    --series-hue: var(--color-series-4);
   }
 
   &[data-slot='5'] {
-    background: var(--color-series-5);
+    --series-hue: var(--color-series-5);
   }
 
   &[data-slot='6'] {
-    background: var(--color-series-6);
+    --series-hue: var(--color-series-6);
   }
 
   &[data-slot='apart'] {
-    background: var(--color-series-apart);
+    --series-hue: var(--color-series-apart);
   }
 
   &[data-slot='other'] {
-    background: var(--color-series-other);
+    --series-hue: var(--color-series-other);
   }
 
   @media (forced-colors: active) {
     &,
     &[data-slot] {
-      background: CanvasText;
+      --series-hue: CanvasText;
+      --series-lifted: Highlight;
+
       forced-color-adjust: none;
     }
 
     &[data-slot='apart'],
     &[data-slot='other'] {
-      background: GrayText;
+      --series-hue: GrayText;
     }
   }
 }

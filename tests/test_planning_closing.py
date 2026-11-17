@@ -873,6 +873,14 @@ class Waiting(Tree):
             )
         ]
 
+    def heard(self, answer: dict) -> list[tuple[str, list[str]]]:
+        """The goal or stage a claim's answer names, with the kinds of the words it hands over."""
+
+        return [
+            (entry["reference"], [said["kind"] for said in entry["said"]])
+            for entry in answer.get("waiting", [])
+        ]
+
     def written(self) -> tuple:
         """What a refused write must leave as it was."""
 
@@ -973,6 +981,68 @@ class OwnerQuestionTests(Waiting):
         )
         self.assertEqual({}, self.sweep(NOW + timedelta(days=3)))
         self.assertEqual(1, len(self.questions(self.goal)))
+
+    def test_a_claim_under_the_goal_hears_what_leave_left_once(self) -> None:
+        """Filing and claiming a task under the goal in one call takes both rows leave left."""
+
+        self.sweep()
+        [asked] = self.questions(self.goal)
+        self.answer(asked, "leave")
+        self.assertEqual(["tree", "space"], self.open_notices(self.goal))
+        created = self.agent(
+            "create_work_item",
+            AS_A,
+            space="MAIN",
+            title="T under the goal",
+            parent=self.goal,
+            claim=True,
+        )
+        self.assertEqual(
+            [(self.goal, ["steps_edited", "awaiting_confirmation", "question_answered"])],
+            self.heard(created),
+        )
+
+    def test_a_session_that_took_the_words_outside_the_goal_hears_them_once_under_it(self) -> None:
+        self.sweep()
+        [asked] = self.questions(self.goal)
+        self.answer(asked, "leave")
+        elsewhere = self.made("T outside the goal")
+        # The space row starts at the leave, so the claim outside it takes that answer only.
+        outside = self.agent("claim_work_item", AS_A, id=elsewhere)
+        self.assertEqual([(self.goal, ["question_answered"])], self.heard(outside))
+        self.assertEqual(["tree"], self.open_notices(self.goal), "the space row went to the claim")
+        created = self.agent(
+            "create_work_item",
+            AS_A,
+            space="MAIN",
+            title="T under the goal",
+            parent=self.goal,
+            claim=True,
+        )
+        self.assertEqual(
+            [(self.goal, ["steps_edited", "awaiting_confirmation"])],
+            self.heard(created),
+            "the session already had the leave's answer; the tree row's earlier words are new",
+        )
+
+    def test_a_second_session_under_the_goal_still_hears_the_tree_row(self) -> None:
+        self.sweep()
+        [asked] = self.questions(self.goal)
+        self.answer(asked, "leave")
+        self.agent("claim_work_item", AS_A, id=self.made("T outside the goal"))
+        created = self.agent(
+            "create_work_item",
+            AS_B,
+            space="MAIN",
+            title="T under the goal",
+            parent=self.goal,
+            claim=True,
+        )
+        self.assertEqual(
+            [(self.goal, ["steps_edited", "awaiting_confirmation", "question_answered"])],
+            self.heard(created),
+            "the tree row was still open for this session",
+        )
 
     def test_an_own_variant_carries_nothing_out(self) -> None:
         self.sweep()

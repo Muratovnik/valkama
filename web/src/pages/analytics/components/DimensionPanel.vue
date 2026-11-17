@@ -16,8 +16,9 @@
  * The hues are ranked over the period without the page's filters (`useColourPlaces`), the values'
  * and the pairs' alike, so a filter that takes some away leaves the rest the hues they had.
  *
- * It runs in the panel's one scroll: the figures, the charts at their own height and the table at
- * its full height under them, nothing scrolling up and down on its own. A «To the table» line over
+ * It runs in the panel's one scroll: the figures and the charts at their own height and the table
+ * under them, held to about the window's height and scrolling inside its own frame, the one part
+ * of the panel that does (`SpendingTable`). A «To the table» line over
  * the charts, like the line under the ranked list that counts the values it leaves out, brings the
  * table into view with the focus on it (`SpendingTable`'s `reveal`).
  *

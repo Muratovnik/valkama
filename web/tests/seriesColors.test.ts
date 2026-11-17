@@ -6,21 +6,34 @@
  * and the neutral `apart` (no value, unknown) under the neutral `other` (the folded rest) — stays
  * apart under protanopia and deuteranopia by an OKLab distance of 0.08 and under ordinary vision
  * by 0.15; each hue sits in the dark lightness band (OKLCH L 0.48–0.67) with chroma 0.10 or more,
- * each neutral is a grey, and every mark stands at 3:1 on every ground a chart lies on. The
- * assignment is held to its promise: a colour follows the name, whatever the order or the values.
+ * each neutral is a grey, and every mark stands at 3:1 on every ground a chart lies on. Any two
+ * hues meet in a ring, so the pairs that fall short apart from a stack are exactly the close pairs
+ * the module lists (`CLOSE_SLOTS`), and the first four hues make none of them. The assignment is
+ * held to its promise: a colour follows the name, whatever the order or the values.
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 import { describe, test } from 'vitest'
 
-import { SERIES_SLOT_COUNT, seriesSlots } from '@/shared/lib/seriesColors.ts'
+import {
+  apartInAnyPair,
+  CLOSE_SLOTS,
+  SERIES_SLOT_COUNT,
+  seriesSlots,
+} from '@/shared/lib/seriesColors.ts'
+import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 
 import { apart, contrast, seen, token } from './paletteColors.ts'
 
 const slots = Array.from({ length: SERIES_SLOT_COUNT }, (_, index) => index + 1)
 const NEUTRALS = ['apart', 'other'] as const
 const hue = (slot: number | (typeof NEUTRALS)[number]) => token(`--color-series-${slot}`)
+/** Whether two hues fall short of what a pair owes any reader: the checks of a stack's neighbours. */
+const fallsShort = (first: number, second: number) =>
+  apart(hue(first), hue(second), 'protanopia') < 0.08 ||
+  apart(hue(first), hue(second), 'deuteranopia') < 0.08 ||
+  apart(hue(first), hue(second), 'ordinary') < 0.15
 const CHART_GROUNDS = ['--color-surface-recess', '--color-surface', '--color-surface-sheet']
 
 describe('the assignment', () => {
@@ -74,11 +87,16 @@ describe('the assignment', () => {
 describe('the palette', () => {
   test('every slot the assignment hands out is a token, and one fill rule draws each', () => {
     const fill = readFileSync(new URL('../src/shared/ui/seriesFill.css', import.meta.url), 'utf8')
-    assert.match(fill, /\.series-fill \{\s*background: var\(--color-series-1\);/u)
+    // One hue a mark is drawn in, painting a box's background and a drawn shape's fill alike, and
+    // the one lift every mark takes is that hue raised.
+    assert.match(
+      fill,
+      /\.series-fill \{\s*--series-hue: var\(--color-series-1\);\s*--series-lifted: oklch\(from var\(--series-hue\) [^;]+\);\s*background: var\(--series-hue\);\s*fill: var\(--series-hue\);/u,
+    )
     for (const slot of [...slots.slice(1), ...NEUTRALS] as const) {
       hue(slot)
       const rule = new RegExp(
-        String.raw`\[data-slot='${slot}'\] \{\s*background: var\(--color-series-${slot}\);`,
+        String.raw`\[data-slot='${slot}'\] \{\s*--series-hue: var\(--color-series-${slot}\);`,
         'u',
       )
       assert.match(fill, rule, `no fill for slot ${slot}`)
@@ -98,6 +116,25 @@ describe('the palette', () => {
       const distance = apart(hue(first), hue(second), 'ordinary')
       assert.ok(distance >= 0.15, `${first} and ${second}: ${distance.toFixed(3)} (ordinary)`)
     }
+  })
+
+  test('the close pairs are exactly the pairs of hues a reader could take for one', () => {
+    const listed = new Set(CLOSE_SLOTS.map(([first, second]) => `${first}-${second}`))
+    for (const first of slots)
+      for (const second of slots.filter((slot) => slot > first)) {
+        const pair = `${first}-${second}`
+        assert.equal(listed.has(pair), fallsShort(first, second), `pair ${pair}`)
+        assert.equal(
+          apartInAnyPair(first as SeriesSlot, second as SeriesSlot),
+          !listed.has(pair),
+          `pair ${pair}`,
+        )
+      }
+    // A ring of the first four hues and both neutrals has no close pair.
+    assert.ok(CLOSE_SLOTS.every(([, second]) => second > 4))
+    assert.equal(apartInAnyPair('apart', 'other'), true)
+    assert.equal(apartInAnyPair('apart', 'apart'), false)
+    assert.equal(apartInAnyPair(3, 3), false)
   })
 
   test('each hue is a colour of the dark band, not a grey, and reads as a mark on every ground', () => {

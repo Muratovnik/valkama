@@ -7,9 +7,14 @@ export declare function scanNativeTitles(
   register?: ReadonlyMap<string, string>,
 ): string[]
 
-export declare const DETAIL_TOOLTIPS: ReadonlyMap<string, string>
-
 export declare function scanTooltipKinds(
+  sources: readonly UiSource[],
+  register?: ReadonlyMap<string, string>,
+): string[]
+
+export declare const SIDED_TOOLTIPS: ReadonlyMap<string, string>
+
+export declare function scanTooltipSides(
   sources: readonly UiSource[],
   register?: ReadonlyMap<string, string>,
 ): string[]

@@ -328,7 +328,7 @@ test('a card’s figure is as wide as itself, and the name of its row takes the 
 })
 
 for (const locale of ['en', 'ru'] as const)
-  test(`a name cut in what changed is whole in its hint, and a whole one has none, at 1440px in ${locale}`, async ({
+  test(`a name cut in what changed says itself whole, and a whole one shows none, at 1440px in ${locale}`, async ({
     page,
   }, info) => {
     await page.addInitScript((lang) => localStorage.setItem('valkama-locale', lang), locale)
@@ -346,11 +346,12 @@ for (const locale of ['en', 'ru'] as const)
     await record(info, `changes-cut-${locale}`, measured)
     expect(measured.holds, 'the name is cut').toBeGreaterThan(measured.shown)
 
-    const hint = page.locator('.tooltip-hint')
+    // Its words laid whole over the cut ones.
+    const hint = page.locator('.whole-text')
     await page.mouse.move(0, 0)
     await name.hover()
     await expect(hint).toBeVisible()
-    await expect(page.getByRole('tooltip')).toHaveText(measured.text)
+    await expect(hint).toHaveText(measured.text)
 
     // A name the card holds whole has no hint: one shown already hands over at once, and goes.
     await whole.locator('.overview-changes-name').hover()
@@ -362,5 +363,5 @@ for (const locale of ['en', 'ru'] as const)
     await page.keyboard.press('Shift+Tab')
     await expect(cut).toBeFocused()
     await expect(hint).toBeVisible()
-    await expect(page.getByRole('tooltip')).toHaveText(measured.text)
+    await expect(hint).toHaveText(measured.text)
   })

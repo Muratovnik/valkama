@@ -9,7 +9,10 @@ call nor decides its permission, and never opens the store. `post-tool-use`,
 did on the work this session holds, and `claude watch` is the background hook
 that wakes an idle session with that notice (`notify`). A `session-start` after
 a resume or a compaction may answer with a note of the work the session holds
-(`held_note`).
+(`held_note`). Before anything else, `post-tool-use` and Claude Code's
+`post-tool-use-failure` take into the store the commit records the Git hook left
+for their session (`commit_records`, `planning.commits`): the one way a tool hook
+writes the store, and only when there is such a record.
 
 The contract with the client is the same in every case: exit 0, and print
 nothing but a notice or that note. A hook that failed its client
@@ -54,6 +57,17 @@ IDENTITY_CLIENTS = frozenset({"claude"})
 _AGENT_TOOLS = frozenset({"Agent", "Task"})
 #: The one event that reads where its session is open, ancestors included.
 SESSION_START = "session-start"
+#: The events after a shell call, which take the commit records the Git hook left
+#: for their session (`commit_records`). Claude Code runs `PostToolUse` only after a
+#: call that succeeded, and `PostToolUseFailure` after one that did not; Codex runs
+#: its `PostToolUse` after either.
+FAILURE_EVENT = "post-tool-use-failure"
+#: How Claude Code names it in an answer that adds to the model's context.
+FAILURE_HOOK_EVENT = "PostToolUseFailure"
+COMMIT_EVENTS = {
+    "claude": frozenset({"post-tool-use", FAILURE_EVENT}),
+    "codex": frozenset({"post-tool-use"}),
+}
 
 
 def main(
@@ -117,8 +131,20 @@ def _run(arguments: list[str], stdin: BinaryIO, stdout: BinaryIO) -> int:
     if event == SESSION_START:
         _session_start(client, payload, stdout)
         return 0
-    if event in notify.DELIVERY_EVENTS.get(client, {}) and payload is not None:
-        _write(stdout, _stage(notify.deliver, client, event, payload))
+    lines = None
+    if event in COMMIT_EVENTS.get(client, frozenset()) and payload is not None:
+        lines = _stage(_commits, client, payload)
+    if event == FAILURE_EVENT:
+        # The commit lines alone: a failed call is no point a notice is delivered at.
+        if lines:
+            _write(stdout, notify.output(FAILURE_HOOK_EVENT, lines))
+        return 0  # a failed tool call is no lifecycle event
+    delivery = notify.DELIVERY_EVENTS.get(client, {}).get(event)
+    if delivery is not None and payload is not None:
+        answer = _stage(notify.deliver, client, event, payload, None, lines or "")
+        if answer is None and lines:
+            answer = notify.output(delivery, lines)  # the notice failed; the lines still go
+        _write(stdout, answer)
     if event == "post-tool-use" and (
         client != "claude" or payload is None or payload.get("tool_name") not in _AGENT_TOOLS
     ):
@@ -161,6 +187,63 @@ def _stage(action: Callable[..., T], *arguments: object) -> T | None:
     except Exception as error:  # noqa: BLE001 -- a hook never fails its client
         note(f"{type(error).__name__}: {error}")
         return None
+
+
+def _commits(client: str, payload: dict) -> str | None:
+    """Take this call's commit records into the store; the lines about them, or None.
+
+    With no record of its session the hook stays what it was, a reader: the store
+    is not opened here at all. With one, it opens the store for writing for one
+    transaction, and deletes the files that transaction is through with once it
+    commits. A store that is busy or cannot be opened leaves every record where it
+    is, for the next hook of the session, and the answer says nothing of them.
+    """
+
+    import time
+
+    from . import commit_records, notify
+
+    store_path = notify.settings()[0]
+    if store_path is None:
+        return None  # the store is protected in this environment
+    now_ns = time.time_ns()
+    records = commit_records.taken(client, payload, store_path, notify.loads, now_ns)
+    if not records:
+        return None
+    import _sqlite3
+
+    from .. import store
+    from ..planning import calls, commits
+    from . import light
+
+    try:
+        conn = light.open_light(store_path, store.STORE_SCHEMA_VERSION)
+    except light.UnwritableError:
+        return None
+    conn.row_factory = _sqlite3.Row  # the planning reads take rows by name
+    agent = payload.get("agent_id")
+    hook = commits.Hook(
+        client=client,
+        session_id=str(payload["session_id"]),
+        agent_id=agent if isinstance(agent, str) and agent else None,
+        now=commit_records.timestamp(now_ns),
+    )
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            with calls.bind(calls.valkama(), commits.HOOK_TOOL):
+                taken = commits.take(conn, records, hook)
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    except _sqlite3.Error:
+        return None  # busy past the light open's wait: the records wait for the next hook
+    finally:
+        conn.close()
+    for path in taken.done:
+        commit_records.remove(path)
+    return taken.answer or None
 
 
 def _identity(raw: bytes) -> None:

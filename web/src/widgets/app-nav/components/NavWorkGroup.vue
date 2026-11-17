@@ -122,7 +122,7 @@ const countWords = computed(() => t('liveWork.open', { count: store.count }))
     </div>
     <button
       ref="rail-button"
-      v-tooltip:right.name="countWords"
+      v-tooltip.name="countWords"
       class="nav-work-rail"
       type="button"
       :aria-label="countWords"

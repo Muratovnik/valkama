@@ -203,16 +203,18 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
 </script>
 
 <template>
+  <!-- The rail is a list of rows: every hint in it stands past its edge, level with its row. -->
   <aside
     :id="railId"
     ref="rail"
     class="app-nav-shell"
+    data-hint-list="rows"
     :class="{ 'is-resizing': resizing }"
     :style="railStyle"
   >
     <div class="nav-head">
       <button
-        v-tooltip:right.detail="t('navigation.home')"
+        v-tooltip.detail="t('navigation.home')"
         class="app-brand"
         type="button"
         @click="emit('home')"

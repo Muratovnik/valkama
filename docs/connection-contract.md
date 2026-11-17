@@ -76,7 +76,7 @@ Every tool carries a `title`, a description, a JSON Schema, and MCP behaviour
 ### Removed tools
 
 The catalogue holds one tool per capability. A write to one item's fields,
-steps, refs, links, discussion, summary or state is a group of
+steps, refs, commits, links, discussion, summary or state is a group of
 `apply_work_item_changes` (see
 [Several changes in one call](#several-changes-in-one-call)); the tools that
 made one such write each are no longer published, and the HTTP writes behind
@@ -116,7 +116,7 @@ changed. `url` is described in [The address of a work item](#the-address-of-a-wo
 | `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)); `project_roots` unless it released |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`, `by_previous_holder`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim` |
+| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim`; `unreported_commits`, `unreported_total` and `unreported_unread` when a close found any (see [The net at a close](#the-net-at-a-close)) |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
 `project_roots` is the root of each project the claimed task changes, or of its
@@ -398,7 +398,7 @@ replaces the word; none is read as its replacement.
 ### The projects an item changes
 
 A task names the projects it changes, at most 20 and each once, by their ids in
-the [project registry](../README.md#project-registry); the space it lies in does
+the [project registry](guides/configuration.md#project-registry); the space it lies in does
 not change with them. `create_work_item` takes them as `projects`, and the
 `update` group of `apply_work_item_changes` (and `POST
 /api/planning/work-item/update`) replaces the whole set with `projects`, each
@@ -606,8 +606,8 @@ whole record and took `full`, is in
 | `events` | integer, 1 to 1000 | that many of the newest history events |
 | `section` | a section key, or a list of them | those sections of the description, with their text |
 
-The parts are `card`, `comments`, `events`, `links`, `refs`, `questions`,
-`mentions`, `sessions`, `images`, `subscribers`, `claim`, `sections`,
+The parts are `card`, `comments`, `events`, `links`, `refs`, `commits`,
+`questions`, `mentions`, `sessions`, `images`, `subscribers`, `claim`, `sections`,
 `participants` and `confirmation`. Without `parts` and without a mode the read is `["card"]`. A
 mode without `parts` reads only the part it cuts: `unresolved`, `thread` and
 `comments_after` the comments, `events` the events, `section` the sections, and
@@ -616,7 +616,7 @@ several modes read each of their parts. Each of these is refused with
 
 | Call | Refusal |
 | --- | --- |
-| a part no item has | `unknown part 'history'; parts are card, comments, events, links, refs, questions, mentions, sessions, images, subscribers, claim, sections, participants, confirmation` |
+| a part no item has | `unknown part 'history'; parts are card, comments, events, links, refs, commits, questions, mentions, sessions, images, subscribers, claim, sections, participants, confirmation` |
 | a mode beside a `parts` without its part | `thread reads the comments part: add comments to parts or leave parts out`, and the same for `unresolved` and `comments_after`; `events reads the events part: …`; `section reads the sections part: …` |
 | `events` outside its bounds | `events must be between 1 and 1000` |
 | `thread` with `comments_after` or `unresolved` | `thread and comments_after exclude each other`, or `thread and unresolved …` |
@@ -636,6 +636,7 @@ at, and beside them the fields of each part named:
 | `mentions` | `mentions`, the newest 50, oldest first, and `mentions_total`; see [Mentions](#mentions) |
 | `sections` | `sections`, as [Sections of the description](#sections-of-the-description) says |
 | `claim` | `claim`, the lease as [Claims are leases](#claims-are-leases) shows it, `null` while nobody holds the item |
+| `commits` | `commits`, as [The commits part](#the-commits-part) says |
 | `links`, `refs`, `questions`, `sessions`, `images`, `subscribers` | the field of that name, as described below and in [Reading a question](#reading-a-question) |
 | `participants` | on a goal or a stage, the field of that name, as [Participants](#participants) shows it; a task has no such part, and naming it is refused with `unknown part 'participants'; a task's parts are card, comments, …` |
 | `confirmation` | on a goal or stage awaiting confirmation, the field of that name, as [Completing a goal or stage](#completing-a-goal-or-stage) shows it; on any other item the answer has no such field |
@@ -666,7 +667,8 @@ The card leaves out what its reference and parts stand for: `work_item_id`,
 `comment_count`, the `state_id` and `is_terminal` of the state, the lease (the
 `claim` part) and every list of the history. A write's answer keeps, beside the
 card, what the write itself reports, such as `applied`, `started`, `requeued`,
-`released`, `merged`, `similar`, `warnings`, `overridden` and `from_person`.
+`released`, `merged`, `similar`, `warnings`, `overridden`, `from_person` and the
+`unreported_*` fields of a close.
 
 `parts` names each other part with what it holds, and leaves out a part with
 nothing in it:
@@ -678,6 +680,7 @@ nothing in it:
 | `questions` | `count` and `open`, the questions to the owner, and `addressed_open`, the open requests asked of agent sessions; it stands while any of them is above 0 |
 | `sections` | `count`, and only for a description longer than 2,000 characters; a shorter one is cheaper to read whole |
 | `claim` | `count`, 1 while somebody holds the item |
+| `commits` | `count`, the commits attached now |
 | `links`, `refs`, `mentions`, `sessions`, `images`, `subscribers`, `participants` | `count` |
 
 ```json
@@ -742,6 +745,31 @@ counts its calls. A call is counted on the item it acted on first: a link counts
 for its source item, not its target. Because Valkama records this itself, a
 caller does not attach its own session id as a ref.
 
+#### The commits part
+
+**Since 3.0.** `commits` lists the commits attached to the item now, the newest
+attachment first. Valkama attaches the commits a session makes; a caller
+attaches one by hand with the `commits` group of
+[Several changes in one call](#several-changes-in-one-call). A commit a rewrite
+replaced is not listed: its attachments moved to the commit that replaced it.
+`delete_work_item` takes the item's attachments with it, and the commits stay.
+
+```json
+{"repository": "valkama", "display_name": "Valkama", "hash": "3f2a9c1…",
+ "subject": "fix(hooks): read the record once", "committed_at": "2026-11-20T10:31:02+03:00",
+ "session": "019a…", "agent": null, "attached_by": "server", "label": ""}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `repository` | the registered project's id; `null` for a commit whose repository is not known |
+| `display_name` | the project's name in the registry, read when the item is; `null` while the registry does not record the project, and beside a `null` `repository` |
+| `hash` | the whole hash, in lower case |
+| `subject`, `committed_at` | the commit's subject and committer time; `""` and `null` for a commit attached by its whole hash on a machine without the project's root |
+| `session`, `agent` | the session and agent that made it; `null` for a commit no session reported |
+| `attached_by` | `server` (Valkama, from the session's work), `manual` (a caller or a person) or `migrated` |
+| `label` | the words the attachment was given, `""` without them |
+
 #### Sections of the description
 
 **Since 3.0.** A card carries its description whole; an agent that wants to
@@ -793,7 +821,7 @@ inside `work_item`, and reads `unresolved`, `thread`, `comments_after` and
 record, as before 3.0, and the parameters below are the cuts of that record.
 
 The full record carries every current field of the item -- state, checklist,
-links, refs, summary, the lease as `claim`, its followers as `subscribers` --
+links, refs, commits, summary, the lease as `claim`, its followers as `subscribers` --
 with every comment and every history event, oldest first, and `mentions` with
 `mentions_total`, the texts on other items that named this one (see
 [Mentions](#mentions)). A cut adds `comments_total`, `threads_total`,
@@ -828,6 +856,140 @@ agents. Its size does not grow with the item's history, and it is what a
 preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
 refused with 400; an unknown item is 404 and a space that is not there is 409,
 as for the full read.
+
+### Commits on no card
+
+**Since 3.0.** A commit a session made that no item holds waits on a list until
+someone attaches it: the hook answer names it to the agent, and the interface
+shows the list to the person. A commit is on it while it has a session, no item
+holds it, and no rewrite replaced it. A commit migrated from a ref or attached by
+hand never has a session, so it is never on the list; a session's commit
+detached from its last item is on it again.
+
+`GET /api/planning/commits/unattached` reads it by one scope:
+
+- `space=<key>` — the commits of the projects the registry binds to the space,
+  its default project among them;
+- `project=<id>` — the commits of one registered project, bound to a space or
+  not.
+
+```json
+{"total": 2,
+ "items": [{"repository": "valkama", "display_name": "Valkama", "hash": "3f2a9c1…",
+            "subject": "fix(hooks): read the record once",
+            "committed_at": "2026-11-20T10:31:02+03:00", "session": "019a…",
+            "agent": null, "client": "claude", "reported_at": "2026-11-20T07:31:04.120Z"}]}
+```
+
+`items` is newest first, by the committer time, with its offset as Git gives it;
+`reported_at` is when Valkama learned of the commit. `repository`, `display_name`,
+`hash`, `subject`, `committed_at`, `session` and `agent` mean what they mean in
+[the commits part](#the-commits-part); `client` is `claude` or `codex`, the
+client whose hook reported it.
+
+- `since=<time>`, an ISO time with its offset or `Z`, keeps the commits made at
+  that time or later.
+- `limit` is how many items the answer lists: 100 when it is left out, 0 to 500.
+- `total` counts every commit the scope and `since` keep, however many `limit`
+  lists.
+
+Each refusal is `invalid_request` (400): neither scope or both
+(`[commit] the commits on no card are read by a space or by a project: name one`),
+a project the registry does not record
+(`[commit] <id> is not a registered project: <ids>`), a space the store does not
+have (`no planning space named <key>`), a registry that cannot be read, a `since`
+without its offset or that is no time, and a `limit` above 500 or below 0.
+
+`POST /api/planning/work-item/commit` attaches one of them, or with
+`"remove": true` detaches a commit, as one entry of the `commits` group of
+[Several changes in one call](#several-changes-in-one-call) does, and is
+refused as that entry is, by the same `[commit]` texts:
+
+```json
+{"reference": "MAIN-12", "repository": "valkama", "hash": "3f2a9c1"}
+```
+
+It takes no other field. Written from the interface, it is the person's write:
+the attachment is `manual`, and it and its `commit_attached` or
+`commit_detached` event are signed by the person. The answer names the item and
+the revision it is at, the commit as the item's record lists it (as it is
+attached now, or once detached as it was; `null` for a commit a rewrite
+replaced, which the record does not list) and whether the write changed
+anything; attaching a commit the item holds already changes nothing.
+
+```json
+{"reference": "MAIN-12", "revision": 7,
+ "commit": {"repository": "valkama", "display_name": "Valkama", "hash": "3f2a9c1…",
+            "subject": "fix(hooks): read the record once",
+            "committed_at": "2026-11-20T10:31:02+03:00", "session": "019a…",
+            "agent": null, "attached_by": "manual", "label": ""},
+ "changed": true}
+```
+
+### The net at a close
+
+**Since 3.0.** A commit no hook reported -- one a person made, a client without a
+session, a session whose hook is off, or `git am` and a commit inside
+`rebase -i`, which fire no commit hook -- reaches no item on its own. So an
+agent's transition into a `review` or `completed` state names the commits made
+in the card's repositories since the card was taken, and attaches none of them:
+the agent attaches the ones that belong with the `commits` group of
+[Several changes in one call](#several-changes-in-one-call).
+
+The window opens where the work began, read in the same write before the
+transition ends the claim, by the first of these that holds:
+
+1. the item is claimed: when the call that claimed it arrived;
+2. it is not, and the caller's holder holds one of its steps: the newest claim or
+   takeover of that step by a call of the caller's session, the earliest of them
+   when it holds several;
+3. neither: the newest claim or takeover of the item by a call of the closing
+   session, as for a close from review, whose entry ended the claim;
+4. none of these: there is no window, and the answer says nothing of commits.
+
+Once the transition has committed, the records the commit hook left that no
+client hook has taken yet -- the closing session's and those of a commit in the
+card's projects -- are taken first, in a transaction of their own and in the
+order they were written across every session, so a commit a hook did report is
+known before anything is named. Then Git is asked, outside any
+transaction and for at most 5 seconds, in each root of the card's projects that
+is on this machine with a repository of its own:
+`git log --branches --tags HEAD --since=<window>`. Of what it lists, a commit is
+named when its committer address is the one Git commits with in that root
+(`git var GIT_COMMITTER_IDENT`, the environment and then the configuration) and
+the store does not hold it for that project. `refs/stash`, a remote's branches
+and the notes are not read, and a commit somebody else committed into a local
+branch, such as one a pull brought, has another address. A commit of the same
+address from another machine, pulled into a local branch while the work was
+held, is named too; the agent leaves it. So is the copy a rebase in the window
+makes of a commit Valkama did not know: its committer time falls in the window,
+and its address is the session's own.
+
+Only an agent's close runs the net. A person's transition in the interface
+does not, and its HTTP answer carries none of these fields: the line speaks to
+an agent and offers the `commits` group, which a person does not have. The
+answer of the agent's transition -- the acknowledgement and the `verbose` card
+of `apply_work_item_changes` -- carries each field only when it is not empty:
+
+| Field | Holds |
+| --- | --- |
+| `unreported_commits` | up to 20 commits, newest first, each `{repository, hash, subject, committed_at}` as [the commits part](#the-commits-part) means them |
+| `unreported_total` | how many there are, when there are more than the 20 listed |
+| `unreported_unread` | the ids of the projects whose root did not answer: the transition stands all the same |
+
+A line among the answer's `warnings` names them to the agent: "These commits in
+the card's repositories were made since the card was taken and no hook reported
+them: valkama 3f2a9c1d0, valkama 7b1e2a9c4 and 3 more. Attach the ones that
+belong here with the commits group." The card was taken when the window above
+began: by its claim, by a step's claim or by the session's last claim of it.
+
+```json
+{"reference": "MAIN-12", "state": {"key": "review", "name": "Review", "is_terminal": false},
+ "applied": {"transition": {"state": "review", "released": "codex (session 019a…)"}},
+ "unreported_commits": [{"repository": "valkama", "hash": "3f2a9c1d0…",
+                         "subject": "docs: note the limit",
+                         "committed_at": "2026-11-20T10:31:02+03:00"}]}
+```
 
 ### Pictures on an item
 
@@ -1546,7 +1708,7 @@ anywhere. The kinds are a closed list:
 | `task_open` | a task opened from any of those |
 
 `POST /api/analytics/uses` counts one use, under the rules of every write from the page
-([local HTTP security](../README.md#local-http-security)): an allowed `Origin`
+([local HTTP security](guides/http-security.md#browser-writes-and-the-installation-token)): an allowed `Origin`
 (`origin_refused`, 403), `Sec-Fetch-Site: same-origin` (`fetch_metadata_refused`, 403)
 and the page's session credential in `X-Valkama-Session` (401 without it), with a JSON
 object for a body:
@@ -2172,7 +2334,7 @@ most 50.
 
 `apply_work_item_changes` applies several writes to one item in one call, all or
 nothing. It is the one MCP tool that edits an item's fields, sets and ticks its
-steps, attaches refs, links it, writes and resolves its discussion, records its
+steps, attaches refs and commits, links it, writes and resolves its discussion, records its
 summary and moves its state. It takes `id`, `author`, `expected_revision`,
 `verbose` and any of these groups, and applies them in this order:
 
@@ -2184,7 +2346,8 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `convert` | `{to, leftover?: {title?, steps?}, force?}`; not with `transition`, `defer` or `move_out` | `/convert`, see [Converting a task into a goal or stage](#converting-a-task-into-a-goal-or-stage) |
 | `checklist` | the steps' list, or `{items, force?}`; each step text or `{text, done?}` | `/checklist` |
 | `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `/checklist/tick` |
-| `refs` | list of `{kind, value, label?}` | `/ref` |
+| `refs` | list of `{kind, value, label?}`, `kind` one of `memory`, `session`, `url`; `commit` is refused, naming the `commits` group | `/ref` |
+| `commits` | list of `{repository, hash, label?, remove?}` | only here |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `/link` |
 | `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `/comment` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
@@ -2253,6 +2416,40 @@ in `reply_to` must already exist when that entry is written: the id of a
 comment the same call writes is not known to the caller, so a reply to it is a
 second call. The same holds for `resolutions`.
 
+**Since 3.0.** `commits` attaches commits by hand, or detaches them with
+`remove: true`. Valkama attaches the commits a session makes and says so in the
+hook answer, as `docs/hook-contract.md` describes; this group places a commit it
+could not place, one made outside a session, or one on the wrong item, which
+moves by a `remove` there and an attachment on the right one.
+
+- `repository` is a registered project's id. `hash` is a whole hash or its
+  start of at least 7 hex digits, in either case.
+- An attachment asks the project's root `git rev-parse --verify <hash>^{commit}`
+  for the whole hash, and records a commit Valkama did not know with its subject
+  and time and no session. On a machine without the project's root a whole hash
+  is recorded as it is.
+- The attachment is signed `manual`. On a task it adds the commit's project with
+  the source `commits`, as
+  [The projects an item changes](#the-projects-an-item-changes) says; a goal or
+  stage takes the commit and no project.
+- A detach names one of the commits attached to the item, by its whole hash or
+  a start, and asks no repository. The commit stays, and a session's commit
+  attached nowhere else is on no card again. A task loses the commit's project
+  when it held it by its commits alone and no other attached commit is of it.
+- Each attachment and detachment writes the history event `commit_attached` or
+  `commit_detached` with the detail `<repository> <hash>`. An attachment the item
+  has already writes nothing.
+
+An entry is refused with `invalid_request`:
+
+| Entry | Refusal |
+| --- | --- |
+| a project the registry does not record | `[commit] <repository> is not a registered project: <ids>` |
+| a hash its repository holds no commit of, or one that is no hash | `[commit] <hash> is not a commit in <repository>` |
+| a start of a hash, on a machine without the project's root | `[commit] <repository> has no root on this machine, so the short hash <hash> cannot be resolved: send the full hash` |
+| a start that more than one object of the repository begins with | `[commit] <hash> is ambiguous in <repository>: send more digits` |
+| `remove` of a commit the item does not have | `[commit] <repository> <hash> is not attached to <REF>` |
+
 `questions` asks up to 100 questions, each with what `create_work_item_request`
 takes and checked by the same rules. Without `addressees` each is that tool's
 question: it waits in the owner's list and raises the owner's alert once the call
@@ -2287,6 +2484,9 @@ one call with its identity, and every row its steps write points to that call.
 
 The acknowledgement's `applied` names only the groups that changed something.
 `update` lists the fields sent;
+`commits` is `{attached, removed, unchanged}`: the `{repository, hash}` of each
+commit attached and removed, and how many entries named a commit attached
+already;
 `comments` and `questions` list every comment and question the call wrote, so
 a reply or a withdrawal needs no read first. A question with `addressees` lists its
 `requests`, each `request_id` with its `addressee`, in place of `request_id` and
@@ -2299,7 +2499,10 @@ hear the items an `update`'s description named stands beside `applied`, as
 ```json
 {"claim": true, "update": ["title", "priority"],
  "checklist": [{"item_id": "…", "text": "write it", "done": false}],
- "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1, "links": 1,
+ "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1,
+ "commits": {"attached": [{"repository": "valkama", "hash": "3f2a9c1…"}], "removed": [],
+             "unchanged": 0},
+ "links": 1,
  "comments": [{"comment_id": 41, "reply_to": null, "reply_to_request": null}],
  "questions": [{"request_id": "…", "revision": 0}],
  "summary": {"summary_comment_id": 42},
@@ -2390,6 +2593,9 @@ What moves to the survivor:
   item, and the replies under a question move with the question. `moved.comments`
   counts the rows that moved;
 - the refs, except one the survivor already has, which stays where it was;
+- **since 3.0**, the attached commits, except one the survivor has already,
+  whose attachment to the merged item goes; `moved.commits` counts those that
+  moved. The projects they gave move with the item's projects;
 - the [pin](#pins), which the survivor keeps when it has one already;
 - the links, each in its own direction: `MAIN-13 blocks MAIN-20` becomes
   `MAIN-12 blocks MAIN-20`. A link to the survivor or to another item of the
@@ -2402,8 +2608,8 @@ What moves to the survivor:
 
 Each merged item is then linked `duplicates` to the survivor, gets a summary
 naming it ("Merged into MAIN-12, which now holds its 2 steps, 1 comment, 0 refs,
-1 link and 0 projects.", `next` "Continue in MAIN-12.", `why` the reason), loses
-its claim and closes in the first `cancelled` state its workflow reaches from
+3 commits, 1 link and 0 projects.", `next` "Continue in MAIN-12.", `why` the
+reason), loses its claim and closes in the first `cancelled` state its workflow reaches from
 where it stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
 saying what came in. What describes the merged item itself stays with it: its
 history, the [mentions](#mentions) of it, its reports, its description, labels and
@@ -2432,7 +2638,8 @@ and `warnings` and `overridden` when there are any:
 ```json
 {"reference": "MAIN-12", "revision": 9, "merged": [
   {"reference": "MAIN-13", "work_item_id": "…", "state": "cancelled",
-   "moved": {"steps": 2, "comments": 1, "refs": 0, "links": 1}}],
+   "moved": {"steps": 2, "comments": 1, "refs": 0, "commits": 3, "links": 1,
+             "projects": 0}}],
  "warnings": ["MAIN-13 stays under MAIN-4; MAIN-12 keeps its own parent"]}
 ```
 
@@ -2526,7 +2733,7 @@ An event written before calls were recorded, or by the execution runner outside
 any call, has
 `{"state": "unconfirmed", "source": null, "session_id": null, "agent_id": null}`.
 A write from the browser UI is `confirmed` with source `browser` and no session;
-see [Local HTTP security](../README.md#local-http-security).
+see [Local HTTP security](guides/http-security.md#whose-write-it-is).
 
 `browser` means this and no more: the request carried the fetch metadata a
 browser sets on its own -- `Sec-Fetch-Site: same-origin` -- together with the
@@ -2715,7 +2922,7 @@ Who may release or take over a claim follows the lease:
   taken. Its history reads `released` and then `claimed`.
   `claim_work_item` with `release` on a stale lease stops after that release.
 - `claim_ready_work_item` first releases every lapsed hold in its space, as the
-  sweep below does. It neither gives nor releases an item whose lease is in the
+  sweep below does, except one the calling session holds. It neither gives nor releases an item whose lease is in the
   grace, because nobody asked for that item in particular.
 - A task in an active state whose workflow lets it reach no `ready` state keeps
   its stale lease: releasing it would leave work with no holder, so every sweep
@@ -2736,6 +2943,16 @@ Who may release or take over a claim follows the lease:
 
   Releases written before the reasons were told apart say `lease-expired`,
   whatever the cause, and stay as they were written.
+- A checklist step's claim records no call of its own, so it lapses with the
+  session its holder names, by the same rules, read from that session's newest
+  confirmed call. Releasing a lapsed lease releases the steps the same holder
+  holds there in the same write, whether the grace is over or a caller asked for
+  the item. A step of any other holder is released once its own lease lapses, by
+  the same sweeps that release a lease, whether or not somebody holds the item,
+  and a task left at work with nothing holding it goes back to the queue. A done
+  step is nobody's hold, and a step of a closed item never lapses. A claim or a
+  step of the session making the call stays, as `claim_work_item` keeps its
+  claim: the call is that session's sign of life.
 - An `unconfirmed` claim is compared by `author`, as every claim was before
   leases. It has no session to go quiet, so it lapses when its item has had no
   history event for 3 days, and so does a step whose holder no session proved.
@@ -2775,6 +2992,7 @@ A pass runs its steps in order, each in a transaction of its own:
 | `waiting` | leaves [words waiting](#words-that-wait-for-a-session) on a goal or stage that a session stopped working on while its claim, step or subscription still stands -- it ended, or went quiet past the lease -- once no live session works there; the words are what a person did there after that session's last call, and they wait under a call of `valkama` with the tool `waiting-recovery` |
 | `subscriptions` | removes every [subscription](#subscriptions) and mute whose session lapsed |
 | `returns` | brings back [work put off](#putting-work-off) whose day or time passed, or whose item closed by a path that did not bring it back, one call of `valkama` under the tool `deferral-return` per item |
+| `commits` | takes the commit records no client hook took within an hour, each decided by its session, and deletes those that change nothing, as the [hook contract](hook-contract.md#taking-the-records) describes; a record it applied is deleted at the next pass |
 | `confirmations` | asks the owner to confirm a goal or stage that awaits confirmation with no live session working there, or unconfirmed a day after its wait began, once in a period of waiting, under the tool `confirmation-question`; and records the wait, with its event, of one a write left unrecorded (see [Completing a goal or stage](#completing-a-goal-or-stage)) |
 
 Every step keeps the same contract:
@@ -3414,7 +3632,7 @@ takes every word waiting on the goals and stages over the task, in the claim's
 own transaction: a refused claim takes nothing. The MCP answer of the claim --
 `claim_work_item`, `claim_ready_work_item`, `claim_work_item_checklist_item`, and
 `apply_work_item_changes` or `create_work_item` with `claim` -- then carries
-`waiting`, one entry per goal or stage:
+`waiting`, one entry per goal or stage that still holds words for the session:
 
 ```json
 "waiting": [{"reference": "MAIN-10", "title": "Release 3.0",
@@ -3428,9 +3646,11 @@ claim, as the entries of `from_person`, and such a record of Valkama's with
 earlier ones when there are more, and each text whole up to 1500 characters, a
 longer one cut there with `cut: true`. A whole text has no `cut`. The words are
 taken once: the next claim under the same goal gets nothing until a person acts
-there again with nobody working. They never lapse, and they go with their item.
-The key is absent when nothing waited, and the HTTP answer of a claim never has
-it: the interface takes no work for an agent.
+there again with nobody working. A session also hears each act once: a goal or
+stage whose acts it already got through another of its open words is no entry,
+though both stay as the record. They never lapse, and they go with their item.
+The key is absent when nothing waited for the session, and the HTTP answer of a
+claim never has it: the interface takes no work for an agent.
 
 ### A close over what a person did
 
@@ -4503,5 +4723,5 @@ one open under `preschema14`). A store already at 15 opens without either. A
 build of the previous release, at schema 14, refuses a store at 15 with
 `StoreTooNew` and leaves it untouched rather than show cards it would refuse;
 going back to it means restoring the `preschema15` snapshot with its pictures
-(see [Migrating an older store](../README.md#migrating-an-older-store)), which
+(see [Restoring a snapshot](guides/store-upgrades.md#restoring-a-snapshot)), which
 loses everything written since.

@@ -35,6 +35,7 @@ import {
   serveTask,
 } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
+import { drawLined } from './drawnViews.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { globalScope, workItem, workItemRef } from './planningFixtures.ts'
 import { WORLD } from './served/analyticsActions.ts'
@@ -240,6 +241,7 @@ for (const width of WIDTHS)
     const byModel = at({ by: 'model' })
     const analytics = await openReport(page, width, byModel)
     const bars = analytics.locator('.spending-bars')
+    await drawLined(bars)
 
     // Neither the work nobody can place nor its row in the table is a control.
     const unknown = bars.locator(':is(.ranked-line, th)', { hasText: 'Unknown' })

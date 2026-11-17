@@ -40,7 +40,17 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from ..hooks import light
-from . import calls, closing, deferral, leases, participation, service, subscriptions, waiting
+from . import (
+    calls,
+    closing,
+    commits,
+    deferral,
+    leases,
+    participation,
+    service,
+    subscriptions,
+    waiting,
+)
 
 #: The most items one step changes in one pass; the next pass takes the rest.
 LIMIT = 200
@@ -48,6 +58,7 @@ LIMIT = 200
 LEASES = "leases"
 WAITING = "waiting"
 SUBSCRIPTIONS = "subscriptions"
+COMMITS = "commits"
 RETURNS = "returns"
 CONFIRMATIONS = "confirmations"
 
@@ -144,6 +155,10 @@ def _subscriptions(conn: sqlite3.Connection) -> int:
     return subscriptions.expire(conn, limit=LIMIT)
 
 
+def _commits(conn: sqlite3.Connection) -> int:
+    return commits.sweep(conn, limit=LIMIT)
+
+
 def _returns_pending(conn: sqlite3.Connection) -> bool:
     return bool(deferral.due(conn, deferral.stamp(leases.utc_now()), 1))
 
@@ -161,13 +176,15 @@ def _confirmations(conn: sqlite3.Connection) -> int:
 #: Words a lapsed session left unheard are recovered next (`waiting`), while the
 #: subscriptions that make it one of those sessions still stand. Work put off until
 #: a day that came, or until an item that closed by a path that did not bring it
-#: back, comes back next (`returns`). Whether anyone still works on a goal or stage
-#: awaiting confirmation is asked last (`confirmations`), once the passes before
-#: have released whoever does not.
+#: back, comes back next (`returns`). The commit records no client hook took follow,
+#: decided by the holds the steps before left (`commits`). Whether anyone still works
+#: on a goal or stage awaiting confirmation is asked last (`confirmations`), once the
+#: passes before have released whoever does not.
 STEPS: tuple[Step, ...] = (
     Step(LEASES, _leases_pending, _leases),
     Step(WAITING, _waiting_pending, _waiting),
     Step(SUBSCRIPTIONS, _subscriptions_pending, _subscriptions),
     Step(RETURNS, _returns_pending, _returns),
+    Step(COMMITS, commits.sweep_pending, _commits),
     Step(CONFIRMATIONS, closing.pending, _confirmations),
 )

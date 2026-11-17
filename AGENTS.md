@@ -12,8 +12,9 @@ A machine may carry a local overlay as `AGENTS.local.md`. It is not tracked
 here, it never contradicts this file, and its absence changes nothing: this file
 is complete on its own.
 
-- Read `README.md` before changing a tool. `CONTRIBUTING.md` states the same
-  gates for a human contributor.
+- Read `README.md`, and the guide in `docs/guides/` for the tool, before
+  changing a tool. `CONTRIBUTING.md` states the same gates for a human
+  contributor.
 - `DESIGN.md` is about 100 KB: find the passage by its component, token or
   `**Label:**` and read that passage; read a whole section of it only when your
   change is to that section's rules.
@@ -36,14 +37,16 @@ is complete on its own.
   with open work under it (`cancel_list`, `cancels`), a parent cleared only by
   `move_out` and never under an unaccepted goal (`[parent]`), work put off
   only by `defer` and brought back by itself (`deferred`, `returned`,
-  `acceptance_question`), and the
-  retired words
+  `acceptance_question`), the step's text alone as the detail of an expired
+  step's `checklist_released`, and the retired words
   refused on input — for spaces and projects — the registry formats 2 and 4, a
   space without `project_id`, an optional `space` on `create_work_item`, the
   scope `space` and the module levels — and for reading an item by parts — the
   arguments and answer of `get_work_item`, `section` among them, the `verbose`
   answer of a write, the `work_item` of `claim_ready_work_item`, and the
-  handshake text about reading — as
+  handshake text about reading — and for commits — the ref kind `commit`,
+  commits among an item's refs, `kind=commit` and `space` on `GET /api/ref`,
+  and the handshake text about commits — as
   `docs/decisions/0014-work-model-breaks-the-planning-schemas.md` records. It
   covers nothing else and no later change. Preserve existing
   local data through a verified backup, one forward-only migration, and a
@@ -163,10 +166,11 @@ and a source guard holds every decoding call to naming both.
 The top level is five owned directories, one entry point, and the configuration
 a repository root has to carry — `server/`, `web/`, `desktop/`, `windows/`,
 `tests/`, plus `docs/` and the `.agents/rules/` this file routes to.
-`README.md` states what each owns. A new file at the top level needs an argument
-for why it belongs to none of them; the usual answer is that it belongs to
-`windows/`, which holds what exists only because the host is Windows — the tray
-script, the icon, the generator that renders it, and the installer.
+`docs/guides/repository-layout.md` states what each owns. A new file at the
+top level needs an argument for why it belongs to none of them; the usual
+answer is that it belongs to `windows/`, which holds what exists only because
+the host is Windows — the tray script, the icon, the generator that renders it,
+and the installer.
 
 The server lives in `server/`, split into domain and surfaces. Domain modules
 answer questions about the store and know nothing about who asked: `store`,
@@ -332,6 +336,10 @@ force, and the gates hold each:
   committed so a clone serves the built UI with no build step; rebuild it
   whenever `web/src` changes and include it in the next incremental local
   commit after a coherent task-owned green boundary.
+- Test fixtures, comments and titles carry no value from a live store or the
+  owner's own records: no figure, name or id. A case found on live data is
+  rebuilt from made-up values, and its comment says the case, not where it was
+  found.
 - Commit subjects are Conventional Commits with the Angular type set: `build`,
   `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`,
   `test`, an optional lowercase scope, and `!` for a break. A merge commit's
@@ -362,8 +370,9 @@ replies.
   commits, PRs, release notes or artifacts. Raw evidence remains ignored.
 - This repository's documentation: `docs/` here. Every document under `docs/`
   declares its lifecycle in frontmatter — `status: draft | adopted | superseded`.
-  `tests/test_docs_lifecycle.py` refuses an orphan; `README.md` files describe a
-  directory rather than one piece of work and are exempt.
+  `tests/test_docs_lifecycle.py` refuses an orphan. `README.md` files describe a
+  directory, and the guides in `docs/guides/` the product as it is now, rather
+  than one piece of work, so both are exempt.
 - The deep halves of `AGENTS.md`: `.agents/rules/`, one topic per file, each
   reached by a pointer in this file. They are instructions, not lifecycle
   documents, so they carry no frontmatter; a topic file nothing points to is

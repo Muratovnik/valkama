@@ -7,6 +7,7 @@ import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
+import { doctorCommitMessages } from '@/shared/i18n/doctorCommitMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { doctorProjectMessages } from '@/shared/i18n/doctorProjectMessages.ts'
 import { doctorQuotaMessages } from '@/shared/i18n/doctorQuotaMessages.ts'
@@ -486,6 +487,7 @@ export const en = {
         title: 'Valkama skill',
         detail: 'Neither Claude Code nor Codex is set up for this user.',
       },
+      ...doctorCommitMessages.en,
       ...doctorLoginMessages.en,
       ...doctorQuotaMessages.en,
       ...doctorProjectMessages.en,

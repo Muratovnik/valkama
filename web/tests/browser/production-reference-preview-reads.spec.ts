@@ -51,6 +51,8 @@ const [ITEM] = SPACE
  * and leaves that wait where it is, however slow the machine is.
  */
 const PAST_THE_DELAY_MS = 550
+/** Past the 120 ms a card stays once the pointer has left it, inside the 300 ms the next opens at once. */
+const PAST_THE_GRACE_MS = 150
 if (!ITEM) throw new Error('Expected the space to hold items')
 
 test('in the open space the card comes from what the page holds, with no request', async ({
@@ -127,6 +129,9 @@ test('a quick answer never says it is reading; a slow one does, then replaces it
     unanswered.push(route)
   })
   await page.mouse.move(5, 5)
+  // The card stays a moment after the pointer leaves, as a hint does; the next one, inside the
+  // moment after that, opens at once.
+  await page.clock.runFor(PAST_THE_GRACE_MS)
   await expect(card(page)).toHaveCount(0)
   await rest(page, reference(dialog, 'MAIN-13'))
   await expect.poll(() => unanswered.length).toBe(1)

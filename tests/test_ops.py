@@ -25,7 +25,7 @@ sys.path.insert(0, ROOT)
 from server import cli, processes, runner, store, transcripts
 from server.executions import service as execution_service
 from server.hooks import pairs, spool
-from server.ops import configuration, doctor, setup, toast
+from server.ops import configuration, doctor, git_hook, setup, toast
 from server.planning import service as planning
 from server.projects import project_registry, registry_owner
 from server.store_identity import metadata as store_metadata
@@ -1260,15 +1260,26 @@ class SetupTests(unittest.TestCase):
         )
 
     def inspect(self, answers: dict, *, launcher_state: dict | None = None) -> dict:
+        """The reading for these client answers, with the Git hook in place: what setup
+        makes of the hook itself is `tests/test_ops_git_hook.py`'s."""
+
         def runner(argv):
             client = pathlib.Path(argv[0]).stem.casefold()
             return answers.get(client, self.result(returncode=1, stderr="unexpected"))
 
+        hooks = {
+            "global_file": "D:/git/global-config",
+            "hooks": [
+                {"name": name, "event": event, "state": "installed"}
+                for event, name in git_hook.NAMES.items()
+            ],
+        }
         with (
             mock.patch.object(setup, "_tool", side_effect=lambda name: f"C:/bin/{name}.exe"),
             mock.patch.object(
                 setup.launcher, "status", return_value=launcher_state or self.launcher_state()
             ),
+            mock.patch.object(setup.git_hook, "hook_states", return_value=hooks),
         ):
             return setup.inspect(runner=runner)
 

@@ -7,6 +7,7 @@
  * lane would make Kanban the model again.
  */
 
+import { commitSchema } from '@/shared/api/commitModel.ts'
 import { confirmationSchema } from '@/shared/api/confirmationModel.ts'
 import {
   blankable,
@@ -21,12 +22,7 @@ import {
 import { executorSchema } from '@/shared/api/executorModel.ts'
 import { itemProjectsField } from '@/shared/api/itemProjectsModel.ts'
 import { liveWorkMapSchema } from '@/shared/api/liveWorkModel.ts'
-import { DECISION_POINTS } from '@/shared/api/planningDecisionPoints.ts'
-import {
-  EVENT_ACTIONS,
-  EVENT_DETAIL_MAX,
-  LABELS_DETAIL_MAX,
-} from '@/shared/api/planningEventActions.ts'
+import { eventSchema } from '@/shared/api/planningEventActions.ts'
 import {
   conditionsChangedField,
   deferredField,
@@ -335,32 +331,6 @@ const commentSchema = z.union([
 ])
 
 /**
- * Who made the call that wrote an event, as far as the call proved it. `author`
- * is what the caller wrote about itself; this is what the call carried. An
- * event older than identity has no source and names nobody.
- */
-const eventIdentitySchema = strictObject({
-  state: enumField(['confirmed', 'unconfirmed'] as const),
-  source: boundedText(/^[a-z][a-z-]{0,63}$/u, 64).nullable(),
-  session_id: callField(),
-  agent_id: callField(),
-})
-
-/** A detail is a short line, but for the label sets a `labels_changed` event carries. */
-const eventSchema = strictObject({
-  action: enumField(EVENT_ACTIONS),
-  detail: blankable(LABELS_DETAIL_MAX),
-  author: actor(),
-  at: boundedText(ISO, 96),
-  identity: eventIdentitySchema,
-  /** The decision point an agent's own decision marked this event with; absent on any other. */
-  point: z.enum(DECISION_POINTS).optional(),
-}).refine((event) => event.action === 'labels_changed' || event.detail.length <= EVENT_DETAIL_MAX, {
-  message: 'expected a detail of at most 512 characters',
-  path: ['detail'],
-})
-
-/**
  * A session that follows the item, as the call that subscribed proved it. `label` is the holder
  * a claim of that session, or of that agent of it, records: the server's own rule, by the
  * channel that proved the session, so it is the very text `claim_ref` holds.
@@ -439,6 +409,8 @@ const workItemSchema = recordObject({
   // The server counts neither, so neither does the card.
   links: z.array(linkSchema),
   refs: z.array(refSchema),
+  // Every full record carries them; optional while no view reads them.
+  commits: z.array(commitSchema).optional(),
   // Unbounded on purpose: the server sends the whole record, however long the
   // discussion and the history grew, and a card refused for its length is lost.
   // Each entry stays bounded.

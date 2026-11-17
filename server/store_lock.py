@@ -67,8 +67,17 @@ def unlock(handle: BinaryIO) -> None:
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+# How long an open waits for another process's bring-up. A release opening a large
+# store for the first time may run a one-time step under the lock, a verified snapshot
+# and an index build, for seconds; every process opening the store meanwhile has to wait
+# that out. The lock goes with its holder however it ends, so only a holder that is alive
+# and stuck is ever waited for this long. Shorter than the two minutes a session's MCP
+# front gives a release to start, so this lock, not the front, names what was waited for.
+BRING_UP_WAIT_SECONDS = 60.0
+
+
 @contextmanager
-def migration_lock(path: str, *, timeout: float = 5.0) -> Iterator[None]:
+def migration_lock(path: str, *, timeout: float = BRING_UP_WAIT_SECONDS) -> Iterator[None]:
     """Serialize store open/migration writers without touching SQLite first."""
 
     lock_path = path + ".migration.lock"

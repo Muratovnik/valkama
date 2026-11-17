@@ -755,6 +755,7 @@ class OrderTests(BatchCase):
                 "checklist",
                 "checklist_ticks",
                 "refs",
+                "commits",
                 "links",
                 "comment",
                 "comments",
@@ -783,7 +784,7 @@ class OrderTests(BatchCase):
             resolutions=[{"comment_id": root, "resolution": "Settled"}],
             comments=[{"body": "One"}, {"body": "Two"}],
             links=[{"other": other, "kind": "relates-to"}],
-            refs=[{"kind": "commit", "value": "abc1234"}],
+            refs=[{"kind": "memory", "value": "abc1234"}],
             checklist_ticks=[{"item_id": step}],
             checklist={"items": ["one", {"text": "two", "done": True}]},
             update={"title": "Renamed"},
@@ -894,7 +895,7 @@ class AllOrNothingTests(BatchCase):
             "update": {"title": "Renamed"},
             "checklist": {"items": ["one", {"text": "two", "done": True}]},
             "checklist_ticks": [{"item_id": self.step}],
-            "refs": [{"kind": "commit", "value": "abc1234"}],
+            "refs": [{"kind": "memory", "value": "abc1234"}],
             "links": [{"other": self.other, "kind": "relates-to"}],
             "comments": three,
             "resolutions": [{"comment_id": self.root, "resolution": "Settled"}],
@@ -969,7 +970,7 @@ class PublishedSchemaTests(unittest.TestCase):
     def test_the_description_states_the_order(self) -> None:
         tool = next(entry for entry in tools.TOOLS if entry["name"] == BATCH)
         self.assertIn(
-            "claim, subscribe, update, convert, checklist, checklist_ticks, refs, links,"
+            "claim, subscribe, update, convert, checklist, checklist_ticks, refs, commits, links,"
             " comment or comments, resolutions, questions, summary, then one of transition,"
             " defer or move_out",
             tool["description"],

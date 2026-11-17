@@ -3004,12 +3004,15 @@ def _hand_back(
 
 
 def _unheld_at_work(current: sqlite3.Row, claim_ref: str, checklist: object) -> bool:
-    """Whether a task stands at work with nobody holding it or any of its steps."""
+    """Whether a task stands at work with nobody holding it or any open step of it.
+
+    A done step is nobody's hold, though a store an earlier build wrote may keep its holder.
+    """
 
     return (
         current["category"] == "active"
         and not claim_ref
-        and not any(step["claimed_by"] for step in model.checklist(checklist))
+        and not any(step["claimed_by"] and not step["done"] for step in model.checklist(checklist))
     )
 
 
@@ -3053,7 +3056,9 @@ def expire_leases(
     its end, one no session proved after its item's quiet. An open question to
     the owner on the item stops the count of silence for every hold there. A
     lease in its grace waits for its session to come back, since nobody asked
-    for that item in particular. An item another writer changed in the meantime
+    for that item in particular. A hold of the session making the call stays, as
+    `claim_work_item` keeps it: the call is that session's heartbeat, though
+    nothing has written it yet. An item another writer changed in the meantime
     is left to it. With `limit`, it stops after releasing on that many items, by
     number, and leaves the rest to the next call.
     """
@@ -3096,10 +3101,12 @@ def lapsed_holds(
     query = with_clauses(
         "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
+    mine = calls.confirmed_session()
     for row in conn.execute(query + " ORDER BY i.number", parameters).fetchall():
         asked = leases.question_stands(conn, row)
         lease = leases.lease(conn, row, settings=settings, asked=asked)
-        claim = lease if lease is not None and leases.lapsed(lease) else None
+        lapsed = lease is not None and leases.lapsed(lease) and not _calling(lease, mine)
+        claim = lease if lapsed else None
         steps = _lapsed_steps(conn, row, claim, settings=settings, asked=asked)
         if claim is None and not steps:
             continue
@@ -3125,11 +3132,12 @@ def _lapsed_steps(
 
     A lapsed one, and, beside a claim being released, every step of the same
     holder: the lease is the session's, so what lapses for its claim lapses for
-    its steps.
+    its steps. A step of the session making the call stays, as its claim does.
     """
 
     if asked is None:
         asked = leases.question_stands(conn, row)
+    mine = calls.confirmed_session()
     found: dict[str, leases.Lease] = {}
     read: dict[str, leases.Lease] = {}
     for step in model.checklist(row["checklist"]):
@@ -3139,9 +3147,17 @@ def _lapsed_steps(
         if holder not in read:
             read[holder] = leases.of_step(conn, row, holder, settings=settings, asked=asked)
         held = read[holder]
+        if _calling(held, mine):
+            continue
         if leases.lapsed(held) or (claim is not None and _same_holder(held, claim)):
             found[str(step["id"])] = held
     return found
+
+
+def _calling(lease: leases.Lease, session: str | None) -> bool:
+    """Whether `lease` is the session's making the call: its call is its heartbeat."""
+
+    return session is not None and lease.session_id == session
 
 
 def _same_holder(step: leases.Lease, claim: leases.Lease) -> bool:
@@ -3756,8 +3772,8 @@ def merge_work_items(
     other work wait. Here the survivor takes all of that — the steps with their
     ids, ticks and step claims, the discussion threads whole, the questions with
     their replies, a list with the comment it stands under, the refs, the
-    links in their own direction, and the projects, a project more than one of
-    them names keeping its strongest source — and each
+    attached commits, the links in their own direction, and the projects, a
+    project more than one of them names keeping its strongest source — and each
     merged item is linked `duplicates` to it, given a summary naming it,
     released and closed in its cancelled state. What describes the merged item
     itself stays with it: its history, its reports with their threads, its
@@ -3995,6 +4011,7 @@ def _fold(
                 "UPDATE OR IGNORE work_item_refs SET work_item_id = ? WHERE work_item_id = ?",
                 (survivor_id, identity),
             ).rowcount,
+            "commits": _move_commits(conn, identity, survivor_id),
             "links": _repoint_links(conn, identity, survivor_id, involved, author),
             # A project both name keeps the stronger source (`item_projects.carry`).
             "projects": item_projects.carry(conn, identity, survivor_id),
@@ -4119,6 +4136,23 @@ def _move_threads(
     )
 
 
+def _move_commits(conn: sqlite3.Connection, identity: str, survivor_id: str) -> int:
+    """Move a merged item's attached commits to the survivor; how many moved.
+
+    One the survivor has already stays there as it was, and the merged item's
+    attachment of it goes: a commit is attached to an item once. The projects
+    those commits gave move with the item's projects, so each project the
+    survivor holds by its commits still has one of them.
+    """
+
+    moved = conn.execute(
+        "UPDATE OR IGNORE work_item_commits SET work_item_id = ? WHERE work_item_id = ?",
+        (survivor_id, identity),
+    ).rowcount
+    conn.execute("DELETE FROM work_item_commits WHERE work_item_id = ?", (identity,))
+    return int(moved)
+
+
 def _repoint_links(
     conn: sqlite3.Connection,
     identity: str,
@@ -4172,7 +4206,7 @@ def _stored_link(conn: sqlite3.Connection, source: str, target: str, kind: str) 
 
 
 def _counts(moved: dict[str, int]) -> str:
-    """`2 steps, 1 comment, 0 refs and 3 links`."""
+    """`2 steps, 1 comment, 0 refs, 3 commits and 1 link`."""
 
     parts = [f"{count} {name if count != 1 else name[:-1]}" for name, count in moved.items()]
     return f"{', '.join(parts[:-1])} and {parts[-1]}"

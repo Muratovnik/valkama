@@ -12,6 +12,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { wholeText, wholeTextOnTop } from './hintFramesPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { blockedWorkItem, spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -178,13 +179,15 @@ for (const width of [1280, 390] as const)
       expect(said.right).toBeLessThanOrEqual(line.right + 0.5)
       expect(said.bottom).toBeLessThanOrEqual(line.bottom + 0.5)
       expect(said.height).toBeLessThanOrEqual(geometry.lineHeight + 1)
-      // Cut words say so: the line ends in an ellipsis and its hint holds them whole.
+      // Cut words say so: the line ends in an ellipsis, and under the pointer they are laid whole
+      // over it.
       expect(geometry.cut).toBe(true)
       await expect(quote).toHaveCSS('text-overflow', 'ellipsis')
       await quote.scrollIntoViewIfNeeded()
       await quote.hover()
       await page.clock.runFor(1000)
-      await expect(page.locator('.tooltip-hint')).toContainText(QUOTE)
+      await expect(wholeText(page)).toHaveText(QUOTE)
+      expect(await wholeTextOnTop(page), 'the whole words over the card').toBe(true)
       // No row of the list stands over another.
       const boxes = await rows.evaluateAll((items) =>
         items.map((item) => item.getBoundingClientRect()),

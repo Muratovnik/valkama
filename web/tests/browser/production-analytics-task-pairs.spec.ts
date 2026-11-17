@@ -20,6 +20,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { LINED } from './drawnViews.ts'
 import { pairNames } from './pairNames.ts'
 import { WORLD } from './served/analyticsTaskPairs.ts'
 import { test } from './test.ts'
@@ -38,7 +39,6 @@ const PLACES = {
 const WIDTHS = [390, 760, 1024, 1107, 1108, 1200, 1280, 1300, 1440, 1600, 1920]
 
 /** What the choice of a chart over its table is called, in each language. */
-const CHART = { en: 'Chart', ru: 'График' }
 
 /**
  * The task section in `locale` at `width`, split by model or not, with its names read. A panel
@@ -53,7 +53,7 @@ async function openTasks(page: Page, locale: 'en' | 'ru', width: number, split: 
     pageAt(split ? { by: 'work_item', across: 'model' } : { by: 'work_item' }),
   )
   await page.setViewportSize({ width, height: 900 })
-  const tables = page.getByRole('radio', { name: CHART[locale], checked: false })
+  const tables = page.getByRole('radio', { name: LINED, checked: false })
   while ((await tables.count()) > 0) await tables.first().click()
   await expect(page.locator(PLACES.bars)).toHaveCount(PAIRS)
   await page.evaluate(() => document.fonts.ready)

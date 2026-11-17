@@ -823,7 +823,7 @@ TOOLS = [
         "Fold items that are one change — one cause, one fix — into the item that"
         " survives (id), all or nothing. Their checklist steps, keeping ids, ticks"
         " and step claims, their discussion threads whole, questions with their"
-        " replies, refs, links and projects move to it; each merged item is linked"
+        " replies, refs, commits, links and projects move to it; each merged item is linked"
         " duplicates to it, gets a summary naming it, is released and closes in its"
         " cancelled state. A project more than one of them names keeps the strongest"
         " source: named, then commits, then migrated. Their history, reports with their threads, description and parent"
@@ -867,8 +867,8 @@ TOOLS = [
         "Apply several changes to a work item",
         "Several writes to one item in one call, all or nothing. The groups apply"
         " in this order: claim,"
-        " subscribe, update, convert, checklist, checklist_ticks, refs, links, comment or"
-        " comments,"
+        " subscribe, update, convert, checklist, checklist_ticks, refs, commits, links, comment"
+        " or comments,"
         " resolutions, questions, summary, then one of transition, defer or move_out — so a"
         " claim and"
         " its steps take one call, and a closing"
@@ -992,8 +992,8 @@ TOOLS = [
             "refs": {
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
-                "description": "Structured pointers to attach: a commit, an AgentMemory"
-                " record id or a url. Attach every memory record materially used for"
+                "description": "Structured pointers to attach: an AgentMemory record id"
+                " or a url. Attach every memory record materially used for"
                 " this work as kind=memory with its stable id; this is a one-way"
                 " pointer and never writes back. Your own session needs no ref:"
                 " Valkama records the confirmed session of every write itself. Raw"
@@ -1006,6 +1006,26 @@ TOOLS = [
                         "label": _STR,
                     },
                     "required": ["kind", "value"],
+                },
+            },
+            "commits": {
+                "type": "array",
+                "maxItems": api.MAX_APPLY_ENTRIES,
+                "description": "Commits to attach to this item, or with remove: true to"
+                " detach. Valkama attaches the commits a session makes and says so in its"
+                " hook answer; use this for a commit it could not place, one made outside a"
+                " session, or to move one to the right item. repository is the registered"
+                " project id; hash is a full hash or a prefix of at least 7 hex digits that"
+                " the repository resolves.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "repository": _STR,
+                        "hash": _STR,
+                        "label": _STR,
+                        "remove": _BOOL,
+                    },
+                    "required": ["repository", "hash"],
                 },
             },
             "links": {
@@ -1455,7 +1475,7 @@ REMOVED_TOOLS: dict[str, str] = {
     "link_work_items": 'apply_work_item_changes with links: {"id": "MAIN-12",'
     ' "links": [{"other": "MAIN-14", "kind": "blocks"}]}',
     "attach_work_item_ref": 'apply_work_item_changes with refs: {"id": "MAIN-12",'
-    ' "refs": [{"kind": "commit", "value": "…"}]}',
+    ' "refs": [{"kind": "memory", "value": "…"}]}',
     "set_work_item_summary": 'apply_work_item_changes with summary: {"id": "MAIN-12",'
     ' "summary": {"done": "…", "next": "…"}}',
     "report_work_item": "apply_work_item_changes with summary, which records the outcome:"

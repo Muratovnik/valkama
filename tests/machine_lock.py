@@ -54,10 +54,25 @@ def lock_path() -> Path:
     """
 
     if sys.platform == "win32":
-        directory = Path(os.environ["LOCALAPPDATA"]) / "Temp"
+        directory = Path(caller_local_app_data()) / "Temp"
     else:
         directory = Path("/tmp")
     return directory / f"valkama-heavy-tests-{getpass.getuser()}.lock"
+
+
+def caller_local_app_data() -> str:
+    """`LOCALAPPDATA` as the caller of this process set it.
+
+    Importing the `tests` package moves the variable into the suite's directory
+    and keeps the caller's value, and `tests/isolated.py gates` imports this file
+    through the package; a lock in the suite's directory would hold nobody else's
+    run. Run as a script, this file imports no package, so the command it runs
+    keeps the caller's variable and finds the browsers under it.
+    """
+
+    package = sys.modules.get("tests")
+    caller = getattr(package, "CALLER_LOCAL_APP_DATA", None)
+    return caller or os.environ["LOCALAPPDATA"]
 
 
 def _say(line: str) -> None:

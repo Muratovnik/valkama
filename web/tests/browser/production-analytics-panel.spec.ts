@@ -1,8 +1,8 @@
 /**
  * The panel of a dimension in the real app, measured. Beside the rail its parts stand whole, one
- * under the next, and the table stands at its full height in the panel's one scroll: a wheel over
- * it scrolls the panel, the document standing still, and at the end of that scroll its heading
- * row, its names and its total row are still in view. On a phone the names stay in view
+ * under the next, and a table shorter than the window stands at its own height, its frame no
+ * taller: a wheel over it scrolls the panel or the table, the document standing still, and at the
+ * end of both scrolls its heading row, its names and its total row are still in view. On a phone the names stay in view
  * while the table scrolls sideways. A second dimension chosen in the section's heading splits the
  * table into pairs, is the address and outlives a reload, and the file downloaded is a row per
  * pair; with the measure
@@ -10,8 +10,8 @@
  * small charts beside it are titled in one line each, and so is the line over the table that
  * counts its rows, in Russian as in English; on a phone no name in a chart's table breaks inside a
  * word. The section of the tokens by kind is such a panel too: its counted kinds add up to the
- * summary's «Tokens» figure, the cache reads stand apart from them, and its address gives it
- * back. Each run prints what it measured.
+ * summary's «Tokens» figure and are the sectors of its ring, the cache reads stand apart from
+ * them, and its address gives it back. Each run prints what it measured.
  */
 import { readFile } from 'node:fs/promises'
 
@@ -62,8 +62,11 @@ async function scrolled(page: Page) {
       panelEnd: panel ? panel.scrollHeight - panel.clientHeight : 0,
       // How far the charts could scroll sideways: never, whatever a chart reaches past.
       chartsWide: charts ? charts.scrollWidth - charts.clientWidth : -1,
-      // How far the table's frame could scroll up and down: never, it stands at its full height.
+      // How far the table's frame could scroll up and down, and how much taller it is than its table.
       tableEnd: frame ? frame.scrollHeight - frame.clientHeight : -1,
+      frameRoom: frame
+        ? frame.clientHeight - (frame.querySelector('table')?.offsetHeight ?? 0)
+        : -1,
       tableLeft: frame?.scrollLeft ?? 0,
     }
   })
@@ -113,7 +116,7 @@ for (const [width, height] of [
   [1440, 900],
   [1280, 768],
 ] as const)
-  test(`at ${width}×${height} the table stands whole in the panel’s scroll and keeps its heading, names and total in view`, async ({
+  test(`at ${width}×${height} the table stands at its own height and keeps its heading, names and total in view`, async ({
     page,
   }, info) => {
     await serve(page)
@@ -125,7 +128,9 @@ for (const [width, height] of [
 
     expect(await parts(page), 'parts that spill or overlap').toEqual([])
     const before = await scrolled(page)
-    expect(before.tableEnd, 'a table that scrolls up and down on its own').toBe(0)
+    // Fourteen rows are shorter than the window: the frame is as tall as its table, no taller.
+    expect(before.tableEnd, 'a short table that scrolls up and down on its own').toBe(0)
+    expect(before.frameRoom, 'room in the frame past its table').toBe(0)
     expect(before.panelEnd, 'a panel taller than its window').toBeGreaterThan(0)
     expect(before.chartsWide, 'charts that scroll sideways').toBe(0)
 
@@ -173,7 +178,7 @@ test('at 1440 pixels the ranked list and the small charts beside it are titled i
         part,
         text: heading.textContent.trim(),
         lines: Math.round(height / line),
-        header: Math.round(heading.parentElement?.getBoundingClientRect().height ?? 0),
+        header: Math.round(heading.closest('.level-head')?.getBoundingClientRect().height ?? 0),
       }
     }),
   )
@@ -446,15 +451,16 @@ test('the tokens by kind are a panel whose counted kinds add up to the «Tokens�
   await expect(about).toContainText(/reasoning is part of output/u)
   await panel.locator('.level-about-press').click()
 
-  // Ranked with a bar: the counted kinds; after them, with no bar, the two the figure leaves out.
-  const bars = panel.locator('.kinds-bars')
-  await expect(bars.locator('ol .ranked-label')).toHaveText([
+  // A ring of the counted kinds, named by its legend; beside it, no part of it, the two the
+  // figure leaves out.
+  const ring = panel.locator('.kinds-bars .donut-chart')
+  await expect(ring.locator('.chart-key-name')).toHaveText([
     'Input',
     'Output',
     'Cache write, 5 min',
   ])
-  await expect(bars.locator('.ranked-rest .ranked-label')).toHaveText(['Cache read', 'Reasoning'])
-  await expect(bars.locator('.ranked-rest .ranked-bar')).toHaveCount(0)
+  await expect(ring.locator('.donut-sector')).toHaveCount(3)
+  await expect(ring.locator('.donut-note-name')).toHaveText(['Cache read', 'Reasoning'])
   // A small chart of each counted kind on one scale, the cache reads apart by their figure.
   await expect(panel.locator('.kinds-multiples h3')).toHaveText('Per day, by kind')
   expect(await parts(page), 'parts that spill or overlap').toEqual([])

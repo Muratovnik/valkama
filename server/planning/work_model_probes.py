@@ -62,6 +62,7 @@ _ROWS: dict[str, dict[str, object]] = {
     # The event it marks is the new rowid each probe takes.
     "agent_decisions": {"point": "decision", "what": "probe"},
     "analytics_surface_uses": {"day": "0001-01-01", "kind": "page_open", "count": 1},
+    "commits": {"project_id": _NEW, "hash": "0" * 40, "reported_at": "probe"},
     "execution_sessions": {"execution_id": _NEW, "session_id": _NEW, "relation": "launched"},
     "executions": {
         "execution_id": _NEW,
@@ -138,6 +139,7 @@ _ROWS: dict[str, dict[str, object]] = {
         "quality": "observed",
     },
     "work_item_comments": {"work_item_id": _NEW, "body": "probe"},
+    "work_item_commits": {"work_item_id": _NEW, "commit_id": 0, "attached_by": "server"},
     "work_item_deferrals": {
         "work_item_id": _NEW,
         "until_at": "2026-12-01T00:00:00Z",
@@ -153,7 +155,7 @@ _ROWS: dict[str, dict[str, object]] = {
     },
     "work_item_links": {"from_id": _NEW, "to_id": _NEW, "kind": "blocks"},
     "work_item_projects": {"work_item_id": _NEW, "project_id": _NEW, "source": "named"},
-    "work_item_refs": {"work_item_id": _NEW, "kind": "commit", "value": "probe"},
+    "work_item_refs": {"work_item_id": _NEW, "kind": "url", "value": "probe"},
     "work_item_request_answers": {
         "request_id": _NEW,
         "version": 1,
@@ -215,6 +217,10 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
     ("analytics_surface_uses", "typeof(count) = 'integer' AND count > 0"): (
         ({"count": 0}, {"count": 1.5}),
         (),
+    ),
+    ("commits", "length(hash) BETWEEN 7 AND 64 AND hash NOT GLOB '*[^0-9a-f]*'"): (
+        ({"hash": "0" * 6}, {"hash": "0" * 65}, {"hash": "A" * 40}),
+        ({"hash": "0" * 7}, {"hash": "f" * 64}),
     ),
     ("label_settings", "ready IS NOT NULL OR description IS NOT NULL"): (
         ({"ready": None},),
@@ -301,6 +307,7 @@ _TAKEN_WITH: dict[tuple[str, str, object], dict[str, object]] = {
 _RETIRED: dict[tuple[str, str], tuple[object, ...]] = {
     ("workflow_states", "category"): ("backlog", "queued"),
     ("work_items", "kind"): ("epic",),
+    ("work_item_refs", "kind"): ("commit",),
     ("work_item_requests", "expired_reason"): ("task_closed",),
 }
 

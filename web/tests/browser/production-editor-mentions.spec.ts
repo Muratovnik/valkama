@@ -3,6 +3,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { installDocuments } from './documentBackend.ts'
 import { openCard } from './editorPage.ts'
+import { wholeText, wholeTextOnTop } from './hintFramesPage.ts'
 import { planningSpace } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -196,7 +197,8 @@ test('what a row cuts short shows whole under the pointer, and what it shows who
   await page.clock.runFor(500)
   const rows = list.getByRole('option')
   await expect(rows).toHaveCount(3)
-  const words = page.getByRole('tooltip')
+  // A row's part that is cut is laid whole over itself, over the sheet of suggestions.
+  const words = wholeText(page)
   /** The pointer rests on a part of a row, from the field, as a hand comes back to the list. */
   const rest = async (part: Locator) => {
     await comment.hover()
@@ -210,7 +212,9 @@ test('what a row cuts short shows whole under the pointer, and what it shows who
 
   await rest(rows.nth(1).locator('.markdown-suggestion-name'))
   await expect(words).toHaveText(LONG.slice(LONG.lastIndexOf('/') + 1))
+  expect(await wholeTextOnTop(page), 'the whole name over the sheet').toBe(true)
 
   await rest(rows.nth(2).locator('.markdown-suggestion-detail'))
   await expect(words).toHaveText(LINE.trim())
+  expect(await wholeTextOnTop(page), 'the whole line over the sheet').toBe(true)
 })

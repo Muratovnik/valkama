@@ -6,7 +6,7 @@
  * it moved, at the widths where the bar is one line and at 1024px, where it is two rows and the
  * name stands at the second row's start. Back is «Today» again, its whole day. A span
  * whose name is longer than the line has room for once it gave up all else is cut at its end,
- * the read again kept at the line's end and the hint saying the name whole.
+ * the read again kept at the line's end and its whole words laid over it under the pointer.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -14,6 +14,7 @@ import type { Page } from '@playwright/test'
 import { task } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
+import { wholeText } from './hintFramesPage.ts'
 import { at, NOW, serveLive } from './liveDouble.ts'
 import { TODAY } from './served/analyticsMomentSpan.ts'
 import { test } from './test.ts'
@@ -202,7 +203,7 @@ for (const lang of ['en', 'ru'] as const)
       const name = page.locator('.analytics-bar-span')
       const words = WORDS[lang].night
 
-      /** Whether the line ends at the read again, and whether the name is cut and has a hint. */
+      /** Whether the line ends at the read again, and whether the name is cut and laid whole. */
       async function nameState() {
         // The line fits once it gave up what it can, and gives nothing up for room it has.
         await expect
@@ -216,14 +217,15 @@ for (const lang of ['en', 'ru'] as const)
           .toBeLessThanOrEqual(0)
         const cut = await name.evaluate((element) => element.scrollWidth > element.clientWidth)
         await name.hover()
-        const hint = page.getByRole('tooltip').filter({ hasText: words })
-        // A hint shows after a moment, or never: wait for one only where the name is cut.
-        await expect(hint).toHaveCount(Number(cut))
+        const whole = wholeText(page).filter({ hasText: words })
+        // The whole name is laid over the cut one after a moment, or never: wait for it only
+        // where the name is cut.
+        await expect(whole).toHaveCount(Number(cut))
         await page.mouse.move(0, 0)
         return { name: await name.textContent(), cut }
       }
 
-      // At 1200px the line has room for the name whole, and it has no hint.
+      // At 1200px the line has room for the name whole, and nothing is laid over it.
       await openReport(page, 1200, NIGHT_ADDRESS)
       await page.evaluate(() => document.fonts.ready)
       await expect(name).toHaveText(words)
@@ -232,7 +234,7 @@ for (const lang of ['en', 'ru'] as const)
 
       // At 1120px, about the narrowest window the bar is one line in, a read again that failed
       // says so beside it, and the line has room for the name only once it gave up all else: it
-      // is cut at its end, and its hint says it whole.
+      // is cut at its end, and its whole words are laid over it.
       const analytics = await openReport(page, 1120, NIGHT_ADDRESS)
       await page.evaluate(() => document.fonts.ready)
       await expect(name).toHaveText(words)

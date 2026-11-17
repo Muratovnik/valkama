@@ -21,7 +21,7 @@ import unittest
 
 from server import mcp_surface
 from server.hooks import notify
-from server.planning import api, calls, model, questions, requests
+from server.planning import api, calls, model, questions, requests, service, waiting
 from tests.test_hooks_tree_notices import (
     A1,
     AS_A1,
@@ -330,6 +330,39 @@ class WordsLeftTests(Harness):
         self.assertEqual([self.g2], [left["reference"] for left in claimed["waiting"]])
         self.assertEqual((0, ""), self.watch(E, alive=1.0), "its answer was enough")
         self.assertIsNone(self.hook(E))
+
+    def test_an_orchestrator_hears_once_words_that_both_rows_of_a_goal_hold(self) -> None:
+        """The space row starts before the comment and the tree row at it: both hold SAID."""
+
+        with calls.bind(calls.valkama(), "test-writer"):
+            waiting.leave(
+                self.conn,
+                str(service.get_work_item(self.conn, self.g2)["work_item_id"]),
+                waiting.SPACE,
+            )
+        self.conn.commit()
+        self.person(COMMENT, id=self.g2, body=SAID)
+        self.agent("claim_work_item", AS_E1, id=self.t4)
+        self.heard_once()
+
+    def test_an_orchestrator_is_not_handed_again_what_its_subagent_already_had(self) -> None:
+        """The subagent takes the space row outside the tree, then the tree row under the goal."""
+
+        with calls.bind(calls.valkama(), "test-writer"):
+            waiting.leave(
+                self.conn,
+                str(service.get_work_item(self.conn, self.g2)["work_item_id"]),
+                waiting.SPACE,
+            )
+        self.conn.commit()
+        self.person(COMMENT, id=self.g2, body=SAID)
+        self.agent("claim_work_item", AS_E1, id=self.made("T outside the goal"))
+        first = self.hook(E)
+        assert first is not None, "the claim outside handed the space row to E"
+        self.assertEqual(1, first.count(SAID), first)
+        self.agent("claim_work_item", AS_E1, id=self.t4)
+        again = self.hook(E) or ""
+        self.assertNotIn(SAID, again, "the words were handed once already")
 
     def test_words_after_the_claim_are_the_trees_news(self) -> None:
         self.person(COMMENT, id=self.g2, body=SAID)

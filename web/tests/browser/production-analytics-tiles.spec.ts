@@ -1,7 +1,7 @@
 /**
  * The three summary tiles stand one height at every width the page is read at, the height of
- * the widest, because each line under a figure keeps one line; what a cut line hides is whole
- * in the tile's hint, never an empty one. A tile not chosen answers the pointer with a ground of
+ * the widest, because each line under a figure keeps one line; a cut line says itself whole
+ * over its own place, never in an empty hint. A tile not chosen answers the pointer with a ground of
  * its own, as a segment of the period does with its ink, and nothing moves.
  */
 import { expect } from '@playwright/test'
@@ -11,7 +11,7 @@ import { test } from './test.ts'
 
 const WIDTHS = [1280, 1440, 1920]
 
-test('the summary tiles stand one height at every width, each cut line whole in the hint', async ({
+test('the summary tiles stand one height at every width, each cut line whole over itself', async ({
   page,
 }, info) => {
   await serve(page)
@@ -46,7 +46,7 @@ test('the summary tiles stand one height at every width, each cut line whole in 
   expect(new Set(widest).size, 'the three tiles at 1920px').toBe(1)
   for (const width of WIDTHS) expect(heights[width], `the tiles at ${width}px`).toEqual(widest)
 
-  // At the narrowest width the tokens' notes are cut, and the tile's hint says them whole.
+  // At the narrowest width the tokens' notes are cut, and each says itself whole over its place.
   await openReport(page, 1280)
   const tokens = page.locator('.spending-tiles .segmented-option', {
     has: page.locator('[data-measure="tokens"]'),
@@ -54,17 +54,18 @@ test('the summary tiles stand one height at every width, each cut line whole in 
   const texts = await tokens.locator('.tile-note').allTextContents()
   const notes = texts.map((note) => note.trim())
   expect(notes).toHaveLength(2)
-  const cut = await tokens
-    .locator('.tile-note')
-    .evaluateAll((all) => all.some((note) => note.scrollWidth > note.clientWidth))
-  expect(cut, 'a tokens note is cut at 1280px').toBe(true)
-  await tokens.locator('.tile-note').first().hover()
-  const hint = page.getByRole('tooltip')
-  await expect(hint).toBeVisible()
-  const said = (await hint.textContent()) ?? ''
-  for (const note of notes) expect(said).toContain(note)
-  const figure = await tokens.locator('.tile-figure').textContent()
-  expect(said).toContain(figure?.trim() ?? '')
+  const cut = await tokens.locator('.tile-note').evaluateAll((all) =>
+    all
+      .map((note, index) => ({ index, cut: note.scrollWidth > note.clientWidth }))
+      .filter((note) => note.cut)
+      .map((note) => note.index),
+  )
+  expect(cut.length, 'the tokens notes cut at 1280px').toBeGreaterThan(0)
+  const whole = page.locator('.whole-text')
+  for (const index of cut) {
+    await tokens.locator('.tile-note').nth(index).hover()
+    await expect(whole, `the cut note ${index + 1}`).toHaveText(notes[index] ?? '')
+  }
 })
 
 test('a tile not chosen takes a ground under the pointer, and nothing moves', async ({

@@ -326,10 +326,6 @@ class WorkModelPreconditionError(RuntimeError):
         self.report = report
 
 
-LINK_KINDS = ("blocks", "blocked_by", "discovered_from")
-REF_KINDS = ("session", "commit", "memory", "url")
-
-
 DATA_ROOT = ".valkama"
 DATA_PREFIX = "valkama"
 
@@ -976,7 +972,8 @@ def _recovery_point_holds(
 
     Its logical identity is the source's, read when it was taken and again inside the
     migration's transaction before the first write, and every picture is beside it.
-    Restoring it is copying it into the store's place, as `README.md` describes.
+    Restoring it is copying it into the store's place, as `docs/guides/store-upgrades.md`
+    describes.
     """
 
     del conn

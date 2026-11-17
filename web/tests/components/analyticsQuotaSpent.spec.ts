@@ -3,7 +3,8 @@
  * oracle is the requirement: under each window that has a start, the work Valkama recorded on that
  * account from the window's start to the answer's moment, ranked by its API price estimate with
  * each item's share of that estimate, by task first and by project or model on choice; the first
- * five items and one line for the rest; a heading that names the period it covers, and the
+ * five items and one line for the rest, or a ring of every item, opening on the bars by task and
+ * on the ring by project or model; a heading that names the period it covers, and the
  * section's «ⓘ» that says once it is the API price estimate and not quota points, and that
  * claude.ai and the desktop app are not in it. Another
  * account's work is never in it, and its organization's work with no account known is said apart
@@ -152,6 +153,7 @@ describe('where a window went', () => {
     const page = await openFiveHours()
     await radio(blockOf(page, 'Work'), 'Projects').trigger('click')
     await flushPromises()
+    await radio(blockOf(page, 'Work'), 'Bars').trigger('click')
     expect(lines(blockOf(page, 'Work'))).toEqual([
       ['Atlas', '≈ $9.00 · 69%'],
       ['Beacon', '≈ $3.00 · 23%'],
@@ -175,6 +177,47 @@ describe('where a window went', () => {
       ['m-a', '≈ $10.00 · 77%'],
       ['m-b', '≈ $3.00 · 23%'],
     ])
+  })
+
+  it('draws the items as a ring by project, with the bars’ figures in its legend, and the tasks as bars', async () => {
+    stubAnalyticsReads(usage, quota)
+    const page = await openFiveHours()
+    const block = () => blockOf(page, 'Work')
+    // By task it opens on the bars, a ring of tasks folding most of them into its rest.
+    expect(radio(block(), 'Bars').attributes('aria-checked')).toBe('true')
+    expect(block().find('.donut-chart').exists()).toBe(false)
+
+    await radio(block(), 'Projects').trigger('click')
+    await flushPromises()
+    expect(radio(block(), 'Ring').attributes('aria-checked')).toBe('true')
+    expect(block().find('.ranked-bars').exists()).toBe(false)
+    // The bars' figures and shares, each at the end of its legend line, no words on a sector.
+    expect(
+      block()
+        .findAll('.chart-entry')
+        .map((one) => [one.get('.chart-key-name').text(), plain(one.get('.chart-figure').text())]),
+    ).toEqual([
+      ['Atlas', '≈ $9.00 · 69%'],
+      ['Beacon', '≈ $3.00 · 23%'],
+      ['Unknown', '≈ $1.00 · 8%'],
+    ])
+    expect(block().get('.donut-ring').text()).toBe('')
+
+    // Chosen, the bars stand for every breakdown until the page is left.
+    await radio(block(), 'Bars').trigger('click')
+    await radio(block(), 'Models').trigger('click')
+    await flushPromises()
+    expect(block().find('.donut-chart').exists()).toBe(false)
+    expect(lines(block())[0]).toEqual(['m-a', '≈ $10.00 · 77%'])
+
+    // The panel's table hides the block's switch: one switch chose for every chart of the card.
+    await radio(page.get('.quota-panel .chart-section > .level-head'), 'Table').trigger('click')
+    await flushPromises()
+    expect(
+      block()
+        .findAll('[role="radio"]')
+        .map((one) => one.text()),
+    ).toEqual(['Tasks', 'Projects', 'Models'])
   })
 
   it('reads a week from its own start', async () => {
@@ -215,7 +258,7 @@ describe('the states of what used a window', () => {
     expect(waiting.attributes('data-state')).toBe('loading')
     expect(waiting.get('.window-spend-body').text()).toBe('Loading')
     // The panel's own figures stand meanwhile.
-    expect(accountNamed(page, 'Work').get('.window-value').text()).toBe('62% used')
+    expect(accountNamed(page, 'Work').get('.quota-window-lead').text()).toBe('62% used · fresh')
     for (const held of reads.held) held.release(usage(held.query))
     await flushPromises()
     await wait(LOADING_MIN_SHOWN_MS + 50)
@@ -232,7 +275,7 @@ describe('the states of what used a window', () => {
       'What used this window could not be read. Retry',
     )
     expect(page.text()).not.toContain('The quota could not be read.')
-    expect(accountNamed(page, 'Work').get('.window-value').text()).toBe('62% used')
+    expect(accountNamed(page, 'Work').get('.quota-window-lead').text()).toBe('62% used · fresh')
     fails = false
     await failed.get('.window-spend-failed button').trigger('click')
     await flushPromises()

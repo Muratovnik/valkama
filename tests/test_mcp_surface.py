@@ -956,7 +956,7 @@ class ToolArgumentTests(McpSurfaceTestCase):
         self.call_tool(
             "apply_work_item_changes",
             reference=self.second,
-            refs=[{"kind": "commit", "value": "d5678"}],
+            refs=[{"kind": "memory", "value": "d5678"}],
         )
         self.assertEqual(
             1, self.call_tool("get_work_item", id=self.second)["parts"]["refs"]["count"]
@@ -1809,7 +1809,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
             "author": "one",
             "claim": True,
             "checklist_ticks": [{"item_id": self.steps[0]}, {"item_id": self.steps[1]}],
-            "refs": [{"kind": "commit", "value": "abc1234", "label": "the change"}],
+            "refs": [{"kind": "memory", "value": "abc1234", "label": "the change"}],
             "links": [{"other": self.other, "kind": "relates-to"}],
             "comment": {"body": "closing note", "checklist_item_id": self.steps[1]},
             "summary": {"done": "both steps", "next": "nothing"},
@@ -1870,7 +1870,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertEqual([True, True], [step["done"] for step in item["checklist"]])
         self.assertEqual(["one", "one"], [step["done_by"] for step in item["checklist"]])
         self.assertEqual(
-            [("commit", "abc1234", "the change")],
+            [("memory", "abc1234", "the change")],
             [(ref["kind"], ref["value"], ref["label"]) for ref in item["refs"]],
         )
         self.assertEqual(
@@ -2143,6 +2143,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "checklist",
                 "checklist_ticks",
                 "refs",
+                "commits",
                 "links",
                 "comment",
                 "comments",
@@ -2710,7 +2711,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
             (
                 {"parts": "history"},
                 "unknown part 'history'; parts are card, comments, events, links, refs,"
-                " questions, mentions, sessions, images, subscribers, claim, sections,"
+                " commits, questions, mentions, sessions, images, subscribers, claim, sections,"
                 " participants, confirmation",
             ),
             (

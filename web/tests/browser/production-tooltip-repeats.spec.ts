@@ -20,6 +20,7 @@ import { ASKING_HEAD, openHead, PICTURE } from './cardHeadPage.ts'
 import { serve as serveChain, smallChain } from './chainFixtures.ts'
 import { drawnColours } from './contrast.ts'
 import { openMentionList } from './editorPage.ts'
+import { hintsFadedIn } from './hintFramesPage.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
 import { heldCard, openPlanFor } from './openSessionFixtures.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
@@ -95,10 +96,10 @@ interface Shown {
  * The hint showing under the pointer at `x, y`, its anchor's kind and the words the anchor
  * shows. A word inside a box cut to nothing, a hidden or a transparent one is not shown. The
  * anchor's own words, said whole over a detail while they are cut, are read apart: a cut
- * word is not on screen.
+ * word is not on screen. A cut text's words laid whole over it are its hint as well.
  */
 function readShown([x, y]: [number, number]): Shown | null {
-  const hint = document.querySelector('.tooltip-hint')
+  const hint = document.querySelector('.tooltip-hint, .whole-text')
   const anchor = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-tooltip]')
   if (!hint || !anchor) return null
   // The hint's own words, without the state under them or the copy read to assistive technology.
@@ -349,6 +350,7 @@ for (const width of [1280, 390] as const)
         hint(page).evaluate((node) => getComputedStyle(node).color),
       ])
       expect(quiet).not.toBe(main)
+      await hintsFadedIn(page)
       const drawn = await note.evaluate(drawnColours, 'own' as const)
       expect(drawn.contrast).toBeGreaterThanOrEqual(4.5)
 

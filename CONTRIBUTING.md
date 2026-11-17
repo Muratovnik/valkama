@@ -31,6 +31,9 @@ cd web     && npm ci
 cd desktop && npm ci
 ```
 
+[Building and development](docs/guides/development.md) shows how to run the web UI
+and the desktop app from source and rebuild them.
+
 ## The gates
 
 Every change runs all of these, from the repository root. GitHub CI runs the
@@ -42,6 +45,7 @@ exercised.
 python -m ruff check .
 python -m ruff format --check .
 python tests/commit_subjects.py
+python .github/relkit.pyz audit --history
 typos
 vulture server tests valkama.py vulture_whitelist.py --min-confidence 60
 mypy
@@ -59,6 +63,13 @@ npm test
 
 The toolchain is pinned in `requirements-dev.txt` and configured in
 `pyproject.toml`. Do not loosen a pin to make a gate pass.
+
+The history audit reads every commit and needs a clean tracked tree, so it runs
+on the clean head before publication, not between commits. Before each commit,
+`python .github/relkit.pyz audit --staged` checks what is about to be committed.
+
+An owner checkout additionally runs `python .github/relkit.pyz protect install`
+once and `python .github/relkit.pyz audit --history --owner` before publication.
 
 `tests/isolated.py` runs that list in one call, in a throwaway profile, so a run
 cannot write test projects or a store into your own. Run it with the virtual
@@ -167,10 +178,11 @@ readable years later.
 | the desktop window | `desktop/` |
 | anything that exists only because the host is Windows | `windows/` |
 | a product contract | `docs/`, with `status:` frontmatter |
+| a guide to using the product | `docs/guides/`, without frontmatter |
 
 A new file at the top level needs an argument for why it belongs to none of
-those. `tests/test_docs_lifecycle.py` refuses a document under `docs/` without
-its frontmatter.
+those. `tests/test_docs_lifecycle.py` refuses a document under `docs/`, outside
+`docs/guides/`, without its frontmatter.
 
 ## Releasing
 
@@ -203,6 +215,50 @@ server, which needs only the standard library. The web build that `check` runs
 in the copy replaces `web/dist` in the checkout; commit it only when `web/src`
 changed.
 
+### The changelog entry
+
+The release publishes the entry `CHANGELOG.md` holds for its version, as it was
+committed, and refuses a version that has none. The changelog keeps Release Kit's
+`conventional-changelog` profile, which `[changelog]` in `relkit.toml` declares.
+Write and commit the entry before `release prepare`, starting from a draft of the
+commits since the previous release:
+
+```powershell
+python .github/relkit.pyz notes v<next> --draft --from-tag v<prev>
+```
+
+The draft is printed, not written into the changelog. Under its version heading
+it lists every `feat`, `fix`, `perf` and `revert` commit and every breaking
+change, one line per commit subject, each linked to its commit. A draft downloads
+Release Kit's pinned git-cliff when its cache lacks it, so the first one on a
+machine needs the network. Make the entry from it for the people who use the
+release:
+
+- Keep only what a user of `v<prev>` sees changed. Drop a fix of something that
+  first appeared in the same release, and merge the steps of one feature into one
+  line that keeps their commit links.
+- Write each line for that user rather than for the reviewer of the commit, and
+  keep every removal, migration, breaking change, security or data-safety fix and
+  changed default.
+- Open the entry with a few lines under `### Highlights`. Put what breaks for a
+  user under `### Breaking Changes` with what to do about it: a store schema that
+  older builds refuse, its recovery point and the way back belong there or in the
+  highlights.
+- Set the heading's date to the release's own. An entry runs to tens of lines,
+  not hundreds.
+
+Then read the entry back as the release will:
+
+```powershell
+python .github/relkit.pyz notes v<next>
+```
+
+It prints the entry, or refuses it naming the line and the rule it breaks: the
+heading compares `v<prev>` with `v<next>`, and every line under Features, Bug
+Fixes and Performance Improvements carries a commit link on its first line, its
+label the start of the hash. `release prepare` then refuses a link to a commit
+outside the release.
+
 ## Reporting a bug
 
 Include what you ran, what happened, and what you expected. For anything
@@ -216,4 +272,5 @@ rather than a public issue.
 ## License
 
 By contributing you agree that your contribution is licensed under the
-[MIT License](LICENSE), the same as the rest of the project.
+[Apache License 2.0 with the Commons Clause License Condition v1.0](LICENSE), the
+same as the rest of the project.

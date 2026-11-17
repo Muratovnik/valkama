@@ -52,7 +52,7 @@ recovery explains the owning boundary and next action.
   its identity, its version and the capabilities it answers — four fields and
   nothing else. The transport record, written by the owner, says where the
   adapter is reached. Neither enables anything or authorizes anything, and
-  neither is published to the browser. The [README](../README.md#external-adapters)
+  neither is published to the browser. The [external adapters guide](guides/external-adapters.md)
   describes the three calls and the checks.
 
 ## Routes and adapters
@@ -74,7 +74,8 @@ module.
 ## References and project membership
 
 A work item's references are Planning's own records: a typed pointer (`memory`,
-`session`, `commit` or `url`) with a stored label. A memory reference stays
+`session` or `url`) with a stored label. A commit is no reference: it is attached
+to the item as a registered project and a hash. A memory reference stays
 readable when its provider is unavailable, and removing a provider does not
 rewrite or delete the pointers that name it.
 

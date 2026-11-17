@@ -334,7 +334,7 @@ class ConvertingTree(SplitTree):
             id=t,
             comment={"body": "A note on t"},
             links=[{"other": x, "kind": "blocks"}, {"other": related, "kind": "relates-to"}],
-            refs=[{"kind": "commit", "value": "abc1234"}],
+            refs=[{"kind": "url", "value": "https://example.invalid/t"}],
         )
         self.agent("apply_work_item_changes", AS_B, id=t, subscribe=True)
         self.agent("claim_work_item", AS_A, id=t)

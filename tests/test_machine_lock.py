@@ -20,6 +20,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from unittest import mock
 
+import tests
 from server import store_lock
 from tests import machine_lock
 
@@ -177,19 +178,42 @@ class LockTests(LockCase):
         # must not follow it there, or it would hold only the runs given that TEMP.
         given = str(ROOT / ".git" / "relkit" / "tmp" / "candidate")
         # The isolated gates runner redirects LOCALAPPDATA into its result directory, which
-        # may sit inside the checkout; the lock's place is pinned here so the check holds
-        # whatever the caller's redirection is.
-        profile = str(Path(tempfile.gettempdir()) / "valkama-lock-profile")
-        with mock.patch.dict(os.environ, {"LOCALAPPDATA": profile}):
+        # may sit inside the checkout, and this process was started with that; the lock's
+        # place is pinned here so the check holds whatever the caller's redirection is. Not
+        # under the TEMP this run was given either: the release coordinator runs this very
+        # check with that TEMP inside the checkout.
+        profile = str(Path(ROOT.anchor) / "valkama-lock-profile")
+        with mock.patch.object(tests, "CALLER_LOCAL_APP_DATA", profile):
             reference = machine_lock.lock_path().resolve()
-        with mock.patch.dict(
-            os.environ, {"LOCALAPPDATA": profile, "TMP": given, "TEMP": given, "TMPDIR": given}
-        ):
-            with mock.patch.object(tempfile, "tempdir", given):
-                path = machine_lock.lock_path().resolve()
+            with mock.patch.dict(os.environ, {"TMP": given, "TEMP": given, "TMPDIR": given}):
+                with mock.patch.object(tempfile, "tempdir", given):
+                    path = machine_lock.lock_path().resolve()
         self.assertFalse(path.is_relative_to(ROOT))
         self.assertFalse(path.is_relative_to(Path.home() / ".valkama"))
         self.assertEqual(reference, path)
+
+    @unittest.skipUnless(sys.platform == "win32", "only on Windows is the lock under LOCALAPPDATA")
+    def test_the_lock_stays_with_the_local_application_data_the_caller_gave(self) -> None:
+        # Importing the `tests` package moved LOCALAPPDATA into the suite's directory, and
+        # the gates import this file through it: a lock there would hold no other run.
+        caller = Path(tempfile.gettempdir()) / "valkama-caller-profile"
+        with mock.patch.object(tests, "CALLER_LOCAL_APP_DATA", str(caller)):
+            self.assertEqual(caller / "Temp", machine_lock.lock_path().parent)
+        self.assertFalse(machine_lock.lock_path().is_relative_to(tests.SUITE_LOCAL_APP_DATA))
+        # The browser runner runs the file as a script, which imports no package and must
+        # leave the variable alone for the browsers found under it.
+        probe = (
+            "import sys; sys.path.insert(0, sys.argv[1]); import machine_lock;"
+            " print('tests' in sys.modules, machine_lock.lock_path().parent)"
+        )
+        found = subprocess.run(
+            [sys.executable, "-c", probe, str(ROOT / "tests")],
+            env={**os.environ, "LOCALAPPDATA": str(caller)},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertEqual(f"False {caller / 'Temp'}", found.stdout.strip())
 
 
 class CommandTests(LockCase):

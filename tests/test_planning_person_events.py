@@ -595,7 +595,7 @@ class TheWindowTests(Harness):
     def test_an_agents_write_that_logs_no_event_moves_it_too(self) -> None:
         for name, arguments in (
             ("apply_work_item_changes", {"update": {"title": "Renamed by the agent"}}),
-            ("apply_work_item_changes", {"refs": [{"kind": "commit", "value": "abc1234"}]}),
+            ("apply_work_item_changes", {"refs": [{"kind": "memory", "value": "abc1234"}]}),
         ):
             with self.subTest(name):
                 self.says()
@@ -711,7 +711,7 @@ class ToldOnWriteTests(Harness):
             ),
             (
                 "apply_work_item_changes",
-                {"id": self.ref, "refs": [{"kind": "commit", "value": "abc1234"}]},
+                {"id": self.ref, "refs": [{"kind": "memory", "value": "abc1234"}]},
             ),
             (
                 "apply_work_item_changes",

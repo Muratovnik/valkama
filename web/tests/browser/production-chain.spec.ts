@@ -22,6 +22,7 @@ import {
   graphRoute,
   largeChainHere,
   longChainHere,
+  openChainCard,
   pointAtWorkUnderWay,
   rootFramed,
   routeState,
@@ -34,21 +35,6 @@ import { expectNoSilentClipping } from './overflow.ts'
 import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-async function openCard(page: Page, view?: 'graph') {
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'planning',
-      scope: spaceScope,
-      entity: planningWorkItemEntity(workItemRef),
-      ...(view ? { state: { view } } : {}),
-    }),
-  )
-  await showChain(page)
-  const section = page.locator('.drawer section.chain')
-  await expect(section).toBeVisible()
-  return section
-}
-
 function shot(info: TestInfo, name: string) {
   return { path: info.outputPath(name), animations: 'disabled' as const }
 }
@@ -58,7 +44,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 })
     await installBackend(page)
     await serve(page, largeChainHere())
-    const section = await openCard(page)
+    const section = await openChainCard(page)
     // The map leads; one line of totals and the verdict follow it, and what the
     // verdict rests on is one action away.
     const map = await section.locator('.branch-map').boundingBox()
@@ -131,7 +117,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1400 })
     await installBackend(page)
     await serve(page, branchedChain(mapRoot, 'MAIN'))
-    const section = await openCard(page)
+    const section = await openChainCard(page)
     expect(await mapReading(page)).toEqual({
       labels: ['MAIN-264', 'MAIN-7001', 'MAIN-4000', 'MAIN-7002', 'MAIN-4001', 'no parent'],
       lanes: 6,
@@ -203,7 +189,7 @@ test('the readout of the first lane stays inside a panel scrolled to the map', a
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
   await serve(page, branchedChain(mapRoot, 'MAIN'))
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   const lane = section.getByRole('slider').first()
   // Hovering waits for the card to finish sliding in; then the pointer leaves.
   await lane.hover()
@@ -233,7 +219,7 @@ test('the tip the map shows names a state in ink that reads on its ground', asyn
   await page.setViewportSize({ width: 1440, height: 1400 })
   await installBackend(page)
   await serve(page, branchedChain(mapRoot, 'MAIN'))
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   const word = section.locator('.branch-tip .semantic-state[data-state="active"] .state-label')
   await pointAtWorkUnderWay(page, section, word)
   await expect(word).toBeVisible()
@@ -247,7 +233,7 @@ test('the branch map gives a small chain a segment, a dot and a name per task', 
   await page.setViewportSize({ width: 1440, height: 1000 })
   await installBackend(page)
   await serve(page, smallBranchedChain(mapRoot, 'MAIN'))
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   const small = { labels: ['MAIN-264', 'no parent'], lanes: 2, outside: 0 }
   expect(await mapReading(page)).toEqual(small)
   await expect(section.locator('.branch-map-dot')).not.toHaveCount(0)
@@ -264,7 +250,7 @@ test('Show on graph draws the open part of the chain, its root marked, and the r
   await installBackend(page)
   const { chain, items, edges } = smallChain()
   await serve(page, chain, items, edges)
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
   // The chip counts the whole chain; the field draws the root and the 9 open members.
@@ -311,7 +297,7 @@ test('the chain is held in the address: a reload keeps it, and leaving removes i
   await installBackend(page)
   const { chain, items, edges } = smallChain()
   await serve(page, chain, items, edges)
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
   await expect(chip).toHaveText('Chain MAIN-264 · 17')
@@ -381,7 +367,7 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
   await installBackend(page)
   const { chain, items, edges } = smallChain()
   await serve(page, chain, items, edges)
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
   await expect(chip).toHaveText('Chain MAIN-264 · 17')

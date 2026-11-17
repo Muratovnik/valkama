@@ -1,11 +1,11 @@
 /**
  * How a dimension's panel beside the rail lays out its parts, in the real app, over thirty tasks.
  * The figures that choose the measure stand whole at the top of the panel; under them the ranked
- * list, a whole row of small charts and the table, all in the panel's one scroll
- * (`production-analytics-one-scroll.spec.ts` holds that nothing in it scrolls on its own). Each row
- * of the table and its heading row is one line, and the figures' columns are as narrow as what
- * they hold. A wheel over the table moves the panel, the document standing still, and the names
- * stay pinned at the frame's start. The ranked list's last line and «To the table» bring the table
+ * list, a whole row of small charts and the table, in the panel's one scroll, the table scrolling
+ * inside its own frame (`production-analytics-one-scroll.spec.ts` holds that nothing else in it
+ * scrolls on its own). Each row of the table and its heading row is one line, and the figures'
+ * columns are as narrow as what they hold. A wheel over the table scrolls it in its frame, the
+ * panel and the document standing still, and the names stay pinned at the frame's start. The ranked list's last line and «To the table» bring the table
  * into view with the focus on it. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
@@ -114,6 +114,10 @@ function split(page: Page) {
 const panelScrolled = (page: Page) =>
   page.evaluate(() => Math.round(document.querySelector('.analytics-panel')?.scrollTop ?? -1))
 
+/** How far the table's frame is scrolled down. */
+const frameScrolled = (page: Page) =>
+  page.evaluate(() => Math.round(document.querySelector('.spending-table-frame')?.scrollTop ?? -1))
+
 /** How far the document is scrolled down. */
 const documentScrolled = (page: Page) =>
   page.evaluate(() => Math.round(document.scrollingElement?.scrollTop ?? 0))
@@ -173,14 +177,15 @@ for (const [width, height] of [
     for (const step of steps) expect(step.trim()).toMatch(/^(0|\d+\s(min|h|d))$/u)
     expect(top).toMatch(/ 0 to \d+\s(min|h|d)$/u)
 
-    // A wheel over the table moves the panel, the one scroll, and the document stands still; the
-    // names stay pinned at the frame's start.
+    // A wheel over the table scrolls it in its own frame, and the panel and the document stand
+    // still; the names stay pinned at the frame's start.
     await page.locator('.spending-table-frame').evaluate((frame) => {
       frame.scrollIntoView({ block: 'start' })
     })
     const before = await panelScrolled(page)
     await wheelOver(page)
-    await expect.poll(async () => panelScrolled(page)).toBeGreaterThan(before)
+    await expect.poll(async () => frameScrolled(page)).toBeGreaterThan(0)
+    expect(await panelScrolled(page)).toBe(before)
     expect(await documentScrolled(page)).toBe(0)
     const name = await page
       .locator('.spending-table-frame tbody th')
@@ -255,7 +260,7 @@ test('the table counts the values of the period as the rail’s tile does', asyn
 
 // At 1024×768 the app's navigation leaves the page too narrow for the rail beside the section, so
 // the section takes the list's place. It runs in the panel's one scroll as it does beside the rail:
-// a wheel over the table moves the panel, and «To the table» brings the table up, focused.
+// a wheel over its figures moves the panel, and «To the table» brings the table up, focused.
 test('at 1024×768 in place of the list the section scrolls in the panel and reaches its table', async ({
   page,
 }, info) => {

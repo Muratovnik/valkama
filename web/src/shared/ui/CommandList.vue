@@ -127,6 +127,7 @@ function submit(event: KeyboardEvent) {
         </span>
         <span
           v-slash-breaks="item.title"
+          v-tooltip.clipped="item.title"
           class="command-title"
         />
         <span
@@ -230,7 +231,8 @@ function submit(event: KeyboardEvent) {
 }
 
 /* Two lines, then an ellipsis: a long title is a row, not a paragraph, and the
-   whole of it stays the option's accessible name. */
+   whole of it stays the option's accessible name. Pointed at while cut, its whole
+   words are laid over both lines (`v-tooltip.clipped`). */
 .command-title {
   display: -webkit-box;
   grid-area: title;

@@ -3,6 +3,10 @@
  * and in the copy assistive technology reads. The words stand on a line of their own, so the
  * space shows nothing; without it a ranked row's hint read «…part 132% of the total», its name
  * «part 1» glued to its share «32%». Uncut, the hint is the detail alone, with nothing before it.
+ *
+ * The hint is its own tooltip and holds its words once: a hidden copy of them for assistive
+ * technology once stood beside the words it shows, so its text read every hint twice, the last
+ * word run into the first. The name is described by the detail once, whether or not it shows.
  */
 import { defineComponent, h, nextTick, withDirectives } from 'vue'
 
@@ -38,22 +42,28 @@ const surface = defineComponent({
   },
 })
 
-/** The hint a key's focus on the name holds up: what it says, and what the words line says. */
+/**
+ * The hint a key's focus on the name holds up: what it says, what the words line says, every
+ * tooltip the page holds, and what the name is described by.
+ */
 async function hintOf(cut: boolean) {
   const wrapper = mount(surface, { props: { cut }, attachTo: document.body })
+  const named = wrapper.get<HTMLElement>('.named').element
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }))
-  wrapper.get<HTMLElement>('.named').element.focus()
+  named.focus()
   await flushPromises()
   await nextTick()
   const hint = document.querySelector('.tooltip-hint')
-  // The hint holds the library's hidden copy for assistive technology; what it shows is the rest.
-  const shown = hint?.cloneNode(true) as HTMLElement | undefined
-  shown?.querySelector('[role="tooltip"]')?.remove()
+  const ids = (named.getAttribute('aria-describedby') ?? '').split(/ +/u).filter(Boolean)
   return {
     wrapper,
-    says: shown?.textContent ?? null,
+    hint,
+    says: hint?.textContent ?? null,
     words: hint?.querySelector('.tooltip-words')?.textContent ?? null,
-    read: document.querySelector('[role="tooltip"]')?.textContent ?? null,
+    tooltips: [...document.querySelectorAll('[role="tooltip"]')],
+    described: ids
+      .map((id) => document.querySelector(`#${CSS.escape(id)}`)?.textContent ?? '')
+      .join(' '),
   }
 }
 
@@ -80,12 +90,22 @@ afterEach(() => {
 
 describe('a hint that says a cut name over its detail', () => {
   it('keeps a space between the name and the share, in the hint and in what is read', async () => {
-    const { wrapper, says, words, read } = await hintOf(true)
+    const { wrapper, hint, says, words, tooltips } = await hintOf(true)
     mounted = wrapper
     expect(says).toBe(`${NAME} ${SHARE}`)
-    expect(read).toBe(`${NAME} ${SHARE}`)
+    // The hint is the one tooltip, and what it reads is what it shows.
+    expect(tooltips).toEqual([hint])
     // The words' own line holds the name and nothing else.
     expect(words).toBe(NAME)
+  })
+
+  it('holds its words once, and the name is described by the share once', async () => {
+    const { wrapper, says, tooltips, described } = await hintOf(false)
+    mounted = wrapper
+    expect(says).toBe(SHARE)
+    expect(tooltips).toHaveLength(1)
+    expect(tooltips[0]?.textContent).toBe(SHARE)
+    expect(described).toBe(SHARE)
   })
 
   it('is the share alone while the name stands whole', async () => {
