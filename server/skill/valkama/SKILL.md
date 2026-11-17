@@ -121,8 +121,11 @@ questions the call wrote.
 tool. A call that failed with "another call in this response was changed by a
 hook": see [the tool reference](references/tools.md#claude-codes-auto-mode).
 
-**Refs.** The `refs` group records a `commit`, a `memory` record id materially
-used, or a `url`. Your own session needs no ref: Valkama records every write's.
+**Commits and refs.** Valkama attaches each commit your session makes to the
+task you hold and says so in the hook answer after the command; when it cannot
+tell which task, the answer names the candidates. The `refs` group records a
+`commit`, a `memory` record id materially used, or a `url`. Your own session
+needs no ref: Valkama records every write's.
 
 **What a person said.** A write's answer carries `from_person` when the owner
 did something on the item in Valkama since an agent last wrote there: a comment,
