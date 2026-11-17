@@ -159,6 +159,26 @@ describe('the server fixtures', () => {
     expect(missing).toEqual([])
   })
 
+  it('name in both languages each count a commit-records code reports', () => {
+    const counted: Record<string, string[]> = {
+      'commit-records-current': ['{waiting}'],
+      'commit-records-waiting': ['{count}', '{oldest}'],
+      'commit-records-rejected': ['{rejected}', '{paths}'],
+      'commit-records-waiting-rejected': ['{count}', '{oldest}', '{rejected}', '{paths}'],
+    }
+    const missing = (['en', 'ru'] as const).flatMap((locale) => {
+      const findings: Record<string, { detail?: unknown } | undefined> =
+        messages[locale].health.finding
+      return Object.entries(counted).flatMap(([code, placeholders]) => {
+        const detail = String(findings[code]?.detail)
+        return placeholders
+          .filter((placeholder) => !detail.includes(placeholder))
+          .map((placeholder) => `${locale}: ${code} lacks ${placeholder}`)
+      })
+    })
+    expect(missing).toEqual([])
+  })
+
   it('name the executor at the claim, each step and each agent of a card', () => {
     const card = validatePlanningWorkItemPayload(read('card-executors.json'))
     if (card.state.status !== 'ready') throw new Error('the card read is not ready')

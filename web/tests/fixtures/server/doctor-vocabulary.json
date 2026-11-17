@@ -27,6 +27,7 @@
     "commit-hook-unsupported",
     "commit-records-current",
     "commit-records-rejected",
-    "commit-records-waiting"
+    "commit-records-waiting",
+    "commit-records-waiting-rejected"
   ]
 }

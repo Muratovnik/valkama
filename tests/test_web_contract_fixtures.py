@@ -933,7 +933,7 @@ def _doctor_quota_codes() -> list[str]:
     return sorted(text for text in texts if _QUOTA_CODE.fullmatch(text))
 
 
-_RECORDS_CODE = re.compile(r"commit-records-[a-z]+")
+_RECORDS_CODE = re.compile(r"commit-records-[a-z]+(?:-[a-z]+)*")
 
 
 def _doctor_commit_codes() -> list[str]:

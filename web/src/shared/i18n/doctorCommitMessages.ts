@@ -33,7 +33,7 @@ export const doctorCommitMessages = {
     },
     'commit-records-current': {
       title: 'Commit records',
-      detail: 'No commit record has waited for over an hour.',
+      detail: '{waiting} commit records are waiting; none has waited for over an hour.',
     },
     'commit-records-waiting': {
       title: 'Commit records wait for over an hour',
@@ -44,6 +44,12 @@ export const doctorCommitMessages = {
       title: 'Commit records set aside',
       detail: '{rejected} unreadable commit records were set aside in {paths}.',
       fix: 'Read the files in commits/rejected/; they are never retried. Delete each one once it is understood.',
+    },
+    'commit-records-waiting-rejected': {
+      title: 'Commit records wait and were set aside',
+      detail:
+        '{count} commit records have waited for over an hour; the oldest is from {oldest}. {rejected} unreadable commit records were set aside in {paths}.',
+      fix: 'Start any MCP session or serve: its sweep takes the records older than an hour every ten minutes. Read the files in commits/rejected/; they are never retried. Delete each one once it is understood.',
     },
   },
   ru: {
@@ -74,7 +80,7 @@ export const doctorCommitMessages = {
     },
     'commit-records-current': {
       title: 'Записи коммитов',
-      detail: 'Ни одна запись о коммите не ждала дольше часа.',
+      detail: 'Записей о коммитах ждут: {waiting}; ни одна не ждёт дольше часа.',
     },
     'commit-records-waiting': {
       title: 'Записи коммитов ждут больше часа',
@@ -85,6 +91,12 @@ export const doctorCommitMessages = {
       title: 'Записи коммитов отложены',
       detail: 'Нечитаемых записей о коммитах отложено: {rejected}, в {paths}.',
       fix: 'Прочитайте файлы в commits/rejected/: повторно они не обрабатываются. Удаляйте каждый, когда причина понятна.',
+    },
+    'commit-records-waiting-rejected': {
+      title: 'Записи коммитов ждут и отложены',
+      detail:
+        'Записей о коммитах ждут больше часа: {count}; самая ранняя от {oldest}. Нечитаемых записей о коммитах отложено: {rejected}, в {paths}.',
+      fix: 'Запустите любую сессию MCP или serve: её очистка забирает записи старше часа каждые десять минут. Прочитайте файлы в commits/rejected/: повторно они не обрабатываются. Удаляйте каждый, когда причина понятна.',
     },
   },
 }

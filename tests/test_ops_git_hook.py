@@ -388,6 +388,58 @@ class DoctorTests(GitHookCase):
         self.assertIn(str(rejected), records["detail"])
         self.assertIn("commits/rejected/", records["fix"])
 
+    def test_each_commit_records_state_has_its_own_code_and_counts(self) -> None:
+        """Four states in turn on one store: none waiting, records set aside only, records
+        waiting over an hour and set aside, and records waiting over an hour only."""
+        commits = self.store.parent / "commits"
+        rejected = commits / commit_records.REJECTED
+
+        def records() -> dict:
+            return self.doctor()["commit-records"]
+
+        none = records()
+        self.assertEqual(("ok", "commit-records-current"), self.outcome(none))
+        self.assertEqual(0, none["presentation"]["parameters"]["waiting"])
+
+        rejected.mkdir(parents=True)
+        (rejected / f"{SESSION}--1-{'b' * 16}.json").write_bytes(b"{not a record")
+        set_aside = records()
+        self.assertEqual(("warn", "commit-records-rejected"), self.outcome(set_aside))
+        self.assertEqual(
+            (0, 1, 0),
+            tuple(
+                set_aside["presentation"]["parameters"][key]
+                for key in ("count", "rejected", "waiting")
+            ),
+        )
+
+        at = time.time_ns() - 2 * HOUR_NS
+        _record(at, commits)
+        both = records()
+        self.assertEqual(("warn", "commit-records-waiting-rejected"), self.outcome(both))
+        parameters = both["presentation"]["parameters"]
+        self.assertEqual(
+            (1, 1, 1, commit_records.timestamp(at)),
+            (
+                parameters["count"],
+                parameters["rejected"],
+                parameters["waiting"],
+                parameters["oldest"],
+            ),
+        )
+
+        for entry in rejected.iterdir():
+            entry.unlink()
+        waiting = records()
+        self.assertEqual(("warn", "commit-records-waiting"), self.outcome(waiting))
+        self.assertEqual(
+            (1, 0, 1),
+            tuple(
+                waiting["presentation"]["parameters"][key]
+                for key in ("count", "rejected", "waiting")
+            ),
+        )
+
     def test_disabled_and_unsupported_say_what_to_do(self) -> None:
         git_hook.install()
         self.git("config", "--global", "hook.valkama-commit.enabled", "false")

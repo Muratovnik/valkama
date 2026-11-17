@@ -1265,6 +1265,7 @@ def _commit_records_check() -> dict:
     old = [at for at, _key, _path in found["files"] if at <= now - planning_commits.SWEEP_AGE_NS]
     rejected = found["rejected"]
     parameters = {
+        "waiting": len(found["files"]),
         "count": len(old),
         "oldest": commit_records.timestamp(old[0]) if old else "",
         "rejected": sum(rejected.values()),
@@ -1275,7 +1276,7 @@ def _commit_records_check() -> dict:
             "commit-records",
             "Commit records",
             "ok",
-            f"{len(found['files'])} commit record(s) waiting, none for over an hour",
+            f"{parameters['waiting']} commit record(s) waiting, none for over an hour",
             presentation_code="commit-records-current",
             parameters=parameters,
         )
@@ -1298,13 +1299,21 @@ def _commit_records_check() -> dict:
             "Read the files in `commits/rejected/`; they are never retried. Delete each once"
             " it is understood."
         )
+    # Each state has its own code with the words for its counts: a check that waits and
+    # sets records aside must not show the one and hide the other.
+    if old and rejected:
+        code = "commit-records-waiting-rejected"
+    elif old:
+        code = "commit-records-waiting"
+    else:
+        code = "commit-records-rejected"
     return _check(
         "commit-records",
         "Commit records",
         "warn",
         "; ".join(parts),
         " ".join(fixes),
-        presentation_code="commit-records-waiting" if old else "commit-records-rejected",
+        presentation_code=code,
         parameters=parameters,
     )
 
