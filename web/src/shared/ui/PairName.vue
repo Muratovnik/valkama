@@ -11,6 +11,10 @@
  * stands before it. A name with no end, or one `end` does not close, is plain text, cut by the
  * host's own rule.
  *
+ * Stacked (`stacked`), as a list of names of free text asks, a part takes a line of its own, the
+ * end under the start, and each is cut at its own end: a task's title is on either side of a pair
+ * there, and each part's start, a task's reference, stays whole on its line.
+ *
  * The words are the name's whole text, in order, as the element around it reads them: a host
  * that names a control by its content, or reads it into a hint while it is cut, gets the whole
  * pair. `innerText` alone breaks a line between the two parts, which are boxes of their own. The
@@ -23,6 +27,8 @@ const props = defineProps<{
   name: string
   /** The end of `name` that stays whole while the rest gives way, « · high». */
   end?: string
+  /** A part a line, each cut at its own end. */
+  stacked?: boolean
 }>()
 
 /** What gives way: the name before its end, or null where the name has no end to keep. */
@@ -37,6 +43,7 @@ const start = computed(() =>
   <span
     v-if="start !== null"
     class="pair-name"
+    :class="{ 'pair-stacked': stacked }"
     ><span class="pair-start one-line">{{ start }}</span
     ><span class="pair-end one-line">{{ end }}</span></span
   >
@@ -64,5 +71,17 @@ const start = computed(() =>
   flex: none;
   max-inline-size: calc(100% - 1em);
   white-space: pre;
+}
+
+/* A part a line, the whole width each; the end's leading space falls at its line's start and
+   collapses there. */
+.pair-stacked {
+  display: flex;
+  flex-direction: column;
+
+  & .pair-end {
+    max-inline-size: 100%;
+    white-space: nowrap;
+  }
 }
 </style>

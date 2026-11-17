@@ -161,6 +161,95 @@ describe('ranked bars', () => {
   })
 })
 
+/**
+ * A list of names of free text, tasks by their titles: each name on lines of its own, two at most,
+ * where the one-line chart cuts it to one; the rows that are not categories apart under a rule with
+ * a bar each in a neutral, on one scale with the categories, where the chart of identifiers draws
+ * them none; and a strip of the whole over the rows, every row a part in its hue, in their order.
+ */
+describe('a ranked list of free text', () => {
+  const tasks: RankedRow[] = [
+    { key: 't2', label: 'MAIN-2 Write the release notes', value: 30, valueText: '30 min', slot: 2 },
+    { key: 'none', label: 'No task', value: 90, valueText: '1 h 30 min', kind: 'none', slot: 2 },
+    { key: 't1', label: 'MAIN-1 Answer the review', value: 60, valueText: '1 h', slot: 1 },
+    { key: 'other', label: 'Other, 4 more', value: 20, valueText: '20 min', kind: 'other' },
+  ]
+  const mountList = (freeText: boolean, given: RankedRow[] = tasks) =>
+    mount(RankedBars, { props: { label: 'Time by task', rows: given, words, freeText } })
+
+  it('clamps each name to lines of its own instead of one', () => {
+    const list = mountList(true)
+    const label = list.get('[data-key="t1"] .ranked-label')
+    expect(list.get('figure').classes()).toContain('ranked-free')
+    expect(label.classes()).toContain('ranked-clamp')
+    expect(label.classes()).not.toContain('one-line')
+    // The control: the chart of identifiers keeps its one line.
+    const chart = mountList(false).get('[data-key="t1"] .ranked-label')
+    expect(chart.classes()).toContain('one-line')
+    expect(chart.classes()).not.toContain('ranked-clamp')
+  })
+
+  it('sets the rows that are not categories apart, each with a neutral bar on one scale', () => {
+    const list = mountList(true)
+    const [ranked, rest] = list.findAll('.ranked-list')
+    expect(
+      ranked?.findAll('.ranked-row').map((row) => row.get('.ranked-line').attributes('data-key')),
+    ).toEqual(['t1', 't2'])
+    expect(rest?.findAll('.ranked-row').map((row) => row.attributes('data-kind'))).toEqual([
+      'other',
+      'none',
+    ])
+    // Work on no task, the largest row, is the whole bar; the categories are measured by it.
+    const bar = (key: string) => list.get(`[data-key="${key}"] .ranked-bar`)
+    expect(bar('none').attributes('style')).toContain('inline-size: 100%')
+    expect(bar('t1').attributes('style')).toContain('inline-size: 66.6')
+    expect(bar('other').attributes('style')).toContain('inline-size: 22.2')
+    // In the neutrals whatever hue the host gave: the darker for no task, the lighter for the rest.
+    expect(bar('none').attributes('data-slot')).toBe('apart')
+    expect(bar('other').attributes('data-slot')).toBe('other')
+    expect(bar('t2').attributes('data-slot')).toBe('2')
+  })
+
+  it('draws the strip of the whole over the rows, every row in its hue and in their order', () => {
+    const strip = mountList(true).get('.mini-share-bar')
+    // A picture of what the rows say, so nothing a screen reader reads twice.
+    expect(strip.attributes('aria-hidden')).toBe('true')
+    expect(
+      strip
+        .findAll('.mini-share-part')
+        .map((part) => [
+          part.attributes('data-key'),
+          part.attributes('data-slot'),
+          part.attributes('style'),
+          part.classes('mini-share-apart'),
+        ]),
+    ).toEqual([
+      ['t1', '1', 'flex-grow: 0.3;', false],
+      ['t2', '2', 'flex-grow: 0.15;', false],
+      ['other', 'other', 'flex-grow: 0.1;', false],
+      ['none', 'apart', 'flex-grow: 0.45;', true],
+    ])
+    expect(mountList(false).find('.mini-share-bar').exists()).toBe(false)
+  })
+
+  it('puts each part of a pair on a line of its own', () => {
+    const pair = mountList(true, [
+      {
+        key: 'p',
+        label: 'MAIN-1 Answer the review · opus',
+        labelEnd: ' · opus',
+        value: 1,
+        valueText: '1 h',
+      },
+    ]).get('.pair-name')
+    expect(pair.classes()).toContain('pair-stacked')
+    expect(pair.findAll('span').map((part) => part.text())).toEqual([
+      'MAIN-1 Answer the review',
+      '· opus',
+    ])
+  })
+})
+
 const mountTable = (given: RankedRow[] = rows) =>
   mount(RankedBarsTable, { props: { label: 'Time by project', rows: given, words } })
 

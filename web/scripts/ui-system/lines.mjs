@@ -54,6 +54,7 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/MarkdownSuggestions.vue', 1], // Overlay edge of the # list floating over the text.
   ['shared/ui/CountBadge.vue', 1],
   ['shared/ui/SmallMultiples.vue', 1], // The floor each small chart stands on, as a baseline.
+  ['shared/ui/RankedBars.vue', 1], // The rule a list of free text sets its rows apart under.
   ['shared/ui/DialogFrame.vue', 2],
   ['shared/ui/DrawerFrame.vue', 1],
   ['shared/ui/PlatformStatePanel.vue', 2],
