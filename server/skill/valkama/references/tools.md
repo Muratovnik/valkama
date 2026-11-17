@@ -449,11 +449,12 @@ A pending question is answered once; a second answer is refused. `change: true`
 replaces the answer of an answered question, held to the same rules, and keeps the
 replaced one as a version: `answer_version` rises by one and `answered_at` moves to
 the change. Change an answer only when the owner asks. Refused with
-`[unchanged]` when nothing differs, `[task_closed]` once the item is closed and
+`[unchanged]` when nothing differs, `[item_closed]` once the item is closed and
 `[answer_versions]` past 50 versions.
 
 A request is `pending` until it is answered, declined or expires; it expires
-when its item closes or its deadline (`expires_at`) passes. A comment over an
+when its item closes, with `item_completed` or `item_cancelled` and for good, or
+when its deadline (`expires_at`) passes. A comment over an
 open question changes nothing about it.
 
 The `questions` part of `get_work_item` is

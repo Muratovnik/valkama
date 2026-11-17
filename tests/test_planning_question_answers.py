@@ -388,7 +388,7 @@ class ChangeTests(AnswerCase):
         service.set_summary(self.conn, self.reference, {"done": "Closed", "next": "Nothing"})
         service.transition_work_item(self.conn, self.reference, "cancelled")
         self.conn.commit()
-        with self.assertRaisesRegex(model.WorkflowGuardError, r"\[task_closed\]"):
+        with self.assertRaisesRegex(model.WorkflowGuardError, r"^\[item_closed\] "):
             self.as_person("change", first, answers={"path": "drop"})
         self.assertEqual({"path": "keep"}, self.stored_answers(first))
 

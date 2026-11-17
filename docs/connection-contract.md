@@ -2247,10 +2247,12 @@ question: it waits in the owner's list and raises the owner's alert once the cal
 is committed. With `addressees` an entry asks those sessions instead, as that tool
 does, one request each, and waits in no owner's list. A call that asks a question
 and closes the item with its `transition` is refused, `invalid_request` on the `transition` step, and
-`force` does not carry it: a closed item reads a waiting question `expired`, so
-it would be asked and lost in one write. Move the item to review, or leave the
-question out. A question asked by an earlier call does not stop a close, as it
-never did. A closed item takes no question, and `questions` is applied before
+`force` does not carry it: the close ends every request still pending on the item in
+the same write, so the question would be asked and ended unanswered at once. The
+refusal reads `transition: a question on an item this call closes would end
+unanswered in the same write: ask it in a call that leaves the item open`. A
+question asked by an earlier call does not stop this refusal's close; the close ends
+it, as below. A closed item takes no question, and `questions` is applied before
 `transition`, so a call that reopens an item cannot also ask on it.
 
 The steps run inside one transaction. When one is refused, none of them is
@@ -2867,6 +2869,16 @@ A close of an item nobody holds releases nothing and carries no `released`. A
 move to `ready`, `triage` or `review` releases the same way; a move among the
 `active` and `blocked` states keeps the claim.
 
+A close also ends every request still pending on the item -- a question or a
+decision, asked of the owner or of an agent session, and a list under a comment --
+in the same write. Each is written `expired`, with `expired_reason: item_completed`
+when the item closes into a `completed` state and `item_cancelled` when it closes
+into a `cancelled` one, and gets a `request_expired` event naming the request, after
+the `transitioned` one, with the close's author and call. When a person closes the
+item, the agent that asked hears it as `question_withdrawn`, as it hears any question
+a person takes back (see [the hook contract](hook-contract.md#who-is-told)), and
+reads the reason on the request.
+
 A checklist step's claim ends too, recorded as `checklist_released` with the
 step's text. A completed close never has one: the guard requires every step
 ticked, and a tick clears the step's claim. A cancelled close leaves its undone
@@ -2875,7 +2887,9 @@ steps stay open and become unheld, so a reopened item does not read as being
 worked by their former holders.
 
 Reopening a closed item -- a transition back to an open state -- restores no
-claim. Whoever takes the work again claims it.
+claim and no request: whoever takes the work again claims it, and a question the
+close ended stays ended, since it was about the item before the close; one still
+needed is asked again.
 
 Who held the item is still on the record. The card (`get_work_item`, a
 `verbose` answer), the full record (`GET /api/planning/work-item`) and the briefs of the HTTP
@@ -3176,10 +3190,19 @@ stays on its item, so its records go on naming the merged item.
 item. `get_work_item_request` and `list_work_item_requests` are read-only tools.
 The answer, decline and expire tools take the request's own `expected_revision`;
 it is independent of the work item revision. Only one concurrent resolution can
-succeed. A closed task, ended bound execution or elapsed deadline prevents a
-late answer, and so does the end of the session a request was
-[asked of](#a-question-asked-of-an-agent-session). Reading effective expiry does
-not write to an attached store.
+succeed. An ended bound execution or elapsed deadline prevents a late answer,
+and so does the end of the session a request was
+[asked of](#a-question-asked-of-an-agent-session); those are read, not written, and
+reading effective expiry does not write to an attached store. A close of the item
+ends the request in its own write ([closing](#a-close-ends-the-claims)), and a
+closed item takes no new request.
+
+A request record says why one ended unanswered in `expired_reason`: `deadline`,
+`withdrawn`, `execution_closed`, `item_completed`, `item_cancelled`, or the
+`session_gone` that is only read; `null` otherwise. `purpose` names what the owner's
+answer carries out -- `review`, `confirm` or `return` -- and is `null` on every
+other request. The compact form of `get_work_item`'s `questions` carries each of
+the two only where it is set.
 
 Fields have stable IDs and one of five types: `text`, `choice`, `multi_choice`,
 `boolean` or `verdict`. A required boolean can be answered `false`; omission is
@@ -3673,7 +3696,7 @@ Refused with `invalid_request`, nothing written:
 | a list on a reply | `a list stands on a root, and this is a reply` |
 | a key a list does not take, or options outside 1 to 20 | `list requires label and options and takes nothing else` |
 | a list on an item that is closed | `a list on a closed item could never be answered; reopen it first, or leave the list out` |
-| a list in a call that closes the item | `transition: a list on an item this call closes could never be answered; send it to review, or leave the list out`, on the `transition` step |
+| a list in a call that closes the item | `transition: a list on an item this call closes would end unticked in the same write: write it in a call that leaves the item open`, on the `transition` step |
 
 **What it does not do.** A list holds nothing: its item closes with a list
 unticked, as with no question at all. It raises no Windows notification and takes
@@ -3700,13 +3723,13 @@ hear it, as for any question (see
 [the hook contract](hook-contract.md#who-is-told)), and the next agent write
 carries it in `from_person`. Changing it is changing an answer.
 
-**Close and reopen.** A pending list on a closed item reads `expired` with
-`expired_reason: task_closed`, as any pending question there does, and nothing is
-written: reopening the item makes it `pending` again with what it held. An answered
-list on a closed item cannot be changed (`[task_closed]`). So a list freezes with
-its item: the interface keeps ticks not yet sent in view and says that the item is
-closed, the ticks would reach nobody, and reopening it lets them be sent. An agent
-that wants the ticks keeps the item open, in review for instance.
+**Close and reopen.** The close of its item ends a pending list as it ends any
+pending question there: `expired`, with `expired_reason` `item_completed` or
+`item_cancelled`, and reopening the item leaves it so. An answered list on a closed
+item cannot be changed (`[item_closed]`); once the item reopens it can. The
+interface keeps ticks not yet sent in view and says that the item is closed and the
+ticks reach nobody. An agent that wants the ticks keeps the item open until they
+come.
 
 **Merging.** A list goes with its comment: a comment root's list moves to the
 survivor with it, and a report's list stays with the report on the merged item. A

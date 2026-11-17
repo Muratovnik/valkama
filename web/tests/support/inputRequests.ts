@@ -33,6 +33,7 @@ export function requestEntry(): InputRequestEntry {
       resolved_at: null,
       revision: 1,
       expired_reason: null,
+      purpose: null,
     },
   }
 }

@@ -112,8 +112,8 @@ Every group but `claim` and `subscribe` is JSON, never bare text: `comment` is
 `{"state": "…"}`. Bare text fails in the client, as input not parsed as JSON. A
 refused step writes nothing and names the group and index to correct. Pass the
 `revision` of the last acknowledgement as `expected_revision` to refuse a stale
-write. A question cannot go in the call that closes its item, which would end it
-unanswered: move the item to review instead. A reply can name only a comment
+write. A question cannot go in the call that closes its item: the close would end
+it unanswered in the same write. A reply can name only a comment
 that existed before the call; `applied` lists the ids of the comments and
 questions the call wrote.
 
@@ -384,12 +384,11 @@ A request suits a question the work can go on without. No session waits for it:
 the answer arrives with the next read of the item, so go on with what does not
 depend on it. A question the work cannot go on without belongs in the client,
 where the person answers now. A request bound to an `execution_id` expires when
-that execution ends, and any pending request expires when its item closes, so an
-item holding an open request stays open. A list under a comment does not hold it:
-the item closes with a list unticked, and the list then freezes, `expired` with
-`task_closed`, until the item reopens. To get the ticks, keep the item open, in
-review for instance; a call that writes a list and closes its item is refused. A
-list's compact form has `undecided`: `["items"]` while nothing on it is ticked, also
+that execution ends. Closing an item ends every request pending on it, a list under
+a comment too, `expired` with `item_completed` or `item_cancelled`, and reopening
+brings none back: keep the item open, in review for instance, while the answer or
+the ticks are still needed. A call that writes a list and closes its item is
+refused. A list's compact form has `undecided`: `["items"]` while nothing on it is ticked, also
 once the person sent it with none ticked. Treat that as not decided, never as every
 option refused; `status` tells a list not sent yet (`pending`) from one sent empty
 (`answered`). The owner's own rules on where to ask come first.

@@ -1,4 +1,4 @@
-"""What a question to the owner is, and when a request has lapsed.
+"""What a question to the owner is, when a request has lapsed, and the two writes of one.
 
 A request asks either the owner or an agent session (its `addressee`). A list on a
 comment asks nobody: nobody waits for it. Only a question to the owner raises the
@@ -10,9 +10,16 @@ a question to the owner, `OWNER_QUESTION`, and the one test of whether a request
 has lapsed although nothing wrote that down, `lapse`. A read of many items asks
 `asked` once for all of them.
 
-The conditions read a request row named `r`. The module sits below the read model
-and the leases, so it reads the store itself and imports neither: `requests`
-imports the service, which imports both.
+A request row is written in two places only: `ask` inserts one with its
+`request_created`, and `end` ends every one still pending on an item, with
+`request_expired`. A move that closes an item calls `end` in its own write, so a
+question there says whether its item was done or cancelled, the asker hears it, and
+reopening the item brings none back.
+
+The conditions read a request row named `r`. The module sits below the read model,
+the leases and the service, which call it inside their writes, so it reads and
+writes the store itself and imports none of them; it imports `calls` for the call a
+write records.
 """
 
 from __future__ import annotations
@@ -22,7 +29,7 @@ import re
 import sqlite3
 from collections.abc import Iterable
 
-from . import model, request_model
+from . import calls, model, request_model
 
 #: A request row `r` that asks the owner, open or closed: neither a list on a
 #: comment nor a request asked of an agent session.
@@ -35,16 +42,14 @@ OWNER_QUESTION = "r.status = 'pending' AND " + OWNER_ASKED
 #: would have set.
 _NAMED = tuple(dict.fromkeys(re.findall(r"\br\.(\w+)", OWNER_QUESTION)))
 
-#: A request row with what its lapse depends on: whether its item is closed and
-#: how its execution, if it names one, stands. `{requests}` is the table, or what
-#: stands in for it in a store an earlier build wrote (`_read`).
+#: A request row with what its lapse depends on: how its execution, if it names one,
+#: stands. `{requests}` is the table, or what stands in for it in a store an earlier
+#: build wrote (`_read`).
 _FACTS = (
-    "SELECT r.*, s.is_terminal AS item_terminal,"
-    " x.execution_id IS NOT NULL AS execution_found,"
+    "SELECT r.*, x.execution_id IS NOT NULL AS execution_found,"
     " x.ended_at AS execution_ended_at, x.status AS execution_status"
     " FROM {requests} r"
     " JOIN work_items i ON i.work_item_id = r.work_item_id"
-    " JOIN workflow_states s ON s.state_id = i.state_id"
     " LEFT JOIN executions x ON x.execution_id = r.execution_id"
 )
 #: One request, by its id.
@@ -63,8 +68,9 @@ def lapse(facts: sqlite3.Row, at: str) -> str | None:
     """Why a request no longer waits for an answer, or None while it still does.
 
     `facts` is a row `_FACTS` reads. A request that is not pending says what
-    closed it. A pending one has lapsed past its deadline, on a closed item, or
-    on an execution that finished or is gone, although nothing wrote that down.
+    closed it, a close of its item among them (`end`). A pending one has lapsed
+    past its deadline, or on an execution that finished or is gone, although
+    nothing wrote that down.
     """
 
     if facts["status"] != "pending":
@@ -72,8 +78,6 @@ def lapse(facts: sqlite3.Row, at: str) -> str | None:
         return reason
     if facts["expires_at"] and facts["expires_at"] <= at:
         return "deadline"
-    if facts["item_terminal"]:
-        return "task_closed"
     if facts["execution_id"] and (
         not facts["execution_found"]
         or facts["execution_ended_at"]
@@ -145,3 +149,112 @@ def _read(conn: sqlite3.Connection, query: str, parameters: tuple[str, ...]) -> 
     standing = ", ".join(f"NULL AS {name}" for name in missing)
     source = f"(SELECT *, {standing} FROM work_item_requests)"  # noqa: S608 - column names from OWNER_QUESTION
     return conn.execute(query.format(requests=source), parameters).fetchall()
+
+
+def closed_reason(category: str) -> str:
+    """The reason `end` writes when a move closes an item into a state of `category`:
+    cancelled, or else done, as every other state that closes an item reads."""
+
+    return "item_cancelled" if category == "cancelled" else "item_completed"
+
+
+def ask(
+    conn: sqlite3.Connection,
+    work_item_id: str,
+    *,
+    kind: str,
+    prompt: str,
+    fields: list[dict],
+    author: str | None,
+    purpose: str | None = None,
+    execution_id: str | None = None,
+    session_id: str | None = None,
+    expires_at: str | None = None,
+    addressee: str | None = None,
+    comment_id: int | None = None,
+) -> str:
+    """Insert one request on an item and its `request_created`; answer its id.
+
+    The one insert of a request row. Its caller has checked and parsed what it
+    passes, and checks after the insert what it must of the row; `purpose` names
+    one of `request_model.PURPOSES`, or nothing.
+    """
+
+    if purpose is not None:
+        model.enum_field(purpose, frozenset(request_model.PURPOSES), "purpose")
+    identity = model.new_id()
+    conn.execute(
+        "INSERT INTO work_item_requests(request_id,work_item_id,comment_id,kind,prompt,"
+        "fields_json,author,execution_id,session_id,expires_at,created_at,addressee,purpose)"
+        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            identity,
+            work_item_id,
+            comment_id,
+            kind,
+            prompt,
+            model.dumps(fields),
+            model.actor(author),
+            execution_id,
+            session_id,
+            expires_at,
+            request_model.now(),
+            addressee,
+            purpose,
+        ),
+    )
+    log_event(conn, work_item_id, "request_created", identity, author)
+    return identity
+
+
+def end(
+    conn: sqlite3.Connection,
+    work_item_id: str,
+    reason: str,
+    author: str | None,
+    *,
+    purpose: str | None = None,
+) -> list[str]:
+    """End every request still pending on an item, or those of one `purpose`, unanswered.
+
+    Each becomes `expired` with `reason`, one of `request_model.EXPIRED_REASONS`,
+    and gets its `request_expired`, whoever it asks: a question, a decision or a
+    list, of the owner or of a session. The event names the request, as every event
+    of one does, and the reason is read from its row. Answers the ids it ended.
+    """
+
+    model.enum_field(reason, frozenset(request_model.EXPIRED_REASONS), "expired_reason")
+    query = "SELECT request_id FROM work_item_requests WHERE work_item_id=? AND status='pending'"
+    parameters: tuple[str, ...] = (work_item_id,)
+    if purpose is not None:
+        query += " AND purpose=?"
+        parameters += (purpose,)
+    ended = [
+        str(row[0]) for row in conn.execute(query + " ORDER BY created_at, request_id", parameters)
+    ]
+    at = request_model.now()
+    for identity in ended:
+        conn.execute(
+            "UPDATE work_item_requests SET status='expired',expired_reason=?,answered_by=?,"
+            "resolved_at=?,revision=revision+1 WHERE request_id=?",
+            (reason, model.actor(author), at, identity),
+        )
+        log_event(conn, work_item_id, "request_expired", identity, author)
+    return ended
+
+
+def log_event(
+    conn: sqlite3.Connection, work_item_id: str, action: str, request_id: str, author: str | None
+) -> None:
+    """Record one event of a request on its item, by the call in progress."""
+
+    conn.execute(
+        "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id) VALUES(?,?,?,?,?)",
+        (
+            work_item_id,
+            model.event_action(action),
+            request_id,
+            model.actor(author),
+            calls.call_id(conn, work_item_id),
+        ),
+    )

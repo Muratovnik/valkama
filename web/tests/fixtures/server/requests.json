@@ -54,6 +54,7 @@
         "revision": 0,
         "expired_reason": null,
         "comment_id": 7,
+        "purpose": null,
         "by_person": null,
         "history": []
       }
@@ -100,6 +101,7 @@
         "revision": 0,
         "expired_reason": null,
         "comment_id": null,
+        "purpose": null,
         "by_person": null,
         "history": []
       }
@@ -191,6 +193,7 @@
         "revision": 2,
         "expired_reason": null,
         "comment_id": null,
+        "purpose": null,
         "by_person": false,
         "history": [
           {

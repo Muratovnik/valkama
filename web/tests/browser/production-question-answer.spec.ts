@@ -381,7 +381,7 @@ test('a task closed under the form is said as that, and the draft stays', async 
   const { card, requests } = await openQuestion(page, [asked(whole)])
   await card.getByRole('button', { name: 'Change answer', exact: true }).click()
   await card.getByRole('radio', { name: 'Drop them', exact: true }).check()
-  requests.refuseNext('[task_closed] the work item is closed; reopen it to change the answer')
+  requests.refuseNext('[item_closed] the work item is closed; reopen it to change the answer')
   await card.getByRole('button', { name: 'Save change', exact: true }).click()
   await expect(card.locator('.request-foot').getByRole('alert')).toContainText('The task is closed')
   await expect(card.getByRole('radio', { name: 'Drop them', exact: true })).toBeChecked()

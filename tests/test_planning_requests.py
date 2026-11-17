@@ -9,9 +9,18 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
-from server import sessions, store
+from server import mcp_surface, sessions, store
 from server.executions import service as executions
-from server.planning import api, model, request_model, requests, service, tools
+from server.planning import (
+    api,
+    calls,
+    model,
+    person_events,
+    request_model,
+    requests,
+    service,
+    tools,
+)
 
 
 def field(identity: str = "reply", kind: str = "text", required: bool = True) -> dict:
@@ -39,6 +48,14 @@ class PlanningRequestTests(unittest.TestCase):
         service.create_planning_space(self.conn, name="Requests", key="REQ")
         self.item = service.create_work_item(self.conn, space="REQ", title="Pick a direction")
         self.conn.commit()
+
+    def close(self, state: str = "done") -> None:
+        """Close the item the way every close goes: its summary, then the move."""
+
+        service.set_summary(self.conn, self.item["reference"], {"done": "Done", "next": "None"})
+        service.transition_work_item(
+            self.conn, self.item["reference"], state, acceptance="assignment"
+        )
 
     def create(self, **kwargs) -> dict:
         return requests.create(
@@ -218,14 +235,14 @@ class PlanningRequestTests(unittest.TestCase):
             "withdrawn", requests.get(self.conn, withdrawn["request_id"])["expired_reason"]
         )
         pending = self.create()
-        state = service.get_planning_space(self.conn, "REQ")["workflow"]["states"]
-        terminal = next(entry for entry in state if entry["is_terminal"])
-        self.conn.execute(
-            "UPDATE work_items SET state_id=?, acceptance='assignment' WHERE work_item_id=?",
-            (terminal["state_id"], self.item["work_item_id"]),
-        )
+        self.close()
+        stored = self.conn.execute(
+            "SELECT status, expired_reason FROM work_item_requests WHERE request_id=?",
+            (pending["request_id"],),
+        ).fetchone()
+        self.assertEqual(("expired", "item_completed"), tuple(stored))
         self.assertEqual(
-            "task_closed", requests.get(self.conn, pending["request_id"])["expired_reason"]
+            "withdrawn", requests.get(self.conn, withdrawn["request_id"])["expired_reason"]
         )
         with self.assertRaisesRegex(model.PlanningError, "live work item"):
             self.create()
@@ -271,15 +288,7 @@ class PlanningRequestTests(unittest.TestCase):
 
     def test_closed_item_rejects_all_resolution_commands_without_history(self) -> None:
         record = self.create()
-        terminal = next(
-            state
-            for state in service.get_planning_space(self.conn, "REQ")["workflow"]["states"]
-            if state["is_terminal"]
-        )
-        self.conn.execute(
-            "UPDATE work_items SET state_id=?, acceptance='assignment' WHERE work_item_id=?",
-            (terminal["state_id"], self.item["work_item_id"]),
-        )
+        self.close()
         self.conn.commit()
         for status in ("answered", "declined", "expired"):
             with self.subTest(status=status), self.assertRaises(model.WorkflowGuardError):
@@ -287,22 +296,24 @@ class PlanningRequestTests(unittest.TestCase):
                     self.conn,
                     record["request_id"],
                     status=status,
-                    expected_revision=0,
+                    expected_revision=1,
                     answers={"reply": "too late"},
                 )
         self.assertEqual(
-            ("pending", 0, None),
+            ("expired", "item_completed", 1, None),
             tuple(
                 self.conn.execute(
-                    "SELECT status,revision,answers_json FROM work_item_requests"
+                    "SELECT status,expired_reason,revision,answers_json FROM work_item_requests"
                 ).fetchone()
             ),
         )
         self.assertEqual(
-            ["created", "request_created"],
+            ["request_created", "request_expired"],
             [
                 row[0]
-                for row in self.conn.execute("SELECT action FROM work_item_events ORDER BY id")
+                for row in self.conn.execute(
+                    "SELECT action FROM work_item_events WHERE action LIKE 'request_%' ORDER BY id"
+                )
             ],
         )
 
@@ -427,3 +438,121 @@ class PlanningRequestTests(unittest.TestCase):
         self.assertEqual(step["id"], comments[0]["checklist_item_id"])
         self.assertIsNone(comments[-1]["checklist_item_id"])
         self.assertIsNone(comments[-1]["checklist_item_text"])
+
+
+#: Codex proves its session in `_meta`, the shortest door in a test.
+ASKER = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
+
+
+class ClosingEndsQuestionsTests(unittest.TestCase):
+    """A close ends what still waits on its item, saying how the item closed.
+
+    From the connection contract: a move into a closed state writes every request
+    still pending on the item `expired`, `item_completed` or `item_cancelled` by the
+    category of that state, with a `request_expired` naming the request, in the same
+    write; reopening the item brings none of them back.
+    """
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        patch = mock.patch.dict(
+            os.environ, {"VALKAMA_DB": str(Path(directory.name) / "store.sqlite3")}
+        )
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        service.create_planning_space(self.conn, name="Closing", key="CLO")
+        self.ref = str(service.create_work_item(self.conn, space="CLO", title="b")["reference"])
+        self.conn.commit()
+
+    def person(self, path: str, **payload: object) -> dict:
+        with calls.bind(calls.browser(), path):
+            answer = api.handle_post(self.conn, path, payload)
+        self.conn.commit()
+        assert answer is not None
+        return answer[1]
+
+    def ask(self) -> str:
+        """An agent's question to the owner on the item, asked through its proved session."""
+
+        answer = mcp_surface.call_tool(
+            self.conn,
+            "create_work_item_request",
+            {"id": self.ref, "kind": "question", "prompt": "Which way?", "fields": [field()]},
+            meta={"sessionId": ASKER},
+        )
+        self.conn.commit()
+        assert isinstance(answer, dict)
+        return str(answer["request_id"])
+
+    def move(self, state: str) -> None:
+        self.person("/api/planning/work-item/transition", id=self.ref, state=state, force=True)
+
+    def stored(self, request_id: str) -> tuple:
+        row = self.conn.execute(
+            "SELECT status, expired_reason FROM work_item_requests WHERE request_id=?",
+            (request_id,),
+        ).fetchone()
+        return tuple(row)
+
+    def ended_events(self, request_id: str) -> int:
+        return int(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM work_item_events"
+                " WHERE action = 'request_expired' AND detail = ?",
+                (request_id,),
+            ).fetchone()[0]
+        )
+
+    def test_a_cancel_ends_the_question_as_cancelled_and_the_asker_hears_it(self) -> None:
+        asked = self.ask()
+        self.person(
+            "/api/planning/work-item/summary",
+            id=self.ref,
+            summary={"done": "Not needed", "next": "None"},
+        )
+        self.move("cancelled")
+        self.assertEqual(("expired", "item_cancelled"), self.stored(asked))
+        self.assertEqual(1, self.ended_events(asked))
+        identity = service.get_work_item(self.conn, self.ref)["work_item_id"]
+        told = [
+            (entry["kind"], entry.get("request_id"))
+            for entry in person_events.since_last_agent_write(self.conn, identity)
+        ]
+        self.assertIn(("question_withdrawn", asked), told)
+        read = requests.get(self.conn, asked)
+        self.assertEqual(("expired", "item_cancelled"), (read["status"], read["expired_reason"]))
+
+    def test_a_person_completing_ends_the_question_and_reopening_leaves_it_ended(self) -> None:
+        asked = self.ask()
+        self.person(
+            "/api/planning/work-item/summary", id=self.ref, summary={"done": "Done", "next": "None"}
+        )
+        self.move("done")
+        self.assertEqual(("expired", "item_completed"), self.stored(asked))
+        self.assertEqual(1, self.ended_events(asked))
+        self.move("ready")
+        self.assertEqual(("expired", "item_completed"), self.stored(asked))
+        read = requests.get(self.conn, asked)
+        self.assertEqual(("expired", "item_completed"), (read["status"], read["expired_reason"]))
+        self.assertEqual(1, self.ended_events(asked), "reopening writes nothing about it")
+
+    def test_a_close_ends_every_request_waiting_on_the_item_and_no_other(self) -> None:
+        asked = self.ask()
+        other = str(service.create_work_item(self.conn, space="CLO", title="c")["reference"])
+        elsewhere = requests.create(
+            self.conn, other, kind="decision", prompt="Keep it?", fields=[field()]
+        )["request_id"]
+        decided = requests.create(
+            self.conn, self.ref, kind="decision", prompt="Ship?", fields=[field()]
+        )["request_id"]
+        self.conn.commit()
+        self.person(
+            "/api/planning/work-item/summary", id=self.ref, summary={"done": "Done", "next": "None"}
+        )
+        self.move("done")
+        self.assertEqual(("expired", "item_completed"), self.stored(asked))
+        self.assertEqual(("expired", "item_completed"), self.stored(decided))
+        self.assertEqual(("pending", None), self.stored(elsewhere))

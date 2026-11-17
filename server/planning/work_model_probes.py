@@ -257,6 +257,7 @@ _TAKEN_WITH: dict[tuple[str, str, object], dict[str, object]] = {
 _RETIRED: dict[tuple[str, str], tuple[object, ...]] = {
     ("workflow_states", "category"): ("backlog", "queued"),
     ("work_items", "kind"): ("epic",),
+    ("work_item_requests", "expired_reason"): ("task_closed",),
 }
 
 _LITERAL = r"'(?:[^']|'')*'|-?\d+"

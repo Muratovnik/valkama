@@ -139,14 +139,12 @@ test('a change opens on what was sent, and a closed task freezes the list until 
   expect(requests.writes[2]?.body.answers).toEqual({ items: ['a', 'e'] })
 })
 
-test('a tick not sent when the task closed stays in sight, and is there to send once it reopens', async ({
-  page,
-}) => {
+test('a tick not sent when the task closed stays in sight as not sent', async ({ page }) => {
   const opened = await openList(page)
   const { list, requests } = opened
   const words = WORDS.en
   await tick(list, 'Split the guard').check()
-  await moveItem(opened, true, { status: 'expired', expired_reason: 'task_closed' })
+  await moveItem(opened, true, { status: 'expired', expired_reason: 'item_completed' })
   await expect(list).toContainText(words.frozen)
   await expect(list).toContainText(words.unsent)
   await expect(list).toContainText(`${LIST_LABEL}: Split the guard`)

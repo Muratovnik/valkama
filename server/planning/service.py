@@ -1141,6 +1141,10 @@ def _transition(
         _log(conn, identity, "released", held, author)
     for step in unheld:
         _log(conn, identity, "checklist_released", step["text"][:120], author)
+    if target["is_terminal"]:
+        # A close ends what still waits on the item, saying how it closed; reopening
+        # brings none of it back.
+        questions.end(conn, identity, questions.closed_reason(str(target["category"])), author)
     # Out of triage or deferred the item had no basis, so the move that accepts it gave one.
     if opened and gives is not None and current["category"] in model.UNACCEPTED_CATEGORIES:
         # The order of bases for what is under it, read with the item now accepted.
