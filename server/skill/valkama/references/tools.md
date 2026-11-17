@@ -418,11 +418,13 @@ owner is open on it, `force` or not; cancelling is not.
 A claim is a lease on the session that took it: `live` while that session is
 active and showed a sign of life in the last 3 days, `stale` once it ended or
 went quiet, `unconfirmed` when no session was proved. A launch's claim is a
-lease of the session the launch started, which the launch proves when it assigns
-or resumes that session (`source: launch`): it is `live` while the launched
-agent runs and follows the same rule after it ends. A client that announces its
-own session once it runs, as Codex does on a fresh launch, leaves that claim
-unconfirmed. An unconfirmed claim, the owner's own from the browser included,
+lease of the session the launch started, which the launch proves
+(`source: launch`): it is `live` while the launched agent runs and follows the
+same rule after it ends. That session is the agent's own when the launch assigns
+or resumes it. On a fresh launch of a client that announces its own session once
+it runs, as Codex does, it is the launch's (`launch-…`): the agent's own session
+does not hold that claim, and a resume reattaches to the session the agent
+announced. An unconfirmed claim, the owner's own from the browser included,
 lapses after 3 days without an event on the item. An open question to the owner on the item stops the count of silence
 for every hold on it; an end still counts. A session's claimed steps lapse with
 its lease. `claim_work_item` releases a stale or lapsed claim at once, and taking

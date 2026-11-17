@@ -143,6 +143,37 @@ def link_session(
     )
 
 
+def resumable_session(conn: sqlite3.Connection, work_item_id: str, client: str) -> str | None:
+    """The client's own session of the newest attempt a launch ran on this item and client.
+
+    A launch links the session it runs under at its start, and at its end the one
+    its client announced, when the client announced its own (`link_session`). The
+    launch's own id (`launch_id`), under which a client that announces its identity
+    runs, is no client's session, so it is never the answer, and nor is a session a
+    person attached. None when that attempt linked no other: a client that never
+    announced its session cannot be reattached to, and an older attempt's session is
+    not this one's.
+    """
+
+    newest = conn.execute(
+        "SELECT e.execution_id, e.launch_id FROM executions e"
+        " WHERE e.work_item_id = ? AND e.client_family = ? AND EXISTS("
+        "  SELECT 1 FROM execution_sessions l"
+        "  WHERE l.execution_id = e.execution_id AND l.relation != 'attached')"
+        " ORDER BY e.started_at DESC, e.rowid DESC LIMIT 1",
+        (work_item_id, client),
+    ).fetchone()
+    if newest is None:
+        return None
+    found = conn.execute(
+        "SELECT session_id FROM execution_sessions"
+        " WHERE execution_id = ? AND session_id != ? AND relation != 'attached'"
+        " ORDER BY linked_at DESC, rowid DESC LIMIT 1",
+        (str(newest[0]), str(newest[1])),
+    ).fetchone()
+    return None if found is None else str(found[0])
+
+
 def close_execution(
     conn: sqlite3.Connection,
     execution_id: str,
@@ -358,5 +389,6 @@ __all__ = [
     "observe_outcome",
     "open_execution",
     "record_baseline",
+    "resumable_session",
     "status_for_outcome",
 ]

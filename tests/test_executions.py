@@ -338,18 +338,87 @@ class LaunchLifecycleTests(LaunchHarness):
         self.assertEqual([(session, "ended")], self.sessions())
         self.assert_lapses_after_the_grace(reference)
 
-    def test_a_client_announcing_its_own_session_leaves_the_claim_unconfirmed(self) -> None:
-        # Its identity exists only once it runs, so the claim can name no session yet.
-        reference = self.item("announce it")
+    def launch_codex(self, reference: str, **overrides) -> dict:
+        """Launch the client that announces its own session once it runs."""
+
         with (
             mock.patch.dict(os.environ, {"VALKAMA_CODEX_BIN": sys.executable}),
             mock.patch.object(tempfile, "tempdir", self._dir.name),
         ):
-            executions.launch_work_item(self.conn, self.packet(reference, client="codex"))
+            return executions.launch_work_item(
+                self.conn, self.packet(reference, client="codex", **overrides)
+            )
+
+    def announce(self, reference: str, thread: str) -> None:
+        """The line the running client prints when it has minted its session."""
+
+        runner.RUNNER._running[reference].capture.append(
+            json.dumps({"type": "thread.started", "thread_id": thread})
+        )
+
+    def lease_of(self, reference: str) -> tuple[str, str, str]:
         claim = planning.get_work_item(self.conn, reference)["claim"]
-        self.assertEqual(("codex:executor", "unconfirmed"), (claim["holder"], claim["state"]))
+        return claim["state"], claim["session_id"], claim["source"]
+
+    def test_a_client_announcing_its_own_session_claims_for_the_launch_session(self) -> None:
+        # Its identity exists only once it runs, so the launch runs it under its own id
+        # from start to end, and the claim is the lease of that session.
+        reference = self.item("announce it")
+        started = self.launch_codex(reference)
+        launched = started["launch_id"]
+        self.assertEqual(launched, started["session_id"])
+        self.assertEqual(("live", launched, "launch"), self.lease_of(reference))
+        self.assertEqual([(launched, "active")], self.sessions())
+        self.announce(reference, "thread-a")
+        self.assertEqual("thread-a", runner.RUNNER.running()[0]["client_session_id"])
+        # The identity it announced starts nothing, and the claim still names the launch's.
+        self.assertEqual([(launched, "active")], self.sessions())
+        self.assertEqual(("live", launched, "launch"), self.lease_of(reference))
         self.processes[0].code = 0
         executions.reap_launches(self.conn)
+        self.conn.commit()
+        # The launch's session ends under the id it opened under. The client's own is
+        # recorded as ended too, for the attempt's link, and the claim reads none of it.
+        self.assertEqual("ended", dict(self.sessions())[launched])
+        self.assertEqual(("stale", launched, "launch"), self.lease_of(reference))
+        self.assertEqual(
+            {launched, "thread-a"},
+            {
+                link["session_id"]
+                for link in execution_service.executions_for_work_item(
+                    self.conn, str(planning.get_work_item(self.conn, reference)["work_item_id"])
+                )[0]["sessions"]
+            },
+        )
+        self.assert_lapses_after_the_grace(reference)
+        self.assertEqual("", planning.get_work_item(self.conn, reference)["claim_ref"])
+
+    def test_a_resumed_codex_launch_reattaches_to_the_session_its_client_announced(
+        self,
+    ) -> None:
+        reference = self.item("resume the thread")
+        self.launch_codex(reference)
+        self.announce(reference, "thread-a")
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        resumed = self.launch_codex(reference, resume=True)
+        argv = self.spawned[-1][0]
+        self.assertEqual(["resume", "--json"], argv[2:4])
+        self.assertEqual("thread-a", argv[-2], "the session comes right before the task")
+        self.assertEqual([], [part for part in argv if part.startswith("launch-")])
+        self.assertEqual(("thread-a", "thread-a"), (resumed["resumed_from"], resumed["session_id"]))
+        self.assertEqual(("live", "thread-a", "launch"), self.lease_of(reference))
+        self.processes[1].code = 0
+        executions.reap_launches(self.conn)
+
+    def test_a_codex_launch_that_never_announced_its_session_cannot_be_resumed(self) -> None:
+        # Its only link is the launch's own id, which no client can reattach to.
+        reference = self.item("never announced")
+        self.launch_codex(reference)
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        with self.assertRaisesRegex(runner.LaunchError, "no exact resumable codex session"):
+            self.launch_codex(reference, resume=True)
 
     def test_zero_exit_without_structured_delivery_does_not_advance(self) -> None:
         reference = self.item("empty success")
