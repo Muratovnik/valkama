@@ -404,10 +404,14 @@ class ComingBackTests(Deferral):
             if row[1] == number and row[5] == returned[2]
         ]
         self.assertEqual([("Triage", 1)], [(row[3], row[12]) for row in entries])
-        # Valkama's own write names nobody, so the item it blocks is told nothing of it:
-        # the entry stands in the history the blocked item reads.
-        told = person_events.blocker_changes(self.conn, self.identity(y), 0)
-        self.assertNotIn(returned[2], [call for call, _entry in told])
+        # The item it blocks hears it as it hears each record Valkama writes in a call
+        # of its own: Valkama's, and a change short of a close.
+        told = [
+            (entry["kind"], entry["via"], entry["blocker"], entry["state"])
+            for call, entry in person_events.blocker_changes(self.conn, self.identity(y), 0)
+            if call == returned[2]
+        ]
+        self.assertEqual([("blocker_changed", "valkama", t, "Triage")], told)
 
 
 class ReadTests(Deferral):

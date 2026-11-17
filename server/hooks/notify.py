@@ -1404,11 +1404,11 @@ def _read(
         ]
         spoken += _owed(conn, item, recorded, session_id)
     if holds and signature[3]:
-        # A blocker's state, a person's or another session's, is read from the one place
-        # other sessions' news is: a close reads as a change once a later transition
-        # undoes it, so a close read from another place would be told again then. Only
-        # a close wakes; a person's is the person's news in the notice, and through a
-        # mute too.
+        # A blocker's state, a person's, another session's or Valkama's, is read from the
+        # one place other sessions' news is: a close reads as a change once a later
+        # transition undoes it, so a close read from another place would be told again
+        # then. Only a close wakes; a person's is the person's news in the notice, and
+        # through a mute too, as Valkama's is.
         for call, entry in person_events.blocker_changes(conn, item, heard):
             if call > newest:
                 continue
