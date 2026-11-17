@@ -76,15 +76,19 @@ class CliTestCase(unittest.TestCase):
 
 class SpaceReportingTests(CliTestCase):
     def test_summary_names_the_space_its_states_and_what_is_ready(self) -> None:
-        self.item("a queued item")
+        self.item("an untriaged item")
+        self.item("a ready item", state="ready", acceptance="assignment")
         started = self.item("an item in flight")
         service.claim_work_item(self.conn, started, author="agent-one")
         self.conn.commit()
         output = self.invoke("summary", "--space", SPACE_KEY)
         self.assertIn(f"space '{SPACE_NAME}'", output)
-        # Claiming starts an item, so one is in the backlog and one under way.
-        self.assertIn("Triage 1, Dev 1", output)
-        self.assertIn("a queued item", output)
+        # Claiming starts an item, so one is in triage, one ready and one under way.
+        self.assertIn("Triage 1, Ready 1, Dev 1", output)
+        # Only accepted work in a ready state is there to take; triage is not.
+        taken = output.split("- ready to take", 1)[1].splitlines()[0]
+        self.assertIn("a ready item", taken)
+        self.assertNotIn("an untriaged item", taken)
 
     def test_summary_reports_an_epic(self) -> None:
         epic = self.item("an umbrella", kind="goal")
@@ -159,7 +163,8 @@ class ConsoleEncodingTests(CliTestCase):
         # redirected -- which is exactly how the session hooks run it. A real
         # child process, because the defect is in what the encoder does at the
         # stream, and nothing in-process reproduces that.
-        self.item("переход → готово")
+        # Ready, so the summary lists it among the work to take.
+        self.item("переход → готово", state="ready", acceptance="assignment")
         finished = subprocess.run(
             [sys.executable, os.path.join(ROOT, "valkama.py"), "summary", "--space", SPACE_KEY],
             capture_output=True,

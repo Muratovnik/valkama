@@ -45,6 +45,7 @@ const step = (id: number, text: string) => ({
   done: false,
   claimed_by: '',
   done_by: '',
+  by_previous_holder: false,
 })
 const withSteps = (item: WorkItem, ...texts: string[]): WorkItem => ({
   ...item,

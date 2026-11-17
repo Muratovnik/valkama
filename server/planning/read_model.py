@@ -18,7 +18,7 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 
 from . import (
     acknowledgements,
@@ -28,6 +28,7 @@ from . import (
     leases,
     mentions,
     model,
+    queue,
     sections,
     states,
     subscriptions,
@@ -268,61 +269,6 @@ def acceptance(row: sqlite3.Row) -> dict | None:
     return {"basis": row["acceptance"], "at": row["accepted_at"]}
 
 
-def workable(
-    *,
-    container: bool,
-    claim_ref: object,
-    checklist: object,
-    category: str,
-    blocked: Callable[[], bool],
-    startable: Callable[[], bool],
-) -> bool:
-    """Whether an item is workable now: a task, unheld, unblocked, startable from triage or ready.
-
-    The rule the take-next queue applies, stated once with its query's form
-    (`WORKABLE_CLAUSES`), so a projection that loaded its facts in bulk answers it
-    the way a single item's record does and the queue hands out what reads
-    workable. A container is never workable: nobody holds one. Unheld is the item
-    and every step of it. A task in a state with no way into work is not workable
-    either: a claim of it is refused, and a queue that offered it would stick on it.
-    `blocked` and `startable` are asked last and only when the rest already holds,
-    because they are the facts that may cost a query.
-    """
-
-    return (
-        not container
-        and not claim_ref
-        and not any(step["claimed_by"] for step in model.checklist(checklist))
-        and category in model.WORKABLE_CATEGORIES
-        and not blocked()
-        and startable()
-    )
-
-
-def startable(conn: sqlite3.Connection, row: sqlite3.Row, loaded: bool | None) -> bool:
-    """Whether a claim can start the item where it stands: what a read loaded, or asked now.
-
-    A read of many items loads it with their tree in the queue's own form
-    (`states.STARTS_CLAUSE`); one task's record asks `states.start_state`.
-    """
-
-    return states.start_state(conn, row) is not None if loaded is None else loaded
-
-
-#: `workable` as the take-next queue's conditions on an item `i` in its state `s`.
-WORKABLE_CLAUSES = (
-    f"i.kind != '{model.CONTAINER_KIND}'",
-    "i.claim_ref = ''",
-    "NOT EXISTS (SELECT 1 FROM json_each(i.checklist) j"
-    " WHERE COALESCE(json_extract(j.value, '$.claimed_by'), '') != '')",
-    "s.category IN (" + ",".join(f"'{category}'" for category in model.WORKABLE_CATEGORIES) + ")",
-    "NOT EXISTS (SELECT 1 FROM work_item_links l JOIN work_items b"
-    " ON b.work_item_id = l.from_id JOIN workflow_states bs ON bs.state_id = b.state_id"
-    " WHERE l.to_id = i.work_item_id AND l.kind = 'blocks' AND bs.is_terminal = 0)",
-    states.STARTS_CLAUSE,
-)
-
-
 #: A closing fact: when the item's latest transition was written, and the
 #: detail of the newest named release after it; None for an item never moved.
 _Closed = tuple[str, str | None] | None
@@ -389,6 +335,81 @@ def closings(
         str(row["work_item_id"]): _closed(row, found.get(str(row["work_item_id"])))
         for row in finished
     }
+
+
+#: The newest release an expiry wrote on each item since its last claim. The event's
+#: call is Valkama's own, under the expiry's tool, so a caller's release never reads
+#: as one; the ids travel as one JSON array, as in `closings`.
+_LAPSED = (
+    "SELECT e.work_item_id, e.detail, e.created_at FROM work_item_events e"
+    " JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.work_item_id IN (SELECT value FROM json_each(?))"
+    " AND e.action = 'released' AND c.tool = ?"
+    " AND NOT EXISTS (SELECT 1 FROM work_item_events n WHERE n.work_item_id = e.work_item_id"
+    "  AND n.action IN ('claimed', 'taken_over') AND n.id > e.id)"
+    " ORDER BY e.id"
+)
+
+
+def lapsed_claims(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> dict[str, dict]:
+    """Whose claim the sweep released on each of `rows`, why and when, by item id.
+
+    Derived from the history, never stored: the newest `released` an expiry wrote,
+    read as `{holder, reason, at}`. Only an open item nobody holds can have one,
+    and a claim since that release ends it; `present` reads an absent item as
+    null. A task only steps held has none, since a step's release names its text,
+    not its holder. One statement for any number of rows.
+    """
+
+    open_states = {
+        str(state[0])
+        for state in conn.execute("SELECT state_id FROM workflow_states WHERE is_terminal = 0")
+    }
+    return _lapsed(
+        conn,
+        [
+            str(row["work_item_id"])
+            for row in rows
+            if not row["claim_ref"] and str(row["state_id"]) in open_states
+        ],
+    )
+
+
+def _lapsed(conn: sqlite3.Connection, unheld: list[str]) -> dict[str, dict]:
+    """The lapsed claims of `unheld`, open items nobody holds, in one statement.
+
+    It asks the schema this build knows, so a store without `execution_events`
+    fails the read: a list or a board is a whole-store read (`whole_store_read`),
+    and such a store answers it with `StoreSchemaError`.
+    """
+
+    found: dict[str, dict] = {}
+    if not unheld:
+        return found
+    released = conn.execute(_LAPSED, (json.dumps(unheld), leases.EXPIRY_TOOL)).fetchall()
+    for identity, detail, at in released:
+        expiry = leases.expiry_of(str(detail))
+        if expiry is not None:
+            found[str(identity)] = {"holder": expiry[1], "reason": expiry[0], "at": at}
+    return found
+
+
+def _lapsed_of_one(conn: sqlite3.Connection, identity: str) -> dict | None:
+    """The lapsed claim of one open item nobody holds, for a record read on its own.
+
+    A brief record needs no later column, so it is read from an attached store an
+    earlier build wrote, before calls were recorded: such a store has no
+    `execution_events`, and none of its items has a lapsed claim. It is asked
+    directly rather than probed first. Only this one-item read forgives the
+    missing table; the batch `lapsed_claims` of a list or a board does not.
+    """
+
+    try:
+        return _lapsed(conn, [identity]).get(identity)
+    except sqlite3.OperationalError as error:
+        if not str(error).startswith("no such table: execution_events"):
+            raise
+        return None
 
 
 def _closed(row: sqlite3.Row, found: _Closed) -> tuple[str, str | None]:
@@ -803,8 +824,10 @@ def present(
     unresolved: bool = False,
     events: int | None = None,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
+    lapsed: Mapping[str, dict] | None = None,
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
+    read_space: str | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
 
@@ -819,17 +842,29 @@ def present(
     mark, carrying the same and `truncated`, the next page after `comments_after`.
     None given is the whole history, which is what every write answers with and
     what a screen draws from. `closed` is what `closings` loaded for a read of
-    many items; absent, the item asks `closing` itself. `tree` is what such a read
+    many items, and `lapsed` what `lapsed_claims` did; absent, the item asks
+    itself. `tree` is what such a read
     loaded of its spaces (`item_tree.of_spaces`); absent, the item loads what is
     under it. `projects` is what `item_projects.of_items` read for such a read in
-    one walk; absent, the item reads its own.
+    one walk; absent, the item reads its own. `read_space` is the space, by id, a
+    read of one space is of, which `withheld` asks another space's item by
+    (`queue.withheld`).
 
     `state` is what `states.public_state` makes of the item's state: null for an
     accepted open container, which says what it derives as `container_state`
     instead. `open` says whether work on it is over, whatever its kind.
     """
 
-    record, lease = _record(conn, row, closed=closed, tree=tree, projects=projects)
+    record, lease = _record(
+        conn,
+        row,
+        full=full,
+        closed=closed,
+        lapsed=lapsed,
+        tree=tree,
+        projects=projects,
+        read_space=read_space,
+    )
     identity = str(row["work_item_id"])
     if not full:
         # A count, under its own name. Calling it `comments` in the brief and
@@ -879,14 +914,19 @@ def _record(
     conn: sqlite3.Connection,
     row: sqlite3.Row,
     *,
+    full: bool,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
+    lapsed: Mapping[str, dict] | None = None,
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
+    read_space: str | None = None,
 ) -> tuple[dict, leases.Lease | None]:
     """What the brief record, the full one and the card share, and the lease it read.
 
     Everything here is read from the item's row, its state and what is under it,
     never from its history, so it costs the same however long the history is.
+    The lease is read whole only when `full` asks for it, as the full record and
+    the card do; a brief record takes its state alone.
     """
 
     state = state_by_id(conn, str(row["state_id"]))
@@ -924,10 +964,6 @@ def _record(
     # answer the same question the same way. The Board era left it to each view,
     # and they disagreed about a held item and about a container.
     identity = str(row["work_item_id"])
-    # Read, never written: a stale lease stays on the record until a write
-    # meets it, and the state says so rather than hiding it.
-    lease = leases.lease(conn, row)
-    record["claim_state"] = lease.state if lease is not None else None
     # A read of many items hands over every closing it loaded at once.
     record["closed_at"], record["last_claim_ref"] = (
         closing(conn, row, bool(state["is_terminal"]))
@@ -935,17 +971,32 @@ def _record(
         else closed.get(identity, (None, None))
     )
     facts = tree if tree is not None else item_tree.of_item(conn, row, str(state["category"]))
+    # Read, never written: a stale lease stays on the record until a write
+    # meets it, and the state says so rather than hiding it. An open question
+    # to the owner stops its count; the tree has read the questions already.
+    asked = (
+        facts.question(identity) if facts.asked is not None and identity in facts.nodes else None
+    )
+    lease = leases.lease(conn, row, asked=asked) if full else None
+    record["claim_state"] = (
+        (lease.state if lease is not None else None)
+        if full
+        else leases.state(conn, row, asked=asked)
+    )
     record["container_state"] = facts.container_state(identity)
     record["started_at"] = facts.started_at(identity)
     record["waits_for"] = facts.waits_for(identity)
-    record["workable"] = workable(
-        container=row["kind"] == model.CONTAINER_KIND,
-        claim_ref=row["claim_ref"],
-        checklist=record["checklist"],
-        category=str(state["category"]),
-        blocked=lambda: bool(record["waits_for"]),
-        startable=lambda: startable(conn, row, facts.startable(identity)),
-    )
+    # The take-next queue's own rule (`queue.withheld`): the queue gives exactly
+    # what reads workable, and the codes say why anything else is not given.
+    record["withheld"] = queue.withheld(conn, row, facts, read_space=read_space)
+    record["workable"] = not record["withheld"]
+    if lapsed is not None:
+        record["lapsed_claim"] = lapsed.get(identity)
+    else:
+        # Asked only of open work nobody holds, the one kind that can have it: the
+        # state is read already, and a brief read's statement count is bounded.
+        unheld = not row["claim_ref"] and not state["is_terminal"]
+        record["lapsed_claim"] = _lapsed_of_one(conn, identity) if unheld else None
     return record, lease
 
 
@@ -968,9 +1019,8 @@ PARTS = (
     "sections",
     "participants",
 )
-#: The card's fields, in the order it carries them. `withheld` and `lapsed_claim`
-#: are named ahead of the builds that add them to the record, and a card carries
-#: each when its record has it, so no build edits this list for them.
+#: The card's fields, in the order it carries them. A card carries each one its
+#: record has, so a field the record gains reaches the card once it is named here.
 CARD_FIELDS = (
     "reference",
     "title",
@@ -1060,7 +1110,7 @@ def card(
     reader above this module counts: the questions, which `requests` reads.
     """
 
-    record, lease = _record(conn, row)
+    record, lease = _record(conn, row, full=True)
     state = record["state"]
     found = {
         **record,

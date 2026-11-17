@@ -15,7 +15,6 @@ import sqlite3
 from ..projects import project_registry
 from ..store_identity.metadata import read_store_metadata
 from . import (
-    calls,
     item_projects,
     item_tree,
     leases,
@@ -82,69 +81,53 @@ def planning_payload(
     }
 
 
-#: An unconfirmed claim quiet for this many days is treated as abandoned. Such a
-#: claim names no session whose end could be seen, so its quiet is the only sign
-#: left; a claim a confirmed session holds is judged by its lease instead.
-STALE_CLAIM_DAYS = 3
-
-
-def stale_claims(
-    conn: sqlite3.Connection,
-    *,
-    space: str | None = None,
-    days: int = STALE_CLAIM_DAYS,
-) -> list[dict]:
+def stale_claims(conn: sqlite3.Connection, *, space: str | None = None) -> list[dict]:
     """Held items whose holder is no longer there, so their ownership is abandoned.
 
-    A lease a confirmed session holds is abandoned when it reads `stale`, however
-    recently somebody else touched the item, and never while it is `live`. An
-    unconfirmed claim has only its quiet to go by: no event for `days`. The
-    owner's own claim, taken in the browser and signed `user`, is not
-    second-guessed here. A launch also claims through the browser, but for its
-    runner, and a runner that died leaves exactly the claim this list is for.
+    Abandoned by the lease's own rule (`leases.abandoned`): a lease a confirmed
+    session holds when it reads `stale`, in its grace or not, however recently
+    somebody else touched the item, and never while it is `live`; a claim no
+    session proved when its item has had no event for `leases.QUIET_PERIOD`,
+    the owner's own claim from the browser and a launch's for its runner alike.
+    Such a claim stays here only until the next sweep releases it.
 
-    A claim only goes stale while somebody is supposed to be working: the
-    categories are asked of the workflow rather than named, so a space that
-    calls its states something else is still covered.
+    A claim only stands where somebody is supposed to be working: at work or
+    blocked at it. The categories are asked of the workflow rather than named, so
+    a space that calls its states something else is still covered.
     """
 
     clauses = [
         "w.claim_ref != ''",
-        "s.category IN ('active','review')",
+        "s.category IN (SELECT value FROM json_each(?))",
     ]
-    parameters: list[object] = []
+    parameters: list[object] = [json.dumps(model.HELD_CATEGORIES)]
     if space is not None:
         clauses.append("w.planning_space_id = ?")
         parameters.append(service.space_identity(conn, space))
     query = service.with_clauses(
         "SELECT w.*, p.key || '-' || w.number AS reference, s.key, s.name, s.category,"
         " s.is_terminal,"
-        " c.identity_source AS claim_source,"
         " COALESCE(MAX(e.created_at), w.updated_at) AS last_event,"
         " CAST(julianday('now') - julianday(COALESCE(MAX(e.created_at), w.updated_at))"
         "  AS INTEGER) AS quiet_days"
         " FROM work_items w"
         " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
         " JOIN workflow_states s ON s.state_id = w.state_id"
-        " LEFT JOIN execution_events c ON c.id = w.claim_call_id"
         " LEFT JOIN work_item_events e ON e.work_item_id = w.work_item_id",
         clauses,
     )
     query += " GROUP BY w.work_item_id ORDER BY quiet_days DESC, w.number"
     abandoned = []
     for row in conn.execute(query, parameters).fetchall():
-        claim_state = leases.state(conn, row)
-        if claim_state == leases.LIVE:
-            continue
-        owners_own = row["claim_source"] == calls.BROWSER and row["claim_ref"] == calls.OWNER_ACTOR
-        if claim_state == leases.UNCONFIRMED and (owners_own or int(row["quiet_days"]) < int(days)):
+        lease = leases.lease(conn, row)
+        if lease is None or not leases.abandoned(lease):
             continue
         abandoned.append(
             {
                 "reference": row["reference"],
                 "title": row["title"],
                 "claim_ref": row["claim_ref"],
-                "claim_state": claim_state,
+                "claim_state": lease.state,
                 "state": (states.public_state(row) or {}).get("key"),
                 "last_event": row["last_event"],
                 "quiet_days": int(row["quiet_days"]),

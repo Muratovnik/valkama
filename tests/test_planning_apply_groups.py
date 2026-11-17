@@ -125,7 +125,6 @@ class UpdateGroupTests(BatchCase):
             "description": "Why it changed",
             "labels": ["one", "two"],
             "priority": "high",
-            "rank": "first",
             "kind": "bug",
             "parent": parent,
             "source": "docs/plan.md#kb:a7f3",
@@ -173,7 +172,6 @@ class UpdateGroupTests(BatchCase):
             {"title": ""},
             {"title": 5},
             {"labels": "one"},
-            {"rank": "nowhere"},
             {"parent": "TALK-999"},
         ):
             with self.subTest(edit=edit):
@@ -183,6 +181,20 @@ class UpdateGroupTests(BatchCase):
                 self.assertEqual(single["code"], error["code"])
                 self.assertEqual(f"update: {single['message']}", error["message"])
                 self.assertEqual({"group": "update", "index": 0}, error["step"])
+                self.assertEqual(before, self.untouched())
+
+    def test_rank_is_retired_in_the_edit_the_move_and_as_an_argument(self) -> None:
+        retired = model.RETIRED_FIELDS["rank"]
+        for groups, says in (
+            ({"update": {"rank": "first"}}, f"update: {retired}"),
+            ({"update": {"title": "Renamed", "rank": "last"}}, f"update: {retired}"),
+            ({"transition": {"state": "ready", "rank": "first"}}, f"transition: {retired}"),
+            ({"claim": True, "rank": "first"}, f"{BATCH}: {retired}"),
+        ):
+            with self.subTest(groups=groups):
+                before = self.untouched()
+                error = self.refused_batch(**groups)
+                self.assertEqual(("invalid_request", says), (error["code"], error["message"]))
                 self.assertEqual(before, self.untouched())
 
     def test_an_edit_answers_to_the_revision_the_batch_names(self) -> None:
@@ -768,23 +780,6 @@ class OrderTests(BatchCase):
         )
         [row] = self.call_rows()
         self.assertEqual("title", row["reason"])
-
-    def test_an_edit_comes_after_the_claim_that_moved_the_item(self) -> None:
-        # A placement names an item in the same state, which the claim has only
-        # just moved this one into.
-        ahead = str(
-            service.create_work_item(
-                self.conn, space="TALK", title="Under way", state="ready", acceptance="assignment"
-            )["reference"]
-        )
-        service.claim_work_item(self.conn, ahead, author="another")
-        self.conn.commit()
-        rank = {"rank": f"before:{ahead}"}
-        self.assertIn("its own state", self.refused_single(UPDATE, id=self.twin, **rank)["message"])
-        answer = self.apply(claim=True, update=rank)
-        self.assertEqual("dev", answer["state"]["key"])
-        rows = service.list_work_items(self.conn, space="TALK", state="dev")
-        self.assertEqual([self.ref, ahead], [row["reference"] for row in rows])
 
     def test_a_comment_reads_the_checklist_the_same_call_set(self) -> None:
         step = service.set_checklist(self.conn, self.ref, ["old name"])["checklist"][0]["id"]

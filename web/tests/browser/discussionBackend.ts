@@ -79,6 +79,7 @@ function setChecklist(item: WorkItem, body: Record<string, unknown>) {
     done: false,
     claimed_by: '',
     done_by: '',
+    by_previous_holder: false,
   })
   item.checklist = (body.items as SentStep[]).map((step, index) => {
     if (typeof step === 'string') return fresh(step, index)

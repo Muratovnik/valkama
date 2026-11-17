@@ -62,23 +62,16 @@ def _row(conn: sqlite3.Connection, identity: object) -> sqlite3.Row:
 
 
 def _expired(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> str | None:
-    if row["status"] != "pending":
-        return row["expired_reason"]
-    if row["expires_at"] and row["expires_at"] <= at:
-        return "deadline"
-    item = read_model.item_by_id(conn, row["work_item_id"])
-    if read_model.state_by_id(conn, item["state_id"])["is_terminal"]:
-        return "task_closed"
-    if row["execution_id"]:
-        execution = conn.execute(
-            "SELECT ended_at,status FROM executions WHERE execution_id=?", (row["execution_id"],)
-        ).fetchone()
-        if (
-            execution is None
-            or execution["ended_at"]
-            or execution["status"] not in {"starting", "running"}
-        ):
-            return "execution_closed"
+    """Why a request no longer waits for an answer, or None while it still does.
+
+    What lapses any request is `questions.lapse`; a request asked of an agent
+    session lapses as well while that session is gone (`session_gone`), read
+    rather than written, so it waits again once the session is back.
+    """
+
+    reason = questions.expired(conn, str(row["request_id"]), at)
+    if reason is not None:
+        return reason
     addressee = _addressee(row)
     if addressee is not None and not leases.session_live(
         conn.execute(
@@ -1022,30 +1015,6 @@ def _stored(row: sqlite3.Row, answers: object, own: object, field_notes: object,
         own=variants,
         field_notes=comments,
     )
-
-
-_OWNER_QUESTIONS = "SELECT r.* FROM work_item_requests r WHERE " + questions.OWNER_QUESTION  # noqa: S608
-
-
-def open_rows(conn: sqlite3.Connection, work_item_id: str | None = None) -> list[sqlite3.Row]:
-    """The questions still open for a person to answer, on one item or everywhere in this store.
-
-    Open as a reader sees it: a pending row past its deadline, on a closed item or
-    on a finished execution has lapsed although nothing wrote that down. Only a
-    question to the owner is one (`questions.OWNER_QUESTION`): nobody waits for a
-    list on a comment, and a request asked of an agent session waits for that
-    session, so neither raises an alert or holds anything up.
-    """
-
-    query = _OWNER_QUESTIONS
-    parameters: tuple[str, ...] = ()
-    if work_item_id is not None:
-        query += " AND r.work_item_id=?"
-        parameters = (work_item_id,)
-    at = request_model.now()
-    return [
-        row for row in conn.execute(query, parameters).fetchall() if not _expired(conn, row, at)
-    ]
 
 
 def _event(

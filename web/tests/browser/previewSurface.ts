@@ -24,6 +24,7 @@ const steps = (done: number, total: number) =>
     done: index < done,
     claimed_by: '',
     done_by: '',
+    by_previous_holder: false,
   }))
 
 /** One card per state of the plan's table, named by `data-state`. */

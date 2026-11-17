@@ -54,6 +54,7 @@
             "done": false,
             "claimed_by": "claude agent a4d2c8f1e0b3a297 (session 00000000-0000-4000-8000-000000000012)",
             "done_by": "",
+            "by_previous_holder": false,
             "executor": {
               "session": "00000000-0000-4000-8000-000000000012",
               "agent": "a4d2c8f1e0b3a297",
@@ -69,6 +70,7 @@
             "done": false,
             "claimed_by": "the owner",
             "done_by": "",
+            "by_previous_holder": false,
             "executor": {
               "session": null,
               "agent": null,
@@ -84,6 +86,7 @@
             "done": false,
             "claimed_by": "claude (session 388ed4aac64b107a)",
             "done_by": "",
+            "by_previous_holder": false,
             "executor": {
               "session": null,
               "agent": null,
@@ -99,7 +102,12 @@
         "updated_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "last_claim_ref": null,
+        "withheld": [
+          "not_ready",
+          "held"
+        ],
         "workable": false,
+        "lapsed_claim": null,
         "claim": {
           "holder": "claude (session 00000000-0000-4000-8000-000000000012)",
           "state": "live",

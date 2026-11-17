@@ -22,8 +22,8 @@ that comes next.
 Only what an agent should act on counts. A launch writes under the interface's
 credential, but its claim and notes are the launch's words rather than a person's,
 so only Planning's own paths do. An edit logs no event, so its call row names what
-it edited (`calls.call_id`), which is also what keeps a card dragged within its
-column, an edit of nothing but `rank`, from reading as somebody speaking.
+it edited (`calls.call_id`), and an edit that changed nothing names nothing and
+is nobody speaking.
 
 A client hook keeps its own place instead (`since_call`): it tells the agents of
 one session, and an item's window ends at any agent's write, so a subagent's tick
@@ -973,7 +973,7 @@ def lists(conn: sqlite3.Connection, request_ids: set[str]) -> set[str]:
     """Which of these requests are lists on a comment, which nobody waits for.
 
     A list is asked and withdrawn as a question is, but the work never waits on it:
-    it raises no alert and holds nothing open (`requests.open_rows`).
+    it raises no alert and holds nothing open (`questions.open_rows`).
     """
 
     if not request_ids:

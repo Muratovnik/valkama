@@ -165,11 +165,11 @@ class PlanningApiTests(unittest.TestCase):
             {
                 "acceptance", "checklist", "claim", "claim_ref", "claim_state", "closed_at",
                 "comments", "container_state", "created_at", "description", "events", "kind",
-                "labels", "last_claim_ref", "links", "mentions", "mentions_total", "number",
-                "open", "parent_id", "planning_space_id", "priority", "projects", "reference", "refs",
-                "revision", "source", "started_at", "state", "subscribers", "summary",
-                "summary_comment_id", "title", "updated_at", "waits_for", "work_item_id",
-                "workable",
+                "labels", "lapsed_claim", "last_claim_ref", "links", "mentions",
+                "mentions_total", "number", "open", "parent_id", "planning_space_id",
+                "priority", "projects", "reference", "refs", "revision", "source",
+                "started_at", "state", "subscribers", "summary", "summary_comment_id",
+                "title", "updated_at", "waits_for", "withheld", "work_item_id", "workable",
             },
             set(record),
         )  # fmt: skip
@@ -195,7 +195,8 @@ class PlanningApiTests(unittest.TestCase):
         )
         graph = self.get("/api/planning/graph")
         self.assertEqual([created["reference"]], [node["reference"] for node in graph["nodes"]])
-        self.assertTrue(graph["nodes"][0]["workable"])
+        # Filed without an acceptance, it waits in triage, which the queue does not give.
+        self.assertFalse(graph["nodes"][0]["workable"])
 
     def test_a_project_does_not_choose_the_space_a_read_shows(self) -> None:
         """A space holds no project, so a project only narrows the read of a space named."""
@@ -323,7 +324,16 @@ class PlanningApiTests(unittest.TestCase):
 
     def test_claim_ready_answers_with_nothing_when_no_item_is_ready(self) -> None:
         self.assertIsNone(self.post("/api/planning/work-item/claim-ready", space="QA")["work_item"])
-        created = self.post("/api/planning/work-items", space="QA", title="Ready")
+        # Work in triage is not accepted, so the queue gives nobody it unasked.
+        self.post("/api/planning/work-items", space="QA", title="In triage")
+        self.assertIsNone(self.post("/api/planning/work-item/claim-ready", space="QA")["work_item"])
+        created = self.post(
+            "/api/planning/work-items",
+            space="QA",
+            title="Ready",
+            state="ready",
+            acceptance="assignment",
+        )
         picked = self.post("/api/planning/work-item/claim-ready", space="QA", author="one")
         self.assertEqual(created["reference"], picked["work_item"]["reference"])
 
@@ -375,6 +385,35 @@ class PlanningApiTests(unittest.TestCase):
             (400, "invalid_request"),
             self._refusal("/api/planning/work-item/link", id="QA-1", other="QA-1", kind="blocks"),
         )
+
+    def test_rank_is_retired_on_the_edit_the_move_and_the_batch_and_writes_nothing(self) -> None:
+        created = self.post("/api/planning/work-items", space="QA", title="First")
+        self.conn.commit()
+        retired = model.RETIRED_FIELDS["rank"]
+        for path, payload, says in (
+            ("/api/planning/work-item/update", {"rank": "first"}, retired),
+            ("/api/planning/work-item/update", {"title": "Renamed", "rank": "last"}, retired),
+            ("/api/planning/work-item/transition", {"state": "ready", "rank": "first"}, retired),
+            ("/api/planning/work-item/apply", {"update": {"rank": "first"}}, f"update: {retired}"),
+            (
+                "/api/planning/work-item/apply",
+                {"transition": {"state": "ready", "rank": "first"}},
+                f"transition: {retired}",
+            ),
+        ):
+            with self.subTest(path=path, payload=payload):
+                with self.assertRaises(planning_api.PlanningHttpError) as caught:
+                    planning_api.handle_post(self.conn, path, {"id": "QA-1", **payload})
+                self.conn.commit()
+                status, body = planning_api.error_response(caught.exception)
+                self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
+                self.assertEqual(says, body["error"]["message"])
+                after = service.get_work_item(self.conn, "QA-1")
+                self.assertEqual(
+                    (created["revision"], "First", created["state"]["key"]),
+                    (after["revision"], after["title"], after["state"]["key"]),
+                )
+        self.assertTrue(retired.startswith("rank is retired: the order of work is computed"))
 
     def test_a_conflict_names_the_revision_it_found(self) -> None:
         self.post("/api/planning/work-items", space="QA", title="First")

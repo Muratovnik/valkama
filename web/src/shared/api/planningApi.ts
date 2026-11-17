@@ -11,13 +11,9 @@ import { validateCommentResolved, validateCommentWritten } from '@/shared/api/co
 import type { CommentResolved, CommentWritten } from '@/shared/api/commentWriteModel.ts'
 import { validateLiveFrame } from '@/shared/api/liveFrameModel.ts'
 import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
-import {
-  readPending,
-  readRefusal,
-  validateReadModel,
-  validateWorkItemRecord,
-} from '@/shared/api/planningModel.ts'
+import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import type { PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
+import { readPending, readRefusal } from '@/shared/api/planningRefusal.ts'
 import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
@@ -291,31 +287,16 @@ export async function createWorkItem(input: CreateWorkItem): Promise<WorkItem> {
   return validateWorkItemRecord(await write('/api/planning/work-items', { ...input }))
 }
 
-/**
- * Move an item to a state. It goes last there unless `rank` names its place:
- * `first`, `last`, `before:<reference>` or `after:<reference>` of an item
- * already in that state.
- */
+/** Move an item to a state; where it stands there the server's order of work says. */
 export async function transitionWorkItem(input: {
   id: string
   state: string
   author?: string
   expected_revision?: number
   force?: boolean
-  rank?: string
   reason?: string
 }): Promise<WorkItem> {
   return validateWorkItemRecord(await write('/api/planning/work-item/transition', { ...input }))
-}
-
-/** Place an item among the items of its own state, in the spelling `transitionWorkItem` takes. */
-export async function rankWorkItem(input: {
-  id: string
-  rank: string
-  author?: string
-  expected_revision?: number
-}): Promise<WorkItem> {
-  return validateWorkItemRecord(await write('/api/planning/work-item/update', { ...input }))
 }
 
 export async function claimWorkItem(input: {

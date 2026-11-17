@@ -135,6 +135,7 @@ test.describe('a section with nothing in it', () => {
         done: false,
         claimed_by: '',
         done_by: '',
+        by_previous_holder: false,
       },
     ]
     // The step is in the space too, so the frame that brings it differs from the read.

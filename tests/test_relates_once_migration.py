@@ -53,10 +53,13 @@ def _populate(conn: sqlite3.Connection) -> dict[str, list[tuple]]:
     space, workflow, state = conn.execute(
         "SELECT planning_space_id, workflow_id, state_id FROM work_items WHERE number = 2"
     ).fetchone()
+    # An earlier build's table holds the place a person set by hand; this one's not.
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(work_items)")}
+    placed, place = (",position", ",?") if "position" in columns else ("", "")
     for number, identity in enumerate((A, B, C, D), start=3):
         conn.execute(
             "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,"
-            "title,position,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+            f"title,created_at,updated_at{placed}) VALUES(?,?,?,?,?,?,?,?{place})",
             (
                 identity,
                 space,
@@ -64,9 +67,9 @@ def _populate(conn: sqlite3.Connection) -> dict[str, list[tuple]]:
                 workflow,
                 state,
                 f"Item {number}",
-                float(number),
                 schema9.CREATED_AT,
                 schema9.CREATED_AT,
+                *([float(number)] if place else []),
             ),
         )
     conn.execute("UPDATE planning_spaces SET next_number=7")

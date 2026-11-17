@@ -98,6 +98,8 @@ function readModel(space: PlanningSpaceRef) {
         started_at: null,
         waits_for: [],
         workable: true,
+        withheld: [],
+        lapsed_claim: null,
         labels: [],
         projects: [],
         source: '',
@@ -106,6 +108,7 @@ function readModel(space: PlanningSpaceRef) {
         created_at: now,
         updated_at: now,
         comment_count: 0,
+        queue_order: 1,
       },
     ],
     links: [],
@@ -324,7 +327,7 @@ describe('planning write ownership', () => {
 
     wrapper
       .findComponent({ name: 'PlanningWorkspace' })
-      .vm.$emit('place', { reference: 'MAIN-264', state: 'dev', rank: 'first' })
+      .vm.$emit('place', { reference: 'MAIN-264', state: 'dev' })
     await flushPromises()
 
     expect(fetchMock).not.toHaveBeenCalled()

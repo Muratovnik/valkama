@@ -40,6 +40,8 @@ class HeldTests(unittest.TestCase):
                 "VALKAMA_PORT": "8642",
                 "HOME": directory.name,
                 "USERPROFILE": directory.name,
+                # No registry there, so no item has a project root.
+                "LOCALAPPDATA": os.path.join(directory.name, "local"),
             },
         )
         patch.start()
@@ -521,6 +523,7 @@ class HeldTests(unittest.TestCase):
             {reference: tuple(item[name] for name in note) for reference, item in told.items()},
         )
         self.assertEqual(1, told[staged]["pending_questions"])
+        self.assertEqual([[]] * 4, [item["roots"] for item in found])
         self.assertIsNone(told[unwritten]["last_write"])
         writes = [told[reference]["last_write"] for reference in (alone, under_goal, staged)]
         self.assertEqual(sorted(writes, reverse=True), writes)
@@ -531,7 +534,7 @@ class HeldTests(unittest.TestCase):
                 note_item = told[item["reference"]]
                 self.assertEqual(item, {name: note_item[name] for name in item})
                 self.assertEqual(
-                    set(item) | {*note, "last_write"},
+                    set(item) | {*note, "roots", "last_write"},
                     set(note_item),
                 )
 

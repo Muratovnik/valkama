@@ -306,23 +306,12 @@ for (const locale of ['en-US', 'ru-RU']) {
 
 /**
  * A tile the board brings into view under its lane's heading, by the board's own ways: the
- * keyboard walking up to it, a press on the part of it in view, or the keyboard moving the tile
- * below up into its place.
+ * keyboard walking up to it, or a press on the part of it in view.
  */
-type Way = 'move' | 'press' | 'walk'
+type Way = 'press' | 'walk'
 
-/** The tile each way brings in: the one walked to or pressed, or the one moved into its place. */
-const BROUGHT: Record<Way, string> = { move: 'MAIN-404', press: 'MAIN-403', walk: 'MAIN-403' }
-
-/**
- * The board each way is tried on. A move is answered by the board's own space: the wide one is
- * read the same whatever is written to it, so the next read puts a moved tile back.
- */
-const OPEN: Record<Way, (page: Page, width: number) => Promise<void>> = {
-  move: (page, width) => open(page, width, false),
-  press: openWide,
-  walk: openWide,
-}
+/** The tile each way brings in: the one walked to or pressed. */
+const BROUGHT: Record<Way, string> = { press: 'MAIN-403', walk: 'MAIN-403' }
 
 /** How far below the lane's heading a tile's sheet stands. */
 async function gapUnder(head: Locator, sheet: Locator) {
@@ -345,26 +334,16 @@ async function tuck(page: Page, head: Locator, sheet: Locator, by: number) {
   }
 }
 
-/** The references of a lane's first three tiles, in the order it draws them. */
-const order = (goal: Locator) =>
-  goal
-    .locator('li[data-reference]')
-    .evaluateAll((items) =>
-      items.slice(0, 3).map((item) => (item as HTMLElement).dataset.reference),
-    )
-
 /** Brings a tile in one of the board's ways, from MAIN-404 below MAIN-403 or on MAIN-403 itself. */
 async function bring(page: Page, goal: Locator, way: Way) {
   const below = goal.locator('li[data-reference="MAIN-404"] .tile-open')
-  if (way !== 'press') {
+  if (way === 'walk') {
     await below.evaluate((node: HTMLElement) => {
       node.focus({ preventScroll: true })
     })
-    await page.keyboard.press(way === 'walk' ? 'ArrowUp' : 'Alt+ArrowUp')
+    await page.keyboard.press('ArrowUp')
     const tile = goal.locator(`li[data-reference="${BROUGHT[way]}"] .tile-open`)
     await expect(tile).toBeFocused()
-    if (way === 'move')
-      await expect.poll(() => order(goal)).toEqual(['MAIN-402', 'MAIN-404', 'MAIN-403'])
     return
   }
   const box = await goal.locator('li[data-reference="MAIN-403"] .work-item-tile').boundingBox()
@@ -405,8 +384,8 @@ for (const width of [320, 390, 760, 1280])
   test(`at ${width}px a tile the board brings in under its lane heading stands at the lane's gap`, async ({
     page,
   }) => {
-    for (const way of ['walk', 'press', 'move'] as const) {
-      await OPEN[way](page, width)
+    for (const way of ['walk', 'press'] as const) {
+      await openWide(page, width)
       const { after, before, height, normal } = await bringsTileIn(page, way)
       expect(before, `${way}: the tile starts under the heading`).toBeLessThan(-11)
       expect

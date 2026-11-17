@@ -137,10 +137,11 @@ test('planning projects three views from one read of the space', () => {
   assert.match(workspace, /<WorkItemGraph/)
   assert.match(workspace, /:items="visibleItems"/)
   assert.doesNotMatch(workspace, /fetchPlanning|fetchPlanningGraph|secureFetch/)
-  // A board move is written by the surface's moves: a placement or a transition.
+  // A board move is written by the surface's moves, as a transition alone: the
+  // server computes the order of work, and nothing places an item by hand.
   assert.match(planningSurface, /usePlanningMoves\(/)
   assert.match(planningMoves, /transitionWorkItem\(/)
-  assert.match(planningMoves, /rankWorkItem\(/)
+  assert.doesNotMatch(planningMoves, /rank/)
   // `open-space` is the portfolio's own event; the surface's part is routing it on.
   assert.match(planningSurface, /<PlanningPortfolio/)
   assert.match(planningSurface, /'open-space': \[space: PlanningSpaceRef\]/)

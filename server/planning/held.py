@@ -13,8 +13,9 @@ A claim counts while its lease has not lapsed, read as the work-item read reads
 its `claim_state` (`leases`): a `stale` lease is nobody's work any more, though
 nothing has released it yet. A step records no call of its own, so it lapses
 with the session that holds it, by the same rule, read from that session's
-newest confirmed call. An item in a terminal state holds nothing: closing
-releases every claim on it.
+newest confirmed call (`leases.of_step`). An open question to the owner on the
+item stops the count of silence for both. An item in a terminal state holds
+nothing: closing releases every claim on it.
 
 Read-only: nothing here writes, releases or expires anything.
 """
@@ -24,14 +25,16 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from ..projects import project_registry
 from . import (
     acknowledgements,
     calls,
+    item_projects,
     item_tree,
     leases,
     model,
+    questions,
     read_model,
-    requests,
     states,
     subscriptions,
 )
@@ -46,9 +49,6 @@ _OPEN_ITEMS = (
     " JOIN workflow_states s ON s.state_id = w.state_id"
     " WHERE s.is_terminal = 0 AND (instr(w.claim_ref, ?) > 0 OR instr(w.checklist, ?) > 0)"
     " ORDER BY w.updated_at DESC, w.work_item_id"
-)
-_NEWEST_CALL = leases.CALL + (
-    " WHERE c.session_id = ? AND c.identity_state = ? ORDER BY c.id DESC LIMIT 1"
 )
 
 
@@ -88,7 +88,7 @@ def held_by_session(conn: sqlite3.Connection, session: object) -> dict:
     """
 
     session = _required(session)
-    held = _holds(conn, session, subscriptions.holder_suffix(session))
+    held = _holds(conn, subscriptions.holder_suffix(session))
     return {"session": session, "items": [_item(conn, row, held_as) for row, held_as in held]}
 
 
@@ -111,6 +111,8 @@ def held_for_note(
       when it wrote none; `to_confirm`, the steps a previous holder ticked;
     - `stage` and `goal`: the nearest container over the item when it is a stage,
       and the topmost one, by reference, or null;
+    - `roots`: the item's `item_projects.project_roots`, as a claim answers with
+      them, from one read of the registry for every item;
     - `last_write`: the id of the recipient's newest confirmed write call on the
       item, or null.
 
@@ -121,7 +123,7 @@ def held_for_note(
     session = _required(session)
     agent = agent or None
     suffix = subscriptions.holder_suffix(session, agent)
-    held = _holds(conn, session, suffix)
+    held = _holds(conn, suffix)
     if not held:
         return []
     writes = {
@@ -130,13 +132,16 @@ def held_for_note(
             _LAST_WRITES, (session, calls.KIND, calls.CONFIRMED, agent, agent)
         ).fetchall()
     }
+    listing = project_registry.read_registry()
     items = []
     for row, held_as in held:
-        write = writes.get(str(row["work_item_id"]))
+        identity = str(row["work_item_id"])
+        write = writes.get(identity)
         items.append(
             {
                 **_item(conn, row, held_as),
                 **_note_facts(conn, row, suffix, None if write is None else str(write["at"])),
+                "roots": item_projects.project_roots(conn, identity, listing=listing),
                 "last_write": None if write is None else int(write["id"]),
             }
         )
@@ -151,23 +156,18 @@ def _required(session: object) -> str:
     return session
 
 
-def _holds(conn: sqlite3.Connection, session: str, suffix: str) -> list[tuple[sqlite3.Row, str]]:
+def _holds(conn: sqlite3.Connection, suffix: str) -> list[tuple[sqlite3.Row, str]]:
     """Each open item a label ending in `suffix` holds, and how: the one rule of holding."""
 
     # The SQL finds every candidate; the label rule decides, because a suffix
     # inside a step's text or a done step's holder is not a hold.
     rows = conn.execute(_OPEN_ITEMS, (suffix, suffix)).fetchall()
-    standing: bool | None = None
     found = []
     for row in rows:
         lease = leases.lease(conn, row) if subscriptions.holds_claim(row, suffix) else None
         if lease is not None and lease.state != leases.STALE:
             held_as = CLAIM
-        elif subscriptions.holds_step(row, suffix):
-            if standing is None:
-                standing = _stands(conn, session)
-            if not standing:
-                continue
+        elif _holds_standing_step(conn, row, suffix):
             held_as = STEP
         else:
             continue
@@ -175,11 +175,14 @@ def _holds(conn: sqlite3.Connection, session: str, suffix: str) -> list[tuple[sq
     return found
 
 
-def _stands(conn: sqlite3.Connection, session: str) -> bool:
-    """Whether a claim this session took now would not read `stale`."""
+def _holds_standing_step(conn: sqlite3.Connection, row: sqlite3.Row, suffix: str) -> bool:
+    """Whether an open step of the item is held under `suffix` by a lease not gone stale."""
 
-    call = conn.execute(_NEWEST_CALL, (session, calls.CONFIRMED)).fetchone()
-    return leases.of_call("", call).state != leases.STALE
+    for step in model.checklist(row["checklist"]):
+        holder = str(step["claimed_by"] or "")
+        if not step["done"] and holder.endswith(suffix):
+            return leases.of_step(conn, row, holder).state != leases.STALE
+    return False
 
 
 def _note_facts(
@@ -267,6 +270,6 @@ def _item(conn: sqlite3.Connection, row: sqlite3.Row, held_as: str) -> dict:
         else {name: shown[name] for name in ("key", "name", "category")},
         "held_as": held_as,
         "steps": {"done": sum(1 for step in steps if step["done"]), "total": len(steps)},
-        "pending_questions": len(requests.open_rows(conn, str(row["work_item_id"]))),
+        "pending_questions": len(questions.open_rows(conn, str(row["work_item_id"]))),
         "url": acknowledgements.work_item_url(reference),
     }

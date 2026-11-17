@@ -26,7 +26,7 @@ import type { LiveWork } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
-import type { PlanningEdge, PlanningReadModel, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type { PlanningEdge, PlanningReadModel, WorkItemRow } from '@/shared/api/planningModel.ts'
 
 type LinkKind = Exclude<PlanningEdge['kind'], 'parent'>
 type StateKey = keyof typeof STATES
@@ -45,7 +45,7 @@ const STATES = {
 const STATE_KEYS = Object.keys(STATES) as StateKey[]
 const stateId = (key: StateKey) => identity(900 + STATE_KEYS.indexOf(key))
 
-function state(key: StateKey): NonNullable<WorkItemBrief['state']> {
+function state(key: StateKey): NonNullable<WorkItemRow['state']> {
   return { state_id: stateId(key), key, ...STATES[key] }
 }
 
@@ -110,11 +110,11 @@ function shuffled<T>(values: readonly T[], next: () => number): T[] {
 
 interface Built {
   /** The grouping items, in plan order. */
-  goals: WorkItemBrief[]
-  items: WorkItemBrief[]
+  goals: WorkItemRow[]
+  items: WorkItemRow[]
   links: PlanningEdge[]
   /** The item whose only link is to its own goal, and that goal. */
-  lone: { goal: WorkItemBrief; item: WorkItemBrief } | null
+  lone: { goal: WorkItemRow; item: WorkItemRow } | null
 }
 
 /** Numbers items in the order they are made, as a space does. */
@@ -123,9 +123,9 @@ function maker(plan: ShapePlan) {
   return (
     key: StateKey,
     parent: string | null,
-    kind: WorkItemBrief['kind'],
+    kind: WorkItemRow['kind'],
     title: string,
-  ): WorkItemBrief => {
+  ): WorkItemRow => {
     number += 1
     const closed = STATES[key].is_terminal
     return {
@@ -146,6 +146,8 @@ function maker(plan: ShapePlan) {
       started_at: null,
       waits_for: [],
       workable: false,
+      withheld: ['not_ready'],
+      lapsed_claim: null,
       labels: [],
       projects: [],
       source: '',
@@ -155,17 +157,18 @@ function maker(plan: ShapePlan) {
       updated_at: '2026-10-01T10:00:00Z',
       closed_at: closed ? '2026-10-20T10:00:00Z' : null,
       comment_count: 0,
+      queue_order: null,
     }
   }
 }
 
 /** `count` items made by `make`. */
-function times(count: number, make: () => WorkItemBrief): WorkItemBrief[] {
+function times(count: number, make: () => WorkItemRow): WorkItemRow[] {
   return Array.from({ length: count }, () => make())
 }
 
 /** Who holds what, spread over the space rather than its first frames. */
-function hold(plan: ShapePlan, openWork: readonly WorkItemBrief[], next: () => number) {
+function hold(plan: ShapePlan, openWork: readonly WorkItemRow[], next: () => number) {
   const { live, unconfirmed } = plan.claims
   for (const [index, item] of shuffled(openWork, next).entries()) {
     if (index < live) {
@@ -186,21 +189,22 @@ function hold(plan: ShapePlan, openWork: readonly WorkItemBrief[], next: () => n
     }
     item.workable =
       item.claim_ref === '' && ['ready', 'triage'].includes(item.state?.category ?? '')
+    item.withheld = item.workable ? [] : ['not_ready']
   }
 }
 
 function build(plan: ShapePlan): Built {
   const next = random(plan.seed)
   const make = maker(plan)
-  const goals: WorkItemBrief[] = []
+  const goals: WorkItemRow[] = []
   for (const frame of plan.frames) {
     const parent = frame.parent === undefined ? null : goals[frame.parent].work_item_id
     const title = frame.title ?? 'Synthetic stream #'
     const kind = frame.kind ?? (parent === null ? 'goal' : 'stage')
     goals.push(make(frame.open ? 'dev' : 'done', parent, kind, title))
   }
-  const openWork: WorkItemBrief[] = []
-  const work: WorkItemBrief[] = []
+  const openWork: WorkItemRow[] = []
+  const work: WorkItemRow[] = []
   for (const [index, frame] of plan.frames.entries()) {
     const id = goals[index].work_item_id
     openWork.push(...times(frame.openWork, () => make('todo', id, 'task', 'Open piece #')))
@@ -212,7 +216,7 @@ function build(plan: ShapePlan): Built {
 
   const items = [...goals, ...openWork, ...work].sort((left, right) => left.number - right.number)
   const loneAt = plan.frames.findIndex((frame) => frame.lone)
-  const loneGoal = goals[loneAt] as WorkItemBrief | undefined
+  const loneGoal = goals[loneAt] as WorkItemRow | undefined
   const loneItem = openWork.find((item) => item.parent_id === loneGoal?.work_item_id)
   const lone = loneGoal && loneItem ? { goal: loneGoal, item: loneItem } : null
   return {
@@ -224,7 +228,7 @@ function build(plan: ShapePlan): Built {
 }
 
 /** The goal an item stands in, and each goal that one stands in. */
-function ancestors(item: WorkItemBrief, byId: Map<string, WorkItemBrief>): Set<string> {
+function ancestors(item: WorkItemRow, byId: Map<string, WorkItemRow>): Set<string> {
   const found = new Set<string>()
   for (let at = item.parent_id; at !== null && !found.has(at); at = byId.get(at)?.parent_id ?? null)
     found.add(at)
@@ -234,26 +238,22 @@ function ancestors(item: WorkItemBrief, byId: Map<string, WorkItemBrief>): Set<s
 function wire(
   plan: ShapePlan,
   built: {
-    goals: WorkItemBrief[]
-    items: WorkItemBrief[]
-    loneItem: WorkItemBrief | null
+    goals: WorkItemRow[]
+    items: WorkItemRow[]
+    loneItem: WorkItemRow | null
     next: () => number
   },
 ): PlanningEdge[] {
   const { goals, items, loneItem, next } = built
   const byId = new Map(items.map((item) => [item.work_item_id, item]))
-  const isWork = (item: WorkItemBrief) => !WORK_ITEM_TREE.isContainer(item) && item !== loneItem
+  const isWork = (item: WorkItemRow) => !WORK_ITEM_TREE.isContainer(item) && item !== loneItem
   const open = items.filter((item) => isWork(item) && item.open)
   const closed = items.filter((item) => isWork(item) && !item.open)
   const pick = <T>(list: readonly T[]) => list[Math.floor(next() * list.length)]
   const seen = new Set<string>()
   const pairs: { from: string; to: string; kind?: LinkKind }[] = []
   /** Adds `count` distinct pairs, whichever way round, drawn by `draw`. */
-  const add = (
-    count: number,
-    draw: () => [WorkItemBrief, WorkItemBrief] | null,
-    kind?: LinkKind,
-  ) => {
+  const add = (count: number, draw: () => [WorkItemRow, WorkItemRow] | null, kind?: LinkKind) => {
     let added = 0
     let tries = 0
     while (added < count) {
@@ -268,7 +268,7 @@ function wire(
       added += 1
     }
   }
-  const flip = (pair: [WorkItemBrief, WorkItemBrief]): [WorkItemBrief, WorkItemBrief] =>
+  const flip = (pair: [WorkItemRow, WorkItemRow]): [WorkItemRow, WorkItemRow] =>
     next() < 0.5 ? pair : [pair[1], pair[0]]
 
   const filed = open.filter((item) => item.parent_id !== null)
@@ -424,8 +424,8 @@ const DEEP: ShapePlan = {
 
 export interface GraphSpace {
   /** The grouping items, in the order the space was built: the largest first. */
-  goals: WorkItemBrief[]
-  lone: { goal: WorkItemBrief; item: WorkItemBrief } | null
+  goals: WorkItemRow[]
+  lone: { goal: WorkItemRow; item: WorkItemRow } | null
   model: PlanningReadModel
 }
 

@@ -47,6 +47,7 @@ async function installLongCard(page: Page, entries: InputRequestEntry[]) {
     done: false,
     claimed_by: '',
     done_by: '',
+    by_previous_holder: false,
   }))
   const requests = await installQuestions(page, entries)
   // What the listener does with the short address: it keeps this one order and nothing else.

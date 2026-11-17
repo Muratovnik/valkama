@@ -82,8 +82,18 @@ holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
 | `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
-`claim_ready_work_item` answers with the card of the item it took as
-`work_item`, null when no task is workable. A comment in `applied` has `comment_id`, and `reply_to` and
+`claim_ready_work_item` takes the first workable task in the order of work —
+urgent, started, a goal or stage under way, priority, age — which a list row
+says as `queue_order`, and answers with the card of the item it took as
+`work_item`, null when no task is workable. It reads one space's queue: `space`, or the space of
+`within`, a goal or stage whose tasks at any depth it keeps, or else the space
+whose project root holds your session's folder (`session_space` in
+`list_planning_spaces`); `label` keeps the tasks that carry that label
+themselves, and `project` the tasks that name that project, never one that
+names none. A call naming neither `space` nor `within` from a session in no
+space's project root is refused with the spaces, as is `within` naming a task or
+a goal of another space than `space`; a task of any space is claimed by number. A goal, a stage and work in triage or deferred are never
+taken. Nothing sets the order by hand. A comment in `applied` has `comment_id`, and `reply_to` and
 `reply_to_request`: the root a reply joined, both null for a new root, and
 `list_request_id` when it carried a `list`, as the summary does. A comment or a
 summary that named other items in `mentions` adds `mentions`: per item its
@@ -200,7 +210,7 @@ resolves its discussion, records its summary and moves its state:
 | `resolutions` | `[{"comment_id": 12, "resolution": "…", "reopen": false}]` | marks thread roots resolved |
 | `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | asks as `create_work_item_request` does |
 | `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
-| `transition` | `{"state": "completed", "reason": "…", "force": false, "rank": "first"}` | moves the state |
+| `transition` | `{"state": "completed", "reason": "…", "force": false}` | moves the state |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
 the item already had and a `checklist` in the same call kept; send a new step
@@ -246,6 +256,17 @@ no mark writes nothing. A mark writes the history event `comment_resolved` or
 comment on another item or none at all (`not_found`), a decision of two lines, and
 `resolution` with `reopen`.
 
+A list under a comment offers the owner findings to choose from: `list` is
+`{"label": "What to take on", "options": [{"id": "a", "label": "Widen the check",
+"recommended": true, "why": "Two of the five misses are its."}, …]}`, up to 20
+options written as a question's options are. The batch's `comment`, `comments`
+and `summary` take it, on a root only, and the comment and its list are one
+write; the answer adds `list_request_id`. It is a question of one `multi_choice`
+field, `items`, which the owner ticks with one button: its answer is
+`{"items": ["a"]}`, told to you and the holders as `question_answered`. Nobody
+waits for it: it raises no alert and is not among the questions waiting for the
+owner. Read it with the item's questions, where it carries `comment_id`.
+
 ## Reading an item
 
 `get_work_item` takes `id` and reads an item by parts. `parts` names them, one
@@ -264,8 +285,12 @@ outside 1 to 1000.
 answer with too: `reference`, `title`, `kind`, `priority`, `state` (`key`,
 `name`, `category`; null for an accepted open goal or stage), `open`,
 `container_state`, `acceptance`, `started_at`, `waits_for`, `workable`,
-`claim_ref`, `claim_state`, `last_claim_ref`, `closed_at`, `labels`, `source`,
-`revision`, `created_at`, `updated_at`, `url`, `parent` (a reference or null),
+`projects` (the projects the item changes, each with its `project_id`, the
+registry's `display_name`, null while the registry does not record it, and its
+`source`: `named`, `commits` or `migrated`; a goal's or stage's are those of
+every task under it), `claim_ref`, `claim_state`, `last_claim_ref`,
+`closed_at`, `labels`, `source`, `revision`, `created_at`, `updated_at`, `url`,
+`parent` (a reference or null),
 `description` whole, `checklist` (each step's `id`, `text` and `done`, and
 `claimed_by` and `done_by` when they are set), `summary` when there is one, and
 `parts`: each other part the item has, with its size. A part with nothing in it
@@ -313,16 +338,6 @@ reads those sections with their `text`, in the description's order. A key the
 description no longer has is refused, naming the keys it has: a renamed heading
 and an edited paragraph get new keys, so a stale key never reads other text.
 
-## Placement
-
-`rank` in the batch's `update` (in the item's own state) and `transition` (in
-the state it moves to): `first`, `last`,
-`before:MAIN-12`, `after:MAIN-12`, the anchor in that same state. Without
-`rank`, a moved item goes last. `claim_ready_work_item` takes the first
-workable task: a ready state before a triage one, then the order inside the
-state; priority only breaks a tie. A goal, a stage and deferred work are never
-taken.
-
 ## Guards
 
 | Moving to | Needs |
@@ -334,6 +349,7 @@ taken.
 | a triage state, for an accepted open goal or stage | refused: an accepted goal or stage is completed or cancelled |
 | a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
 | a completed state | every step done and a summary |
+| a review or completed state | no step marked `by_previous_holder`: tick it again to confirm it, or reopen it (`previous_holder`) |
 | a cancelled state | a summary; open steps stay open |
 | a blocked state | an unfinished item linked `blocks` to it, or a `reason` |
 | any state | a transition the workflow allows from where the item stands |
@@ -363,15 +379,22 @@ the refusal names what they did. A `comment` sent in the same
 ## Claims
 
 A claim is a lease on the session that took it: `live` while that session is
-active and showed a sign of life in the last 14 days, `stale` once it ended or
-went quiet, `unconfirmed` when no session was proved. `claim_work_item` releases
-a stale claim at once, and taking it over needs no `force`; a live or unconfirmed
-claim held by another needs `force`. Everything else leaves the claim of an ended
+active and showed a sign of life in the last 3 days, `stale` once it ended or
+went quiet, `unconfirmed` when no session was proved. An unconfirmed claim, the
+owner's own from the browser included, lapses after 3 days without an event on
+the item. An open question to the owner on the item stops the count of silence
+for every hold on it; an end still counts. A session's claimed steps lapse with
+its lease. `claim_work_item` releases a stale or lapsed claim at once, and taking
+it over needs no `force`; a live or unconfirmed claim held by another needs
+`force`. Everything else leaves the claim of an ended
 session alone for 12 hours after its end, so a resumed session reads `live` again
 with its claims in place: until then `claim_ready_work_item` does not hand the
 item out and a server start does not release it. The history names why a claim
 was released: `session-ended`, `session-missing` or `lease-expired`, the last for
-14 quiet days. `release: true` requeues an item that was
+3 quiet days. The release marks every step the lapsed holder ticked
+`by_previous_holder`, at work or blocked, until a tick confirms it, and the
+item's `lapsed_claim` (`holder`, `reason`, `at`) names that release until the
+next claim. `release: true` requeues an item that was
 in its active state unless one of its steps is still claimed. A task at work stands
 held: with no ready state to requeue it in, a release, the tick or release of its
 last held step and a takeover of its stale claim are refused, and its lapsed lease
@@ -547,12 +570,15 @@ the fourth is refused with `ask_limit`. The batch's `questions` take no
 
 `merge_work_items` takes `id` (the survivor), `items` (1 to 20), and optionally
 `reason`, `force`, `expected_revision` (the survivor's) and `author`. What
-moves: steps, discussion threads whole, questions with their replies, refs the
-survivor lacks, and links in their own direction; `moved.comments` counts the
-comment rows, replies included. What stays on a merged item: its history,
-reports with their threads, description, labels and parent. Each merged item is linked `duplicates` to the
-survivor, summarised, released and closed in its cancelled state. Refused,
-writing nothing: the survivor in `items`, an item named twice, another space,
-a closed item, a merged item with children, more than 100 steps in all, a
-workflow with no reachable cancelled state, or an item another session holds
-without `force`.
+moves: steps (their ids, ticks and step claims kept), discussion threads whole,
+questions with their replies, refs the survivor lacks, links in their own
+direction, and projects (a project more than one of them names keeps the
+strongest source: named, then commits, then migrated); `moved.comments` counts
+the comment rows, replies included. A list goes with the comment it stands
+under. What stays on a merged item: its history, reports with their threads and
+lists, description, labels and parent. Each merged item is linked `duplicates`
+to the survivor, gets a summary naming it, is released and closes in its
+cancelled state. Refused, writing nothing: the survivor in `items`, an item
+named twice, another space, a closed item, a goal or stage with a task, a merged
+item with children, more than 100 steps in all, a workflow with no reachable
+cancelled state, or an item another session holds without `force`.

@@ -27,13 +27,13 @@ import {
   CONTAINER_STATES,
   linkEndState,
   linkEndStateSaid,
-  readRefusal,
   STATE_CATEGORIES,
   STATE_KEY,
   TITLE,
   WORK_ITEM_KINDS,
   WORK_ITEM_REFERENCE,
 } from '@/shared/api/planningModel.ts'
+import { readRefusal } from '@/shared/api/planningRefusal.ts'
 import { enumField, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
@@ -93,8 +93,8 @@ const memberSchema = strictObject({
   created_at: boundedText(ISO, 96),
   closed_at: boundedText(ISO, 96).nullable(),
   workable: z.boolean(),
-  /** The member's place in its space's order of work, 1 first: compare, never count. */
-  rank: positiveInt(),
+  /** Its place in its space's queue, 1 given next; null when the queue does not give it. */
+  queue_order: positiveInt().nullable(),
 })
 
 /**

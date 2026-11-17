@@ -16,11 +16,8 @@ import {
 } from '@/shared/api/inputRequestModel.ts'
 import { fetchWorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearchApi.ts'
-import {
-  readRefusal,
-  validateReadModel,
-  validateWorkItemRecord,
-} from '@/shared/api/planningModel.ts'
+import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
+import { readRefusal } from '@/shared/api/planningRefusal.ts'
 import { validatePlatformContextPayload } from '@/shared/api/platformContextPayload.ts'
 import { validatePlatformPlanningPayload } from '@/shared/api/platformPlanningPayload.ts'
 
@@ -90,7 +87,7 @@ const member = (index: number) => ({
   created_at: at,
   closed_at: null,
   workable: false,
-  rank: index + 1,
+  queue_order: null,
 })
 const day = (index: number) => ({
   day: new Date(Date.UTC(2000, 0, 1 + index)).toISOString().slice(0, 10),

@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from unittest import mock
 
 from server import sessions, store
-from server.planning import api, calls, held, model, requests, service, tools
+from server.planning import api, calls, held, model, questions, requests, service, tools
 
 A = "a0000000-0000-4000-8000-00000000000a"
 B = "b0000000-0000-4000-8000-00000000000b"
@@ -270,13 +270,13 @@ class GoneTests(Harness):
     def test_a_request_to_a_session_quiet_past_its_lease_reads_gone(self) -> None:
         [to_b] = self.ask(self.goal, B)
         self.conn.execute(
-            "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now','-15 days')"
+            "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now','-4 days')"
             " WHERE id = ?",
             (B,),
         )
         self.conn.commit()
         self.assertEqual("session_gone", self.read(to_b)["expired_reason"])
-        self.assertEqual([], requests.open_rows(self.conn))
+        self.assertEqual([], questions.open_rows(self.conn))
 
 
 class AskRefusalTests(Harness):
@@ -287,7 +287,7 @@ class AskRefusalTests(Harness):
         quiet = "c0000000-0000-4000-8000-00000000000c"
         self.conn.execute(
             "INSERT INTO sessions(id, client, last_seen) VALUES(?, 'claude-code',"
-            " strftime('%Y-%m-%dT%H:%M:%SZ','now','-15 days'))",
+            " strftime('%Y-%m-%dT%H:%M:%SZ','now','-4 days'))",
             (quiet,),
         )
         subagent = sessions.subagent_session_id(B, B1)
@@ -376,7 +376,7 @@ class AgentAskTests(Harness):
             (answered["http"], answered["status"], answered["answers"]),
             "B's subagent answers for B",
         )
-        self.assertEqual([], requests.open_rows(self.conn), "nothing waits for the owner")
+        self.assertEqual([], questions.open_rows(self.conn), "nothing waits for the owner")
         self.assertEqual([], requests.list_page(self.conn, reference=self.t3)["requests"])
 
     def test_a_decision_asks_as_a_question_does(self) -> None:
@@ -391,7 +391,7 @@ class AgentAskTests(Harness):
         self.claim(self.item("V"), D)
         self.end(D)
         self.conn.execute(
-            "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now','-15 days')"
+            "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now','-4 days')"
             " WHERE id = ?",
             (C,),
         )
@@ -469,8 +469,8 @@ class OwnerTests(Harness):
         self.asked = self.ask(self.t2, B, E)
 
     def test_no_reader_of_the_owners_questions_sees_it(self) -> None:
-        self.assertEqual([], requests.open_rows(self.conn))
-        self.assertEqual([], requests.open_rows(self.conn, self.work_item_id(self.t2)))
+        self.assertEqual([], questions.open_rows(self.conn))
+        self.assertEqual([], questions.open_rows(self.conn, self.work_item_id(self.t2)))
         for lists in (True, False):
             with self.subTest(lists=lists):
                 page = requests.list_page(self.conn, reference=self.t2, lists=lists)

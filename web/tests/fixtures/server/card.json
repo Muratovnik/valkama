@@ -50,7 +50,12 @@
         "updated_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "last_claim_ref": null,
-        "workable": true,
+        "withheld": [
+          "not_ready",
+          "question"
+        ],
+        "workable": false,
+        "lapsed_claim": null,
         "claim": null,
         "description": "",
         "summary": null,

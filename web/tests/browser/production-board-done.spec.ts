@@ -4,8 +4,8 @@
  * nothing, and a tile dropped on it from another column that closes and stands
  * on top.
  *
- * The server is the board suite's double, which keeps the order of work it is
- * told, so the drawn order is the board's reading of the closing times and not
+ * The server is the board suite's double, which puts a moved tile last in its
+ * new state, so the drawn order is the board's reading of the closing times and not
  * the order the read listed.
  */
 import { expect } from '@playwright/test'

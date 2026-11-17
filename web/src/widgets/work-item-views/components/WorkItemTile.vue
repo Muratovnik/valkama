@@ -66,10 +66,8 @@ const props = withDefaults(
     item: WorkItemBrief
     /** The filter in force, so a chip already in it offers to come out. */
     filter?: WorkFilter
-    /** The element that says how the tile moves from the keyboard, if it can. */
+    /** The element that says how focus moves between tiles from the keyboard. */
     hintId?: string
-    /** The keys the open target answers to, when the tile can be moved. */
-    keyShortcuts?: string
     /** What an agent's session is doing on the item now, or nothing. */
     live?: LiveWork | null
     /** The open target is its stack's Tab stop (0), or reached by the arrows (-1). */
@@ -80,14 +78,13 @@ const props = withDefaults(
   {
     filter: () => EMPTY_WORK_FILTER,
     hintId: undefined,
-    keyShortcuts: undefined,
     live: null,
     tabStop: 0,
     waitingOn: null,
   },
 )
 
-// The stack's Tab stop, its keys and its hint belong to the open target, not to
+// The stack's Tab stop and its hint belong to the open target, not to
 // the sheet around it.
 const emit = defineEmits<{
   filter: [token: WorkFilterToken]
@@ -189,7 +186,6 @@ const describedBy = computed(() => {
       class="tile-open"
       type="button"
       :tabindex="props.tabStop"
-      :aria-keyshortcuts="props.keyShortcuts"
       :aria-describedby="describedBy"
       @click="open"
       @keydown="emit('keydown', $event)"

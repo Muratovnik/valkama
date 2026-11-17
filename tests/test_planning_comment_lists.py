@@ -21,7 +21,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface, store
-from server.planning import api, calls, interactions, model, requests, service
+from server.planning import api, calls, interactions, model, questions, requests, service
 from server.planning.request_model import MINUS
 from server.planning.routing import PlanningRouting
 from server.store_identity.metadata import read_store_metadata
@@ -320,10 +320,10 @@ class WaitsForNobodyTests(Harness):
     def test_no_open_row_is_a_list(self) -> None:
         identity = str(service.get_work_item(self.conn, self.ref)["work_item_id"])
         self.listed()
-        self.assertEqual([], requests.open_rows(self.conn, identity))
-        self.assertEqual([], requests.open_rows(self.conn))
+        self.assertEqual([], questions.open_rows(self.conn, identity))
+        self.assertEqual([], questions.open_rows(self.conn))
         asked = self.ask()
-        self.assertEqual([asked], [row["request_id"] for row in requests.open_rows(self.conn)])
+        self.assertEqual([asked], [row["request_id"] for row in questions.open_rows(self.conn)])
 
     def test_closing_the_item_passes_freezes_the_list_and_reopening_thaws_it(self) -> None:
         listed = self.listed()["list_request_id"]

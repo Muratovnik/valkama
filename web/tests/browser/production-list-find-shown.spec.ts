@@ -38,6 +38,7 @@ const DRESSED: Record<number, object> = {
       claimed_by: '',
       done: at === 0,
       done_by: at === 0 ? 'codex' : '',
+      by_previous_holder: false,
       id: identity(960 + at),
       text,
     })),

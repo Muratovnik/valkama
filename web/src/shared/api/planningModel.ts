@@ -25,6 +25,7 @@ import {
   EVENT_DETAIL_MAX,
   LABELS_DETAIL_MAX,
 } from '@/shared/api/planningEventActions.ts'
+import { lapsedClaimField, recordObject, withheldField } from '@/shared/api/planningRecordRules.ts'
 import {
   otherSpaceSchema,
   spaceBriefSchema,
@@ -37,7 +38,6 @@ import { enumField, ID, invalid, ISO, UUID } from '@/shared/api/platformApiGuard
 export { SPACE_KEY, TITLE } from '@/shared/api/planningSpaceModel.ts'
 
 export const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
-const PLANNING_API = 'valkama-planning-api' as const
 
 export const STATE_CATEGORIES = [
   'triage',
@@ -92,6 +92,8 @@ const checklistStepSchema = strictObject({
   done: z.boolean(),
   claimed_by: actor(),
   done_by: actor(),
+  /** Ticked by a holder whose lease lapsed: a fresh tick confirms it before review or a close. */
+  by_previous_holder: z.boolean(),
   executor: executorSchema.optional(),
 })
 
@@ -133,8 +135,12 @@ const workItemBriefShape = {
   revision: positiveInt(true),
   created_at: boundedText(ISO, 96),
   updated_at: boundedText(ISO, 96),
-  /** Workable now, by the take-next queue's rule: a task, unheld, unblocked, in triage or ready. */
+  /** Workable now: its space's take-next queue may give it, and `withheld` is empty. */
   workable: z.boolean(),
+  /** Why the queue does not give it, each reason once, in the server's one order. */
+  withheld: withheldField(),
+  /** Whose claim the lease sweep released, until the next claim. */
+  lapsed_claim: lapsedClaimField(),
   /**
    * When a finished item closed: its latest transition. Null for open work, and
    * absent from a server that predates it.
@@ -147,17 +153,20 @@ const workItemBriefShape = {
    */
   last_claim_ref: holderField().nullable().optional(),
 }
-/** A record stands in a state or derives one as an accepted open container: one of the two. */
-const stateOrDerived = [
-  (item: { container_state: unknown; state: unknown }) =>
-    (item.state === null) !== (item.container_state === null),
-  { message: 'expected a state or a container state' },
-] as const
-
-const workItemBriefSchema = strictObject({
+const workItemBriefSchema = recordObject({
   ...workItemBriefShape,
   comment_count: positiveInt(true),
-}).refine(...stateOrDerived)
+})
+/**
+ * A row of a list read, the board's among them: the brief record and its place in its
+ * space's queue, 1 given next, or null when the queue does not give it. The place is
+ * the list's, so one item's preview and its full record do not carry it.
+ */
+const workItemRowSchema = recordObject({
+  ...workItemBriefShape,
+  comment_count: positiveInt(true),
+  queue_order: positiveInt().nullable(),
+})
 
 const summarySchema = strictObject({
   done: blankable(4000),
@@ -397,7 +406,7 @@ const workItemAgentSchema = strictObject({
   executor: executorSchema.optional(),
 })
 
-const workItemSchema = strictObject({
+const workItemSchema = recordObject({
   ...workItemBriefShape,
   agents: z.array(workItemAgentSchema).optional(),
   claim: claimSchema.nullable(),
@@ -431,7 +440,7 @@ const workItemSchema = strictObject({
   requeued: stateMoveSchema.optional(),
   // The holder whose claim a close ended.
   released: holderField().optional(),
-}).refine(...stateOrDerived)
+})
 
 const workflowSchema = strictObject({
   workflow_id: boundedText(UUID, 36),
@@ -496,7 +505,7 @@ const readModelSchema = strictObject({
   planning_spaces: z.array(spaceBriefSchema),
   planning_space: spaceIdentitySchema.nullable(),
   workflow: workflowSchema.nullable(),
-  work_items: z.array(workItemBriefSchema),
+  work_items: z.array(workItemRowSchema),
   links: z.array(edgeSchema),
   // The ends of those links the read holds no item for; optional, as an older server sends none.
   other_space_ends: z.array(otherSpaceEndSchema).optional(),
@@ -519,37 +528,15 @@ const readModelSchema = strictObject({
     { message: 'every item names a state its workflow declares' },
   )
 
-const apiVersion = z.literal(PLANNING_API, { message: `expected ${PLANNING_API}` })
-/** The refusal shape every neutral write answers with when it says no. */
-const refusalSchema = strictObject({
-  error: strictObject({
-    code: boundedText(/^[a-z_]{1,64}$/u, 64),
-    message: serverText(),
-    expected: positiveInt(true).optional(),
-    actual: positiveInt(true).optional(),
-  }),
-})
-
-/** The typed unavailable a read answers with while the cutover is pending. */
-const pendingSchema = strictObject({
-  interface_version: apiVersion,
-  state: strictObject({
-    interface_version: z.literal('valkama-ui-state', { message: 'expected valkama-ui-state' }),
-    status: z.literal('unavailable', { message: 'expected unavailable' }),
-    reason: boundedText(/^[^\u{0}]{1,512}$/u, 512),
-  }),
-})
-
 export type WorkflowState = z.infer<typeof workflowStateSchema>
 export type ContainerState = (typeof CONTAINER_STATES)[number]
 export type WorkItemBrief = z.infer<typeof workItemBriefSchema>
+export type WorkItemRow = z.infer<typeof workItemRowSchema>
 export type WorkItem = z.infer<typeof workItemSchema>
 export type WorkItemAgent = z.infer<typeof workItemAgentSchema>
 export type PlanningWorkflow = z.infer<typeof workflowSchema>
 export type PlanningReadModel = z.infer<typeof readModelSchema>
 export type PlanningEdge = z.infer<typeof edgeSchema>
-export type PlanningRefusal = z.infer<typeof refusalSchema>
-export type PlanningPending = z.infer<typeof pendingSchema>
 
 export function validateReadModel(value: unknown, path = 'planning'): PlanningReadModel {
   return parseContract(readModelSchema, value, path, invalid)
@@ -562,16 +549,6 @@ export function validateWorkItemRecord(value: unknown, path = 'planning.workItem
 /** The brief record a space's list carries, as one item's preview reads it alone. */
 export function validateWorkItemBrief(value: unknown, path = 'planning.workItem'): WorkItemBrief {
   return parseContract(workItemBriefSchema, value, path, invalid)
-}
-
-export function readRefusal(value: unknown): PlanningRefusal | null {
-  const parsed = refusalSchema.safeParse(value)
-  return parsed.success ? parsed.data : null
-}
-
-export function readPending(value: unknown): PlanningPending | null {
-  const parsed = pendingSchema.safeParse(value)
-  return parsed.success ? parsed.data : null
 }
 
 /**

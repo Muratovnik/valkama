@@ -25,9 +25,10 @@ the store cannot resolve that state (`read_model.end_state`), never open.
 Everything is read in one query per table and computed here, so a space of a
 thousand items answers in one pass rather than one read per member; only a held
 member costs one more, to read its lease. Readiness is the read model's own
-rule, asked through `read_model.workable` with facts loaded in bulk, and so is a
-member's `rank`: its place in the space's order of work, `ranking.ranks`. A
-member's state is what `states.public_state` shows, and an accepted open
+rule, asked through `queue.withheld` with facts loaded in bulk, and so is a
+member's `queue_order`: its place in its space's queue, null when the queue does
+not give it. The members come in the total order of every read of many items
+(`queue.list_key`), not by number. A member's state is what `states.public_state` shows, and an accepted open
 container's what it derives, from the same `item_tree` read of the space: its
 `state` is null, and the counts put it in `by_container_state`, never in a
 category of its own.
@@ -35,13 +36,11 @@ category of its own.
 
 from __future__ import annotations
 
-import operator
 import sqlite3
 from collections import Counter
 from datetime import UTC, date, datetime, timedelta
-from functools import partial
 
-from . import item_tree, leases, model, ranking, read_model, states
+from . import item_tree, leases, model, queue, read_model, states
 
 #: The scopes a chain is read in.
 SCOPES = ("chain", "tree")
@@ -77,10 +76,10 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         for row in conn.execute(
             "SELECT i.*, s.key AS state_key, s.name AS state_name,"
             " s.category AS state_category, s.is_terminal AS state_terminal,"
-            " s.position AS state_position"
+            " s.position AS state_position, ? AS space_key"
             " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
             " WHERE i.planning_space_id = ? ORDER BY i.number",
-            (space_id,),
+            (key, space_id),
         )
     }
     links = conn.execute(
@@ -116,19 +115,12 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         else len(_members(root_id, other, rows, children, links))
         for other in SCOPES
     }
-    rank = ranking.ranks(rows.values())
     tree = item_tree.of_spaces(conn, [space_id])
+    places = queue.places(queue.of_spaces(conn, [space_id], tree))
     sources = item_tree.below(conn, read_model.service_ends(links, "from_id"))
 
-    # What an unfinished item blocks, wherever the blocker lives. A blocker whose
-    # state the store cannot resolve is not unfinished, as `read_model.blocked` says.
-    blocked = {
-        str(link["to_id"])
-        for link in links
-        if link["kind"] == "blocks" and link["is_terminal"] == 0
-    }
     found = []
-    for identity in sorted(members, key=lambda item: int(rows[item]["number"])):
+    for identity in sorted(members, key=lambda item: queue.list_key(rows[item], tree)):
         row = rows[identity]
         terminal = bool(row["state_terminal"])
         parent = str(row["parent_id"]) if row["parent_id"] is not None else None
@@ -155,15 +147,8 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 else None,
                 "created_at": row["created_at"],
                 "closed_at": closed_by_event.get(identity, row["updated_at"]) if terminal else None,
-                "workable": read_model.workable(
-                    container=row["kind"] == model.CONTAINER_KIND,
-                    claim_ref=row["claim_ref"],
-                    checklist=row["checklist"],
-                    category=str(row["state_category"]),
-                    blocked=partial(operator.contains, blocked, identity),
-                    startable=partial(read_model.startable, conn, row, tree.startable(identity)),
-                ),
-                "rank": rank[identity],
+                "workable": not queue.withheld(conn, row, tree),
+                "queue_order": places.get(identity),
                 "_parent_id": parent,
             }
         )

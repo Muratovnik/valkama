@@ -1204,10 +1204,9 @@ class SessionStartNoteProcessTests(SessionStartNoteCase):
         (_, at_call), (quiet, at_startup), (told, at_compact) = json.loads(done.stdout)
         # The lifecycle write loads the store, and planning's own store modules with
         # it; what only the note reads loads for a start the note answers.
-        for name in ("server.planning.held", "server.planning.requests"):
-            self.assertNotIn(name, at_call)
-            self.assertNotIn(name, at_startup)
-            self.assertIn(name, at_compact)
+        self.assertNotIn("server.planning.held", at_call)
+        self.assertNotIn("server.planning.held", at_startup)
+        self.assertIn("server.planning.held", at_compact)
         self.assertNotIn("server.hooks.held_note", at_call)
         self.assertEqual("", quiet)
         self.assertIn(self.reference, told)

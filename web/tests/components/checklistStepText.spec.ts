@@ -28,6 +28,7 @@ function overview(writable: boolean, open = vi.fn()) {
       done: false,
       claimed_by: '',
       done_by: '',
+      by_previous_holder: false,
     },
   ]
   const render = () => h(InspectorOverview, { item, writable })

@@ -73,8 +73,8 @@ describe('a lane cell', () => {
       .find((cell) => cell.props('state').key === 'todo')
     todoCell?.vm.$emit(
       'place',
-      { reference: 'MAIN-36', state: 'backlog', rank: 'last' },
-      { keyboard: false, position: 6, total: 6 },
+      { reference: 'MAIN-36', state: 'backlog' },
+      { position: 6, total: 6 },
     )
     await flushPromises()
     const more = wrapper.get<HTMLElement>('.lane-cell[data-state="backlog"] .lane-more')
@@ -107,44 +107,20 @@ describe('a lane cell', () => {
     expect(wrapper.emitted('place')).toBeUndefined()
   })
 
-  it('shows a tile moved past what it draws, so the moved tile can keep focus', async () => {
-    const wrapper = crowdedBoard()
-    await tile(wrapper, 'MAIN-32').trigger('keydown', { key: 'ArrowDown', altKey: true })
-    expect(wrapper.emitted('place')).toEqual([
-      [{ reference: 'MAIN-32', state: 'backlog', rank: 'after:MAIN-33' }],
-    ])
-    expect(backlog(wrapper)).toHaveLength(5)
-  })
-
   it('shows an open cell whole once a dropped tile lands past what it draws', async () => {
     const wrapper = crowdedBoard()
-    // A drop from the second column of the same lane to the fourth place of Backlog.
+    // A drop from the second column of the same lane, last in Backlog.
     const todoCell = wrapper
       .findAllComponents(WorkItemLaneCell)
       .find((cell) => cell.props('state').key === 'todo')
     todoCell?.vm.$emit(
       'place',
-      { reference: 'MAIN-36', state: 'backlog', rank: 'last' },
-      { keyboard: false, position: 6, total: 6 },
+      { reference: 'MAIN-36', state: 'backlog' },
+      { position: 6, total: 6 },
     )
     await flushPromises()
     expect(backlog(wrapper)).toHaveLength(5)
     expect(wrapper.get('.lane-cell[data-state="backlog"] .lane-more').text()).toBe('Show fewer')
-  })
-
-  it('keeps an open cell at its limit when a drop lands among the tiles it draws', async () => {
-    const wrapper = crowdedBoard()
-    const todoCell = wrapper
-      .findAllComponents(WorkItemLaneCell)
-      .find((cell) => cell.props('state').key === 'todo')
-    todoCell?.vm.$emit(
-      'place',
-      { reference: 'MAIN-36', state: 'backlog', rank: 'before:MAIN-31' },
-      { keyboard: false, position: 2, total: 6 },
-    )
-    await flushPromises()
-    expect(backlog(wrapper)).toHaveLength(3)
-    expect(wrapper.get('.lane-cell[data-state="backlog"] .lane-more').text()).toBe('Show all · 5')
   })
 })
 
@@ -233,8 +209,8 @@ describe('a terminal cell of the board grouped by goal', () => {
       .find((cell) => cell.props('state').key === 'backlog')
     backlogCell?.vm.$emit(
       'place',
-      { reference: 'MAIN-10', state: 'done', rank: 'last' },
-      { keyboard: false, position: 5, total: 5 },
+      { reference: 'MAIN-10', state: 'done' },
+      { position: 5, total: 5 },
     )
     await flushPromises()
     expect(doneCell(wrapper).findAll('[data-reference]')).toHaveLength(4)

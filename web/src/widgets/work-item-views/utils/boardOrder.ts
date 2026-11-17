@@ -2,55 +2,36 @@
  * A move on the board, as the server is asked for it and as the board shows it
  * before the server has answered.
  *
- * The server owns the order: a state's items arrive in it, and a move is sent
- * as the state the item goes to and where it lands among that state's items —
- * `first`, `last`, `before:<reference>` or `after:<reference>`. Drawing the
- * answer only once it came back would leave a dropped tile where it was taken
- * from for the length of a round trip, so the board draws the same move itself
- * first, from the same two facts, and the next read replaces it.
+ * The server computes the order of work, and a state's items arrive in it;
+ * nothing places an item by hand. A move is sent as the state the item goes to
+ * and nothing else. Drawing the answer only once it came back would leave a
+ * dropped tile where it was taken from for the length of a round trip, so the
+ * board draws the tile last in its new state first, and the next read puts it
+ * where the order of work does. The board does not repeat that order: it has
+ * one form, the server's.
  */
 import type { PlanningWorkflow, WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 export interface BoardMove {
   reference: string
-  /** The key of the state the item goes to; its own state for a reorder. */
+  /** The key of the state the item goes to, which is another than its own. */
   state: string
-  /** Where among that state's items; absent puts it last, as a plain move does. */
-  rank?: string
 }
 
 /**
- * Where a tile dropped between two others goes: before the one below it, or
- * after the one above it when it landed last. Nothing on either side is the
- * state's own default, last.
- */
-export function rankBeside(previous?: string, next?: string): string | undefined {
-  if (next !== undefined) return `before:${next}`
-  return previous === undefined ? undefined : `after:${previous}`
-}
-
-/** Where `rank` puts an item among `items`, all of one state, without it. */
-function landing(items: readonly WorkItemBrief[], rank: string | undefined): number {
-  if (rank === 'first') return 0
-  const [where, anchor] = rank?.split(':') ?? []
-  const at = items.findIndex((item) => item.reference === anchor)
-  if (at < 0) return items.length
-  return where === 'before' ? at : at + 1
-}
-
-/**
- * The space's items with one move applied, in the order the server would list
- * them: states in workflow order, each in its own order, then the accepted open goals
- * and stages, which stand in no state the workflow lists and keep their place there.
+ * The space's items with one move applied, as the board draws them until the
+ * next read: states in workflow order, each in the order it was read, the moved
+ * item last in its new one, then the accepted open goals and stages, which stand
+ * in no state the workflow lists and keep their place there.
  *
  * An item or state the model does not know leaves the items as they were, so a
  * move that raced a deletion draws nothing rather than something invented.
  */
-export function placeLocally(
-  items: readonly WorkItemBrief[],
+export function placeLocally<Item extends WorkItemBrief>(
+  items: readonly Item[],
   workflow: PlanningWorkflow,
   move: BoardMove,
-): WorkItemBrief[] {
+): Item[] {
   const item = items.find((candidate) => candidate.reference === move.reference)
   const target = workflow.states.find((state) => state.key === move.state)
   if (item === undefined || target === undefined) return [...items]
@@ -73,11 +54,7 @@ export function placeLocally(
   }
   const destination = groups.get(target.state_id) ?? []
   // A move into a finishing state closes the item, as the server will say it did.
-  destination.splice(landing(destination, move.rank), 0, {
-    ...item,
-    state,
-    open: !target.is_terminal,
-  })
+  destination.push({ ...item, state, open: !target.is_terminal })
   const derived = items.filter((candidate) => candidate.state === null)
   return [...states.flatMap((entry) => groups.get(entry.state_id) ?? []), ...derived]
 }
@@ -85,8 +62,8 @@ export function placeLocally(
 /**
  * Whether a state's tiles stand in the order they closed rather than in an
  * order of work: the completed state. Nothing there is still planned, and what
- * a reader looks for in it is what just finished, so the newest close leads
- * and no tile is placed by hand. A tile dropped there from another column is
+ * a reader looks for in it is what just finished, so the newest close leads.
+ * A tile dropped there from another column is
  * still moved there; it lands on top.
  */
 export function ordersByClosing(state: Pick<WorkflowState, 'category'> | null): boolean {

@@ -61,38 +61,6 @@
     },
     "members": [
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000042",
-        "reference": "MAIN-10",
-        "title": "Tree stage",
-        "kind": "stage",
-        "state": null,
-        "open": true,
-        "container_state": "not_started",
-        "claim_ref": "",
-        "claim_state": null,
-        "parent_reference": "MAIN-9",
-        "created_at": "2026-01-02T03:04:05Z",
-        "closed_at": null,
-        "workable": false,
-        "rank": 16
-      },
-      {
-        "work_item_id": "00000000-0000-4000-8000-000000000040",
-        "reference": "MAIN-11",
-        "title": "Tree nested stage",
-        "kind": "stage",
-        "state": null,
-        "open": true,
-        "container_state": "not_started",
-        "claim_ref": "",
-        "claim_state": null,
-        "parent_reference": "MAIN-10",
-        "created_at": "2026-01-02T03:04:05Z",
-        "closed_at": null,
-        "workable": false,
-        "rank": 17
-      },
-      {
         "work_item_id": "00000000-0000-4000-8000-000000000039",
         "reference": "MAIN-12",
         "title": "Tree work in the nested stage",
@@ -111,7 +79,7 @@
         "created_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "workable": true,
-        "rank": 4
+        "queue_order": 1
       },
       {
         "work_item_id": "00000000-0000-4000-8000-000000000041",
@@ -132,7 +100,7 @@
         "created_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "workable": true,
-        "rank": 5
+        "queue_order": 2
       },
       {
         "work_item_id": "00000000-0000-4000-8000-000000000045",
@@ -153,7 +121,39 @@
         "created_at": "2026-01-02T03:04:05Z",
         "closed_at": "2026-01-02T03:04:05Z",
         "workable": false,
-        "rank": 14
+        "queue_order": null
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000042",
+        "reference": "MAIN-10",
+        "title": "Tree stage",
+        "kind": "stage",
+        "state": null,
+        "open": true,
+        "container_state": "not_started",
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_reference": "MAIN-9",
+        "created_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "workable": false,
+        "queue_order": null
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000040",
+        "reference": "MAIN-11",
+        "title": "Tree nested stage",
+        "kind": "stage",
+        "state": null,
+        "open": true,
+        "container_state": "not_started",
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_reference": "MAIN-10",
+        "created_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "workable": false,
+        "queue_order": null
       }
     ],
     "edges": []

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import NamedTuple
 from uuid import UUID, uuid4
 
@@ -56,8 +56,9 @@ HELD_CATEGORIES = ("active", "blocked")
 #: Entering one of these is a start, recorded once: completed work was done even
 #: if nobody claimed it, and cancelled work was not.
 STARTING_CATEGORIES = ("active", "review", "completed")
-#: Where the take-next queue takes work from, and where an item is `workable`.
-WORKABLE_CATEGORIES = ("triage", "ready")
+#: Where the take-next queue takes work from, and where an item may be `workable`:
+#: work in triage or deferred is not accepted, so nobody is given it unasked.
+WORKABLE_CATEGORIES = ("ready",)
 #: Why nothing claims a goal or a stage, by any way in: work is held, a container is not.
 CONTAINER_UNHELD = "a goal or stage has no holder; claim a task under it"
 
@@ -130,6 +131,14 @@ RETIRED_WORDS: dict[str, dict[str, RetiredWord]] = {
     # unknown key gets, which lists the workflow's states.
     "state": {**_RETIRED_STATE_WORDS, "todo": RetiredWord("", lists=True)},
 }
+#: The fields an input no longer takes, each with what its refusal says. Like a
+#: retired word, a refusal and not a synonym: the field is read for nothing, and the
+#: write that names it is refused before anything is written. The tools' refusal of
+#: an unknown argument and the HTTP refusal of an unknown field both read this list.
+RETIRED_FIELDS: dict[str, str] = {
+    "rank": "rank is retired: the order of work is computed — urgent, started, a goal or"
+    " stage under way, priority, age",
+}
 PRIORITIES = ("low", "medium", "high", "urgent")
 _PRIORITY_SET = frozenset(PRIORITIES)
 
@@ -145,9 +154,14 @@ UPDATABLE_FIELDS = (
     "labels_remove",
     "kind",
     "parent",
-    "rank",
     "projects",
 )
+
+
+def retired_field(names: Iterable[str]) -> str | None:
+    """What the refusal of the first retired field among `names` says, or None."""
+
+    return next((RETIRED_FIELDS[name] for name in names if name in RETIRED_FIELDS), None)
 
 
 def updated_fields(arguments: Mapping[str, object]) -> list[str]:
@@ -228,6 +242,8 @@ MAX_CHECKLIST = 100
 # A step is a sentence, not a title. The store this migrates from holds one
 # of 213 characters, so borrowing the title's limit refused real work.
 MAX_CHECKLIST_TEXT = 1000
+#: The step field that marks a tick made by a holder whose lease lapsed.
+PREVIOUS_HOLDER = "by_previous_holder"
 
 
 class PlanningError(ValueError):
@@ -297,7 +313,7 @@ class RevisionConflictError(PlanningError):
 def container_unheld() -> WorkflowGuardError:
     """The one refusal of a claim on a goal or stage, by whatever way in it came."""
 
-    return WorkflowGuardError(f"[container] {CONTAINER_UNHELD}")
+    return WorkflowGuardError(f"[goal_or_stage] {CONTAINER_UNHELD}")
 
 
 def new_id() -> str:
@@ -582,7 +598,12 @@ def names_exactly(query: str, reference: str) -> bool:
 
 
 def checklist(value: object) -> list[dict]:
-    """The steps of one item, each with the id that lets two agents split it."""
+    """The steps of one item, each with the id that lets two agents split it.
+
+    `by_previous_holder` says the step's tick was made by a holder whose lease
+    lapsed, and waits for a tick that confirms it; a step stored without it reads
+    false.
+    """
 
     if value is None:
         return []
@@ -605,7 +626,7 @@ def checklist(value: object) -> list[dict]:
             continue
         if not isinstance(raw, dict):
             raise PlanningError(f"{where} must be a string or an object")
-        unknown = set(raw) - {"id", "text", "done", "claimed_by", "done_by"}
+        unknown = set(raw) - {"id", "text", "done", "claimed_by", "done_by", PREVIOUS_HOLDER}
         if unknown:
             raise PlanningError(f"{where} has unknown field(s): {', '.join(sorted(unknown))}")
         item_id = identifier(raw.get("id") or new_id(), f"{where}.id")
@@ -615,6 +636,9 @@ def checklist(value: object) -> list[dict]:
         done = raw.get("done", False)
         if not isinstance(done, bool):
             raise PlanningError(f"{where}.done must be a boolean")
+        flagged = raw.get(PREVIOUS_HOLDER, False)
+        if not isinstance(flagged, bool):
+            raise PlanningError(f"{where}.{PREVIOUS_HOLDER} must be a boolean")
         items.append(
             {
                 "id": item_id,
@@ -626,6 +650,7 @@ def checklist(value: object) -> list[dict]:
                 "done_by": actor(raw.get("done_by") or "", f"{where}.done_by")
                 if raw.get("done_by")
                 else "",
+                PREVIOUS_HOLDER: flagged,
             }
         )
     return items
@@ -638,6 +663,7 @@ def new_checklist_item(text: object) -> dict:
         "done": False,
         "claimed_by": "",
         "done_by": "",
+        PREVIOUS_HOLDER: False,
     }
 
 

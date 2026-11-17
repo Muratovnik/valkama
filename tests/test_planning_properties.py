@@ -3,13 +3,12 @@
 The example suites drive one operation at a time and assert its result. This one
 drives arbitrary sequences of them against a real SQLite store and asserts the
 things every sequence has to leave true: a guarded write versions the item
-exactly once, a refused write leaves nothing behind, an override is on the
-record, and one state never orders two of its items the same.
+exactly once, a refused write leaves nothing behind, and an override is on the
+record.
 
 Those are properties the surfaces depend on without stating: the desktop app
-resolves a conflict by comparing revisions, and every view draws a state's items
-in position order. A sequence that broke either would still pass every
-single-operation test in this repository.
+resolves a conflict by comparing revisions. A sequence that broke one would still
+pass every single-operation test in this repository.
 
 Every case runs against a throwaway store in a temporary directory. The owner's
 store is never a subject here — and cannot be: `tests/__init__.py` names it as
@@ -150,44 +149,6 @@ class PlanningMachine(RuleBasedStateMachine):
             assert force
             assert "overridden" in self.events(item)
 
-    @rule(item=items, anchor=items, where=st.sampled_from(("first", "last", "before", "after")))
-    def place(self, item, anchor, where):
-        """A placement moves its own item once, or refuses and moves nothing.
-
-        Any two items will do as item and anchor: one in another state, or the
-        item itself, is a refusal, and the invariant below still has to hold
-        whichever way it went.
-        """
-
-        before = self.row(item)
-        neighbours = {
-            str(row["work_item_id"]): int(row["revision"])
-            for row in self.conn.execute(
-                "SELECT work_item_id, revision FROM work_items WHERE work_item_id != ?",
-                (before["work_item_id"],),
-            )
-        }
-        rank = where if where in ("first", "last") else f"{where}:{anchor}"
-        try:
-            service.update_work_item(self.conn, item, rank=rank)
-        except model.PlanningError:
-            after = self.row(item)
-            assert after["position"] == before["position"]
-            assert after["revision"] == before["revision"]
-            return
-        after = self.row(item)
-        assert after["state_key"] == before["state_key"]
-        # Written once, or not at all when it already stood there.
-        assert after["revision"] in (before["revision"], before["revision"] + 1)
-        if after["revision"] == before["revision"]:
-            assert after["position"] == before["position"]
-        # A neighbour may be renumbered, but never written: its revision stays.
-        for row in self.conn.execute(
-            "SELECT work_item_id, revision FROM work_items WHERE work_item_id != ?",
-            (before["work_item_id"],),
-        ):
-            assert int(row["revision"]) == neighbours[str(row["work_item_id"])]
-
     @rule(item=items, drift=st.integers(min_value=1, max_value=3))
     def a_stale_revision_is_refused(self, item, drift):
         before = self.row(item)
@@ -287,31 +248,6 @@ class PlanningMachine(RuleBasedStateMachine):
         after = self.row(item)
         assert after["summary"]
         assert after["revision"] == before["revision"] + 1
-
-    @invariant()
-    def a_state_orders_its_items_uniquely(self):
-        """Two items in one state never share a position, and the order holds.
-
-        Not contiguity. The Board era renumbered a lane on every move because
-        its reorder API sent an index into that lane; the neutral views send a
-        transition and no index, so a gap left by a departed item costs nothing
-        and closing it would be a write nobody asked for. What still has to be
-        true is that the display order is total: a repeat would make two items
-        swap places between reads.
-        """
-
-        for key in self.states:
-            positions = [
-                row["position"]
-                for row in self.conn.execute(
-                    "SELECT w.position FROM work_items w"
-                    " JOIN workflow_states s ON s.state_id = w.state_id"
-                    " WHERE s.key = ? ORDER BY w.position",
-                    (key,),
-                )
-            ]
-            assert len(set(positions)) == len(positions), f"{key}: {positions}"
-            assert positions == sorted(positions), f"{key}: {positions}"
 
     @invariant()
     def a_holder_stands_only_at_work_or_blocked_and_work_always_has_one(self):

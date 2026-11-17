@@ -147,7 +147,7 @@ function seriesOf(members: MapMember[]) {
   })
 }
 
-/** The order of work by state category, as the server ranks a chain's members. */
+/** The order of the states these fixtures name, as the workflow lists them. */
 const WORK_ORDER = [
   'active',
   'review',
@@ -161,17 +161,21 @@ const WORK_ORDER = [
 const numberOf = (member: MapMember) => Number(member.reference.split('-').at(-1))
 
 /**
- * Each member's place in the order of work: by category, then by number. These
- * fixtures name one state per category, so that is the server's order too.
+ * The members as the server sends them: in the order of work, here by state, then by
+ * number, since these fixtures give every member one key of work; each workable one
+ * with its place in the queue, the rest with none.
  */
-function ranked(members: MapMember[]) {
+function inOrder(members: MapMember[]) {
   const ordered = members.toSorted(
     (left, right) =>
       WORK_ORDER.indexOf(left.state.category) - WORK_ORDER.indexOf(right.state.category) ||
       numberOf(left) - numberOf(right),
   )
-  const rank = new Map(ordered.map((member, index) => [member.work_item_id, index + 1]))
-  return members.map((member) => ({ ...member, rank: rank.get(member.work_item_id) ?? 0 }))
+  const given = ordered.filter((member) => member.workable)
+  return ordered.map((member) => ({
+    ...member,
+    queue_order: member.workable ? given.indexOf(member) + 1 : null,
+  }))
 }
 
 /** A chain answer for these members and edges, its counts derived from them. */
@@ -202,7 +206,7 @@ export function chainOf(root: MapRoot, members: MapMember[], extras: ChainExtras
     origins: originsOf(root, members, extras.titles ?? {}),
     series: seriesOf(members),
     recent: extras.recent ?? { days: 7, created: 0, closed: 0, trend: 'steady' as const },
-    members: ranked(members),
+    members: inOrder(members),
     edges: extras.edges ?? [],
   }
 }

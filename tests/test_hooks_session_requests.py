@@ -21,7 +21,7 @@ import unittest
 
 from server import mcp_surface
 from server.hooks import notify
-from server.planning import api, calls, model, requests
+from server.planning import api, calls, model, questions, requests
 from tests.test_hooks_tree_notices import (
     A1,
     AS_A1,
@@ -243,7 +243,7 @@ class AgentAsksTests(Asked):
         self.assertNotIn("the reply awaited", text)
         self.assertIsNone(self.hook(A), "once")
         self.nothing_for(E, F, C)
-        self.assertEqual([], requests.open_rows(self.conn), "nor does the owner hear of it")
+        self.assertEqual([], questions.open_rows(self.conn), "nor does the owner hear of it")
 
     def answered_at(self, asked: dict) -> str:
         return str(

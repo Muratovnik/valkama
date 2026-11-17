@@ -85,9 +85,9 @@ class Tree:
         steps = [{"text": f"The step of {name}", "claimed_by": step_holder}] if step_holder else []
         self.conn.execute(
             "INSERT INTO work_items(work_item_id, planning_space_id, number, workflow_id,"
-            " state_id, kind, priority, title, description, labels, position, parent_id,"
+            " state_id, kind, priority, title, description, labels, parent_id,"
             " acceptance, accepted_at, started_at, claim_ref, checklist)"
-            " VALUES (?, ?, ?, ?, ?, ?, 'medium', ?, '', '[]', ?, ?, ?, ?, ?, ?, ?)",
+            " VALUES (?, ?, ?, ?, ?, ?, 'medium', ?, '', '[]', ?, ?, ?, ?, ?, ?)",
             (
                 identity,
                 self.space_id,
@@ -96,7 +96,6 @@ class Tree:
                 self.states[state],
                 model.CONTAINER_KIND if container else kind,
                 f"{name} item",
-                number,
                 parent_id,
                 accepted,
                 self.stamp() if accepted is not None else None,

@@ -97,6 +97,8 @@ export const blockedWorkItem: BriefFields = {
   started_at: null,
   waits_for: [],
   workable: false,
+  withheld: ['not_ready'],
+  lapsed_claim: null,
   checklist: [],
   revision: 1,
   created_at: now,
@@ -129,6 +131,8 @@ const briefFields: BriefFields = {
   started_at: null,
   waits_for: [],
   workable: false,
+  withheld: ['not_ready'],
+  lapsed_claim: null,
   checklist: [
     {
       id: identity(300),
@@ -136,6 +140,7 @@ const briefFields: BriefFields = {
       done: false,
       claimed_by: 'codex',
       done_by: '',
+      by_previous_holder: false,
     },
   ],
   revision: 3,
@@ -143,8 +148,9 @@ const briefFields: BriefFields = {
   updated_at: now,
 }
 
-const workItemBrief = { ...briefFields, comment_count: 0 }
-const blockedBrief = { ...blockedWorkItem, comment_count: 0 }
+// Rows of the read model: the brief record and the place in the queue, none for work at work.
+const workItemBrief = { ...briefFields, comment_count: 0, queue_order: null }
+const blockedBrief = { ...blockedWorkItem, comment_count: 0, queue_order: null }
 
 /** The full record the inspector reads, links included. */
 export const workItem: WorkItem = {

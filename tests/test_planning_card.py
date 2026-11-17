@@ -31,7 +31,7 @@ CARD = frozenset(
         "checklist", "summary",
     }
 )  # fmt: skip
-#: Fields a later build adds to the record, which the card carries only when it does.
+#: Fields the queue, the lease and the projects add to the record, which the card copies.
 AHEAD = ("withheld", "projects", "lapsed_claim")
 #: Fields the card makes itself rather than takes from the record.
 OWN = ("url", "parent")
@@ -160,7 +160,8 @@ class DefaultReadTests(FullItemCase):
         self.assertEqual(wanted | {"parts"}, set(card))
         for name in AHEAD:
             with self.subTest(ahead=name):
-                self.assertEqual(name in full, name in card)
+                self.assertIn(name, full)
+                self.assertIn(name, card)
         # The record's own fields come over as the record has them.
         for name in wanted - {"state", "checklist", "url", "parent", "summary"}:
             with self.subTest(field=name):

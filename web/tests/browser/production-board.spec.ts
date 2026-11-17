@@ -1,12 +1,12 @@
 /**
  * The board read by goal in the built application: lanes with their counts, a
  * lane folded because nothing in it is open and one unfolded by hand, one
- * goal's chain on the board, and a column reordered by a drag and from the
- * keyboard.
+ * goal's chain on the board, and a tile moved to another column by a drag, never
+ * placed by hand within one.
  *
- * The server here is a double that keeps the order it is told, so what the
- * board draws after a move is what the next read of the space answers, not what
- * the board drew before it asked. Each test saves what it looked at under its
+ * The server here is a double that puts a moved tile last in its new state, so
+ * what the board draws after a move is what the next read of the space answers,
+ * not what the board drew before it asked. Each test saves what it looked at under its
  * own output folder.
  */
 import { expect } from '@playwright/test'
@@ -177,7 +177,7 @@ test('a lane shows its goal’s chain on the board, in every view, and the chip 
   await expect(page.locator('tbody tr')).toHaveCount(13)
 })
 
-test('a drag reorders a column and moves a tile across columns inside its lane', async ({
+test('a drag moves a tile across columns inside its lane, never within one', async ({
   page,
 }, info) => {
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -187,40 +187,36 @@ test('a drag reorders a column and moves a tile across columns inside its lane',
   const goal = lane(page, LONG_GOAL)
   const tile = (reference: string) => goal.locator(`li[data-reference="${reference}"]`)
 
-  await drag(page, { from: tile('MAIN-404'), to: tile('MAIN-402'), where: 'top', midway: info })
-  await expect.poll(() => writes.length).toBe(1)
-  expect(writes[0]).toEqual({
-    path: '/api/planning/work-item/update',
-    body: expect.objectContaining({
-      id: 'MAIN-404',
-      rank: 'before:MAIN-402',
-      expected_revision: 1,
-    }),
+  // Within its own column a drop places nothing: the order of work is the server's.
+  await drag(page, {
+    from: tile('MAIN-404'),
+    to: tile('MAIN-402'),
+    where: 'top',
+    midway: info,
+    refused: true,
   })
+  await expect(page.locator('.work-item-board')).not.toHaveClass(/dragging/u)
   await expect
     .poll(() => tiles(cell(goal, 'backlog')))
-    .toEqual(['MAIN-404', 'MAIN-402', 'MAIN-403'])
+    .toEqual(['MAIN-402', 'MAIN-403', 'MAIN-404'])
+  expect(writes).toHaveLength(0)
 
-  // Into another column, dropped on the ground below its last tile.
+  // Into another column, dropped on the ground below its last tile: the state alone.
   await drag(page, { from: tile('MAIN-403'), to: cell(goal, 'dev'), where: 'bottom' })
-  await expect.poll(() => writes.length).toBe(2)
-  expect(writes[1]).toEqual({
+  await expect.poll(() => writes.length).toBe(1)
+  expect(writes[0]).toEqual({
     path: '/api/planning/work-item/transition',
-    body: expect.objectContaining({
-      id: 'MAIN-403',
-      state: 'dev',
-      rank: 'after:MAIN-405',
-      expected_revision: 1,
-    }),
+    body: expect.objectContaining({ id: 'MAIN-403', state: 'dev', expected_revision: 1 }),
   })
+  expect(writes[0].body).not.toHaveProperty('rank')
   await expect.poll(() => tiles(cell(goal, 'dev'))).toEqual(['MAIN-405', 'MAIN-403'])
-  await expect.poll(() => tiles(cell(goal, 'backlog'))).toEqual(['MAIN-404', 'MAIN-402'])
+  await expect.poll(() => tiles(cell(goal, 'backlog'))).toEqual(['MAIN-402', 'MAIN-404'])
   // A tile never crosses into another lane: the lanes do not share a list.
   const loose = page.locator('li[data-reference="MAIN-430"]')
   await drag(page, { from: tile('MAIN-402'), to: loose, where: 'top', refused: true })
   await expect(page.locator('.work-item-board')).not.toHaveClass(/dragging/u)
-  expect(writes).toHaveLength(2)
-  await expect.poll(() => tiles(cell(goal, 'backlog'))).toEqual(['MAIN-404', 'MAIN-402'])
+  expect(writes).toHaveLength(1)
+  await expect.poll(() => tiles(cell(goal, 'backlog'))).toEqual(['MAIN-402', 'MAIN-404'])
 })
 
 test('a refused drop leaves the tile where it was and says why', async ({ page }) => {
@@ -243,9 +239,7 @@ test('a refused drop leaves the tile where it was and says why', async ({ page }
     .toEqual(['MAIN-402', 'MAIN-403', 'MAIN-404'])
 })
 
-test('Alt+Arrow moves a focused tile one place and the move is announced', async ({
-  page,
-}, info) => {
+test('Alt+Arrow on a focused tile moves nothing and writes nothing', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
   const writes = await serve(page)
@@ -253,29 +247,15 @@ test('Alt+Arrow moves a focused tile one place and the move is announced', async
   const goal = lane(page, LONG_GOAL)
   const live = page.locator('.work-item-board [role="status"]')
   const focused = goal.locator('li[data-reference="MAIN-402"] .tile-open')
-  await expect(focused).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown')
+  expect(await focused.getAttribute('aria-keyshortcuts')).toBeNull()
   await focused.focus()
-  await page.keyboard.press('Alt+ArrowDown')
-  await expect(live).toHaveText('MAIN-402 moved: 2 of 3 in Backlog')
-  await expect.poll(() => writes.length).toBe(1)
-  expect(writes[0].body).toEqual(
-    expect.objectContaining({ id: 'MAIN-402', rank: 'after:MAIN-403', expected_revision: 1 }),
-  )
+  for (const key of ['Alt+ArrowDown', 'Alt+ArrowUp']) await page.keyboard.press(key)
+  await expect(focused).toBeFocused()
+  await expect(live).toHaveText('')
   await expect
     .poll(() => tiles(cell(goal, 'backlog')))
-    .toEqual(['MAIN-403', 'MAIN-402', 'MAIN-404'])
-  // Focus follows the tile it moved, so a second press moves it again.
-  await expect(focused).toBeFocused()
-  await page.screenshot(shot(info, 'w-board-keyboard-1440.png'))
-  await page.keyboard.press('Alt+ArrowDown')
-  await expect(live).toHaveText('MAIN-402 moved: 3 of 3 in Backlog')
-  await expect
-    .poll(() => tiles(cell(goal, 'backlog')))
-    .toEqual(['MAIN-403', 'MAIN-404', 'MAIN-402'])
-  await expect(focused).toBeFocused()
-  await page.keyboard.press('Alt+ArrowDown')
-  await expect(live).toHaveText('MAIN-402 is already last')
-  expect(writes).toHaveLength(2)
+    .toEqual(['MAIN-402', 'MAIN-403', 'MAIN-404'])
+  expect(writes).toHaveLength(0)
 })
 
 /** The ground a cell draws, as the page paints it. */
@@ -341,7 +321,7 @@ test('a lane is as tall as its tiles: an empty cell stays a low ground', async (
   expect(full, 'the cell with a tile is a tile tall').toBeGreaterThan(empty * 2)
 })
 
-test('arrows walk the tiles, and a tile moved from the keyboard is brought into view', async ({
+test('arrows walk the tiles, and the last tile walked to is brought into view', async ({
   page,
 }, info) => {
   await page.setViewportSize({ width: 1024, height: 640 })
@@ -363,21 +343,14 @@ test('arrows walk the tiles, and a tile moved from the keyboard is brought into 
   await page.keyboard.press('Home')
   await expect(tile('MAIN-402')).toBeFocused()
 
-  // Moved to the end of its cell, the tile stays focused and in sight.
+  // Walked to the end of its cell, the tile is focused and in sight.
   const scroller = page.locator('.work-item-lanes')
-  await page.keyboard.press('Alt+ArrowDown')
-  await expect
-    .poll(() => tiles(cell(goal, 'backlog')))
-    .toEqual(['MAIN-403', 'MAIN-402', 'MAIN-404'])
-  await page.keyboard.press('Alt+ArrowDown')
-  await expect
-    .poll(() => tiles(cell(goal, 'backlog')))
-    .toEqual(['MAIN-403', 'MAIN-404', 'MAIN-402'])
-  await expect(tile('MAIN-402')).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(tile('MAIN-404')).toBeFocused()
   await expect
     .poll(async () => {
       const [box, port] = await Promise.all([
-        tile('MAIN-402').boundingBox(),
+        tile('MAIN-404').boundingBox(),
         scroller.boundingBox(),
       ])
       if (!box || !port) return 'not drawn'

@@ -767,6 +767,7 @@ class WorkItemUrlTests(unittest.TestCase):
         self.assertEqual("http://127.0.0.1:8642/open/MAIN-1", moved["url"])
 
     def test_the_item_the_queue_hands_over_carries_the_address(self) -> None:
+        service.transition_work_item(self.conn, "MAIN-1", "ready", acceptance="assignment")
         taken = self.call("claim_ready_work_item", space="MAIN", author="one")
         self.assertEqual("http://127.0.0.1:8642/open/MAIN-1", taken["work_item"]["url"])
         self.assertIsNone(self.call("claim_ready_work_item", space="MAIN")["work_item"])

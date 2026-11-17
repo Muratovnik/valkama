@@ -321,14 +321,19 @@ class LivenessTests(Harness):
             service.claim_checklist_item(self.conn, self.task, step)
         self.follow(self.goal, E)
         self.assertEqual([A, B, E], self.who(self.goal))
+        # The lease term is three days, a subscription's own silence fourteen.
         for session in (A, B, E):
-            self.quiet(session, 13)
+            self.quiet(session, 2)
         self.assertEqual([A, B, E], self.who(self.goal), "within the lease term")
         for session in (A, B, E):
             with self.subTest(session=session):
-                self.quiet(session, 15)
+                self.quiet(session, 4)
                 self.assertNotIn(session, self.who(self.goal), "silent past the lease term")
         self.assertEqual([], self.who(self.goal))
+        followers = service.get_work_item(self.conn, self.goal)["subscribers"]
+        self.assertEqual(
+            [E], [entry["session"] for entry in followers], "the subscription itself still stands"
+        )
 
     def test_a_session_with_no_row_is_no_participant(self) -> None:
         self.conn.execute("DELETE FROM sessions WHERE id = ?", (B,))
@@ -361,6 +366,9 @@ class BoardCostTests(Harness):
         """
 
         self.claim(self.item("Held"), B)
+        # A board with an unheld open item pays once for what such items read in one
+        # statement (`read_model.lapsed_claims`), so the base pays it already.
+        self.item("Unheld")
         base = self.statements()
         goals = [self.item(f"Goal {number}", "goal") for number in range(4)]
         for goal in goals:

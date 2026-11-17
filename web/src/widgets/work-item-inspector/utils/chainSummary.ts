@@ -26,20 +26,12 @@ function byReference(left: ChainMember, right: ChainMember): number {
 }
 
 /**
- * Open work in the order of work, so the item that will be taken next leads
- * its group; finished work most recently closed first, because that is the part
- * of the past a reader asks about.
+ * Finished work most recently closed first, because that is the part of the past
+ * a reader asks about. Open work keeps the order the server sent, the order of
+ * work, so the item that will be taken next leads its group.
  */
-function byRank(left: ChainMember, right: ChainMember): number {
-  return left.rank - right.rank || byReference(left, right)
-}
-
 function byClosing(left: ChainMember, right: ChainMember): number {
   return (right.closed_at ?? '').localeCompare(left.closed_at ?? '') || byReference(left, right)
-}
-
-function memberOrder(group: ChainGroup) {
-  return group === 'done' ? byClosing : byRank
 }
 
 export function groupMembers(members: readonly ChainMember[]): ChainGroups {
@@ -47,7 +39,7 @@ export function groupMembers(members: readonly ChainMember[]): ChainGroups {
     CHAIN_GROUPS.map((group) => [group, []]),
   ) as unknown as ChainGroups
   for (const member of members) groups[chainGroup(member)].push(member)
-  for (const group of CHAIN_GROUPS) groups[group].sort(memberOrder(group))
+  groups.done.sort(byClosing)
   return groups
 }
 

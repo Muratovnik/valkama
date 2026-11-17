@@ -17,9 +17,11 @@ read: the frame is the primary store's, whichever space a stream follows.
 | a parent | of any row, so that `parent` always names a row of the same space |
 
 A space's rows come in the order they are drawn: a row that is another row's
-parent is a group, and the groups come first in the order of work, each followed
-by its own rows; then the rows with neither a parent nor rows of their own. Rows
-that are not groups stand by number, so a change of state does not move one.
+parent is a group, and the groups come first by the place of their state in its
+workflow and then by number, each followed by its own rows; then the rows with
+neither a parent nor rows of their own. A group has no urgency or start in the
+queue's sense, and its number is its age. Rows that are not groups stand by
+number, so a change of state does not move one.
 
 A waiting row says whether its wait is `long`, which the side panel folds away,
 and whether its session `asks` a person in the middle of a turn. A waiting or a
@@ -68,7 +70,7 @@ _ITEMS = (
     " lineage(id) AS (SELECT id FROM shown"
     " UNION SELECT w.parent_id FROM lineage l JOIN work_items w ON w.work_item_id = l.id"
     " WHERE w.parent_id IS NOT NULL)"
-    " SELECT w.work_item_id, w.number, w.title, w.kind, w.parent_id, w.position, w.updated_at,"
+    " SELECT w.work_item_id, w.number, w.title, w.kind, w.parent_id, w.updated_at,"
     " CASE WHEN w.checklist LIKE '%(session %' THEN w.checklist ELSE '[]' END AS checklist,"
     " p.key, s.key AS state_key, s.name AS state_name, s.category AS state_category,"
     " s.is_terminal, s.position AS state_position,"
@@ -97,8 +99,8 @@ class _Item:
     accepted_open: bool
     #: When the item last changed: only a write to it moves this.
     updated_at: str
-    #: The order of work: the state's place in its workflow, then the item's in its state.
-    order: tuple[float, float, int]
+    #: The order of groups: the state's place in its workflow, then the number.
+    order: tuple[float, int]
     number: int
 
 
@@ -124,7 +126,7 @@ def _item(row: sqlite3.Row) -> _Item:
         is_terminal=bool(row["is_terminal"]),
         accepted_open=shown is None and str(row["kind"]) == model.CONTAINER_KIND,
         updated_at=str(row["updated_at"]),
-        order=(float(row["state_position"]), float(row["position"]), number),
+        order=(float(row["state_position"]), number),
         number=number,
     )
 
@@ -141,7 +143,7 @@ def _steps(checklist: str) -> list[dict]:
 
 
 def _ordered(rows: list[_Item]) -> list[_Item]:
-    """A space's rows as they are drawn: groups by the order of work, each with its own."""
+    """A space's rows as they are drawn: groups by state and number, each with its own."""
 
     children: dict[str | None, list[_Item]] = {}
     for row in rows:
@@ -159,7 +161,7 @@ def _ordered(rows: list[_Item]) -> list[_Item]:
     return under(None)
 
 
-def _work(row: _Item) -> tuple[float, float, int]:
+def _work(row: _Item) -> tuple[float, int]:
     return row.order
 
 

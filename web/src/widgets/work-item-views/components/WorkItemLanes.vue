@@ -70,7 +70,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   chain: [reference: string]
   dragging: [active: boolean]
-  edge: [reference: string, edge: 'first' | 'last']
   filter: [token: WorkFilterToken]
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
@@ -288,7 +287,6 @@ function laneGroup(lane: BoardLane): string {
               :writable="props.writable"
               @collapse="settle(lane, state)"
               @dragging="(active) => drag(lane, active)"
-              @edge="(reference, edge) => emit('edge', reference, edge)"
               @filter="emit('filter', $event)"
               @open="emit('open', $event)"
               @place="(move, landing) => (land(lane, move, landing), emit('place', move, landing))"
@@ -328,14 +326,13 @@ function laneGroup(lane: BoardLane): string {
   /* A tile focused or brought into view stops below the sticky row of state
      names and a lane heading of one row held under it, with the room it keeps
      above for a ring, and short of the bottom edge by more than its focus ring
-     reaches — or, while the board shows its shared-order line there, above that
-     line. A heading of more rows is as tall as its words make it, so the lane's
+     reaches. A heading of more rows is as tall as its words make it, so the lane's
      own heading is read for the rest (`useLaneClearance`). Sideways, a column
      stops where the tracks start, inside the room kept for the rings. */
   scroll-padding-block: calc(
       var(--lanes-head-block) + var(--size-control-height-compact) + var(--space-1) + var(--space-2)
     )
-    var(--board-note-reach, var(--space-2));
+    var(--space-2);
   scroll-padding-inline: var(--space-1);
   scroll-snap-type: x proximity;
   container: board-lanes / inline-size;

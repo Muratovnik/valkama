@@ -11,8 +11,13 @@ published MCP argument and every HTTP parameter named kind, scope, category or
 state is read off the schemas and the route registries, so one that is added fails
 this file until it is driven here, or listed with the reason it takes no such word.
 
+The field `rank`, which placed an item by hand among the items of its state, is
+retired the same way: the order of work is computed, and a write naming the field
+is refused with what computes it (`tests/test_planning_api.py` and
+`tests/test_planning_apply_groups.py` drive it on every write that took it).
+
 What an agent reads does not teach the words either: no tool's schema, no line of
-the handshake and no page of the skill Valkama ships names one.
+the handshake and no page of the skill Valkama ships names one, nor the field.
 """
 
 from __future__ import annotations
@@ -62,6 +67,12 @@ RETIRED: dict[str, dict[str, tuple[str, ...]]] = {
         "todo": ("no state named todo", STATES_LISTED),
         "container": (CONTAINER,),
     },
+}
+
+#: Each retired field, with what its refusal says.
+RETIRED_FIELDS = {
+    "rank": "rank is retired: the order of work is computed — urgent, started, a goal or"
+    " stage under way, priority, age",
 }
 
 Call = Callable[["RetiredWordTests", str], object]
@@ -300,6 +311,9 @@ class RetiredWordTests(unittest.TestCase):
                         self.assertEqual(before, self.store_as_it_stands(), "nothing is written")
                         self.conn.rollback()
 
+    def test_the_retired_fields_are_the_ones_the_model_lists(self) -> None:
+        self.assertEqual(RETIRED_FIELDS, model.RETIRED_FIELDS)
+
     def test_the_list_in_the_model_is_the_one_every_refusal_reads(self) -> None:
         self.assertEqual(
             {field: set(words) for field, words in RETIRED.items()},
@@ -347,7 +361,9 @@ class RetiredWordTests(unittest.TestCase):
 SKILL = Path(__file__).resolve().parent.parent.joinpath(*skills.SOURCE_PARTS)
 #: A retired word as a word of its own: `container_state` is not `container`.
 RETIRED_WORD = re.compile(
-    r"\b(" + "|".join(sorted({word for words in RETIRED.values() for word in words})) + r")\b",
+    r"\b("
+    + "|".join(sorted({word for words in RETIRED.values() for word in words} | set(RETIRED_FIELDS)))
+    + r")\b",
     re.IGNORECASE,
 )
 

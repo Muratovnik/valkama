@@ -294,18 +294,37 @@ class RowTests(FrameCase):
 
 
 class OrderTests(FrameCase):
-    def test_groups_come_first_in_the_order_of_work_then_the_rest_by_number(self) -> None:
+    def test_groups_come_first_by_state_then_number_then_the_rest_by_number(self) -> None:
         loose_low = self.item()
+        accepted = str(
+            service.create_work_item(
+                self.conn, space=SPACE, title="Epic", kind="goal", acceptance="assignment"
+            )["reference"]
+        )
         later, sooner = self.epic(), self.epic()
+        accepted_child = self.child(accepted)
         later_child = self.child(later)
         third, first = self.child(sooner), self.child(sooner)
         loose_high = self.item()
-        # The order of work puts `sooner` first: it is placed first in its state.
-        service.update_work_item(self.conn, sooner, rank="first")
-        for reference in (loose_high, loose_low, first, third, later_child):
+        # Both goals in triage stand before the accepted one, whose state comes last
+        # in the workflow though its number is the smallest; between the two, the
+        # smaller number first, whatever their priority says.
+        service.update_work_item(self.conn, sooner, priority="urgent")
+        for reference in (loose_high, loose_low, first, third, later_child, accepted_child):
             self.pin(reference)
         self.assertEqual(
-            [sooner, third, first, later, later_child, loose_low, loose_high], self.order()
+            [
+                later,
+                later_child,
+                sooner,
+                third,
+                first,
+                accepted,
+                accepted_child,
+                loose_low,
+                loose_high,
+            ],
+            self.order(),
         )
 
     def test_a_change_of_state_does_not_move_a_row_that_is_not_a_group(self) -> None:

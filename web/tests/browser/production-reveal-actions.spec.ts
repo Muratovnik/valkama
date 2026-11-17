@@ -39,6 +39,7 @@ const steps = ['123e4567-e89b-42d3-a456-426614174201', '123e4567-e89b-42d3-a456-
     done: false,
     claimed_by: '',
     done_by: '',
+    by_previous_holder: false,
   }),
 )
 

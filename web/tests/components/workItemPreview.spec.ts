@@ -50,6 +50,7 @@ const steps = (done: number, total: number) =>
     done: index < done,
     claimed_by: '',
     done_by: '',
+    by_previous_holder: false,
   }))
 
 const item = (overrides: Partial<WorkItemBrief>, state: 'backlog' | 'dev' | 'done' = 'dev') =>

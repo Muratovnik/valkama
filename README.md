@@ -534,8 +534,7 @@ Three things make a card honest about its own progress:
 - **An activity trace.** Creations, moves, claims, takeovers, releases,
   completions and link changes are all recorded with an author. The `events`
   part of `get_work_item` returns the newest of it, up to a thousand events at a
-  time, with how many there are, so nobody has to guess who did what. Reordering
-  within a lane is deliberately *not* history.
+  time, with how many there are, so nobody has to guess who did what.
 - **Reading by parts.** `get_work_item` answers with the item's card: its
   fields, its description, its checklist and its summary, and a table of the
   other parts it has with their sizes. An agent reads the discussion, the
@@ -560,12 +559,17 @@ closes as its duplicate with its own history intact
 A claim also says whether anyone is still behind it. When the client proves its
 session, the claim is a lease on that session: `live` while the session is
 active and has shown a sign of life — a hook event or a Valkama write — in the
-last 14 days, `stale` once it ended or went quiet, and `unconfirmed` when no
+last 3 days, `stale` once it ended or went quiet, and `unconfirmed` when no
 session was proved, which is also how every older claim and every claim made in
-the browser reads. Another session needs `force` to take a live claim, even when
+the browser reads. An `unconfirmed` claim lapses after 3 days without an event
+on the item, the owner's own included. An open question to the owner on the item
+stops both counts. Another session needs `force` to take a live claim, even when
 it signs with the same author. A stale claim is released by whoever meets it
-next, and taking it over needs no `force`; the history shows the expiry as a
-`released` event by `valkama`. The board marks stale claims, and the inspector
+next, or by the
+[planning sweep](docs/connection-contract.md#the-planning-sweep) a running server
+repeats every ten minutes, and taking it over needs no `force`; the history
+shows the expiry as a `released` event by `valkama`, and the claimed steps of
+that session go with it. The board marks stale claims, and the inspector
 shows the lease and when it expires. The exact rules are in
 [the connection contract](docs/connection-contract.md#claims-are-leases).
 
@@ -611,23 +615,24 @@ executor, `done` needs every checklist item closed and a summary, `blocked`
 needs a linked blocker or a stated reason. A refusal names its guard, and
 `force=true` carries the move through as a recorded override.
 
-**Concurrent moves are resolved, not raced.** A drag or a keyboard move sends
-the revision of the card as the board last read it. If an agent has moved or
-edited the card since, the server answers `409` with the revision it is at, the
-board says so, and the card stays where the next read of the space puts it
-rather than silently undoing the agent's work.
+**Concurrent moves are resolved, not raced.** A drag sends the revision of the
+card as the board last read it. If an agent has moved or edited the card since,
+the server answers `409` with the revision it is at, the board says so, and the
+card stays where the next read of the space puts it rather than silently undoing
+the agent's work.
 
-**The board's order is the order work is taken in.** Dragging a card up or down
-its column, or pressing Alt+↑ or Alt+↓ on a focused card, places it among the
-cards of its state; the move is announced to a screen reader. Dropping it in
-another column moves it there at the place it was dropped. Agents see the same
-order: `claim_ready_work_item` takes the first ready item of it,
-`list_work_items` lists each state in it, and the `update` and `transition`
-of `apply_work_item_changes` take a `rank` (`first`, `last`, `before:<item>` or
-`after:<item>`) to place an item themselves. Priority only breaks a tie. The
-order is the item's `position`, which every store already holds, so it needs
-no new schema; the exact rules are in
-[the connection contract](docs/connection-contract.md#the-order-of-work).
+**The board's order is the order work is taken in.** Valkama computes it and
+nobody sets it: urgent work first, then work already started, then work whose
+goal or stage is under way, then by priority, then the older. Dropping a card in
+another column moves it to that state, and the move is announced to a screen
+reader; a drop within its own column changes nothing. Agents see the same order:
+`claim_ready_work_item` takes the first workable task of one space's queue, the
+space it names, else that of the goal or stage it names in `within`, else the
+space whose project root holds the agent session's folder; `within`, `label` and
+`project` narrow that queue without reordering it. `list_work_items` lists each
+state in the same order, a row the queue would give carries its place there as
+`queue_order`, and a `rank` sent to place an item is refused. The exact rules
+are in [the connection contract](docs/connection-contract.md#the-order-of-work).
 
 **The board reads by goal.** With View → Grouping → By goal, each goal is a lane
 headed by its reference, title, open and closed counts and a fold, and holds all the
@@ -722,11 +727,12 @@ the `preschema14` snapshot, which has no `.images` folder, before pinning the
 earlier release as described below for schema 9: everything written since is
 lost, pictures included.
 
-The order of work took no migration of its own. A placement is written to the
-item's `position`, a column every schema-9 store already has, so no snapshot was
-taken for it, and an earlier schema-9 build opens a schema-9 store that holds
-placements and lists its states in the placed order. Such a build still puts a
-moved item last in its new state, and a later placement works from there.
+The order set by hand took no migration of its own before 3.0. A placement was
+written to the item's `position`, a column every schema-9 store already had, so no
+snapshot was taken for it, and an earlier schema-9 build opened a schema-9 store
+that held placements and listed its states in the placed order. From 3.0 the order
+is computed, and `valkama migrate work-model` drops `position`: the `pre3.0`
+snapshot is what keeps the placements.
 
 Notes on answers and option descriptions took no migration either. A schema-9
 build from before them opens a schema-9 store that holds them, and its tools read

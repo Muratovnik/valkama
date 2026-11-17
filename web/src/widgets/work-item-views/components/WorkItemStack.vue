@@ -1,21 +1,19 @@
 <script setup lang="ts">
 /**
- * The tiles of one state, in the order of work, and the two ways to change it.
+ * The tiles of one state, in the order of work the server computed.
  *
- * A drag and a keystroke end the same way: as a move naming the state the tile
- * goes to and where it lands among that state's tiles, which the board hands
- * up. Neither changes what is drawn here. The drop library moves the element it
- * dragged, and a list Vue rendered must not be rearranged under it, so the
- * element goes back where it came from the moment the drop is read; the tile
- * moves when the move comes back down as data. A refused move therefore needs
- * nothing undone, which is what the old drop got wrong: it left the tile in the
- * column the server had just refused.
+ * Nothing places a tile by hand. A tile dragged to another stack ends as a
+ * move naming the state it goes to, which the board hands up; a tile dropped
+ * back among its own stack's tiles moves nothing. The drop library moves the
+ * element it dragged, and a list Vue rendered must not be rearranged under it,
+ * so the element goes back where it came from the moment the drop is read; the
+ * tile moves when the move comes back down as data. A refused move therefore
+ * needs nothing undone, which is what the old drop got wrong: it left the tile
+ * in the column the server had just refused. Several stacks share one `group`
+ * when a tile may cross between them — the columns of a board, or the cells of
+ * one lane.
  *
- * Alt+↑ and Alt+↓ move a focused tile one place up or down its stack, for a
- * reader without a pointer. Several stacks share one `group` when a tile may
- * cross between them — the columns of a board, or the cells of one lane.
- *
- * Without Alt the arrows only move focus. A stack is one Tab stop — the tile
+ * The arrows move focus. A stack is one Tab stop — the tile
  * last focused in it — so a board of a thousand tiles is a handful of stops,
  * not a thousand; ↑ and ↓ walk the stack, Home and End go to its ends, and ←
  * and → go to the nearest stack beside it that holds a tile, in the same row of
@@ -23,13 +21,9 @@
  * Show all toggle is the last step of its stack's walk, so it is reached like a
  * tile and the arrows lead from it back to the tiles.
  *
- * A stack may draw only its first `limit` tiles. It still reads every item, so
- * a move from the keyboard names its true neighbour and its true end.
- *
- * The completed state's stack is ordered by when its items closed, not by
- * hand, so it offers no reorder: a tile does not move within it by drag or by
- * Alt+↑/↓, and a tile dropped on it from another stack is sent with no place,
- * since the newest close leads whatever place the drop measured.
+ * A stack may draw only its first `limit` tiles. A tile dropped on it lands
+ * last until the next read places it, and the completed state's stack, ordered
+ * by when its items closed, takes it on top, since the newest close leads.
  */
 import { computed, ref, watch } from 'vue'
 
@@ -37,7 +31,7 @@ import { useSortable } from '@vueuse/integrations/useSortable'
 import type { SortableEvent } from 'sortablejs'
 
 import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
-import { ordersByClosing, rankBeside } from '@/widgets/work-item-views/utils/boardOrder.ts'
+import { ordersByClosing } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import { afterRelease, endDropClickWait } from '@/widgets/work-item-views/utils/dropClick.ts'
 
@@ -48,7 +42,6 @@ import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts
 
 /** Where a move left the tile, for the sentence that announces it. */
 export interface StackLanding {
-  keyboard: boolean
   position: number
   total: number
 }
@@ -65,7 +58,7 @@ const props = defineProps<{
   /** Each item's open blocker, by item id. */
   waiting: Map<string, string>
   writable: boolean
-  /** The element a keyboard hint is read from, or nothing when no move is possible. */
+  /** The element the keyboard hint is read from. */
   hintId?: string
   /** Draw only this many tiles; every item is still read. */
   limit?: number
@@ -73,7 +66,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   dragging: [active: boolean]
-  edge: [reference: string, edge: 'first' | 'last']
   filter: [token: WorkFilterToken]
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
@@ -82,12 +74,8 @@ const emit = defineEmits<{
 const list = ref<HTMLElement | null>(null)
 /** A release's own task is under way: a click in it is that release, not a press of its own. */
 let releasing = false
-/** Whether a tile may be placed by hand among this stack's tiles. */
-const reorderable = computed(() => !ordersByClosing(props.state))
 /** What the stack says of its order, which a drop into it reads. */
-const order = computed(() => (reorderable.value ? undefined : 'closing'))
-/** The reorder hint a tile is described by, only where it can be reordered. */
-const tileHint = computed(() => (reorderable.value ? props.hintId : undefined))
+const order = computed(() => (ordersByClosing(props.state) ? 'closing' : undefined))
 
 const shown = computed(() =>
   props.limit === undefined ? props.items : props.items.slice(0, props.limit),
@@ -95,7 +83,7 @@ const shown = computed(() =>
 /**
  * The item whose tile is this stack's Tab stop: the one last focused while it is
  * still drawn here, otherwise the first. Held by item rather than by place, so
- * the stop moves with a tile Alt+↓ moved.
+ * the stop moves with its tile when a read puts it elsewhere.
  */
 const active = ref<string | null>(null)
 const stop = computed(() => {
@@ -105,17 +93,6 @@ const stop = computed(() => {
 
 const waitingOn = (item: WorkItemBrief) => props.waiting.get(item.work_item_id) ?? null
 
-/** The reference of the nearest tile beside `element` in one direction. */
-function beside(element: Element, direction: 'next' | 'previous'): string | undefined {
-  let current = direction === 'next' ? element.nextElementSibling : element.previousElementSibling
-  while (current !== null) {
-    const reference = (current as HTMLElement).dataset.reference
-    if (reference) return reference
-    current = direction === 'next' ? current.nextElementSibling : current.previousElementSibling
-  }
-  return undefined
-}
-
 /**
  * The stack a drop ended in, with the dragged element standing in its place there.
  *
@@ -123,15 +100,9 @@ function beside(element: Element, direction: 'next' | 'previous'): string | unde
  * and has no way to read it once more at a release, so a quick hand lets go over
  * a stack it has not read and the element still stands in the last one it did:
  * a column the pointer only passed. So a release over another stack this tile may
- * go to wins, and it takes the place above the first tile whose middle is below
- * the pointer, which is the place the library gives a tile coming in from another
- * stack. Over a column's head it means that column, and it takes the top place: the
- * pointer stands above every tile, and a column scrolled down has tiles above it that
- * are not in sight. A lane's cells share one head between every lane, so that head
- * means no stack. Over the stack it already stands in, the place the library drew
- * stands: its neighbours may still be gliding, so the pointer's height there is no
- * reading. Over anything else, or in a press the browser took back, a release says
- * nothing about where the hand meant.
+ * go to wins. Over a column's head it means that column. A lane's cells share one
+ * head between every lane, so that head means no stack. Over anything else, or in
+ * a press the browser took back, a release says nothing about where the hand meant.
  *
  * The event that ended the drag is not in the library's documented event or its
  * types, though every event it dispatches carries it; production-board-release
@@ -151,13 +122,7 @@ function landedIn(event: SortableEvent): HTMLElement {
     ? head.parentElement?.querySelector<HTMLElement>('.work-item-stack')
     : pointed?.closest<HTMLElement>('.work-item-stack')
   if (!under || under === to || under.dataset.group !== props.group) return to
-  const next = head
-    ? under.firstElementChild
-    : [...under.children].find((tile) => {
-        const { height, top } = tile.getBoundingClientRect()
-        return release.clientY < top + height / 2
-      })
-  under.insertBefore(item, next ?? null)
+  under.append(item)
   return under
 }
 
@@ -176,29 +141,23 @@ function dropped(event: SortableEvent) {
   const { from, item } = event
   const to = landedIn(event)
   const oldIndex = event.oldIndex ?? 0
-  const newIndex = [...to.children].indexOf(item)
   const reference = item.dataset.reference
   const state = to.dataset.state
-  // A stack that orders itself takes a tile back at no place of the hand's.
-  const moved = from !== to || (reorderable.value && oldIndex !== newIndex)
-  const closing = to.dataset.order === 'closing'
-  const rank = closing ? undefined : rankBeside(beside(item, 'previous'), beside(item, 'next'))
-  const landing = {
-    keyboard: false,
-    position: closing ? 1 : newIndex + 1,
-    total: to.children.length,
-  }
+  const total = to.children.length
+  // Last in the stack it went to, or first where the newest close leads.
+  const landing = { position: to.dataset.order === 'closing' ? 1 : total, total }
   // Back where Vue put it; the move is drawn from the data that comes back.
   item.remove()
   from.insertBefore(item, from.children[oldIndex] ?? null)
-  if (moved && reference && state) emit('place', { reference, state, rank }, landing)
+  if (from !== to && reference && state) emit('place', { reference, state }, landing)
 }
 
 const sortable = useSortable(list, [], {
   group: props.group,
   animation: 150,
   disabled: !props.writable,
-  sort: !ordersByClosing(props.state),
+  // No stack is ordered by hand: a tile only crosses to another one.
+  sort: false,
   // The pointer's own copy of the tile, drawn by the page rather than the
   // platform, so it looks the same in every engine and stays on top of a
   // column that clips its overflow.
@@ -221,7 +180,6 @@ watch(
   () => props.group,
   (group) => sortable.option('group', group),
 )
-watch(reorderable, (sort) => sortable.option('sort', sort))
 
 function open(reference: string) {
   if (!releasing) emit('open', reference)
@@ -230,8 +188,6 @@ function open(reference: string) {
 function tabStop(item: WorkItemBrief): 0 | -1 {
   return item.work_item_id === stop.value ? 0 : -1
 }
-
-const STEPS: Record<string, -1 | 1> = { ArrowDown: 1, ArrowUp: -1 }
 
 /** The tiles a stack draws, as the open targets focus lands on. */
 function tilesOf(stack: Element): HTMLElement[] {
@@ -281,7 +237,8 @@ function target(key: string, index: number): HTMLElement | undefined {
  * scroller either, which would slide the focused tile away from the reader.
  */
 function walked(event: KeyboardEvent, index: number) {
-  if (!WALKS.has(event.key) || event.ctrlKey || event.metaKey || event.shiftKey) return
+  if (!WALKS.has(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
+    return
   event.preventDefault()
   target(event.key, index)?.focus()
 }
@@ -291,40 +248,11 @@ function focusAt(index: number) {
   if (list.value !== null) tilesOf(list.value)[index]?.focus()
 }
 
-/** A walk that starts on the cell's toggle rather than on a tile; Alt moves nothing from there. */
+/** A walk that starts on the cell's toggle rather than on a tile. */
 function walkFrom(event: KeyboardEvent, from: HTMLElement | null) {
-  if (event.altKey || list.value === null || from === null) return
+  if (list.value === null || from === null) return
   const index = walkOf(list.value).indexOf(from)
   if (index >= 0) walked(event, index)
-}
-
-function stepped(event: KeyboardEvent, index: number) {
-  const step = STEPS[event.key]
-  if (!event.altKey) {
-    walked(event, index)
-    return
-  }
-  if (!props.writable || !reorderable.value || step === undefined) return
-  if (event.ctrlKey || event.metaKey || event.shiftKey) return
-  event.preventDefault()
-  const item = props.items[index]
-  const neighbour = props.items[index + step] as WorkItemBrief | undefined
-  if (neighbour === undefined) {
-    emit('edge', item.reference, step < 0 ? 'first' : 'last')
-    return
-  }
-  const where = step < 0 ? 'before' : 'after'
-  emit(
-    'place',
-    { reference: item.reference, state: props.state.key, rank: `${where}:${neighbour.reference}` },
-    { keyboard: true, position: index + step + 1, total: props.items.length },
-  )
-}
-
-/** What a tile says it answers to, only where it can answer. */
-const shortcuts = 'Alt+ArrowUp Alt+ArrowDown'
-function keyHint(): string | undefined {
-  return props.writable && reorderable.value ? shortcuts : undefined
 }
 
 defineExpose({ focusAt, walkFrom })
@@ -351,9 +279,8 @@ defineExpose({ focusAt, walkFrom })
         :live="props.live[item.work_item_id] ?? null"
         :filter="props.filter"
         :tab-stop="tabStop(item)"
-        :key-shortcuts="keyHint()"
-        :hint-id="tileHint"
-        @keydown="stepped($event, index)"
+        :hint-id="props.hintId"
+        @keydown="walked($event, index)"
         @filter="emit('filter', $event)"
         @open="open"
       />

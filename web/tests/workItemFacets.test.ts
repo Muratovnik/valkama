@@ -334,6 +334,7 @@ describe('holder', () => {
 describe('parent and steps', () => {
   const child = item({ parent_id: boardItem(3).work_item_id })
   const context = { parentReference: 'MAIN-3' }
+  const unheld = { claimed_by: '', done_by: '', by_previous_holder: false }
 
   test('the parent prints on the flat board, the graph and the card, never in the list or the finder', () => {
     assert.deepEqual(printedOn('parent', child, context), ['tile', 'graph', 'card'])
@@ -342,7 +343,7 @@ describe('parent and steps', () => {
   })
 
   test('a closed tile prints no steps: all of them done is what its column says', () => {
-    const checklist = [{ id: 'a', text: 'a', done: true, claimed_by: '', done_by: '' }]
+    const checklist = [{ id: 'a', text: 'a', done: true, ...unheld }]
     assert.equal(printsFacet('steps', 'tile', item({ checklist })), true)
     assert.equal(printsFacet('steps', 'tile', item({ checklist }, 'done')), false)
     // The list keeps its column.
@@ -354,8 +355,7 @@ describe('parent and steps', () => {
       id: `00000000-0000-4000-8000-00000000030${index}`,
       text: `Step ${index}`,
       done,
-      claimed_by: '',
-      done_by: '',
+      ...unheld,
     }))
     const withSteps = item({ checklist: steps })
     assert.deepEqual(printedOn('steps', withSteps), ['tile', 'list', 'card'])

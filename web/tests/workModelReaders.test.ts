@@ -37,6 +37,7 @@ const acceptedGoal = (extra: Record<string, unknown> = {}) => ({
   container_state: 'in_progress',
   acceptance: { basis: 'owner', at: '2026-01-02T03:04:05Z' },
   workable: false,
+  withheld: ['goal_or_stage'],
   ...extra,
 })
 
@@ -72,14 +73,70 @@ describe('a record of the work model', () => {
 
   it('takes the workable set from the server’s own word', () => {
     const items = [
-      validateWorkItemBrief(brief()),
+      validateWorkItemBrief({ ...brief(), workable: true, withheld: [] }),
       validateWorkItemBrief({
         ...brief(),
         work_item_id: '00000000-0000-4000-8000-000000000099',
         workable: false,
+        withheld: ['not_ready'],
       }),
     ]
     expect([...workableIds(items)]).toEqual([items[0].work_item_id])
+  })
+
+  it('reads why the queue withholds an item, and holds workable to it', () => {
+    const reasons = ['not_ready', 'question']
+    expect(
+      validateWorkItemBrief({ ...brief(), withheld: reasons, workable: false }).withheld,
+    ).toEqual(reasons)
+    // Workable is the same rule read as one bit: nothing withheld, and only then.
+    for (const [workable, withheld] of [
+      [true, ['waits']],
+      [false, []],
+    ] as const) {
+      expect(() => validateWorkItemBrief({ ...brief(), workable, withheld })).toThrow(
+        /workable exactly when nothing is withheld/u,
+      )
+    }
+    // A code this build does not know, a repeated one, and a record without the field.
+    expect(() => validateWorkItemBrief({ ...brief(), withheld: ['busy'] })).toThrow()
+    expect(() =>
+      validateWorkItemBrief({ ...brief(), withheld: ['not_ready', 'not_ready'] }),
+    ).toThrow()
+    const without = brief()
+    delete without.withheld
+    expect(() => validateWorkItemBrief(without)).toThrow()
+  })
+
+  it('reads whose claim lapsed and a step a lapsed holder ticked', () => {
+    const lapsed = {
+      holder: 'codex (session s1)',
+      reason: 'session-ended',
+      at: '2026-01-02T03:04:05Z',
+    }
+    const step = {
+      id: '00000000-0000-4000-8000-000000000011',
+      text: 'One',
+      done: true,
+      claimed_by: '',
+      done_by: 'codex (session s1)',
+      by_previous_holder: true,
+    }
+    const read = validateWorkItemBrief({ ...brief(), lapsed_claim: lapsed, checklist: [step] })
+    expect([read.lapsed_claim, read.checklist[0].by_previous_holder]).toEqual([lapsed, true])
+    // A cause this build does not know, a field the server never sends, and records without them.
+    expect(() =>
+      validateWorkItemBrief({ ...brief(), lapsed_claim: { ...lapsed, reason: 'gone' } }),
+    ).toThrow()
+    expect(() =>
+      validateWorkItemBrief({ ...brief(), lapsed_claim: { ...lapsed, session: 's1' } }),
+    ).toThrow()
+    const without = brief()
+    delete without.lapsed_claim
+    expect(() => validateWorkItemBrief(without)).toThrow()
+    const unflagged: Record<string, unknown> = { ...step }
+    delete unflagged.by_previous_holder
+    expect(() => validateWorkItemBrief({ ...brief(), checklist: [unflagged] })).toThrow()
   })
 })
 

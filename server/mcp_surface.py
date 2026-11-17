@@ -101,8 +101,8 @@ PLANNING_INSTRUCTIONS = (
     " history, and the holder when no session is confirmed."
     " An item raised from a plan carries a source anchor"
     " (path#kb:xxxx) instead of a copy of the plan text."
-    " claim_ready_work_item is the take-next queue: it takes a workable task,"
-    " unclaimed and unblocked in triage or ready."
+    " claim_ready_work_item is the take-next queue of one space; withheld says why"
+    " a task is not workable."
     " Guards refuse a transition: an active state needs a holder, a terminal"
     " state needs every checklist item closed and a summary, a blocked state needs a"
     " linked blocker or a stated reason. Work that is not"
@@ -286,6 +286,9 @@ def _canonical_arguments(name: str, arguments: object) -> dict:
         else:
             resolved.setdefault(target, value)
             given.setdefault(target, argument)
+    says = planning_model.retired_field(unknown)
+    if says is not None:
+        raise planning_api.PlanningHttpError(400, "invalid_request", f"{name}: {says}")
     if unknown:
         raise planning_api.PlanningHttpError(
             400,
@@ -597,16 +600,18 @@ def _report(line: str) -> None:
 def mcp_main() -> None:
     """Own the stdio session and its database handle."""
     conn = connect()
-    pulse: housekeeping.Pulse | None = None
+    loops: list[housekeeping.Background] = []
     try:
         # Before the first request, and bounded: a lease that lapsed while no
         # session ran is released here rather than reported as held to the
-        # first reader. The transcript sweep has no such bound, so it runs
-        # beside the loop and `initialize` never waits for it.
+        # first reader, and the planning sweep repeats that while the loop runs.
+        # The transcript sweep has no such bound, so it runs beside the loop and
+        # `initialize` never waits for it.
         for line in housekeeping.start_up(conn):
             _report(line)
-        housekeeping.start_sweep(conn, _report)
-        pulse = housekeeping.start_pulse(_report)
+        housekeeping.start_transcript_sweep(conn, _report)
+        loops.append(housekeeping.start_pulse(_report))
+        loops.append(housekeeping.start_planning_sweep(_report))
         source_watch = static_assets.SourceWatch(
             static_assets.SOURCE_ROOT, launched_from=launcher.pinned_source_reader()
         )
@@ -615,8 +620,8 @@ def mcp_main() -> None:
         # The client is gone, so a question it asked a moment ago must not wait
         # out the window, or be the reason this process lingers.
         alert_emit.flush()
-        if pulse is not None:
-            pulse.stop()
+        for loop in loops:
+            loop.stop()
         conn.close()
 
 

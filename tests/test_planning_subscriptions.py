@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 import unittest
 from unittest import mock
 
-from server import housekeeping, mcp_surface, store
-from server.planning import api, calls, model, service, subscriptions
+from server import mcp_surface, store
+from server.hooks import notify
+from server.planning import api, calls, model, service, subscriptions, sweep
 
 SESSION = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
 CHILD = "019a3c2e-9999-7c11-9e0f-2f4b6d8a1c3e"
@@ -278,7 +280,7 @@ class LifetimeTests(Harness):
         self.conn.commit()
 
     def sweep(self) -> None:
-        housekeeping.expire_leases(self.conn)
+        sweep.run_pass(self.conn)
 
     def test_a_session_ended_within_its_grace_still_follows(self) -> None:
         self.subscribe(True)
@@ -299,7 +301,7 @@ class LifetimeTests(Harness):
         self.assertEqual([(OTHER, "", 1)], self.rows(), "the mute went too; the live one stays")
         self.assertEqual("", service.get_work_item(self.conn, self.ref)["claim_ref"])
 
-    def test_a_silent_session_lapses_after_the_lease_period(self) -> None:
+    def test_a_silent_session_lapses_after_its_quiet_period(self) -> None:
         self.subscribe(True)
         self.conn.execute(
             "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now','-15 days')"
@@ -308,6 +310,36 @@ class LifetimeTests(Harness):
         self.assertEqual([], self.followers())
         self.sweep()
         self.assertEqual([], self.rows())
+
+    def test_a_subscription_keeps_its_own_fourteen_days_of_silence(self) -> None:
+        # A lease lapses after three days; a subscription is kept for fourteen,
+        # here and in the hook, which reads the rule from its own SQL.
+        self.subscribe(True)
+        self.subscribe(True, ELSEWHERE)
+        silent = {SESSION: "-4 days", OTHER: "-20161 minutes"}  # 14 days and a minute
+        for session, quiet in silent.items():
+            self.conn.execute(
+                "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now',?)"
+                " WHERE id = ?",
+                (quiet, session),
+            )
+        self.conn.commit()
+        self.sweep()
+        self.assertEqual([(SESSION, "", 1)], self.rows())
+        now = time.time()
+        cutoffs = (
+            time.strftime(
+                "%Y-%m-%dT%H:%M:%S", time.gmtime(now - notify.SUBSCRIPTION_QUIET_SECONDS)
+            ),
+            time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now - notify.ENDED_GRACE_SECONDS)),
+        )
+        stands = {
+            session: bool(
+                self.conn.execute("SELECT " + notify._STANDS, (session, *cutoffs)).fetchone()[0]
+            )
+            for session in silent
+        }
+        self.assertEqual({SESSION: True, OTHER: False}, stands)
 
     def test_a_merge_carries_it_to_the_survivor_and_the_item_takes_it_away(self) -> None:
         survivor = self.item("Survivor")

@@ -60,7 +60,7 @@ class Lapsed(Harness):
         self.conn.execute(
             "UPDATE sessions SET last_seen = ? WHERE id = ?",
             (
-                (leases.utc_now() - leases.LEASE_PERIOD).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                (leases.utc_now() - leases.QUIET_PERIOD).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 session,
             ),
         )

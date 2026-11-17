@@ -362,10 +362,16 @@ for (const width of [1280, 390]) {
 }
 
 const steps = [
-  { id: '123e4567-e89b-42d3-a456-426614174201', text: LONG, done: true, done_by: 'agent' },
+  {
+    id: '123e4567-e89b-42d3-a456-426614174201',
+    text: LONG,
+    done: true,
+    done_by: 'agent',
+    by_previous_holder: false,
+  },
   { id: '123e4567-e89b-42d3-a456-426614174202', text: LONG, done: false, claimed_by: 'agent' },
   { id: '123e4567-e89b-42d3-a456-426614174203', text: 'Короткий шаг', done: false },
-].map((step) => ({ claimed_by: '', done_by: '', ...step }))
+].map((step) => ({ claimed_by: '', done_by: '', by_previous_holder: false, ...step }))
 
 for (const width of [1280, 390]) {
   test(`a step's box stands on the checklist's edge at ${width}px`, async ({ page }) => {

@@ -615,6 +615,7 @@ def _update(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     naming it, so who hears the items this description named is `mentions_told`.
     """
 
+    _refuse_retired_fields(payload)
     if payload.get("mentions") is None:
         return _edited(conn, payload)
     with _all_or_nothing(conn):
@@ -642,7 +643,6 @@ def _edited(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         labels_remove=payload.get("labels_remove"),
         kind=_optional_text(payload, "kind"),
         parent=_optional_text(payload, "parent"),
-        rank=_optional_text(payload, "rank"),
         projects=payload.get("projects"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
@@ -653,14 +653,22 @@ def _delete(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.delete_work_item(conn, _text(payload, "id"))
 
 
+def _refuse_retired_fields(payload: Mapping[str, object]) -> None:
+    """Refuse a write that names a field no input takes any more, before it writes."""
+
+    says = model.retired_field(payload)
+    if says is not None:
+        raise PlanningHttpError(400, "invalid_request", says)
+
+
 def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    _refuse_retired_fields(payload)
     return service.transition_work_item(
         conn,
         _text(payload, "id"),
         _text(payload, "state"),
         reason=str(payload.get("reason") or ""),
         force=_flag(payload, "force"),
-        rank=_optional_text(payload, "rank"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
         acceptance=payload.get("acceptance"),
@@ -682,6 +690,9 @@ def _claim_ready(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dic
     picked = service.claim_ready_work_item(
         conn,
         space=_optional_text(payload, "space"),
+        within=_optional_text(payload, "within"),
+        label=_optional_text(payload, "label"),
+        project=_optional_text(payload, "project"),
         author=_author(payload),
     )
     return {"interface_version": PLANNING_API_INTERFACE, "work_item": picked}
@@ -1092,7 +1103,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         frozenset({"kind", "prompt", "fields", "execution_id", "session_id", "expires_at"}),
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
-    ("transition", frozenset({"state", "reason", "force", "rank", "acceptance"})),
+    ("transition", frozenset({"state", "reason", "force", "acceptance"})),
 )
 #: What a creation may do to the item it just made, after making it and in this
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
@@ -1177,6 +1188,9 @@ def _steps(
             if not isinstance(entry, Mapping):
                 raise PlanningHttpError(400, "invalid_request", f"{label} must be an object", step)
             unknown = sorted(set(entry) - fields)
+            says = model.retired_field(unknown)
+            if says is not None:
+                raise PlanningHttpError(400, "invalid_request", f"{label}: {says}", step)
             if unknown:
                 raise PlanningHttpError(
                     400,

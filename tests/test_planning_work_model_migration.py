@@ -691,7 +691,26 @@ class MigratedStoreTests(StoreCase):
         )
         self.assertIsNone(self.item("ALT-1")["acceptance"])
 
-    def test_m4_releases_every_container_and_opens_the_accepted_ones(self) -> None:
+    def test_items_drops_the_order_set_by_hand_and_indexes_a_state_without_it(self) -> None:
+        fresh = os.path.join(self.directory.name, "fresh", "valkama.sqlite3")
+        os.makedirs(os.path.dirname(fresh))
+        store.connect(fresh).close()
+        for path in (self.path, fresh):
+            with self.subTest(store=os.path.basename(os.path.dirname(path))):
+                conn = sqlite3.connect(path)
+                try:
+                    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(work_items)")}
+                    indexed = [
+                        str(row[2]) for row in conn.execute("PRAGMA index_info(work_items_state)")
+                    ]
+                finally:
+                    conn.close()
+                self.assertNotIn("position", columns)
+                self.assertEqual(["planning_space_id", "state_id"], indexed)
+        [items] = [step for step in self.report["steps"] if step["name"] == "items"]
+        self.assertIn("work_items_state", items["result"]["indexes_and_triggers_recreated"])
+
+    def test_containers_releases_every_container_and_opens_the_accepted_ones(self) -> None:
         first = self.item("WM-1")
         self.assertEqual(("", None), (first["claim_ref"], first["claim_call_id"]))
         self.assertEqual("", json.loads(first["checklist"])[0]["claimed_by"])
@@ -1276,7 +1295,7 @@ FAULTS = (
     fault("indexes", "DROP INDEX work_items_parent"),
     fault(
         "identities",
-        "UPDATE work_items SET position = 99 WHERE work_item_id = ?",
+        "UPDATE work_items SET title = 'Renamed by a fault' WHERE work_item_id = ?",
         lambda ids: (ids["WM-9"],),
     ),
     fault(

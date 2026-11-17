@@ -44,7 +44,14 @@ function space(labelled: boolean) {
       kind: index % 2 ? 'bug' : 'improvement',
       claim_ref: 'codex',
       checklist: [
-        { id: identity(3000 + index), text: 'Step', done: false, claimed_by: '', done_by: '' },
+        {
+          id: identity(3000 + index),
+          text: 'Step',
+          done: false,
+          claimed_by: '',
+          done_by: '',
+          by_previous_holder: false,
+        },
       ],
     }),
   )
@@ -218,6 +225,7 @@ test('a list one row short of a window paints its first rows first, then all of 
       done: false,
       claimed_by: '',
       done_by: '',
+      by_previous_holder: false,
     })),
     updated_at: '2020-08-28T20:08:00Z',
   })

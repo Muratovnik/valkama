@@ -473,7 +473,7 @@ class WatchedTests(Harness):
         self.agent("apply_work_item_changes", {"sessionId": q}, id=self.s2, subscribe=True)
         self.agent("claim_work_item", {"sessionId": x}, id=self.t1)
         self.conn.execute(
-            "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now','-15 days')"
+            "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now','-4 days')"
             " WHERE id = ?",
             (q,),
         )

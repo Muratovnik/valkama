@@ -148,6 +148,7 @@ const step = (index: number, text: string, overrides: object) => ({
   done: false,
   claimed_by: '',
   done_by: '',
+  by_previous_holder: false,
   ...overrides,
 })
 
@@ -192,11 +193,13 @@ export const heldCard = (read: Record<string, unknown>) => ({
     step(3, 'Done in Codex, as it was first opened', {
       done: true,
       done_by: `codex (session ${FIRST_OPEN})`,
+      by_previous_holder: false,
       executor: executors.firstOpen,
     }),
     step(4, 'Done by a session its client has lost', {
       done: true,
       done_by: `claude (session ${LOST})`,
+      by_previous_holder: false,
       executor: executors.lost,
     }),
     step(5, 'Held by an attempt with no window', {

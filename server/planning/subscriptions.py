@@ -22,18 +22,29 @@ subscribes a session itself (`follow`) only to what that session's work is for: 
 goal an agent creates is followed by the conversation of its session, even when a
 subagent created it, since the goal outlives the subagent.
 
-It lapses with its session, by the rule a claim lapses by (`leases`): a session
-gone without a row, failed, ended longer ago than `leases.ENDED_GRACE`, or silent
-for `leases.LEASE_PERIOD`. A lapsed one is read as gone at once and removed by the
-start-up sweep that releases lapsed claims; a session coming back within its
-grace finds it standing, as it finds its claims.
+It lapses with its session, by the rule a claim lapses by (`leases`) but with a
+silence of its own: a session gone without a row, failed, ended longer ago than
+`leases.ENDED_GRACE`, or silent for `QUIET_PERIOD`. That is longer than a lease's,
+because the costs differ: a subscription left over costs a row and a name among
+the subscribers, while one lost leaves a session deaf to the owner's answer it
+still waits for; a lease holds work away from other sessions. A lapsed one is
+read as gone at once and removed by the planning sweep (`sweep`) that releases
+lapsed claims; a session coming back within its grace finds it standing, as it
+finds its claims.
 """
 
 from __future__ import annotations
 
+import itertools
 import sqlite3
+from collections.abc import Iterator
+from datetime import timedelta
 
 from . import calls, leases, model, participants
+
+#: How long a session may stay silent before what it follows lapses. The hook's
+#: `notify.SUBSCRIPTION_QUIET_SECONDS` is the same number, held equal by a test.
+QUIET_PERIOD = timedelta(days=14)
 
 #: What `subscribe` says the session now does about the item.
 FOLLOWING = "following"
@@ -232,14 +243,18 @@ def subscribers(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
     return listed
 
 
-def expire(conn: sqlite3.Connection) -> int:
-    """Remove every subscription and mute whose session has lapsed; how many went."""
+def lapsed(conn: sqlite3.Connection) -> Iterator[tuple[str, str, str]]:
+    """Each subscription or mute whose session has lapsed: its item, session and agent."""
 
-    gone = [
-        (str(row["work_item_id"]), str(row["follower"]), str(row["follower_agent"]))
-        for row in conn.execute(_LISTED)
-        if _lapsed(row)
-    ]
+    for row in conn.execute(_LISTED).fetchall():
+        if _lapsed(row):
+            yield str(row["work_item_id"]), str(row["follower"]), str(row["follower_agent"])
+
+
+def expire(conn: sqlite3.Connection, *, limit: int | None = None) -> int:
+    """Remove every subscription and mute whose session lapsed, at most `limit`; how many went."""
+
+    gone = list(itertools.islice(lapsed(conn), limit))
     conn.executemany(
         "DELETE FROM work_item_subscriptions"
         " WHERE work_item_id = ? AND session_id = ? AND agent_id = ?",
@@ -272,5 +287,5 @@ def carry(conn: sqlite3.Connection, merged_id: str, survivor_id: str) -> None:
 def _lapsed(row: sqlite3.Row) -> bool:
     """Whether a claim the same call took would be released now: stale past its grace."""
 
-    found = leases.of_call("", row)
+    found = leases.of_call("", row, quiet=QUIET_PERIOD)
     return found.state != leases.LIVE and not found.in_grace

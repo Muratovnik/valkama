@@ -404,18 +404,21 @@ _SCOPE = (
     " AND {stands}) GROUP BY work_item_id ORDER BY MAX(id) DESC LIMIT {most}"
 )
 #: Whether the recipient's session still stands behind what it subscribed, by the rule a
-#: claim lapses by (`planning.leases`): a row, not failed, seen within the lease period,
-#: or ended within its grace. Every row of the recipient is its own session's, so one
+#: claim lapses by (`planning.leases`) with a subscription's own silence: a row, not
+#: failed, seen within `planning.subscriptions.QUIET_PERIOD`, or ended within its grace. Every row of the recipient is its own session's, so one
 #: test of that session answers for all of them, inside the queries the hook makes anyway.
 _STANDS = (
     "EXISTS (SELECT 1 FROM sessions v WHERE v.id = ? AND ((v.status NOT IN ('ended', 'failed')"
     " AND substr(v.last_seen, 1, 19) >= ?) OR (v.status = 'ended'"
     " AND substr(v.ended_at, 1, 19) > ?)))"
 )
-#: `leases.LEASE_PERIOD` and `leases.ENDED_GRACE` in seconds, held equal by a test: the
-#: hook does not import the planning package to read two numbers.
-LEASE_SECONDS = 14 * 24 * 3600
+#: `subscriptions.QUIET_PERIOD`, `leases.ENDED_GRACE` and `leases.QUIET_PERIOD` in seconds,
+#: held equal by a test: the hook does not import the planning package to read three numbers.
+SUBSCRIPTION_QUIET_SECONDS = 14 * 24 * 3600
 ENDED_GRACE_SECONDS = 12 * 3600
+#: How long a session may be silent and still work on its tree (`watched`), as a
+#: participant may (`planning.leases.session_live`).
+LEASE_QUIET_SECONDS = 3 * 24 * 3600
 _ITEMS = (
     "SELECT w.work_item_id, s.key, w.number, w.title, w.claim_ref, w.checklist, w.revision,"
     " (SELECT MAX(e.id) FROM work_item_events e WHERE e.work_item_id = w.work_item_id),"
@@ -497,7 +500,7 @@ def _in_scope(
     now = time.time()
     stands = (
         session_id,
-        time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now - LEASE_SECONDS)),
+        time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now - SUBSCRIPTION_QUIET_SECONDS)),
         time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now - ENDED_GRACE_SECONDS)),
     )
     parameters = (
@@ -639,7 +642,7 @@ def watched(conn: sqlite3.Connection, session_id: str) -> frozenset[str]:
     package, which it does not load to answer a tool call.
     """
 
-    since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - LEASE_SECONDS))
+    since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - LEASE_QUIET_SECONDS))
     if conn.execute(_LIVE, (session_id, since)).fetchone() is None:
         return frozenset()
     suffix = holder_suffix(session_id, None)
@@ -1430,7 +1433,7 @@ def _followed(
     wakes, so a subscriber's share of a person's news is read from the other place,
     as another session's is, and wakes nobody. What is addressed to the recipient, a
     reply in its thread or the answer it awaited, is the person's part, and wakes as
-    it did. The kinds are other sessions' kinds: no field edit and no rank.
+    it did. The kinds are other sessions' kinds: no field edit.
     """
 
     from ..planning import person_events

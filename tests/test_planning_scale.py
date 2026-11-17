@@ -28,8 +28,8 @@ class PlanningScaleTests(unittest.TestCase):
             state = space["workflow"]["states"][0]["state_id"]
             identities = [str(uuid.uuid4()) for _ in range(1200)]
             conn.executemany(
-                "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,title,parent_id,position)"
-                " VALUES(?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,title,parent_id)"
+                " VALUES(?,?,?,?,?,?,?,?)",
                 [
                     (
                         identity,
@@ -40,7 +40,6 @@ class PlanningScaleTests(unittest.TestCase):
                         "container" if index == 0 else "task",
                         f"Task {index + 1}",
                         identities[0] if index == 1 else None,
-                        index,
                     )
                     for index, identity in enumerate(identities)
                 ],
@@ -66,7 +65,9 @@ class PlanningScaleTests(unittest.TestCase):
             self.assertEqual("goal", items[0]["kind"])
             self.assertFalse(items[0]["workable"])
             self.assertEqual(identities[0], items[1]["parent_id"])
-            self.assertTrue(items[2]["workable"])
+            # Every item stands in triage, and the one under the goal says so of the goal too.
+            self.assertEqual(["not_ready", "ancestor_triage"], items[1]["withheld"])
+            self.assertEqual(["not_ready"], items[2]["withheld"])
             self.assertEqual({1}, {item["comment_count"] for item in items})
 
     def test_an_item_read_costs_the_same_however_many_links_it_has(self) -> None:
@@ -159,12 +160,13 @@ class PlanningScaleTests(unittest.TestCase):
             self.assertEqual(few_cost, many_cost)
 
     def test_a_brief_read_costs_the_same_however_long_the_history(self) -> None:
-        """The preview's read: at most 12 statements and one size for 2 or 200 comments.
+        """The preview's read: at most 13 statements and one size for 2 or 200 comments.
 
         Counted on the whole exact-scope answer, binding included, for each shape
         that asks one more statement: open and startable (its blockers), held by a
         recorded call (that call), and finished while still held (the call and
-        when it closed).
+        when it closed). The projects the item names, its open questions to the
+        owner and the claim the sweep released are one statement each.
         """
 
         with tempfile.TemporaryDirectory() as directory:
@@ -257,4 +259,4 @@ class PlanningScaleTests(unittest.TestCase):
                     with self.subTest(shape=shape):
                         few, many = read(items[2]), read(items[200])
                         self.assertEqual(few, many)
-                        self.assertLessEqual(few[0], 12)
+                        self.assertLessEqual(few[0], 13)

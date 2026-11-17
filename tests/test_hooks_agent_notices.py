@@ -29,10 +29,10 @@ import time
 import unittest
 from unittest import mock
 
-from server import housekeeping, mcp_surface, store
+from server import mcp_surface, store
 from server.alerts import settings as alert_settings
 from server.hooks import notify
-from server.planning import api, calls, service
+from server.planning import api, calls, service, sweep
 
 B = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
 CHILD = "019a3c2e-9999-7c11-9e0f-2f4b6d8a1c3e"
@@ -589,7 +589,7 @@ class WhoListensTests(Harness):
             (B,),
         )
         self.conn.commit()
-        housekeeping.expire_leases(self.conn)
+        sweep.run_pass(self.conn)
         self.comment(AS_A, self.followed, "After the session lapsed")
         told = self.hook()
         assert told is not None, "B held the item its lapsed lease released: it hears so once"
@@ -733,11 +733,17 @@ class LapseTests(Harness):
         self.assertIn("marker LP-1", orchestrator)
         self.assertEqual([CHILD], [entry["agent"] for entry in self.listed])
 
-    def test_the_hook_reads_the_lease_periods_the_planning_rule_has(self) -> None:
-        from server.planning import leases
+    def test_the_hook_reads_the_periods_the_planning_rule_has(self) -> None:
+        from server.planning import leases, subscriptions
 
-        self.assertEqual(leases.LEASE_PERIOD.total_seconds(), notify.LEASE_SECONDS)
+        # A subscription keeps its own silence, not a lease's: the hook reads that one.
+        self.assertEqual(
+            subscriptions.QUIET_PERIOD.total_seconds(), notify.SUBSCRIPTION_QUIET_SECONDS
+        )
+        self.assertNotEqual(leases.QUIET_PERIOD, subscriptions.QUIET_PERIOD)
         self.assertEqual(leases.ENDED_GRACE.total_seconds(), notify.ENDED_GRACE_SECONDS)
+        # The tree a session works on is a participant's, live by the lease's silence.
+        self.assertEqual(leases.QUIET_PERIOD.total_seconds(), notify.LEASE_QUIET_SECONDS)
 
 
 class LockTests(Harness):

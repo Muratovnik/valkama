@@ -14,11 +14,16 @@
   "acceptance": null,
   "started_at": null,
   "waits_for": [],
-  "workable": true,
+  "workable": false,
+  "withheld": [
+    "not_ready",
+    "question"
+  ],
   "projects": [],
   "claim_ref": "",
   "claim_state": null,
   "last_claim_ref": null,
+  "lapsed_claim": null,
   "closed_at": null,
   "labels": [],
   "source": "",

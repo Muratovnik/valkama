@@ -123,7 +123,7 @@ class McpSurfaceTestCase(unittest.TestCase):
             mock.patch.object(sys, "stdin", Stdin(b"")),
             mock.patch.object(mcp_surface, "connect", return_value=connection),
             mock.patch.object(housekeeping, "start_up", return_value=[]),
-            mock.patch.object(housekeeping, "start_sweep", return_value=None),
+            mock.patch.object(housekeeping, "start_transcript_sweep", return_value=None),
             mock.patch.object(tray, "start", return_value=None),
         ):
             mcp_surface.mcp_main()
@@ -134,7 +134,7 @@ class McpSurfaceTestCase(unittest.TestCase):
         with (
             mock.patch.object(mcp_surface, "connect", return_value=connection),
             mock.patch.object(housekeeping, "start_up", return_value=[]),
-            mock.patch.object(housekeeping, "start_sweep", return_value=None),
+            mock.patch.object(housekeeping, "start_transcript_sweep", return_value=None),
             mock.patch.object(mcp_surface, "_mcp_loop", side_effect=RuntimeError("stdin failed")),
             self.assertRaisesRegex(RuntimeError, "stdin failed"),
         ):
@@ -257,7 +257,7 @@ class StartUpMaintenanceTests(McpSurfaceTestCase):
             elapsed = time.monotonic() - started
             release.set()
             for thread in threading.enumerate():
-                if thread.name == housekeeping.SWEEP_THREAD:
+                if thread.name == housekeeping.TRANSCRIPT_SWEEP_THREAD:
                     thread.join(10)
         self.assertEqual(1, len(answers))
         self.assertLess(elapsed, 5.0)
@@ -2330,79 +2330,27 @@ class ServerInstructionTests(unittest.TestCase):
         self.assertIn("never in a Valkama comment or description", text)
 
 
-class RankToolTests(WireCallTestCase):
-    """`rank` on the writes an agent already has: where an item goes in its state."""
+class RetiredRankTests(WireCallTestCase):
+    """`rank` is gone from the writes that took it: the order of work is computed."""
 
-    def setUp(self) -> None:
-        super().setUp()
-        self.items = [
-            planning_service.create_work_item(self.conn, space=SPACE_KEY, title=title)["reference"]
-            for title in ("First", "Second", "Third")
-        ]
-        self.queued = planning_service.create_work_item(
-            self.conn, space=SPACE_KEY, title="Queued", state="ready", acceptance="assignment"
-        )["reference"]
-        self.conn.commit()
-
-    def order(self, state: str = "triage") -> list[str]:
-        return [
-            item["reference"]
-            for item in planning_service.list_work_items(self.conn, space=SPACE_KEY, state=state)
-        ]
-
-    def test_the_writes_that_place_an_item_publish_rank_and_no_new_tool_does(self) -> None:
+    def test_no_write_publishes_rank_and_a_call_naming_it_is_refused_unwritten(self) -> None:
         schemas = {tool["name"]: tool["inputSchema"] for tool in planning_tools.TOOLS}
         batch = schemas["apply_work_item_changes"]["properties"]
-        self.assertEqual("string", batch["update"]["properties"]["rank"]["type"])
-        transition = batch["transition"]
-        self.assertIn("rank", transition["properties"])
-        self.assertFalse({"rank_work_item", "place_work_item", "reorder_work_item"} & set(schemas))
-
-    def test_an_update_places_the_item_and_says_so(self) -> None:
-        answer = self.answer(
-            "apply_work_item_changes",
-            {"id": self.items[2], "update": {"rank": f"before:{self.items[0]}"}},
+        self.assertNotIn("rank", batch["update"]["properties"])
+        self.assertNotIn("rank", batch["transition"]["properties"])
+        item = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="First")
+        self.conn.commit()
+        error = self.refusal(
+            "apply_work_item_changes", {"id": item["reference"], "update": {"rank": "first"}}
         )
-        self.assertEqual(["rank"], answer["applied"]["update"])
-        self.assertEqual([self.items[2], *self.items[:2]], self.order())
-        [call] = self.calls()
-        self.assertEqual("apply_work_item_changes", call["tool"])
-
-    def test_a_transition_and_a_batch_place_the_item_in_its_new_state(self) -> None:
-        self.answer(
-            "apply_work_item_changes",
-            {
-                "id": self.items[0],
-                "transition": {"state": "ready", "rank": "first", "acceptance": "assignment"},
-            },
+        self.assertEqual("invalid_request", error["code"])
+        self.assertEqual(
+            "update: rank is retired: the order of work is computed — urgent, started, a goal"
+            " or stage under way, priority, age",
+            error["message"],
         )
-        self.assertEqual([self.items[0], self.queued], self.order("ready"))
-        answer = self.answer(
-            "apply_work_item_changes",
-            {
-                "id": self.items[1],
-                "transition": {
-                    "state": "ready",
-                    "rank": f"after:{self.items[0]}",
-                    "acceptance": "assignment",
-                },
-            },
-        )
-        self.assertEqual({"transition": {"state": "ready"}}, answer["applied"])
-        self.assertEqual([self.items[0], self.items[1], self.queued], self.order("ready"))
-
-    def test_a_placement_the_store_cannot_follow_is_refused_and_writes_nothing(self) -> None:
-        for rank, message in (
-            ("top", "rank must be first, last, before:<work item> or after:<work item>"),
-            (f"after:{self.queued}", f"{self.queued} is in Ready, not Triage"),
-        ):
-            with self.subTest(rank=rank):
-                error = self.refusal(
-                    "apply_work_item_changes", {"id": self.items[0], "update": {"rank": rank}}
-                )
-                self.assertEqual("invalid_request", error["code"])
-                self.assertIn(message, error["message"])
-        self.assertEqual(self.items, self.order())
+        after = planning_service.get_work_item(self.conn, item["reference"])
+        self.assertEqual(item["revision"], after["revision"])
         self.assertEqual([], self.calls())
 
 
@@ -2818,8 +2766,10 @@ class ChainToolTests(WireCallTestCase):
 
     def setUp(self) -> None:
         super().setUp()
+        # Accepted, so the work under it is too: under a goal in triage the queue
+        # would give none of it.
         self.root = planning_service.create_work_item(
-            self.conn, space=SPACE_KEY, title="Root", kind="goal"
+            self.conn, space=SPACE_KEY, title="Root", kind="goal", acceptance="assignment"
         )["reference"]
         self.children: dict[str, str] = {}
         for name, state in (
@@ -2861,9 +2811,9 @@ class ChainToolTests(WireCallTestCase):
                 "UPDATE work_items SET created_at = ?, updated_at = ? WHERE work_item_id = ?",
                 (stamp, stamp, done["work_item_id"]),
             )
-        self.found = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="found")[
-            "reference"
-        ]
+        self.found = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="found", state="ready", acceptance="assignment"
+        )["reference"]
         planning_service.link_work_items(
             self.conn, self.found, self.children["ready"], "discovered-from"
         )
@@ -2936,8 +2886,6 @@ class ChainToolTests(WireCallTestCase):
         )
         self.assertEqual((False, None), (answer["truncated"], answer["next_offset"]))
         claimed = answer["open_members"][-2]
-        # A row's rank is the one the whole chain gives that member.
-        ranks = {member["reference"]: member["rank"] for member in self.whole()["members"]}
         self.assertEqual(
             {
                 "reference": self.children["claimed"],
@@ -2948,7 +2896,8 @@ class ChainToolTests(WireCallTestCase):
                 "claim_state": "unconfirmed",
                 "workable": False,
                 "parent_reference": self.root,
-                "rank": ranks[self.children["claimed"]],
+                # The queue does not give a held task: it has no place in it.
+                "queue_order": None,
             },
             claimed,
         )
@@ -2957,10 +2906,20 @@ class ChainToolTests(WireCallTestCase):
         for row in answer["open_members"]:
             self.assertEqual(states[row["reference"]], row["claim_state"], row["reference"])
         self.assertIsNone(answer["open_members"][3]["parent_reference"])
-        # Inside a group the rows follow the rank: the two ready ones, the rest.
+        # Inside a group the rows follow the members' order: the two ready ones, the rest.
+        members = self.whole()["members"]
+        place = {member["reference"]: index for index, member in enumerate(members)}
         rows = answer["open_members"]
         for group in (rows[2:4], rows[4:]):
-            self.assertLess(group[0]["rank"], group[1]["rank"])
+            self.assertLess(place[group[0]["reference"]], place[group[1]["reference"]])
+        # A row's queue_order is the one the whole chain gives that member: the ready
+        # task under the goal at work comes before the one found outside it.
+        orders = {member["reference"]: member["queue_order"] for member in members}
+        self.assertEqual(
+            [orders[row["reference"]] for row in rows], [row["queue_order"] for row in rows]
+        )
+        self.assertEqual([None, None, 1, 2, None, None], [row["queue_order"] for row in rows])
+        self.assertNotIn("rank", rows[0])
 
     def test_open_members_page_until_next_offset_is_null(self) -> None:
         seen: list[str] = []

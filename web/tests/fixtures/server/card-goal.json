@@ -50,7 +50,11 @@
         "updated_at": "2026-01-02T03:04:05Z",
         "closed_at": null,
         "last_claim_ref": null,
+        "withheld": [
+          "goal_or_stage"
+        ],
         "workable": false,
+        "lapsed_claim": null,
         "claim": null,
         "description": "",
         "summary": null,

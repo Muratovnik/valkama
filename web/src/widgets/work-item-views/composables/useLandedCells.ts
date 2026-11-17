@@ -1,6 +1,6 @@
 /**
- * The lane cells a move has landed in past what they draw. A card dropped or
- * moved to the fourth place of a cell that draws three is drawn there rather
+ * The lane cells a move has landed in past what they draw. A card dropped in
+ * the fourth place of a cell that draws three is drawn there rather
  * than hidden behind a count that just changed, so the cell it went to opens.
  * Keyed by lane and state: a landing opens that cell of that lane only.
  */

@@ -58,7 +58,8 @@ splitting one, or handing items to other agents.
    merge the new item into one that is the same change (`merge_work_items`)
    and link a related one; an empty `similar` does not rule out a duplicate.
 4. **Claim before working.** `claim_work_item`, or `claim_ready_work_item` to
-   take the next workable task of a space. A claim is atomic and refuses naming
+   take the next workable task of a space: accepted work in a ready state, never
+   triage; a record's `withheld` says why a task is not given. A claim is atomic and refuses naming
    the holder when someone else has the item. It also starts the work: a task
    in a triage, deferred or ready state moves to the first active state, and the
    acknowledgement's `started` says so. Send no separate transition to start.
@@ -71,12 +72,13 @@ The holder is the session your client proved, written as
 for your call, and the holder only when no session is confirmed. Sign every
 call with the same `author`.
 
-A claim is a lease. It reads `live` while its session is active, `stale` once
-the session ended or was quiet for 14 days, and `unconfirmed` when no session
-was proved. A stale claim is taken over without `force`; a live one is
-someone's work, so take it over only on an instruction that says so. A session
-that ended keeps its claims for 12 hours: resuming it makes them `live` again,
-and `claim_ready_work_item` does not hand them out until then.
+A claim is a lease: `live` while its session is active, `stale` once it ended
+or was quiet 3 days, `unconfirmed` when no session was proved, lapsing after 3
+days without an event on the item. An open question to the owner there stops
+the count; your steps lapse with your claim. Take a stale claim over without
+`force`, a live one only on an instruction that says so. An ended session keeps
+its claims 12 hours: resuming makes them `live`, and the queue leaves them.
+An item's `lapsed_claim` names whose claim lapsed, why and when, until the next claim.
 `release: true` gives an item back and returns it from the active state to a
 ready one, unless a checklist step of it is still claimed; a blocked one stays.
 With no ready state to return to, the release is refused: move the item first.
@@ -202,16 +204,9 @@ the root of its own thread, posts what follows as replies there, and hands the
 root's `comment_id` back to the agent that delegated.
 
 **A list under a comment.** When a report or a comment offers several findings
-for the owner to choose from, put them under it as `list`: `{"label": "What to
-take on", "options": [{"id": "a", "label": "Widen the check", "recommended":
-true, "why": "Two of the five misses are its."}, …]}`, up to 20 options written as
-a question's options are.
-The batch's `comment`, `comments` and `summary` take it, on a root only, and the
-comment and its list are one write; the answer adds `list_request_id`. It is a question of one
-`multi_choice` field, `items`, which the owner ticks with one button: its answer is
-`{"items": ["a"]}`, told to you and the holders as `question_answered`. Nobody
-waits for it: it raises no alert and is not among the questions waiting for the
-owner. Read it with the item's questions, where it carries `comment_id`.
+for the owner to choose from, put them under it as `list`, on a root only; the
+owner ticks the ones to take on ([its form and answer](references/tools.md#comments-and-threads)).
+Nobody waits for it: it raises no alert and is not among the questions waiting for the owner.
 
 **Telling another item.** A number in a text is a link and tells nobody. To tell
 the work on another item, name it in `mentions`: the batch's `comment`,
@@ -256,27 +251,27 @@ that names it. A reply and a question's thread take no mark.
 
 Steps of the same change stay on the checklist; a link is for separate work.
 
-**Order.** Inside a state, items keep the order the board shows and
-`claim_ready_work_item` takes work in. The batch's `update` and
-`transition` take `rank`: `first`, `last`, `before:MAIN-12` or
-`after:MAIN-12`, naming an item in the same state. Placing an item first is
-what makes it next; priority only breaks a tie.
+**Order.** The order of work is computed, and nothing sets it: urgent first,
+then work already started, then tasks of a goal or stage already under way,
+then priority, then age. A list row the queue gives says its `queue_order`, 1
+being what `claim_ready_work_item` gives next; any other row says `withheld`.
+The queue is one space's: `space`, or that of `within`, a goal or stage whose
+work it keeps at any depth, or else your session's space; `label` keeps the
+tasks carrying that label, `project` those naming that project.
 
 **Priority.** `urgent`: blocks work or loses data. `high`: serious; could block
 work. `medium`: noticeably affects work, with a workaround. `low`: minor. A label
-is not a scale. How much an item matters goes in priority and what comes next
-goes in rank. Asked to rate work along something an item has no field for, ask
+is not a scale. How much an item matters goes in priority; what comes next
+follows from it. Asked to rate work along something an item has no field for, ask
 the owner how it maps before writing it to many items.
 
-**Labels.** `labels` in an edit replaces the whole set. To add one, send
-`labels_add`; to take one off, `labels_remove`. Neither needs the labels the item
-already has. An edit that changes the set leaves a `labels_changed` event in the
-history with the set before and after, so who changed the labels and from what
-can be read back.
+**Labels.** `labels` replaces the whole set; `labels_add` and `labels_remove`
+change it: see [the tool reference](references/tools.md#creating-an-item).
 
-**Reading.** `get_work_item` answers with the card: the fields, the description,
-the checklist with each condition's id, the summary, and `parts`, which lists
-every other part the item has with its count and size. Read a part by name in
+**Reading.** `get_work_item` answers with the card: the fields, `projects` (the
+projects the item changes) among them, the description, the checklist with each
+condition's id, the summary, and `parts`, which lists every other part the item
+has with its count and size. Read a part by name in
 `parts` when the work needs it: `comments` for the discussion, `events` for who
 did what, `claim` for the lease and when it lapses, `links`, `refs`,
 `questions`, `mentions`, `sessions`, `images`, `subscribers`. `unresolved`,
@@ -284,7 +279,7 @@ did what, `claim` for the lease and when it lapses, `links`, `refs`,
 newest n events. To refresh part of a long description, read `parts: sections`
 for its keys and sizes, then `section` with the keys you need. After a resume or
 a compaction the session start may bring a Valkama note: what you hold, each
-item's state and its next condition.
+item's state, its next condition and the root of its project.
 
 In the comments part each root carries `replies` and `last_reply`, so a reply
 in an old thread lifts it into the default read; while `truncated` is true, read
@@ -403,22 +398,19 @@ option refused; `status` tells a list not sent yet (`pending`) from one sent emp
 
 When two items turn out to be one change — the same finding filed twice, one
 cause found from two places — `merge_work_items` folds them into the item that
-survives (`id`), with `items` the ones that fold in and a `reason`. The
-survivor takes their steps (ids, ticks and step claims kept), discussion
-threads whole, questions with their replies, refs, links and projects (a project
-more than one of them names keeps the strongest source: named, then commits, then
-migrated); a report's thread stays on the merged item with the report. A list goes
-with the comment it stands under, so a report's list stays with the report. Each merged item is linked
-`duplicates` to it, gets a summary naming it and closes in its cancelled state. It is refused, writing nothing,
-for an item another session holds (unless `force`), a closed item, an item in
-another space, a goal or stage with a task, or a merged item with children. Merge before handing the work to
-anyone.
+survives (`id`), with `items` the ones that fold in and a `reason`. Each merged
+item is linked `duplicates` to it and closes in its cancelled state; what moves,
+what stays and when it is refused is in [the tool reference](references/tools.md#merging).
+Merge before handing the work to anyone.
 
 ## Close
 
 1. Tick the steps that were done. A step still open keeps the item from
    completing: do it, or file it as an item of its own linked
-   `discovered-from` this one and leave it off this checklist.
+   `discovered-from` this one and leave it off this checklist. A step marked
+   `by_previous_holder` was ticked by a holder whose claim lapsed: check the work
+   and tick it again, or reopen it; until then review and a completed state are
+   refused (`previous_holder`).
 2. Record the summary: `done` (what was done), `next` (what comes next) and
    `why` only when the choice is not obvious. When your instructions ask a
    closing summary for flow friction, give it in `friction` (`none`, or a line

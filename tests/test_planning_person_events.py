@@ -381,12 +381,6 @@ class WhatCountsTests(Harness):
         self.assertIn("title: A better title", event["text"])
         self.assertIn("description: A longer brief", event["text"])
 
-    def test_a_card_dragged_within_its_column_says_nothing(self) -> None:
-        service.create_work_item(self.conn, space=self.space["key"], title="Neighbour")
-        self.conn.commit()
-        self.person("/api/planning/work-item/update", id=self.ref, rank="last")
-        self.assertEqual([], self.window())
-
     def test_an_edit_that_changes_nothing_says_nothing(self) -> None:
         self.person("/api/planning/work-item/update", id=self.ref, title="Do the work")
         self.assertEqual([], self.window())
@@ -679,6 +673,9 @@ class ToldOnWriteTests(Harness):
                 )
 
     def test_the_next_item_of_the_queue_comes_with_what_was_said_on_it(self) -> None:
+        # Accepted, it stands where the queue gives work from.
+        service.transition_work_item(self.conn, self.ref, "ready", acceptance="assignment")
+        self.conn.commit()
         self.says()
         taken = self.agent("claim_ready_work_item", space=self.space["key"])
         self.assertEqual(self.ref, taken["work_item"]["reference"])

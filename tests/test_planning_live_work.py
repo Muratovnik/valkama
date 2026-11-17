@@ -478,13 +478,13 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
     (
         "silent exactly the lease period",
         None,
-        _silent_for(leases.LEASE_PERIOD, "user-prompt-submit"),
-        {"state": "quiet", "quiet_since": second(days=14)},
+        _silent_for(leases.QUIET_PERIOD, "user-prompt-submit"),
+        {"state": "quiet", "quiet_since": second(days=3)},
     ),
     (
         "silent the lease period and a second",
         None,
-        _silent_for(leases.LEASE_PERIOD + timedelta(seconds=1), "user-prompt-submit"),
+        _silent_for(leases.QUIET_PERIOD + timedelta(seconds=1), "user-prompt-submit"),
         None,
     ),
     ("working beside quiet", ["step"], _two_sessions(True, "user-prompt-submit"), WORKING),

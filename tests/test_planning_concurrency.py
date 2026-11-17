@@ -32,6 +32,9 @@ from server import store
 from server.planning import calls, model, read_model, service
 from server.planning import store as planning_store
 
+#: Accepted work, in the ready state the take-next queue gives work from.
+READY = {"state": "ready", "acceptance": "assignment"}
+
 
 class PlanningConcurrencyTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -259,8 +262,8 @@ class PlanningConcurrencyTests(unittest.TestCase):
         happens next.
         """
 
-        self.item("First", priority="urgent")
-        self.item("Second", priority="urgent")
+        self.item("First", priority="urgent", **READY)
+        self.item("Second", priority="urgent", **READY)
         queue = self.open()
         rival = self.open()
         original = service._write
@@ -298,7 +301,7 @@ class PlanningConcurrencyTests(unittest.TestCase):
         forever, and the attempts have to end somewhere.
         """
 
-        self.item("Only one")
+        self.item("Only one", **READY)
         queue = self.open()
 
         def always_refuse(

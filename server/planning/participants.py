@@ -11,7 +11,7 @@ through it. A task has no participants; it has a holder.
 
 Live is one rule, whatever made the session a participant: the session half of a
 live lease (`leases.session_live`). It has a row, it has not ended or failed, and it
-was seen within `leases.LEASE_PERIOD`. An ended session works on nothing from the
+was seen within `leases.QUIET_PERIOD`. An ended session works on nothing from the
 moment it ended, with no grace: its claim stands through `leases.ENDED_GRACE` in case
 it comes back, but it can neither hear nor answer. Resumed, it is a participant again
 while its claim or its subscription stands. A subscription outlives a silent session

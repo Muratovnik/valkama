@@ -116,18 +116,13 @@ _FORCE = {
     "type": "boolean",
     "description": "Carry a refusal through. The override is recorded as an event.",
 }
-_RANK = {
-    "type": "string",
-    "description": "Where the item goes among the items of its state: first, last,"
-    " before:MAIN-12 or after:MAIN-12, naming an item in that same state. The order"
-    " is the one the board shows and claim_ready_work_item takes work in.",
-}
 #: The four levels of `priority`, each defined; a level added to model.PRIORITIES
 #: must be defined here, which the schema test checks.
 _PRIORITY_MEANING = (
     "How much the item matters, not when to do it: urgent blocks work or loses data;"
     " high is serious and could block work; medium noticeably affects work, with a"
-    " workaround; low is minor. Order is rank."
+    " workaround; low is minor. The queue takes urgent work first; otherwise priority"
+    " comes after work already started (see claim_ready_work_item)."
 )
 _VERBOSE = {
     "type": "boolean",
@@ -223,11 +218,13 @@ _COMMENT_FORM = (
 )
 #: What a batch's transition takes, and the guards it meets.
 _TRANSITION_FORM = (
-    'An object, never a bare state name: {"state": "done"}, with reason, force or rank'
+    'An object, never a bare state name: {"state": "done"}, with reason or force'
     " when they apply. The one path a state changes by. The workflow's guards apply:"
     " an active state needs a holder after the write (executor), a terminal state needs"
-    " every checklist step ticked and a closing summary, a blocked state needs a blocker"
-    " or a stated reason. An item with no basis, in triage, deferred or cancelled out"
+    " every checklist step ticked and a closing summary, entering review or a completed"
+    " state is refused while a step stands ticked by a holder whose claim lapsed"
+    " (previous_holder): tick it again, a blocked state needs a blocker or a stated"
+    " reason. An item with no basis, in triage, deferred or cancelled out"
     " of triage, moved to ready, active, review, blocked or completed needs one"
     " (acceptance): inherited under goals and stages that are all accepted and open,"
     " else the acceptance you send. A move to triage takes the basis away. A goal or"
@@ -243,7 +240,7 @@ _TRANSITION_FORM = (
     " state but an active or blocked one"
     " also ends the item's claim and any step claim, whoever holds them; the answer"
     " names the holder as released, and last_claim_ref keeps reading it. Reopening"
-    " restores no claim. The item goes last in its new state unless rank places it. An"
+    " restores no claim. An"
     " agent's close is refused with person_spoke while a person acted on the item in"
     " the interface since an agent last wrote to it; the refusal quotes it."
 )
@@ -451,10 +448,10 @@ TOOLS = [
         "get_work_item",
         "Read a work item",
         "One item. By default its card: reference, title, kind, priority, state, open,"
-        " container_state, acceptance, started_at, waits_for, workable, claim_ref,"
-        " claim_state, last_claim_ref, labels, revision, parent, url, description,"
-        " checklist (each condition with its id) and summary, and parts: every other part"
-        " it has, with count and size. parts names what to read: "
+        " container_state, acceptance, started_at, waits_for, workable, withheld, projects,"
+        " claim_ref, claim_state, last_claim_ref, lapsed_claim, labels, revision, parent,"
+        " url, description, checklist (each condition with its id) and summary, and parts:"
+        " every other part it has, with count and size. parts names what to read: "
         + ", ".join(read_model.PARTS[:-1])
         + " and, on a goal or stage, participants; each comes as the field of that name"
         f" beside reference and revision. comments: the {read_model.PART_THREADS} threads"
@@ -476,7 +473,16 @@ TOOLS = [
         " root's mark, and mentions, the items it told. A comment mode, events or section"
         " without parts reads that part alone. An accepted"
         " open goal or stage shows state null and container_state: not_started,"
-        " in_progress or awaiting_confirmation.",
+        " in_progress or awaiting_confirmation. workable says whether its space's queue may"
+        " give it now and withheld why not: goal_or_stage, not_ready, held, waits,"
+        " question, no_start, ancestor_triage, ancestor_deferred, ancestor_waits or"
+        " ancestor_closed. claim.expires_at is when the claim lapses if its session stays"
+        " silent, or, for a claim no session proved, the owner's own included, if the item"
+        " stays quiet; null while an open question to the owner stops that count. A"
+        " checklist step with by_previous_holder was ticked by a holder whose claim"
+        " lapsed: tick it again to confirm it before review or closing. lapsed_claim"
+        " names the holder whose claim the sweep released, why and when, until the next"
+        " claim.",
         READ_ONLY,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -540,14 +546,16 @@ TOOLS = [
     _tool(
         "list_work_items",
         "List work items",
-        "Items in state order, and inside a state in the planned order, filtered by state,"
-        " category, kind, holder or parent. One compact row per item: reference, title,"
-        " kind, state, priority, parent and holder; an accepted open goal or stage has"
-        " state null and adds its container_state. kind=goal lists the goals, kind=stage"
-        " the stages. With space, the list holds that space's items and other spaces'"
-        " items that name one of its projects, marked other_space. project keeps the"
-        " items that name that project, in every space unless space is given; a goal or"
-        " stage names what a task under it names."
+        "Items in state order, and inside a state in the order of work (see"
+        " claim_ready_work_item), filtered by state, category, kind, holder or parent. One"
+        " compact row per item: reference, title, kind, state, priority, parent and holder;"
+        " an accepted open goal or stage has state null and adds its container_state. A row"
+        " the queue gives adds queue_order, its place in its space's queue; any other row"
+        " adds withheld, why the queue does not give it. With space, the list holds that"
+        " space's items and other spaces' items that name one of its projects, marked"
+        " other_space. project keeps the items that name that project, in every space"
+        " unless space is given; a goal or stage names what a task under it names."
+        " kind=goal lists the goals, kind=stage the stages."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -589,8 +597,8 @@ TOOLS = [
         " change) and recent: the last 7 UTC"
         " days' created and closed and a trend of growing, converging or steady."
         " open_members lists the open members, active first, then review, then"
-        " workable, then the rest, each in the order of work; a row's rank is its"
-        " place in that order across the space, to compare, not to count; at most"
+        " workable, then the rest, each in the order of work; a row's queue_order is its"
+        " place in its space's queue, null when the queue does not give it; at most"
         f" {CHAIN_PAGE} per page." + _PAGING,
         READ_ONLY,
         {
@@ -668,19 +676,42 @@ TOOLS = [
     _tool(
         "claim_ready_work_item",
         "Claim the next ready work item",
-        "Choose and claim in one step: the first workable task — unheld, in a triage or"
-        " ready state, with nothing unfinished blocking it — in the order of work: a"
-        " ready state before a triage one, and inside a state the planned order (see rank"
-        " in apply_work_item_changes's update); priority only breaks a tie. A goal, a stage"
-        " and deferred work are never taken. The claim starts the item"
-        " as claim_work_item does, so it answers in its active state with started."
-        " The answer names the root of each project the task changes in project_roots:"
-        " read each one's instructions before editing it."
-        " Answers with nothing when no task is workable."
+        "Choose and claim in one step the next task the queue gives: a task in a ready"
+        " state, unheld, with nothing unfinished blocking it and no open question to the"
+        " owner, under no goal or stage that is in triage, deferred, closed or blocked."
+        " Order: urgent first, then work already started, then tasks of a goal or stage"
+        " already under way, then by priority, oldest first. The queue is one space's:"
+        " space, else the space of within, else the space whose project root holds your"
+        " session's folder (session_space in list_planning_spaces). within (a goal or"
+        " stage, at any depth), label and project narrow it; project keeps the tasks that"
+        " name that project. A task of any space is claimed by number with claim_work_item."
+        " The claim starts the task as claim_work_item does. The answer names the root of"
+        " each project the task changes in project_roots: read each one's instructions"
+        " before editing it. Answers with nothing when no task is workable; a record's"
+        " withheld says why an item is not given."
         " The answer carries waiting when a person's words on a goal or stage above the"
         " work found nobody working there: read them before you start.",
         WRITES,
-        {"space": _SPACE, "author": _AUTHOR},
+        {
+            "space": _SPACE,
+            "within": {
+                "type": "string",
+                "description": "A goal or stage, by its reference (MAIN-142) or its"
+                " work_item_id: only the tasks under it, at any depth. Beside space it must"
+                " be of that space.",
+            },
+            "label": {
+                "type": "string",
+                "description": "Only the tasks that carry this label themselves, not through a"
+                " goal or stage over them.",
+            },
+            "project": {
+                "type": "string",
+                "description": "Only the tasks that name this project, by its id in the project"
+                " registry; a task that names none is kept by no project.",
+            },
+            "author": _AUTHOR,
+        },
     ),
     _tool(
         "claim_work_item_checklist_item",
@@ -812,7 +843,6 @@ TOOLS = [
                         " is never edited into a task, and its place says which it is.",
                     },
                     "parent": _PARENT,
-                    "rank": _RANK,
                     "projects": _PROJECTS
                     | {
                         "description": "projects replaces the projects the item names;"
@@ -827,7 +857,8 @@ TOOLS = [
                 ' the list alone, ["first step", {"text": "…", "done": true}], or'
                 ' {"items": [...], "force": true} when force must carry a refusal'
                 " through. A step sent with the text of one the item has keeps that"
-                " step's item_id, claim and tick, so appending is sending the old steps"
+                " step's item_id, claim, tick and by_previous_holder, so appending is"
+                " sending the old steps"
                 " and then the new ones; a new step gets a new item_id, which"
                 " checklist_ticks in the same call cannot name: send it done=true"
                 " instead. Leaving out a claimed or completed step is refused, naming"
@@ -842,7 +873,9 @@ TOOLS = [
                 "description": "Steps to complete, or to reopen with done=false."
                 " Completion records who and clears the live claim; when that was the"
                 " last hold on an active task nobody holds, the batch's end puts the task"
-                " back in the first ready state, and with none to reach it is refused.",
+                " back in the first ready state, and with none to reach it is refused."
+                " Ticking a step again confirms a tick its lapsed holder made and clears"
+                " by_previous_holder.",
                 "items": {
                     "type": "object",
                     "properties": {"item_id": _STR, "done": _BOOL, "force": _FORCE},
@@ -980,7 +1013,6 @@ TOOLS = [
                     "state": _STATE,
                     "reason": _STR,
                     "force": _FORCE,
-                    "rank": _RANK,
                     "acceptance": _ACCEPTANCE,
                 },
                 "required": ["state"],
@@ -1569,6 +1601,12 @@ def _compact_row(conn: sqlite3.Connection, item: dict) -> dict:
     # What an accepted open goal or stage derives, where it stands in no state.
     if item["container_state"] is not None:
         row["container_state"] = item["container_state"]
+    # Its place in its space's queue, or why the queue does not give it; a search
+    # row carries no place, since a place is the list's and not the item's.
+    if item.get("queue_order") is not None:
+        row["queue_order"] = item["queue_order"]
+    if item["withheld"]:
+        row["withheld"] = item["withheld"]
     # The space an item of another space lies in, where a space's list holds it.
     if item.get("other_space") is not None:
         row["other_space"] = item["other_space"]
@@ -1644,10 +1682,8 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     members = found.pop("members")
     found.pop("edges")
     found["series"] = found["series"][-CHAIN_SERIES_ENTRIES:]
-    open_members = sorted(
-        (member for member in members if member["open"]),
-        key=lambda member: (_open_rank(member), member["rank"]),
-    )
+    # The members come in the order of work; a stable sort keeps it inside each group.
+    open_members = sorted((member for member in members if member["open"]), key=_open_rank)
     found["open_members"] = [
         {
             "reference": member["reference"],
@@ -1662,7 +1698,7 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
             "claim_state": member["claim_state"],
             "workable": member["workable"],
             "parent_reference": member["parent_reference"],
-            "rank": member["rank"],
+            "queue_order": member["queue_order"],
         }
         for member in open_members[offset : offset + size]
     ]

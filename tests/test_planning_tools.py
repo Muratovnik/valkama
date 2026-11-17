@@ -492,7 +492,14 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         step = replaced[0]["item_id"]
         held = self.call("claim_work_item_checklist_item", id=self.ref, item_id=step, author="two")
         self.assertEqual(
-            {"item_id": step, "done": False, "claimed_by": "two", "done_by": ""}, held["step"]
+            {
+                "item_id": step,
+                "done": False,
+                "claimed_by": "two",
+                "done_by": "",
+                "by_previous_holder": False,
+            },
+            held["step"],
         )
         ticked = self.call(
             "apply_work_item_changes",
@@ -595,6 +602,11 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 self.assertIn(key, read)
         listed = self.call("list_work_items", space="QA", verbose=True)["work_items"]
         self.assertTrue(all("comment_count" in item and "events" not in item for item in listed))
+        self.call(
+            "apply_work_item_changes",
+            id=self.ref,
+            transition={"state": "ready", "acceptance": "assignment"},
+        )
         taken = self.call("claim_ready_work_item", space="QA", author="one")["work_item"]
         card = self.call("get_work_item", id=taken["reference"])
         self.assertEqual(card, {name: taken[name] for name in card if name in taken})
@@ -684,9 +696,12 @@ class PlanningCompactReadTests(unittest.TestCase):
                 "claim_ref": "one",
                 # The call carried no identity, so nothing confirms the holder.
                 "claim_state": "unconfirmed",
+                # Why the queue does not give it; a row it gives says its place instead.
+                "withheld": ["not_ready", "held", "ancestor_triage"],
             },
             rows[self.child["reference"]],
         )
+        self.assertNotIn("queue_order", rows[self.child["reference"]])
         self.assertIsNone(rows[self.epic["reference"]]["parent"])
         self.assertEqual("", rows[self.epic["reference"]]["claim_ref"])
         self.assertIsNone(rows[self.epic["reference"]]["claim_state"])

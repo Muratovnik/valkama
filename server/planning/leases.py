@@ -14,7 +14,7 @@ the call and the session row, every time it is asked for, and never written:
 |---|---|
 | no claim | none |
 | no call (or no such column, in a scope an earlier build wrote), a call that is not `confirmed`, or a call without a session | `unconfirmed` |
-| no session row, a session `ended` or `failed`, or `last_seen` older than `LEASE_PERIOD` | `stale` |
+| no session row, a session `ended` or `failed`, or `last_seen` older than `QUIET_PERIOD` | `stale` |
 | otherwise | `live` |
 
 Liveness follows the top-level session: a subagent's write names its parent's
@@ -30,21 +30,38 @@ its own, and the session coming back makes it `live` again without a write. A
 session with no `ended_at` has no grace, and neither has a `failed` one, which
 only an explicit start reopens.
 
+An open question to the owner on the item stops the count of silence: the
+holder waits for the owner, it has not left the work. The question is the
+item's, so it stops the count for every hold on that item, its claim and its
+steps, whoever holds them, and for no other item. An end or a missing session
+row still counts. While it stops the count, a live lease promises no expiry.
+
+A lease is the session's, not the record's: a step held by a session lapses with
+that session, read from its newest confirmed call (`of_step`), because a step
+records no call of its own and its holder label names the session.
+
+A claim or a step that no session proved has no session to go quiet, so it ages
+with its item instead: it lapses `QUIET_PERIOD` after the item's last history
+event, the owner's own claim from the browser included. It still reads
+`unconfirmed` until a write releases it; `abandoned` and `lapsed` say whether it
+has gone.
+
 Expiry is not done here, and it lives with every other write in `service`. A
-caller who asks for the item releases a stale lease at once, in its grace or
-not. The start-up sweep and the take-next queue release only a lease past it.
+caller who asks for the item releases an abandoned lease at once, in its grace
+or not. The sweep and the take-next queue release only a lapsed one, past it.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
-from . import calls
+from . import calls, questions, request_model
 
-#: How long a session may go without a sign of life before its leases lapse.
-LEASE_PERIOD = timedelta(days=14)
+#: How long a session, or an item no session holds by proof, may go without a sign of
+#: life before what it holds lapses. Read here and nowhere else.
+QUIET_PERIOD = timedelta(days=3)
 #: How long an ended session may come back before Valkama releases its leases itself.
 ENDED_GRACE = timedelta(hours=12)
 
@@ -121,34 +138,38 @@ def _stamp(moment: datetime) -> str:
     return moment.strftime(_SECOND) + "Z"
 
 
-def _stale_reason(call: sqlite3.Row, seen: datetime | None) -> str:
+def _stale_reason(call: sqlite3.Row, seen: datetime | None, quiet: timedelta, asked: bool) -> str:
     """Why nobody stands behind this claim any more; blank while its session does."""
 
     if call["session_row"] is None:
         return SESSION_MISSING
     if call["status"] in _ENDED:
         return SESSION_ENDED
-    return LEASE_EXPIRED if _quiet(seen) else ""
+    if asked:
+        return ""
+    return LEASE_EXPIRED if _quiet(seen, quiet) else ""
 
 
-def _quiet(seen: datetime | None) -> bool:
-    """Whether a session last seen then has gone without a sign of life for the lease period."""
+def _quiet(seen: datetime | None, quiet: timedelta) -> bool:
+    """Whether a session last seen then has gone without a sign of life for `quiet`."""
 
-    return seen is None or seen < utc_now() - LEASE_PERIOD
+    return seen is None or seen < utc_now() - quiet
 
 
 def session_live(session: sqlite3.Row | None) -> bool:
     """Whether a session row stands behind its work now: neither ended nor failed, and not quiet.
 
     The session half of a live lease, read from the `sessions` row alone, with no
-    grace: what a participant is held to, whatever made it one (`participants`).
+    grace, against `QUIET_PERIOD`: what a participant is held to, whatever made it
+    one (`participants`), and what an agent session a request asks must meet to be
+    asked and to answer (`requests`).
     """
 
     return (
         session is not None
         and session["status"] not in _ENDED
         and not session["ended_at"]
-        and not _quiet(moment(session["last_seen"]))
+        and not _quiet(moment(session["last_seen"]), QUIET_PERIOD)
     )
 
 
@@ -159,19 +180,36 @@ def _in_grace(call: sqlite3.Row) -> bool:
     return call["status"] == "ended" and ended is not None and utc_now() < ended + ENDED_GRACE
 
 
-def lease(conn: sqlite3.Connection, row: sqlite3.Row) -> Lease | None:
-    """The lease on this work item row, or None when nobody holds it."""
+def lease(conn: sqlite3.Connection, row: sqlite3.Row, *, asked: bool | None = None) -> Lease | None:
+    """The lease on this work item row, or None when nobody holds it.
+
+    `asked` is whether an open question to the owner stands on the item, for a
+    reader that loaded it already; None asks the store when the answer matters.
+    """
 
     holder = str(row["claim_ref"] or "")
     if not holder:
         return None
-    call = None
+    call = _claim_call(conn, row)
+    found = of_call(holder, call)
+    if found.state == STALE and found.reason != LEASE_EXPIRED:
+        return found  # an end or a missing row counts whatever is asked
+    stopped = question_stands(conn, row) if asked is None else asked
+    if found.state == UNCONFIRMED:
+        return _aged(conn, row, found, stopped)
+    return of_call(holder, call, asked=True) if stopped else found
+
+
+def _claim_call(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
     # An attached scope is read as it is and never migrated, so a store an
     # earlier build wrote has no `claim_call_id`: its claims name no call.
     columns = row.keys()  # `in row` would search a Row's values, not its names
     if "claim_call_id" in columns and row["claim_call_id"] is not None:
-        call = conn.execute(CALL + " WHERE c.id = ?", (int(row["claim_call_id"]),)).fetchone()
-    return of_call(holder, call)
+        found: sqlite3.Row | None = conn.execute(
+            CALL + " WHERE c.id = ?", (int(row["claim_call_id"]),)
+        ).fetchone()
+        return found
+    return None
 
 
 #: The call behind a lease, with the session row its liveness is read from. Whatever
@@ -181,10 +219,31 @@ CALL = (
     " s.id AS session_row, s.status, s.last_seen, s.ended_at"
     " FROM execution_events c LEFT JOIN sessions s ON s.id = c.session_id"
 )
+#: A session's newest confirmed call: what a step that session holds stands on.
+_NEWEST_CALL = CALL + (
+    " WHERE c.session_id = ? AND c.identity_state = 'confirmed' ORDER BY c.id DESC LIMIT 1"
+)
+#: When the item last had an event in its history, or was last written without one.
+_QUIET_SINCE = (
+    "SELECT COALESCE((SELECT MAX(e.created_at) FROM work_item_events e"
+    " WHERE e.work_item_id = w.work_item_id), w.updated_at)"
+    " FROM work_items w WHERE w.work_item_id = ?"
+)
 
 
-def of_call(holder: str, call: sqlite3.Row | None) -> Lease:
-    """The lease `holder` has through `call`, a row of `CALL`, or an unconfirmed one."""
+def of_call(
+    holder: str,
+    call: sqlite3.Row | None,
+    *,
+    quiet: timedelta | None = None,
+    asked: bool = False,
+) -> Lease:
+    """The lease `holder` has through `call`, a row of `CALL`, or an unconfirmed one.
+
+    `quiet` is how long the session may be silent, `QUIET_PERIOD` unless a reader such
+    as a subscription passes its own.
+    `asked` says an open question to the owner stops that count.
+    """
 
     if call is None:
         return Lease(holder, UNCONFIRMED, None, None, None, None, None, None)
@@ -200,8 +259,9 @@ def of_call(holder: str, call: sqlite3.Row | None) -> Lease:
         return Lease(state=UNCONFIRMED, last_seen=None, expires_at=None, **described)
     last_seen = call["last_seen"] if call["session_row"] is not None else None
     seen = moment(last_seen)
-    reason = _stale_reason(call, seen)
-    if seen is None or reason:
+    silence = QUIET_PERIOD if quiet is None else quiet
+    reason = _stale_reason(call, seen, silence, asked)
+    if reason:
         return Lease(
             state=STALE,
             last_seen=last_seen,
@@ -210,16 +270,88 @@ def of_call(holder: str, call: sqlite3.Row | None) -> Lease:
             in_grace=_in_grace(call),
             **described,
         )
-    return Lease(
-        state=LIVE, last_seen=last_seen, expires_at=_stamp(seen + LEASE_PERIOD), **described
-    )
+    expires = None if asked or seen is None else _stamp(seen + silence)
+    return Lease(state=LIVE, last_seen=last_seen, expires_at=expires, **described)
 
 
-def state(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
-    """Only the state: what a list row carries."""
+def of_step(
+    conn: sqlite3.Connection, row: sqlite3.Row, holder: str, *, asked: bool | None = None
+) -> Lease:
+    """The lease a step's `holder` has on this item: its session's, or the item's quiet.
 
-    found = lease(conn, row)
-    return found.state if found is not None else None
+    A step records no call, so the session its holder label names
+    (`calls.holder_ids`) stands behind it through that session's newest confirmed
+    call. A holder no session proved ages with the item, as an unconfirmed claim
+    does.
+    """
+
+    ids = calls.holder_ids(holder)
+    call = conn.execute(_NEWEST_CALL, (ids[0],)).fetchone() if ids is not None else None
+    found = of_call(holder, call)
+    if found.state == STALE and found.reason != LEASE_EXPIRED:
+        return found
+    stopped = question_stands(conn, row) if asked is None else asked
+    if found.state == UNCONFIRMED:
+        return _aged(conn, row, found, stopped)
+    return of_call(holder, call, asked=True) if stopped else found
+
+
+def question_stands(conn: sqlite3.Connection, row: sqlite3.Row) -> bool:
+    """Whether an open question to the owner stands on this item and stops its count.
+
+    Its deadline is read against `utc_now`, the clock of the lease it stops.
+    """
+
+    at = request_model.stamp(utc_now())
+    return bool(questions.asked(conn, items=[str(row["work_item_id"])], at=at))
+
+
+def _aged(conn: sqlite3.Connection, row: sqlite3.Row, found: Lease, asked: bool) -> Lease:
+    """An unconfirmed lease, with when its item's quiet lapses it and whether it has."""
+
+    if asked:
+        return found
+    since = conn.execute(_QUIET_SINCE, (str(row["work_item_id"]),)).fetchone()
+    quiet_since = moment(since[0]) if since is not None else None
+    if quiet_since is None:
+        return found
+    deadline = quiet_since + QUIET_PERIOD
+    reason = LEASE_EXPIRED if utc_now() > deadline else ""
+    return replace(found, expires_at=_stamp(deadline), reason=reason)
+
+
+def abandoned(found: Lease) -> bool:
+    """Whether nobody stands behind this lease any more, though nothing has released it.
+
+    A stale lease, in its grace or not, and an unconfirmed one whose item has
+    been quiet past `QUIET_PERIOD`. A caller who asks for the item releases it.
+    """
+
+    return found.state == STALE or (found.state == UNCONFIRMED and bool(found.reason))
+
+
+def lapsed(found: Lease) -> bool:
+    """Whether the sweep and the take-next queue release this lease: abandoned, past any grace."""
+
+    return abandoned(found) and not found.in_grace
+
+
+def state(conn: sqlite3.Connection, row: sqlite3.Row, *, asked: bool | None = None) -> str | None:
+    """Only the state: what a list row carries.
+
+    It reads the question only when the session's silence would make it stale,
+    and never the item's history: an unconfirmed claim reads `unconfirmed` until
+    a write releases it.
+    """
+
+    holder = str(row["claim_ref"] or "")
+    if not holder:
+        return None
+    found = of_call(holder, _claim_call(conn, row))
+    if found.state == STALE and found.reason == LEASE_EXPIRED:
+        if question_stands(conn, row) if asked is None else asked:
+            return LIVE
+    return found.state
 
 
 def held_by(found: Lease, caller: calls.Identity | None, actor: str) -> bool:
@@ -257,8 +389,15 @@ def released_holder(detail: str) -> str:
     no session proved is free text.
     """
 
+    found = expiry_of(detail)
+    return found[1] if found is not None else detail
+
+
+def expiry_of(detail: str) -> tuple[str, str] | None:
+    """The reason and the holder an expiry's `released` detail names; None for a caller's."""
+
     for reason in _EXPIRY_REASONS:
         prefix = f"{reason}: "
         if detail.startswith(prefix):
-            return detail[len(prefix) :]
-    return detail
+            return reason, detail[len(prefix) :]
+    return None

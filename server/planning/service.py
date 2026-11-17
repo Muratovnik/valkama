@@ -30,7 +30,7 @@ from . import (
     leases,
     model,
     questions,
-    ranking,
+    queue,
     read_model,
     request_model,
     states,
@@ -200,7 +200,9 @@ def list_work_items(
     `other_spaces` makes `space` a read of that space: its items, and the items of
     other spaces that name one of the projects the registry binds to it, each record
     marked with `other_space`, the `{key, name}` of the space it lies in, or None
-    for the space's own. With `project` too, another space's item is kept only when
+    for the space's own. The space's queue never gives another space's item, so
+    its `withheld` adds `outside_space` and its `queue_order` is null, though its
+    own space's queue may give it. With `project` too, another space's item is kept only when
     that project is one of the space's. Without it `space` keeps the space's items
     alone, which is what a reader that accounts for a space's items, an export,
     asks for.
@@ -211,6 +213,11 @@ def list_work_items(
     replaces it, as is every retired word (`kind=epic`, `category=backlog`), and a
     `state` name no workflow of the spaces read gives (by key, state id or a category
     one state has) is refused with their states.
+
+    The items come in the one total order (`queue.list_key`), and each says its
+    `queue_order`, its place in its own space's queue, or null when the queue
+    does not give it. Every row the filters keep is loaded, ordered and then cut,
+    so on a store nothing writes to the pages of one walk neither repeat nor skip.
 
     Nothing here caps the count: a caller that wants a bounded page with an
     honest account of what it left out asks `list_work_items_page`.
@@ -269,33 +276,49 @@ def list_work_items(
     if kept is not None:
         clauses.append("i.work_item_id IN (SELECT value FROM json_each(?))")
         parameters.append(json.dumps(kept))
+    start = model.count_field(offset, "offset")
     query = with_clauses(
-        "SELECT i.*, p.key AS space_key, p.name AS space_name FROM work_items i"
+        "SELECT i.*, s.position AS state_position, p.key AS space_key, p.name AS space_name"
+        " FROM work_items i"
         " JOIN workflow_states s ON s.state_id = i.state_id"
         " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id",
         clauses,
     )
-    # The work item id closes the order: two spaces can tie on every other key,
-    # and an order with ties lets one page repeat an item the next page skips.
-    query += " ORDER BY s.position, i.position, i.number, i.work_item_id"
-    query += " LIMIT ? OFFSET ?"
-    parameters.extend(
-        [-1 if limit is None else max(1, int(limit)), model.count_field(offset, "offset")]
-    )
+    # Every row the filters keep, ordered and cut here rather than in SQL: the order
+    # of work reads the tree, which the read loads anyway, once for the spaces read.
     rows = conn.execute(query, parameters).fetchall()
+    spaces = {str(row["planning_space_id"]) for row in rows}
+    tree = item_tree.of_spaces(conn, spaces)
+    rows.sort(key=lambda row: queue.list_key(row, tree))
+    rows = rows[start:] if limit is None else rows[start : start + max(1, int(limit))]
+    # A row's place in its space's queue: one count of the queue of each space read.
+    places = queue.places(
+        queue.of_spaces(conn, {str(row["planning_space_id"]) for row in rows}, tree)
+    )
     closed = read_model.closings(conn, rows)
-    tree = _page_tree(conn, rows)
+    lapsed = read_model.lapsed_claims(conn, rows)
     projects = item_projects.of_items(conn, rows)
-    found = [
-        read_model.present(conn, row, closed=closed, tree=tree, projects=projects) for row in rows
-    ]
-    if marked:
-        for row, record in zip(rows, found, strict=True):
+    # A read of one space asks another space's item of that space's queue, which
+    # never gives it: its record says `outside_space`, and it has no place there.
+    read_space = space_id if marked else None
+    found = []
+    for row in rows:
+        record = read_model.present(
+            conn,
+            row,
+            closed=closed,
+            lapsed=lapsed,
+            tree=tree,
+            projects=projects,
+            read_space=read_space,
+        )
+        outside = marked and str(row["planning_space_id"]) != space_id
+        record["queue_order"] = None if outside else places.get(str(row["work_item_id"]))
+        if marked:
             record["other_space"] = (
-                None
-                if str(row["planning_space_id"]) == space_id
-                else {"key": row["space_key"], "name": row["space_name"]}
+                {"key": row["space_key"], "name": row["space_name"]} if outside else None
             )
+        found.append(record)
     return found
 
 
@@ -688,12 +711,11 @@ def create_work_item(
     transitions.refuse(refusals, False)
     item_id = model.new_id()
     number = store.next_number(conn, space_id)
-    position = _tail_position(conn, space_id, str(target["state_id"]))
     starts = stored_kind != model.CONTAINER_KIND and target["category"] in model.STARTING_CATEGORIES
     conn.execute(
         "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,"
-        "parent_id,priority,title,description,labels,source,position,acceptance,accepted_at,"
-        "started_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+        "parent_id,priority,title,description,labels,source,acceptance,accepted_at,"
+        "started_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,"
         f" CASE WHEN ? IS NULL THEN NULL ELSE {_NOW} END, CASE WHEN ? THEN {_NOW} END)",
         (
             item_id,
@@ -708,7 +730,6 @@ def create_work_item(
             model.multiline_field(description, "work_item.description"),
             model.dumps(model.labels(labels)),
             model.text_field(source, "work_item.source", limit=512, required=False),
-            position,
             basis,
             basis,
             starts,
@@ -768,22 +789,19 @@ def update_work_item(
     labels_remove: object = None,
     kind: str | None = None,
     parent: str | None = None,
-    rank: str | None = None,
     projects: object = None,
     expected_revision: int | None = None,
     author: str | None = None,
 ) -> dict:
-    """Edit the fields a transition does not own, and where the item stands in its state.
+    """Edit the fields a transition does not own: one guarded write, one revision.
 
-    `rank` is a placement in the item's own state (`ranking.placement`). It is an
-    edit like the others: one guarded write, one revision, no history event.
     `labels` replaces the set; `labels_add` and `labels_remove` change the set the
     item has, read under the write lock (`model.edited_labels`). An edit that
     changes the set is the one edit the history records: a `labels_changed` event
     with the set before and after (`model.labels_change`), under `author`.
     `projects` replaces the projects the item names, each then `named`
-    (`item_projects.replace`); the item stays in its space. Like `rank`, it is an
-    edit with no history event.
+    (`item_projects.replace`); the item stays in its space. It is an edit with no
+    history event.
     """
 
     row = _row_for_write(conn, reference, expected_revision)
@@ -797,7 +815,6 @@ def update_work_item(
         # The event is written after the edit, under this author: an author the history
         # cannot hold is refused here, while the store is still untouched.
         model.actor(author)
-    placement = ranking.placement(rank) if rank is not None else None
     updates: list[str] = []
     parameters: list[object] = []
     if title is not None:
@@ -837,17 +854,7 @@ def update_work_item(
         if name
     )
     if edited:
-        # Before the placement, which may write first: the row is inserted once.
         calls.call_id(conn, str(row["work_item_id"]), edited=edited)
-    if placement is not None:
-        # Last, because it is the one step that may write before `_write` does:
-        # every refusal above has had its chance to leave the store untouched.
-        placed = ranking.position(
-            conn, row, read_model.state_by_id(conn, str(row["state_id"])), placement
-        )
-        if placed is not None:
-            updates.append("position = ?")
-            parameters.append(placed)
     if not updates and not reprojected:
         return read_model.present(conn, row, full=True)
     _write(conn, row, updates, parameters)
@@ -995,15 +1002,11 @@ def transition_work_item(
     *,
     reason: str = "",
     force: bool = False,
-    rank: str | None = None,
     expected_revision: int | None = None,
     author: str | None = None,
     acceptance: object = None,
 ) -> dict:
-    """Move an item to a state, last in that state unless `rank` places it.
-
-    Last is where a build without placements puts a moved item too, so an item
-    that enters a state queues behind the work already ordered there.
+    """Move an item to a state; the order of work places it there (`queue.list_key`).
 
     Any state but an active or a blocked one ends every claim on the item in the
     same write: a claim says somebody is working it, and nobody works an item in
@@ -1029,7 +1032,6 @@ def transition_work_item(
         state,
         reason=reason,
         force=force,
-        rank=rank,
         expected_revision=expected_revision,
         author=author,
         acceptance=acceptance,
@@ -1078,7 +1080,6 @@ def _transition(
     *,
     reason: str = "",
     force: bool = False,
-    rank: str | None = None,
     expected_revision: int | None = None,
     author: str | None = None,
     acceptance: object = None,
@@ -1097,22 +1098,14 @@ def _transition(
         answer["warnings"] = [f"{read_model.reference(conn, row)} is accepted and open already"]
         return answer
     note = _transition_reason(reason, str(target["key"]))
-    placement = ranking.placement(rank) if rank is not None else None
     gives = _basis(conn, row, target, named)
     refusals, warnings = transitions.findings(
         conn, row, target, reason=reason, basis=row["acceptance"] or gives
     )
     refusals = [finding for finding in refusals if finding[0] not in spared]
     transitions.refuse(refusals, force)
-    position = (
-        _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"]))
-        if placement is None
-        else ranking.position(conn, row, target, placement)
-    )
-    if position is None:
-        position = float(row["position"])
-    updates = ["state_id = ?", "position = ?"]
-    parameters: list[object] = [str(target["state_id"]), position]
+    updates = ["state_id = ?"]
+    parameters: list[object] = [str(target["state_id"])]
     updates += _accepting(row, target, gives, parameters)
     # Only a task at work, or blocked at it, has a holder: anywhere else the move ends
     # every claim on the item in the same write.
@@ -1262,15 +1255,8 @@ def _cascade(
                 " state of accepted work it can move to"
             )
             continue
-        parameters: list[object] = [
-            str(target["state_id"]),
-            _tail_position(conn, str(child["planning_space_id"]), str(target["state_id"])),
-        ]
-        updates = [
-            "state_id = ?",
-            "position = ?",
-            *_accepting(child, target, basis, parameters),
-        ]
+        parameters: list[object] = [str(target["state_id"])]
+        updates = ["state_id = ?", *_accepting(child, target, basis, parameters)]
         _write(conn, child, updates, parameters)
         found = str(child["work_item_id"])
         _log(conn, found, "accepted", basis, author)
@@ -1295,8 +1281,9 @@ def claim_work_item(
 ) -> dict:
     """Take, release or take over an item, deciding who holds it from its lease.
 
-    A stale lease is released before anything else, so taking it over needs no
-    `force` and the history shows the expiry and the claim as two events. The
+    An abandoned lease (`leases.abandoned`) is released before anything else,
+    with the steps its holder held and every lapsed one, so taking it over needs
+    no `force` and the history shows the expiry and the claim as two events. The
     one exception is the holding session itself: it is still the holder, and
     its own call has just counted as its heartbeat.
 
@@ -1319,12 +1306,8 @@ def claim_work_item(
     caller = calls.current()
     lease = leases.lease(conn, row)
     expired = False
-    if (
-        lease is not None
-        and lease.state == leases.STALE
-        and not leases.held_by(lease, caller, actor)
-    ):
-        row = _expire(conn, row, lease)
+    if lease is not None and leases.abandoned(lease) and not leases.held_by(lease, caller, actor):
+        row = _expire(conn, row, lease, _lapsed_steps(conn, row, lease))
         lease, expired = None, True
     held = lease.holder if lease is not None else ""
     holder = lease is not None and leases.held_by(lease, caller, actor)
@@ -1448,11 +1431,8 @@ def _starting(conn: sqlite3.Connection, row: sqlite3.Row, move_state: bool = Tru
         conn, row, target, basis=row["acceptance"] or gives, held=True
     )
     transitions.refuse(refusals, False)
-    parameters += [
-        str(target["state_id"]),
-        _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"])),
-    ]
-    updates = ["state_id = ?", "position = ?", *_accepting(row, target, gives, parameters)]
+    parameters.append(str(target["state_id"]))
+    updates = ["state_id = ?", *_accepting(row, target, gives, parameters)]
     return _Start(updates, parameters, current, target, gives)
 
 
@@ -1545,8 +1525,7 @@ def _hand_back(
     target = states.queue_state(conn, row)
     if target is None:
         raise _stranded(conn, row)
-    position = _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"]))
-    _write(conn, row, ["state_id = ?", "position = ?"], [str(target["state_id"]), position])
+    _write(conn, row, ["state_id = ?"], [str(target["state_id"])])
     _log(conn, identity, "transitioned", f"{target['key']}: {reason}", author)
     return {"from": str(current["key"]), "to": str(target["key"])}
 
@@ -1589,41 +1568,109 @@ def _claim_lost(conn: sqlite3.Connection, row: sqlite3.Row, actor: str) -> dict:
     raise model.RevisionConflictError(int(row["revision"]), int(fresh["revision"])) from None
 
 
-def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> int:
-    """Release every stale lease past its grace, in one space or all; how many were released.
+def expire_leases(
+    conn: sqlite3.Connection, *, space_id: str | None = None, limit: int | None = None
+) -> int:
+    """Release every lapsed hold, in one space or all; on how many items it released one.
 
-    Only a lease a confirmed session holds can lapse: an unconfirmed claim has
-    no session to go quiet. A lease in its grace waits for its session to come
-    back, since nobody asked for that item in particular. A lease another writer
-    changed in the meantime is left to it.
+    A hold is an item's claim or a claimed step of it, and each lapses by its
+    lease (`leases.lapsed`): a session's after its silence or past the grace of
+    its end, one no session proved after its item's quiet. An open question to
+    the owner on the item stops the count of silence for every hold there. A
+    lease in its grace waits for its session to come back, since nobody asked
+    for that item in particular. An item another writer changed in the meantime
+    is left to it. With `limit`, it stops after releasing on that many items, by
+    number, and leaves the rest to the next call.
+    """
+
+    expired = 0
+    for row, claim, steps in lapsed_holds(conn, space_id=space_id):
+        if limit is not None and expired >= limit:
+            break
+        try:
+            _expire(conn, row, claim, steps)
+        except model.RevisionConflictError:
+            continue
+        expired += 1
+    return expired
+
+
+def lapsed_holds(
+    conn: sqlite3.Connection, *, space_id: str | None = None
+) -> Iterator[tuple[sqlite3.Row, leases.Lease | None, dict[str, leases.Lease]]]:
+    """Each item `expire_leases` would release a hold on, by number: its row, claim and steps.
+
+    The claim is the lapsed lease to release, or None when only steps lapsed. It
+    only reads, so a caller that asks whether there is anything to release takes
+    no write lock; an item whose release would leave it at work unheld for good
+    (`_strands`) is not one.
     """
 
     clauses = [
-        "i.claim_ref != ''",
-        "c.identity_state = 'confirmed'",
-        "COALESCE(c.session_id, '') != ''",
+        "s.is_terminal = 0",
+        "(i.claim_ref != '' OR EXISTS (SELECT 1 FROM json_each(i.checklist) j"
+        " WHERE json_extract(j.value, '$.claimed_by') != ''))",
     ]
     parameters: list[object] = []
     if space_id is not None:
         clauses.append("i.planning_space_id = ?")
         parameters.append(space_id)
     query = with_clauses(
-        "SELECT i.* FROM work_items i JOIN execution_events c ON c.id = i.claim_call_id", clauses
+        "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
-    expired = 0
     for row in conn.execute(query + " ORDER BY i.number", parameters).fetchall():
-        lease = leases.lease(conn, row)
-        if lease is None or lease.state != leases.STALE or lease.in_grace:
+        asked = leases.question_stands(conn, row)
+        lease = leases.lease(conn, row, asked=asked)
+        claim = lease if lease is not None and leases.lapsed(lease) else None
+        steps = _lapsed_steps(conn, row, claim, asked=asked)
+        if claim is None and not steps:
             continue
-        if _strands(conn, row, "", row["checklist"]):
-            # Its release would leave it at work unheld: the lease stays until it moves.
+        left = model.checklist(row["checklist"])
+        for step in left:
+            if step["id"] in steps:
+                step["claimed_by"] = ""
+        if _strands(conn, row, "" if claim is not None else str(row["claim_ref"]), left):
+            # Its release would leave it at work unheld: the hold stays until it moves.
             continue
-        try:
-            _expire(conn, row, lease)
-        except model.RevisionConflictError:
+        yield row, claim, steps
+
+
+def _lapsed_steps(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    claim: leases.Lease | None,
+    *,
+    asked: bool | None = None,
+) -> dict[str, leases.Lease]:
+    """The claimed steps of the item to release, by step id, each with its lease.
+
+    A lapsed one, and, beside a claim being released, every step of the same
+    holder: the lease is the session's, so what lapses for its claim lapses for
+    its steps.
+    """
+
+    if asked is None:
+        asked = leases.question_stands(conn, row)
+    found: dict[str, leases.Lease] = {}
+    read: dict[str, leases.Lease] = {}
+    for step in model.checklist(row["checklist"]):
+        holder = str(step["claimed_by"] or "")
+        if step["done"] or not holder:
             continue
-        expired += 1
-    return expired
+        if holder not in read:
+            read[holder] = leases.of_step(conn, row, holder, asked=asked)
+        held = read[holder]
+        if leases.lapsed(held) or (claim is not None and _same_holder(held, claim)):
+            found[str(step["id"])] = held
+    return found
+
+
+def _same_holder(step: leases.Lease, claim: leases.Lease) -> bool:
+    """Whether a step stands on the lease of the claim: its session, or its unproved name."""
+
+    if claim.session_id is not None:
+        return step.session_id == claim.session_id
+    return step.state == leases.UNCONFIRMED and step.holder == claim.holder
 
 
 def _strands(conn: sqlite3.Connection, row: sqlite3.Row, claim_ref: str, checklist: object) -> bool:
@@ -1650,39 +1697,100 @@ def _keep_held(
         raise _stranded(conn, row)
 
 
-def _expire(conn: sqlite3.Connection, row: sqlite3.Row, lease: leases.Lease) -> sqlite3.Row:
-    """Release a stale lease as a write of Valkama's own, and return the row after it.
+def _expire(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    claim: leases.Lease | None,
+    steps: Mapping[str, leases.Lease],
+) -> sqlite3.Row:
+    """Release lapsed holds as one write of Valkama's own, and return the row after it.
 
-    The release is its own call, so the history says who released it and why
-    rather than charging the expiry to whichever caller happened to meet it. The
-    why is the lease's own reason, in the release and in the move back to the queue.
-    What a person said over the work after the session's last call reached nobody,
-    so the same call leaves it for the next session (`waiting.recover`), before a
-    claim that met the lapsed lease looks for words to take.
+    `claim` is the item's lease to release, or None to keep it; `steps` the
+    claimed steps to release, by id. The only path an expiry takes, for the
+    sweep, the take-next queue and a claim by number alike. The release is its
+    own call, so the history says who released it and why rather than charging
+    the expiry to whichever caller happened to meet it: `released` with the
+    claim's reason and holder, `checklist_released` with each step's text. The
+    why of the move back to the queue is the claim's reason, else a step's.
+
+    Every step a lapsed holder ticked is marked `by_previous_holder` in the same
+    write, whatever state the item stands in: nobody is left to stand behind
+    that tick, so a later holder confirms it before review or a close. A tick
+    someone else made is theirs and stays as it is.
+
+    What a person said over the work after a lapsed session's last call reached
+    nobody, so the same call leaves it for the next session (`waiting.recover`),
+    for every lease it releases that a session held, before a claim that met the
+    lapsed lease looks for words to take.
     """
 
     identity = str(row["work_item_id"])
+    checklist = model.checklist(row["checklist"])
+    released = [step for step in checklist if step["id"] in steps]
+    for step in released:
+        step["claimed_by"] = ""
+    gone = [lease for lease in (claim, *steps.values()) if lease is not None]
+    flagged = [
+        step
+        for step in checklist
+        if not step[model.PREVIOUS_HOLDER] and any(_ticked_by(step, lease) for lease in gone)
+    ]
+    for step in flagged:
+        step[model.PREVIOUS_HOLDER] = True
+    changed = bool(released or flagged)
+    updates: list[str] = ["checklist = ?"] if changed else []
+    parameters: list[object] = [model.dumps(checklist)] if changed else []
+    reason = claim.reason if claim is not None else next(iter(steps.values())).reason
     with calls.bind(calls.valkama(), leases.EXPIRY_TOOL):
-        _hold(conn, row, "")
-        _log(conn, identity, "released", leases.expiry_detail(lease), leases.EXPIRY_AUTHOR)
-        _hand_back(conn, identity, leases.EXPIRY_AUTHOR, lease.reason)
-        if lease.session_id is not None:
-            waiting.recover(conn, [(lease.session_id, identity)])
+        if claim is not None:
+            _hold(conn, row, "", updates, parameters)
+            _log(conn, identity, "released", leases.expiry_detail(claim), leases.EXPIRY_AUTHOR)
+        else:
+            _write(conn, row, updates, parameters)
+        for step in released:
+            _log(conn, identity, "checklist_released", step["text"][:120], leases.EXPIRY_AUTHOR)
+        _hand_back(conn, identity, leases.EXPIRY_AUTHOR, reason)
+        waiting.recover(
+            conn, [(lease.session_id, identity) for lease in gone if lease.session_id is not None]
+        )
     return read_model.item_by_id(conn, identity)
+
+
+def _ticked_by(step: Mapping[str, object], lease: leases.Lease) -> bool:
+    """Whether this step's tick is the lease's holder's: its session, or its unproved name."""
+
+    by = str(step["done_by"] or "")
+    if not step["done"] or not by:
+        return False
+    if lease.session_id is None:
+        return by == lease.holder
+    ids = calls.holder_ids(by)
+    return ids is not None and ids[0] == calls.label_id(lease.session_id)
 
 
 def claim_ready_work_item(
     conn: sqlite3.Connection,
     *,
     space: str | None = None,
+    within: str | None = None,
+    label: str | None = None,
+    project: str | None = None,
     author: str | None = None,
 ) -> dict | None:
-    """Pick the next unheld, unblocked item in a startable state and take it.
+    """Pick the next task the queue of one space gives and take it.
 
-    The next one is the first in the order of work: a ready state before a
-    triage one, and inside a state the order the board shows, top first. Priority
-    only breaks a tie in that order, so placing an item first is what puts it
-    next, and an urgent item nobody placed waits its turn.
+    The queue gives a task `queue.withheld` names nothing for, read over the
+    whole of its space. The next one is the first by the key of work
+    (`queue.work_key`) — urgent, started, under way above, priority, age — the
+    smaller number first on a tie: the item whose `queue_order` reads 1.
+
+    The space is `space`, else the space of `within`, else the space of the
+    calling session (`item_projects.session_space`); a call with none of them is
+    refused with the spaces there are (`_queue_scope`). `within`, a goal or
+    stage, keeps the tasks under it at any depth, `label` the tasks that carry
+    that label themselves, and `project` the tasks that name that project, as the
+    list's `project` keeps them, so a task naming none is kept by no project; each
+    narrows that one queue, never reorders it.
 
     Choosing and writing are two statements, so the item chosen can be taken by
     somebody else before this claim lands. The guarded write is what catches
@@ -1693,45 +1801,120 @@ def claim_ready_work_item(
     the last refusal is reported rather than looped on forever.
     """
 
-    # What the queue hands out is exactly what reads `workable`: one rule, two forms.
-    clauses = list(read_model.WORKABLE_CLAUSES)
-    parameters: list[object] = []
-    space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
-    if space_id is not None:
-        clauses.append("i.planning_space_id = ?")
-        parameters.append(space_id)
-    query = with_clauses(
-        "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
-    )
-    query += " ORDER BY " + ranking.WORK_ORDER_SQL + ", s.position, i.position,"
-    query += " CASE i.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1"
-    query += " WHEN 'medium' THEN 2 ELSE 3 END, i.number LIMIT 1"
-    label = calls.holder(author)
+    scope = _queue_scope(conn, space, within, label, project)
+    holder = calls.holder(author)
     # An expired lease is not a holder, so the queue sees through it: released
-    # first, the item then reads unheld to the filter above. A lease in its grace
+    # first, the item then reads unheld to the rule below. A lease in its grace
     # is still held, so the queue neither gives that item nor releases it.
-    expire_leases(conn, space_id=space_id)
+    expire_leases(conn, space_id=scope.space_id)
     lost: model.RevisionConflictError | None = None
     for _ in range(_READY_CLAIM_ATTEMPTS):
-        row = conn.execute(query, tuple(parameters)).fetchone()
-        if row is None:
+        chosen = _next_given(conn, scope)
+        if chosen is None:
             return None
+        row = read_model.item_by_id(conn, chosen)
         start = _starting(conn, row)
         try:
-            _hold(conn, row, label, start.updates, start.parameters)
+            _hold(conn, row, holder, start.updates, start.parameters)
         except model.RevisionConflictError as conflict:
             lost = conflict
             continue
-        identity = str(row["work_item_id"])
-        _log(conn, identity, "claimed", "", author)
-        _started(conn, identity, start, author, "claimed")
+        _log(conn, chosen, "claimed", "", author)
+        _started(conn, chosen, start, author, "claimed")
         waiting.deliver(conn, row)
-        answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+        answer = read_model.present(conn, read_model.item_by_id(conn, chosen), full=True)
         _say_started(conn, answer, start)
         return answer
     if lost is not None:
         raise lost
     raise model.PlanningError("no work item could be claimed")
+
+
+@dataclasses.dataclass(frozen=True)
+class _QueueScope:
+    """One queue call's space, and what narrows that space's queue."""
+
+    space_id: str
+    within_id: str | None
+    label: str | None
+    project: str | None
+
+
+def _queue_scope(
+    conn: sqlite3.Connection,
+    space: str | None,
+    within: str | None,
+    label: str | None,
+    project: str | None,
+) -> _QueueScope:
+    """The space a queue call reads and what narrows it, or the refusal that says why not.
+
+    `within` names a goal or stage, of any space when `space` is not given, and
+    then its space is the call's; beside `space` it must be of that space. With
+    neither, the space is the one whose project root holds the folder of the
+    session the call proved: none for a call that proved no session, a session
+    whose folder lies under no root bound to a space, or a registry that cannot
+    be read, and the call is refused. A label is matched as an item's labels are
+    written, and a project as the items name it, so one nothing carries or names
+    narrows the queue to nothing rather than being refused; a project of another
+    space keeps the tasks of this space that name it.
+    """
+
+    named = _space_row(conn, space) if space is not None else None
+    within_id = None
+    if within is not None:
+        row = read_model.item_row(conn, within)
+        under = _space_row(conn, row["planning_space_id"])
+        reference = model.human_id(str(under["key"]), int(row["number"]))
+        if row["kind"] != model.CONTAINER_KIND:
+            raise model.PlanningError(
+                f"within names a goal or stage; {reference} is a {row['kind']}"
+            )
+        if named is not None and named["planning_space_id"] != under["planning_space_id"]:
+            raise model.PlanningError(
+                f"within {reference} is in space {under['key']}, not {named['key']}"
+            )
+        named = under
+        within_id = str(row["work_item_id"])
+    if named is None:
+        found = item_projects.session_space(conn, calls.confirmed_session())
+        named = _space_row(conn, found) if found is not None else None
+    if named is None:
+        keys = [str(key) for (key,) in conn.execute("SELECT key FROM planning_spaces ORDER BY key")]
+        raise model.PlanningError(
+            "name a space: no space's project root holds this session's folder; "
+            + (f"the spaces are {', '.join(keys)}" if keys else "there is no space yet")
+        )
+    return _QueueScope(
+        space_id=str(named["planning_space_id"]),
+        within_id=within_id,
+        label=None
+        if label is None
+        else model.text_field(label, "label", limit=model.MAX_LABEL_LENGTH),
+        project=None if project is None else item_projects.project_id(project, "project"),
+    )
+
+
+def _next_given(conn: sqlite3.Connection, scope: _QueueScope) -> str | None:
+    """The first item the queue of the scope's space gives, if any: one read of its tree.
+
+    The scope only keeps some of what the queue gives, so the item given is
+    the one of those that stands first in the space's own queue. A project keeps
+    what `item_projects.naming` names, the rule the list's `project` reads.
+    """
+
+    tree = item_tree.of_spaces(conn, [scope.space_id])
+    naming = None if scope.project is None else set(item_projects.naming(conn, [scope.project]))
+    for row in queue.of_spaces(conn, [scope.space_id], tree):
+        identity = str(row["work_item_id"])
+        if scope.within_id is not None and scope.within_id not in tree.ancestors(identity):
+            continue
+        if scope.label is not None and scope.label not in model.labels(json.loads(row["labels"])):
+            continue
+        if naming is not None and identity not in naming:
+            continue
+        return identity
+    return None
 
 
 def set_checklist(
@@ -1747,7 +1930,8 @@ def set_checklist(
 
     A step is text, or `{text, done}`. One that repeats a step the item has —
     the same text, or that step's own `id` — is that step: it keeps its id and
-    its claim, tick and author, so appending to a checklist is sending it with
+    its claim, tick, author and `by_previous_holder`, as stored, so appending
+    to a checklist is sending it with
     the new steps after the old. Only a claimed or completed step the new list
     leaves out needs `force`, because only dropping one discards its state.
 
@@ -1818,6 +2002,7 @@ def set_checklist(
         guards.append("checklist_discard")
     for step in completed:
         step["done_by"] = label
+        step[model.PREVIOUS_HOLDER] = False
     _keep_held(conn, row, str(row["claim_ref"]), replacement)
     identity = str(row["work_item_id"])
     _write_checklist(conn, row, replacement, completed, author)
@@ -1956,6 +2141,9 @@ def tick_checklist_item(
     step["done"] = bool(done)
     step["done_by"] = label if done else ""
     step["claimed_by"] = "" if done else step["claimed_by"]
+    # A tick, even of a step already ticked, is the caller standing behind it;
+    # reopening leaves nothing to confirm.
+    step[model.PREVIOUS_HOLDER] = False
     _keep_held(conn, row, str(row["claim_ref"]), steps)
     _write(conn, row, ["checklist = ?"], [model.dumps(steps)])
     identity = str(row["work_item_id"])
@@ -2172,8 +2360,8 @@ def _merge_claims(
     """The claims of other sessions a merge would override, by item id.
 
     Moving steps into an item someone else holds changes their work, and closing
-    an item someone else holds ends it, so either needs `force`. A stale lease
-    is nobody's work any more and does not stand in the way.
+    an item someone else holds ends it, so either needs `force`. An abandoned
+    lease (`leases.abandoned`) is nobody's work any more and does not stand in the way.
     """
 
     actor = model.actor(author)
@@ -2181,7 +2369,7 @@ def _merge_claims(
     overridden: dict[str, str] = {}
     for row in rows:
         lease = leases.lease(conn, row)
-        if lease is None or lease.state == leases.STALE or leases.held_by(lease, caller, actor):
+        if lease is None or leases.abandoned(lease) or leases.held_by(lease, caller, actor):
             continue
         if not force:
             raise model.PlanningError(
@@ -2991,11 +3179,3 @@ def _step(steps: list[dict], item_id: object, conn: sqlite3.Connection, row: sql
         if step["id"] == wanted:
             return step
     raise model.PlanningError(f"{read_model.reference(conn, row)} has no checklist step {wanted}")
-
-
-def _tail_position(conn: sqlite3.Connection, planning_space_id: str, state_id: str) -> float:
-    row = conn.execute(
-        "SELECT MAX(position) FROM work_items WHERE planning_space_id = ? AND state_id = ?",
-        (planning_space_id, state_id),
-    ).fetchone()
-    return float(row[0] or 0.0) + 1.0

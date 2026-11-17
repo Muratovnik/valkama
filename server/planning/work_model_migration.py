@@ -580,7 +580,6 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
             "labels": row["labels"],
             # Whether `items` adds the kind label, writing the labels anew.
             "kind_label": kind_label,
-            "position": row["position"],
             "summary": row["summary"],
         }
         oracle.numbers.add((str(row["planning_space_id"]), int(row["number"])))
@@ -987,14 +986,19 @@ _KEPT_COLUMNS = (
     "summary_comment_id",
     "source",
     "checklist",
-    "position",
     "revision",
     "created_at",
     "updated_at",
     "claim_call_id",
 )
-#: The one column of the old table no row of the new one holds: it was never written.
-_DROPPED_COLUMNS = frozenset({"owner_ref"})
+#: The columns of the old table no row of the new one holds: `owner_ref` was never
+#: written, and `position` held the order a person set by hand, which the order of
+#: work now computes.
+_DROPPED_COLUMNS = frozenset({"owner_ref", "position"})
+#: The index whose stored text names a dropped column: dropped before the rebuild
+#: and created after it from this build's declaration, where every other index and
+#: trigger is created again from the text the store holds.
+_REDECLARED_INDEX = "work_items_state"
 
 _SHAPE_ITEMS = (
     f"""CREATE TEMP TABLE work_model_entries AS
@@ -1109,7 +1113,14 @@ def _rebuild_sessions(conn: sqlite3.Connection, context: Context) -> list[str]:
 
 
 def _items_needed(conn: sqlite3.Connection, context: Context) -> bool:
-    return "acceptance" not in _columns(conn, "work_items") or _sessions_needed(conn, context)
+    # A dropped column still standing is a table a branch build rebuilt before the
+    # column went: the step then refuses it, since such a store is only ever a copy.
+    columns = _columns(conn, "work_items")
+    return (
+        "acceptance" not in columns
+        or bool(columns & _DROPPED_COLUMNS)
+        or _sessions_needed(conn, context)
+    )
 
 
 def _migrate_items(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
@@ -1127,6 +1138,7 @@ def _migrate_items(conn: sqlite3.Connection, context: Context) -> Mapping[str, A
     planning_store.widen_event_actions(conn)
     for statement in _SHAPE_ITEMS:
         conn.execute(statement)
+    conn.execute(f"DROP INDEX IF EXISTS {_REDECLARED_INDEX}")
     try:
         recreated = planning_store.rebuild_table(
             conn,
@@ -1136,6 +1148,8 @@ def _migrate_items(conn: sqlite3.Connection, context: Context) -> Mapping[str, A
             ),
             _ITEM_ROWS,
         )
+        conn.execute(planning_store.WORK_ITEMS_STATE_INDEX)
+        recreated.append(_REDECLARED_INDEX)
     finally:
         for table in ("work_model_accepted", "work_model_items", "work_model_entries"):
             conn.execute(f"DROP TABLE IF EXISTS temp.{table}")
@@ -2033,11 +2047,12 @@ def _holds_identities(conn: sqlite3.Connection, context: Context) -> Mapping[str
             continue
         # A value no step writes is compared as stored, character for character, so a
         # step that rewrote it to the same meaning is still seen. Only what a step
-        # writes anew is compared parsed: the checklist whose step claims `containers` to `children-left`
-        # release goes through `model.dumps`, the labels `items` adds a kind label to
-        # through `json_insert`, and those `labels` takes some from through `model.dumps`,
-        # each in a spelling of its own.
-        for column in ("title", "description", "position", "summary"):
+        # writes anew is compared parsed: the checklist whose step claims
+        # `containers` to `children-left` release goes through `model.dumps`, the
+        # labels `items` adds a kind label to through `json_insert`, and those
+        # `labels` takes some from through `model.dumps`, each in a spelling of its
+        # own.
+        for column in ("title", "description", "summary"):
             if row[column] != before[column]:
                 found.append(f"{identity} changed its {column}")
         if before["steps_released"]:

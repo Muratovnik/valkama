@@ -258,7 +258,16 @@ describe('FacetMarks in a column', () => {
     const held = boardItem(1, 'dev', {
       claim_ref: 'codex',
       priority: 'high',
-      checklist: [{ id: 'a', text: 'one', done: true, claimed_by: '', done_by: '' }],
+      checklist: [
+        {
+          id: 'a',
+          text: 'one',
+          done: true,
+          claimed_by: '',
+          done_by: '',
+          by_previous_holder: false,
+        },
+      ],
     })
     // The holder and steps columns name their facet in the heading.
     const column = marks({ item: held, surface: 'list', facets: ['holder', 'steps'] })

@@ -57,6 +57,8 @@ function planningWorkItemPayload() {
           started_at: null,
           waits_for: [],
           workable: false,
+          withheld: ['not_ready'],
+          lapsed_claim: null,
           revision: 4,
           created_at: '2026-08-13T08:00:00Z',
           updated_at: '2026-08-13T09:00:00Z',

@@ -237,12 +237,12 @@ class ThroughMcpTests(WriteCase):
     def test_the_queue_hands_out_a_task_and_leaves_the_goals_before_it(self) -> None:
         self.tree.add("T", kind="goal")
         self.accepted_goal()
-        # In triage like T, so that only the kind keeps the goal before it out of the queue.
-        self.tree.add("a")
-        self.conn.execute(
-            "UPDATE work_items SET position = -1 WHERE kind = ?", (model.CONTAINER_KIND,)
-        )
+        self.tree.add("a", state="ready")
         self.conn.commit()
+        # A goal or stage is withheld for its kind alone, wherever it stands.
+        for name in ("G", "S", "T"):
+            with self.subTest(item=name):
+                self.assertEqual(["goal_or_stage"], self.record(name)["withheld"])
         untouched = {name: self.stored(name, "revision") for name in ("G", "S", "T")}
         self.call("claim_ready", {"space": self.tree.key})
         self.assertEqual("active", self.category("a"))
@@ -253,7 +253,7 @@ class ThroughMcpTests(WriteCase):
                 self.assertEqual(("", []), self.holders(name))
 
     def test_a_goal_created_with_a_claim_is_refused_and_nothing_is_created(self) -> None:
-        self.refused(lambda: self.create(title="Goal", kind="goal", claim=True), "[container]")
+        self.refused(lambda: self.create(title="Goal", kind="goal", claim=True), "[goal_or_stage]")
 
     def test_a_task_in_review_or_done_is_refused_a_claim(self) -> None:
         self.tree.add("a", state="review", started=True)
@@ -367,7 +367,7 @@ class ThroughMcpTests(WriteCase):
             with self.subTest(state=state):
                 self.refused(
                     lambda state=state: self.transition("G", state, force=True, reason="r"),
-                    "[container]",
+                    "[goal_or_stage]",
                 )
 
     def test_a_move_to_deferred_is_refused_even_with_force(self) -> None:
@@ -847,7 +847,7 @@ class CreationTests(WriteCase):
             ({"state": "deferred"}, "[deferred]"),
             ({"state": "review"}, "[acceptance]"),
             ({"kind": "goal", "state": "done"}, "[container_state]"),
-            ({"kind": "goal", "state": "review"}, "[container]"),
+            ({"kind": "goal", "state": "review"}, "[goal_or_stage]"),
         ):
             with self.subTest(fields=fields):
                 self.refused(lambda fields=fields: self.create(title="Placed", **fields), said)
@@ -1134,10 +1134,14 @@ class QueueTests(WriteCase):
             "UPDATE work_items SET checklist = ? WHERE work_item_id = ?",
             (json.dumps(held), self.tree.ids["r"]),
         )
+        # The oracle's ready tasks wait: b's goal on X, y on S. Two that do not.
+        self.tree.add("q", state="ready")
+        self.tree.add("h", state="ready", parent="H")
         self.conn.commit()
         workable = {name for name in self.tree.ids if self.record(name)["workable"]}
-        # Worked by hand from the tree: the unheld, unblocked tasks in triage or ready.
-        self.assertEqual({"b", "e", "k", "u", "X"}, workable)
+        # Worked by hand from the tree: the unheld, unblocked tasks in ready, under no
+        # goal or stage that waits or is not accepted. Triage is never given.
+        self.assertEqual({"h", "q"}, workable)
         by_ref = {ref: name for name, ref in self.tree.refs.items()}
         handed: list[str] = []
         while reference := self.handed_out(self.call("claim_ready", {"space": self.tree.key})):
@@ -1149,16 +1153,21 @@ class QueueTests(WriteCase):
     def test_a_task_its_workflow_cannot_start_is_not_workable_and_the_queue_passes_it(
         self,
     ) -> None:
-        # Ready comes before triage in the order of work, so `a` is first in the queue;
-        # with no way from ready into work, only `b` can be started.
-        self.tree.add("a", state="ready")
-        self.tree.add("b")
+        # A second ready state, first in the workflow's order, with no way into work:
+        # `a` stands first in the queue, and only `b` can be started.
+        parked = model.new_id()
         self.conn.execute(
-            "DELETE FROM workflow_transitions WHERE workflow_id = ? AND from_state_id = ?"
-            " AND to_state_id IN (SELECT state_id FROM workflow_states WHERE category = 'active')",
-            (self.tree.workflow_id, self.tree.states["ready"]),
+            "INSERT INTO workflow_states(state_id, workflow_id, key, name, category, position)"
+            " VALUES (?, ?, 'parked', 'Parked', 'ready', -1)",
+            (parked, self.tree.workflow_id),
         )
+        self.tree.states["parked"] = parked
+        self.tree.add("a", state="parked", basis=model.NAMED_BASIS)
+        self.tree.add("b", state="ready")
         self.conn.commit()
+        self.assertEqual(
+            (["no_start"], []), (self.record("a")["withheld"], self.record("b")["withheld"])
+        )
         self.assertEqual(
             (False, True), (self.record("a")["workable"], self.record("b")["workable"])
         )
@@ -1170,7 +1179,7 @@ class QueueTests(WriteCase):
         )
         handed = self.handed_out(self.call("claim_ready", {"space": self.tree.key}))
         self.assertEqual(self.ref("b"), handed)
-        self.assertEqual(("ready", ""), (self.record("a")["state"]["key"], self.holders("a")[0]))
+        self.assertEqual(("parked", ""), (self.record("a")["state"]["key"], self.holders("a")[0]))
         self.assertIsNone(self.handed_out(self.call("claim_ready", {"space": self.tree.key})))
 
 

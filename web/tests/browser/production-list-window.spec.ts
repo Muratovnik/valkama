@@ -140,6 +140,7 @@ test('a long list keeps its columns while it scrolls, a far row that is widest i
       done: false,
       claimed_by: '',
       done_by: '',
+      by_previous_holder: false,
     })),
     updated_at: '2020-08-28T20:08:00Z',
   })

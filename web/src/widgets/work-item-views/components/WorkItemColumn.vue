@@ -5,16 +5,15 @@
  * The column exists because the workflow declares the state, not because the
  * product has six lanes. Its tone comes from the state's *category*, so a
  * renamed state keeps its reading and a second active state gets the same one.
- * The tiles and the ways to reorder them are the stack's; the column is the
- * ground they lie on, and what it is called.
+ * The tiles and the way they cross to another state are the stack's; the column
+ * is the ground they lie on, and what it is called.
  *
  * A column draws its tiles as the reader scrolls towards them. A space of a
  * thousand finished items drew a thousand tiles every time the board was
  * opened or regrouped, which held the page for over a tenth of a second while
  * only the first four could be seen. The column draws a page of them, and the
- * next page once the end of what is drawn comes within reach of the scroll; a
- * tile moved from the keyboard past that end is drawn where it lands. The count
- * in the header is always the whole state's.
+ * next page once the end of what is drawn comes within reach of the scroll. The
+ * count in the header is always the whole state's.
  */
 import { computed, ref } from 'vue'
 
@@ -46,7 +45,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   dragging: [active: boolean]
-  edge: [reference: string, edge: 'first' | 'last']
   filter: [token: WorkFilterToken]
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
@@ -69,11 +67,6 @@ useIntersectionObserver(
   },
   { root: scroll, rootMargin: '0px 0px 600px 0px' },
 )
-
-function placed(move: BoardMove, landing: StackLanding) {
-  if (landing.keyboard && landing.position >= drawn.value) drawn.value = landing.position + PAGE
-  emit('place', move, landing)
-}
 </script>
 
 <template>
@@ -110,10 +103,9 @@ function placed(move: BoardMove, landing: StackLanding) {
         :hint-id="props.hintId"
         :writable="props.writable"
         @dragging="emit('dragging', $event)"
-        @edge="(reference, edge) => emit('edge', reference, edge)"
         @filter="emit('filter', $event)"
         @open="emit('open', $event)"
-        @place="placed"
+        @place="(move, landing) => emit('place', move, landing)"
       />
       <div
         v-if="drawn < props.items.length"

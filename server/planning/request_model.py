@@ -987,8 +987,14 @@ def timestamp(value: object, field: str = "expires_at") -> str | None:
         raise model.PlanningError(f"{field} must be an ISO timestamp") from error
     if parsed.tzinfo is None:
         raise model.PlanningError(f"{field} must include a timezone")
-    return parsed.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    return stamp(parsed)
+
+
+def stamp(moment: datetime) -> str:
+    """A moment in the form requests store and compare their times in."""
+
+    return moment.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def now() -> str:
-    return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    return stamp(datetime.now(UTC))

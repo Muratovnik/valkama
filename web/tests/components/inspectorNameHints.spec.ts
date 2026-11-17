@@ -55,7 +55,7 @@ function held(holder: string, followers: string[] = []): WorkItem {
   } as WorkItem
 }
 
-const LEASE = 'Claim: Unconfirmed — held until someone releases it'
+const LEASE = 'Claim: Unconfirmed — lapses after 3 days without an event on the item'
 
 describe("a name's hint on the card's facts", () => {
   it("is the holder's lease, never its name", () => {
@@ -71,6 +71,15 @@ describe("a name's hint on the card's facts", () => {
     const hint = tooltipOf(wrapper.get('.card-holder-name').element)
     expect(wrapper.get('.card-holder-name').text()).toBe('codex · 019a3c2e-0001')
     expect(hint).toMatchObject({ text: `${SESSION}\n${LEASE}`, words: 'codex · 019a3c2e-0001' })
+    wrapper.unmount()
+  })
+
+  it('names no date or term for a live lease an open question to the owner holds', () => {
+    const record = held('codex')
+    const claim = { ...record.claim, state: 'live', session_id: SESSION, expires_at: null }
+    const wrapper = facts({ ...record, claim_state: 'live', claim } as WorkItem)
+    const hint = tooltipOf(wrapper.get('.card-holder-name').element)
+    expect(hint).toMatchObject({ text: 'Claim: Live' })
     wrapper.unmount()
   })
 

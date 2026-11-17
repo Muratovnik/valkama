@@ -108,8 +108,22 @@ describe('what a point can be', () => {
 describe('the checklist sent', () => {
   it('is every step the item has, by its id, and the chosen points after them', () => {
     const steps = [
-      { id: 'a', text: 'One', done: true, claimed_by: '', done_by: 'kolo' },
-      { id: 'b', text: 'Two', done: false, claimed_by: 'kolo', done_by: '' },
+      {
+        id: 'a',
+        text: 'One',
+        done: true,
+        claimed_by: '',
+        done_by: 'worker-b',
+        by_previous_holder: false,
+      },
+      {
+        id: 'b',
+        text: 'Two',
+        done: false,
+        claimed_by: 'worker-b',
+        done_by: '',
+        by_previous_holder: false,
+      },
     ]
     expect(checklistWith(steps, ['Three'])).toEqual([
       { id: 'a', text: 'One' },

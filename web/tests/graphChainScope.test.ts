@@ -53,6 +53,8 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
     started_at: null,
     waits_for: [],
     workable: false,
+    withheld: ['not_ready'],
+    lapsed_claim: null,
     comment_count: 0,
     ...overrides,
   }

@@ -19,10 +19,11 @@ import unittest
 from datetime import UTC, datetime
 from unittest import mock
 
-from server import store
+from server import mcp_surface, store
 from server.planning import api as planning_api
 from server.planning import chain, service
 from tests.planning_fixtures import basis_for
+from tests.planning_tree import Tree
 
 CHAIN_PATH = "/api/planning/work-item/chain"
 
@@ -63,7 +64,8 @@ class ChainFixture(unittest.TestCase):
         make("C1", parent="QA-1")
         make("C2", parent="QA-1")
         make("C3", parent="QA-1")
-        make("D0")
+        # Accepted, so it is the member the queue gives once its blocker is done.
+        make("D0", state="ready")
         make("D1", state="review")
         make("E", kind="goal")
         make("E1", parent=self.refs["E"])
@@ -186,17 +188,21 @@ class ChainBoundaryTests(ChainFixture):
     def test_the_chain_follows_discovery_and_children_downward_only(self) -> None:
         found = self.read(id=self.refs["R"])
         self.assertEqual("chain", found["scope"])
-        # By number, which is creation order here.
-        self.assertEqual(list(self.MEMBERS), self.names([m["reference"] for m in found["members"]]))
+        # Who belongs; the order they come in is the order of work (ChainOrderTests).
+        self.assertEqual(
+            sorted(self.MEMBERS), sorted(self.names([m["reference"] for m in found["members"]]))
+        )
         excluded = {"R", "O", "O2", "Up", "Rel", "Dup", "Blk", "Z"}
         self.assertFalse(excluded & set(self.names([m["reference"] for m in found["members"]])))
 
     def test_the_tree_scope_is_everything_under_the_root(self) -> None:
         found = self.read(id=self.refs["R"], scope="tree")
         self.assertEqual("tree", found["scope"])
-        self.assertEqual(["C1", "C2", "C3"], self.names([m["reference"] for m in found["members"]]))
         self.assertEqual(
-            (3, 1, 2, 1), (found["total"], found["closed"], found["open"], found["workable"])
+            ["C1", "C2", "C3"], sorted(self.names([m["reference"] for m in found["members"]]))
+        )
+        self.assertEqual(
+            (3, 1, 2, 0), (found["total"], found["closed"], found["open"], found["workable"])
         )
         self.assertEqual(
             [("R", 3, 2)],
@@ -247,10 +253,10 @@ class ChainBoundaryTests(ChainFixture):
     def test_counts_and_categories(self) -> None:
         found = self.read(id=self.refs["R"])
         self.assertEqual(
-            (10, 4, 6, 2), (found["total"], found["closed"], found["open"], found["workable"])
+            (10, 4, 6, 1), (found["total"], found["closed"], found["open"], found["workable"])
         )
         self.assertEqual(
-            {"active": 1, "triage": 3, "cancelled": 1, "completed": 3, "ready": 1, "review": 1},
+            {"active": 1, "triage": 2, "cancelled": 1, "completed": 3, "ready": 2, "review": 1},
             found["by_category"],
         )
 
@@ -287,7 +293,8 @@ class ChainBoundaryTests(ChainFixture):
         self.assertEqual("2026-10-10T08:00:00Z", members["C3"]["created_at"])
         # Ready: unheld, uncontained, not started, and nothing unfinished blocks
         # it. D0's only blocker is finished; E is a container; E2 waits on C3.
-        self.assertEqual({"C2", "D0"}, {name for name, m in members.items() if m["workable"]})
+        # C2 waits in triage under a goal in triage: the queue does not give it.
+        self.assertEqual({"D0"}, {name for name, m in members.items() if m["workable"]})
         self.assertEqual(
             ("one", "unconfirmed"), (members["C3"]["claim_ref"], members["C3"]["claim_state"])
         )
@@ -422,7 +429,7 @@ class ChainBoundaryTests(ChainFixture):
                 "created_at",
                 "closed_at",
                 "workable",
-                "rank",
+                "queue_order",
             },
             set(found["members"][0]),
         )
@@ -551,6 +558,73 @@ class ChainBlockerSourceTests(ChainFixture):
             [(self.refs["Blk"], None, None, None, "state_missing")], self.blockers_of("D0")
         )
         self.assertTrue(self.ready("D0"))
+
+
+class ChainOrderTests(unittest.TestCase):
+    """Members in the order of work, open members by group in that order."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        patch = mock.patch.dict(
+            os.environ, {"VALKAMA_DB": os.path.join(directory.name, "valkama.sqlite3")}
+        )
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        # G at work through t1; t2 urgent with a greater number than t3; t4 waits on
+        # B, outside the goal; t5 closed. Placed in SQL as the queue's cases are.
+        self.tree = Tree(self.conn, "CH")
+        self.tree.add("G", kind="goal", state="container")
+        self.tree.add("t1", state="dev", parent="G", started=True)
+        self.tree.add("t3", state="ready", parent="G")
+        self.tree.add("t2", state="ready", parent="G")
+        self.tree.add("t4", state="ready", parent="G")
+        self.tree.add("t5", state="done", parent="G", started=True)
+        self.tree.add("B")
+        self.tree.block("B", "t4")
+        self.conn.execute("UPDATE work_items SET created_at = '2026-11-01T00:00:00Z'")
+        self.conn.execute(
+            "UPDATE work_items SET priority = 'urgent' WHERE work_item_id = ?",
+            (self.tree.ids["t2"],),
+        )
+
+    def names(self, references: list[str]) -> list[str]:
+        by_reference = {reference: name for name, reference in self.tree.refs.items()}
+        return [by_reference[reference] for reference in references]
+
+    def test_members_come_in_the_order_of_work_with_their_place_in_the_queue(self) -> None:
+        answer = planning_api.handle_get(self.conn, CHAIN_PATH, {"id": [self.tree.refs["G"]]})
+        assert answer is not None
+        members = answer[1]["chain"]["members"]
+        # Ready by the key of work, then work at work, then what is closed.
+        self.assertEqual(
+            ["t2", "t3", "t4", "t1", "t5"], self.names([m["reference"] for m in members])
+        )
+        self.assertEqual(
+            {"t2": 1, "t3": 2, "t4": None, "t1": None, "t5": None},
+            {
+                name: member["queue_order"]
+                for name, member in zip(
+                    self.names([m["reference"] for m in members]), members, strict=True
+                )
+            },
+        )
+        self.assertFalse(any("rank" in member for member in members))
+        # The places are the queue's own.
+        self.assertEqual(
+            self.tree.refs["t2"],
+            service.claim_ready_work_item(self.conn, space="CH", author="agent")["reference"],
+        )
+
+    def test_open_members_go_by_group_and_inside_one_in_the_members_order(self) -> None:
+        rows = mcp_surface.call_tool(self.conn, "get_work_item_chain", {"id": self.tree.refs["G"]})[
+            "open_members"
+        ]
+        self.assertEqual(["t1", "t2", "t3", "t4"], self.names([row["reference"] for row in rows]))
+        self.assertEqual([None, 1, 2, None], [row["queue_order"] for row in rows])
+        self.assertFalse(any("rank" in row for row in rows))
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest discovery owns this
