@@ -523,8 +523,9 @@ Two points, one with its steps and one with its way:
               {"id": "split_first", "label": "Split the files first"}]}]
 ```
 
-A field `under` a later field, a field under another, or an option its parent
-lacks is refused, naming the field and how to put it right.
+A field `under` a later field, a field of a type other than `verdict`, `choice` or
+`multi_choice`, a field that is itself under another, or an option its parent lacks
+is refused, naming the field and how to put it right.
 
 ### Asking another session
 
