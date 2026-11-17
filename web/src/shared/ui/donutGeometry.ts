@@ -141,9 +141,17 @@ export function sectorPath(start: number, end: number): string {
   ].join(' ')
 }
 
+/**
+ * The middle of a sector's band, in the ring's box: where its share is written and the point its
+ * hint stands at (`data-hint-point`).
+ */
+export function bandMiddle(sector: Pick<RingSector, 'start' | 'end'>) {
+  return pointAt((sector.start + sector.end) / 2, (OUTER + INNER) / 2)
+}
+
 /** Where a sector's share is written: the middle of its band, as shares of the ring's box. */
 export function labelPlace(sector: Pick<RingSector, 'start' | 'end'>) {
-  const middle = pointAt((sector.start + sector.end) / 2, (OUTER + INNER) / 2)
+  const middle = bandMiddle(sector)
   return { left: middle.x / RING_BOX, top: middle.y / RING_BOX }
 }
 

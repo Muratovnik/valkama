@@ -18,7 +18,10 @@
  *   left, mirrored, and where the window has no room over the mark, under it at the same side.
  *   The element marks the point it holds, `data-hint-point`, so a point's whole area is its
  *   element's: a reading takes the pointer on the whole step it holds and on its mark. Placed as a
- *   detail is, under the step, the hint stood under the plot over the moments named there.
+ *   detail is, under the step, the hint stood under the plot over the moments named there. A drawn
+ *   shape that holds no mark names its point in its own units instead, as a sector of a ring names
+ *   the middle of its band: placed as a detail, under the sector's box, the hint of a sector that
+ *   runs round half the ring stood under the whole ring, far from where the pointer was.
  * - In a list, every other hint stands aside of it: a list of rows down (`data-hint-list="rows"`:
  *   the rail, a ranking's bars, the Analytics rail and the list view's table) puts it past the
  *   list's own edge, clear of every row, its top level with its row's; a list of rows across
@@ -385,16 +388,34 @@ function barBox(row: HTMLElement): DOMRect {
  * as the mark, `OFFSET` past its right edge or short of its left, so the hint's start or end stands
  * there and its bottom, or under the mark its top, `OFFSET` from the mark.
  */
-function cornerEdge(point: Element, corner: 'left' | 'right'): DOMRect {
-  const mark = point.getBoundingClientRect()
+function cornerEdge(mark: DOMRect, corner: 'left' | 'right'): DOMRect {
   const at = corner === 'right' ? mark.right + OFFSET : mark.left - OFFSET
   return new DOMRect(at, mark.top, 0, mark.height)
 }
 
-/** Where the hint of `element` stands that speaks for the point it holds (`data-hint-point`). */
+/**
+ * The point `element`'s hint speaks for (`data-hint-point`), as drawn now: the mark it holds, or,
+ * where a drawn shape holds none, as a sector of a ring, the point the shape names in its own
+ * units, `x y`, a box of no size. None where it declares neither.
+ */
+function hintPointOf(element: Element): (() => DOMRect) | null {
+  const mark = element.querySelector('[data-hint-point]')
+  if (mark) return () => mark.getBoundingClientRect()
+  if (!(element instanceof SVGGraphicsElement)) return null
+  const named = element.dataset.hintPoint?.split(' ').map(Number)
+  if (named?.length !== 2) return null
+  if (!named.every((part) => Number.isFinite(part))) return null
+  const [x = 0, y = 0] = named
+  return () => {
+    const drawn = new DOMPoint(x, y).matrixTransform(element.getScreenCTM() ?? undefined)
+    return new DOMRect(drawn.x, drawn.y, 0, 0)
+  }
+}
+
+/** Where the hint of `element` stands that speaks for its point (`hintPointOf`). */
 function pointPlaceOf(
   element: HTMLElement,
-  point: Element,
+  point: () => DOMRect,
   setting: Pick<HintSetting, 'kind' | 'rem' | 'width' | 'window'>,
 ): HintPlace & { reference: HintReference } {
   const place = placeHint({
@@ -402,15 +423,14 @@ function pointPlaceOf(
     aside: element.getBoundingClientRect(),
     frame: frameAround(element),
     list: null,
-    point: point.getBoundingClientRect(),
+    point: point(),
   })
   const { corner } = place
   return {
     ...place,
     reference: {
       contextElement: element,
-      getBoundingClientRect: () =>
-        corner ? cornerEdge(point, corner) : point.getBoundingClientRect(),
+      getBoundingClientRect: () => (corner ? cornerEdge(point(), corner) : point()),
     },
   }
 }
@@ -433,7 +453,7 @@ export function hintPlaceOf(
 ): HintPlace & { reference: HTMLElement | HintReference } {
   const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
   const inner = document.documentElement.clientWidth
-  const point = asked ? null : element.querySelector('[data-hint-point]')
+  const point = asked ? null : hintPointOf(element)
   if (point) return pointPlaceOf(element, point, { kind, rem, width, window: inner })
   const declared = asked ? null : hintListOf(element)
   const aside = declared

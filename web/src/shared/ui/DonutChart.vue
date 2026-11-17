@@ -15,7 +15,8 @@
  *
  * A sector is a mark of its chart: its one hint, under the pointer or the keyboard, gives its
  * figure and its share of the whole, and for the rest each part it holds (`markHints.ts` draws the
- * same grid for a period). The sectors are one stop for Tab, walked round the ring with the arrows,
+ * same grid for a period). It stands at the top right of the middle of the sector's band, as a
+ * chart's hint stands at its point (`data-hint-point`, `hintPlacement.ts`). The sectors are one stop for Tab, walked round the ring with the arrows,
  * Home and End; a sector whose row opens something (`actionable`) is a button there, pressed with
  * Enter or Space as with the pointer, and sent out as `select` with the row's key, as its legend
  * entry is. A row that leads somewhere (`href`) is followed from its legend entry and the table.
@@ -34,7 +35,14 @@ import { shareWords } from '@/shared/ui/chartGeometry.ts'
 import ChartLegend from '@/shared/ui/ChartLegend.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import type { RingSector } from '@/shared/ui/donutGeometry.ts'
-import { labelFits, labelPlace, RING_BOX, ringOf, sectorPath } from '@/shared/ui/donutGeometry.ts'
+import {
+  bandMiddle,
+  labelFits,
+  labelPlace,
+  RING_BOX,
+  ringOf,
+  sectorPath,
+} from '@/shared/ui/donutGeometry.ts'
 import type { TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
@@ -62,10 +70,20 @@ const props = defineProps<{
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
 
 const ring = computed(() => ringOf(props.rows))
-/** The sectors drawn, each with its outline; one too thin to show past its gap is in the legend. */
+/**
+ * The sectors drawn, each with its outline and the point its hint stands at, the middle of its
+ * band in the drawing's units; one too thin to show past its gap is in the legend.
+ */
 const drawn = computed(() =>
   ring.value.sectors
-    .map((sector) => ({ ...sector, path: sectorPath(sector.start, sector.end) }))
+    .map((sector) => {
+      const middle = bandMiddle(sector)
+      return {
+        ...sector,
+        path: sectorPath(sector.start, sector.end),
+        point: `${middle.x} ${middle.y}`,
+      }
+    })
     .filter((sector) => sector.path),
 )
 
@@ -234,6 +252,7 @@ async function walk(event: KeyboardEvent, index: number) {
             :data-slot="sector.slot"
             :data-key="sector.key"
             :data-sector="index"
+            :data-hint-point="sector.point"
             v-bind="sectorAttrs(sector, index)"
             @click="press(sector)"
             @keydown="(event: KeyboardEvent) => walk(event, index)"

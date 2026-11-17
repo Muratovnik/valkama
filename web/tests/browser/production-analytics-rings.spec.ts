@@ -158,6 +158,14 @@ test('agent time by effort is a ring of five sectors at most, with a legend, a h
   await expect(hint).toContainText('high')
   await expect(hint).toContainText('6 h')
   await expect(hint).toContainText('47% of the total')
+  // It stands at the top right of the middle of the sector's band, where its share is written,
+  // as a chart's hint stands at its point: its bottom left corner 6px past it and over it.
+  await expect(async () => {
+    const placed = await hint.boundingBox()
+    if (!placed) throw new Error('no hint')
+    expect(Math.abs(placed.x - (band.x + 6)), 'across').toBeLessThan(1)
+    expect(Math.abs(band.y - 6 - (placed.y + placed.height)), 'down').toBeLessThan(1)
+  }).toPass({ timeout: 3000 })
   await page.mouse.move(0, 0)
   await expect(hint).toBeHidden()
 
