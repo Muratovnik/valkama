@@ -5,7 +5,9 @@
  * in its order, five sectors at most with the smaller past them folded into one rest; a sector
  * pointed at or reached with the keyboard shows one hint with its figure and share; the section's
  * «Table» shows every value as before; split by a second dimension, the section draws its pairs as
- * ranked bars again; a sector of a value pressed narrows the view to it. At 1440 and 360 pixels the
+ * ranked bars again; a sector of a value pressed narrows the view to it; a sector reached from the
+ * keyboard shows its focus ring, in the forced palette's highlight there, and a pointer press shows
+ * none. At 1440 and 360 pixels the
  * ring stands inside its column, its legend clear of it, and no share written on a sector lies on
  * another or past the ring. Each run prints what it measured and keeps a picture of each section.
  */
@@ -238,3 +240,55 @@ for (const width of [1440, 360])
     await expect(kinds.locator('.donut-note-name')).toHaveText(['Cache read', 'Reasoning'])
     await kinds.screenshot(shot(info, `ring-kinds-${width}.png`))
   })
+
+/**
+ * Moves focus onto the ring's second sector from the keyboard, then presses the largest in its
+ * band at three o'clock with the pointer: what each sector shows and the colour of its ring.
+ */
+async function focusThenPress(page: Page) {
+  const sectors = ring(page).locator('.donut-sector')
+  await sectors.first().focus()
+  await page.keyboard.press('ArrowRight')
+  const keyed = await sectors.nth(1).evaluate((sector) => ({
+    stroke: getComputedStyle(sector).stroke,
+    shown: sector.matches(':focus-visible'),
+  }))
+  const band = await ring(page).locator('.donut-ring').boundingBox()
+  if (!band) throw new Error('the ring is not laid out')
+  // Read while held down: the release narrows the view and redraws the ring.
+  await page.mouse.move(band.x + band.width * 0.905, band.y + band.height / 2)
+  await page.mouse.down()
+  const pressed = await sectors.first().evaluate((sector) => ({
+    focused: sector === document.activeElement,
+    shown: sector.matches(':focus-visible'),
+  }))
+  await page.mouse.up()
+  return { keyed, pressed }
+}
+
+test('a sector reached from the keyboard shows its ring, in the forced palette too, and a pointer press none', async ({
+  page,
+}) => {
+  await openRing(page, { by: 'effort' }, 1440)
+  const themed = await focusThenPress(page)
+  expect(themed.keyed.shown).toBe(true)
+  expect(themed.pressed).toEqual({ focused: true, shown: false })
+
+  await page.emulateMedia({ forcedColors: 'active' })
+  await openRing(page, { by: 'effort' }, 1440)
+  const forced = await focusThenPress(page)
+  expect(forced.keyed.shown).toBe(true)
+  // The forced palette's highlight, not the theme's ring the series fill would otherwise keep.
+  expect(forced.keyed.stroke).not.toBe(themed.keyed.stroke)
+  expect(forced.keyed.stroke).toBe(
+    await page.evaluate(() => {
+      const probe = document.createElement('i')
+      probe.style.color = 'Highlight'
+      document.body.append(probe)
+      const color = getComputedStyle(probe).color
+      probe.remove()
+      return color
+    }),
+  )
+  expect(forced.pressed).toEqual({ focused: true, shown: false })
+})

@@ -330,6 +330,13 @@ async function walk(event: KeyboardEvent, index: number) {
     stroke-width: var(--size-focus-ring);
     vector-effect: non-scaling-stroke;
   }
+
+  /* The series fill opts out of the forced palette, so its stroke would keep the theme's ring. */
+  @media (forced-colors: active) {
+    &:focus-visible {
+      stroke: Highlight;
+    }
+  }
 }
 
 /* A share on its sector, centred on the middle of its band, in the ink that reads on every hue of
