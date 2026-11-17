@@ -236,6 +236,9 @@ EVENT_ACTIONS = (
     # many steps it took, `MAIN-15: 2 steps`, and on the part the task's reference.
     "split_off",
     "split_from",
+    # An action that waited for the owner and was dropped without being carried out
+    # (`planning.pending`): `<point>: <why>`, such as `proposed_goal: merged into MAIN-12`.
+    "action_dropped",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 #: The actions that say which state an item came to stand in: `created` and

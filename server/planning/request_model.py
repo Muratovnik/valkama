@@ -17,7 +17,11 @@ EXPIRED_REASONS = ("deadline", "withdrawn", "execution_closed", "item_completed"
 #: accepted, a goal or stage whose work is all closed to be confirmed, put-off work
 #: that came back to be taken up again. Null on any other request. Declared here,
 #: beside the statuses, because the store's CHECK reads it.
-PURPOSES = ("review", "confirm", "return")
+#: The purposes of the owner's participation (`planning.pending`) follow: a goal an
+#: agent proposed or put off, a task in a goal, a cancel, a condition removed or
+#: rewritten, the consent of the sessions whose work a cancel ends, and a finding.
+PARTICIPATION_PURPOSES = ("goal", "task", "cancel", "condition", "consent", "triage")
+PURPOSES = ("review", "confirm", "return", *PARTICIPATION_PURPOSES)
 #: The field of the question a move into review asks, by what its answer carries out:
 #: `accept` completes the work, `return` sends it back to work. The question's note
 #: is the owner's comment on either.
