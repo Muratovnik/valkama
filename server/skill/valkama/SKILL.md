@@ -440,7 +440,9 @@ what is finished: partly released work shows as well, a `changed-patch` or
 **Not done.** Work that is not needed, duplicated or superseded closes in the
 cancelled state. It needs the summary, which starts with why (`Not needed:`,
 `Duplicate of MAIN-12`, `Superseded by MAIN-12`), and leaves undone steps open,
-because ticking them would claim work that did not happen. For a duplicate,
+because ticking them would claim work that did not happen. Cancelling a goal or
+stage with open work is two calls: the first answers with the list and a token,
+the second sends it in `cancels`. For a duplicate,
 prefer `merge_work_items`; otherwise link `duplicates` to the survivor and copy
 anything unique there first. `delete_work_item` is only for an item that should
 never have existed, and it refuses while the item has children.

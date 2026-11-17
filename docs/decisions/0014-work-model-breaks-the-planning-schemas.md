@@ -66,6 +66,11 @@ and no compatibility layer.
      where it read `task_closed`, reopening brings none back, a change of an
      answer on a closed item is refused with `[item_closed]`, and the record
      carries `purpose`;
+   - a cancel of a goal or stage with open work under it, which used to pass, is
+     refused with `cancel_list` and the list of what would close, and the
+     `transition` group and its HTTP write take `cancels`, that list's token,
+     which cancels the work under it in the same write; that answer's
+     `released` is then a list of `{reference, holder}`;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -135,6 +140,7 @@ and no compatibility layer.
 | scope `project` | scope `space`, the project an optional refinement |
 | `expired_reason: "task_closed"`, read until the item reopens | `"item_completed"` or `"item_cancelled"`, written by the close |
 | `[task_closed]` on an answer change | `[item_closed]` |
+| cancelling a goal or stage with open work under it in one move | the move, refused with `cancel_list`; then the same move with `cancels` set to its `list_token` |
 
 ## Consequences
 

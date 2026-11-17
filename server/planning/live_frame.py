@@ -119,7 +119,7 @@ def _item(row: sqlite3.Row) -> _Item:
         key=key,
         reference=f"{key}-{number}",
         title=str(row["title"]),
-        kind=read_model.outward_kind(row["kind"], row["parent_id"]),
+        kind=model.outward_kind(row["kind"], row["parent_id"]),
         parent=None if row["parent_id"] is None else str(row["parent_id"]),
         pinned=bool(row["pinned"]),
         state_name="" if shown is None else str(shown["name"]),

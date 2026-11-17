@@ -59,6 +59,8 @@ says what it is:
   `deferred` it accepts the work in `triage` under it, stopping at a deferred goal
   or stage.
 - `started_at` is when work on it began, `waits_for` the open items blocking it,
+  `cancelled_blockers`, only when there are any, the cancelled items still linked
+  to block it,
   `workable` whether its space's queue may give it now, and `withheld` why not,
   as codes such as `not_ready`, `held`, `waits`, `question` or
   `ancestor_triage`: empty exactly when it is `workable`.
@@ -288,8 +290,8 @@ outside 1 to 1000.
 **The card** is what a write with `verbose: true` and `claim_ready_work_item`
 answer with too: `reference`, `title`, `kind`, `priority`, `state` (`key`,
 `name`, `category`; null for an accepted open goal or stage), `open`,
-`container_state`, `acceptance`, `started_at`, `waits_for`, `workable`,
-`withheld`, `projects` (the projects the item changes, each with its `project_id`, the
+`container_state`, `acceptance`, `started_at`, `waits_for`, `cancelled_blockers`
+(only when there are any), `workable`, `withheld`, `projects` (the projects the item changes, each with its `project_id`, the
 registry's `display_name`, null while the registry does not record it, and its
 `source`: `named`, `commits` or `migrated`; a goal's or stage's are those of
 every task under it), `claim_ref`, `claim_state`, `last_claim_ref`,
@@ -357,6 +359,7 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 | a review state, from outside review | `to_check`, what the owner is to check, which `force` does not carry (`review_question`); the move asks it of the owner |
 | a review or completed state | no step marked `by_previous_holder`: tick it again to confirm it, or reopen it (`previous_holder`) |
 | a cancelled state | a summary; open steps stay open |
+| a cancelled state, for a goal or stage with open work under it | `cancels` set to the `list_token` its refusal (`cancel_list`) handed over, which `force` does not carry; the move then cancels that work too |
 | a blocked state | a `reason`, for a cause outside Valkama; work that waits on an item is linked `blocks` and stays where it is |
 | any state | a transition the workflow allows from where the item stands |
 | review, blocked, completed or cancelled, for an item being created | refused (`new_item`): create it, then move it there; `force` does not carry this |
@@ -383,6 +386,7 @@ owner is open on it, `force` or not; cancelling is not.
 | `workflow_guard` with `[new_item]` | Create the item, then move it. |
 | `workflow_guard` with `[review_question]` | Send `to_check`, what the owner is to check. |
 | `workflow_guard` with `[question]` | Wait for the owner's answer, or withdraw a question you asked. |
+| `cancel_list` | Read the list, then send the same transition with `cancels` set to `list_token`. |
 | `owner_only` | The owner answers this question in Valkama: leave it. |
 | `[purpose]` | The review question takes one of its two answers, and its answer is not changed or declined. |
 | `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |

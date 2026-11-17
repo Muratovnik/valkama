@@ -152,6 +152,7 @@ describe('a card', () => {
     ['5001 agents', { agents: many(5001, (index) => agent(index)) }],
     ['an agent whose ids run to 200 characters', { agents: [agent(0, 'a'.repeat(200))] }],
     ['33 warnings past 512 characters', { warnings: many(33, () => 'w'.repeat(600)) }],
+    ['501 items a close freed', { freed: many(501, (index) => `QA-${index + 1}`) }],
   ])('reads with %s', (_, change) => {
     const record = { ...workItemFixture('Bounds', 1), ...change }
     expect(() => validateWorkItemRecord(record)).not.toThrow()

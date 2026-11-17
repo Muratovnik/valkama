@@ -219,7 +219,7 @@ _COMMENT_FORM = (
 #: What a batch's transition takes, and the guards it meets.
 _TRANSITION_FORM = (
     'An object, never a bare state name: {"state": "done"}, with reason, force,'
-    " acceptance or to_check when they apply. The one path a state changes by. The"
+    " acceptance, to_check or cancels when they apply. The one path a state changes by. The"
     " workflow's guards apply: an active state needs a holder after the write"
     " (executor); review and a completed state need every checklist step ticked and a"
     " closing summary, and are refused while a step stands ticked by a holder whose"
@@ -239,10 +239,14 @@ _TRANSITION_FORM = (
     " triage, and one never accepted is cancelled, not completed. It completes only"
     " with nothing open under it (children): when the last item under it closes it"
     " awaits confirmation, the answer names it in awaiting_confirmation, and completing"
-    " it is the confirmation. Entering deferred is refused."
+    " it is the confirmation. Cancelling one with open work under it is refused with"
+    " the list of what would close and a list_token (cancel_list): send the same"
+    " transition with cancels set to that token to cancel it all; a list that changed"
+    " meanwhile is refused again with the new one. Entering deferred is refused."
     " A cancelled state needs only the summary, saying why the work stopped; its undone"
     " steps stay open. force carries a refusal through and records it, except executor,"
-    " acceptance, deferred, children, question, review_question and the refusals that"
+    " acceptance, deferred, children, question, review_question, cancel_list and the"
+    " refusals that"
     " keep a goal or stage out of work. Any"
     " state but an active or blocked one"
     " also ends the item's claim and any step claim, whoever holds them; the answer"
@@ -458,8 +462,9 @@ TOOLS = [
         "get_work_item",
         "Read a work item",
         "One item. By default its card: reference, title, kind, priority, state, open,"
-        " container_state, acceptance, started_at, waits_for, workable, withheld, projects,"
-        " claim_ref, claim_state, last_claim_ref, lapsed_claim, labels, revision, parent,"
+        " container_state, acceptance, started_at, waits_for, cancelled_blockers (the"
+        " cancelled items still linked to block it, only when there are any), workable,"
+        " withheld, projects, claim_ref, claim_state, last_claim_ref, lapsed_claim, labels, revision, parent,"
         " url, description, checklist (each condition with its id) and summary, and parts:"
         " every other part it has, with count and size. parts names what to read: "
         + ", ".join(read_model.PARTS[:-2])
@@ -1045,6 +1050,15 @@ TOOLS = [
                         " check, asked as the owner's question on the item. The owner's"
                         " answer completes the item or returns it to work; the answer names"
                         " the question as review_request_id.",
+                    },
+                    "cancels": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "With cancelling a goal or stage only: the list_token"
+                        " of the cancel_list refusal, confirming that list. Everything open"
+                        " under it is cancelled in the same write, and the answer names it"
+                        " as cancelled, the claims that ended as released and the work"
+                        " nothing blocks any more as freed.",
                     },
                 },
                 "required": ["state"],

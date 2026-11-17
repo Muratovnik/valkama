@@ -140,6 +140,17 @@ def error_response(error: BaseException) -> tuple[int, dict]:
         return error.status, {"error": {"code": error.code, "message": str(error)}}
     if isinstance(error, model.WorkItemNotFoundError):
         return 404, {"error": {"code": "not_found", "message": str(error)}}
+    if isinstance(error, model.CancelListError):
+        # Before the guard it is a kind of: its body is the list the caller confirms.
+        return 409, {
+            "error": {
+                "code": "cancel_list",
+                "message": str(error),
+                "cancels": error.cancels,
+                "dependents": error.dependents,
+                "list_token": error.list_token,
+            }
+        }
     if isinstance(error, model.WorkflowGuardError):
         return 409, {"error": {"code": "workflow_guard", "message": str(error)}}
     if isinstance(error, model.MentionLimitError):
@@ -680,6 +691,7 @@ def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict
         author=_author(payload),
         acceptance=payload.get("acceptance"),
         to_check=payload.get("to_check"),
+        cancels=payload.get("cancels"),
     )
 
 
@@ -1121,7 +1133,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         ),
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
-    ("transition", frozenset({"state", "reason", "force", "acceptance", "to_check"})),
+    ("transition", frozenset({"state", "reason", "force", "acceptance", "to_check", "cancels"})),
 )
 #: What a creation may do to the item it just made, after making it and in this
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
@@ -1293,10 +1305,11 @@ def _apply_step(
     moved = {"state": answer["state"]["key"] if answer["state"] is not None else None}
     if answer["container_state"] is not None:
         moved["container_state"] = answer["container_state"]
-    if answer.get("released"):
-        moved["released"] = answer["released"]
-    if answer.get("review_request_id"):
-        moved["review_request_id"] = answer["review_request_id"]
+    # What the move closed and let go: the work a cancel took with it, the claims it
+    # ended and the work it left with nothing open blocking it.
+    for name in ("cancelled", "released", "freed", "review_request_id"):
+        if answer.get(name):
+            moved[name] = answer[name]
     return found, moved
 
 
