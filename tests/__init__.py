@@ -22,6 +22,14 @@ of any other module reached the owner's registry. A module that sets
 `LOCALAPPDATA` itself still wins, since it does so after this has run. `HOME` and
 `USERPROFILE` stay: a test that commits needs the caller's Git identity, and the
 registry falls back to them only when `LOCALAPPDATA` is not set at all.
+
+`GIT_CONFIG_GLOBAL` moves too, to a file of the suite's own that holds only the
+caller's identity and the directories it marked safe. `valkama git-hook install`
+and `launcher install` write the global Git configuration, and Git commits run the
+hooks it names: a targeted run of a module whose test forgot its own file would
+write Valkama's hooks into the caller's, and a test's commit made inside an agent's
+shell would run the hooks installed there. `tests/isolated.py gates` gives its
+children a file of the throwaway profile; this covers every other test process.
 """
 
 from __future__ import annotations
@@ -29,6 +37,7 @@ from __future__ import annotations
 import atexit
 import os
 import shutil
+import subprocess
 import tempfile
 
 #: The suite's own directory, removed when the interpreter exits. One per run,
@@ -63,6 +72,49 @@ CALLER_LOCAL_APP_DATA = os.environ.get("LOCALAPPDATA")
 SUITE_LOCAL_APP_DATA = os.path.join(_SUITE_ROOT, "local")
 os.makedirs(SUITE_LOCAL_APP_DATA)
 os.environ["LOCALAPPDATA"] = SUITE_LOCAL_APP_DATA
+#: What of the caller's global Git configuration a test process keeps: who commits,
+#: and the repositories it marked safe to work in.
+CARRIED_GIT_SETTINGS = ("user.name", "user.email", "safe.directory")
+#: The global Git file every test process reads and writes in place of the caller's.
+SUITE_GIT_CONFIG = os.path.join(_SUITE_ROOT, "gitconfig")
+
+
+def _quoted(value: str) -> str:
+    """A value as the Git configuration file format spells it, quoted whole."""
+
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _carried_git_settings() -> str:
+    """The caller's settings of `CARRIED_GIT_SETTINGS`, as the text of a configuration file.
+
+    Read with one Git call before the move, includes followed, as a commit reads
+    them; nothing, when there is no Git or no such setting.
+    """
+
+    pattern = "^(" + "|".join(name.replace(".", r"\.") for name in CARRIED_GIT_SETTINGS) + ")$"
+    try:
+        found = subprocess.run(
+            ["git", "config", "--global", "--includes", "-z", "--get-regexp", pattern],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    sections: dict[str, list[str]] = {}
+    for item in found.stdout.decode("utf-8", "replace").split("\0"):
+        key, separator, value = item.partition("\n")
+        if separator:
+            section, _, name = key.rpartition(".")
+            sections.setdefault(section, []).append(f"\t{name} = {_quoted(value)}\n")
+    return "".join(f"[{section}]\n" + "".join(lines) for section, lines in sections.items())
+
+
+with open(SUITE_GIT_CONFIG, "w", encoding="utf-8", newline="\n") as _file:
+    _file.write(_carried_git_settings())
+os.environ["GIT_CONFIG_GLOBAL"] = SUITE_GIT_CONFIG
 # A test must never put an icon in the tray or reach a real user runtime root.
 os.environ.setdefault("VALKAMA_NO_TRAY", "1")
 # Nor a toast on the desktop of whoever runs the suite: every process a test starts
