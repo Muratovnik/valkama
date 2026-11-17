@@ -13,20 +13,34 @@ function localized(locale: 'en' | 'ru', code: string): string {
   return i18n.global.t(failure.key, failure.params ?? {})
 }
 
-test('known failures have stable English and Russian copy', () => {
-  assert.equal(localized('en', 'stream_disconnected'), 'Live session updates were interrupted.')
-  assert.equal(localized('ru', 'stream_disconnected'), 'Поток обновлений сессий прерван.')
+// The words are the catalog's to edit. What holds is that a failure reads in the reader's
+// language, and that only a failure the catalog does not name shows its technical code.
+const LANGUAGE = { en: /^(?!.*\p{Script=Cyrillic}).*\p{L}/su, ru: /\p{Script=Cyrillic}/u }
+
+function ownCopy(code: string) {
+  for (const locale of ['en', 'ru'] as const) {
+    const text = localized(locale, code)
+    assert.match(text, LANGUAGE[locale], `${locale}: «${text}»`)
+    assert.ok(!text.includes(code), `${locale}: «${text}» shows its code`)
+  }
+}
+
+test('known failures have their own copy in English and Russian', () => {
+  ownCopy('stream_disconnected')
 })
 
 test('unknown failures expose only a bounded stable technical code in both locales', () => {
-  assert.equal(
-    localized('en', 'adapter_timeout'),
-    'The request failed (technical code: adapter_timeout).',
-  )
-  assert.equal(
-    localized('ru', 'adapter_timeout'),
-    'Запрос завершился ошибкой (технический код: adapter_timeout).',
-  )
+  for (const locale of ['en', 'ru'] as const) {
+    const text = localized(locale, 'adapter_timeout')
+    assert.match(text, LANGUAGE[locale], `${locale}: «${text}»`)
+    assert.ok(text.includes('adapter_timeout'), `${locale}: «${text}» hides the code`)
+    // Every unknown code reads as one sentence; only the code in it differs.
+    assert.equal(
+      text.replace('adapter_timeout', '…'),
+      localized(locale, 'sync_lost').replace('sync_lost', '…'),
+      locale,
+    )
+  }
   assert.equal(
     failureMessage({ code: '<script>private path</script>', status: null, retryable: true }).params
       ?.code,
@@ -39,14 +53,7 @@ test('a missing record is not offered again and says so in both locales', () => 
     Object.assign(new Error('no work item MAIN-12'), { status: 404, code: 'not_found' }),
   )
   assert.deepEqual(missing, { code: 'not_found', status: 404, retryable: false })
-  assert.equal(
-    localized('en', 'not_found'),
-    'There is no such record: it was deleted, or the address points elsewhere.',
-  )
-  assert.equal(
-    localized('ru', 'not_found'),
-    'Такой записи нет: её удалили или адрес указывает не туда.',
-  )
+  ownCopy('not_found')
 })
 
 function unavailable(status: number): Error {

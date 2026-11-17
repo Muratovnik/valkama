@@ -5,11 +5,14 @@ import { test } from 'vitest'
 import {
   iconPolicy,
   selectionMode,
+  SEMANTIC_TONE_TOKENS,
   STATE_PRESENTATION,
   stateColor,
   statePresentation,
   surfacePolicy,
 } from '@/shared/lib/uiSystem.ts'
+
+import { token } from './paletteColors.ts'
 
 test('state presentation is dimension-aware instead of guessing from labels', () => {
   assert.deepEqual(statePresentation('integration-health', 'ready'), {
@@ -60,13 +63,17 @@ test('state presentation is dimension-aware instead of guessing from labels', ()
 
 test('canvas visualizations use the same semantic colors as component states', () => {
   // Keyed by category, so a workflow that renames Dev keeps its colour and a
-  // second active state gets the same one.
-  assert.equal(stateColor('work-item-state', 'backlog'), '#a8a8a8')
-  assert.equal(stateColor('work-item-state', 'queued'), '#a8a8a8')
-  assert.equal(stateColor('work-item-state', 'active'), '#7cacf8')
-  assert.equal(stateColor('work-item-state', 'review'), '#d9b06a')
-  assert.equal(stateColor('work-item-state', 'completed'), '#7bd6a1')
-  assert.equal(stateColor('work-item-state', 'blocked'), '#f99a8f')
+  // second active state gets the same one. The colour is the token a component
+  // state of that tone paints with, as tokens.css resolves it; the literal itself
+  // is what `npm run tokens:sync` writes, so the palette is not repeated here.
+  for (const category of ['backlog', 'queued', 'active', 'review', 'completed', 'blocked']) {
+    const { tone } = statePresentation('work-item-state', category)
+    assert.equal(
+      stateColor('work-item-state', category).toLowerCase(),
+      token(SEMANTIC_TONE_TOKENS[tone]).toLowerCase(),
+      category,
+    )
+  }
 })
 
 /**
