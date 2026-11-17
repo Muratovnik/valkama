@@ -9,6 +9,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { scanScopeEscapes } from './ui-system/boundaries.mjs'
+import { DETAIL_TOOLTIPS } from './ui-system/detail-tooltips.mjs'
 import { scanFocusRingWidths } from './ui-system/focus-rings.mjs'
 import { scanImportCycles, scanImportDirection } from './ui-system/imports.mjs'
 import {
@@ -19,7 +20,6 @@ import {
   scanHiddenRules,
 } from './ui-system/lines.mjs'
 import {
-  DETAIL_TOOLTIPS,
   NATIVE_TITLES,
   scanNativeTitles,
   scanTooltipKinds,
