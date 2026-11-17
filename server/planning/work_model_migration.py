@@ -66,6 +66,10 @@ otherwise cascade into them:
   postcondition of the same name holds a condition to each item in a deferred state.
 - **history-actions** gives the events table the CHECK of every action this build declares, when
   `items` left one out: `items` widens it already, so on a 2.9 store the step has nothing to do.
+- **participation** creates the owner's participation setting and the rules of the
+  labels (`participation_settings`, `label_settings`) and their indexes, empty: with no
+  row every space reads the default set. Its postcondition of the same name holds both
+  empty and every space at that set.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -92,7 +96,7 @@ from typing import Any
 from .. import store_steps
 from ..store_steps import Context, Postcondition, Step, UnmetError
 from . import closing as closing_rules
-from . import item_tree, model, questions, read_model, words, work_model_probes
+from . import item_tree, model, participation, questions, read_model, words, work_model_probes
 from . import store as planning_store
 
 #: Who every record the migration writes names as its author.
@@ -1901,6 +1905,68 @@ def _check_actions(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError(f"the events table refuses the actions {missing}")
 
 
+# -- participation: the owner's setting, empty ---------------------------------------
+
+#: The step and the postcondition that give the store the owner's participation setting.
+PARTICIPATION = "participation"
+_PARTICIPATION_TABLES = ("participation_settings", "label_settings")
+
+
+def _participation_missing(conn: sqlite3.Connection) -> list[str]:
+    present = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?)",
+            _PARTICIPATION_TABLES,
+        )
+    }
+    return [table for table in _PARTICIPATION_TABLES if table not in present]
+
+
+def _participation_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return bool(_participation_missing(conn))
+
+
+def _create_participation(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Both tables and their indexes, empty: the setting starts at the default set."""
+
+    del context
+    missing = _participation_missing(conn)
+    for statement in planning_store.PARTICIPATION:
+        conn.execute(statement)
+    return {"tables_created": missing}
+
+
+def _check_participation(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    missing = _participation_missing(conn)
+    if missing:
+        raise UnmetError(f"{', '.join(missing)} missing")
+
+
+def _participation_default(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Both tables are empty, and every space reads each point and switch at the
+    default set and stands at it."""
+
+    del context
+    found = []
+    for table in _PARTICIPATION_TABLES:
+        rows = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])  # noqa: S608 - constant name
+        if rows:
+            found.append(f"{table} holds {rows} rows, not 0")
+    settings = participation.load(conn)
+    default = participation.SETS[participation.DEFAULT]
+    spaces = conn.execute("SELECT planning_space_id, key FROM planning_spaces ORDER BY key")
+    for space, key in spaces.fetchall():
+        chosen = settings.chosen(str(space))
+        apart = [name for name, value in default.items() if chosen[name] != value]
+        if apart or participation.set_of(chosen) != participation.DEFAULT:
+            found.append(f"{key} reads {apart or 'another set'} apart from the default set")
+    _unmet(found, "the owner's participation")
+    return {"set": participation.DEFAULT}
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1961,6 +2027,13 @@ STEPS = (
         _check_deferrals,
     ),
     Step("history-actions", "the actions the history takes", _widen_actions, _actions_needed, _check_actions),
+    Step(
+        PARTICIPATION,
+        "the owner's participation setting",
+        _create_participation,
+        _participation_needed,
+        _check_participation,
+    ),
 )
 
 
@@ -2813,13 +2886,23 @@ POSTCONDITIONS = (
     Postcondition("request-shapes", "requests and waiting words shaped as a fresh store's", _p25),
     Postcondition("fresh-tables", "a table the store lacked is declared fresh and empty", _p26),
     Postcondition(
-        "requests-kept", "every request keeps its item, kind and status but those a close ended", _p27
+        "no-closed-waits",
+        "no request waits on a closed item or says task_closed",
+        _holds_no_closed_waits,
+    ),
+    Postcondition(
+        "requests-ended",
+        "a close ended the requests foreseen, each by its item's category",
+        _holds_requests_ended,
     ),
     Postcondition("no-closed-waits", "no request waits on a closed item or says task_closed", _p28),
     Postcondition("requests-ended", "a close ended the requests foreseen, each by its item's category", _p29),
     Postcondition("awaiting-rows", "a row for each goal or stage awaiting confirmation", _p30),
     Postcondition(
         DEFERRED_ITEMS, "a condition for each item put off, and for no other", _deferred_items
+    ),
+    Postcondition(
+        PARTICIPATION, "no setting stored; every space at the default set", _participation_default
     ),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )

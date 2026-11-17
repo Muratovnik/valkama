@@ -30,6 +30,7 @@ from . import (
     mention_records,
     model,
     participants,
+    participation,
     read_model,
     requests,
     sections,
@@ -536,6 +537,13 @@ def _request(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> d
     }
 
 
+def _participation(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """The owner's participation in one space, or without `space` the common setting."""
+
+    space = _first(parameters, "space")
+    return participation.shown(conn, None if space is None else service.space_identity(conn, space))
+
+
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
     "/api/planning": _read_model,
     "/api/planning/spaces": _spaces,
@@ -553,6 +561,7 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/requests": _requests,
     "/api/planning/request": _request,
     "/api/planning/held": _held,
+    "/api/planning/participation": _participation,
 }
 
 
@@ -1141,6 +1150,47 @@ def _space_settings(conn: sqlite3.Connection, payload: Mapping[str, object]) -> 
     return shown
 
 
+#: The fields of each form of a participation write, by the field that names the form.
+_PARTICIPATION_FORMS = {
+    "key": frozenset({"space", "key", "value"}),
+    "set": frozenset({"space", "set"}),
+    "label": frozenset({"space", "label", "ready", "description"}),
+}
+
+
+def _write_participation(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """One value, a set or a label's rule of one scope, answered with the scope's read.
+
+    The person's alone: an agent's call is refused before anything is read.
+    """
+
+    if not calls.by_person():
+        raise model.OwnerOnlyError(participation.OWNER_ONLY)
+    forms = [form for form in _PARTICIPATION_FORMS if form in payload]
+    if len(forms) != 1:
+        raise PlanningHttpError(400, "invalid_request", "name one of key, set or label")
+    (form,) = forms
+    unknown = sorted(str(name) for name in payload if name not in _PARTICIPATION_FORMS[form])
+    if unknown:
+        raise PlanningHttpError(400, "invalid_request", f"unknown field: {', '.join(unknown)}")
+    named = _field(payload, "space")
+    space = None if named is None else service.space_identity(conn, named)
+    if form == "key":
+        participation.write_value(conn, space, payload["key"], _field(payload, "value"))
+    elif form == "set":
+        participation.write_set(conn, space, payload["set"])
+    else:
+        participation.write_label(
+            conn,
+            space,
+            payload["label"],
+            # Both are named, so leaving one out never takes it away unseen.
+            ready=_field(payload, "ready"),
+            description=_field(payload, "description"),
+        )
+    return participation.shown(conn, space)
+
+
 def _author(payload: Mapping[str, object]) -> str | None:
     """The author the payload names, or the one its call implies.
 
@@ -1584,6 +1634,7 @@ def _run_steps(
 _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] = {
     "/api/planning/spaces": _space,
     "/api/planning/space/settings": _space_settings,
+    "/api/planning/participation": _write_participation,
     "/api/planning/work-items": _create,
     "/api/planning/work-item/update": _update,
     "/api/planning/work-item/delete": _delete,

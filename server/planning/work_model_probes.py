@@ -70,7 +70,19 @@ _ROWS: dict[str, dict[str, object]] = {
         "expected_effect": "probe",
         "status": "starting",
     },
+    "label_settings": {
+        "planning_space_id": _NEW,
+        "label": "probe",
+        "ready": 1,
+        "updated_at": "probe",
+    },
     "owner_alert_settings": {"key": "settings", "record_json": "{}", "updated_at": "probe"},
+    "participation_settings": {
+        "planning_space_id": _NEW,
+        "key": "queue",
+        "value": "on",
+        "updated_at": "probe",
+    },
     "planning_spaces": {
         "planning_space_id": _NEW,
         "name": _NEW,
@@ -193,6 +205,10 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
     ("analytics_surface_uses", "typeof(count) = 'integer' AND count > 0"): (
         ({"count": 0}, {"count": 1.5}),
         (),
+    ),
+    ("label_settings", "ready IS NOT NULL OR description IS NOT NULL"): (
+        ({"ready": None},),
+        ({"ready": None, "description": "probe"},),
     ),
     ("planning_spaces", "next_number >= 1"): (({"next_number": 0},), ({"next_number": 1},)),
     ("quota_account_names", "length(organization) BETWEEN 1 AND 512"): (

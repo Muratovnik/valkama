@@ -250,8 +250,14 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
 # closed; a request also names its `purpose`. A build at 18 would read a request
 # ended by a close as pending again once its item reopened, and refuse the whole
 # request over a reason it does not know; the ratchet makes it refuse a store at 19.
-# The work-model migration carries a store at 17 straight to 19.
-STORE_SCHEMA_VERSION = 19
+#
+# 20 keeps the owner's participation setting and the rules of the labels
+# (`participation_settings`, `label_settings`), empty in a migrated store, which reads
+# as the default set. The owner sets there where an agent's decision waits for them; a
+# build at 19 would read none of it and let an agent go ahead where the owner chose to
+# decide, so the ratchet makes it refuse a store at 20. The work-model migration carries
+# a store at 17 straight to 20.
+STORE_SCHEMA_VERSION = 20
 
 
 class StoreTooNewError(RuntimeError):
