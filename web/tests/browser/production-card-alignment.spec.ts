@@ -133,7 +133,7 @@ for (const locale of ['ru', 'en'] as const) {
  * Each fact's row (`data-fact`), with the baseline of its name and of the words its value draws
  * on the value's first line: the priority, the state and the question, the first labels, the
  * holder and the parent. A word is any run of text the value draws, whatever element holds it;
- * one drawn a pixel wide is only read out.
+ * one held in a box a pixel wide is only read out.
  */
 function factBaselines(page: Page) {
   return page.evaluate(() => {
@@ -153,8 +153,9 @@ function factBaselines(page: Page) {
       const walker = document.createTreeWalker(value, NodeFilter.SHOW_TEXT)
       const words: Node[] = []
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        const { height, width } = measure(node)
-        if (node.textContent?.trim() && width > 1 && height > 1) words.push(node)
+        // The text's own range is not clipped, so the box that holds it says whether it is drawn.
+        const box = node.parentElement?.getBoundingClientRect()
+        if (node.textContent?.trim() && box && box.width > 1 && box.height > 1) words.push(node)
       }
       return words
     }

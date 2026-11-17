@@ -23,6 +23,7 @@ import { installBackend } from './backend.ts'
 import { boardRoute, openBoard, serve } from './boardPage.ts'
 import { graphRoute, serve as serveChain, smallChain } from './chainFixtures.ts'
 import { settled } from './documentBeside.ts'
+import { motionsEnded } from './frames.ts'
 import { serveWide } from './laneWideFixture.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
 import { projectId, projectScope, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
@@ -113,8 +114,13 @@ const ROWS = [
   '.lane-head',
   'tr',
   '[role="row"]',
-  '.card-row',
+  // A fact's row draws no box (it lays its cells into the block's columns), so its name is
+  // read on the cell that holds the fact.
+  '.card-row-value',
   '.relations li',
+  // A group of Relations is named by its link's kind, which may read as a state («Заблокировано»):
+  // it stands on the toggle that opens the group.
+  '[aria-expanded]',
   '.branch-key-entry',
   '.chain-group-title',
   '.chain-done-toggle',
@@ -362,6 +368,8 @@ async function readSurface(page: Page, surface: Surface, naming: Naming, locale:
     })
     await page.goto(cardRoute())
     const drawer = page.locator('.drawer')
+    // The drawer slides in: its names are read where it comes to rest.
+    await motionsEnded(drawer)
     const facts = await check(drawer.locator('.card-facts'), naming, locale, 'card')
     await showTab(page, locale, 'relations')
     const links = await check(drawer.locator('.relations'), naming, locale, 'relations')
