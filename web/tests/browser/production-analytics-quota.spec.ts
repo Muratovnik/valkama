@@ -5,8 +5,8 @@
  *
  * Its two tiles stand after the token kinds and before the dimensions. A tile chosen opens its
  * panel, and the choice is in the address, so a reload opens the same panel. The panel has a group
- * per account, its windows side by side where the width allows, and for each window its bar, its
- * facts and the step line of its readings, each on its window's edge; nothing
+ * per account, its windows side by side where the width allows, and for each window its lead, its
+ * bar, its facts and the step line of its readings, each on its window's edge; nothing
  * in it or on the tiles is cut without a sign, nothing moves while the pointer passes over the
  * tiles, the bars and the readings, and no money stands beside a share. Each run prints what it
  * measured and keeps a picture of the panel.
@@ -34,7 +34,7 @@ const boxes = (page: Page) =>
 
 /**
  * The parts of the panel whose left edge strays more than a pixel from where it stands: the parts
- * of a window on the window's edge, and the windows that start a row, and what is not a window, on
+ * of a window, and the lines of what stands now in it, on the window's edge, and the windows that start a row, and what is not a window, on
  * their account's name. Windows side by side start each where the one before ends.
  */
 const edges = (page: Page) =>
@@ -59,7 +59,11 @@ const edges = (page: Page) =>
         ),
         ...windows.flatMap((one) =>
           stray(
-            [...one.window.querySelectorAll(':scope > .level-head, :scope > .level-body > *')],
+            [
+              ...one.window.querySelectorAll(
+                ':scope > .level-head, .quota-window-parts > *, .quota-window-summary > *',
+              ),
+            ],
             one.left,
           ),
         ),
@@ -135,7 +139,7 @@ for (const colorScheme of ['light', 'dark'] as const)
       expect(shares.length).toBeGreaterThan(0)
       expect(shares.join(' '), 'no money beside a share').not.toContain('$')
       // Every part of an account starts at one edge, within a pixel: its name and the windows
-      // that start a row, and each window's name, bar, facts and readings at the window's.
+      // that start a row, and each window's name, lead, bar, facts and readings at the window's.
       expect(await edges(page), 'every part at its account edge').toEqual([])
       await expectNoSilentClipping(page, `five hours at ${width}px`, '.analytics-panel')
       await page

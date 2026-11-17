@@ -6,9 +6,10 @@
  * together to be measured.
  *
  * The quota is read with six accounts, as a workstation that holds six reads it: each account is
- * a group on a surface of its own, its windows side by side where the width allows. Six accounts
- * once ran together into one list 4279 pixels long, each 16px from the next under a heading as
- * large as its section's.
+ * a group on a surface of its own, its windows side by side where the width allows, each window's
+ * parts 12px apart and the lines of what stands now 4px, so no part stands as far from the next
+ * as a window from a window. Six accounts once ran together into one list 4279 pixels long, each
+ * 16px from the next under a heading as large as its section's.
  *
  * The headings' elements follow how the levels nest, from the module's name, the `h1` over the
  * panel: each heading is one rank under the heading of the level around it. A section's heading
@@ -115,7 +116,8 @@ for (const { width, height, tallest } of QUOTA_SIZES)
     const seen = {
       height: await heightOf(page, '.quota-panel'),
       accounts: await gaps(page, '.quota-panel .chart-section > .level-body'),
-      lines: await gaps(page, '.quota-window > .level-body'),
+      parts: await gaps(page, '.quota-window-parts'),
+      lines: await gaps(page, '.quota-window-summary'),
       section: await size(page, '.quota-panel .chart-section > .level-head > .level-heading'),
       group: await size(page, '.quota-account > .level-head > .level-heading'),
       block: await size(page, '.quota-window > .level-head > .level-heading'),
@@ -138,7 +140,10 @@ for (const { width, height, tallest } of QUOTA_SIZES)
     }
     await record(info, `levels quota ${width}x${height}`, seen)
     expect(seen.accounts, 'the six accounts').toEqual([24, 24, 24, 24, 24])
-    expect(new Set(seen.lines), 'the lines of a window').toEqual(new Set([8]))
+    // A window's three parts stand as far apart as a heading from what it heads, closer than two
+    // windows, and the lines of what stands now closer still.
+    expect(new Set(seen.parts), 'the parts of a window').toEqual(new Set([12]))
+    expect(new Set(seen.lines), 'the lines of what stands now').toEqual(new Set([4]))
     expect([seen.section, seen.group, seen.block]).toEqual(['16px', '15px', '14px'])
     expect(seen.surface.ground, 'an account on a surface').not.toBe('rgba(0, 0, 0, 0)')
     expect(seen.surface.radius).not.toBe('0px')

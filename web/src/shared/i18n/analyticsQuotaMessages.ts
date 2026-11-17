@@ -40,8 +40,9 @@ export const analyticsQuotaMessages = {
       reset: 'Reset since read',
       detail: '{window} of {account}',
     },
-    used: '{share} used',
+    lead: '{share} used · {state}',
     bar: '{window}: {share} used, steady use {even}, {state}',
+    barRead: '{bar}. {read}',
     barNoPace: '{window}: {share} used, {state}',
     even: 'Steady use would be at {share} now',
     noPace: 'No pace until the window has a reset',
@@ -62,6 +63,7 @@ export const analyticsQuotaMessages = {
     read: 'Read {ago} from {source}',
     silentSince: 'No change since {at}, {ago}, from {source}',
     other: '{window}: {state}, read {ago} from {source}',
+    otherState: '{window}: {state}',
     panel: {
       heading: 'Each account',
       intro:
@@ -153,8 +155,9 @@ export const analyticsQuotaMessages = {
       reset: 'Сброшено после чтения',
       detail: '{window}, {account}',
     },
-    used: 'израсходовано {share}',
+    lead: '{share} израсходовано · {state}',
     bar: '{window}: израсходовано {share}, при ровном расходе {even}, {state}',
+    barRead: '{bar}. {read}',
     barNoPace: '{window}: израсходовано {share}, {state}',
     even: 'При ровном расходе сейчас было бы {share}',
     noPace: 'Темпа нет: окно ещё не назвало сброс',
@@ -175,6 +178,7 @@ export const analyticsQuotaMessages = {
     read: 'Прочитано {ago}, источник: {source}',
     silentSince: 'Без изменений с {at}, {ago}, источник: {source}',
     other: '{window}: {state}, прочитано {ago}, источник: {source}',
+    otherState: '{window}: {state}',
     panel: {
       heading: 'По аккаунтам',
       intro: 'Период и фильтры выше к квоте не относятся; аккаунты и окна не складываются.',

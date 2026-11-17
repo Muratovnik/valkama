@@ -215,7 +215,7 @@ describe('the states of what used a window', () => {
     expect(waiting.attributes('data-state')).toBe('loading')
     expect(waiting.get('.window-spend-body').text()).toBe('Loading')
     // The panel's own figures stand meanwhile.
-    expect(accountNamed(page, 'Work').get('.window-value').text()).toBe('62% used')
+    expect(accountNamed(page, 'Work').get('.quota-window-lead').text()).toBe('62% used · fresh')
     for (const held of reads.held) held.release(usage(held.query))
     await flushPromises()
     await wait(LOADING_MIN_SHOWN_MS + 50)
@@ -232,7 +232,7 @@ describe('the states of what used a window', () => {
       'What used this window could not be read. Retry',
     )
     expect(page.text()).not.toContain('The quota could not be read.')
-    expect(accountNamed(page, 'Work').get('.window-value').text()).toBe('62% used')
+    expect(accountNamed(page, 'Work').get('.quota-window-lead').text()).toBe('62% used · fresh')
     fails = false
     await failed.get('.window-spend-failed button').trigger('click')
     await flushPromises()

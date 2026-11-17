@@ -1121,7 +1121,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   Two forms draw one window of a limit, a share of it spent and never a sum of two:
   `WindowBar`, the share as a fill on a track of the series hue's own tint, a tick across the
   bar where steady use from the window's start would stand now, and the share and the state in
-  words beside it; and `StepLine`, the window's readings as steps from its start,
+  words beside it where no line over it says them; and `StepLine`, the window's readings as steps from its start,
   flat until the next reading and never a slope between two, with steady use as a thin diagonal
   in the text ink; a reading pointed at or focused says its moment, its share and its source in
   its hint, as every mark does. A step line opens on «To now and the forecast», from the window's
@@ -2531,20 +2531,26 @@ name, with its share, its state in words beside the section's name and a thin `W
 tile with no window to name says why: no source read the work, the windows reset since they
 were read, or no reading. The panel has a group per account on a surface of its own, by the
 name its owner gave it or the start of its id, the whole id in its hint, its windows side by
-side where the width allows. Each window shows its bar, when it resets in absolute and relative
-time and its forecast — the five hours a point, lasting to the reset or running out at a time;
-a week a range, said as a range and never past 100 %, which a quota cannot pass: a low end there
-says the week runs out before its reset and about when its slower pace spends it, a high end
-there that it may, and ends said alike one value — as short labelled values over the `StepLine`
-of its readings.
+side where the width allows. Every window, the five hours, the week and a model's week, has the
+same three parts 12px apart: what stands now, the `StepLine` of its readings and what used it.
+What stands now leads with one line, the share as the window's figure and its state beside it,
+«41% used · fresh», over its bar; then its forecast in the text's ink — the five hours a point,
+lasting to the reset or running out at a time; a week a range, said as a range and never past
+100 %, which a quota cannot pass: a low end there says the week runs out before its reset and
+about when its slower pace spends it, a high end there that it may, and ends said alike one
+value — and when it resets in absolute and relative time, quieter, each line 4px from the next.
 Where steady use would stand is drawn — the bar's tick, the line's diagonal — and said in their
-hints, as are how old the latest reading is and who read it. A window's step line is on no
+hints, the bar's with how old the latest reading is and who read it, which its words for a
+screen reader say too. As a table, where no hint shows, the window says its latest reading in
+words under its reset, and that it has no pace where it has none. A window's step line is on no
 period of the page, so its scale is its own: it opens on «To now and the forecast» with a
 switch to the whole window (Charts), and a frame dragged along it narrows that line alone. An
-account no source read says so and draws no window; a silent window is hatched and says since when it has not changed; a
-fresh 0 % draws an empty track and says «0% used» and «fresh». A window of money past a limit
-is a line of its state, its age and its source, with no figure. No share is added to another,
-of two windows or two accounts, and no dollar stands beside one.
+account no source read says so and draws no window; a silent window is hatched and says since
+when it has not changed in its bar's hint; a fresh 0 % draws an empty track and says «0% used ·
+fresh». A window of money past a limit is a line of its name and its state, its age and its
+source in the line's hint as a window of a share keeps them in its bar's and in words as a
+table, with no figure. No share is added to another, of two windows or two accounts, and no
+dollar stands beside one.
 
 Under each window that names its start stands «Where the window went»: the work Valkama
 recorded on that account from the window's start to the answer's moment, held to the last five

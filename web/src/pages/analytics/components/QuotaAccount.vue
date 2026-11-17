@@ -8,7 +8,8 @@
  * An account nobody's source read says so and shows no window, and one with no window of the
  * section says that instead, so no source, a window never read and a fresh 0 % never read alike.
  * A seat known only for its week says so. A window of money past a limit has no share: it is a
- * line of its state, its age and its source, and never a figure beside a share.
+ * line of its name and its state, its age and its source in the line's hint as a window of a
+ * share keeps them in its bar's, all of it in words as a table, and never a figure beside a share.
  *
  * It is a group of the panel on a surface of its own, its windows side by side where the width
  * keeps each readable and one under the next where it does not (`PanelLevel`).
@@ -43,10 +44,16 @@ const words = useQuotaWords()
 const name = computed(() => words.accountName(props.account))
 const detail = computed(() => words.accountDetail(props.account))
 const windows = computed(() => sectionWindows(props.account, props.section))
+/**
+ * The windows of money, as the windows of a share say themselves: its name and state on the line
+ * and how old its reading is and who read it in its hint, all of it in words in a table.
+ */
 const others = computed(() =>
   spendWindows(props.account).map((window) => ({
     key: windowKey(window),
     text: words.other(window, props.now),
+    state: words.otherState(window),
+    read: words.latest(window, props.now, props.today),
   })),
 )
 
@@ -134,7 +141,12 @@ const tableWords = computed<WindowWords>(() => ({
         v-for="other in others"
         :key="other.key"
       >
-        {{ other.text }}
+        <span
+          v-if="shown === 'chart'"
+          v-tooltip.detail="other.read"
+          >{{ other.state }}</span
+        >
+        <template v-else>{{ other.text }}</template>
       </li>
     </ul>
   </PanelLevel>

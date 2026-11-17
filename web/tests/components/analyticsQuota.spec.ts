@@ -64,19 +64,28 @@ const accountNamed = (page: VueWrapper, name: string) => {
 }
 /** Words as a reader reads them: the app keeps a figure and its unit together with a no-break space. */
 const plain = (text: string) => text.replaceAll(' ', ' ')
-/** What a window of the panel says: its state, its bar's words and its facts. */
+/**
+ * What a window of the panel says: its state, its lead, its facts, and what its bar's hint adds —
+ * where steady use would stand, then how old the latest reading is and who read it — with the
+ * bar's words for a screen reader.
+ */
 function windowOf(account: DOMWrapper<Element>, kind: string) {
   const window = account.get(`.quota-window[data-window="${kind}"]`)
   const fact = (key: string) => plain(window.get(`[data-fact="${key}"]`).text())
+  const bar = window.get('.quota-window-bar')
+  const [even, latest, ...more] = plain(bar.attributes('data-tooltip') ?? '').split('\n')
   return {
     state: window.attributes('data-state'),
-    value: window.get('.window-value').text(),
-    note: window.get('.window-note').text(),
+    lead: plain(window.get('.quota-window-lead').text()),
     filled: window.find('.window-fill').exists(),
     hatched: window.find('.window-held').exists(),
     reset: fact('reset'),
     forecast: fact('forecast'),
-    latest: fact('latest'),
+    facts: window.findAll('[data-fact]').map((one) => one.attributes('data-fact')),
+    even,
+    latest,
+    more,
+    label: plain(bar.get('.window-track').attributes('aria-label') ?? ''),
   }
 }
 
@@ -193,8 +202,24 @@ describe('the quota panel', () => {
       `Account ${'0b7d4e19-1c2d-4e3f-8a4b-5c6d7e8f9a0b'} of organization`,
     )
     expect(accountNamed(page, 'a1b2c3d4').text()).toContain('Known by its seat for this week only')
-    // The usage credits are a line of their state, never a figure.
-    expect(plain(work.get('.quota-account-others').text())).toBe(
+    // The usage credits are a line of their name and state, never a figure, and how old their
+    // reading is and who read it is the line's hint, as a window of a share keeps it in its bar's.
+    const credits = work.get('.quota-account-others li span')
+    expect(plain(credits.text())).toBe('Usage credits: silent')
+    expect(plain(credits.attributes('data-tooltip') ?? '')).toMatch(
+      /^No change since .+, 2 d ago, from the poll$/u,
+    )
+    page.unmount()
+
+    // As a table, where no hint shows, the line says it all in words.
+    stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
+    const table = await mountAnalytics({ routeState: { by: 'quota_week' } })
+    const chooseTable = table
+      .findAll('.quota-panel [role="radio"]:not([aria-checked="true"])')
+      .find((one) => one.element.closest('.step-views') === null)
+    await chooseTable?.trigger('click')
+    await flushPromises()
+    expect(plain(accountNamed(table, 'Work').get('.quota-account-others').text())).toBe(
       'Usage credits: silent, read 2 d ago from the poll',
     )
   })
@@ -205,28 +230,38 @@ describe('the quota panel', () => {
     const fresh = windowOf(accountNamed(week, 'Work'), 'week')
     expect(fresh).toMatchObject({
       state: 'fresh',
-      value: '41% used',
-      note: 'fresh',
+      lead: '41% used · fresh',
       hatched: false,
+      // The forecast, then the reset: the pace and the reading's age are the bar's hint.
+      facts: ['forecast', 'reset'],
+      even: 'Steady use would be at 57% now',
+      more: [],
     })
     expect(fresh.latest).toBe('Read 2 min ago from the poll')
+    expect(fresh.label).toBe('Week: 41% used, steady use 57%, fresh. Read 2 min ago from the poll')
     const silent = windowOf(accountNamed(week, 'Work'), 'week_model')
     expect(silent).toMatchObject({
       state: 'silent',
-      value: '13% used',
-      note: 'silent',
+      lead: '13% used · silent',
       hatched: true,
     })
     expect(silent.latest).toMatch(/^No change since \d{2}:\d{2}, 5 h ago, from the poll$/u)
-    // A week forecasts a range, said as one.
+    // A week forecasts a range, said as one; one too new for a forecast says so, quieter.
     expect(fresh.forecast).toBe('By the reset: 57% to 61%')
     expect(fresh.reset).toMatch(/^Resets .+, in 3 d$/u)
+    expect(silent.forecast).toBe('Too few readings for a forecast')
+    const quiet = (window: string, key: string) =>
+      accountNamed(week, 'Work')
+        .get(`.quota-window[data-window="${window}"] [data-fact="${key}"]`)
+        .classes('quota-window-quiet')
+    expect([quiet('week', 'forecast'), quiet('week', 'reset')]).toEqual([false, true])
+    expect(quiet('week_model', 'forecast')).toBe(true)
     week.unmount()
 
     stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
     const five = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
     const zero = windowOf(accountNamed(five, '7e6d5c4b'), 'five_hour')
-    expect(zero).toMatchObject({ value: '0% used', note: 'fresh', filled: false, hatched: false })
+    expect(zero).toMatchObject({ lead: '0% used · fresh', filled: false, hatched: false })
     expect(zero.latest).toBe('Read 3 min ago from the status line')
     // The five hours forecast a point: it lasts, or runs out at a time.
     expect(zero.forecast).toBe('Lasts to the reset')
@@ -362,6 +397,51 @@ describe('the quota panel’s times', () => {
     expect(work.findAll('.step-axis span').map((one) => plain(one.text()))).toEqual([
       'Nov 14, 21:30',
       '01:43',
+    ])
+  })
+
+  it('say a window with no reset yet has no pace, in its bar’s hint and in a table’s words', async () => {
+    const at = new Date('2026-11-14T18:46:00Z')
+    vi.setSystemTime(at)
+    const latest = { at: '2026-11-14T21:44:00+03:00', used_percent: 30, source: 'poll' } as const
+    const week: QuotaShareWindow = {
+      kind: 'week',
+      model: null,
+      state: 'fresh',
+      resets_at: null,
+      latest,
+      started_at: null,
+      even_percent: null,
+      readings: [latest],
+      forecast: null,
+    }
+    stubAnalyticsReads(usage, workWith(at, [week]))
+    const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
+    const said = windowOf(accountNamed(page, 'Work'), 'week')
+    expect(said).toMatchObject({
+      lead: '30% used · fresh',
+      even: 'No pace until the window has a reset',
+      latest: 'Read 2 min ago from the poll',
+      facts: ['forecast', 'reset'],
+      reset: 'No reset named yet',
+    })
+    expect(said.label).toBe('Week: 30% used, fresh. Read 2 min ago from the poll')
+
+    // As a table no hint shows, so the window says its pace and its latest reading in words.
+    const table = page
+      .findAll('.quota-panel [role="radio"]:not([aria-checked="true"])')
+      .find((one) => one.element.closest('.step-views') === null)
+    await table?.trigger('click')
+    await flushPromises()
+    const window = accountNamed(page, 'Work').get('.quota-window[data-window="week"]')
+    expect(window.find('.quota-window-lead').exists()).toBe(false)
+    expect(
+      window.findAll('[data-fact]').map((one) => [one.attributes('data-fact'), plain(one.text())]),
+    ).toEqual([
+      ['forecast', 'Too few readings for a forecast'],
+      ['reset', 'No reset named yet'],
+      ['even', 'No pace until the window has a reset'],
+      ['latest', 'Read 2 min ago from the poll'],
     ])
   })
 })

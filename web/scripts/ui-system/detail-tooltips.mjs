@@ -55,6 +55,14 @@ export const DETAIL_TOOLTIPS = new Map([
     'the whole id of the account and of its organization, where the quota panel names the account by the name its owner gave it or the start of its id; while the name is cut, it comes first, whole',
   ],
   [
+    'pages/analytics/components/QuotaAccount.vue <span> v-tooltip.detail="other.read"',
+    'how old the reading of a window of money is and who read it, where its line names only the window and its state',
+  ],
+  [
+    'pages/analytics/components/QuotaWindow.vue <WindowBar> v-tooltip.detail="bar.hint"',
+    'where steady use from the window start would stand now, which the bar draws only as a tick, and how old the latest reading is and who read it, where the line over the bar says only the share and the state',
+  ],
+  [
     'pages/analytics/components/RailTile.vue <MiniShareBar> v-tooltip.detail="tile.shares.label"',
     'every part of the share bar with its share, work on no value and the rest among them, where the tile says only the first',
   ],

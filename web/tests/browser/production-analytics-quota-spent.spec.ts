@@ -198,7 +198,9 @@ test('a block that waits says so once the wait has lasted, and one whose read fa
   await expect(work).toHaveAttribute('data-state', 'loading')
   await expect(work.locator('.window-spend-body')).toHaveText('Loading')
   // The window's own figures stand meanwhile.
-  await expect(accountNamed(page, 'Work').locator('.window-value').first()).toHaveText('62% used')
+  await expect(accountNamed(page, 'Work').locator('.quota-window-lead').first()).toHaveText(
+    '62% used · fresh',
+  )
   await page.locator('.analytics-panel').screenshot(shot(info, 'quota-spent-waiting.png'))
 
   answer = 'fail'
