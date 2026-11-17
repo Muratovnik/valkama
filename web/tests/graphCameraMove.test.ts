@@ -51,6 +51,7 @@ function chain(count: number) {
     started_at: null,
     waits_for: [],
     workable: index === 0,
+    withheld: index === 0 ? [] : ['not_ready'],
     state: { ...stateOf(base), is_terminal: false },
   }))
   const edges: PlanningEdge[] = nodes.slice(1).map((node, index) => ({

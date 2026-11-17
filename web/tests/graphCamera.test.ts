@@ -43,6 +43,7 @@ function graph(count: number, fanout = false) {
     started_at: null,
     waits_for: [],
     workable: index === 0,
+    withheld: index === 0 ? [] : ['not_ready'],
     state: { ...stateOf(base), is_terminal: false },
   }))
   const edges: PlanningEdge[] = Array.from({ length: count - 1 }, (_, index) => ({
@@ -129,6 +130,7 @@ test('a narrowed field of unlinked work opens on its first node, with no empty g
     started_at: null,
     waits_for: [],
     workable: true,
+    withheld: [],
     state: { ...stateOf(base), is_terminal: false },
   }))
   const placed = await layout({ nodes, edges: [] }, engine, false, flat(nodes))
