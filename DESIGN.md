@@ -1038,6 +1038,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   share of a period can be work on no task; only the folded tail closes the chart, apart and
   unranked, and sets no scale. Elsewhere, as in a card of first values, all three close the
   chart in a list of their own, set apart by air, draw no bar and are read by their figures.
+  Hatching means one thing on every chart: a figure that is not final yet — a period still
+  running, the forecast to a window's reset, the minutes no record has reached yet. Where a
+  chart hatches, its legend or its words name what the hatch is. A final figure is never
+  hatched: a reading that is no longer fresh is drawn solid and says its age in words, and a
+  part with no value or no recorded owner is the neutral under its name. The hatch once marked
+  work on no task and an organization nobody recorded as well, so one texture said two things
+  and a reader could not tell from it which one was meant.
   A hue
   never speaks alone: a chart of two series or more carries a legend, and every hint and every
   accessible name say each series by name. The legend's lines step 24px with no gap between
@@ -1083,7 +1090,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   no segment under the pointer, and a press acted for the period rather than the part pressed. A
   period still running is hatched (a mask, which adds no colour), so it does not read as a drop,
   and its hint says it is under way; no word stands under its name, since «so far» came out in
-  Russian as «пока», which reads as «bye». A change
+  Russian as «пока», which reads as «bye». While such a period is on the plot the legend names
+  the hatch, «in progress» beside a hatched swatch, and drops the key once none is. A change
   at a period's start, such as the account the work ran under, is a line up the plot in the gap
   before its column, a shape and not a hue, and the period's hint, name and table row say it,
   «Account change: a → a, b», naming each account as Settings does: the chart keeps no row for
@@ -1137,9 +1145,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   largest first, with what they leave out last in the neutral. Each is one image whose words say
   what it draws — the highest and the last period, every part with its share — so neither is read
   by its shape or its hue alone: columns and parts stand apart by a gap of ground, a period still
-  running is hatched, and a forced palette draws the marks in its ink and the floor, the rest and
-  an empty track in its quiet ink. Neither acts or moves under the pointer, and each keeps its
-  height with nothing to draw, so the tile around it never moves when its figures arrive.
+  running is hatched and the trend's words, which are its hint too, say «running» after its
+  figure, work on no task is the plain neutral that its name in the words says, and a forced
+  palette draws the marks in its ink and the floor, the rest and an empty track in its quiet ink.
+  Neither acts or moves under the pointer, and each keeps its height with nothing to draw, so the tile around it never moves when its figures arrive.
   Two forms draw one window of a limit, a share of it spent and never a sum of two:
   `WindowBar`, the share as a fill on a track of the series hue's own tint, a tick across the
   bar where steady use from the window's start would stand now, and the share and the state in
@@ -2439,8 +2448,8 @@ too: where the line has no room for «· Retry», the words themselves are the r
 Dropped there, a phone and a span of days in Russian offered no retry of its own, only the
 refresh beside it. Reading another period or filter dims what is shown until its answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in
-seconds and the minutes after the newest record are hatched as «no data yet» rather than drawn
-as a drop.
+seconds and the minutes after the newest record are hatched, as every figure not final yet is,
+and say «no data yet» in their hint rather than being drawn as a drop.
 
 Words are said once, where they belong. A value carries a short label, never a sentence. A
 caveat common to a section is said once, in an «ⓘ» at the section's heading, never per block:

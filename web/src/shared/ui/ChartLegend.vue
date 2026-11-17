@@ -3,8 +3,10 @@
  * Which hue is which series, in words: each series' name beside a swatch of its hue, in the
  * stack's order. A chart of two series or more carries one, so a series is never told apart by
  * its hue alone; one series needs none, since the chart's title already says what it is. A chart
- * that marks a period it is compared with names that mark last (`outline`), beside a short line
- * as the plot draws it at the height that period reached.
+ * that hatches a period still running names the hatch after the series (`hatch`), beside a
+ * hatched swatch, so the texture never has to be guessed; and a chart that marks a period it is
+ * compared with names that mark last (`outline`), beside a short line in the ink the plot draws
+ * it in at the height that period reached. Neither key acts.
  *
  * A legend given a figure for its entries (`figures`), as a ring's is, lists down, an entry a
  * line, each figure at the end of its line in the quiet ink, ending where the others end: a
@@ -33,6 +35,8 @@ const props = defineProps<{
   series: readonly PeriodSeries[]
   /** The figure each entry gives at the end of its line, by series key; none for a legend of names. */
   figures?: ReadonlyMap<string, string>
+  /** The name of the hatch, while the chart draws a period still running. */
+  hatch?: string
   /** What each entry says in its hint, by series key; `outline` for the period compared with. */
   hints?: ReadonlyMap<string, TooltipValue>
   /** The name of the mark of the period compared with, when the chart draws one. */
@@ -121,6 +125,21 @@ const figureOf = (key: string) => props.figures?.get(key)
       >
     </li>
     <li
+      v-if="hatch"
+      class="chart-entry"
+    >
+      <span
+        class="chart-key"
+        data-series="hatch"
+      >
+        <span
+          class="chart-hatch hatched"
+          aria-hidden="true"
+        />
+        <span class="chart-key-name">{{ hatch }}</span>
+      </span>
+    </li>
+    <li
       v-if="outline"
       class="chart-entry"
     >
@@ -140,6 +159,8 @@ const figureOf = (key: string) => props.figures?.get(key)
 </template>
 
 <style scoped src="@/shared/ui/seriesFill.css"></style>
+
+<style scoped src="@/shared/ui/hatch.css"></style>
 
 <style scoped>
 /* The lines step 24 pixels, the target WCAG 2.5.8 asks, with no gap between them: every key fills
@@ -217,10 +238,22 @@ const figureOf = (key: string) => props.figures?.get(key)
   color: var(--color-text);
 }
 
-.chart-swatch {
+.chart-swatch,
+.chart-hatch {
   flex: none;
   inline-size: var(--space-3);
   block-size: var(--space-3);
   border-radius: calc(var(--radius-status) / 2);
+}
+
+/* The hatch a period still running is drawn with, on no hue of its own: the quiet ink, which a
+   forced palette paints in its ink, keeping the mask. */
+.chart-hatch {
+  background: var(--color-text-muted);
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
 }
 </style>

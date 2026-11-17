@@ -119,6 +119,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'a period prints nothing of itself, and its segments are blocks of hue that speak through it: its sum against the period before, what changed and its series with their shares are its hint',
   ],
   [
+    'shared/ui/MiniTrend.vue <span> v-tooltip.detail="label"',
+    'a small trend draws columns and prints no word: its highest and last period, the last said as running where it is hatched, are its hint, since it has no legend to name the hatch',
+  ],
+  [
     'shared/ui/DonutChart.vue <path> v-tooltip.detail="hintOf(sector)"',
     'a sector is a band of hue: its name, figure and share of the whole, and for the rest its largest parts, are its hint',
   ],

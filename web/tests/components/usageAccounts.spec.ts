@@ -154,7 +154,7 @@ describe('the organizations an item ran under', () => {
     expect(wrapper.findAll('.account-name').map((name) => hintOf(name))).toEqual([ORG_A, ORG_B])
   })
 
-  it('an organization nobody recorded is named as unknown and hatched, not given a hue', () => {
+  it('an organization nobody recorded is named as unknown in the plain neutral, not given a hue', () => {
     const wrapper = mountAccounts(
       usageOf([
         stretch(UNKNOWN, '2030-03-04T09:00:00Z', 900),
@@ -163,9 +163,9 @@ describe('the organizations an item ran under', () => {
     )
     const parts = wrapper.findAll('.account-part')
     expect(parts[0].attributes('data-slot')).toBe('apart')
-    expect(parts[0].classes()).toContain('is-unknown')
     expect(parts[1].attributes('data-slot')).toBe('1')
-    expect(parts[1].classes()).not.toContain('is-unknown')
+    // Never hatched: a hatch says a figure not final yet, and this one is final.
+    expect(wrapper.findAll('.hatched')).toHaveLength(0)
     expect(listed(wrapper)).toEqual([
       expect.stringMatching(/^3fa1b2c4 75% of the time /u),
       expect.stringMatching(/^Unknown organization 25% of the time /u),
@@ -189,12 +189,12 @@ describe('the organizations an item ran under', () => {
     )
     // Every stretch is still drawn, the unknown ones in the neutral, and both are listed.
     const parts = wrapper.findAll('.account-part')
-    expect(parts.map((part) => part.classes().includes('is-unknown'))).toEqual([
-      false,
-      true,
-      false,
-      true,
-      false,
+    expect(parts.map((part) => part.attributes('data-slot'))).toEqual([
+      '1',
+      'apart',
+      '1',
+      'apart',
+      '1',
     ])
     expect(listed(wrapper)).toEqual([
       expect.stringMatching(/^3fa1b2c4 60% of the time /u),

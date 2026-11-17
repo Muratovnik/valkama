@@ -123,6 +123,7 @@ const hours: PeriodColumn[] = Array.from({ length: 24 }, (_, hour) => ({
 const periodWords: PeriodWords = {
   total: 'total',
   incomplete: 'so far',
+  hatch: 'in progress',
   period: 'Day',
   note: 'Note',
   empty: 'No sessions in this range.',

@@ -1,6 +1,7 @@
 /**
  * The marks a chart of days draws over its columns besides their hues, in the real app at the
- * widths it is used at: the tick of the period before. The oracle is the owner's rule for it.
+ * widths it is used at: the tick of the period before, the hatch of a day still running, and what
+ * a part with no value is drawn in. The oracle is the owner's rule for the hatch and the tick.
  *
  * - The tick of the period before is a tick wider than its column, 4px past each side of it, in
  *   the text's main ink and ringed in the ground's colour. A segment's border never leaves its
@@ -8,6 +9,10 @@
  *   segment hid a tick in the quiet ink, and its dark ring read as two such gaps. Where a period's
  *   room leaves less than that beside its column, the tick reaches what it can and stays 1px
  *   inside its period's room, so it never touches a neighbour's column or tick.
+ * - Hatching means a figure not final yet. The legend names the hatch, «in progress», while a
+ *   day still running is on the plot, and only then.
+ * - A part with no value, such as work on no task, is the plain neutral under its name and never
+ *   hatched; the running day of the small trend beside it is, which shows the reading sees one.
  *
  * Each run prints what it measured.
  */
@@ -225,4 +230,83 @@ test('in a forced palette the tick keeps its overhang in the palette’s ink', a
     expect(overhangOf(one).wanted).toBe(OVERHANG)
     expect(one.ink, `${one.key}: the palette's ink`).toBe(seen.canvasText)
   }
+})
+
+/** The hatch's key in the day chart's legend: its words and its swatch's mask, if it is there. */
+const hatchKey = (page: Page) =>
+  page.evaluate(() => {
+    const key = document.querySelector('.spending-days .chart-key[data-series="hatch"]')
+    const swatch = key?.querySelector('.chart-hatch')
+    return key && swatch
+      ? {
+          text: key.textContent.trim(),
+          mask: getComputedStyle(swatch).maskImage,
+          focusable: (key as HTMLElement).tabIndex >= 0,
+        }
+      : null
+  })
+
+for (const [locale, word] of [
+  ['en', 'in progress'],
+  ['ru', 'идёт'],
+] as const)
+  test(`in ${locale} the legend names the hatch while a running day is on the plot, and only then`, async ({
+    page,
+  }, info) => {
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    await serve(page, WORLD)
+    const days = await openDays(page, 1440)
+    const legend = days.locator('.chart-legend')
+    // This week runs to Wednesday, which is hatched: the legend names the hatch.
+    await expect(days.locator('.period-incomplete')).toHaveCount(1)
+    const running = await hatchKey(page)
+    expect(running?.text).toBe(word)
+    expect(running?.mask, 'the swatch is hatched').toContain('repeating-linear-gradient')
+    expect(running?.focusable, 'the key only shows').toBe(false)
+
+    // The week before is over: nothing on the plot is hatched, and the legend has no such key,
+    // though it still names the series and the period before.
+    await page.goto(pageAt({ period: 'custom', from: '2026-11-02', to: '2026-11-04' }))
+    await expect(days.locator('.period-column')).toHaveCount(3)
+    await expect(days.locator('.period-incomplete')).toHaveCount(0)
+    await expect(legend.locator('.chart-key').first()).toBeVisible()
+    const past = await hatchKey(page)
+    await record(info, `hatch key ${locale}`, { running, past })
+    expect(past).toBeNull()
+  })
+
+test('a part with no value is the plain neutral under its name, and a running day is hatched', async ({
+  page,
+}, info) => {
+  await serve(page, WORLD)
+  await openReport(page, 1440, pageAt())
+  const rail = page.locator('.analytics-rail')
+  const none = rail.locator('[data-section="work_item"] .mini-share-part[data-key="none"]')
+  await expect(none).toBeVisible()
+  const seen = await page.evaluate(() => {
+    const probe = document.createElement('i')
+    document.body.append(probe)
+    probe.style.backgroundColor = 'var(--color-series-apart)'
+    const neutral = getComputedStyle(probe).backgroundColor
+    probe.remove()
+    const part = document.querySelector(
+      '.analytics-rail [data-section="work_item"] .mini-share-part[data-key="none"]',
+    )
+    const bar = part?.closest('[role="img"]')
+    const column = [...document.querySelectorAll('.analytics-rail .mini-trend-column')].at(-1)
+    if (!part || !bar || !column) throw new Error('the rail drew no share bar or trend')
+    return {
+      neutral,
+      part: getComputedStyle(part).backgroundColor,
+      mask: getComputedStyle(part).maskImage,
+      name: bar.getAttribute('aria-label') ?? '',
+      running: getComputedStyle(column).maskImage,
+    }
+  })
+  await record(info, 'no value part', seen)
+  expect(seen.part, 'work on no task').toBe(seen.neutral)
+  expect(seen.mask, 'work on no task').toBe('none')
+  expect(seen.name, 'the bar names it').toContain('No task')
+  // The control: the trend's running day is hatched, and the same reading sees it.
+  expect(seen.running, 'the running day').toContain('repeating-linear-gradient')
 })

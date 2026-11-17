@@ -15,6 +15,7 @@ import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 const words: PeriodWords = {
   total: 'total',
   incomplete: 'so far',
+  hatch: 'in progress',
   period: 'Day',
   note: 'Note',
   empty: 'No sessions in this range.',
@@ -31,6 +32,9 @@ const columns: PeriodColumn[] = [
   { key: 'd3', label: '3', fullLabel: 'May 3', values: { work: 3 } },
   { key: 'd4', label: '4', fullLabel: 'May 4', values: { ci: 1 }, incomplete: true },
 ]
+
+/** The same periods once the last is over: nothing on the plot is hatched. */
+const finished = columns.map((column) => ({ ...column, incomplete: false }))
 
 /** Each period a control that narrows to itself, as a chart of days is. */
 const acting = columns.map((column) => ({ ...column, action: `Show ${column.fullLabel}` }))
@@ -88,12 +92,12 @@ describe('period columns that open nothing', () => {
 
   it('carries a legend for two series and none for one', () => {
     expect(
-      mountColumns()
+      mountColumns({ columns: finished })
         .findAll('.chart-key')
         .map((key) => key.text()),
     ).toEqual(['ci', 'work'])
     expect(
-      mountColumns({ series: [series[0] as PeriodSeries] })
+      mountColumns({ columns: finished, series: [series[0] as PeriodSeries] })
         .find('.chart-legend')
         .exists(),
     ).toBe(false)
@@ -113,7 +117,41 @@ describe('period columns that open nothing', () => {
 
     expect(chart.findAll('.period-incomplete')).toHaveLength(1)
     expect(chart.get('[data-key="d4"] .period-stack').classes()).toContain('period-incomplete')
+    // Its segments are hatched, and only its: the hatch is a figure not final yet.
+    expect(
+      chart.findAll('.period-segment.hatched').map((one) => one.attributes('data-series')),
+    ).toEqual(['ci'])
     expect(chart.get('.period-axis').text()).not.toContain('so far')
+  })
+
+  it('names the hatch in the legend while a running period is drawn, and only then', () => {
+    const running = mountColumns()
+    const key = running.get('.chart-key[data-series="hatch"]')
+    expect(key.text()).toBe('in progress')
+    expect(key.get('.chart-hatch').classes()).toContain('hatched')
+    // The key only shows: no link, no button, no focus.
+    expect(key.element.tagName).toBe('SPAN')
+    expect(key.attributes('tabindex')).toBeUndefined()
+
+    const over = mountColumns({ columns: finished })
+    expect(over.find('.chart-key[data-series="hatch"]').exists()).toBe(false)
+    expect(over.findAll('.hatched')).toHaveLength(0)
+    // The legend is still there for its two series: the key is gone, not the legend.
+    expect(over.findAll('.chart-key')).toHaveLength(2)
+  })
+
+  it('gives a single series a legend for the hatch alone while its period runs', () => {
+    const one = [series[0] as PeriodSeries]
+    expect(
+      mountColumns({ series: one })
+        .findAll('.chart-key')
+        .map((key) => key.text()),
+    ).toEqual(['ci', 'in progress'])
+    const over = mountColumns({
+      series: one,
+      columns: finished,
+    })
+    expect(over.find('.chart-legend').exists()).toBe(false)
   })
 
   it('marks a change by a line in its period, says it in its hint and keeps no row for it', () => {
@@ -180,7 +218,7 @@ describe('period columns that open nothing', () => {
   })
 
   it('gives each legend entry a hint of its series over the span and its share', () => {
-    const chart = mountColumns({ formatShare: share })
+    const chart = mountColumns({ columns: finished, formatShare: share })
 
     expect(chart.findAll('.chart-key').map((key) => key.attributes('data-tooltip'))).toEqual([
       '3 h, 43% of the total',

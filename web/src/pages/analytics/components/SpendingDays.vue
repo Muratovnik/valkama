@@ -2,8 +2,9 @@
 /**
  * The period day by day: a column per day of the chosen measure, stacked by the largest values
  * of the dimension and «other» for the rest; work with no value there and unknown work stack
- * apart, as in the bars, and never inside «other». The day not over yet is hatched and says
- * «so far», so its short column does not read as a fall; a line stands where the known accounts
+ * apart, as in the bars, and never inside «other». The day not over yet is hatched, its hint
+ * says it is running and the legend names the hatch, «in progress», so its short column does not
+ * read as a fall; a line stands where the known accounts
  * with a figure in the measure shown changed from the last day a known account had one, and that
  * day's hint, name and table row say the change, «Account change: a → b» (`accountChanges`):
  * work whose organization nobody recorded is no account and marks nothing. The marks are the ones
@@ -189,6 +190,7 @@ const chart = computed<PeriodChartProps>(() => ({
     before: t('analytics.overview.before.word'),
     empty: t('analytics.days.empty'),
     incomplete: t('analytics.days.soFar'),
+    hatch: t('analytics.days.hatch'),
     note: t('analytics.days.note'),
     pending: t('analytics.time.notYet'),
     period: t(`analytics.time.steps.${step.value}.name`),

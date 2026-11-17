@@ -134,7 +134,6 @@ export function useRailTiles(options: {
       key: part.key,
       share: part.share,
       slot: slots.get(part.key) ?? ('other' as const),
-      apart: part.line?.kind === 'none',
     }))
     const said = figures.parts.map(
       (part) =>

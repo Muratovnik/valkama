@@ -74,9 +74,7 @@ function trendOf(tiles: ReturnType<typeof mountTiles>, measure: Measure) {
       const column = step.querySelector<HTMLElement>('.mini-trend-column')
       return column ? Math.round(Number.parseFloat(column.style.blockSize)) : null
     }),
-    hatched: steps.map((step) =>
-      Boolean(step.querySelector('.mini-trend-column.mini-trend-incomplete')),
-    ),
+    hatched: steps.map((step) => Boolean(step.querySelector('.mini-trend-column.hatched'))),
   }
 }
 

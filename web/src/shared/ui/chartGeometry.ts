@@ -209,6 +209,11 @@ export interface PeriodMark {
 export interface PeriodWords {
   empty: string
   /**
+   * What the legend calls the hatch a period still running is drawn with, beside a hatched
+   * swatch while such a period is on the plot: "in progress".
+   */
+  hatch: string
+  /**
    * What a period still running says of itself, in its hint, its name and its row of the
    * table: no word stands under its name on the axis, where it is hatched instead.
    */

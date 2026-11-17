@@ -79,6 +79,7 @@ export const analyticsMessages = {
       days: {
         title: '{measure} {per}, {by}',
         soFar: 'running',
+        hatch: 'in progress',
         note: 'Note',
         total: 'total',
         empty: 'No day in this period spent anything.',
@@ -272,6 +273,7 @@ export const analyticsMessages = {
       days: {
         title: '{measure} {per}, {by}',
         soFar: 'идёт',
+        hatch: 'идёт',
         note: 'Примечание',
         total: 'всего',
         empty: 'Ни в один день периода ничего не потрачено.',
