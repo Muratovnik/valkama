@@ -1,0 +1,610 @@
+"""What `tests/agent_probes.py run` owes: a working profile, a recorded session, the user's files untouched.
+
+The user here is a directory this test builds and names through the environment
+the runner starts from: instruction files, client settings with hooks of a
+memory service and of an installed Valkama release, skills, plugins, a project
+registry and a store as Valkama 2.9 leaves one. The clients are
+`tests/agent_probes/fake_client.py`, which runs what the profile registered and
+makes the calls its prompt lists; no model and no network are involved.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import hashlib
+import io
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+import tomllib
+import unittest
+from pathlib import Path
+from typing import Any, ClassVar
+from unittest import mock
+
+from server import store
+from server.store_identity.refs import planning_space_entity
+from tests import agent_probes, registry_fixtures
+from tests import test_planning_work_model_migration as work_model
+
+ROOT = Path(__file__).resolve().parents[1]
+SAMPLES = ROOT / "tests" / "agent_probes"
+FAKE = SAMPLES / "fake_client.py"
+
+#: What a coordinator hook of the user's does: print one file, for the main agent only.
+PRINT_FILE = (
+    "import json, sys\n"
+    "agent = json.loads(sys.stdin.buffer.read() or b'{}').get('agent_id')\n"
+    "if not agent:\n"
+    "    sys.stdout.buffer.write(open(sys.argv[1], 'rb').read())\n"
+)
+#: The launcher of an installed release that writes for the store schema before
+#: this one, as a 2.9 install does: its hook spools what a newer store refuses.
+OLD_RELEASE = """\
+import sys
+sys.path.insert(0, {root!r})
+from server import store
+store.STORE_SCHEMA_VERSION = {schema}
+from server.hooks import entry
+sys.exit(entry.main(sys.argv[2:]))
+"""
+
+
+def tree_digest(root: Path) -> dict[str, str]:
+    """Every file under `root` by its path, with the SHA-256 of its bytes.
+
+    A store's `-shm` and `-wal` files are left out: SQLite makes them for any
+    reader of a store in WAL mode, a read-only one included, and a live store has
+    them already, kept by the service it runs under. `new_sidecars` checks what a
+    read left there.
+    """
+
+    return {
+        path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(root.rglob("*"))
+        if path.is_file() and not path.name.endswith(SIDECARS)
+    }
+
+
+SIDECARS = (".sqlite3-shm", ".sqlite3-wal")
+
+
+def new_sidecars(root: Path, before: dict[str, str]) -> dict[str, int]:
+    """The WAL files a read made beside a store, by path, with their sizes."""
+
+    return {
+        path.relative_to(root).as_posix(): path.stat().st_size
+        for path in root.rglob("*.sqlite3-wal")
+        if path.relative_to(root).as_posix() not in before
+    }
+
+
+def make_user(root: Path) -> dict[str, Path]:
+    """The user's side of a run, as a client user's home holds it."""
+
+    claude, codex, local = root / ".claude", root / ".codex", root / "AppData" / "Local"
+    coordinator = claude / "coordinator"
+    for directory in (coordinator, codex, local / "Valkama" / "bin", root / ".valkama"):
+        directory.mkdir(parents=True)
+    (claude / "CLAUDE.md").write_text(
+        "# Instructions\n\n## Reading\n\nRead the range you need.\n\n"
+        "## Planning\n\nOld planning text.\n\n## Responses\n\nBe brief.\n",
+        encoding="utf-8",
+    )
+    (codex / "AGENTS.md").write_text(
+        "# Instructions\n\n## Planning\n\nOld planning text.\n\n"
+        "## Coordination\n\nOld coordination text.\n",
+        encoding="utf-8",
+    )
+    (coordinator / "coordination.md").write_text(
+        "## Coordination\n\nOld coordination text.\n", encoding="utf-8"
+    )
+    (coordinator / "questions.md").write_text("## Questions\n\nAsk the caller.\n", "utf-8")
+    launcher = local / "Valkama" / "bin" / "valkama-launcher.py"
+    launcher.write_text(OLD_RELEASE.format(root=str(ROOT), schema=17), encoding="utf-8")
+
+    def release(event: str, client: str = "claude") -> dict[str, Any]:
+        return {
+            "type": "command",
+            "command": sys.executable,
+            "args": ["-I", "-S", str(launcher), "hook", client, event],
+            "timeout": 5,
+        }
+
+    memory = {"type": "command", "command": sys.executable, "args": ["-c", "pass"]}
+    printer = {
+        "type": "command",
+        "command": sys.executable,
+        "args": ["-I", "-S", "-c", PRINT_FILE, str(coordinator / "coordination.md")],
+    }
+    settings = {
+        "model": "a-model",
+        "env": {"VALKAMA_DB": str(root / "elsewhere.sqlite3"), "KEPT": "1"},
+        "statusLine": {"type": "command", "command": str(launcher)},
+        "hooks": {
+            "SessionStart": [
+                {"matcher": "*", "hooks": [memory]},
+                {"matcher": "*", "hooks": [release("session-start")]},
+                {"matcher": "*", "hooks": [printer]},
+            ],
+            "PreToolUse": [{"matcher": "^mcp__valkama__", "hooks": [release("pre-tool-use")]}],
+            "PostToolUse": [{"matcher": "*", "hooks": [release("post-tool-use")]}],
+            "MessageDisplay": [
+                {"matcher": "*", "hooks": [{"type": "http", "url": "http://127.0.0.1:8642/x"}]}
+            ],
+        },
+    }
+    (claude / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+    codex_line = f'"{sys.executable}" -I -S "{launcher}" hook codex session-start'
+    codex_hooks = {
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        {"type": "command", "command": codex_line, "commandWindows": codex_line}
+                    ]
+                },
+                {"hooks": [{"type": "command", "command": "memory-capture"}]},
+            ]
+        }
+    }
+    (codex / "hooks.json").write_text(json.dumps(codex_hooks), encoding="utf-8")
+    (codex / "config.toml").write_text(
+        'model = "a-model"\n\n[mcp_servers.memory]\ncommand = "memory"\n\n'
+        '[mcp_servers.valkama]\ncommand = "valkama.cmd"\n\n[mcp_servers.valkama.env]\n'
+        'VALKAMA_AUTHOR = "codex"\n\n[windows]\nsandbox = "elevated"\n',
+        encoding="utf-8",
+    )
+    for skills in (claude / "skills", root / ".agents" / "skills", codex / "skills"):
+        for name, text in (("valkama", "an installed release's skill"), ("helper", "help")):
+            (skills / name).mkdir(parents=True)
+            (skills / name / "SKILL.md").write_text(f"{text}\n", encoding="utf-8")
+    plugins = claude / "plugins"
+    (plugins / "cache" / "tool").mkdir(parents=True)
+    (plugins / "cache" / "tool" / "plugin.json").write_text("{}", encoding="utf-8")
+    (plugins / "installed_plugins.json").write_text(
+        json.dumps({"tool": {"installPath": str(plugins / "cache" / "tool")}}), encoding="utf-8"
+    )
+    entries = [
+        {
+            "project_id": project,
+            "display_name": project.title(),
+            "canonical_root": str(root / "roots" / project),
+            "planning_binding": planning_space_entity(
+                {"data_scope_id": work_model.DATA_SCOPE, "space_key": key}
+            ),
+        }
+        for key, project in sorted(work_model.SPACE_PROJECTS.items())
+    ]
+    (local / "Valkama" / "projects.json").write_bytes(registry_fixtures.registry_bytes(entries))
+    work_model.build(str(root / ".valkama" / "valkama.sqlite3"))
+    return {"claude": claude, "codex": codex, "coordinator": coordinator}
+
+
+class RunCase(unittest.TestCase):
+    """A user, a home and an output directory, and one run over them."""
+
+    directory: ClassVar[tempfile.TemporaryDirectory]
+    user: ClassVar[Path]
+    home: ClassVar[Path]
+    out: ClassVar[Path]
+    paths: ClassVar[dict[str, Path]]
+    before: ClassVar[dict[str, str]]
+    said: ClassVar[str]
+    code: ClassVar[int]
+
+    @classmethod
+    def run_probes(cls, *arguments: str) -> None:
+        cls.directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        cls.addClassCleanup(cls.directory.cleanup)
+        base = Path(cls.directory.name)
+        cls.user, cls.home, cls.out = base / "user", base / "home", base / "out"
+        cls.paths = make_user(cls.user)
+        cls.home.mkdir()
+        (cls.home / ".claude").mkdir()
+        (cls.home / ".claude" / ".credentials.json").write_text('{"login": 1}', "utf-8")
+        (cls.home / "leftover.txt").write_text("from an earlier run", encoding="utf-8")
+        cls.before = tree_digest(cls.user)
+        cls.code, cls.said = cls.main(
+            "--client-home", str(cls.home), "--out", str(cls.out), *arguments
+        )
+
+    @classmethod
+    def environment(cls) -> dict[str, str]:
+        """What the runner starts from besides the user's locations."""
+
+        return {}
+
+    @classmethod
+    def main(cls, *arguments: str) -> tuple[int, str]:
+        user = cls.user
+        patched = {
+            "USERPROFILE": str(user),
+            "HOME": str(user),
+            "LOCALAPPDATA": str(user / "AppData" / "Local"),
+            "APPDATA": str(user / "AppData" / "Roaming"),
+            **cls.environment(),
+        }
+        argv = [
+            "run",
+            "--cases",
+            str(SAMPLES / "cases"),
+            "--sections",
+            str(SAMPLES / "sections.md"),
+            "--claude-md",
+            str(cls.paths["claude"] / "CLAUDE.md"),
+            "--claude-coordinator",
+            str(cls.paths["coordinator"]),
+            "--codex-agents",
+            str(cls.paths["codex"] / "AGENTS.md"),
+            "--client-program",
+            f"claude={FAKE}",
+            "--client-program",
+            f"codex={FAKE}",
+            *arguments,
+        ]
+        output = io.StringIO()
+        with mock.patch.dict(os.environ, patched), contextlib.redirect_stdout(output):
+            for name in ("VALKAMA_DB", "CLAUDE_CONFIG_DIR", "CODEX_HOME"):
+                os.environ.pop(name, None)
+            code = agent_probes.main(argv)
+        return code, output.getvalue()
+
+    def record(self, scenario: str, client: str) -> agent_probes.Record:
+        return agent_probes.Record.read(self.out / scenario / client)
+
+    def start_verdict(self, scenario: str, client: str) -> dict[str, Any]:
+        loaded = agent_probes.load_scenario(SAMPLES / "cases" / f"{scenario}.json")
+        return agent_probes.judge_start(self.record(scenario, client), loaded.expect["start"])
+
+
+class RunTests(RunCase):
+    """Both sample scenarios on both clients, with the user's own store copied by default."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.run_probes("--client", "both", "--store-copy")
+
+    def test_the_run_ends_without_an_environment_failure(self) -> None:
+        self.assertEqual(0, self.code, self.said)
+        run = json.loads((self.out / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {("A1", "claude"), ("A1", "codex"), ("B1", "claude"), ("B1", "codex")},
+            {(item["scenario"], item["client"]) for item in run["sessions"]},
+        )
+        self.assertEqual("migrated", run["store"]["migration"])
+        self.assertEqual({"claude": "fake-client 1", "codex": "fake-client 1"}, run["versions"])
+
+    def test_each_turn_runs_and_the_second_resumes_the_session_of_the_first(self) -> None:
+        for client in agent_probes.CLIENTS:
+            with self.subTest(client=client):
+                session = self.record("alpha", client).session
+                self.assertEqual([], session["failures"])
+                self.assertEqual([1, 2], [turn["index"] for turn in session["turns"]])
+                self.assertEqual([0, 0], [turn["exit"] for turn in session["turns"]])
+                second = (self.out / "alpha" / client / "turn-2.jsonl").read_text("utf-8")
+                self.assertIn(session["session_id"], second)
+                self.assertIn(f"Commented on {session['bindings']['n']}", second)
+
+    def test_the_setup_and_the_other_session_write_through_confirmed_sessions(self) -> None:
+        record = self.record("alpha", "claude")
+        roles = record.session["roles"]
+        with contextlib.closing(record.store()) as conn:
+            rows = conn.execute(
+                "SELECT tool, identity_state, session_id FROM execution_events"
+                " WHERE tool IS NOT NULL ORDER BY id"
+            ).fetchall()
+        sessions = {row[2]: row[1] for row in rows}
+        self.assertEqual("confirmed", sessions[roles["setup"]])
+        self.assertEqual("confirmed", sessions[roles["other"]])
+        self.assertEqual("confirmed", sessions[record.session["session_id"]])
+
+    def test_the_start_probe_passes_on_the_hooks_of_this_checkout(self) -> None:
+        for scenario in ("alpha", "beta"):
+            for client in agent_probes.CLIENTS:
+                with self.subTest(scenario=scenario, client=client):
+                    verdict = self.start_verdict(scenario, client)
+                    self.assertEqual("passed", verdict["verdict"], verdict)
+
+    def test_the_failing_registration_answers_no_handshake(self) -> None:
+        handshake = json.loads((self.out / "beta" / "claude" / "handshake.json").read_text())
+        self.assertIn("error", handshake)
+        answer = (self.out / "beta" / "codex" / "turn-1.jsonl").read_text("utf-8")
+        self.assertIn("Valkama is unavailable", answer)
+
+    def test_the_workspace_takes_the_overlay_and_each_repository_one_commit(self) -> None:
+        workspace = self.out / "alpha" / "claude" / "workspace"
+        self.assertIn("printed on start", (workspace / "app" / "README.md").read_text("utf-8"))
+        for repo in ("app", "lib"):
+            self.assertTrue((workspace / repo / ".git").is_dir(), repo)
+        self.assertFalse((workspace / ".git").exists())
+        self.assertTrue((self.out / "beta" / "claude" / "workspace" / ".git").is_dir())
+
+    def test_the_instructions_carry_the_new_sections_and_keep_the_rest(self) -> None:
+        claude_md = (self.home / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn("Replaced planning text", claude_md)
+        self.assertNotIn("Old planning text", claude_md)
+        self.assertIn("## Reading\n\nRead the range you need.\n\n## Planning", claude_md)
+        self.assertTrue(claude_md.endswith("## Responses\n\nBe brief.\n"))
+        agents = (self.home / ".codex" / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("Replaced planning text", agents)
+        self.assertIn("Replaced coordination text", agents)
+        self.assertNotIn("Old", agents)
+        coordinator = self.home / ".claude" / "coordinator"
+        self.assertIn("Replaced coordination", (coordinator / "coordination.md").read_text())
+        self.assertEqual(
+            (self.paths["coordinator"] / "questions.md").read_bytes(),
+            (coordinator / "questions.md").read_bytes(),
+        )
+
+    def test_the_hooks_run_this_checkout_and_leave_other_services_out(self) -> None:
+        settings = json.loads((self.home / ".claude" / "settings.json").read_text("utf-8"))
+        hooks = settings["hooks"]
+        found = {
+            event: [hook for group in groups for hook in group["hooks"]]
+            for event, groups in hooks.items()
+        }
+        entry = str(agent_probes.ENTRY)
+        self.assertEqual(
+            [
+                [sys.executable, entry, "hook", "claude", "session-start"],
+                [
+                    sys.executable,
+                    "-I",
+                    "-S",
+                    "-c",
+                    PRINT_FILE,
+                    str(self.home / ".claude" / "coordinator" / "coordination.md"),
+                ],
+            ],
+            [[hook["command"], *hook["args"]] for hook in found["SessionStart"]],
+        )
+        self.assertEqual(
+            {"PostToolUse", "PostToolUseFailure"},
+            {event for event in found if event.startswith("PostToolUse")},
+        )
+        self.assertEqual(["*"], [group["matcher"] for group in hooks["PostToolUse"]])
+        self.assertEqual("Bash|PowerShell", hooks["PostToolUseFailure"][0]["matcher"])
+        self.assertEqual(
+            ["hook", "claude", "post-tool-use-failure"], found["PostToolUseFailure"][0]["args"][1:]
+        )
+        port = self.record("beta", "codex").session["port"]
+        self.assertEqual(
+            [f"http://127.0.0.1:{port}/api/hooks/message-display"],
+            [hook["url"] for hook in found["MessageDisplay"]],
+        )
+        self.assertNotIn("statusLine", settings)
+        self.assertEqual({"KEPT": "1"}, settings["env"])
+        self.assertEqual("a-model", settings["model"])
+        codex = json.loads((self.home / ".codex" / "hooks.json").read_text("utf-8"))["hooks"]
+        self.assertEqual(
+            [["hook", "codex", "session-start"], ["hook", "codex", "post-tool-use"]],
+            [
+                hook["command"].split()[-3:]
+                for group in codex["SessionStart"] + codex["PostToolUse"]
+                for hook in group["hooks"]
+            ],
+        )
+        self.assertEqual("Bash", codex["PostToolUse"][0]["matcher"])
+        self.assertIn(entry, codex["SessionStart"][0]["hooks"][0]["commandWindows"])
+
+    def test_the_mcp_registration_launcher_skill_plugins_and_git(self) -> None:
+        claude = json.loads((self.home / ".claude" / ".claude.json").read_text("utf-8"))
+        self.assertEqual(["mcp_servers", "model", "windows"], sorted(self.codex_config()))
+        servers = {"claude": claude["mcpServers"], "codex": self.codex_config()["mcp_servers"]}
+        for client, registered in servers.items():
+            with self.subTest(client=client):
+                # The last session written is the one whose registration fails.
+                self.assertEqual(["valkama"], list(registered))
+                self.assertEqual(sys.executable, registered["valkama"]["command"])
+                self.assertEqual("-c", registered["valkama"]["args"][0])
+        for client in agent_probes.CLIENTS:
+            record = self.record("alpha", client)
+            registration = agent_probes.mcp_registration(
+                mock.Mock(python=sys.executable, environment={"VALKAMA_X": "1"}),
+                "tip",
+                Path(record.session["environment"]["VALKAMA_DB"]),
+                client,
+            )
+            self.assertEqual([str(agent_probes.ENTRY), "mcp"], registration["args"])
+            self.assertEqual(
+                record.session["environment"]["VALKAMA_DB"], registration["env"]["VALKAMA_DB"]
+            )
+            handshake = json.loads((record.directory / "handshake.json").read_text("utf-8"))
+            self.assertEqual("valkama", handshake["answer"]["serverInfo"]["name"])
+        path = self.record("alpha", "claude").session["environment"]["PATH"]
+        launcher = self.home / "AppData" / "Local" / "Valkama" / "bin"
+        self.assertEqual(str(launcher), path.split(os.pathsep)[0])
+        self.assertIn(str(agent_probes.ENTRY), (launcher / "valkama.cmd").read_text("utf-8"))
+        head_skill = (ROOT / "server" / "skill" / "valkama" / "SKILL.md").read_bytes()
+        for skills in (self.home / ".claude" / "skills", self.home / ".agents" / "skills"):
+            with self.subTest(skills=skills):
+                self.assertEqual(head_skill, (skills / "valkama" / "SKILL.md").read_bytes())
+                self.assertEqual("help\n", (skills / "helper" / "SKILL.md").read_text("utf-8"))
+        self.assertFalse((self.home / ".codex" / "skills" / "valkama").exists())
+        installed = json.loads(
+            (self.home / ".claude" / "plugins" / "installed_plugins.json").read_text("utf-8")
+        )
+        self.assertEqual(
+            str(self.home / ".claude" / "plugins" / "cache" / "tool"),
+            installed["tool"]["installPath"],
+        )
+        git = (self.home / ".gitconfig").read_text(encoding="utf-8")
+        self.assertIn("event = post-commit", git)
+        self.assertIn("git-hook run post-merge", git)
+        self.assertEqual(
+            str(self.home / ".gitconfig"),
+            self.record("alpha", "codex").session["environment"]["GIT_CONFIG_GLOBAL"],
+        )
+
+    def codex_config(self) -> dict[str, Any]:
+        return tomllib.loads((self.home / ".codex" / "config.toml").read_text(encoding="utf-8"))
+
+    def test_the_store_copy_is_migrated_and_holds_the_scenarios_space(self) -> None:
+        record = self.record("alpha", "codex")
+        with contextlib.closing(record.store()) as conn:
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            keys = {row[0] for row in conn.execute("SELECT key FROM planning_spaces")}
+        self.assertEqual(store.STORE_SCHEMA_VERSION, version)
+        self.assertLessEqual({"ALPHA", *work_model.SPACE_PROJECTS}, keys)
+        self.assertRegex(record.session["bindings"]["n"], r"^ALPHA-\d+$")
+
+    def test_only_the_logins_survive_from_an_earlier_run(self) -> None:
+        self.assertEqual(
+            '{"login": 1}', (self.home / ".claude" / ".credentials.json").read_text("utf-8")
+        )
+        self.assertFalse((self.home / "leftover.txt").exists())
+
+    def test_the_users_files_registrations_and_store_are_unchanged(self) -> None:
+        self.assertEqual(self.before, tree_digest(self.user))
+        self.assertEqual([0], list(set(new_sidecars(self.user, self.before).values()) or {0}))
+
+
+class OldReleaseHookTests(RunCase):
+    """The start probe on the hooks an installed release for the older schema registers."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.run_probes("--client", "claude", "--store-copy", "--only", "A1")
+
+    @classmethod
+    def environment(cls) -> dict[str, str]:
+        # The fake client runs the Valkama hooks the user's own registration names.
+        return {"PROBE_FAKE_VALKAMA_HOOKS": str(cls.paths["claude"] / "settings.json")}
+
+    def test_the_session_start_lands_in_the_spool_and_the_probe_fails_on_it(self) -> None:
+        self.assertEqual(0, self.code, self.said)
+        verdict = self.start_verdict("alpha", "claude")
+
+        self.assertEqual("failed", verdict["verdict"])
+        self.assertEqual(
+            ["session"], [check["check"] for check in verdict["checks"] if not check["passed"]]
+        )
+        # The release spooled each turn's start, and the MCP server the client then
+        # started drained it into the copy.
+        record = self.record("alpha", "claude")
+        with contextlib.closing(record.store()) as conn:
+            deliveries = conn.execute(
+                "SELECT delivery FROM execution_events WHERE kind = 'session_start'"
+                " AND session_id = ?",
+                (record.session["session_id"],),
+            ).fetchall()
+        self.assertEqual([("spooled",), ("spooled",)], deliveries)
+
+    def test_the_users_files_registrations_and_store_are_unchanged(self) -> None:
+        self.assertEqual(self.before, tree_digest(self.user))
+        self.assertEqual([0], list(set(new_sidecars(self.user, self.before).values()) or {0}))
+
+
+class ScenarioFormatTests(unittest.TestCase):
+    """A scenario is refused for what the runner would otherwise pass over in silence."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.cases = Path(directory.name) / "cases"
+        shutil.copytree(SAMPLES / "cases", self.cases)
+        self.alpha = json.loads((self.cases / "alpha.json").read_text(encoding="utf-8"))
+
+    def write(self, scenario: dict[str, Any]) -> Path:
+        path = self.cases / "alpha.json"
+        path.write_text(json.dumps(scenario), encoding="utf-8")
+        return path
+
+    def test_the_setup_keys_are_read(self) -> None:
+        loaded = agent_probes.load_scenario(self.write(self.alpha))
+
+        self.assertEqual((self.cases.parent / "overlay").resolve(), loaded.overlay)
+        self.assertEqual(("app", "lib"), loaded.repos)
+        self.assertEqual(
+            {"space": "ALPHA", "projects": ["app", "lib"], "default": "app"}, loaded.registry
+        )
+        self.assertEqual("tip", loaded.mcp)
+        beta = agent_probes.load_scenario(self.cases / "beta.json")
+        self.assertEqual((None, None, "failing"), (beta.overlay, beta.registry, beta.mcp))
+
+    def test_an_unknown_key_is_refused(self) -> None:
+        cases = (
+            ({**self.alpha, "fixtures": []}, "unknown key(s) fixtures"),
+            (
+                {**self.alpha, "registry": {**self.alpha["registry"], "scope": "x"}},
+                "registry has unknown key(s) scope",
+            ),
+            ({**self.alpha, "mcp": "remote"}, "mcp is 'remote'"),
+            (
+                {**self.alpha, "setup": [{**self.alpha["setup"][0], "session": "third"}]},
+                "unknown session 'third'",
+            ),
+        )
+        for scenario, message in cases:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(agent_probes.ProbeError, re.escape(message)):
+                    agent_probes.load_scenario(self.write(scenario))
+
+    def test_an_unknown_kind_of_check_is_refused_also_inside_any(self) -> None:
+        bad = {"check": "looks_fine"}
+        for checks in ([bad], [{"check": "any", "of": [{"check": "file", "path": "x"}, bad]}]):
+            with self.subTest(checks=checks):
+                scenario = {**self.alpha, "expect": {"start": checks}}
+                with self.assertRaisesRegex(agent_probes.ProbeError, "'looks_fine'"):
+                    agent_probes.load_scenario(self.write(scenario))
+
+    def test_a_run_is_refused_before_it_builds_anything(self) -> None:
+        self.write({**self.alpha, "fixtures": []})
+        home = self.cases.parent / "home"
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = agent_probes.main(
+                [
+                    "run",
+                    "--cases",
+                    str(self.cases),
+                    "--sections",
+                    "s",
+                    "--claude-md",
+                    "c",
+                    "--claude-coordinator",
+                    "d",
+                    "--codex-agents",
+                    "a",
+                    "--client",
+                    "both",
+                    "--client-home",
+                    str(home),
+                    "--out",
+                    str(self.cases.parent / "out"),
+                ]
+            )
+        self.assertEqual(2, code)
+        self.assertIn("unknown key(s) fixtures", output.getvalue())
+        self.assertFalse(home.exists())
+
+    def test_only_picks_scenarios_by_their_id_or_a_probe_they_hold(self) -> None:
+        self.assertEqual(["A1"], [item.id for item in agent_probes.load_cases(self.cases, ["A1"])])
+        self.assertEqual(
+            ["A1"], [item.id for item in agent_probes.load_cases(self.cases, ["seeded"])]
+        )
+        with self.assertRaisesRegex(agent_probes.ProbeError, "no scenario"):
+            agent_probes.load_cases(self.cases, ["Z9"])
+
+
+class SectionTests(unittest.TestCase):
+    def test_a_section_replaces_its_namesake_and_nothing_else(self) -> None:
+        text = "# Top\n\n## One\n\nold\n```\n## Not a heading\n```\n\n## Two\n\nkept\n"
+        replaced, used = agent_probes.replace_sections(text, {"One": "## One\n\nnew\n"})
+
+        self.assertEqual({"One"}, used)
+        self.assertEqual("# Top\n\n## One\n\nnew\n\n## Two\n\nkept\n", replaced)
+
+    def test_front_matter_is_not_a_section(self) -> None:
+        sections = agent_probes.read_sections(SAMPLES / "sections.md")
+
+        self.assertEqual(["Planning", "Coordination"], list(sections))
+        self.assertTrue(sections["Planning"].startswith("## Planning\n"))
+
+
+if __name__ == "__main__":
+    unittest.main()
