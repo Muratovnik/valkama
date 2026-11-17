@@ -8,6 +8,7 @@
  * Nothing here formats a value or knows a word: the caller hands in the rows as `rankRows` takes
  * them, a value as the number it is and the text it reads as.
  */
+import { apartInAnyPair } from '@/shared/lib/seriesColors.ts'
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { PlacedRow, RankedRow } from '@/shared/ui/chartGeometry.ts'
 import { rankRows } from '@/shared/ui/chartGeometry.ts'
@@ -58,17 +59,32 @@ const drawable = (value: number) => (Number.isFinite(value) && value > 0 ? value
  * smallest fold into one rest so that the ring draws `limit` in all. A row of kind `other` is no
  * part of the whole: it is listed apart (`notes`). A row's hue is its own `slot`, the colour of its
  * value wherever its page draws it, else its rank's; the rest is `other`, the folded tail's neutral.
+ *
+ * Any two parts of a ring can stand side by side, so it names a part only where its hue stays
+ * apart in any pair from every hue named before it (`apartInAnyPair`), and none in the rest's own
+ * neutral: the first part that would not, and every smaller one, fold into the rest. A part is
+ * never folded while a smaller one is named. On a page whose ranking is the ring's the first four
+ * hues are named; filtered, a value of the fifth or sixth hue can stand among them, and the ring
+ * then names fewer rather than two parts a reader could take for one.
  */
 export function ringOf(rows: readonly RankedRow[], limit = RING_SECTORS): Ring {
   const { ranked, rest } = rankRows(rows, true)
   const drawn = ranked.filter((row) => drawable(row.value) > 0)
   const whole = drawn.reduce((sum, row) => sum + drawable(row.value), 0)
-  const named = drawn.length > limit ? drawn.slice(0, Math.max(0, limit - 1)) : drawn
+  const room = drawn.length > limit ? Math.max(0, limit - 1) : drawn.length
+  const hueOf = (row: RankedRow, index: number) => row.slot ?? ((index + 1) as SeriesSlot)
+  const named: RankedRow[] = []
+  for (const row of drawn.slice(0, room)) {
+    const hue = hueOf(row, named.length)
+    const apart = named.every((one, index) => apartInAnyPair(hue, hueOf(one, index)))
+    if (hue === 'other' || !apart) break
+    named.push(row)
+  }
   const folded = drawn.slice(named.length)
   const parts = named.map((row, index) => ({
     key: row.key,
     value: drawable(row.value),
-    slot: row.slot ?? ((index + 1) as SeriesSlot),
+    slot: hueOf(row, index),
     members: [] as PlacedRow[],
     row: row as PlacedRow | null,
   }))

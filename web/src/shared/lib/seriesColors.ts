@@ -25,6 +25,31 @@ export const SERIES_SLOT_COUNT = 6
  */
 export type SeriesSlot = 1 | 2 | 3 | 4 | 5 | 6 | 'apart' | 'other'
 
+/**
+ * The pairs of hues that stay apart beside each other in a stack but not in every pair: each
+ * falls short, under protanopia, deuteranopia or ordinary vision, of what every other pair of the
+ * palette keeps, and no hue of the dark band could take a fifth place beside the first four
+ * without making another such pair. `tests/seriesColors.test.ts` holds this list to the tokens.
+ */
+export const CLOSE_SLOTS: readonly (readonly [number, number])[] = [
+  [1, 6],
+  [2, 5],
+  [4, 6],
+]
+
+/**
+ * Whether two slots stay apart for every reader whichever stands beside the other, as the parts
+ * of a ring can: two hues no close pair joins, or a hue beside a neutral, or the two neutrals.
+ * A slot is never apart from itself.
+ */
+export function apartInAnyPair(one: SeriesSlot, other: SeriesSlot): boolean {
+  if (one === other) return false
+  if (typeof one !== 'number' || typeof other !== 'number') return true
+  return !CLOSE_SLOTS.some(
+    ([first, second]) => (first === one && second === other) || (first === other && second === one),
+  )
+}
+
 function byCodePoint(left: string, right: string) {
   if (left === right) return 0
   return left < right ? -1 : 1

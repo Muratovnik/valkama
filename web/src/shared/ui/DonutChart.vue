@@ -2,9 +2,11 @@
 /**
  * How one whole splits among its parts, as a ring: a sector a part, as long around the ring as its
  * share of the whole, largest first from 12 o'clock clockwise (`donutGeometry`). It draws five
- * sectors at most; past them the smaller parts fold into one rest, in the neutral of a folded tail
- * and named by the caller's words with how many it holds (`words.rest`). A part takes the hue its
- * value has wherever its page draws it (`slot`), so the colour follows the value and not its place.
+ * sectors at most and names a part only where its hue stays apart from every hue named before it,
+ * since any two parts of a ring can meet (`ringOf`); the smaller parts past them fold into one
+ * rest, in the neutral of a folded tail and named by the caller's words with how many it holds
+ * (`words.rest`). A part takes the hue its value has wherever its page draws it (`slot`), so the
+ * colour follows the value and not its place.
  * The rows of kind `other` are no part of the whole: they close the chart under its legend by name
  * and figure, slanted in the quiet ink, as the rows apart of a ranked chart do (`RankedBars`).
  *

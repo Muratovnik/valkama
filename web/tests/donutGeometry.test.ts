@@ -1,7 +1,8 @@
 /**
  * The numbers a ring of shares draws. Each expectation is worked out by hand from the rows in the
  * test, not read back from the module: which parts the ring draws and in what order, what folds
- * into the rest past five sectors, each part's share of the whole and its place round the ring,
+ * into the rest past five sectors or past a colour close to one named before it, each part's
+ * share of the whole and its place round the ring,
  * that a part keeps the hue its page gave its value, and when a share fits on its sector in words.
  */
 import assert from 'node:assert/strict'
@@ -58,11 +59,32 @@ describe('the ring', () => {
     )
   })
 
-  test('draws five parts as they are, and past five folds the smaller into one rest', () => {
+  test('names four hues and past them folds the smaller parts into one rest', () => {
+    // Five parts in the first five hues: the fifth stays close to the second in some pair, so
+    // it is the rest, as it would be past five sectors.
     const five = [50, 20, 15, 10, 5].map((value, index) => row(`v${index}`, value))
     assert.deepEqual(
-      placed(five).map((one) => one.key),
-      ['v0', 'v1', 'v2', 'v3', 'v4'],
+      placed(five).map(({ key, slot }) => [key, slot]),
+      [
+        ['v0', 1],
+        ['v1', 2],
+        ['v2', 3],
+        ['v3', 4],
+        ['rest', 'other'],
+      ],
+    )
+    // Five parts with a neutral among them: no two of their colours are close, so all five
+    // are named.
+    const neutral = [
+      row('a', 50, { slot: 1 }),
+      row('none', 20, { kind: 'none', slot: 'apart' }),
+      row('b', 15, { slot: 2 }),
+      row('c', 10, { slot: 3 }),
+      row('d', 5, { slot: 4 }),
+    ]
+    assert.deepEqual(
+      placed(neutral).map((one) => one.key),
+      ['a', 'none', 'b', 'c', 'd'],
     )
 
     const slots: SeriesSlot[] = [1, 2, 3, 4, 5, 6, 'other']
@@ -86,6 +108,37 @@ describe('the ring', () => {
     assert.deepEqual(
       rest?.members.map((one) => one.key),
       ['v4', 'v5', 'v6'],
+    )
+  })
+
+  test('names no part whose colour a reader could take for one named before it', () => {
+    // Filtered, the value of the sixth hue is the second largest: the sixth stays close to the
+    // first, so it folds, and with it every smaller part, never a larger one before a smaller.
+    const filtered = ringOf([
+      row('a', 50, { slot: 1 }),
+      row('f', 30, { slot: 6 }),
+      row('b', 20, { slot: 2 }),
+    ])
+    assert.deepEqual(
+      filtered.sectors.map((one) => [one.key, one.slot, one.members.map((member) => member.key)]),
+      [
+        ['a', 1, []],
+        [' rest', 'other', ['f', 'b']],
+      ],
+    )
+    // Two parts in the one darker neutral would look alike: the smaller is the rest.
+    assert.deepEqual(
+      placed([
+        row('none', 50, { kind: 'none', slot: 'apart' }),
+        row('a', 40, { slot: 1 }),
+        row('unknown', 10, { kind: 'unknown', slot: 'apart' }),
+      ]).map((one) => one.key),
+      ['none', 'a', 'rest'],
+    )
+    // A value the page gives no hue is drawn in the rest's own neutral, never named in it.
+    assert.deepEqual(
+      placed([row('z', 60, { slot: 'other' }), row('a', 40, { slot: 1 })]).map((one) => one.key),
+      ['rest'],
     )
   })
 

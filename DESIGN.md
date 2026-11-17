@@ -32,9 +32,9 @@ colors:
   series-1: "#3987e5"
   series-2: "#d95926"
   series-3: "#199e70"
-  series-4: "#9085e9"
+  series-4: "#bf51b0"
   series-5: "#c98500"
-  series-6: "#d55181"
+  series-6: "#9085e9"
   series-apart: "#b3b3b3"
   series-other: "#e6e6e6"
 
