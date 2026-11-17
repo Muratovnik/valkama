@@ -33,7 +33,14 @@
      end, a live one opened on its running period says it at the scale, and one scrolled between
      says it at both; the scale and its ground never fade. A mask
      paints no colour and moves nothing. The keyboard's period keeps its ring whole: while one has
-     it, nothing fades, and the period it walks to is brought into view anyway. */
+     it, nothing fades, and the period it walks to is brought into view anyway.
+
+     The frame is what scrolls, and a mask on it takes its scrollbar too: drawn over the whole
+     frame, the fade ate the thumb wherever it ran under an edge. So the fade stops over the
+     scrollbar's strip, as tall as the bar is drawn (`--size-scrollbar`), and the strip is laid
+     under the mask whole. Clipped to the padding box instead, it still took the bar: Chromium
+     masks a frame's scrollbar with the box it scrolls in. A frame fades only while periods lie
+     past it, which is while it scrolls and draws the bar. */
   &[data-hidden-start] {
     --period-fade-start: transparent;
   }
@@ -44,14 +51,21 @@
 
   &[data-hidden-start],
   &[data-hidden-end] {
-    mask-image: linear-gradient(
-      to right,
-      black var(--period-gutter),
-      var(--period-fade-start) var(--period-gutter),
-      black calc(var(--period-gutter) + var(--period-fade)),
-      black calc(100% - var(--period-fade)),
-      var(--period-fade-end)
-    );
+    mask-image:
+      linear-gradient(
+        to right,
+        black var(--period-gutter),
+        var(--period-fade-start) var(--period-gutter),
+        black calc(var(--period-gutter) + var(--period-fade)),
+        black calc(100% - var(--period-fade)),
+        var(--period-fade-end)
+      ),
+      linear-gradient(black, black);
+    mask-repeat: no-repeat;
+    mask-position: top, bottom;
+    mask-size:
+      100% calc(100% - var(--size-scrollbar)),
+      100% var(--size-scrollbar);
   }
 
   &:has(:focus-visible) {
