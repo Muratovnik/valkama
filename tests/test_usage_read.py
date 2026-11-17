@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import unittest
 
 from server.planning import api, ladder, model, usage
@@ -235,6 +236,41 @@ class SessionReadTests(Case):
         line = next(line for line in read["by_item"] if line["work_item_id"] == doomed)
         self.assertIsNone(line["reference"])
         self.assertGreater(line["agent_seconds"], 0)
+
+
+class PeriodTests(unittest.TestCase):
+    """The period grammar every read over a period takes, refusing in Analytics' words."""
+
+    FIRST = dt.date(2030, 1, 1)
+
+    def days(self, count: int) -> str:
+        return (self.FIRST + dt.timedelta(days=count)).isoformat()
+
+    def refusal(self, start: str, end: str, **options) -> str:
+        with self.assertRaises(usage.UsageQueryError) as raised:
+            usage.period(start, end, **options)
+        return str(raised.exception)
+
+    def test_a_period_of_the_most_days_is_held_and_one_day_more_is_refused(self) -> None:
+        start = self.FIRST.isoformat()
+        begins, ends = usage.period(start, self.days(2400), utc_offset=330)
+        self.assertEqual(2400 * 86_400 * 1_000_000, ends - begins)
+        self.assertEqual(
+            "the period holds more than 2400 steps of one day",
+            self.refusal(start, self.days(2401), utc_offset=330),
+        )
+
+    def test_an_offset_beyond_any_zone_is_refused_before_the_dates_are_read(self) -> None:
+        for offset in (841, -841):
+            with self.subTest(offset):
+                self.assertEqual(
+                    "utc_offset must be from -840 to 840 minutes",
+                    self.refusal("yesterday", self.days(1), utc_offset=offset),
+                )
+        with self.assertRaises(usage.UsageQueryError) as raised:
+            usage.caller_zone(841)
+        self.assertEqual("utc_offset must be from -840 to 840 minutes", str(raised.exception))
+        self.assertEqual(dt.timedelta(minutes=-840), usage.caller_zone(-840).utcoffset(None))
 
 
 if __name__ == "__main__":
