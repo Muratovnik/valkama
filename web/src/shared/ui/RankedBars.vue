@@ -141,7 +141,6 @@ const strip = computed<SharePart[]>(() =>
           key: row.key,
           share: row.value / whole.value,
           slot: barSlot(row),
-          apart: row.kind === 'none' || row.kind === 'unknown',
         }))
     : [],
 )

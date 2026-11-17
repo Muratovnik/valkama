@@ -210,7 +210,7 @@ describe('a ranked list of free text', () => {
     expect(bar('t2').attributes('data-slot')).toBe('2')
   })
 
-  it('draws the strip of the whole over the rows, every row in its hue and in their order', () => {
+  it('draws the strip of the whole over the rows, every row in its hue and in their order, none of it hatched', () => {
     const strip = mountList(true).get('.mini-share-bar')
     // A picture of what the rows say, so nothing a screen reader reads twice.
     expect(strip.attributes('aria-hidden')).toBe('true')
@@ -221,13 +221,13 @@ describe('a ranked list of free text', () => {
           part.attributes('data-key'),
           part.attributes('data-slot'),
           part.attributes('style'),
-          part.classes('mini-share-apart'),
+          part.classes('hatched'),
         ]),
     ).toEqual([
       ['t1', '1', 'flex-grow: 0.3;', false],
       ['t2', '2', 'flex-grow: 0.15;', false],
       ['other', 'other', 'flex-grow: 0.1;', false],
-      ['none', 'apart', 'flex-grow: 0.45;', true],
+      ['none', 'apart', 'flex-grow: 0.45;', false],
     ])
     expect(mountList(false).find('.mini-share-bar').exists()).toBe(false)
   })
