@@ -31,6 +31,7 @@ from server.executions import artifacts
 from server.executions import lifecycle as executions
 from server.executions import results as execution_results
 from server.executions import service as execution_service
+from server.planning import calls as planning_calls
 from server.planning import leases, sweep
 from server.planning import model as planning_model
 from server.planning import service as planning
@@ -181,6 +182,32 @@ class LaunchLifecycleTests(LaunchHarness):
             [row[0] for row in self.conn.execute("SELECT status FROM sessions")],
             "the session its claim opened never ran, so it is not left open",
         )
+
+    def test_a_launch_failure_puts_put_off_work_back_with_its_condition(self) -> None:
+        """The launch took it out of deferred, and the condition went with it."""
+
+        reference = self.item("put off")
+        with planning_calls.bind(planning_calls.browser(), "/api/planning/work-item/defer"):
+            planning.defer_work_item(
+                self.conn, reference, until="2099-01-01", reason="waits for the vendor"
+            )
+        self.conn.commit()
+        condition = (
+            "SELECT until_at, until_item_id, reason, call_id, since, reached_at"
+            " FROM work_item_deferrals"
+        )
+        before = self.conn.execute(condition).fetchall()
+        runner.RUNNER = runner.Runner(
+            spawn=lambda _argv, _cwd, _environment: (_ for _ in ()).throw(OSError("boom"))
+        )
+        with self.assertRaisesRegex(runner.LaunchError, "cannot start claude"):
+            executions.launch_work_item(self.conn, self.packet(reference))
+        detail = planning.get_work_item(self.conn, reference)
+        self.assertEqual(("deferred", ""), (detail["state"]["key"], detail["claim_ref"]))
+        self.assertEqual(
+            [tuple(row) for row in before], [tuple(row) for row in self.conn.execute(condition)]
+        )
+        self.assertEqual("2099-01-01T00:00:00Z", detail["deferred"]["until"])
 
     def test_stopping_records_the_stop_on_the_item_and_the_session(self) -> None:
         reference = self.item("stop me")

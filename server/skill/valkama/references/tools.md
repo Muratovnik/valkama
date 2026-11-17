@@ -67,6 +67,10 @@ says what it is:
 - `lapsed_claim` (`holder`, `reason`, `at`) names whose claim the sweep released,
   why and when, until the next claim; a step marked `by_previous_holder` was
   ticked by that holder and waits for a tick that confirms it (see Claims).
+- `deferred`, on work put off, says what it waits on: `until` or `until_item`,
+  and `reached_at` once that came and the owner is asked; `returned`, on work in
+  triage that came back, says why (`because`: `date`, `completed`, `cancelled`
+  or `deleted`, with the `item`) and when.
 - `get_work_item_chain` with `scope: "tree"` reads everything under an item at
   any depth; `scope: "chain"`, the default, adds what was discovered from it.
 
@@ -220,7 +224,8 @@ resolves its discussion, records its summary and moves its state:
 | `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | asks as `create_work_item_request` does |
 | `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
 | `transition` | `{"state": "completed", "reason": "…", "force": false}` | moves the state |
-| `move_out` | `{"reason": "…", "force": false}`, not with `transition` | takes the item out of its goal or stage, to triage |
+| `defer` | `{"until": "2026-12-01", "reason": "…", "force": false}`, not with `transition` or `move_out` | puts the item off until a day, a time with its zone, or an open item's close ([work model](work-model.md#goals-and-stages)) |
+| `move_out` | `{"reason": "…", "force": false}`, not with `transition` or `defer` | takes the item out of its goal or stage, to triage |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
 the item already had and a `checklist` in the same call kept; send a new step
@@ -358,7 +363,8 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 | --- | --- |
 | an active state | a holder after the move: a claim on the item or on one of its steps; `force` does not carry this |
 | ready, active, review, blocked or completed, for an item with no basis | a basis of acceptance (`acceptance`), which `force` does not carry |
-| a deferred state | refused: putting work off is its own action |
+| a deferred state | refused: put work off with `defer` |
+| anything but a cancelled state, for an agent, while the owner is asked whether to take put-off work up again | refused with `acceptance_question`, which `force` does not carry |
 | active, review or blocked, for a goal or stage | refused: a goal or stage is accepted (ready), completed or cancelled |
 | a triage state, for an accepted open goal or stage | refused: an accepted goal or stage is completed or cancelled |
 | a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
@@ -397,7 +403,9 @@ owner is open on it, `force` or not; cancelling is not.
 | `workflow_guard` with `[children]` | Close, cancel or move out what is open under it; it then awaits confirmation. |
 | `cancel_list` | Read the list, then send the same transition with `cancels` set to `list_token`. |
 | `owner_only` | The owner answers this question in Valkama: leave it. |
-| `[purpose]` | A question with a purpose (review, confirm) takes one of its two answers, and its answer is not changed or declined. |
+| `[purpose]` | A question with a purpose (review, confirm, return) takes one of its answers, and its answer is not changed or declined. |
+| `workflow_guard` or a claim refused with `[acceptance_question]` | Wait for the owner's answer, then take it. |
+| `[deferral]` | Send `until` and `reason`; `until` is a day, a time with its zone, or an open item other than this one and the goals and stages over it. |
 | `[move_out]` | Give the reason the item leaves its goal or stage; an item under none, or closed, has nothing to move out of. |
 | `[parent]` | Clear a parent with `move_out`, not an edit; accept the goal or stage first, or move the item out, before accepted work goes under it. |
 | `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |

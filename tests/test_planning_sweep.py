@@ -158,7 +158,16 @@ class LeaseStepTests(PassTestCase):
         self.lapse_after_ticks()
         done = self.run_pass(deadline=time.monotonic() - 1)
         self.assertEqual(
-            ([sweep.LEASES, sweep.WAITING, sweep.SUBSCRIPTIONS, sweep.CONFIRMATIONS], {}),
+            (
+                [
+                    sweep.LEASES,
+                    sweep.WAITING,
+                    sweep.SUBSCRIPTIONS,
+                    sweep.RETURNS,
+                    sweep.CONFIRMATIONS,
+                ],
+                {},
+            ),
             (done.left, done.changed),
         )
         self.assertEqual(held(ONE), self.read()["claim_ref"])

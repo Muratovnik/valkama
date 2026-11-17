@@ -19,12 +19,14 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import unittest
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from server import mcp_surface, store
@@ -33,10 +35,12 @@ from server.planning import (
     api,
     calls,
     item_tree,
+    leases,
     participants,
     person_events,
     read_model,
     service,
+    sweep,
 )
 
 A = "0a000000-0000-4000-8000-00000000000a"
@@ -50,6 +54,8 @@ A2 = "0a000000-0000-4000-8000-0000000000a2"
 AS_A = {"sessionId": A}
 AS_A1 = {"sessionId": A, "threadId": A1}
 AS_A2 = {"sessionId": A, "threadId": A2}
+B1 = "0b000000-0000-4000-8000-0000000000b1"
+AS_B1 = {"sessionId": B, "threadId": B1}
 AS_B = {"sessionId": B}
 AS_C = {"sessionId": C}
 AS_D = {"sessionId": D}
@@ -353,6 +359,78 @@ class PersonOnTheTreeTests(Harness):
             for session in (A, B, F):
                 self.assertFalse(self.woken(session))
                 self.assertIsNone(self.hook(session))
+
+
+class DeferredGoalTests(Harness):
+    """G is put off and comes back; everyone working under it hears both once.
+
+    A holds `a` under G, a subagent of B holds a step of T1 under S1, C follows G and D holds
+    U under H; E puts G off. Valkama brings it back at the time as its own call: an hour
+    on, well inside the quiet period, so every claim under G still holds when it comes.
+    """
+
+    WHY = "the budget comes in January"
+
+    def setUp(self) -> None:
+        super().setUp()
+        at = datetime.now(UTC).replace(second=30, microsecond=0) + timedelta(hours=1)
+        self.until = at.strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.come = at + timedelta(minutes=1)
+        self.a = self.made("a", parent=self.goal)
+        self.person("/api/planning/work-item/apply", id=self.t1, checklist=["Look"])
+        step = service.get_work_item(self.conn, self.t1)["checklist"][0]["id"]
+        self.agent("claim_work_item", AS_A, id=self.a)
+        self.agent("claim_work_item_checklist_item", AS_B1, id=self.t1, item_id=step)
+        self.agent("apply_work_item_changes", AS_C, id=self.goal, subscribe=True)
+        self.agent("claim_work_item", AS_D, id=self.u)
+        self.settle(A, B, C, D, E)
+
+    def put_off(self, by_person: bool) -> None:
+        defer = {"until": self.until, "reason": self.WHY}
+        if by_person:
+            self.person("/api/planning/work-item/apply", id=self.goal, defer=defer)
+        else:
+            self.agent("apply_work_item_changes", AS_E, id=self.goal, defer=defer)
+
+    def test_an_agent_putting_the_goal_off_tells_everyone_under_it_once_without_a_wake(
+        self,
+    ) -> None:
+        self.put_off(by_person=False)
+        line = (
+            rf"\n- status at \S+ by session {E}: «deferred: until {self.until}:"
+            rf" {self.WHY}\. {re.escape(person_events.DEFERRED_WORK)}»\n"
+        )
+        for session in (A, B, C):
+            with self.subTest(session=session):
+                self.assertEqual((0, ""), self.watch(session, alive=1.0), "no wake")
+                told = self.hook(session)
+                assert told is not None, f"{session} works under G"
+                self.assertIn(f"\n{self.line(self.goal)}\n", told)
+                self.assertRegex(told, line)
+                self.assertIsNone(self.hook(session), "once")
+        self.assertIsNone(self.hook(D), "D works under H")
+        self.assertIsNone(self.hook(E), "E's own write")
+        with mock.patch.object(leases, "utc_now", lambda: self.come):
+            done = sweep.run_pass(self.conn)
+        self.assertEqual({sweep.RETURNS: 1}, done.changed)
+        back = rf"\n- status at \S+ by Valkama: «triage: returned, date {self.until}»"
+        for session in (A, B, C):
+            with self.subTest(returned=session):
+                self.assertEqual((0, ""), self.watch(session, alive=1.0), "no wake")
+                told = self.hook(session)
+                assert told is not None, f"{session} hears it came back"
+                self.assertRegex(told, back)
+                self.assertIsNone(self.hook(session), "once")
+        self.assertIsNone(self.hook(D))
+
+    def test_a_person_putting_the_goal_off_wakes_everyone_under_it(self) -> None:
+        self.put_off(by_person=True)
+        for session in (A, B, C):
+            with self.subTest(session=session):
+                status, text = self.watch(session)
+                self.assertEqual(notify.WAKE_STATUS, status, f"{session} is woken")
+                self.assertEqual(1, text.count(person_events.DEFERRED_WORK), text)
+        self.assertIsNone(self.hook(D))
 
 
 class MutedGoalTests(Harness):

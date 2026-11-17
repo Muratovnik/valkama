@@ -71,6 +71,8 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'card-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
   'card-goal.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-deferred.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-returned.json': (value) => validatePlanningWorkItemPayload(value),
   'comment-reply.json': validateCommentWritten,
   'comment-resolved.json': validateCommentResolved,
   'description-told.json': (value) => validateWorkItemRecord(value),
@@ -114,6 +116,13 @@ const agentOnly = new Set([
 /** Where a record stands, in words a test can compare: in a state, or deriving one. */
 const standing = (item: { container_state: string | null; state: { category?: string } | null }) =>
   item.state === null ? `derives ${item.container_state}` : `stands in ${item.state.category}`
+
+/** The work item of a card fixture the card read answered. */
+const cardItem = (name: string) => {
+  const card = validatePlanningWorkItemPayload(read(name))
+  if (card.state.status !== 'ready') throw new Error('the card read is not ready')
+  return card.state.payload.work_item
+}
 
 describe('the server fixtures', () => {
   it('are each read by the web or named as an agent read', () => {
@@ -172,6 +181,23 @@ describe('the server fixtures', () => {
       { holds: 0, follows: true },
       { holds: 1, follows: false },
     ])
+  })
+
+  it('say what put-off work waits on, and why work in triage came back', () => {
+    const waiting = cardItem('card-deferred.json')
+    expect([waiting.state?.category, waiting.deferred?.until, waiting.returned]).toEqual([
+      'deferred',
+      null,
+      undefined,
+    ])
+    expect(waiting.deferred?.until_item).toMatch(/^MAIN-\d+$/u)
+    const back = cardItem('card-returned.json')
+    expect([back.state?.category, back.deferred, back.returned?.because]).toEqual([
+      'triage',
+      undefined,
+      'deleted',
+    ])
+    expect(back.events.at(-1)?.action).toBe('returned')
   })
 
   it('carry what a path in a text can come to', () => {

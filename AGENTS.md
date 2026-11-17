@@ -34,7 +34,9 @@ is complete on its own.
   `not_asker`, `[purpose]`; withdrawing review's returns its item to `ready`),
   a launch that no longer moves its item to review, a cancel of a goal or stage
   with open work under it (`cancel_list`, `cancels`), a parent cleared only by
-  `move_out` and never under an unaccepted goal (`[parent]`), and the
+  `move_out` and never under an unaccepted goal (`[parent]`), work put off
+  only by `defer` and brought back by itself (`deferred`, `returned`,
+  `acceptance_question`), and the
   retired words
   refused on input — for spaces and projects — the registry formats 2 and 4, a
   space without `project_id`, an optional `space` on `create_work_item`, the

@@ -29,6 +29,7 @@ from datetime import UTC, datetime
 
 from .. import runner, sessions
 from ..planning import calls as planning_calls
+from ..planning import deferral as planning_deferral
 from ..planning import item_projects
 from ..planning import model as planning_model
 from ..planning import service as planning_service
@@ -82,6 +83,9 @@ def _launch_reserved(
         resume_session_id = _resumable_session(conn, record, packet.client) if packet.resume else ""
         state_before = str(record["state"]["key"])
         claim_before = str(record["claim_ref"] or "")
+        # Put off, the item stands on a condition the claim below takes away with the
+        # move out; a launch that never started puts it back with the state.
+        deferred_before = planning_service.deferral_of(conn, reference)
         session = _LaunchSession.of(
             conn, packet, runner.session_identity(packet, resume_session_id)
         )
@@ -143,6 +147,7 @@ def _launch_reserved(
             execution_id,
             error,
             session,
+            deferred=deferred_before,
         )
         raise
 
@@ -173,6 +178,7 @@ def _launch_reserved(
             execution_id,
             error,
             session,
+            deferred=deferred_before,
         )
         raise
 
@@ -484,12 +490,15 @@ def _restore(
     execution_id: str,
     error: BaseException,
     session: _LaunchSession,
+    *,
+    deferred: planning_deferral.Held | None = None,
 ) -> None:
     """Compensate only the unchanged launch-owned item, with the write lock held.
 
     The launch's own release is made in the launch's call, since only the session
     its claim names holds it; a session the claim opened is ended, because its
-    process never ran.
+    process never ran. An item the launch took out of deferred goes back with
+    `deferred`, the condition it stood there on.
     """
 
     conn.execute("BEGIN IMMEDIATE")
@@ -507,6 +516,7 @@ def _restore(
                 state,
                 author=actor,
                 expected_revision=int(launched["revision"]),
+                deferred=deferred,
             )
             # The state was put back above, so neither claim write may move
             # it: a claim would start it again and a release would requeue it.

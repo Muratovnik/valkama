@@ -15,7 +15,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping
 
-from . import calls, item_tree, leases, model, person_events, questions
+from . import calls, deferral, item_tree, leases, model, person_events, questions
 
 Finding = tuple[str, str]
 
@@ -25,7 +25,8 @@ Finding = tuple[str, str]
 #: new item standing where only a move with its reason or summary leads, open work
 #: under a goal or stage that is done, or work in review with nothing for the owner
 #: to answer — or an agent would go over the owner's open question, where
-#: withdrawing its own question is its way out, or cancel work under a goal or stage
+#: withdrawing its own question is its way out, or decide for the owner whether work
+#: put off is to be done (`acceptance_question`), or cancel work under a goal or stage
 #: it was never shown (`cancel_list`, which the service refuses with the list).
 UNFORCED = frozenset(
     {
@@ -39,6 +40,7 @@ UNFORCED = frozenset(
         "question",
         "review_question",
         "cancel_list",
+        "acceptance_question",
     }
 )
 #: How many of the open items under a goal or stage its `children` refusal names.
@@ -102,8 +104,8 @@ def placement(
         found.append(
             (
                 "deferred",
-                f"{reference} is deferred by the deferral action, with the condition it"
-                " comes back on, not by a move",
+                f"{reference} is put off with defer, which names the day or item it comes"
+                " back on, not by a move",
             )
         )
     if container and category == "triage" and was == model.SERVICE_CATEGORY:
@@ -263,6 +265,9 @@ def findings(
     asked = owner_question(conn, item, current, target, reference)
     if asked:
         refusals.append(("question", asked))
+    undecided = return_question(conn, item, current, target, reference)
+    if undecided:
+        refusals.append(("acceptance_question", undecided))
     if closing:
         spoke = person_spoke(conn, item, reference)
         if spoke:
@@ -355,6 +360,34 @@ def owner_question(
     return (
         f"{reference} has {len(found)} open question(s) to the owner, and an agent does not"
         f" {doing} over them: wait for the owner's answer, or withdraw a question you asked"
+    )
+
+
+def return_question(
+    conn: sqlite3.Connection,
+    item: sqlite3.Row,
+    current: sqlite3.Row,
+    target: sqlite3.Row,
+    reference: str,
+) -> str:
+    """What stops an agent's move of put-off work the owner is asked about.
+
+    Whether work that came back under goals and stages all accepted is to be done
+    is the owner's question (`deferral.RETURN`): a move out of deferred, or putting
+    it off again, would answer it for them. Only a cancel goes before the answer, and
+    ends the question as it closes; a person's move is their answer.
+    """
+
+    if current["category"] != "deferred" or target["category"] == "cancelled":
+        return ""
+    if not calls.from_agent():
+        return ""
+    asked = deferral.asked(conn, str(item["work_item_id"]))
+    if asked is None:
+        return ""
+    return (
+        f"the owner has not decided whether {reference} is to be done (question {asked}):"
+        " wait for the answer; only a cancel moves it before then"
     )
 
 

@@ -110,8 +110,29 @@ WORK_KINDS = frozenset(
 #: person's edit of the labels, which is told as the edit its call row names.
 #: `accepted`: the basis of an acceptance, beside the write that accepted the item.
 #: `child_left`: a child's move out of this container, told on the child itself.
+#: `returned`: why put-off work came back, beside the move that brought it, which is told.
 NOT_TOLD = frozenset(
-    {"created", "execution_attached", "overridden", "labels_changed", "accepted", "child_left"}
+    {
+        "created",
+        "execution_attached",
+        "overridden",
+        "labels_changed",
+        "accepted",
+        "child_left",
+        "returned",
+    }
+)
+#: What a goal or stage put off is told with, after the move's own words: the work
+#: under it is not put off with it.
+DEFERRED_WORK = (
+    "Work under it stays with whoever holds it; the queue hands out none of it until it comes back."
+)
+#: Whether a move went into a deferred state of a goal's or stage's workflow, by the
+#: key its detail opens with.
+_DEFERRED_CONTAINER = (
+    "SELECT 1 FROM work_items i JOIN workflow_states s ON s.workflow_id = i.workflow_id"
+    " WHERE i.work_item_id = ? AND i.kind = 'container' AND s.category = 'deferred'"
+    " AND s.key = ?"
 )
 #: The kinds of Valkama's own records that ask for a session: one wakes it, as a person's
 #: act does, and waits on a goal or stage nobody works on for the next session that takes
@@ -818,7 +839,16 @@ def _event_entry(conn: sqlite3.Connection, row: tuple, work_item_id: str) -> dic
     if action == "opened":
         # The detail is a reason, if one was named, and never a state.
         return _entry(kind, at, text=f"{OPENED}: {detail}" if detail else OPENED)
+    if action == "transitioned" and _deferred_container(conn, work_item_id, detail):
+        return _entry(kind, at, text=f"{detail.rstrip('.')}. {DEFERRED_WORK}")
     return _entry(kind, at, text=detail)
+
+
+def _deferred_container(conn: sqlite3.Connection, work_item_id: str, detail: str) -> bool:
+    """Whether a move's detail took a goal or stage into a deferred state."""
+
+    key = detail.split(": ", 1)[0]
+    return conn.execute(_DEFERRED_CONTAINER, (work_item_id, key)).fetchone() is not None
 
 
 _MENTIONING = (

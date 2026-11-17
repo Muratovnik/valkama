@@ -43,11 +43,12 @@ T4 = "2026-08-04T10:00:00Z"
 T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
-STEP_NAMES = [f"M{number}" for number in range(17)]
+STEP_NAMES = [*(f"M{number}" for number in range(16)), "deferred-items", "history-actions"]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(1, 16)),
     *(f"P{number}" for number in range(18, 31)),
+    "deferred-items",
     "second-run",
     "recovery-point",
 ]
@@ -843,7 +844,7 @@ class MigratedStoreTests(StoreCase):
             {
                 "no-old-waiting": {"rows": 0},
                 "request-shapes": {"refused": ["scope 'other'", "delivered_call without delivered_at"]},
-                "fresh-tables": {"added": ["work_item_waiting_notices"]},
+                "fresh-tables": {"added": ["work_item_deferrals", "work_item_waiting_notices"]},
             },
             details,
         )
@@ -957,6 +958,35 @@ class MigratedStoreTests(StoreCase):
         # WM-1 waits on a ready task nobody started; WM-6, WM-15 and WM-16 have work
         # started under them; every child of WM-18 is done.
         self.assertEqual({"awaiting_confirmation": 1, "in_progress": 3, "not_started": 1}, derived)
+
+    def test_deferred_items_creates_the_conditions_empty_as_a_fresh_store_has_them(
+        self,
+    ) -> None:
+        """No 2.9 state was deferred: the table comes empty, and its postcondition holds."""
+
+        names = {
+            str(row[0])
+            for row in self.read(
+                "SELECT name FROM sqlite_master WHERE tbl_name = 'work_item_deferrals'"
+            )
+        }
+        self.assertEqual(
+            {
+                "work_item_deferrals",
+                "work_item_deferrals_until_at",
+                "work_item_deferrals_until_item",
+                "sqlite_autoindex_work_item_deferrals_1",
+            },
+            names,
+        )
+        [(rows,)] = self.read("SELECT COUNT(*) FROM work_item_deferrals")
+        self.assertEqual(0, rows)
+        [step] = [step for step in self.report["steps"] if step["name"] == "deferred-items"]
+        self.assertEqual((True, {"table_created": True}), (step["needed"], step["result"]))
+        [found] = [
+            entry for entry in self.report["postconditions"] if entry["name"] == "deferred-items"
+        ]
+        self.assertEqual((True, {"rows": 0, "deferred": 0}), (found["passed"], found["detail"]))
 
     def test_a_second_run_changes_nothing_and_says_the_migration_ran(self) -> None:
         backups = sorted(os.listdir(os.path.join(self.directory.name, "backups")))

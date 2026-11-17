@@ -1,7 +1,8 @@
 """The planning sweep: what Planning releases by time, pass after pass.
 
 Of Planning's work rules only these wait for nobody's call: a lease lapses while
-its session is silent or gone, and what the session follows lapses with it. A
+its session is silent or gone, and what the session follows lapses with it; work
+put off until a day comes back when the day comes. A
 pass of this sweep is what releases them. `housekeeping` runs the first pass when
 a long-lived process starts, inside its start-up budget, and then repeats it on
 its own connection in a background thread of both processes that start up, the
@@ -20,7 +21,8 @@ What every step promises, because the steps added later lean on it:
 2. it writes as Valkama's own call, so the history says who and why: the pass
    binds `calls.valkama()` with the step's name as the tool, and a step whose
    writes are recorded under a name of their own binds that one inside
-   (the lease expiry's `leases.EXPIRY_TOOL`, one call per item);
+   (the lease expiry's `leases.EXPIRY_TOOL`, one call per item, and the return of
+   put-off work's `deferral.RETURN_TOOL`);
 3. it changes at most `LIMIT` items in one pass and leaves the rest to the next;
 4. it reads the time from `leases.utc_now`, which tests replace.
 
@@ -38,7 +40,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from ..hooks import light
-from . import calls, closing, service, subscriptions, waiting
+from . import calls, closing, deferral, leases, service, subscriptions, waiting
 
 #: The most items one step changes in one pass; the next pass takes the rest.
 LIMIT = 200
@@ -46,6 +48,7 @@ LIMIT = 200
 LEASES = "leases"
 WAITING = "waiting"
 SUBSCRIPTIONS = "subscriptions"
+RETURNS = "returns"
 CONFIRMATIONS = "confirmations"
 
 
@@ -140,6 +143,14 @@ def _subscriptions(conn: sqlite3.Connection) -> int:
     return subscriptions.expire(conn, limit=LIMIT)
 
 
+def _returns_pending(conn: sqlite3.Connection) -> bool:
+    return bool(deferral.due(conn, deferral.stamp(leases.utc_now()), 1))
+
+
+def _returns(conn: sqlite3.Connection) -> int:
+    return service.return_due(conn, limit=LIMIT)
+
+
 def _confirmations(conn: sqlite3.Connection) -> int:
     return closing.sweep_confirmations(conn, limit=LIMIT)
 
@@ -147,12 +158,15 @@ def _confirmations(conn: sqlite3.Connection) -> int:
 #: The steps of a pass, in order. The leases go first: the subscriptions of a
 #: session lapse by the same rule, and a later step may ask who still holds what.
 #: Words a lapsed session left unheard are recovered next (`waiting`), while the
-#: subscriptions that make it one of those sessions still stand. Whether anyone
-#: still works on a goal or stage awaiting confirmation is asked last
-#: (`confirmations`), once the passes before have released whoever does not.
+#: subscriptions that make it one of those sessions still stand. Work put off until
+#: a day that came, or until an item that closed by a path that did not bring it
+#: back, comes back next (`returns`). Whether anyone still works on a goal or stage
+#: awaiting confirmation is asked last (`confirmations`), once the passes before
+#: have released whoever does not.
 STEPS: tuple[Step, ...] = (
     Step(LEASES, _leases_pending, _leases),
     Step(WAITING, _waiting_pending, _waiting),
     Step(SUBSCRIPTIONS, _subscriptions_pending, _subscriptions),
+    Step(RETURNS, _returns_pending, _returns),
     Step(CONFIRMATIONS, closing.pending, _confirmations),
 )

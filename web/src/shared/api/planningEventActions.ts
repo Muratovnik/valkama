@@ -33,6 +33,7 @@ export const EVENT_ACTIONS = [
   'opened',
   'child_left',
   'awaiting_confirmation',
+  'returned',
 ] as const
 
 /** The longest detail any event but `labels_changed` carries. */

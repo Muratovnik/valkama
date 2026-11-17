@@ -23,6 +23,7 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from . import (
     acknowledgements,
     calls,
+    deferral,
     item_projects,
     item_tree,
     leases,
@@ -900,7 +901,27 @@ def present(
     # What its confirmer checks, only while it awaits confirmation.
     if record["container_state"] == closing_rules.AWAITING:
         record["confirmation"] = closing_rules.confirmation(conn, row)
+    record.update(_put_off(conn, identity, record["state"]))
     return record
+
+
+def _put_off(conn: sqlite3.Connection, identity: str, state: Mapping | None) -> dict:
+    """`deferred`, the condition of an item put off, or `returned`, why one in triage came
+    back; each only while it holds, and neither of any other item.
+
+    Read from the condition's row and the history, so a full record and the card carry
+    them, never a brief record. Reading writes nothing: a condition that has come stands
+    until a write brings the item back.
+    """
+
+    category = None if state is None else state["category"]
+    if category == "deferred":
+        found = deferral.record(conn, identity)
+        return {} if found is None else {"deferred": found}
+    if category == "triage":
+        came = deferral.returned(conn, identity)
+        return {} if came is None else {"returned": came}
+    return {}
 
 
 def _record(
@@ -1033,6 +1054,8 @@ CARD_FIELDS = (
     "started_at",
     "waits_for",
     "cancelled_blockers",
+    "deferred",
+    "returned",
     "workable",
     "withheld",
     "projects",
@@ -1123,6 +1146,11 @@ def card(
         "checklist": [card_step(step) for step in record["checklist"]],
         "summary": model.summary(row["summary"], required=False),
     }
+    put_off = _put_off(conn, str(row["work_item_id"]), state)
+    if "deferred" in put_off:
+        # Why and who put it off are read with the events part, so the card stays short.
+        put_off["deferred"] = deferral.card(put_off["deferred"])
+    found.update(put_off)
     shown = {name: found[name] for name in CARD_FIELDS if name in found}
     if shown["summary"] is None:
         del shown["summary"]

@@ -27,6 +27,7 @@ from . import agents as planning_agents
 from . import (
     calls,
     closing,
+    deferral,
     images,
     item_projects,
     item_tree,
@@ -1058,15 +1059,20 @@ def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
     # Its parent derives from the children it has; the row of a container awaiting
     # confirmation goes with it.
     closing.note(conn, row["parent_id"])
+    # Work put off until it comes back as if it closed, while it can still be named.
+    returned = _return_waiting(conn, [identity], deferral.DELETED)
     conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (identity,))
     # The rows went with the item; a file no other item holds goes once this commits.
     images.release(conn, pictures)
     words.bring_current(conn)
-    return {
+    answer = {
         "work_item_id": row["work_item_id"],
         "reference": read_model.reference(conn, row),
         "deleted": True,
     }
+    if returned:
+        answer["returned"] = returned
+    return answer
 
 
 def pin_work_item(conn: sqlite3.Connection, reference: str, pinned: bool) -> str:
@@ -1200,19 +1206,22 @@ def put_back_after_launch(
     *,
     expected_revision: int,
     author: str,
+    deferred: deferral.Held | None = None,
 ) -> dict:
     """Put a task a failed launch started back in the state the launch found it in.
 
     The launch's claim moved the task to work and the client never started, so
     nothing happened that the move could stand for. Going back is forced, as the
     compensation always was, and it is the one write that may enter deferred: the
-    task is not being deferred, only put back where it stood. The move ends the
-    launch's claim like any move out of work, and a move back to triage or deferred
-    takes away the basis the claim gave. Nothing on a surface reaches this: a
-    create, a move and `force` keep refusing entry into deferred.
+    task is not being deferred, only put back where it stood, with `deferred`, the
+    condition it stood there on (`deferral_of`, read before the launch's claim took
+    it away). The move ends the launch's claim like any move out of work, and a move
+    back to triage or deferred takes away the basis the claim gave. Nothing on a
+    surface reaches this: a create, a move and `force` keep refusing entry into
+    deferred.
     """
 
-    return _transition(
+    answer = _transition(
         conn,
         reference,
         state,
@@ -1222,6 +1231,18 @@ def put_back_after_launch(
         author=author,
         spared=_PUT_BACK_SPARES,
     )
+    identity = str(answer["work_item_id"])
+    row = read_model.item_by_id(conn, identity)
+    category = read_model.state_by_id(conn, str(row["state_id"]))["category"]
+    if deferred is not None and category == "deferred":
+        deferral.restore(conn, identity, deferred)
+    return answer
+
+
+def deferral_of(conn: sqlite3.Connection, reference: str) -> deferral.Held | None:
+    """The condition the item stands put off on, or None, for a write that puts it back."""
+
+    return deferral.held(conn, str(read_model.item_row(conn, reference)["work_item_id"]))
 
 
 @_marked
@@ -1289,8 +1310,9 @@ def _transition(
     closing.note(conn, row["parent_id"], author)
     if row["kind"] == model.CONTAINER_KIND:
         closing.note(conn, identity, author)
+    returned: list[str] = []
     if cancelling is not None:
-        warnings += _cancel_under(conn, cancelling, note, author)
+        warnings += _cancel_under(conn, cancelling, note, author, returned)
     _write(conn, row, updates, parameters)
     if gives is not None:
         _log(conn, identity, "accepted", gives, author)
@@ -1317,6 +1339,12 @@ def _transition(
         # The question of review is about the work as it stood there: a move that takes
         # the item elsewhere takes it back.
         questions.end(conn, identity, "withdrawn", author, purpose=transitions.REVIEW)
+    if current["category"] == "deferred" and target["category"] != "deferred":
+        _put_off_ends(conn, identity, author)
+    if target["is_terminal"] and not current["is_terminal"]:
+        # What was put off until this item comes back in the same transaction.
+        how = "cancelled" if target["category"] == "cancelled" else "completed"
+        returned += _return_waiting(conn, [identity], how)
     asked = None
     if into_review:
         asked = questions.ask(
@@ -1350,10 +1378,246 @@ def _transition(
         closed += [str(found["work_item_id"]) for found in cancelling.listing.rows]
     if target["is_terminal"] and not current["is_terminal"]:
         answer["freed"] = closing.freed(conn, closed)
-    for name in ("released", "freed"):
+        answer["returned"] = returned
+    for name in ("released", "freed", "returned"):
         if name in answer and not answer[name]:
             del answer[name]
     return answer
+
+
+# -- putting work off -----------------------------------------------------------
+
+
+#: The refusal putting work off is spared: entering deferred is what it does, with
+#: the condition a move there does not name.
+_DEFER_SPARES = frozenset({"deferred"})
+
+
+@_marked
+def defer_work_item(
+    conn: sqlite3.Connection,
+    reference: str,
+    *,
+    until: object,
+    reason: object,
+    force: bool = False,
+    expected_revision: int | None = None,
+    author: str | None = None,
+) -> dict:
+    """Put an item off until a day, a time or another item's close (`deferral`).
+
+    It moves to the first deferred state its workflow reaches, and the move records
+    `deferred: until 2026-12-01: <reason>`; like every move there it takes the basis
+    away and ends the claims. The condition is written beside it in the same write,
+    under the call that put it off. An item put off already takes the new condition,
+    and the question whether to take it up again ends with the old one. A claim of
+    another session is refused without `force`, which records it as overridden.
+    The answer names the condition as `deferred`.
+    """
+
+    row = _row_for_write(conn, reference, expected_revision)
+    identity = str(row["work_item_id"])
+    named = read_model.reference(conn, row)
+    current = read_model.state_by_id(conn, str(row["state_id"]))
+    if current["is_terminal"]:
+        raise model.PlanningError(
+            f"[{deferral.TAG}] {named} is closed: reopen it before putting it off"
+        )
+    why = _put_off_reason(reason)
+    until_at, until_item, said = _condition(conn, row, until)
+    target: sqlite3.Row | None = (
+        current if current["category"] == "deferred" else states.reachable(conn, row, "deferred")
+    )
+    if target is None:
+        raise model.WorkflowGuardError(
+            f"[transition] {named} cannot be put off: its workflow has no deferred state it"
+            " can move to"
+        )
+    overridden = held_elsewhere(conn, [row], author, force, doing="put it off")
+    answer = _transition(
+        conn,
+        identity,
+        str(target["state_id"]),
+        reason=f"until {said}: {why}",
+        author=author,
+        spared=_DEFER_SPARES,
+    )
+    questions.end(conn, identity, "withdrawn", author, purpose=deferral.RETURN)
+    deferral.put(
+        conn,
+        identity,
+        until_at=until_at,
+        until_item_id=until_item,
+        reason=why,
+        call_id=calls.call_id(conn, identity),
+        since=deferral.stamp(leases.utc_now()),
+    )
+    forced = record_overrides(conn, identity, ["claim"] if overridden else [], author)
+    answer = {
+        **answer,
+        **read_model.present(conn, read_model.item_by_id(conn, identity), full=True),
+    }
+    if forced:
+        answer["overridden"] = forced
+    return answer
+
+
+def defer_again(conn: sqlite3.Connection, identity: str, until: object) -> None:
+    """Put work that came back off again until `until`, as the owner's answer `later` says.
+
+    The item stays where it stands; its condition is the new one, set by the call of
+    the answer, not yet come, with the reason and the start it was put off with. The
+    answer's own event is the history of it.
+    """
+
+    row = _row_for_write(conn, identity, None)
+    kept = deferral.held(conn, identity)
+    if kept is None:
+        raise model.PlanningError(
+            f"[{deferral.TAG}] {read_model.reference(conn, row)} is not put off"
+        )
+    until_at, until_item, _said = _condition(conn, row, until)
+    deferral.put(
+        conn,
+        identity,
+        until_at=until_at,
+        until_item_id=until_item,
+        reason=kept.reason,
+        call_id=calls.call_id(conn, identity),
+        since=kept.since,
+    )
+
+
+def return_due(
+    conn: sqlite3.Connection, *, limit: int | None = None, space_id: str | None = None
+) -> int:
+    """Bring back the put-off work whose condition came and nothing acted on; how much.
+
+    A day or time that passed, or an item that closed by a path that did not bring
+    its waiting back. Read with `leases.utc_now`, at most `limit` items, of one
+    space's items when `space_id` names it. The sweep's `returns` step and the
+    take-next queue call it; a read never does.
+    """
+
+    found = deferral.due(
+        conn, deferral.stamp(leases.utc_now()), -1 if limit is None else limit, space_id=space_id
+    )
+    for due in found:
+        return_deferred(conn, due)
+    return len(found)
+
+
+def _return_waiting(conn: sqlite3.Connection, items: list[str], because: str) -> list[str]:
+    """Bring back what was put off until one of `items`, which closed or goes; their
+    references."""
+
+    return [
+        return_deferred(conn, deferral.Due(waiting_id, because, until_id, None))
+        for waiting_id, until_id in deferral.waiting(conn, items)
+    ]
+
+
+def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str:
+    """Bring one put-off item back, its condition having come; its reference.
+
+    The return is Valkama's own call (`deferral.RETURN_TOOL`), so the history names
+    the server and why. Under no accepted chain the item moves to the first triage
+    state it reaches, with `transitioned` (`triage: returned, date 2026-12-01`) and
+    `returned` (`date 2026-12-01`, `completed MAIN-12`) side by side, and its
+    condition goes with the move. Under goals and stages all accepted and open, or
+    with no triage to reach, it stays put off: its condition is marked come and the
+    owner is asked whether to do it, put it off again or drop it.
+    """
+
+    row = read_model.item_by_id(conn, due.work_item_id)
+    reference = read_model.reference(conn, row)
+    item = None if due.until_item_id is None else deferral.reference(conn, due.until_item_id)
+    with calls.bind(calls.valkama(), deferral.RETURN_TOOL):
+        current = read_model.state_by_id(conn, str(row["state_id"]))
+        if current["category"] != "deferred":
+            # A condition with no item put off on it holds nothing: it goes.
+            deferral.clear(conn, due.work_item_id)
+            return reference
+        target = states.reachable(conn, row, "triage")
+        parent = None if row["parent_id"] is None else str(row["parent_id"])
+        if target is None or item_tree.accepted_chain(conn, parent):
+            deferral.reach(
+                conn,
+                due.work_item_id,
+                deferral.stamp(leases.utc_now()),
+                gone=due.because == deferral.DELETED,
+            )
+            condition = deferral.said(str(due.until_at)) if item is None else f"{item} closed"
+            questions.ask(
+                conn,
+                due.work_item_id,
+                kind="question",
+                prompt=(
+                    f"{reference} was put off until {condition}; that has come. Do it, put it"
+                    " off again, or drop it."
+                ),
+                fields=request_model.fields(list(request_model.RETURN_FIELDS)),
+                author=deferral.AUTHOR,
+                purpose=deferral.RETURN,
+            )
+            return reference
+        said = deferral.because_text(due.because, due.until_at, item)
+        _transition(
+            conn,
+            due.work_item_id,
+            str(target["state_id"]),
+            reason=f"returned, {said}",
+            author=deferral.AUTHOR,
+        )
+        _log(conn, due.work_item_id, "returned", said, deferral.AUTHOR)
+    return reference
+
+
+def _put_off_ends(conn: sqlite3.Connection, identity: str, author: str | None) -> None:
+    """The item left deferred: its condition goes, and the question its coming asked."""
+
+    deferral.clear(conn, identity)
+    questions.end(conn, identity, "withdrawn", author, purpose=deferral.RETURN)
+
+
+#: The most characters the reason for putting work off holds.
+_PUT_OFF_REASON_LIMIT = 400
+
+
+def _put_off_reason(reason: object) -> str:
+    if reason is None or (isinstance(reason, str) and not reason.strip()):
+        raise model.PlanningError(
+            f"[{deferral.TAG}] defer needs reason: why the work waits, which the owner reads"
+            " when it comes back"
+        )
+    return model.text_field(reason, "reason", limit=_PUT_OFF_REASON_LIMIT)
+
+
+def _condition(
+    conn: sqlite3.Connection, row: sqlite3.Row, until: object
+) -> tuple[str | None, str | None, str]:
+    """The condition `until` names for the item: the moment or the item it waits on,
+    and how a person reads it."""
+
+    if until is None or (isinstance(until, str) and not until.strip()):
+        raise model.PlanningError(
+            f"[{deferral.TAG}] defer needs until: a day YYYY-MM-DD, a time with its zone, or"
+            " the reference of the open item it waits on"
+        )
+    text = model.text_field(until, "until", limit=64)
+    at = deferral.moment(text, leases.utc_now())
+    if at is not None:
+        return at, None, deferral.said(at)
+    try:
+        waited = read_model.item_row(conn, text)
+    except model.PlanningError as error:
+        raise model.PlanningError(
+            f"[{deferral.TAG}] until {text} is no day, time or work item: send a day"
+            " YYYY-MM-DD, a time with its zone such as 2026-12-01T09:00:00Z, or an item's"
+            " reference"
+        ) from error
+    deferral.check_item(conn, row, waited)
+    return None, str(waited["work_item_id"]), read_model.reference(conn, waited)
 
 
 def _cancel_listing(
@@ -1420,16 +1684,21 @@ _CASCADE_SPARES = frozenset({"person_spoke"})
 
 
 def _cancel_under(
-    conn: sqlite3.Connection, cancelling: _Cancelling, why: str, author: str | None
+    conn: sqlite3.Connection,
+    cancelling: _Cancelling,
+    why: str,
+    author: str | None,
+    returned: list[str],
 ) -> list[str]:
     """Cancel every open item under a goal or stage, deepest first, each with its summary.
 
     Each moves to the first cancelled state its workflow reaches, with the reason
     `cancelled with MAIN-3`, through the one transition path: its claims end, its
-    questions end as cancelled. An item without a summary gets one that says so; one
-    with a summary keeps what it did and says nothing comes next. The new summary is
-    a new report, and the one before stays in the comments. `why`, the reason the goal
-    or stage was cancelled for, is each summary's `why` when there is one.
+    questions end as cancelled, and what was put off until it comes back, named in
+    `returned`. An item without a summary gets one that says so; one with a summary
+    keeps what it did and says nothing comes next. The new summary is a new report,
+    and the one before stays in the comments. `why`, the reason the goal or stage was
+    cancelled for, is each summary's `why` when there is one.
     """
 
     warnings: list[str] = []
@@ -1447,6 +1716,7 @@ def _cancel_under(
             spared=_CASCADE_SPARES,
         )
         warnings += moved["warnings"]
+        returned += moved.get("returned", [])
     return warnings
 
 
@@ -1704,7 +1974,8 @@ def _holdable(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
     One refusal for every way in -- a claim, the queue, a batch, a creation that
     claims, HTTP and a launch -- before anything is written. A goal or stage is
     never held; an item in review waits on the owner's answer, and a closed one is
-    reopened before anybody works it again.
+    reopened before anybody works it again. An agent does not take put-off work the
+    owner is asked whether to do (`acceptance_question`).
     """
 
     if row["kind"] == model.CONTAINER_KIND:
@@ -1718,6 +1989,15 @@ def _holdable(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
     if category in model.TERMINAL_CATEGORIES:
         raise model.WorkflowGuardError(
             f"[closed] {read_model.reference(conn, row)} is closed; reopen it first"
+        )
+    asked = deferral.asked(conn, str(row["work_item_id"])) if category == "deferred" else None
+    if asked is not None and calls.from_agent():
+        # Taking it would start it on an assignment the owner has not given: whether
+        # it is to be done is the question. A person's claim is their answer.
+        raise model.WorkflowGuardError(
+            f"[acceptance_question] the owner has not decided whether"
+            f" {read_model.reference(conn, row)} is to be done (question {asked}): take it"
+            " after the answer"
         )
 
 
@@ -1777,12 +2057,17 @@ def _starting(conn: sqlite3.Connection, row: sqlite3.Row, move_state: bool = Tru
 def _started(
     conn: sqlite3.Connection, identity: str, start: _Start, author: str | None, reason: str
 ) -> None:
-    """The history of the start a claim wrote with its holder: the basis, then the move."""
+    """The history of the start a claim wrote with its holder: the basis, then the move.
+
+    A start out of deferred ends the condition it stood there on, as any move out does.
+    """
 
     if start.gives is not None:
         _log(conn, identity, "accepted", start.gives, author)
     if start.target is not None:
         _log(conn, identity, "transitioned", f"{start.target['key']}: {reason}", author)
+    if start.current is not None and start.current["category"] == "deferred":
+        _put_off_ends(conn, identity, author)
 
 
 def _say_started(conn: sqlite3.Connection, answer: dict, start: _Start) -> None:
@@ -2171,6 +2456,8 @@ def claim_ready_work_item(
     # first, the item then reads unheld to the rule below. A lease in its grace
     # is still held, so the queue neither gives that item nor releases it.
     expire_leases(conn, space_id=scope.space_id)
+    # So does work put off until a day that came: the queue reads the space as it is.
+    return_due(conn, space_id=scope.space_id)
     lost: model.RevisionConflictError | None = None
     for _ in range(_READY_CLAIM_ATTEMPTS):
         chosen = _next_given(conn, scope)
@@ -2870,6 +3157,9 @@ def _fold(
         if note:
             summary["why"] = note
         set_summary(conn, identity, summary, author=author)
+        # What was put off until it waits for the survivor, which holds its work now,
+        # before its close would bring that back.
+        deferral.repoint(conn, identity, survivor_id, involved)
         closed = transition_work_item(
             conn,
             identity,

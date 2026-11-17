@@ -218,11 +218,29 @@ _COMMENT_FORM = (
     " that reply's root, and applied names the root it joined in reply_to or"
     " reply_to_request. A reply carries no checklist_item_id; its root does."
 )
+#: What a batch's defer takes, and what putting work off does.
+_DEFER_FORM = (
+    "Put the item off until a day (YYYY-MM-DD, returning at 00:00 UTC), a time, or"
+    " another open item's close: until and reason are both required. It moves to its"
+    " deferred state, loses its basis and its claims; nothing takes it from the queue."
+    " When the day comes or that item closes, is cancelled or deleted, it returns to"
+    " triage, or, under goals and stages all accepted, waits as a question to the owner:"
+    " do it, later or drop it. An item merged away passes the wait to the item it merged"
+    " into. A claim or any transition out of deferred, a cancel included, ends the wait,"
+    " but while the question to the owner is open an agent can neither claim the item"
+    " nor move it anywhere but cancelled (acceptance_question); moving the item under"
+    " another parent keeps the wait. A goal or stage is put off the same way: the work"
+    " under it stays with whoever holds it, the queue hands out none of it until it"
+    " comes back, and the sessions working under it hear that it was put off and that it"
+    " came back. Refused for an item another session holds unless force. Not with"
+    " transition or move_out in one call."
+)
 #: What a batch's transition takes, and the guards it meets.
 _TRANSITION_FORM = (
     'An object, never a bare state name: {"state": "done"}, with reason, force,'
     " acceptance, to_check or cancels when they apply. The one path a state changes by,"
-    " except taking the item out of its goal or stage (move_out). The"
+    " except putting work off (defer) and taking it out of its goal or stage"
+    " (move_out). The"
     " workflow's guards apply: an active state needs a holder after the write"
     " (executor); review and a completed state need every checklist step ticked and a"
     " closing summary, and are refused while a step stands ticked by a holder whose"
@@ -245,11 +263,13 @@ _TRANSITION_FORM = (
     " it is the confirmation. Cancelling one with open work under it is refused with"
     " the list of what would close and a list_token (cancel_list): send the same"
     " transition with cancels set to that token to cancel it all; a list that changed"
-    " meanwhile is refused again with the new one. Entering deferred is refused."
+    " meanwhile is refused again with the new one. Entering deferred is refused: use"
+    " defer. An agent moves an item the owner is asked whether to take up again only"
+    " to cancelled (acceptance_question)."
     " A cancelled state needs only the summary, saying why the work stopped; its undone"
     " steps stay open. force carries a refusal through and records it, except executor,"
-    " acceptance, deferred, children, question, review_question, cancel_list and the"
-    " refusals that"
+    " acceptance, deferred, children, question, review_question, cancel_list,"
+    " acceptance_question and the refusals that"
     " keep a goal or stage out of work. Any"
     " state but an active or blocked one"
     " also ends the item's claim and any step claim, whoever holds them; the answer"
@@ -772,7 +792,8 @@ TOOLS = [
         " an item in another space, a closed item, a merged item with children, a goal"
         " or stage with a task (goals and stages merge only with each other),"
         f" more than {model.MAX_CHECKLIST} steps in all, or an item another session"
-        " holds unless force. The answer lists what each item moved.",
+        " holds unless force. The answer lists what each item moved. An item put off"
+        " until a merged item waits for the survivor instead.",
         WRITES,
         {
             "id": {
@@ -808,7 +829,8 @@ TOOLS = [
         "Several writes to one item in one call, all or nothing. The groups apply"
         " in this order: claim,"
         " subscribe, update, checklist, checklist_ticks, refs, links, comment or comments,"
-        " resolutions, questions, summary, then transition or move_out — so a claim and"
+        " resolutions, questions, summary, then one of transition, defer or move_out — so a"
+        " claim and"
         " its steps take one call, and a closing"
         " transition sees the ticks and the summary sent with it, and a transition"
         " sent with claim moves an item the claim has already started; a closing"
@@ -1066,13 +1088,29 @@ TOOLS = [
                 },
                 "required": ["state"],
             },
+            "defer": {
+                "type": "object",
+                "description": _DEFER_FORM,
+                "properties": {
+                    "until": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A day YYYY-MM-DD, coming back at 00:00 UTC; a time"
+                        " with its zone, such as 2026-12-01T09:00:00Z; or the reference or"
+                        " work_item_id of the open item whose close it waits on.",
+                    },
+                    "reason": _STR,
+                    "force": _FORCE,
+                },
+                "required": ["until", "reason"],
+            },
             "move_out": {
                 "type": "object",
                 "description": "Take the item out of its goal or stage, with the reason: it goes"
                 " to the top level and to triage, keeps that it started, and loses its claims"
                 " and its basis. The goal or stage it left records the reason. The one way to"
                 " clear a parent. Refused for an item another session holds unless force;"
-                " not with transition in one call.",
+                " not with transition or defer in one call.",
                 "properties": {"reason": _STR, "force": _FORCE},
                 "required": ["reason"],
             },
@@ -1089,7 +1127,8 @@ TOOLS = [
     _tool(
         "delete_work_item",
         "Delete a work item",
-        "Removes the item and its trail. Refuses while it still has children.",
+        "Removes the item and its trail. Refuses while it still has children. Items put"
+        " off until it return as if it closed.",
         DESTRUCTIVE,
         {"id": WORK_ITEM_REFERENCE},
         ["id"],

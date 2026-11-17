@@ -760,6 +760,7 @@ class OrderTests(BatchCase):
                 "questions",
                 "summary",
                 "transition",
+                "defer",
                 "move_out",
             ),
             tuple(group for group, _fields in api.APPLY_GROUPS),
@@ -967,7 +968,8 @@ class PublishedSchemaTests(unittest.TestCase):
         tool = next(entry for entry in tools.TOOLS if entry["name"] == BATCH)
         self.assertIn(
             "claim, subscribe, update, checklist, checklist_ticks, refs, links, comment or"
-            " comments, resolutions, questions, summary, then transition or move_out",
+            " comments, resolutions, questions, summary, then one of transition, defer or"
+            " move_out",
             tool["description"],
         )
 

@@ -97,6 +97,20 @@ goal or stage that is not accepted (`[parent]`): accept that one first, or move
 the item out. Work in triage moved under goals and stages all accepted is
 accepted with them, as if filed there.
 
+Work that is to wait is put off with `defer`, never by a move into a deferred
+state: `until` names the day (`2026-12-01`, from 00:00 UTC), a time with its zone,
+or the open item whose close it waits on, and `reason` says why, which the owner
+reads when it comes back. It loses its claims and its basis, and the queue gives
+none of it, nor of the work under a goal or stage put off; whoever holds work under
+one keeps it and hears that it was put off and that it came back. When the day
+comes, or that item completes, is cancelled or deleted, the work comes back to
+triage by itself (the record's `returned` says why); an item merged away passes the
+wait to the one it merged into. Under goals and stages all accepted it stays put
+off and the owner is asked instead: do it, later or drop it. Until the owner
+answers, you can neither claim it nor move it anywhere but cancelled
+(`acceptance_question`): wait for the answer. A claim, or any move out of
+deferred, ends the wait.
+
 ## Sources
 
 Read on 2026-11-01.

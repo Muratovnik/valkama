@@ -26,8 +26,8 @@ CARD = frozenset(
     {
         "reference", "title", "kind", "priority", "revision", "created_at", "updated_at",
         "labels", "source", "state", "open", "container_state", "acceptance", "started_at",
-        "waits_for", "cancelled_blockers", "workable", "withheld", "projects", "claim_ref",
-        "claim_state",
+        "waits_for", "cancelled_blockers", "deferred", "returned", "workable", "withheld",
+        "projects", "claim_ref", "claim_state",
         "last_claim_ref", "closed_at", "lapsed_claim", "url", "parent", "description",
         "checklist", "summary",
     }
@@ -422,6 +422,75 @@ class CancelledBlockerTests(CardCase):
             transition={"state": "cancelled"},
         )
         self.assertNotIn("cancelled_blockers", self.read())
+
+
+class DeferralFieldTests(CardCase):
+    """Work put off and brought back: the card carries the condition short."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.ref = self.item("Put off")
+        self.reason = "r" * 400
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            defer={"until": "2099-01-01", "reason": self.reason},
+        )
+
+    def test_the_card_carries_when_it_comes_back_and_the_full_record_why(self) -> None:
+        card = self.read()
+        self.assertEqual(
+            {"until": "2099-01-01T00:00:00Z", "until_item": None, "reached_at": None},
+            card["deferred"],
+        )
+        full = self.http()
+        self.assertEqual(self.reason, full["deferred"]["reason"])
+        self.assertEqual(HOLDER, full["deferred"]["by"]["session_id"])
+        self.assertEqual(
+            {"until", "until_item", "reason", "since", "by", "reached_at"}, set(full["deferred"])
+        )
+        placed = set(read_model.CARD_FIELDS) | set(read_model.PARTS) | set(read_model.OFF_CARD)
+        self.assertEqual(set(), set(self.http(sessions="true")) - placed)
+        # A moment, or a reference in its place, and the moment it came: the reason,
+        # however long, stays off the card.
+        widest = {
+            "until": "2099-01-01T00:00:00Z",
+            "until_item": None,
+            "reached_at": "2099-01-01T00:00:00Z",
+        }
+        self.assertLessEqual(len(compact(card["deferred"])), len(compact(widest)))
+        self.assertLessEqual(len(compact(widest)), 90)
+
+    def test_an_item_that_came_back_carries_why_until_it_moves(self) -> None:
+        waited = self.item("Waited on")
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            defer={"until": waited, "reason": "after it"},
+        )
+        self.agent(
+            "apply_work_item_changes",
+            id=waited,
+            claim=True,
+            summary={"done": "Done", "next": "Nothing"},
+            transition={"state": "done"},
+        )
+        card = self.read()
+        self.assertNotIn("deferred", card)
+        self.assertEqual(
+            {"because": "completed", "item": waited},
+            {name: card["returned"][name] for name in ("because", "item")},
+        )
+        self.assertEqual(card["returned"], self.http()["returned"])
+        self.assertLessEqual(len(compact(card["returned"])), 100)
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            transition={"state": "ready", "acceptance": "assignment"},
+        )
+        self.assertNotIn("returned", self.read())
+        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "triage"})
+        self.assertNotIn("returned", self.read(), "a move of its own to triage is no return")
 
 
 class SizeTests(unittest.TestCase):

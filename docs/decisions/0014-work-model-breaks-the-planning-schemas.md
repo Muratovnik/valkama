@@ -103,6 +103,19 @@ and no compatibility layer.
      or one over which, stands in `triage` or `deferred` (`[parent]`), and moves
      an item in `triage` put under goals and stages all accepted to `ready`, or a
      goal or stage to its service state, accepted with them;
+   - work is put off by the new `defer` group and its HTTP write, with `until`
+     (a day, a time with its zone, or the open item it waits on) and a
+     `reason`; a `transition` into a `deferred` state is refused naming it. The
+     item's full record and card carry `deferred`, its condition, while it is
+     put off, and `returned`, why it came back, while it stands in `triage`
+     after that; the history takes the action `returned`, and a cancel list's
+     entries take `how: deferred`. When its day comes or that item closes, a
+     sweep step brings it back to `triage`, or, under goals and stages all
+     accepted, asks the owner with a question of `purpose` `return`; while that
+     question is open an agent's claim of the item, and its move anywhere but a
+     cancelled state, is refused with `acceptance_question`, which `force` does
+     not carry. A close, a delete or a merge that brings work back answers
+     with `returned`;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -182,6 +195,8 @@ and no compatibility layer.
 | cancelling a goal or stage with open work under it in one move | the move, refused with `cancel_list`; then the same move with `cancels` set to its `list_token` |
 | `update` with `parent: ""` | `move_out` with the `reason` the item leaves its goal or stage for |
 | moving accepted work under a goal or stage in triage or deferred | accept that goal or stage first, or move the item out |
+| `transition` into a deferred state | `defer` with `until` and `reason`; the work comes back by itself |
+| an agent claiming or moving work the owner is asked to take up again | wait for the owner's answer; only a cancel moves it before then |
 
 ## Consequences
 
