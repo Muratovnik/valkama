@@ -27,6 +27,7 @@ import RequestSummary from '@/features/input-requests/components/RequestSummary.
 import RequestUnsent from '@/features/input-requests/components/RequestUnsent.vue'
 import { isStructured } from '@/features/input-requests/utils/reviewForm.ts'
 
+import { endedByClose } from '@/shared/api/inputRequestModel.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import { unbroken } from '@/shared/lib/unbroken.ts'
@@ -78,10 +79,9 @@ const closing = computed(() => {
     const declined = person === false ? 'requests.agentDeclined' : 'requests.declinedBy'
     return t(declined, { actor: actorName(by) })
   }
-  const state =
-    props.request.expired_reason === 'task_closed'
-      ? t('requests.record.withdrawn', { reference: props.request.reference })
-      : t(`requests.${status}`)
+  const state = endedByClose(props.request)
+    ? t('requests.record.withdrawn', { reference: props.request.reference })
+    : t(`requests.${status}`)
   if (!by) return state
   const signed = person === false ? 'requests.agentResolved' : 'requests.resolvedBy'
   return `${state} · ${t(signed, { actor: actorName(by) })}`

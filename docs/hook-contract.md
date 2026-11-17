@@ -557,7 +557,9 @@ the same rules as a person's act and beside the mentions above:
   moves to is told to the holders: `blocker_closed` when it reached a terminal
   state and is still there, `blocker_changed` for any other state, a reopen
   included, and for a close another transition undid before it was read. A
-  person's change is in the person's block, another session's in this one; a
+  person's change is in the person's block, another session's in this one, and
+  one Valkama made in a call of its own, such as work put off coming back, in
+  this one too, as [its own](#valkamas-own-records); a
   change by the holder's own session is told to nobody, though its orchestrator
   hears a subagent's change on the blocker itself, as above. Only a close wakes (see
   [when another session's news wakes](#when-another-sessions-news-wakes)): a

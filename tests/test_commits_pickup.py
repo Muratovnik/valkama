@@ -338,7 +338,12 @@ class RuleCase(PickupCase):
         """Claimed, then moved into review by the session `minutes` ago."""
 
         self.claim(reference)
-        self.tool("apply_work_item_changes", id=reference, transition={"state": "review"})
+        self.tool(
+            "apply_work_item_changes",
+            id=reference,
+            summary={"done": "the change", "next": "nothing"},
+            transition={"state": "review", "to_check": "the change"},
+        )
         self.conn.execute(
             "UPDATE work_item_events SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)"
             " WHERE action = 'transitioned' AND work_item_id = ?",

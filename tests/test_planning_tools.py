@@ -564,10 +564,21 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         warned = self.call(
             "apply_work_item_changes",
             id=bare,
-            transition={"state": "review", "force": True, "acceptance": "assignment"},
+            transition={
+                "state": "review",
+                "force": True,
+                "acceptance": "assignment",
+                "to_check": "The bare item.",
+            },
         )
         self.assertRegex(warned["warnings"][0], "no session ref or attached commit")
-        clean = self.call("apply_work_item_changes", id=self.ref, transition={"state": "review"})
+        clean = self.call(
+            "apply_work_item_changes",
+            id=self.ref,
+            checklist={"items": [{"text": t, "done": True} for t in ("first", "second")]},
+            summary={"done": "Both steps.", "next": "Nothing."},
+            transition={"state": "review", "to_check": "Both steps."},
+        )
         self.assertNotIn("overridden", clean)
         self.assertNotIn("warnings", clean)
 

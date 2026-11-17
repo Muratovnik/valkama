@@ -14,6 +14,7 @@ from unittest import mock
 from server import runner, store
 from server.executions import lifecycle
 from server.executions import service as execution_service
+from server.planning import calls as planning_calls
 from server.planning import service as planning
 
 
@@ -96,6 +97,35 @@ class LaunchCompensationTests(unittest.TestCase):
         # state, and its own claim writes neither start nor requeue it again.
         self.assertEqual(before["state"]["key"], item["state"]["key"])
         self.assertEqual("prior-holder", item["claim_ref"])
+        self.assertIn("restored", self.attempt()["result"]["unresolved"])
+
+    def test_a_confirmed_prior_claim_comes_back_confirmed(self) -> None:
+        # Put back with the call that took it, the claim is the lease of the same
+        # session again, rather than a name nobody proved.
+        proved = planning_calls.Identity(
+            state=planning_calls.CONFIRMED,
+            source=planning_calls.CODEX_META,
+            session_id="session-a",
+            client="codex",
+        )
+        with planning_calls.bind(proved, "claim_work_item"):
+            planning.claim_work_item(self.other, self.reference, author="worker-a")
+        self.other.commit()
+        before = planning.get_work_item(self.other, self.reference)
+        self.assertEqual(
+            ("live", "session-a", planning_calls.CODEX_META),
+            (before["claim"]["state"], before["claim"]["session_id"], before["claim"]["source"]),
+        )
+        runner.RUNNER = runner.Runner(
+            spawn=lambda *_args: (_ for _ in ()).throw(OSError("no client"))
+        )
+
+        with self.assertRaises(runner.LaunchError):
+            lifecycle.launch_work_item(self.conn, self.packet(force=True))
+
+        item = planning.get_work_item(self.other, self.reference)
+        self.assertEqual(before["state"]["key"], item["state"]["key"])
+        self.assertEqual((before["claim_ref"], before["claim"]), (item["claim_ref"], item["claim"]))
         self.assertIn("restored", self.attempt()["result"]["unresolved"])
 
     def test_compensation_holds_write_lock_through_guard_and_restore(self) -> None:
@@ -348,7 +378,7 @@ class LaunchCompensationTests(unittest.TestCase):
         self.assertFalse(os.path.exists(second_runtime))
         self.assertEqual([], lifecycle.reap_launches(self.conn))
 
-    def test_old_delivery_cannot_move_a_newer_running_attempt_to_review(self) -> None:
+    def test_an_old_delivery_does_not_end_a_newer_running_attempt(self) -> None:
         class Process:
             pid = 42
             stdout = None
@@ -412,9 +442,8 @@ class LaunchCompensationTests(unittest.TestCase):
             [second["execution_id"]],
             [item["execution_id"] for item in lifecycle.reap_launches(self.conn)],
         )
-        self.assertEqual(
-            "review", planning.get_work_item(self.conn, self.reference)["state"]["key"]
-        )
+        # The newer attempt ends on its own delivery, which moves nothing either.
+        self.assertEqual("dev", planning.get_work_item(self.conn, self.reference)["state"]["key"])
         self.assertEqual([], lifecycle.reap_launches(self.conn))
 
 

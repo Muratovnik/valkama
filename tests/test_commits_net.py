@@ -17,6 +17,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface
+from server.planning import service
 
 from .commit_fixtures import CLAUDE, PROJECT
 from .test_commits_api import ApiCase
@@ -29,6 +30,8 @@ META = {"sessionId": CLAUDE, "threadId": CLAUDE}
 #: A session that is not the closing one.
 OTHER = "019a3c2e-9999-7c11-9e0f-2f4b6d8a1c3e"
 FIELDS = ("unreported_commits", "unreported_total", "unreported_unread")
+#: The summary every close here records.
+SUMMARY = {"done": "the change", "next": "nothing"}
 
 
 class NetCase(RuleCase):
@@ -78,13 +81,25 @@ class NetCase(RuleCase):
         self.conn.commit()
 
     def close(
-        self, reference: str, state: str = "review", *, acceptance: str = "", **extra: object
+        self,
+        reference: str,
+        state: str = "review",
+        *,
+        acceptance: str = "",
+        force: bool = False,
+        **extra: object,
     ) -> dict:
-        """A move as the stdio loop runs it: answered, committed, then the net."""
+        """A move as the stdio loop runs it: answered, committed, then the net. It carries
+        the summary a close asks, and `to_check` when it enters review."""
 
         move: dict[str, object] = {"state": state}
         if acceptance:
             move["acceptance"] = acceptance
+        if force:
+            move["force"] = True
+        if state == "review":
+            move["to_check"] = "the change"
+        extra.setdefault("summary", SUMMARY)
         answer = mcp_surface.run_tool_call(
             self.conn,
             "apply_work_item_changes",
@@ -235,9 +250,20 @@ class WindowTests(NetCase):
         self.claim(t1)
         self.dated(t1, "claimed", 60)
         self.made("before", 50)
-        self.tool("apply_work_item_changes", id=t1, transition={"state": "review"})
+        self.tool(
+            "apply_work_item_changes",
+            id=t1,
+            summary=SUMMARY,
+            transition={"state": "review", "to_check": "the change"},
+        )
+        # An agent completes from review only with no question to the owner open there,
+        # as on an item a store before 3.0 left in review: the one entering asked goes.
+        self.conn.execute(
+            "DELETE FROM work_item_requests WHERE work_item_id = ?", (self.identity(t1),)
+        )
+        self.conn.commit()
         c = self.made("c", 70)
-        answer = self.close(t1, "done", summary={"done": "the change", "next": "nothing"})
+        answer = self.close(t1, "done")
         self.assertEqual([c], self.named(answer), "the window opens at the session's claim")
 
     def test_a_step_holder_starts_at_its_step_claim(self) -> None:
@@ -252,7 +278,9 @@ class WindowTests(NetCase):
             "SELECT claim_ref FROM work_items WHERE work_item_id = ?", (self.identity(t2),)
         )
         self.assertEqual("", row.fetchone()[0], "the item itself is not claimed")
-        self.assertEqual([d], self.named(self.close(t2)))
+        # The step stays open and held: a close of an item with an open step is forced,
+        # and a step ticked in the closing call no longer counts as held.
+        self.assertEqual([d], self.named(self.close(t2, force=True)))
 
     def test_an_item_the_session_never_held_has_no_window(self) -> None:
         t3 = self.task("Never", PROJECT)
@@ -269,8 +297,11 @@ class WhoseCloseTests(NetCase, ApiCase):
         self.claim(t1)
         self.claim(t2)
         c = self.made("c", 30)
+        service.set_summary(self.conn, t2, SUMMARY, author="tester")
+        self.conn.commit()
         status, body = self.http(
-            "/api/planning/work-item/transition", {"id": t2, "state": "review"}
+            "/api/planning/work-item/transition",
+            {"id": t2, "state": "review", "to_check": "the change"},
         )
         self.assertEqual(200, status, body)
         self.assertEqual("review", body["state"]["key"])

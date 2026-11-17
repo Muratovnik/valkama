@@ -35,6 +35,8 @@ from tests.planning_tree import Tree, oracle
 #: The tables a write changes: a refusal leaves each as it was.
 WRITTEN = ("planning_spaces", "work_items", "work_item_events", "work_item_links")
 AGENT = "agent-one"
+SUMMARY = {"done": "The step.", "next": "Nothing."}
+TO_CHECK = "The step holds."
 
 #: Each write by the MCP tool and the HTTP route that make it.
 MCP_TOOLS = {
@@ -198,6 +200,12 @@ class WriteCase(unittest.TestCase):
         service.set_checklist(self.conn, self.ref(name), [{"text": f"The step of {name}"}])
         self.conn.commit()
 
+    def summarize(self, name: str) -> None:
+        """The summary a move into review needs, written before the move."""
+
+        service.set_summary(self.conn, self.ref(name), SUMMARY, author="tester")
+        self.conn.commit()
+
     # -- trees ------------------------------------------------------------------
 
     def accepted_goal(self, stage: bool = True) -> None:
@@ -276,20 +284,24 @@ class ThroughMcpTests(WriteCase):
         self.assertIsNotNone(self.stored("a", "started_at"))
         self.assertIsNotNone(self.stored("a", "accepted_at"))
 
-    def test_a_task_moved_to_review_is_released_by_the_move(self) -> None:
+    def test_a_task_entering_review_is_released_by_the_move(self) -> None:
         self.tree.add("a", state="ready")
         self.give_step("a")
         self.claim("a")
         self.claim_step("a")
+        self.summarize("a")
         holder, steps = self.holders("a")
         mark = self.mark()
-        self.transition("a", "review")
+        # A held step is an open one, and only force carries an open step into review.
+        self.transition("a", "review", force=True, to_check=TO_CHECK)
         self.assertEqual(("review", ("", [""])), (self.category("a"), self.holders("a")))
         self.assertEqual(
             [
                 ("transitioned", "review"),
                 ("released", holder),
                 ("checklist_released", "The step of a"),
+                ("request_created", mock.ANY),  # the owner's review question
+                ("overridden", "checklist"),
             ],
             self.actions("a", mark),
         )
@@ -392,11 +404,11 @@ class ThroughMcpTests(WriteCase):
         self.conn.commit()
         self.refused(
             lambda: self.update("S", parent=self.ref("a")),
-            "a task holds no children; convert it to a stage first",
+            "is a task and holds no children: convert it first, with convert {to: stage}",
         )
         self.refused(
             lambda: self.create(title="Under a task", parent=self.ref("a")),
-            "a task holds no children",
+            "is a task and holds no children",
         )
 
     def test_a_parent_that_would_close_a_cycle_is_refused(self) -> None:
@@ -427,7 +439,17 @@ class ThroughMcpTests(WriteCase):
         mark = self.mark()
         self.update("a", parent=self.ref("G"))
         self.assertEqual(self.tree.ids["G"], self.record("a")["parent_id"])
-        self.assertEqual([("child_left", self.ref("a"))], self.actions("S", mark))
+        # With nothing open under it, the stage enters the wait in a call of Valkama's own.
+        self.assertEqual(
+            [
+                ("child_left", f"{self.ref('a')}: moved under {self.ref('G')}"),
+                (
+                    "awaiting_confirmation",
+                    f"moved out {self.ref('a')}; no steps: check it against its description",
+                ),
+            ],
+            self.actions("S", mark),
+        )
         self.assertEqual("awaiting_confirmation", self.record("S")["container_state"])
 
     def test_a_stage_takes_a_stage_and_a_task_at_any_depth(self) -> None:
@@ -453,10 +475,17 @@ class ThroughMcpTests(WriteCase):
         self.tree.add("a")
         self.accepted_goal()
         self.conn.commit()
-        for name, kind in (("a", "goal"), ("a", "stage"), ("G", "task"), ("G", "stage")):
+        # Each refusal names the conversion that passes: a top-level task becomes a goal.
+        for name, kind, word in (
+            ("a", "goal", "goal"),
+            ("a", "stage", "goal"),
+            ("G", "task", "task"),
+            ("G", "stage", "task"),
+        ):
             with self.subTest(item=name, kind=kind):
                 self.refused(
-                    lambda name=name, kind=kind: self.update(name, kind=kind), "conversion"
+                    lambda name=name, kind=kind: self.update(name, kind=kind),
+                    f"convert {{to: {word}}}",
                 )
         self.update("a", kind="bug")
         self.assertEqual("bug", self.record("a")["kind"])
@@ -580,11 +609,14 @@ class ThroughMcpTests(WriteCase):
             for force in (False, True):
                 with self.subTest(force=force):
                     self.refused(
-                        lambda force=force: self.transition("a", "review", force=force),
+                        lambda force=force: self.transition(
+                            "a", "review", force=force, to_check=TO_CHECK
+                        ),
                         "[acceptance]",
                     )
         else:
-            self.transition("a", "review")
+            self.summarize("a")
+            self.transition("a", "review", to_check=TO_CHECK)
             self.assertEqual(("review", "owner"), (self.category("a"), self.basis("a")))
 
     def test_a_goal_cancelled_unaccepted_is_opened_again_with_a_basis(self) -> None:
@@ -751,7 +783,8 @@ class ThroughMcpTests(WriteCase):
             {
                 "id": self.ref("a"),
                 "checklist_ticks": [{"item_id": self.step("a")}],
-                "transition": {"state": "review"},
+                "summary": SUMMARY,
+                "transition": {"state": "review", "to_check": TO_CHECK},
             },
         )
         # The batch is one write: work went to review, not to ready and on from there.
@@ -845,9 +878,11 @@ class CreationTests(WriteCase):
         for fields, said in (
             ({"state": "dev"}, "[executor]"),
             ({"state": "deferred"}, "[deferred]"),
-            ({"state": "review"}, "[acceptance]"),
-            ({"kind": "goal", "state": "done"}, "[container_state]"),
-            ({"kind": "goal", "state": "review"}, "[goal_or_stage]"),
+            ({"state": "ready"}, "[acceptance]"),
+            ({"kind": "goal", "state": "dev"}, "[goal_or_stage]"),
+            # Review, blocked and the closed states are reached by a move only.
+            ({"state": "review"}, "[new_item]"),
+            ({"kind": "goal", "state": "done"}, "[new_item]"),
         ):
             with self.subTest(fields=fields):
                 self.refused(lambda fields=fields: self.create(title="Placed", **fields), said)

@@ -4,8 +4,9 @@
  * are each read in one place; a link's end may be such a container; and an address names
  * a grouping and a chain's scope by the values this build knows.
  *
- * Every record starts from the brief the real server answered
- * (`fixtures/server/card-brief.json`) and changes only what the case is about.
+ * Every brief starts from the one the real server answered (`fixtures/server/card-brief.json`),
+ * and every full record from the shared work item fixture; each changes only what the case
+ * is about.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -16,10 +17,17 @@ import { chainTarget, groupingOf } from '@/pages/planning/composables/usePlannin
 
 import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
-import { linkEndStateSaid, validateWorkItemBrief, workableIds } from '@/shared/api/planningModel.ts'
+import {
+  linkEndStateSaid,
+  validateWorkItemBrief,
+  validateWorkItemRecord,
+  workableIds,
+} from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { standingOf } from '@/shared/lib/standing.ts'
 import type { StandingItem } from '@/shared/lib/standing.ts'
+
+import { workItemFixture } from './fixtures/workItem.ts'
 
 const brief = (): Record<string, unknown> =>
   JSON.parse(
@@ -137,6 +145,42 @@ describe('a record of the work model', () => {
     const unflagged: Record<string, unknown> = { ...step }
     delete unflagged.by_previous_holder
     expect(() => validateWorkItemBrief({ ...brief(), checklist: [unflagged] })).toThrow()
+  })
+
+  it('reads the cancelled items still linked to block it, which only some records carry', () => {
+    const read = validateWorkItemBrief({ ...brief(), cancelled_blockers: ['MAIN-5'] })
+    expect([read.cancelled_blockers, read.waits_for]).toEqual([['MAIN-5'], []])
+    expect(validateWorkItemBrief(brief()).cancelled_blockers).toBeUndefined()
+    expect(() => validateWorkItemBrief({ ...brief(), cancelled_blockers: ['main 5'] })).toThrow()
+  })
+
+  it('reads what put-off work waits on, one of a moment or an item, and why work came back', () => {
+    const put = {
+      until: null,
+      until_item: 'MAIN-5',
+      reason: 'The budget comes in January.',
+      since: '2026-01-02T03:04:05Z',
+      by: { author: 'user', session_id: null },
+      reached_at: null,
+    }
+    const back = { because: 'completed', item: 'MAIN-5', at: '2026-01-02T03:04:05Z' }
+    const record = { ...workItemFixture('Put off', 1), deferred: put }
+    expect(validateWorkItemRecord(record).deferred?.until_item).toBe('MAIN-5')
+    const came = { ...workItemFixture('Came back', 2), returned: back }
+    expect(validateWorkItemRecord(came).returned).toEqual(back)
+    for (const deferred of [
+      { ...put, until: '2026-12-01T00:00:00Z' },
+      { ...put, until_item: null },
+    ]) {
+      expect(() => validateWorkItemRecord({ ...record, deferred })).toThrow()
+    }
+    // A cause this build does not know, and a day that came with no item named.
+    expect(() =>
+      validateWorkItemRecord({ ...came, returned: { ...back, because: 'merged' } }),
+    ).toThrow()
+    expect(
+      validateWorkItemRecord({ ...came, returned: { ...back, because: 'date', item: null } }),
+    ).toBeTruthy()
   })
 })
 

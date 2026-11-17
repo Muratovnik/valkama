@@ -179,7 +179,9 @@ def _item_dues(
     reference = read_model.reference(conn, item)
     state = read_model.state_by_id(conn, str(item["state_id"]))
     moves = [int(event["id"]) for event in events if event["action"] == "transitioned"]
-    created = [str(event["detail"]) for event in events if event["action"] == "request_created"]
+    created = _asked(
+        conn, [str(event["detail"]) for event in events if event["action"] == "request_created"]
+    )
     open_rows = questions.open_rows(conn, work_item_id)
     dues: list[Due] = []
     closing = (moves and state["is_terminal"]) or any(
@@ -200,6 +202,28 @@ def _item_dues(
     ):
         dues.append(_plain(_REVIEW, item, reference, settings))
     return dues
+
+
+def _asked(conn: sqlite3.Connection, created: list[str]) -> list[str]:
+    """The questions a write asked that are news of their own, of the requests it created.
+
+    A move into review asks the owner what to check in the same write, and that
+    question is the move's news: the move raises the review toast, which the
+    owner's `review` setting turns on and off. Any other question the write asked
+    is a question toast, and stands above the move.
+    """
+
+    if not created:
+        return []
+    review = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT request_id FROM work_item_requests WHERE purpose = ?"
+            " AND request_id IN (SELECT value FROM json_each(?))",
+            (_REVIEW, json.dumps(created)),
+        )
+    }
+    return [request_id for request_id in created if request_id not in review]
 
 
 #: What a call wrote that can be news for the owner's alert: its moves, and what it did
@@ -261,12 +285,11 @@ def due_after_write(conn: sqlite3.Connection) -> list[Due]:
 def _reap_dues(conn: sqlite3.Connection, ended: list[dict]) -> list[Due]:
     settings = alert_settings.read(conn)
     dues: list[Due] = []
+    event = "launchFailed"
     for launch in ended:
-        if launch.get("moved_to_review"):
-            event = _REVIEW
-        elif launch["result"]["outcome"] in execution_results.FAILED_OUTCOMES:
-            event = "launchFailed"
-        else:
+        # A launch moves nothing: the agent it ran moves its work into review, and that
+        # move raises its own toast. What a launch can still owe is word of its failure.
+        if launch["result"]["outcome"] not in execution_results.FAILED_OUTCOMES:
             continue
         if alert_settings.wants(settings, event):
             reference = str(launch["reference"])

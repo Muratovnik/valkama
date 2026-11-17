@@ -22,7 +22,7 @@ from unittest import mock
 from server import mcp_surface, store
 from server.planning import api as planning_api
 from server.planning import chain, service
-from tests.planning_fixtures import basis_for
+from tests.planning_fixtures import standing_in
 from tests.planning_tree import Tree
 
 CHAIN_PATH = "/api/planning/work-item/chain"
@@ -50,10 +50,8 @@ class ChainFixture(unittest.TestCase):
         self.refs: dict[str, str] = {}
 
         def make(name: str, *, state: str | None = None, **fields: object) -> None:
-            fields = {**basis_for(state), **fields}
-            item = service.create_work_item(
-                self.conn, space=str(fields.pop("space", "QA")), title=name, state=state, **fields
-            )
+            space = str(fields.pop("space", "QA"))
+            item = standing_in(self.conn, state, space=space, title=name, **fields)
             self.ids[name] = str(item["work_item_id"])
             self.refs[name] = str(item["reference"])
 

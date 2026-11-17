@@ -18,6 +18,16 @@ A write made outside any bound call â€” the execution runner in the background â
 writes `call_id` NULL and reads exactly like history written before identity
 existed: unconfirmed.
 
+A launch's claim is the one write the client never makes and still names its
+session. Valkama starts the process, so it names the session the process runs
+under before it exists, and the claim is taken in a call of the launch's own
+(`launch`, source `launch`): a lease of that session, live while it runs and
+released `leases.ENDED_GRACE` after it ends. The session is the client's identity
+when it is assigned or resumed, and the launch's id on a fresh run of a client
+that announces its own once it runs; what that client announces holds nothing.
+Nothing else reads that call as an agent's: no client proved it, so it hands no
+words over and moves no boundary of what a person said.
+
 Verification is a pure function of what the client sent and of the pair its
 hook left. Codex puts the session in `_meta` of every call. Claude Code repeats
 the call's `tool_use_id` in `_meta["claudecode/toolUseId"]`, and its
@@ -80,6 +90,8 @@ BROWSER = "browser"
 CLI = "cli"
 #: A write Valkama makes itself: releasing a lease that expired.
 VALKAMA = "valkama"
+#: A launch's claim, for the session the launch starts: Valkama assigned or resumed it.
+LAUNCH = "launch"
 #: The values `identity_source` takes on a call row.
 SOURCES = (
     CODEX_META,
@@ -93,6 +105,7 @@ SOURCES = (
     BROWSER,
     CLI,
     VALKAMA,
+    LAUNCH,
 )
 
 #: The argument an older `PreToolUse` hook adds. Removed before schema validation.
@@ -278,6 +291,12 @@ def valkama() -> Identity:
     return Identity(state=CONFIRMED, source=VALKAMA, client=VALKAMA)
 
 
+def launch(session_id: str, client: str) -> Identity:
+    """A launch's claim, for the session it starts: proved by the launch, not by the client."""
+
+    return Identity(state=CONFIRMED, source=LAUNCH, session_id=session_id, client=client)
+
+
 @contextlib.contextmanager
 def bind(identity: Identity, tool: str) -> Iterator[None]:
     """Make every Planning write inside this block part of one call."""
@@ -317,10 +336,10 @@ def confirmed_session() -> str | None:
 
 
 def from_agent() -> bool:
-    """Whether an agent is making this call: bound, and neither the interface nor Valkama."""
+    """Whether an agent is making this call: bound, and neither the interface, Valkama nor a launch."""
 
     identity = current()
-    return identity is not None and identity.source not in (BROWSER, VALKAMA)
+    return identity is not None and identity.source not in (BROWSER, VALKAMA, LAUNCH)
 
 
 def by_person() -> bool:

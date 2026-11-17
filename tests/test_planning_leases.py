@@ -879,7 +879,9 @@ class StartUpTests(unittest.TestCase):
                 f"planning sweep leases: {later}",
                 f"planning sweep waiting: {later}",
                 f"planning sweep subscriptions: {later}",
+                f"planning sweep returns: {later}",
                 f"planning sweep commits: {later}",
+                f"planning sweep confirmations: {later}",
                 "quota retention: no time left; it runs at the next start",
             ],
             report.failures,
@@ -1427,9 +1429,11 @@ class PreviousHolderTests(SweepTestCase):
         self.lapse_after_ticks()
         self.sweep()
         self.take(codex(THREE))
-        review = {"transition": {"state": "review"}}
+        self.tick(codex(THREE), 2)
+        move = {"state": "review", "to_check": "All three steps hold."}
+        review = {"summary": SUMMARY, "transition": move}
         self.assertEqual(ONE_UNCONFIRMED, self.refusal(self.write(codex(THREE), **review)))
-        forced = self.write(codex(THREE), transition={"state": "review", "force": True})
+        forced = self.write(codex(THREE), summary=SUMMARY, transition={**move, "force": True})
         self.assertEqual(["previous_holder"], forced["overridden"])
         item = self.read()
         self.assertEqual("review", item["state"]["category"])

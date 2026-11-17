@@ -509,7 +509,9 @@ class CommitRefsPreconditionTests(CommitRefsCase):
 
 
 class CarriedCommitRefsTests(CommitRefsCase):
-    """`commit-refs` on the store: each record carried as the file says, held by `no-commit-refs` to `commit-projects`."""
+    """`commit-refs` on the store: each record carried as the file says, held by
+    `no-commit-refs`, `other-refs`, `record-pairs`, `commits-attached` and
+    `commit-projects`."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -531,10 +533,10 @@ class CarriedCommitRefsTests(CommitRefsCase):
         self.assertEqual(
             [], [entry["name"] for entry in report["postconditions"] if not entry["passed"]]
         )
-        m15 = next(step for step in report["steps"] if step["name"] == "commit-refs")
+        step_commit_refs = next(step for step in report["steps"] if step["name"] == "commit-refs")
         self.assertEqual(
             {"commit_refs": 10, "dropped": 1, "commits": 5, "attachments": 6, "url_refs": 1},
-            m15["result"],
+            step_commit_refs["result"],
         )
         # The refs are rebuilt to take no commit once `commit-refs` has left none, keeping the rest.
         rebuilt = next(step for step in report["steps"] if step["name"] == "refs-without-commits")

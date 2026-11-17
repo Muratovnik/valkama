@@ -23,7 +23,7 @@ a test-based "done when" holds, checked by a verify command the item names. A
 finding is evidence attached to an item, not an item of its own. Work that
 shares a cause, a fix or one mechanical rule is one item. Read
 [the work model](references/work-model.md) before filing several items,
-splitting one, or handing items to other agents.
+splitting one or a part off it, or handing items to other agents.
 
 ## Start
 
@@ -78,6 +78,9 @@ days without an event on the item. An open question to the owner there stops
 the count; your steps lapse with your claim. Take a stale claim over without
 `force`, a live one only on an instruction that says so. An ended session keeps
 its claims 12 hours: resuming makes them `live`, and the queue leaves them.
+A launch claims for the session it starts (`source: launch`): the agent's own,
+or the launch's when the client names its session only once it runs, as Codex
+does. What the agent left at work goes back to the queue 12 hours after it ends.
 An item's `lapsed_claim` names whose claim lapsed, why and when, until the next claim.
 `release: true` gives an item back and returns it from the active state to a
 ready one, unless a checklist step of it is still claimed; a blocked one stays.
@@ -113,8 +116,8 @@ Every group but `claim` and `subscribe` is JSON, never bare text: `comment` is
 `{"state": "…"}`. Bare text fails in the client, as input not parsed as JSON. A
 refused step writes nothing and names the group and index to correct. Pass the
 `revision` of the last acknowledgement as `expected_revision` to refuse a stale
-write. A question cannot go in the call that closes its item, which would end it
-unanswered: move the item to review instead. A reply can name only a comment
+write. A question cannot go in the call that closes its item: the close would end
+it unanswered in the same write. A reply can name only a comment
 that existed before the call; `applied` lists the ids of the comments and
 questions the call wrote.
 
@@ -320,11 +323,11 @@ it, and how to write an absolute path or one with spaces, is in
 
 ## Blocked work
 
-When another item blocks the work, link it: `blocks` from the blocking item to
-this one (the `links` group on the blocker, `other` this item). When the
-blocker is outside Valkama, transition to the blocked state with a `reason` and
-say what would unblock it in a comment. A transition to a blocked state is
-refused without a linked blocker or a reason.
+When the work waits on another item, link it: `blocks` from the blocking item to
+this one (the `links` group on the blocker, `other` this item); it stays where it
+is and its `waits_for` names the blocker. Only a cause outside Valkama takes the
+blocked state: transition there with a `reason` and say what would unblock it in
+a comment. A transition to a blocked state is refused without a reason.
 
 ## Asking the owner
 
@@ -388,12 +391,11 @@ A request suits a question the work can go on without. No session waits for it:
 the answer arrives with the next read of the item, so go on with what does not
 depend on it. A question the work cannot go on without belongs in the client,
 where the person answers now. A request bound to an `execution_id` expires when
-that execution ends, and any pending request expires when its item closes, so an
-item holding an open request stays open. A list under a comment does not hold it:
-the item closes with a list unticked, and the list then freezes, `expired` with
-`task_closed`, until the item reopens. To get the ticks, keep the item open, in
-review for instance; a call that writes a list and closes its item is refused. A
-list's compact form has `undecided`: `["items"]` while nothing on it is ticked, also
+that execution ends. Closing an item ends every request pending on it, a list under
+a comment too, `expired` with `item_completed` or `item_cancelled`, and reopening
+brings none back: keep the item open, in review for instance, while the answer or
+the ticks are still needed. A call that writes a list and closes its item is
+refused. A list's compact form has `undecided`: `["items"]` while nothing on it is ticked, also
 once the person sent it with none ticked. Treat that as not decided, never as every
 option refused; `status` tells a list not sent yet (`pending`) from one sent empty
 (`answered`). The owner's own rules on where to ask come first.
@@ -401,11 +403,8 @@ option refused; `status` tells a list not sent yet (`pending`) from one sent emp
 ## Merging items that are one change
 
 When two items turn out to be one change — the same finding filed twice, one
-cause found from two places — `merge_work_items` folds them into the item that
-survives (`id`), with `items` the ones that fold in and a `reason`. Each merged
-item is linked `duplicates` to it and closes in its cancelled state; what moves,
-what stays and when it is refused is in [the tool reference](references/tools.md#merging).
-Merge before handing the work to anyone.
+cause found from two places — fold them into one with `merge_work_items`, as
+[the tool reference](references/tools.md#merging) says.
 
 ## Close
 
@@ -419,10 +418,12 @@ Merge before handing the work to anyone.
    `why` only when the choice is not obvious. When your instructions ask a
    closing summary for flow friction, give it in `friction` (`none`, or a line
    per hindrance), never at the end of `done` or `why`, in the `summary` group.
-3. Transition to the completed state, or to review when someone must check the
-   result first. A state is named by its key or by a category that one state
-   has (`completed`, `review`, `cancelled`); a name the workflow lacks is
-   refused listing its states.
+3. Transition to the completed state, or to review when the owner must check the
+   result first. Review needs the same ticks and summary and `to_check`, what the
+   owner is to check; the owner's answer completes the item or returns it to work.
+   A state is named by its key or by a category that one state has (`completed`,
+   `review`, `cancelled`); a name the workflow lacks is refused listing its
+   states.
 
 Steps 1 to 3 go in one `apply_work_item_changes` call. The transition to a
 completed or cancelled state also ends
@@ -436,6 +437,14 @@ you did about it (a comment is enough), then close; a comment in the same call
 as the close does not count. `force: true` carries a refusal through and records
 it as `overridden`: use it only when the record would still be true.
 
+**A goal or stage** completes only with nothing open under it (`children`). When
+the last item under one closes, it awaits confirmation and you hear it (the
+answer's `awaiting_confirmation`): read its `confirmation` part, check its steps or
+description against what was done, tick them, write the summary and complete it;
+if something is missing, file a task under it. Unconfirmed, the owner is asked
+([work model](references/work-model.md#goals-and-stages)).
+Converting, dividing, moving out and putting off work: [work model](references/work-model.md#goals-and-stages).
+
 **Closing a release.** Before closing the release's goal, check its open items
 with `valkama released`, as
 [the tool reference](references/tools.md#closing-a-release) says.
@@ -443,7 +452,9 @@ with `valkama released`, as
 **Not done.** Work that is not needed, duplicated or superseded closes in the
 cancelled state. It needs the summary, which starts with why (`Not needed:`,
 `Duplicate of MAIN-12`, `Superseded by MAIN-12`), and leaves undone steps open,
-because ticking them would claim work that did not happen. For a duplicate,
+because ticking them would claim work that did not happen. Cancelling a goal or
+stage with open work is two calls: the first answers with the list and a token,
+the second sends it in `cancels`. For a duplicate,
 prefer `merge_work_items`; otherwise link `duplicates` to the survivor and copy
 anything unique there first. `delete_work_item` is only for an item that should
 never have existed, and it refuses while the item has children.

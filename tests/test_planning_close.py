@@ -174,7 +174,9 @@ class CloseReleasesTests(CloseTestCase):
         self.assertEqual("agent", moved["claim_ref"])
         self.assertNotIn("released", moved)
         # Review waits on the owner's answer, and nobody holds work there.
-        reviewed = service.transition_work_item(self.conn, reference, "review", author="agent")
+        reviewed = service.transition_work_item(
+            self.conn, reference, "review", author="agent", to_check="The result"
+        )
         self.assertEqual(("", "agent"), (reviewed["claim_ref"], reviewed["released"]))
 
     def test_reopening_a_closed_item_does_not_restore_the_claim(self) -> None:

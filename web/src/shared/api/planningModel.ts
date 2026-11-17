@@ -7,6 +7,8 @@
  * lane would make Kanban the model again.
  */
 
+import { commitSchema } from '@/shared/api/commitModel.ts'
+import { confirmationSchema } from '@/shared/api/confirmationModel.ts'
 import {
   blankable,
   boundedList,
@@ -25,7 +27,14 @@ import {
   EVENT_DETAIL_MAX,
   LABELS_DETAIL_MAX,
 } from '@/shared/api/planningEventActions.ts'
-import { lapsedClaimField, recordObject, withheldField } from '@/shared/api/planningRecordRules.ts'
+import {
+  conditionsChangedField,
+  deferredField,
+  lapsedClaimField,
+  recordObject,
+  returnedField,
+  withheldField,
+} from '@/shared/api/planningRecordRules.ts'
 import {
   otherSpaceSchema,
   spaceBriefSchema,
@@ -33,7 +42,7 @@ import {
   TITLE,
 } from '@/shared/api/planningSpaceModel.ts'
 import { actor, callField, holderField, serverText } from '@/shared/api/planningText.ts'
-import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
+import { enumField, ID, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
 export { SPACE_KEY, TITLE } from '@/shared/api/planningSpaceModel.ts'
 
@@ -119,6 +128,8 @@ const workItemBriefShape = {
   started_at: boundedText(ISO, 96).nullable(),
   /** The open items that block it, by reference. */
   waits_for: boundedList(boundedText(WORK_ITEM_REFERENCE, 20), 500),
+  /** The cancelled items still linked to block it; only on open work, and only when there are any. */
+  cancelled_blockers: boundedList(boundedText(WORK_ITEM_REFERENCE, 20), 500).optional(),
   claim_ref: actor(),
   claim_state: claimStateField(),
   parent_id: boundedText(UUID, 36).nullable(),
@@ -230,23 +241,6 @@ const refSchema = strictObject({
   label: blankable(200),
   author: actor(),
   at: boundedText(ISO, 96),
-})
-
-/**
- * A commit attached to the item, as its full record lists them, the newest first.
- * `repository` is null for a commit whose repository is not known, and the time
- * is Git's committer time, with its offset.
- */
-const commitSchema = strictObject({
-  repository: boundedText(PROJECT_ID, 160).nullable(),
-  display_name: boundedText(/^[^\u{0}]{1,200}$/u, 200).nullable(),
-  hash: boundedText(/^[0-9a-f]{7,64}$/u, 64),
-  subject: blankable(10_000),
-  committed_at: boundedText(/^\d{4}-\d{2}-\d{2}T[^\s]{1,80}$/u, 96).nullable(),
-  session: callField(),
-  agent: callField(),
-  attached_by: enumField(['server', 'manual', 'migrated'] as const),
-  label: blankable(200),
 })
 
 /**
@@ -451,6 +445,13 @@ const workItemSchema = recordObject({
   subscribers: z.array(subscriberSchema).optional(),
   // Who works on a goal or a stage: only the HTTP reads of one item carry it.
   participants: boundedList(participantSchema, 50).optional(),
+  // What a goal's or stage's confirmer checks, only while it awaits confirmation.
+  confirmation: confirmationSchema.optional(),
+  // Why it waits while put off, and why it came back while it stands in triage after that.
+  deferred: deferredField().optional(),
+  returned: returnedField().optional(),
+  // What became of steps taken off, reworded or moved to another item, once any were.
+  conditions_changed: conditionsChangedField().optional(),
   // A transition answers with these; a plain read does not.
   warnings: z.array(serverText()).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),
@@ -459,6 +460,10 @@ const workItemSchema = recordObject({
   requeued: stateMoveSchema.optional(),
   // The holder whose claim a close ended.
   released: holderField().optional(),
+  // The open items a close left with nothing open blocking them.
+  freed: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
+  // The goals and stages a write left with nothing open under them.
+  awaiting_confirmation: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
 })
 
 const workflowSchema = strictObject({

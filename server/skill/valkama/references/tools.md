@@ -59,12 +59,18 @@ says what it is:
   `deferred` it accepts the work in `triage` under it, stopping at a deferred goal
   or stage.
 - `started_at` is when work on it began, `waits_for` the open items blocking it,
+  `cancelled_blockers`, only when there are any, the cancelled items still linked
+  to block it,
   `workable` whether its space's queue may give it now, and `withheld` why not,
   as codes such as `not_ready`, `held`, `waits`, `question` or
   `ancestor_triage`: empty exactly when it is `workable`.
 - `lapsed_claim` (`holder`, `reason`, `at`) names whose claim the sweep released,
   why and when, until the next claim; a step marked `by_previous_holder` was
   ticked by that holder and waits for a tick that confirms it (see Claims).
+- `deferred`, on work put off, says what it waits on: `until` or `until_item`,
+  and `reached_at` once that came and the owner is asked; `returned`, on work in
+  triage that came back, says why (`because`: `date`, `completed`, `cancelled`
+  or `deleted`, with the `item`) and when.
 - `get_work_item_chain` with `scope: "tree"` reads everything under an item at
   any depth; `scope: "chain"`, the default, adds what was discovered from it.
 
@@ -76,14 +82,17 @@ opens the item), `work_item_id`, `revision`, `state` (`key`, `name`,
 alone says what it derives), `open` (whether its work is over), `claim_ref` (the
 holder) and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus
 `container_state` where the item has one and what the call changed. Pass
-`verbose: true` for the item's card instead; it carries `url` too.
+`verbose: true` for the item's card instead; it carries `url` too. A write that
+closed, moved or deleted the last open item under a goal or stage also answers
+`awaiting_confirmation`, the references of the goals and stages it brought to
+await confirmation: check each and complete it, as the skill's Close section says.
 
 | Tool | Also answers |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started` |
+| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `commits`, `links`, `projects`) |
 
 `claim_ready_work_item` takes the first workable task in the order of work —
@@ -167,6 +176,18 @@ new item in the same call, all or nothing:
 
 A refused claim, step or link creates nothing and spends no number.
 
+`split_from` names an open task to split a part off, and `steps` the ids of its
+steps the part takes. The part stands beside the task, under the same parent,
+and is accepted as the task is: in the first ready state when the task is
+accepted (`inherited` under goals and stages all accepted, else the task's
+basis), in triage beside a task in triage, put off on the same condition beside
+one put off. The steps go with their ids, ticks and `done_by`, and their claims
+end; the part names the task's projects unless `projects` names others. The task
+records `split_off`, the part `split_from`. `parent`, `state` and `acceptance`
+are the task's to set and are refused beside `split_from`, as are a task in
+review or closed and a step it does not have (`[split]`); a task another session
+holds needs `force`.
+
 `priority` on `create_work_item` and in the batch's `update` is how much the item
 matters, not when to do it:
 
@@ -191,7 +212,12 @@ A step is text, or `{"text": "…", "done": true}` for one already done, which i
 recorded done by you with the event a tick writes. A checklist holds at most
 100 steps of at most 1000 characters each. A step sent with the text of one the
 item has is that step and keeps its `item_id`, claim and tick; a new text is a
-new step. Leaving out a claimed or completed step needs `force`.
+new step. Leaving out a claimed or completed step needs `force`. A step sent as
+`{"id": "…", "text": "…"}` with its `item_id` and another text is that step
+reworded, keeping its tick and claim. Each step left out, and the former text of
+each one reworded, is recorded as a `checklist_removed` event, and entering
+review or completing then answers `conditions_changed`: `removed`, those texts,
+and `moved`, each item that took steps along (`{to, count}`).
 
 ## One call, several writes
 
@@ -205,6 +231,7 @@ resolves its discussion, records its summary and moves its state:
 | `claim` | `true` | claims the item as `claim_work_item` does |
 | `subscribe` | `true` or `false` | follows the item's news for this session, or stops |
 | `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | edits the fields a transition does not own |
+| `convert` | `{"to": "stage", "leftover": {"title": "…", "steps": ["…"]}, "force": false}`, not with `transition`, `defer` or `move_out` | turns a task into a goal or stage, or one with nothing under it into a task ([work model](work-model.md#goals-and-stages)) |
 | `checklist` | `["…", {"text": "…", "done": true}]`, or `{"items": [...], "force": true}` to carry a refusal through | sets the steps |
 | `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | completes or reopens steps |
 | `refs` | `[{"kind": "memory", "value": "…", "label": "…"}]` | attaches pointers: a `memory` record id or a `url` |
@@ -216,6 +243,8 @@ resolves its discussion, records its summary and moves its state:
 | `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | asks as `create_work_item_request` does |
 | `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
 | `transition` | `{"state": "completed", "reason": "…", "force": false}` | moves the state |
+| `defer` | `{"until": "2026-12-01", "reason": "…", "force": false}`, not with `transition`, `move_out` or `convert` | puts the item off until a day, a time with its zone, or an open item's close ([work model](work-model.md#goals-and-stages)) |
+| `move_out` | `{"reason": "…", "force": false}`, not with `transition`, `defer` or `convert` | takes the item out of its goal or stage, to triage |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
 the item already had and a `checklist` in the same call kept; send a new step
@@ -290,7 +319,8 @@ owner. Read it with the item's questions, where it carries `comment_id`.
 `get_work_item` takes `id` and reads an item by parts. `parts` names them, one
 name or a list: `card`, `comments`, `events`, `links`, `refs`, `commits`,
 `questions`, `mentions`, `sessions`, `images`, `subscribers`, `claim` and
-`sections`. The
+`sections`, and on a goal or stage `participants`, and `confirmation` while it
+awaits confirmation. The
 answer carries `reference`, `revision` and the fields of each part named, the
 card's among them when `card` is. Without `parts` it reads the card, and a mode
 without `parts` reads only the part it cuts: `unresolved`, `thread` and
@@ -303,8 +333,8 @@ outside 1 to 1000.
 **The card** is what a write with `verbose: true` and `claim_ready_work_item`
 answer with too: `reference`, `title`, `kind`, `priority`, `state` (`key`,
 `name`, `category`; null for an accepted open goal or stage), `open`,
-`container_state`, `acceptance`, `started_at`, `waits_for`, `workable`,
-`withheld`, `projects` (the projects the item changes, each with its `project_id`, the
+`container_state`, `acceptance`, `started_at`, `waits_for`, `cancelled_blockers`
+(only when there are any), `workable`, `withheld`, `projects` (the projects the item changes, each with its `project_id`, the
 registry's `display_name`, null while the registry does not record it, and its
 `source`: `named`, `commits` or `migrated`; a goal's or stage's are those of
 every task under it), `claim_ref`, `claim_state`, `last_claim_ref`,
@@ -326,6 +356,8 @@ is left out.
 | `sections` | `count`, for a description longer than 2,000 characters | `sections`, as below |
 | `commits` | `count`, the commits attached now | `commits`, the newest first, each with `repository`, `display_name`, `hash`, `subject`, `committed_at`, `session`, `agent`, `attached_by` (`server`, `manual` or `migrated`) and `label` |
 | `links`, `refs`, `sessions`, `images`, `subscribers` | `count` | the list of that name |
+| `participants` | `count`, on a goal or stage | `participants`, the live sessions working on it: each `session`, `client`, `label`, `holds` (the tasks under it it holds), `follows` and `last_seen` |
+| `confirmation` | `count`, the items it lists, only while a goal or stage awaits confirmation | `confirmation`: `since`, `steps` (how many it has; 0: check it against its description), `cancelled` and `moved_out` (each `reference` and `reason`), `asked` (the owner's question, once asked) and `left_for_next_session` |
 
 The comments part takes one of these modes:
 
@@ -365,22 +397,29 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 | --- | --- |
 | an active state | a holder after the move: a claim on the item or on one of its steps; `force` does not carry this |
 | ready, active, review, blocked or completed, for an item with no basis | a basis of acceptance (`acceptance`), which `force` does not carry |
-| a deferred state | refused: putting work off is its own action |
+| a deferred state | refused: put work off with `defer` |
+| anything but a cancelled state, for an agent, while the owner is asked whether to take put-off work up again | refused with `acceptance_question`, which `force` does not carry |
 | active, review or blocked, for a goal or stage | refused: a goal or stage is accepted (ready), completed or cancelled |
 | a triage state, for an accepted open goal or stage | refused: an accepted goal or stage is completed or cancelled |
 | a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
-| a completed state | every step done and a summary |
+| a completed state, for a goal or stage | nothing open under it at any depth, triage and deferred included, which `force` does not carry (`children`); when the last item under it closes it awaits confirmation, and completing it is the confirmation |
+| a review or completed state | every step done and a summary |
+| a review state, from outside review | `to_check`, what the owner is to check, which `force` does not carry (`review_question`); the move asks it of the owner |
 | a review or completed state | no step marked `by_previous_holder`: tick it again to confirm it, or reopen it (`previous_holder`) |
 | a cancelled state | a summary; open steps stay open |
-| a blocked state | an unfinished item linked `blocks` to it, or a `reason` |
+| a cancelled state, for a goal or stage with open work under it | `cancels` set to the `list_token` its refusal (`cancel_list`) handed over, which `force` does not carry; the move then cancels that work too |
+| a blocked state | a `reason`, for a cause outside Valkama; work that waits on an item is linked `blocks` and stays where it is |
 | any state | a transition the workflow allows from where the item stands |
+| review, blocked, completed or cancelled, for an item being created | refused (`new_item`): create it, then move it there; `force` does not carry this |
 
 A move to review warns, and is not refused, when the item has no `session` ref,
 no attached commit and no write a confirmed session made.
 An agent's move to a completed or cancelled state is also refused with
 `person_spoke` while a person acted on the item since an agent last wrote to it;
 the refusal names what they did. A `comment` sent in the same
-`apply_work_item_changes` call does not lift it.
+`apply_work_item_changes` call does not lift it. An agent's move that completes an
+item or takes it out of review is refused with `question` while a question to the
+owner is open on it, `force` or not; cancelling is not.
 `force: true` carries a refusal through and records an `overridden` event.
 
 ## Closing a release
@@ -403,7 +442,20 @@ match is weak, and an item with no attached commit cannot show.
 | `workflow_guard` with `[executor]` | Claim the item or a step before moving it to an active state. |
 | `workflow_guard` with `[acceptance]` | Send `acceptance: "assignment"` only on the owner's word; otherwise leave the item to the owner to accept. |
 | `workflow_guard` with `[checklist]` or `[summary]` | Tick what was done, move undone work to an item of its own, record the summary, then close. |
-| `workflow_guard` with `[blocker]` | Link the blocking item, or give the reason. |
+| `workflow_guard` with `[blocker]` | Give the reason: blocking by hand is for a cause outside Valkama; link `blocks` for work that waits on an item. |
+| `workflow_guard` with `[new_item]` | Create the item, then move it. |
+| `workflow_guard` with `[review_question]` | Send `to_check`, what the owner is to check. |
+| `workflow_guard` with `[question]` | Wait for the owner's answer, or withdraw a question you asked. |
+| `workflow_guard` with `[children]` | Close, cancel or move out what is open under it; it then awaits confirmation. |
+| `cancel_list` | Read the list, then send the same transition with `cancels` set to `list_token`. |
+| `owner_only` | The owner answers this question in Valkama: leave it. |
+| `[purpose]` | A question with a purpose (review, confirm, return) takes one of its answers, and its answer is not changed or declined. |
+| `workflow_guard` or a claim refused with `[acceptance_question]` | Wait for the owner's answer, then take it. |
+| `[deferral]` | Send `until` and `reason`; `until` is a day, a time with its zone, or an open item other than this one and the goals and stages over it. |
+| `[move_out]` | Give the reason the item leaves its goal or stage; an item under none, or closed, has nothing to move out of. |
+| `[parent]` | Clear a parent with `move_out`, not an edit; accept the goal or stage first, or move the item out, before accepted work goes under it. |
+| `[convert]` | Send the word the refusal names: `stage` for a task under a parent, `goal` for one without, a task kind for a goal or stage; move out what stands under a goal or stage first, and reopen a closed item. |
+| `[split]` | Send `split_from` with `steps` alone, without `parent`, `state` or `acceptance`; split a part off an open task, not one in review, and name only its own step ids. |
 | `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
 | `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |
@@ -413,9 +465,15 @@ match is weak, and an item with no attached commit cannot show.
 
 A claim is a lease on the session that took it: `live` while that session is
 active and showed a sign of life in the last 3 days, `stale` once it ended or
-went quiet, `unconfirmed` when no session was proved. An unconfirmed claim, the
-owner's own from the browser included, lapses after 3 days without an event on
-the item. An open question to the owner on the item stops the count of silence
+went quiet, `unconfirmed` when no session was proved. A launch's claim is a
+lease of the session the launch started, which the launch proves
+(`source: launch`): it is `live` while the launched agent runs and follows the
+same rule after it ends. That session is the agent's own when the launch assigns
+or resumes it. On a fresh launch of a client that announces its own session once
+it runs, as Codex does, it is the launch's (`launch-…`): the agent's own session
+does not hold that claim, and a resume reattaches to the session the agent
+announced. An unconfirmed claim, the owner's own from the browser included,
+lapses after 3 days without an event on the item. An open question to the owner on the item stops the count of silence
 for every hold on it; an end still counts. A session's claimed steps lapse with
 its lease. `claim_work_item` releases a stale or lapsed claim at once, and taking
 it over needs no `force`; a live or unconfirmed claim held by another needs
@@ -475,11 +533,12 @@ A pending question is answered once; a second answer is refused. `change: true`
 replaces the answer of an answered question, held to the same rules, and keeps the
 replaced one as a version: `answer_version` rises by one and `answered_at` moves to
 the change. Change an answer only when the owner asks. Refused with
-`[unchanged]` when nothing differs, `[task_closed]` once the item is closed and
+`[unchanged]` when nothing differs, `[item_closed]` once the item is closed and
 `[answer_versions]` past 50 versions.
 
 A request is `pending` until it is answered, declined or expires; it expires
-when its item closes or its deadline (`expires_at`) passes. A comment over an
+when its item closes, with `item_completed` or `item_cancelled` and for good, or
+when its deadline (`expires_at`) passes. A comment over an
 open question changes nothing about it.
 
 The `questions` part of `get_work_item` is
@@ -493,7 +552,13 @@ lists the open requests asked of your own session; answer each with
 `answer_work_item_request`, from your conversation or a subagent. A request asked of
 a session is answered only by that session (`not_addressed` refuses anyone else)
 and withdrawn only by the session that asked (`not_asker`); while the session asked
-has ended or gone quiet, it reads expired with `session_gone`. With `answered_after` the oldest answer comes first, and a page runs
+has ended or gone quiet, it reads expired with `session_gone`. The question a move
+into review asks is the owner's to answer (`owner_only` refuses an agent); the
+answer completes the item or returns it to ready, and withdrawing it, which only the
+asking session does, returns it to ready too. The question Valkama asks to confirm a
+goal or stage nobody confirmed (purpose `confirm`) is the owner's too, and nobody
+withdraws it; the owner's answer completes it or leaves it to the next session that
+takes work in its space. With `answered_after` the oldest answer comes first, and a page runs
 past `limit` rather than part two answers of one time. Both give a compact form
 unless `full` is true:
 
@@ -603,6 +668,7 @@ the fourth is refused with `ask_limit`. The batch's `questions` take `addressees
 
 ## Merging
 
+Merge before handing the work to anyone.
 `merge_work_items` takes `id` (the survivor), `items` (1 to 20), and optionally
 `reason`, `force`, `expected_revision` (the survivor's) and `author`. What
 moves: steps (their ids, ticks and step claims kept), discussion threads whole,

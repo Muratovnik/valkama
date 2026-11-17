@@ -254,6 +254,35 @@ def client_argv(
         raise LaunchError(str(error)) from error
 
 
+def session_identity(packet: LaunchPacket, resume_session_id: str = "") -> str:
+    """The session a launch will run under, known before its process exists; blank when not.
+
+    A resume runs under the session it resumes. A fresh run of a client that takes
+    its identity from its launcher runs under one minted here; a client that mints
+    its own announces it only once it runs. Asked of the capability rather than of
+    the client's name: whether the identity is chosen here or announced later is
+    exactly what that field says, and a name test is a second answer that can drift.
+    """
+
+    if resume_session_id:
+        return resume_session_id
+    if drivers.capabilities_for(packet.client).assigns_session_identity:
+        return str(uuid.uuid4())
+    return ""
+
+
+def new_launch_id() -> str:
+    """The id of one launch, minted before its process exists.
+
+    It is the session a fresh launch runs under when its client announces its own
+    identity only once it runs (`session_identity` blank): known before the claim,
+    so the claim can name it, and kept to the end, so the session opens and ends
+    under it.
+    """
+
+    return f"launch-{uuid.uuid4().hex[:12]}"
+
+
 def worktree_path(repo: str, reference: str) -> str:
     """Sibling directory, never inside the repository it checks out."""
     parent = os.path.dirname(os.path.abspath(repo))
@@ -526,6 +555,8 @@ class RunningLaunch:
     process: LaunchProcess
     packet: LaunchPacket
     cwd: str
+    #: The client's identity as known before the spawn, assigned or resumed; blank
+    #: for a client that announces its own, which `capture` then reads.
     client_session_id: str = ""
     preflight: dict = field(default_factory=dict)
     capture: OutputCapture = field(default_factory=OutputCapture)
@@ -533,6 +564,14 @@ class RunningLaunch:
     runtime: tempfile.TemporaryDirectory | None = None
     result_path: str = ""
     resumed_from: str = ""
+
+    @property
+    def session_id(self) -> str:
+        """The session this launch runs under from start to end: the client's identity
+        known before the spawn, else the launch's own id. An identity the client
+        announces later is `capture.client_session_id` and renames nothing."""
+
+        return self.client_session_id or self.launch_id
 
 
 class Runner:
@@ -612,6 +651,8 @@ class Runner:
         directory: tuple[str, dict] | None = None,
         reservation: object | None = None,
         added_dirs: Sequence[str] = (),
+        session_id: str = "",
+        launch_id: str = "",
     ) -> dict:
         """Spawn one client for this work item.
 
@@ -621,7 +662,10 @@ class Runner:
         computations that agree by luck. A caller that has none resolves it here.
         `added_dirs` are the directories the client may reach beside it, on the
         runs its driver takes them on; under WSL each is translated as the
-        directory it runs in is.
+        directory it runs in is. `session_id` is the identity a caller took from
+        `session_identity` before the process existed, and `launch_id` the one it
+        took from `new_launch_id`, for the same reason; a caller that has none
+        leaves it to this launch.
         """
 
         if reservation is None:
@@ -636,6 +680,8 @@ class Runner:
                     directory=directory,
                     reservation=owned,
                     added_dirs=added_dirs,
+                    session_id=session_id,
+                    launch_id=launch_id,
                 )
         with self._lock:
             if self._starting.get(reference) is not reservation:
@@ -646,13 +692,12 @@ class Runner:
             raise LaunchError("resume requires an exact client session id")
         if not packet.resume and resume_session_id:
             raise LaunchError("a resume session id was supplied for a fresh launch")
-        launch_id = f"launch-{uuid.uuid4().hex[:12]}"
-        client_session_id = resume_session_id
-        # Asked of the capability rather than of the client's name: whether the
-        # identity is chosen here or announced later is exactly what this field
-        # says, and a name test here is a second answer that can drift from it.
-        if capabilities.assigns_session_identity and not client_session_id:
-            client_session_id = str(uuid.uuid4())
+        launch_id = launch_id or new_launch_id()
+        if session_id and packet.resume and session_id != resume_session_id:
+            raise LaunchError("a resume runs under the session it resumes")
+        if session_id and not packet.resume and not capabilities.assigns_session_identity:
+            raise LaunchError(f"{packet.client} announces its own session; none can be assigned")
+        client_session_id = session_id or session_identity(packet, resume_session_id)
         runtime = None
         schema_path = ""
         result_path = ""
@@ -720,28 +765,30 @@ class Runner:
                 daemon=True,
             )
             reader.start()
+        live = RunningLaunch(
+            launch_id,
+            reference,
+            execution_id,
+            process,
+            packet,
+            cwd,
+            client_session_id,
+            preflight,
+            capture,
+            reader,
+            runtime,
+            result_path,
+            resume_session_id,
+        )
         with self._lock:
-            self._running[reference] = RunningLaunch(
-                launch_id,
-                reference,
-                execution_id,
-                process,
-                packet,
-                cwd,
-                client_session_id,
-                preflight,
-                capture,
-                reader,
-                runtime,
-                result_path,
-                resume_session_id,
-            )
+            self._running[reference] = live
         return {
             "launch_id": launch_id,
             "execution_id": execution_id,
             "reference": reference,
             "cwd": cwd,
             "packet": packet.as_dict(),
+            "session_id": live.session_id,
             "client_session_id": client_session_id,
             "resumed_from": resume_session_id,
             "worktree_preflight": preflight,
@@ -806,6 +853,7 @@ class Runner:
                 "exit_code": code,
                 "launch_id": live.launch_id,
                 "execution_id": live.execution_id,
+                "session_id": live.session_id,
                 "client_session_id": live.capture.client_session_id,
             }
         # A client spawns its own children; terminating it alone leaves them.
@@ -818,6 +866,7 @@ class Runner:
             "launch_id": live.launch_id,
             "execution_id": live.execution_id,
             "cwd": live.cwd,
+            "session_id": live.session_id,
             "client_session_id": live.capture.client_session_id,
             "tree": stopped_tree,
         }
@@ -864,6 +913,7 @@ class Runner:
                     "exit_code": code,
                     "client": live.packet.client,
                     "detail": detail,
+                    "session_id": live.session_id,
                     "client_session_id": live.capture.client_session_id,
                     "resumed_from": live.resumed_from,
                     "result": result,

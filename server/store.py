@@ -243,7 +243,15 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
 # container out of the states work is held in. Existing rows change their meaning, so
 # no build before it may read a store at 18, and this one opens a store at 17 only
 # once `migrate work-model` has carried it forward.
-STORE_SCHEMA_VERSION = 18
+#
+# 19 stores how a request on a closed item ended. A close writes every request still
+# pending on its item `expired`, as `item_completed` or `item_cancelled`, where a
+# build at 18 left the row pending and read it `task_closed` while the item stayed
+# closed; a request also names its `purpose`. A build at 18 would read a request
+# ended by a close as pending again once its item reopened, and refuse the whole
+# request over a reason it does not know; the ratchet makes it refuse a store at 19.
+# The work-model migration carries a store at 17 straight to 19.
+STORE_SCHEMA_VERSION = 19
 
 
 class StoreTooNewError(RuntimeError):

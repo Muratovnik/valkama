@@ -17,13 +17,17 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import dataclasses
+import functools
 import json
 import sqlite3
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from typing import TypeVar, cast
 
 from . import agents as planning_agents
 from . import (
     calls,
+    closing,
+    deferral,
     images,
     item_projects,
     item_tree,
@@ -67,6 +71,23 @@ MAX_SEARCH_PAGE = 200
 #: The columns a space is read by, named: a store another build wrote answers a
 #: missing one with `StoreSchemaError` rather than with a record lacking a field.
 _SPACE_COLUMNS = "planning_space_id, name, key, provider_kind, launch_place, updated_at"
+
+
+_Write = TypeVar("_Write", bound=Callable[..., dict])
+
+
+def _marked(write: _Write) -> _Write:
+    """A write of the service inside its own marks: its answer names what came to wait."""
+
+    @functools.wraps(write)
+    def run(conn: sqlite3.Connection, *args: object, **kwargs: object) -> dict:
+        with marking(conn) as entered:
+            answer = write(conn, *args, **kwargs)
+        if entered:
+            answer[closing.AWAITING] = entered
+        return answer
+
+    return cast(_Write, run)
 
 
 def _space_record(row: sqlite3.Row) -> dict:
@@ -612,7 +633,7 @@ def set_launch_place(conn: sqlite3.Connection, space: str, launch_place: object)
 
 
 def _parent_row(
-    conn: sqlite3.Connection, space_id: str, parent: str | None, item_id: str | None = None
+    conn: sqlite3.Connection, space_id: str, parent: str | None, item: sqlite3.Row | None = None
 ) -> sqlite3.Row | None:
     """The row a work item may take as its parent, or None when it takes none.
 
@@ -620,9 +641,11 @@ def _parent_row(
     parent exists, lives in the same space, is a goal or stage, is open, and is
     neither the item nor anything under it. The last is read by climbing from the
     parent to its root (`item_tree.above`), inside the write lock the caller took,
-    so two crossing moves cannot both pass it. An `item_id` is given only when an
-    existing item is reparented: a new item cannot yet name itself or have children.
-    The tree has no depth limit.
+    so two crossing moves cannot both pass it. `item` is given only when an
+    existing item is reparented: a new item cannot yet name itself or have children,
+    nor be accepted on its own. An accepted open item does not move under a goal or
+    stage that, or one over which, stands in triage or deferred: the owner's decision
+    about the work would sit under one not yet taken. The tree has no depth limit.
     """
 
     if not parent:
@@ -631,23 +654,41 @@ def _parent_row(
     if str(parent_row["planning_space_id"]) != space_id:
         raise model.PlanningError("a parent work item lives in another planning space")
     if parent_row["kind"] != model.CONTAINER_KIND:
-        raise model.PlanningError("a task holds no children; convert it to a stage first")
+        # The word a conversion of that task passes with: its place says which it becomes.
+        raise model.PlanningError(
+            f"{read_model.reference(conn, parent_row)} is a task and holds no children:"
+            f" convert it first, with convert {{to: {_container_word(parent_row)}}} in"
+            " apply_work_item_changes"
+        )
     # Work filed under finished work would read as done before it began.
     if read_model.state_by_id(conn, str(parent_row["state_id"]))["is_terminal"]:
         raise model.PlanningError(
             f"{read_model.reference(conn, parent_row)} is closed; reopen it first"
         )
-    if item_id is not None and any(
-        identity == item_id
-        for identity, _kind, _category in item_tree.above(conn, str(parent_row["work_item_id"]))
-    ):
+    if item is None:
+        return parent_row
+    chain = item_tree.above(conn, str(parent_row["work_item_id"]))
+    if any(identity == str(item["work_item_id"]) for identity, _kind, _category in chain):
         raise model.PlanningError(
             f"{read_model.reference(conn, parent_row)} stands under this item, or is it:"
             " a parent there would close a cycle"
         )
+    category = read_model.state_by_id(conn, str(item["state_id"]))["category"]
+    accepted_open = item["acceptance"] is not None and category not in (
+        *model.UNACCEPTED_CATEGORIES,
+        *model.TERMINAL_CATEGORIES,
+    )
+    if accepted_open and any(
+        found in model.UNACCEPTED_CATEGORIES for _identity, _kind, found in chain
+    ):
+        raise model.PlanningError(
+            "[parent] an accepted item does not move under a goal or stage that is not"
+            " accepted: accept it first, or move the item out"
+        )
     return parent_row
 
 
+@_marked
 def create_work_item(
     conn: sqlite3.Connection,
     *,
@@ -663,6 +704,7 @@ def create_work_item(
     author: str | None = None,
     acceptance: object = None,
     projects: object = None,
+    claimed: bool = False,
 ) -> dict:
     """A new item, placed where the work model puts it, accepted when it is accepted work.
 
@@ -671,7 +713,11 @@ def create_work_item(
     an agent's stays in triage unless it names `acceptance`. Accepted work stands
     in ready, and a goal or stage accepted at once stands in the service state:
     `created` names no state for it, and `accepted` and `opened` follow. A named
-    state is held to the refusals a move there meets (`transitions.placement`).
+    state is held to the refusals a move there meets (`transitions.placement`),
+    and review, blocked and the closed states are refused (`new_item`): the move
+    there carries what entering asks for. An active state needs an executor, and
+    `claimed` says the write creating the item claims it before it ends, which is
+    the executor; without it the active state is refused (`executor`).
     `projects` names the projects a task changes, each `named`
     (`item_projects`); a goal or stage names none. `space` may be left out: the
     item then lies where `item_projects.placement` puts it.
@@ -704,36 +750,27 @@ def create_work_item(
     target = _destination(conn, item, target)
     basis = given if target["category"] in model.ACCEPTED_CATEGORIES else None
     refusals = transitions.placement(item, None, target, reference="the new item", basis=basis)
-    if target["category"] == "active":
+    if target["category"] == "active" and not claimed:
         refusals.append(
             ("executor", "the new item has no executor: create it with claim to start it at once")
         )
     transitions.refuse(refusals, False)
-    item_id = model.new_id()
-    number = store.next_number(conn, space_id)
+    closing.note(conn, parent_id, author)
     starts = stored_kind != model.CONTAINER_KIND and target["category"] in model.STARTING_CATEGORIES
-    conn.execute(
-        "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,"
-        "parent_id,priority,title,description,labels,source,acceptance,accepted_at,"
-        "started_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,"
-        f" CASE WHEN ? IS NULL THEN NULL ELSE {_NOW} END, CASE WHEN ? THEN {_NOW} END)",
-        (
-            item_id,
-            space_id,
-            number,
-            workflow_id,
-            str(target["state_id"]),
-            stored_kind,
-            parent_id,
-            model.priority(priority),
-            model.text_field(title, "work_item.title"),
-            model.multiline_field(description, "work_item.description"),
-            model.dumps(model.labels(labels)),
-            model.text_field(source, "work_item.source", limit=512, required=False),
-            basis,
-            basis,
-            starts,
-        ),
+    item_id = _insert_item(
+        conn,
+        space_id=space_id,
+        workflow_id=workflow_id,
+        state=target,
+        kind=stored_kind,
+        parent_id=parent_id,
+        priority=model.priority(priority),
+        title=model.text_field(title, "work_item.title"),
+        basis=basis,
+        started=True if starts else None,
+        description=model.multiline_field(description, "work_item.description"),
+        labels=model.labels(labels),
+        source=model.text_field(source, "work_item.source", limit=512, required=False),
     )
     item_projects.replace(conn, item_id, changes)
     opened = target["category"] == model.SERVICE_CATEGORY
@@ -750,6 +787,64 @@ def create_work_item(
         subscriptions.follow(conn, item_id, creator)
     words.bring_current(conn)
     return read_model.present(conn, read_model.item_by_id(conn, item_id), full=True)
+
+
+def _insert_item(
+    conn: sqlite3.Connection,
+    *,
+    space_id: str,
+    workflow_id: str,
+    state: sqlite3.Row,
+    kind: str,
+    parent_id: str | None,
+    priority: str,
+    title: str,
+    basis: str | None,
+    started: str | bool | None,
+    description: str = "",
+    labels: Sequence[str] = (),
+    source: str = "",
+    claim: str = "",
+    claim_call_id: object = None,
+    steps: Sequence[Mapping[str, object]] = (),
+) -> str:
+    """Insert a new item's row, its values checked by the caller; its id.
+
+    The one INSERT of a work item, which creating, a conversion's leftover and a
+    split part each make. `started` is the moment the item started, or True for
+    now; `basis` sets `accepted_at` to now with it. Its number is the space's next.
+    """
+
+    identity = model.new_id()
+    conn.execute(
+        "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,state_id,kind,"
+        "parent_id,priority,title,description,labels,source,claim_ref,claim_call_id,checklist,"
+        "acceptance,accepted_at,started_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+        f" CASE WHEN ? IS NULL THEN NULL ELSE {_NOW} END,"
+        f" CASE WHEN ? = 1 THEN {_NOW} ELSE ? END)",
+        (
+            identity,
+            space_id,
+            store.next_number(conn, space_id),
+            workflow_id,
+            str(state["state_id"]),
+            kind,
+            parent_id,
+            priority,
+            title,
+            description,
+            model.dumps(list(labels)),
+            source,
+            claim,
+            claim_call_id,
+            model.dumps(list(steps)),
+            basis,
+            basis,
+            started is True,
+            None if started is True else started,
+        ),
+    )
+    return identity
 
 
 def _placed_space(
@@ -776,6 +871,7 @@ def _placed_space(
     return named if named is not None and str(named["key"]) == key else _space_row(conn, key)
 
 
+@_marked
 def update_work_item(
     conn: sqlite3.Connection,
     reference: str,
@@ -834,17 +930,24 @@ def update_work_item(
         parameters.append(model.dumps(labels))
     if kind is not None:
         updates.append("kind = ?")
-        parameters.append(_edited_kind(row, kind))
-    left: str | None = None
+        parameters.append(_edited_kind(conn, row, kind))
+    moved_under: sqlite3.Row | None = None
     if parent is not None:
-        parent_row = _parent_row(
-            conn, str(row["planning_space_id"]), parent, item_id=str(row["work_item_id"])
-        )
-        moved_to = str(parent_row["work_item_id"]) if parent_row is not None else None
+        if not parent.strip():
+            raise model.PlanningError(
+                f"[parent] an edit does not clear the parent: take"
+                f" {read_model.reference(conn, row)} out of its goal or stage with move_out,"
+                " which records why it leaves"
+            )
+        parent_row = _parent_row(conn, str(row["planning_space_id"]), parent, item=row)
+        moved_to = None if parent_row is None else str(parent_row["work_item_id"])
         updates.append("parent_id = ?")
         parameters.append(moved_to)
-        if row["parent_id"] is not None and str(row["parent_id"]) != moved_to:
-            left = str(row["parent_id"])
+        if parent_row is not None and str(row["parent_id"]) != moved_to:
+            moved_under = parent_row
+            # The container it leaves and the one it joins each derive from it.
+            closing.note(conn, row["parent_id"], author)
+            closing.note(conn, moved_to, author)
     reprojected = changes is not None and item_projects.differs(
         conn, str(row["work_item_id"]), changes
     )
@@ -860,9 +963,9 @@ def update_work_item(
     _write(conn, row, updates, parameters)
     if reprojected and changes is not None:
         item_projects.replace(conn, str(row["work_item_id"]), changes)
-    if left is not None:
-        # The container keeps that it had this child: what it derives counts the child.
-        _log(conn, left, "child_left", read_model.reference(conn, row), author)
+    under = None if moved_under is None else read_model.reference(conn, moved_under)
+    if moved_under is not None and row["parent_id"] is not None:
+        _left(conn, row, f"moved under {under}", author)
     # Any other field's edit is no audited action; the revision and the call row carry it.
     if change is not None:
         _log(
@@ -873,30 +976,335 @@ def update_work_item(
             author,
             limit=model.LABELS_DETAIL_LIMIT,
         )
+    if moved_under is not None:
+        _accept_moved(conn, row, f"moved under {under}", author)
     words.bring_current(conn)
     return read_model.present(
         conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
     )
 
 
-def _edited_kind(row: sqlite3.Row, kind: str) -> str:
+def _left(conn: sqlite3.Connection, row: sqlite3.Row, reason: str, author: str | None) -> None:
+    """Record on the goal or stage `row` stood under that it left, and why: `child_left`.
+
+    The container keeps that it had this child, so what it derives counts the child,
+    and its `confirmation` part reads the reason: `MAIN-12: <reason>`.
+    """
+
+    detail = f"{read_model.reference(conn, row)}: {reason}"
+    _log(conn, str(row["parent_id"]), "child_left", detail, author)
+
+
+def _accept_moved(
+    conn: sqlite3.Connection, row: sqlite3.Row, reason: str, author: str | None
+) -> None:
+    """Accept an item in triage that a move put under goals and stages all accepted and open.
+
+    Moving it there is filing it there: it takes the basis `inherited`, a task moves
+    to the first ready state its workflow reaches and a goal or stage to the service
+    state, taking the work in triage under it along (`_transition`). An item put off
+    stays put off, and one with no ready state to reach stays where it is.
+    """
+
+    identity = str(row["work_item_id"])
+    current = read_model.state_by_id(conn, str(row["state_id"]))
+    if current["category"] != "triage" or not item_tree.accepted_chain(
+        conn, str(read_model.item_by_id(conn, identity)["parent_id"])
+    ):
+        return
+    target = states.reachable(conn, row, "ready")
+    if target is None:
+        return
+    _transition(conn, identity, str(target["state_id"]), reason=reason, author=author)
+
+
+@_marked
+def take_out(conn: sqlite3.Connection, reference: str, reason: str, author: str | None) -> dict:
+    """Clear an item's parent, recording on the goal or stage it left why it left.
+
+    The one write that clears a parent: an edit refuses `parent: ""`, so the reason
+    the work model asks for is never bypassed. `split.move_out` makes it, beside the
+    move to triage (`move_to_triage`); the caller has checked that there is a parent.
+    """
+
+    row = _row_for_write(conn, reference, None)
+    closing.note(conn, row["parent_id"], author)
+    calls.call_id(conn, str(row["work_item_id"]), edited="parent_id")
+    _write(conn, row, ["parent_id = ?"], [None])
+    _left(conn, row, reason, author)
+    return read_model.present(
+        conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
+    )
+
+
+#: The refusal a move out of a goal or stage is spared: an accepted one leaves for triage.
+_MOVED_OUT_SPARES = frozenset({"container_state"})
+
+
+def move_to_triage(
+    conn: sqlite3.Connection, reference: str, state: str, *, reason: str, author: str | None
+) -> dict:
+    """Move an item that leaves its goal or stage to `state`, the triage state chosen for it.
+
+    A move like any other, with its guards, except the one that keeps an accepted goal
+    or stage out of triage: moved out, it is new work for the owner to decide on again,
+    as a task moved out is. Nothing on a surface reaches this but `split.move_out`.
+    """
+
+    return _transition(
+        conn, reference, state, reason=reason, author=author, spared=_MOVED_OUT_SPARES
+    )
+
+
+def locked_row(
+    conn: sqlite3.Connection, reference: object, expected_revision: int | None = None
+) -> sqlite3.Row:
+    """The item an action composed above the service decides from, read under the write lock.
+
+    `_row_for_write` for `split`: the writes it then makes through the service find
+    the lock already taken, so nothing lands between its decision and them.
+    """
+
+    return _row_for_write(conn, reference, expected_revision)
+
+
+# -- converting -------------------------------------------------------------------
+
+
+def reform(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    kind: str,
+    state: sqlite3.Row | None,
+    reason: str,
+    steps: list[dict],
+    labels: list[str],
+    author: str | None,
+) -> dict:
+    """Write an item converted to `kind`: one of `split.convert`'s writes, which decides it.
+
+    `state` is where it then stands, or None where it stays: a goal or stage accepted
+    stands in the service state, recorded `opened` with `reason`, and a task out of it
+    in a ready state, recorded `transitioned`. Its claim ends, and so does every step
+    claim it had, which `steps`, the steps it keeps, no longer carry: each recorded
+    `released` or `checklist_released`. A goal or stage keeps no start of its own, so
+    it loses `started_at`. The goal or stage it stands under, and the item itself,
+    derive from it, and are marked. The `converted` event is the caller's
+    (`log_converted`), once it knows what the conversion left.
+    """
+
+    identity = str(row["work_item_id"])
+    # The first write of the call names what it acted on: the converted item.
+    calls.call_id(conn, identity)
+    closing.note(conn, row["parent_id"], author)
+    closing.note(conn, identity, author)
+    current = model.labels(json.loads(str(row["labels"])))
+    change = model.labels_change(current, labels)
+    updates = ["kind = ?", "checklist = ?", "labels = ?"]
+    parameters: list[object] = [kind, model.dumps(steps), model.dumps(labels)]
+    if state is not None:
+        updates.append("state_id = ?")
+        parameters.append(str(state["state_id"]))
+    held = str(row["claim_ref"])
+    if held:
+        updates += ["claim_ref = ?", "claim_call_id = ?"]
+        parameters += ["", None]
+    if kind == model.CONTAINER_KIND:
+        updates.append("started_at = NULL")
+    _write(conn, row, updates, parameters)
+    if held:
+        _log(conn, identity, "released", held, author)
+    for step in model.checklist(row["checklist"]):
+        if step["claimed_by"]:
+            _log(conn, identity, "checklist_released", step["text"][:120], author)
+    if change is not None:
+        _log(conn, identity, "labels_changed", change, author, limit=model.LABELS_DETAIL_LIMIT)
+    if state is not None and state["category"] == model.SERVICE_CATEGORY:
+        _log(conn, identity, "opened", reason, author)
+    elif state is not None:
+        _log(conn, identity, "transitioned", f"{state['key']}: {reason}", author)
+    return {"released": held} if held else {}
+
+
+def file_leftover(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    title: str,
+    steps: list[dict],
+    state: sqlite3.Row,
+    basis: str | None,
+    holder: bool,
+    reason: str,
+    author: str | None,
+) -> str:
+    """File the work a task converted into a goal or stage leaves, under it; its reference.
+
+    `row` is the task as it stood before the conversion (`reform`): the new task takes
+    its kind, priority and start, its holder with the call that took it, so the claim
+    reads as the same lease, when `holder`, and its projects (`item_projects.carry`).
+    `steps` go with their ids, ticks and claims, each claim recorded
+    `checklist_claimed`. It stands in `state` with `basis`; `reason` follows the key
+    of its `created`, as a move's does, for one blocked as the task was.
+    """
+
+    parent = str(row["work_item_id"])
+    closing.note(conn, parent, author)
+    claim = str(row["claim_ref"]) if holder else ""
+    identity = _insert_item(
+        conn,
+        space_id=str(row["planning_space_id"]),
+        workflow_id=str(row["workflow_id"]),
+        state=state,
+        kind=str(row["kind"]),
+        parent_id=parent,
+        priority=str(row["priority"]),
+        title=model.text_field(title, "leftover.title"),
+        basis=basis,
+        started=row["started_at"],
+        claim=claim,
+        claim_call_id=row["claim_call_id"] if claim else None,
+        steps=steps,
+    )
+    _log(conn, identity, "created", f"{state['key']}: {reason}" if reason else state["key"], author)
+    if basis is not None:
+        _log(conn, identity, "accepted", basis, author)
+    if claim:
+        _log(conn, identity, "claimed", "", author)
+    for step in steps:
+        if step["claimed_by"]:
+            _log(conn, identity, "checklist_claimed", step["text"][:120], author)
+    item_projects.carry(conn, parent, identity)
+    return read_model.reference(conn, read_model.item_by_id(conn, identity))
+
+
+def log_converted(conn: sqlite3.Connection, identity: str, detail: str, author: str | None) -> None:
+    """Record on a converted item what it became and what the conversion left: `converted`."""
+
+    _log(conn, identity, "converted", detail, author)
+
+
+# -- splitting a part off ----------------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class Part:
+    """What a part split off a task is filed with, read and checked by `split.split_off`.
+
+    `steps` are the task's steps it takes, with their ids, ticks and marks and no claim;
+    `state` and `basis` where it stands and on what; `deferred` the condition it waits
+    on, when it stands put off as the task does.
+    """
+
+    title: str
+    kind: str
+    priority: str
+    description: str
+    labels: list[str]
+    source: str
+    projects: list[str]
+    steps: list[dict]
+    state: sqlite3.Row
+    basis: str | None
+    deferred: deferral.Held | None
+
+
+def file_part(conn: sqlite3.Connection, row: sqlite3.Row, part: Part, author: str | None) -> str:
+    """File a part split off the task `row` beside it, under its parent; its reference.
+
+    One of `split.split_off`'s writes, which decides the part: it stands in
+    `part.state` with `part.basis`, names `part.projects`, each `named`, and records
+    `split_from` with the task's reference; one put off waits on the task's condition.
+    """
+
+    parent_id = None if row["parent_id"] is None else str(row["parent_id"])
+    closing.note(conn, parent_id, author)
+    identity = _insert_item(
+        conn,
+        space_id=str(row["planning_space_id"]),
+        workflow_id=str(row["workflow_id"]),
+        state=part.state,
+        kind=part.kind,
+        parent_id=parent_id,
+        priority=part.priority,
+        title=part.title,
+        basis=part.basis,
+        started=None,
+        description=part.description,
+        labels=part.labels,
+        source=part.source,
+        steps=part.steps,
+    )
+    item_projects.replace(conn, identity, part.projects)
+    if part.deferred is not None:
+        deferral.restore(conn, identity, part.deferred)
+    _log(conn, identity, "created", str(part.state["key"]), author)
+    if part.basis is not None:
+        _log(conn, identity, "accepted", part.basis, author)
+    _log(conn, identity, "split_from", read_model.reference(conn, row), author)
+    return read_model.reference(conn, read_model.item_by_id(conn, identity))
+
+
+def hand_over_steps(
+    conn: sqlite3.Connection, row: sqlite3.Row, moved: list[dict], to: str, author: str | None
+) -> None:
+    """Take the steps `moved` off the task `row`, which a part `to` split off it took.
+
+    Each claim on one ends (`checklist_released`), and the task records `split_off`,
+    `MAIN-15: 2 steps`: the steps went with their work, not discarded, so no
+    `checklist_removed` is written. A task at work whose last holder was such a step
+    goes back to the queue at the end of the write (`_settle`).
+    """
+
+    identity = str(row["work_item_id"])
+    gone = {str(step["id"]) for step in moved}
+    steps = model.checklist(row["checklist"])
+    _write(
+        conn,
+        row,
+        ["checklist = ?"],
+        [model.dumps([step for step in steps if str(step["id"]) not in gone])],
+    )
+    for step in steps:
+        if str(step["id"]) in gone and step["claimed_by"]:
+            _log(conn, identity, "checklist_released", str(step["text"])[:120], author)
+    _log(conn, identity, "split_off", f"{to}: {len(moved)} steps", author)
+    _settle(conn, identity, author, "steps split off")
+
+
+def _edited_kind(conn: sqlite3.Connection, row: sqlite3.Row, kind: str) -> str:
     """The stored kind an edit of `kind` leaves, refused where an edit cannot change it.
 
     An edit changes a task's kind among the task kinds. A task becomes a goal or
-    stage, and back, by converting it, which is an action of its own; whether a
-    container is a goal or a stage follows from whether it stands under a parent.
+    stage, and back, by converting it (`split.convert`), which is an action of its
+    own, and the refusal names the word it passes with; whether a container is a goal
+    or a stage follows from whether it stands under a parent.
     """
 
     named = model.public_kind(kind)
     container = row["kind"] == model.CONTAINER_KIND
-    if container and named == read_model.outward_kind(row["kind"], row["parent_id"]):
+    if container and named == model.outward_kind(row["kind"], row["parent_id"]):
         return model.CONTAINER_KIND
-    if container or named not in model.TASK_KINDS:
+    reference = read_model.reference(conn, row)
+    if container:
         raise model.PlanningError(
-            "an edit changes kind among task, bug and improvement; a task and a goal or stage"
-            " become each other by conversion, and goal or stage follows from the parent"
+            f"an edit does not make a goal or stage a task: {reference} becomes one with"
+            " convert {to: task}, and goal or stage follows from the parent"
+        )
+    if named not in model.TASK_KINDS:
+        word = _container_word(row)
+        raise model.PlanningError(
+            f"an edit changes kind among task, bug and improvement: {reference} becomes a"
+            f" {word} with convert {{to: {word}}}"
         )
     return model.work_item_kind(named)
+
+
+def _container_word(row: sqlite3.Row) -> str:
+    """What a task becomes when converted where it stands: a stage under a parent, else a goal."""
+
+    return "stage" if row["parent_id"] else "goal"
 
 
 def _edited(row: sqlite3.Row, updates: list[str], parameters: list[object]) -> str | None:
@@ -909,6 +1317,7 @@ def _edited(row: sqlite3.Row, updates: list[str], parameters: list[object]) -> s
     return ",".join(changed) or None
 
 
+@_marked
 def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
     # Under the lock, so a child created meanwhile is counted here and refused
     # in words, rather than met by the DELETE as a raw FOREIGN KEY failure.
@@ -922,15 +1331,23 @@ def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
         )
     identity = str(row["work_item_id"])
     pictures = images.held(conn, identity)
+    # Its parent derives from the children it has; the row of a container awaiting
+    # confirmation goes with it.
+    closing.note(conn, row["parent_id"])
+    # Work put off until it comes back as if it closed, while it can still be named.
+    returned = _return_waiting(conn, [identity], deferral.DELETED)
     conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (identity,))
     # The rows went with the item; a file no other item holds goes once this commits.
     images.release(conn, pictures)
     words.bring_current(conn)
-    return {
+    answer = {
         "work_item_id": row["work_item_id"],
         "reference": read_model.reference(conn, row),
         "deleted": True,
     }
+    if returned:
+        answer["returned"] = returned
+    return answer
 
 
 def pin_work_item(conn: sqlite3.Connection, reference: str, pinned: bool) -> str:
@@ -981,7 +1398,7 @@ def list_pins(conn: sqlite3.Connection, spaces: list[str]) -> list[dict]:
 EVENT_DETAIL_LIMIT = 512
 
 
-def _transition_reason(reason: str, state_key: str) -> str:
+def transition_reason(reason: str, state_key: str) -> str:
     """The reason a transition records, sized to the event it is written into.
 
     The event's detail reads `<state key>: <reason>`, so the reason may use only
@@ -1005,6 +1422,8 @@ def transition_work_item(
     expected_revision: int | None = None,
     author: str | None = None,
     acceptance: object = None,
+    to_check: object = None,
+    cancels: object = None,
 ) -> dict:
     """Move an item to a state; the order of work places it there (`queue.list_key`).
 
@@ -1024,6 +1443,17 @@ def transition_work_item(
     state, and accepted from triage or deferred it takes the work waiting in
     triage under it along (`_cascade`). The refusals of `transitions.UNFORCED`
     hold against `force`.
+
+    A move into review asks the owner, in the same write, the question `to_check`
+    words: what to check, answered by accepting the work or returning it
+    (`requests.carry_out`); the answer names it as `review_request_id`. The question
+    lasts while the item stays in review: any other way out ends it, a close as a
+    close ends every request and any other move as withdrawn.
+
+    Cancelling a goal or stage with open work under it cancels that work too, so it is
+    refused with the list of what would close until `cancels` names that list's token
+    (`closing.cancel_list`, `_cancel_under`); `force` does not carry it. A close names
+    the open items it left with nothing open blocking them as `freed`.
     """
 
     return _transition(
@@ -1035,6 +1465,8 @@ def transition_work_item(
         expected_revision=expected_revision,
         author=author,
         acceptance=acceptance,
+        to_check=to_check,
+        cancels=cancels,
     )
 
 
@@ -1049,19 +1481,29 @@ def put_back_after_launch(
     *,
     expected_revision: int,
     author: str,
+    deferred: deferral.Held | None = None,
+    claim: PriorClaim | None = None,
 ) -> dict:
     """Put a task a failed launch started back in the state the launch found it in.
 
     The launch's claim moved the task to work and the client never started, so
     nothing happened that the move could stand for. Going back is forced, as the
     compensation always was, and it is the one write that may enter deferred: the
-    task is not being deferred, only put back where it stood. The move ends the
-    launch's claim like any move out of work, and a move back to triage or deferred
-    takes away the basis the claim gave. Nothing on a surface reaches this: a
-    create, a move and `force` keep refusing entry into deferred.
+    task is not being deferred, only put back where it stood, with `deferred`, the
+    condition it stood there on (`deferral_of`, read before the launch's claim took
+    it away). The move ends the launch's claim like any move out of work, and a move
+    back to triage or deferred takes away the basis the claim gave. Nothing on a
+    surface reaches this: a create, a move and `force` keep refusing entry into
+    deferred.
+
+    `claim` is the claim the launch took over (`claim_of`), put back with the call
+    that took it, so its lease reads as it did: a confirmed claim comes back
+    confirmed, by its session, and an unconfirmed one unconfirmed. It is recorded as
+    its holder taking the item back over from the launch, forced, as a claim that
+    puts it back always was; it names its own call and makes none.
     """
 
-    return _transition(
+    answer = _transition(
         conn,
         reference,
         state,
@@ -1071,8 +1513,52 @@ def put_back_after_launch(
         author=author,
         spared=_PUT_BACK_SPARES,
     )
+    identity = str(answer["work_item_id"])
+    row = read_model.item_by_id(conn, identity)
+    category = read_model.state_by_id(conn, str(row["state_id"]))["category"]
+    if deferred is not None and category == "deferred":
+        deferral.restore(conn, identity, deferred)
+    if claim is not None:
+        row = read_model.item_by_id(conn, identity)
+        held = str(row["claim_ref"])
+        _write(conn, row, ["claim_ref = ?", "claim_call_id = ?"], [claim.holder, claim.call_id])
+        _log(conn, identity, "taken_over", held, claim.holder)
+        record_overrides(conn, identity, ["claim"], claim.holder)
+        answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    return answer
 
 
+def deferral_of(conn: sqlite3.Connection, reference: str) -> deferral.Held | None:
+    """The condition the item stands put off on, or None, for a write that puts it back."""
+
+    return deferral.held(conn, str(read_model.item_row(conn, reference)["work_item_id"]))
+
+
+@dataclasses.dataclass(frozen=True)
+class PriorClaim:
+    """A claim as a write found it: who held the item, and the call that took it.
+
+    `call_id` is `work_items.claim_call_id`, None for a claim no call took. The lease
+    is read from that call (`leases.lease`), so a claim put back with it reads as it
+    did before.
+    """
+
+    holder: str
+    call_id: int | None
+
+
+def claim_of(conn: sqlite3.Connection, reference: str) -> PriorClaim | None:
+    """The item's claim with the call that took it, or None, for a write that puts it back."""
+
+    row = read_model.item_row(conn, reference)
+    holder = str(row["claim_ref"] or "")
+    if not holder:
+        return None
+    call = row["claim_call_id"]
+    return PriorClaim(holder, None if call is None else int(call))
+
+
+@_marked
 def _transition(
     conn: sqlite3.Connection,
     reference: str,
@@ -1084,6 +1570,8 @@ def _transition(
     author: str | None = None,
     acceptance: object = None,
     spared: frozenset[str] = frozenset(),
+    to_check: object = None,
+    cancels: object = None,
 ) -> dict:
     """`transition_work_item`, sparing the refusals named in `spared`."""
 
@@ -1097,13 +1585,22 @@ def _transition(
         answer = read_model.present(conn, row, full=True)
         answer["warnings"] = [f"{read_model.reference(conn, row)} is accepted and open already"]
         return answer
-    note = _transition_reason(reason, str(target["key"]))
+    into_review = (
+        target["category"] == transitions.REVIEW and current["category"] != transitions.REVIEW
+    )
+    out_of_review = (
+        current["category"] == transitions.REVIEW and target["category"] != transitions.REVIEW
+    )
+    check = _to_check(to_check, into_review, target)
+    note = transition_reason(reason, str(target["key"]))
     gives = _basis(conn, row, target, named)
     refusals, warnings = transitions.findings(
-        conn, row, target, reason=reason, basis=row["acceptance"] or gives
+        conn, row, target, reason=reason, basis=row["acceptance"] or gives, to_check=check
     )
     refusals = [finding for finding in refusals if finding[0] not in spared]
     transitions.refuse(refusals, force)
+    # Past every other refusal, so the list it hands over is the last thing in the way.
+    cancelling = _cancel_listing(conn, row, current, target, cancels)
     updates = ["state_id = ?"]
     parameters: list[object] = [str(target["state_id"])]
     updates += _accepting(row, target, gives, parameters)
@@ -1121,6 +1618,14 @@ def _transition(
             step["claimed_by"] = ""
         updates.append("checklist = ?")
         parameters.append(model.dumps(steps))
+    # Whether the item is open, or a goal or stage stands accepted and open, is what
+    # its parent derives from, and a goal or stage derives from it too.
+    closing.note(conn, row["parent_id"], author)
+    if row["kind"] == model.CONTAINER_KIND:
+        closing.note(conn, identity, author)
+    returned: list[str] = []
+    if cancelling is not None:
+        warnings += _cancel_under(conn, cancelling, note, author, returned)
     _write(conn, row, updates, parameters)
     if gives is not None:
         _log(conn, identity, "accepted", gives, author)
@@ -1139,19 +1644,437 @@ def _transition(
         _log(conn, identity, "released", held, author)
     for step in unheld:
         _log(conn, identity, "checklist_released", step["text"][:120], author)
+    if target["is_terminal"]:
+        # A close ends what still waits on the item, saying how it closed; reopening
+        # brings none of it back.
+        questions.end(conn, identity, questions.closed_reason(str(target["category"])), author)
+    elif out_of_review:
+        # The question of review is about the work as it stood there: a move that takes
+        # the item elsewhere takes it back.
+        questions.end(conn, identity, "withdrawn", author, purpose=transitions.REVIEW)
+    if current["category"] == "deferred" and target["category"] != "deferred":
+        _put_off_ends(conn, identity, author)
+    if target["is_terminal"] and not current["is_terminal"]:
+        # What was put off until this item comes back in the same transaction.
+        how = "cancelled" if target["category"] == "cancelled" else "completed"
+        returned += _return_waiting(conn, [identity], how)
+    asked = None
+    if into_review:
+        asked = questions.ask(
+            conn,
+            identity,
+            kind="question",
+            prompt=check,
+            fields=request_model.fields(list(request_model.REVIEW_FIELDS)),
+            author=author,
+            purpose=transitions.REVIEW,
+        )
     # Out of triage or deferred the item had no basis, so the move that accepts it gave one.
     if opened and gives is not None and current["category"] in model.UNACCEPTED_CATEGORIES:
         # The order of bases for what is under it, read with the item now accepted.
         under = "inherited" if item_tree.accepted_chain(conn, identity) else gives
         warnings += _cascade(conn, identity, read_model.reference(conn, row), under, author)
-    overridden = _record_overrides(conn, identity, [guard for guard, _ in refusals], author)
+    overridden = record_overrides(conn, identity, [guard for guard, _ in refusals], author)
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     answer["warnings"] = warnings
     if held:
         answer["released"] = held
     if overridden:
         answer["overridden"] = overridden
+    if asked is not None:
+        answer["review_request_id"] = asked
+    closed = [identity]
+    if cancelling is not None:
+        # A goal or stage is never held: what the cancel released is the work under it.
+        answer["cancelled"] = [entry["reference"] for entry in cancelling.listing.cancels]
+        answer["released"] = cancelling.listing.released()
+        closed += [str(found["work_item_id"]) for found in cancelling.listing.rows]
+    if target["is_terminal"] and not current["is_terminal"]:
+        answer["freed"] = closing.freed(conn, closed)
+        answer["returned"] = returned
+    for name in ("released", "freed", "returned"):
+        if name in answer and not answer[name]:
+            del answer[name]
     return answer
+
+
+# -- putting work off -----------------------------------------------------------
+
+
+#: The refusal putting work off is spared: entering deferred is what it does, with
+#: the condition a move there does not name.
+_DEFER_SPARES = frozenset({"deferred"})
+
+
+@_marked
+def defer_work_item(
+    conn: sqlite3.Connection,
+    reference: str,
+    *,
+    until: object,
+    reason: object,
+    force: bool = False,
+    expected_revision: int | None = None,
+    author: str | None = None,
+) -> dict:
+    """Put an item off until a day, a time or another item's close (`deferral`).
+
+    It moves to the first deferred state its workflow reaches, and the move records
+    `deferred: until 2026-12-01: <reason>`; like every move there it takes the basis
+    away and ends the claims. The condition is written beside it in the same write,
+    under the call that put it off. An item put off already takes the new condition,
+    and the question whether to take it up again ends with the old one. A claim of
+    another session is refused without `force`, which records it as overridden.
+    The answer names the condition as `deferred`.
+    """
+
+    row = _row_for_write(conn, reference, expected_revision)
+    identity = str(row["work_item_id"])
+    named = read_model.reference(conn, row)
+    current = read_model.state_by_id(conn, str(row["state_id"]))
+    if current["is_terminal"]:
+        raise model.PlanningError(
+            f"[{deferral.TAG}] {named} is closed: reopen it before putting it off"
+        )
+    why = _put_off_reason(reason)
+    until_at, until_item, said = _condition(conn, row, until)
+    target: sqlite3.Row | None = (
+        current if current["category"] == "deferred" else states.reachable(conn, row, "deferred")
+    )
+    if target is None:
+        raise model.WorkflowGuardError(
+            f"[transition] {named} cannot be put off: its workflow has no deferred state it"
+            " can move to"
+        )
+    overridden = held_elsewhere(conn, [row], author, force, doing="put it off")
+    answer = _transition(
+        conn,
+        identity,
+        str(target["state_id"]),
+        reason=f"until {said}: {why}",
+        author=author,
+        spared=_DEFER_SPARES,
+    )
+    questions.end(conn, identity, "withdrawn", author, purpose=deferral.RETURN)
+    deferral.put(
+        conn,
+        identity,
+        until_at=until_at,
+        until_item_id=until_item,
+        reason=why,
+        call_id=calls.call_id(conn, identity),
+        since=deferral.stamp(leases.utc_now()),
+    )
+    forced = record_overrides(conn, identity, ["claim"] if overridden else [], author)
+    answer = {
+        **answer,
+        **read_model.present(conn, read_model.item_by_id(conn, identity), full=True),
+    }
+    if forced:
+        answer["overridden"] = forced
+    return answer
+
+
+def defer_again(conn: sqlite3.Connection, identity: str, until: object) -> None:
+    """Put work that came back off again until `until`, as the owner's answer `later` says.
+
+    The item stays where it stands; its condition is the new one, set by the call of
+    the answer, not yet come, with the reason and the start it was put off with. The
+    answer's own event is the history of it.
+    """
+
+    row = _row_for_write(conn, identity, None)
+    kept = deferral.held(conn, identity)
+    if kept is None:
+        raise model.PlanningError(
+            f"[{deferral.TAG}] {read_model.reference(conn, row)} is not put off"
+        )
+    until_at, until_item, _said = _condition(conn, row, until)
+    deferral.put(
+        conn,
+        identity,
+        until_at=until_at,
+        until_item_id=until_item,
+        reason=kept.reason,
+        call_id=calls.call_id(conn, identity),
+        since=kept.since,
+    )
+
+
+def return_due(
+    conn: sqlite3.Connection, *, limit: int | None = None, space_id: str | None = None
+) -> int:
+    """Bring back the put-off work whose condition came and nothing acted on; how much.
+
+    A day or time that passed, or an item that closed by a path that did not bring
+    its waiting back. Read with `leases.utc_now`, at most `limit` items, of one
+    space's items when `space_id` names it. The sweep's `returns` step and the
+    take-next queue call it; a read never does.
+    """
+
+    found = deferral.due(
+        conn, deferral.stamp(leases.utc_now()), -1 if limit is None else limit, space_id=space_id
+    )
+    for due in found:
+        return_deferred(conn, due)
+    return len(found)
+
+
+def _return_waiting(conn: sqlite3.Connection, items: list[str], because: str) -> list[str]:
+    """Bring back what was put off until one of `items`, which closed or goes; the
+    references of those whose condition came with it."""
+
+    found = (
+        return_deferred(conn, deferral.Due(waiting_id, because, until_id, None))
+        for waiting_id, until_id in deferral.waiting(conn, items)
+    )
+    return [reference for reference in found if reference is not None]
+
+
+def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str | None:
+    """Bring one put-off item back, its condition having come; its reference.
+
+    The return is Valkama's own call (`deferral.RETURN_TOOL`), so the history names
+    the server and why. Under no accepted chain the item moves to the first triage
+    state it reaches, with `transitioned` (`triage: returned, date 2026-12-01`) and
+    `returned` (`date 2026-12-01`, `completed MAIN-12`) side by side, and its
+    condition goes with the move. Under goals and stages all accepted and open, or
+    with no triage to reach, it stays put off: its condition is marked come and the
+    owner is asked whether to do it, put it off again or drop it. A condition that
+    came before was asked about then: the item it waits on closing again or going
+    asks nothing new, and the answer is None.
+    """
+
+    row = read_model.item_by_id(conn, due.work_item_id)
+    reference = read_model.reference(conn, row)
+    item = None if due.until_item_id is None else deferral.reference(conn, due.until_item_id)
+    with calls.bind(calls.valkama(), deferral.RETURN_TOOL):
+        current = read_model.state_by_id(conn, str(row["state_id"]))
+        if current["category"] != "deferred":
+            # A condition with no item put off on it holds nothing: it goes.
+            deferral.clear(conn, due.work_item_id)
+            return reference
+        target = states.reachable(conn, row, "triage")
+        parent = None if row["parent_id"] is None else str(row["parent_id"])
+        if target is None or item_tree.accepted_chain(conn, parent):
+            if not deferral.reach(
+                conn,
+                due.work_item_id,
+                deferral.stamp(leases.utc_now()),
+                gone=due.because == deferral.DELETED,
+            ):
+                return None
+            condition = deferral.said(str(due.until_at)) if item is None else f"{item} closed"
+            questions.ask(
+                conn,
+                due.work_item_id,
+                kind="question",
+                prompt=(
+                    f"{reference} was put off until {condition}; that has come. Do it, put it"
+                    " off again, or drop it."
+                ),
+                fields=request_model.fields(list(request_model.RETURN_FIELDS)),
+                author=deferral.AUTHOR,
+                purpose=deferral.RETURN,
+            )
+            return reference
+        said = deferral.because_text(due.because, due.until_at, item)
+        _transition(
+            conn,
+            due.work_item_id,
+            str(target["state_id"]),
+            reason=f"returned, {said}",
+            author=deferral.AUTHOR,
+        )
+        _log(conn, due.work_item_id, "returned", said, deferral.AUTHOR)
+    return reference
+
+
+def _put_off_ends(conn: sqlite3.Connection, identity: str, author: str | None) -> None:
+    """The item left deferred: its condition goes, and the question its coming asked."""
+
+    deferral.clear(conn, identity)
+    questions.end(conn, identity, "withdrawn", author, purpose=deferral.RETURN)
+
+
+#: The most characters the reason for putting work off holds.
+_PUT_OFF_REASON_LIMIT = 400
+
+
+def _put_off_reason(reason: object) -> str:
+    if reason is None or (isinstance(reason, str) and not reason.strip()):
+        raise model.PlanningError(
+            f"[{deferral.TAG}] defer needs reason: why the work waits, which the owner reads"
+            " when it comes back"
+        )
+    return model.text_field(reason, "reason", limit=_PUT_OFF_REASON_LIMIT)
+
+
+def _condition(
+    conn: sqlite3.Connection, row: sqlite3.Row, until: object
+) -> tuple[str | None, str | None, str]:
+    """The condition `until` names for the item: the moment or the item it waits on,
+    and how a person reads it."""
+
+    if until is None or (isinstance(until, str) and not until.strip()):
+        raise model.PlanningError(
+            f"[{deferral.TAG}] defer needs until: a day YYYY-MM-DD, a time with its zone, or"
+            " the reference of the open item it waits on"
+        )
+    text = model.text_field(until, "until", limit=64)
+    at = deferral.moment(text, leases.utc_now())
+    if at is not None:
+        return at, None, deferral.said(at)
+    try:
+        waited = read_model.item_row(conn, text)
+    except model.PlanningError as error:
+        raise model.PlanningError(
+            f"[{deferral.TAG}] until {text} is no day, time or work item: send a day"
+            " YYYY-MM-DD, a time with its zone such as 2026-12-01T09:00:00Z, or an item's"
+            " reference"
+        ) from error
+    deferral.check_item(conn, row, waited)
+    return None, str(waited["work_item_id"]), read_model.reference(conn, waited)
+
+
+def _cancel_listing(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    current: sqlite3.Row,
+    target: sqlite3.Row,
+    cancels: object,
+) -> _Cancelling | None:
+    """The list a cancel of a goal or stage closes, once `cancels` confirms it; else None.
+
+    A goal or stage with open work under it is refused with the list until `cancels`
+    is the token of the list the server builds now: none sent, or one of a list that
+    changed since, and the refusal hands over the list as it stands. One with nothing
+    open under it is cancelled alone, as a task is, and a token sent for it confirms
+    a list that has emptied. An item under it whose workflow cannot be cancelled from
+    where it stands refuses the whole cancel, before any list is handed over. Sent
+    with any other move, `cancels` is refused rather than dropped.
+    """
+
+    cancelling = (
+        row["kind"] == model.CONTAINER_KIND
+        and target["category"] == "cancelled"
+        and current["category"] != "cancelled"
+    )
+    if not cancelling:
+        if cancels is not None:
+            raise model.PlanningError(
+                "cancels goes with cancelling a goal or stage, whose list it confirms; a move"
+                f" to {target['name']} of {read_model.reference(conn, row)} cancels no list:"
+                " leave it out"
+            )
+        return None
+    sent = None if cancels is None else model.text_field(cancels, "cancels", limit=64)
+    listing = closing.cancel_list(conn, row)
+    if listing is None:
+        return None
+    targets = []
+    for found in listing.rows:
+        target_state = states.cancel_state(conn, found)
+        if target_state is None:
+            raise model.WorkflowGuardError(
+                f"[transition] {read_model.reference(conn, found)} is under"
+                f" {listing.reference} and cannot be cancelled from where it stands: its"
+                " workflow has no transition to a cancelled state; move it where one leads"
+            )
+        targets.append(target_state)
+    if sent != listing.token:
+        raise listing.refusal(stale=sent is not None)
+    return _Cancelling(listing, targets)
+
+
+@dataclasses.dataclass(frozen=True)
+class _Cancelling:
+    """A confirmed cancel list, and the cancelled state each of its rows moves to."""
+
+    listing: closing.CancelList
+    targets: list[sqlite3.Row]
+
+
+#: What a cancel of a goal or stage does not ask of the work under it: the guard holds
+#: for the item the caller named, and the cancel closes the rest with it.
+_CASCADE_SPARES = frozenset({"person_spoke"})
+
+
+def _cancel_under(
+    conn: sqlite3.Connection,
+    cancelling: _Cancelling,
+    why: str,
+    author: str | None,
+    returned: list[str],
+) -> list[str]:
+    """Cancel every open item under a goal or stage, deepest first, each with its summary.
+
+    Each moves to the first cancelled state its workflow reaches, with the reason
+    `cancelled with MAIN-3`, through the one transition path: its claims end, its
+    questions end as cancelled, and what was put off until it comes back, named in
+    `returned`. An item without a summary gets one that says so; one with a summary
+    keeps what it did and says nothing comes next. The new summary is a new report,
+    and the one before stays in the comments. `why`, the reason the goal or stage was
+    cancelled for, is each summary's `why` when there is one.
+    """
+
+    warnings: list[str] = []
+    served = cancelling.listing.reference
+    reason = f"cancelled with {served}"
+    for found, target in zip(cancelling.listing.rows, cancelling.targets, strict=True):
+        identity = str(found["work_item_id"])
+        set_summary(conn, identity, _cancelled_summary(found, served, why), author=author)
+        moved = _transition(
+            conn,
+            identity,
+            str(target["state_id"]),
+            reason=reason,
+            author=author,
+            spared=_CASCADE_SPARES,
+        )
+        warnings += moved["warnings"]
+        returned += moved.get("returned", [])
+    return warnings
+
+
+def _cancelled_summary(row: sqlite3.Row, served: str, why: str) -> dict:
+    """The summary an item cancelled with the goal or stage `served` closes with."""
+
+    said = model.summary(row["summary"], required=False)
+    if said is None or not str(said.get("done") or "").strip():
+        summary = {
+            "done": f"Cancelled with {served}.",
+            "next": "Nothing: the goal or stage it served was cancelled.",
+        }
+    else:
+        summary = {
+            "done": str(said["done"]),
+            "next": f"Nothing: cancelled with {served}, the goal or stage it served.",
+        }
+    if why:
+        summary["why"] = why
+    return summary
+
+
+def _to_check(value: object, into_review: bool, target: sqlite3.Row) -> str:
+    """What the owner is to check, as a move into review asks it; refused on any other move.
+
+    Sent with a move that does not enter review it would ask nothing, so it is refused
+    rather than dropped: the caller meant a question that would never be asked.
+    """
+
+    if value is None:
+        return ""
+    if not into_review:
+        raise model.PlanningError(
+            f"to_check goes with a move into review, which asks it; a move to {target['name']}"
+            " asks nothing: leave it out"
+        )
+    return model.multiline_field(value, "to_check", limit=_TO_CHECK_LIMIT)
+
+
+#: The most characters `to_check` holds: as many as any question's prompt.
+_TO_CHECK_LIMIT = 8000
 
 
 def _destination(
@@ -1257,8 +2180,10 @@ def _cascade(
             continue
         parameters: list[object] = [str(target["state_id"])]
         updates = ["state_id = ?", *_accepting(child, target, basis, parameters)]
-        _write(conn, child, updates, parameters)
         found = str(child["work_item_id"])
+        if container:
+            closing.note(conn, found, author)
+        _write(conn, child, updates, parameters)
         _log(conn, found, "accepted", basis, author)
         if container:
             _log(conn, found, "opened", "", author)
@@ -1348,7 +2273,7 @@ def claim_work_item(
             _log(conn, identity, "claimed", "", author)
         _started(conn, identity, start, author, start_reason)
         waiting.deliver(conn, row)
-    overridden = _record_overrides(conn, identity, carried, author)
+    overridden = record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     if requeued is not None:
@@ -1366,7 +2291,8 @@ def _holdable(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
     One refusal for every way in -- a claim, the queue, a batch, a creation that
     claims, HTTP and a launch -- before anything is written. A goal or stage is
     never held; an item in review waits on the owner's answer, and a closed one is
-    reopened before anybody works it again.
+    reopened before anybody works it again. An agent does not take put-off work the
+    owner is asked whether to do (`acceptance_question`).
     """
 
     if row["kind"] == model.CONTAINER_KIND:
@@ -1380,6 +2306,15 @@ def _holdable(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
     if category in model.TERMINAL_CATEGORIES:
         raise model.WorkflowGuardError(
             f"[closed] {read_model.reference(conn, row)} is closed; reopen it first"
+        )
+    asked = deferral.asked(conn, str(row["work_item_id"])) if category == "deferred" else None
+    if asked is not None and calls.from_agent():
+        # Taking it would start it on an assignment the owner has not given: whether
+        # it is to be done is the question. A person's claim is their answer.
+        raise model.WorkflowGuardError(
+            f"[acceptance_question] the owner has not decided whether"
+            f" {read_model.reference(conn, row)} is to be done (question {asked}): take it"
+            " after the answer"
         )
 
 
@@ -1439,12 +2374,17 @@ def _starting(conn: sqlite3.Connection, row: sqlite3.Row, move_state: bool = Tru
 def _started(
     conn: sqlite3.Connection, identity: str, start: _Start, author: str | None, reason: str
 ) -> None:
-    """The history of the start a claim wrote with its holder: the basis, then the move."""
+    """The history of the start a claim wrote with its holder: the basis, then the move.
+
+    A start out of deferred ends the condition it stood there on, as any move out does.
+    """
 
     if start.gives is not None:
         _log(conn, identity, "accepted", start.gives, author)
     if start.target is not None:
         _log(conn, identity, "transitioned", f"{start.target['key']}: {reason}", author)
+    if start.current is not None and start.current["category"] == "deferred":
+        _put_off_ends(conn, identity, author)
 
 
 def _say_started(conn: sqlite3.Connection, answer: dict, start: _Start) -> None:
@@ -1467,23 +2407,57 @@ _UNSETTLED: contextvars.ContextVar[dict[str, tuple[str | None, str]] | None] = (
 
 
 @contextlib.contextmanager
-def one_write(conn: sqlite3.Connection) -> Iterator[None]:
-    """Hold the holder rule to the end of several steps that are one write.
+def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
+    """Hold the holder rule and the container marks to the end of several steps that are one write.
 
     A batch is one write: a task at work that lost its last holder in one step and
     went to review in the next went from work to review, not by way of ready. So
     inside this block `_settle` only notes the item, and the end of the block
-    settles each item once, as the last step left it.
+    settles each item once, as the last step left it. The goals and stages the steps
+    changed the work under are settled after that, once (`marking`), and the list
+    this yields names, after the block, those that came to await confirmation.
+
+    A block inside another joins it: the outer block's end settles both, and the
+    inner one's list stays empty.
     """
 
-    pending: dict[str, tuple[str | None, str]] = {}
-    token = _UNSETTLED.set(pending)
-    try:
-        yield
-    finally:
-        _UNSETTLED.reset(token)
-    for identity, (author, reason) in pending.items():
-        _hand_back(conn, identity, author, reason)
+    with marking(conn) as entered:
+        if _UNSETTLED.get() is not None:
+            yield entered
+            return
+        pending: dict[str, tuple[str | None, str]] = {}
+        token = _UNSETTLED.set(pending)
+        try:
+            yield entered
+        finally:
+            _UNSETTLED.reset(token)
+        for identity, (author, reason) in pending.items():
+            _hand_back(conn, identity, author, reason)
+
+
+@contextlib.contextmanager
+def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> Iterator[list[str]]:
+    """The container marks of one write (`closing.frame`), without the holder rule's wait.
+
+    Every write route opens it, and so does every write here that changes the work
+    under a goal or stage, so no path passes it by; one inside another joins it. At
+    the end of the outermost the marked containers enter or leave the wait for their
+    confirmation, the words left on one that stopped waiting go (`waiting.drop`), and
+    the list this yields names the references of those that came to wait.
+
+    `person` is where the history stood before a person's write, which the route
+    passes to the frame it opens: what that write told nobody is left for the next
+    session (`waiting.after_person`) after the wait is settled, so what entering it
+    recorded counts, and before the words on a container that stopped waiting go, so
+    a person's act that ended the wait leaves no words behind it.
+    """
+
+    with closing.frame(conn) as settled:
+        yield settled.entered
+    if person is not None:
+        waiting.after_person(conn, person)
+    for identity in settled.left:
+        waiting.drop(conn, identity)
 
 
 def _settle(
@@ -1807,6 +2781,8 @@ def claim_ready_work_item(
     # first, the item then reads unheld to the rule below. A lease in its grace
     # is still held, so the queue neither gives that item nor releases it.
     expire_leases(conn, space_id=scope.space_id)
+    # So does work put off until a day that came: the queue reads the space as it is.
+    return_due(conn, space_id=scope.space_id)
     lost: model.RevisionConflictError | None = None
     for _ in range(_READY_CLAIM_ATTEMPTS):
         chosen = _next_given(conn, scope)
@@ -1940,6 +2916,11 @@ def set_checklist(
     and ticking it are one history; a step is reopened by a tick, not by
     leaving `done` out. A step that names an `id` the item does not have is one
     being carried over from elsewhere, and keeps the state it carries.
+
+    Every step the new list leaves out is recorded `checklist_removed` with its
+    text, and every step repeated by its `id` with another text with the text it
+    had: that wording is gone, and a tick made under it now stands under the new
+    one, which the item's close is to name.
     """
 
     row = _row_for_write(conn, reference, expected_revision)
@@ -1953,6 +2934,7 @@ def set_checklist(
     kept: set[str] = set()
     replacement: list[dict] = []
     completed: list[dict] = []
+    rewritten: list[str] = []
     guards: list[str] = []
     for step, raw in zip(sent_steps, sent, strict=True):
         named = raw.get("id") if isinstance(raw, dict) else None
@@ -1973,6 +2955,8 @@ def set_checklist(
             replacement.append(step)
             continue
         kept.add(match["id"])
+        if match["text"] != step["text"]:
+            rewritten.append(str(match["text"]))
         same = {**match, "text": step["text"]}
         if step["done"] and not match["done"]:
             held = match["claimed_by"]
@@ -2006,7 +2990,10 @@ def set_checklist(
     _keep_held(conn, row, str(row["claim_ref"]), replacement)
     identity = str(row["work_item_id"])
     _write_checklist(conn, row, replacement, completed, author)
-    overridden = _record_overrides(conn, identity, guards, author)
+    removed = [str(step["text"]) for step in existing if step["id"] not in kept]
+    for text in (*removed, *rewritten):
+        _log(conn, identity, "checklist_removed", text[:120], author)
+    overridden = record_overrides(conn, identity, guards, author)
     # A step completed or dropped here ends its claim, which may have been the last holder.
     _settle(conn, identity, author, "steps replaced")
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
@@ -2031,7 +3018,7 @@ def _write_checklist(
         _log(conn, identity, "checklist_completed", step["text"][:120], author)
 
 
-def _record_overrides(
+def record_overrides(
     conn: sqlite3.Connection, identity: str, guards: list[str], author: str | None
 ) -> list[str]:
     """Record the refusals a `force` carried through, as one `overridden` event; the guards named.
@@ -2108,7 +3095,7 @@ def claim_checklist_item(
     _started(conn, identity, start, author, "claimed")
     if not release:
         waiting.deliver(conn, row)
-    overridden = _record_overrides(conn, identity, carried, author)
+    overridden = record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     _say_started(conn, answer, start)
@@ -2154,7 +3141,7 @@ def tick_checklist_item(
         step["text"][:120],
         author,
     )
-    overridden = _record_overrides(conn, identity, ["checklist_claim"] if theirs else [], author)
+    overridden = record_overrides(conn, identity, ["checklist_claim"] if theirs else [], author)
     # A tick ends the step's claim, which may have been the last holder of the task.
     requeued = _settle(conn, identity, author, "step completed") if done else None
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
@@ -2227,6 +3214,7 @@ def link_work_items(
 MAX_MERGE_ITEMS = 20
 
 
+@_marked
 def merge_work_items(
     conn: sqlite3.Connection,
     reference: str,
@@ -2263,7 +3251,7 @@ def merge_work_items(
 
     survivor = _row_for_write(conn, reference, expected_revision)
     merged = _merged_rows(conn, survivor, items)
-    overridden = _merge_claims(conn, [survivor, *merged], author, force)
+    overridden = held_elsewhere(conn, [survivor, *merged], author, force)
     spoke = _merge_spoke(conn, merged, force)
     steps = model.checklist(survivor["checklist"])
     moving = [model.checklist(row["checklist"]) for row in merged]
@@ -2273,7 +3261,7 @@ def merge_work_items(
             f"{read_model.reference(conn, survivor)} would hold {total} checklist steps;"
             f" a checklist holds at most {model.MAX_CHECKLIST}"
         )
-    closing = []
+    cancels = []
     for row in merged:
         target = states.cancel_state(conn, row)
         if target is None:
@@ -2281,7 +3269,7 @@ def merge_work_items(
                 f"{read_model.reference(conn, row)} cannot close as a duplicate: its workflow"
                 " has no cancelled state it can move to"
             )
-        closing.append(target)
+        cancels.append(target)
     note = model.text_field(reason, "reason", limit=512, required=False)
     conn.execute("SAVEPOINT planning_merge")
     try:
@@ -2289,7 +3277,7 @@ def merge_work_items(
             conn,
             survivor,
             steps,
-            list(zip(merged, moving, closing, strict=True)),
+            list(zip(merged, moving, cancels, strict=True)),
             overridden=overridden,
             spoke=spoke,
             note=note,
@@ -2354,14 +3342,21 @@ def _merged_rows(
     return rows
 
 
-def _merge_claims(
-    conn: sqlite3.Connection, rows: list[sqlite3.Row], author: str | None, force: bool
+def held_elsewhere(
+    conn: sqlite3.Connection,
+    rows: list[sqlite3.Row],
+    author: str | None,
+    force: bool,
+    *,
+    doing: str = "merge it",
 ) -> dict[str, str]:
-    """The claims of other sessions a merge would override, by item id.
+    """The claims of other sessions a write would override, by item id; refused without `force`.
 
     Moving steps into an item someone else holds changes their work, and closing
-    an item someone else holds ends it, so either needs `force`. An abandoned
-    lease (`leases.abandoned`) is nobody's work any more and does not stand in the way.
+    an item someone else holds ends it, so a merge needs `force`, and so does an
+    action that takes the item from its holder's work (`split`). `doing` says what
+    `force` would do anyway, in the refusal. An abandoned lease (`leases.abandoned`)
+    is nobody's work any more and does not stand in the way.
     """
 
     actor = model.actor(author)
@@ -2374,7 +3369,7 @@ def _merge_claims(
         if not force:
             raise model.PlanningError(
                 f"{read_model.reference(conn, row)} is held by {lease.holder};"
-                " pass force to merge it anyway"
+                f" pass force to {doing} anyway"
             )
         overridden[str(row["work_item_id"])] = lease.holder
     return overridden
@@ -2437,7 +3432,7 @@ def _fold(
     warnings: list[str] = []
     forced: list[str] = []
     if survivor_id in overridden:
-        _record_overrides(conn, survivor_id, ["claim"], author)
+        record_overrides(conn, survivor_id, ["claim"], author)
         forced.append(f"{survivor_ref}: claim")
     for row, found, target in merging:
         identity = str(row["work_item_id"])
@@ -2490,7 +3485,7 @@ def _fold(
             _hold(conn, current, "")
             _log(conn, identity, "released", str(current["claim_ref"]), author)
         if identity in overridden:
-            _record_overrides(conn, identity, ["claim"], author)
+            record_overrides(conn, identity, ["claim"], author)
             forced.append(f"{reference}: claim")
         summary = {
             "done": f"Merged into {survivor_ref}, which now holds its {_counts(moved)}.",
@@ -2499,6 +3494,9 @@ def _fold(
         if note:
             summary["why"] = note
         set_summary(conn, identity, summary, author=author)
+        # What was put off until it waits for the survivor, which holds its work now,
+        # before its close would bring that back.
+        deferral.repoint(conn, identity, survivor_id, involved)
         closed = transition_work_item(
             conn,
             identity,
@@ -2511,7 +3509,7 @@ def _fold(
         guards = closed.get("overridden", [])
         forced.extend(f"{reference}: {guard}" for guard in guards)
         if identity in spoke and "person_spoke" not in guards:
-            _record_overrides(conn, identity, ["person_spoke"], author)
+            record_overrides(conn, identity, ["person_spoke"], author)
             forced.append(f"{reference}: person_spoke")
         parent = row["parent_id"]
         if parent and parent not in (survivor["parent_id"], survivor_id):

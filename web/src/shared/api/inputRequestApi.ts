@@ -15,7 +15,7 @@ import { WEB_AUTHOR } from '@/shared/api/webAuthor.ts'
 
 export class InputRequestError extends Error {
   readonly code: string
-  /** The server's bracketed word on why, such as `task_closed`; empty when it gave none. */
+  /** The server's bracketed word on why, such as `item_closed`; empty when it gave none. */
   readonly reason: string
   readonly status: number
 

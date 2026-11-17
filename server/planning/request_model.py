@@ -9,6 +9,88 @@ from datetime import UTC, datetime
 from . import model
 
 STATUSES = frozenset({"pending", "answered", "declined", "expired"})
+#: Why a request ended unanswered, as the store writes it: past its deadline, taken
+#: back, its execution over, or its item closed, done or cancelled (`questions.end`).
+#: What is only read and never written, such as `session_gone`, is not among them.
+EXPIRED_REASONS = ("deadline", "withdrawn", "execution_closed", "item_completed", "item_cancelled")
+#: What a question to the owner asks for beyond an answer: a task in review to be
+#: accepted, a goal or stage whose work is all closed to be confirmed, put-off work
+#: that came back to be taken up again. Null on any other request. Declared here,
+#: beside the statuses, because the store's CHECK reads it.
+PURPOSES = ("review", "confirm", "return")
+#: The field of the question a move into review asks, by what its answer carries out:
+#: `accept` completes the work, `return` sends it back to work. The question's note
+#: is the owner's comment on either.
+REVIEW_ANSWER = "answer"
+REVIEW_ACCEPT = "accept"
+REVIEW_RETURN = "return"
+REVIEW_FIELDS = (
+    {
+        "id": REVIEW_ANSWER,
+        "label": "Answer",
+        "type": "choice",
+        "required": True,
+        "options": [
+            {"id": REVIEW_ACCEPT, "label": "Accept it"},
+            {"id": REVIEW_RETURN, "label": "Return it to work"},
+        ],
+    },
+)
+#: The field of the question that asks the owner to confirm a goal or stage whose work
+#: is all closed, under the same id as review's: `confirm` completes it, `leave` leaves
+#: it to the next session that takes work in its space.
+CONFIRM_CONFIRM = "confirm"
+CONFIRM_LEAVE = "leave"
+CONFIRM_FIELDS = (
+    {
+        "id": REVIEW_ANSWER,
+        "label": "Answer",
+        "type": "choice",
+        "required": True,
+        "options": [
+            {"id": CONFIRM_CONFIRM, "label": "Confirm it"},
+            {"id": CONFIRM_LEAVE, "label": "Leave it to the next session"},
+        ],
+    },
+)
+#: The fields of the question put-off work asks when its condition came under goals
+#: and stages all accepted: `do` takes it up, `later` puts it off again until `until`
+#: (a day or an item's reference, as `defer` reads it), and `drop` cancels it, with
+#: `cancels` the list token a goal or stage with open work under it is cancelled by.
+RETURN_DO = "do"
+RETURN_LATER = "later"
+RETURN_DROP = "drop"
+RETURN_UNTIL = "until"
+RETURN_CANCELS = "cancels"
+RETURN_FIELDS = (
+    {
+        "id": REVIEW_ANSWER,
+        "label": "Answer",
+        "type": "choice",
+        "required": True,
+        "options": [
+            {"id": RETURN_DO, "label": "Do it"},
+            {"id": RETURN_LATER, "label": "Put it off again"},
+            {"id": RETURN_DROP, "label": "Drop it"},
+        ],
+    },
+    {
+        "id": RETURN_UNTIL,
+        "label": "Until: a day YYYY-MM-DD or the item it waits on",
+        "type": "text",
+        "required": True,
+        "options": [],
+        "under": {"field": REVIEW_ANSWER, "option": RETURN_LATER},
+    },
+    {
+        "id": RETURN_CANCELS,
+        "label": "The list token, for a goal or stage with open work under it",
+        "type": "text",
+        "required": False,
+        "options": [],
+        "under": {"field": REVIEW_ANSWER, "option": RETURN_DROP},
+    },
+)
 MAX_NOTE = 8000
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each
@@ -885,7 +967,8 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
     `last_reply` quotes its latest reply as a thread's root carries it. A review
     adds `verdicts` and `undecided`, which stand whole before any row, and a list
     on a comment `comment_id`, the comment it stands under, and `undecided`, its
-    field while nothing on it is ticked.
+    field while nothing on it is ticked. One that ended unanswered says why in
+    `expired_reason`, and one with a purpose names it in `purpose`.
     `clipped` appears when anything was left out or cut: past `MAX_COMPACT_TEXT`
     in a text, or past `MAX_COMPACT_JSON` the replaced answer first, then every
     label, then the later fields of the current one.
@@ -904,6 +987,10 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
         "question": prompt[:QUESTION_PREVIEW] + ("…" if len(prompt) > QUESTION_PREVIEW else ""),
         # Only a list stands under a comment, and only a list says which.
         **({"comment_id": record["comment_id"]} if listed else {}),
+        # Why one ended unanswered, done or cancelled among it, and what one with a
+        # purpose carries out: each only where it is set.
+        **({"expired_reason": record["expired_reason"]} if record.get("expired_reason") else {}),
+        **({"purpose": record["purpose"]} if record.get("purpose") else {}),
         **(_verdicts(descriptors, record) if review else {}),
         **(_list_undecided(descriptors, record) if listed else {}),
         "answer": [],

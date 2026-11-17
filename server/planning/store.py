@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from . import model
+from . import model, request_model
 
 _EVENT_ACTION_SQL = ",".join(f"'{action}'" for action in model.EVENT_ACTIONS)
 _CATEGORY_SQL = ",".join(f"'{category}'" for category in model.STORED_CATEGORIES)
@@ -73,7 +73,7 @@ def _appended(table: str) -> str:
 
 #: The agent session a request asks instead of the owner, a top-level one; null asks
 #: the owner. The 3.0 migration appends it after the columns above, so the base
-#: schema declares it last and both stores have one order.
+#: schema declares it after them, with only `purpose` behind it.
 ADDRESSEE_COLUMN = "addressee TEXT REFERENCES sessions(id)"
 #: The open requests asked of one session, read by that session.
 ADDRESSEE_INDEX = (
@@ -109,6 +109,45 @@ WAITING_OPEN_INDEX = (
 WAITING_DELIVERED_INDEX = (
     "CREATE INDEX IF NOT EXISTS work_item_waiting_notices_delivered"
     " ON work_item_waiting_notices(delivered_session, notice_id) WHERE delivered_call IS NOT NULL"
+)
+#: A goal or stage that awaits confirmation, one row for exactly as long as it does
+#: (`planning.closing`): since when, the call that recorded it -- Valkama's call that
+#: wrote the event, or the sweep step's that wrote the row; none for a row the
+#: work-model migration wrote -- the question to confirm it, once asked, and when the
+#: owner left it to the next session. It goes with the item.
+CONFIRMATIONS = """CREATE TABLE IF NOT EXISTS work_item_confirmations(
+    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    since TEXT NOT NULL,
+    call_id INTEGER REFERENCES execution_events(id),
+    request_id TEXT REFERENCES work_item_requests(request_id),
+    left_at TEXT
+)"""
+#: The condition put-off work comes back on (`planning.deferral`), one row for exactly
+#: as long as its item stands in a deferred state: a moment, or another item's close,
+#: never both. The item it waits on is held without an action on delete, so a delete
+#: that went around the return fails rather than leaving the condition unmet forever.
+#: `call_id` is the call that set it -- the put-off, or the owner's answer to put it
+#: off again -- which a failed launch's put-back keeps, null for a write made outside
+#: any call; `reached_at` is when it came and the owner was asked instead. It goes
+#: with the item.
+DEFERRALS = """CREATE TABLE IF NOT EXISTS work_item_deferrals(
+    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    until_at TEXT,
+    until_item_id TEXT REFERENCES work_items(work_item_id),
+    reason TEXT NOT NULL,
+    call_id INTEGER REFERENCES execution_events(id),
+    since TEXT NOT NULL,
+    reached_at TEXT,
+    CHECK((until_at IS NULL) <> (until_item_id IS NULL))
+)"""
+#: What comes due by the clock, and who waits on one item, each read by its own column.
+DEFERRALS_UNTIL_AT_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_item_deferrals_until_at"
+    " ON work_item_deferrals(until_at) WHERE until_at IS NOT NULL"
+)
+DEFERRALS_UNTIL_ITEM_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_item_deferrals_until_item"
+    " ON work_item_deferrals(until_item_id) WHERE until_item_id IS NOT NULL"
 )
 
 
@@ -230,11 +269,38 @@ _WORK_ITEM_REFS = f"""(
     call_id INTEGER REFERENCES execution_events(id),
     UNIQUE(work_item_id, kind, value)
 )"""
+_EXPIRED_REASON_SQL = ",".join(f"'{reason}'" for reason in request_model.EXPIRED_REASONS)
+_PURPOSE_SQL = ",".join(f"'{purpose}'" for purpose in request_model.PURPOSES)
+#: A question, a decision or a list, asked of the owner or of one agent session, and
+#: how it ended. Closing its item ends one still pending (`questions.end`), as done or
+#: cancelled. The 3.0 migration rebuilds the table from this text, so the columns
+#: later schemas appended stand in the order they were appended, `purpose` last.
+_WORK_ITEM_REQUESTS = f"""(
+    request_id TEXT PRIMARY KEY,
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK(kind IN ('question','decision')),
+    prompt TEXT NOT NULL,
+    fields_json TEXT NOT NULL,
+    answers_json TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','answered','declined','expired')),
+    author TEXT NOT NULL,
+    answered_by TEXT NOT NULL DEFAULT '',
+    execution_id TEXT REFERENCES executions(execution_id),
+    session_id TEXT REFERENCES sessions(id),
+    expires_at TEXT,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT,
+    revision INTEGER NOT NULL DEFAULT 0,
+    expired_reason TEXT CHECK(expired_reason IN ({_EXPIRED_REASON_SQL})){_appended("work_item_requests")},
+    {ADDRESSEE_COLUMN},
+    purpose TEXT CHECK(purpose IS NULL OR purpose IN ({_PURPOSE_SQL}))
+)"""
 _REBUILT = {
     "planning_spaces": _PLANNING_SPACES,
     "workflow_states": _WORKFLOW_STATES,
     "work_items": _WORK_ITEMS,
     "work_item_refs": _WORK_ITEM_REFS,
+    "work_item_requests": _WORK_ITEM_REQUESTS,
 }
 #: The items of one state of one space, which every read of a state's items takes.
 #: Declared apart because the 3.0 migration creates it anew rather than from the
@@ -366,25 +432,7 @@ CREATE TABLE IF NOT EXISTS work_item_events(
     call_id INTEGER REFERENCES execution_events(id)
 );
 CREATE INDEX IF NOT EXISTS work_item_events_item ON work_item_events(work_item_id, id);
-CREATE TABLE IF NOT EXISTS work_item_requests(
-    request_id TEXT PRIMARY KEY,
-    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK(kind IN ('question','decision')),
-    prompt TEXT NOT NULL,
-    fields_json TEXT NOT NULL,
-    answers_json TEXT,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','answered','declined','expired')),
-    author TEXT NOT NULL,
-    answered_by TEXT NOT NULL DEFAULT '',
-    execution_id TEXT REFERENCES executions(execution_id),
-    session_id TEXT REFERENCES sessions(id),
-    expires_at TEXT,
-    created_at TEXT NOT NULL,
-    resolved_at TEXT,
-    revision INTEGER NOT NULL DEFAULT 0,
-    expired_reason TEXT CHECK(expired_reason IN ('deadline','withdrawn','execution_closed','task_closed')){_appended("work_item_requests")},
-    {ADDRESSEE_COLUMN}
-);
+CREATE TABLE IF NOT EXISTS work_item_requests{_WORK_ITEM_REQUESTS};
 CREATE INDEX IF NOT EXISTS work_item_requests_item ON work_item_requests(work_item_id,created_at);
 {ADDRESSEE_INDEX};
 -- The answers a question's current one replaced, one row per version. The
@@ -443,6 +491,10 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {WAITING_NOTICES};
 {WAITING_OPEN_INDEX};
 {WAITING_DELIVERED_INDEX};
+{CONFIRMATIONS};
+{DEFERRALS};
+{DEFERRALS_UNTIL_AT_INDEX};
+{DEFERRALS_UNTIL_ITEM_INDEX};
 
 {_ITEM_PROJECTS}
 {_COMMITS}
@@ -861,6 +913,8 @@ SCHEMA_TABLES = (
     "work_item_subscriptions",
     "work_item_images",
     "work_item_waiting_notices",
+    "work_item_confirmations",
+    "work_item_deferrals",
     "work_item_projects",
     "commits",
     "work_item_commits",

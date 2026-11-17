@@ -118,6 +118,12 @@ _ROWS: dict[str, dict[str, object]] = {
     },
     "work_item_comments": {"work_item_id": _NEW, "body": "probe"},
     "work_item_commits": {"work_item_id": _NEW, "commit_id": 0, "attached_by": "server"},
+    "work_item_deferrals": {
+        "work_item_id": _NEW,
+        "until_at": "2026-12-01T00:00:00Z",
+        "reason": "probe",
+        "since": "probe",
+    },
     "work_item_events": {"work_item_id": _NEW, "action": "created"},
     "work_item_images": {
         "work_item_id": _NEW,
@@ -244,6 +250,10 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
         ({"size": 10485760},),
     ),
     ("work_items", "number >= 1"): (({"number": 0},), ()),
+    ("work_item_deferrals", "(until_at IS NULL) <> (until_item_id IS NULL)"): (
+        ({"until_at": None}, {"until_item_id": "probe"}),
+        ({"until_at": None, "until_item_id": "probe"},),
+    ),
     ("work_item_waiting_notices", "(delivered_call IS NULL) = (delivered_at IS NULL)"): (
         ({"delivered_call": 1}, {"delivered_at": "probe"}),
         ({"delivered_call": 1, "delivered_at": "probe"},),
@@ -264,6 +274,7 @@ _RETIRED: dict[tuple[str, str], tuple[object, ...]] = {
     ("workflow_states", "category"): ("backlog", "queued"),
     ("work_items", "kind"): ("epic",),
     ("work_item_refs", "kind"): ("commit",),
+    ("work_item_requests", "expired_reason"): ("task_closed",),
 }
 
 _LITERAL = r"'(?:[^']|'')*'|-?\d+"

@@ -30,6 +30,8 @@ UPDATE = "/api/planning/work-item/update"
 COMMENT = "/api/planning/work-item/comment"
 QUESTION = {"kind": "question", "prompt": "Which path?", "fields": FIELDS}
 SUMMARY = {"done": "The change", "next": "Nothing"}
+#: A move into review: it asks the owner what to check.
+REVIEW = {"state": "review", "to_check": "The path chosen"}
 
 
 class BatchCase(ThreadTestCase):
@@ -46,11 +48,17 @@ class BatchCase(ThreadTestCase):
     def apply(self, **groups: object) -> dict:
         return self.agent(BATCH, id=self.ref, **groups)
 
-    def goal(self, title: str) -> str:
+    def goal(self, title: str, *, accepted: bool = False) -> str:
         """A goal: what an item stands under, a task holding no children."""
 
         return str(
-            service.create_work_item(self.conn, space="TALK", title=title, kind="goal")["reference"]
+            service.create_work_item(
+                self.conn,
+                space="TALK",
+                title=title,
+                kind="goal",
+                acceptance=model.NAMED_BASIS if accepted else None,
+            )["reference"]
         )
 
     def refused(self, name: str, **arguments: object) -> dict:
@@ -150,14 +158,30 @@ class UpdateGroupTests(BatchCase):
             self.assertEqual(alone[name], row[name], name)
         self.assertEqual((calls.CONFIRMED, SESSION), (row["identity_state"], row["session_id"]))
 
-    def test_an_edit_names_only_what_was_sent_and_a_cleared_parent_is_sent(self) -> None:
+    def test_an_edit_names_only_what_was_sent_and_a_new_parent_is_sent(self) -> None:
+        parent = self.goal("An epic")
+        other = self.goal("Another epic")
+        service.update_work_item(self.conn, self.ref, parent=parent)
+        self.conn.commit()
+        answer = self.apply(update={"title": "Renamed", "parent": other, "kind": None})
+        self.assertEqual(["title", "parent"], answer["applied"]["update"])
+        record = self.record()
+        self.assertEqual(
+            ("Renamed", self.record(other)["work_item_id"]), (record["title"], record["parent_id"])
+        )
+
+    def test_an_edit_that_clears_the_parent_is_refused_naming_move_out(self) -> None:
         parent = self.goal("An epic")
         service.update_work_item(self.conn, self.ref, parent=parent)
         self.conn.commit()
-        answer = self.apply(update={"title": "Renamed", "parent": "", "kind": None})
-        self.assertEqual(["title", "parent"], answer["applied"]["update"])
-        record = self.record()
-        self.assertEqual(("Renamed", None), (record["title"], record["parent_id"]))
+        before = self.untouched()
+        error = self.refused_batch(update={"title": "Renamed", "parent": ""})
+        self.assertEqual({"group": "update", "index": 0}, error["step"])
+        self.assertEqual("invalid_request", error["code"])
+        self.assertIn("[parent]", error["message"])
+        self.assertIn("move_out", error["message"])
+        self.assertEqual(before, self.untouched())
+        self.assertEqual(self.record(parent)["work_item_id"], self.record()["parent_id"])
 
     def test_an_edit_of_nothing_names_nothing_and_writes_nothing(self) -> None:
         before = self.record()["revision"]
@@ -450,6 +474,13 @@ class QuestionsGroupTests(BatchCase):
         self.assertEqual(before, self.untouched())
 
 
+#: The refusal of a question beside the close that would end it, word for word.
+ENDS_UNANSWERED = (
+    "transition: a question on an item this call closes would end unanswered in the"
+    " same write: ask it in a call that leaves the item open"
+)
+
+
 class AskingAndClosingTests(BatchCase):
     def closing(self, state: str, **force: object) -> dict:
         return {
@@ -459,29 +490,54 @@ class AskingAndClosingTests(BatchCase):
             "transition": {"state": state, **force},
         }
 
-    def test_a_batch_that_asks_and_closes_is_refused_and_says_why(self) -> None:
-        for state in ("done", "cancelled"):
-            with self.subTest(state=state):
-                before = self.untouched()
-                error = self.refused_batch(**self.closing(state))
-                self.assertEqual("invalid_request", error["code"])
-                self.assertEqual({"group": "transition", "index": 0}, error["step"])
-                self.assertEqual(
-                    "transition: a question on an item this call closes could never be"
-                    " answered; move it to review, or leave the question out",
-                    error["message"],
-                )
-                self.assertEqual(before, self.untouched())
+    def test_a_batch_that_asks_and_cancels_is_refused_and_says_why(self) -> None:
+        before = self.untouched()
+        error = self.refused_batch(**self.closing("cancelled"))
+        self.assertEqual("invalid_request", error["code"])
+        self.assertEqual({"group": "transition", "index": 0}, error["step"])
+        self.assertEqual(ENDS_UNANSWERED, error["message"])
+        self.assertEqual(before, self.untouched())
+
+    def test_a_batch_that_asks_and_completes_is_refused_and_writes_nothing(self) -> None:
+        # An agent meets the guard on a close over an open question to the owner first,
+        # the question its own batch asked included, and nothing of the batch stands.
+        before = self.untouched()
+        error = self.refused_batch(**self.closing("done"))
+        self.assertEqual(
+            ("workflow_guard", {"group": "transition", "index": 0}), (error["code"], error["step"])
+        )
+        self.assertIn("[question]", error["message"])
+        self.assertEqual(before, self.untouched())
+
+    def test_a_person_who_asks_and_closes_in_one_write_is_refused_the_same(self) -> None:
+        before = self.untouched()
+        payload = {
+            "id": self.ref,
+            "questions": [QUESTION],
+            "summary": SUMMARY,
+            "transition": {"state": "done"},
+        }
+        with self.assertRaises(api.PlanningHttpError) as caught:
+            with calls.bind(calls.browser(), "/api/planning/work-item/apply"):
+                api.handle_post(self.conn, "/api/planning/work-item/apply", payload)
+        self.conn.commit()
+        status, body = api.error_response(caught.exception)
+        self.assertEqual(400, status)
+        self.assertEqual(
+            ("invalid_request", ENDS_UNANSWERED, {"group": "transition", "index": 0}),
+            (body["error"]["code"], body["error"]["message"], body["error"]["step"]),
+        )
+        self.assertEqual(before, self.untouched())
 
     def test_force_does_not_carry_it_through(self) -> None:
         # force overrides a guard; here there is nothing to override, only a question to lose.
         before = self.untouched()
-        error = self.refused_batch(**self.closing("done", force=True))
+        error = self.refused_batch(**self.closing("cancelled", force=True))
         self.assertEqual("invalid_request", error["code"])
         self.assertEqual(before, self.untouched())
 
     def test_a_batch_that_asks_and_moves_to_review_keeps_the_question_open(self) -> None:
-        answer = self.apply(claim=True, questions=[QUESTION], transition={"state": "review"})
+        answer = self.apply(claim=True, questions=[QUESTION], summary=SUMMARY, transition=REVIEW)
         self.assertEqual("review", answer["state"]["key"])
         [asked] = answer["applied"]["questions"]
         self.assertEqual(
@@ -490,17 +546,25 @@ class AskingAndClosingTests(BatchCase):
 
     def test_a_close_with_no_question_in_it_stands_as_the_single_transition_does(self) -> None:
         # Only a question this very call asks is lost unseen: one asked before has
-        # had its chance, and closing over it reads it expired, as it always did.
+        # had its chance, and the person's close ends it, saying the item was done. An
+        # agent's close waits for the owner's answer instead (the question guard).
         asked = self.question()
-        answer = self.apply(claim=True, summary=SUMMARY, transition={"state": "done"})
+        path = "/api/planning/work-item/apply"
+        with calls.bind(calls.browser(), path):
+            payload = {"id": self.ref, "summary": SUMMARY, "transition": {"state": "done"}}
+            answer = api.handle_post(self.conn, path, payload)[1]  # type: ignore[index]
+        self.conn.commit()
         self.assertEqual("done", answer["state"]["key"])
         closed = self.agent("get_work_item_request", id=asked)
-        self.assertEqual(("expired", "task_closed"), (closed["status"], closed["expired_reason"]))
+        self.assertEqual(
+            ("expired", "item_completed"), (closed["status"], closed["expired_reason"])
+        )
 
 
 class EditingAndClosingTests(BatchCase):
     def test_a_new_parent_and_kind_land_with_the_close_that_follows_them(self) -> None:
-        parent = self.goal("An epic")
+        # The claim accepts the item, and accepted work moves only under accepted goals.
+        parent = self.goal("An epic", accepted=True)
         self.conn.commit()
         answer = self.apply(
             claim=True,
@@ -519,7 +583,7 @@ class EditingAndClosingTests(BatchCase):
         parent = self.item("A task")
         self.conn.commit()
         before = self.untouched()
-        # A task holds no children.
+        # A task holds no children: the refusal names the conversion that passes.
         error = self.refused_batch(
             claim=True,
             update={"parent": parent},
@@ -527,7 +591,8 @@ class EditingAndClosingTests(BatchCase):
             transition={"state": "done"},
         )
         self.assertEqual({"group": "update", "index": 0}, error["step"])
-        self.assertIn("a task holds no children", error["message"])
+        self.assertIn("is a task and holds no children", error["message"])
+        self.assertIn("convert {to: goal}", error["message"])
         self.assertEqual(before, self.untouched())
 
     def test_an_edit_and_a_close_land_on_a_closed_item_as_the_single_tools_do(self) -> None:
@@ -686,6 +751,7 @@ class OrderTests(BatchCase):
                 "claim",
                 "subscribe",
                 "update",
+                "convert",
                 "checklist",
                 "checklist_ticks",
                 "refs",
@@ -697,6 +763,8 @@ class OrderTests(BatchCase):
                 "questions",
                 "summary",
                 "transition",
+                "defer",
+                "move_out",
             ),
             tuple(group for group, _fields in api.APPLY_GROUPS),
         )
@@ -710,7 +778,7 @@ class OrderTests(BatchCase):
 
         answer = self.apply(
             author="one",
-            transition={"state": "review"},
+            transition=REVIEW,
             summary=SUMMARY,
             questions=[QUESTION],
             resolutions=[{"comment_id": root, "resolution": "Settled"}],
@@ -718,7 +786,7 @@ class OrderTests(BatchCase):
             links=[{"other": other, "kind": "relates-to"}],
             refs=[{"kind": "memory", "value": "abc1234"}],
             checklist_ticks=[{"item_id": step}],
-            checklist={"items": ["one", "two"]},
+            checklist={"items": ["one", {"text": "two", "done": True}]},
             update={"title": "Renamed"},
             claim=True,
         )
@@ -730,12 +798,15 @@ class OrderTests(BatchCase):
                 "transitioned",
                 "checklist_replaced",
                 "checklist_completed",
+                "checklist_completed",
                 "linked",
                 "comment_resolved",
                 "request_created",
                 "summarized",
                 "transitioned",
                 "released",
+                # The question the move into review asks, after the move.
+                "request_created",
             ],
             self.actions()[recorded:],
         )
@@ -748,8 +819,11 @@ class OrderTests(BatchCase):
         self.assertEqual(
             comments, [entry["comment_id"] for entry in applied["comments"]], "every new comment"
         )
+        review = applied["transition"]["review_request_id"]
         [request] = [
-            event["detail"] for event in record["events"] if event["action"] == "request_created"
+            event["detail"]
+            for event in record["events"]
+            if event["action"] == "request_created" and event["detail"] != review
         ]
         self.assertEqual([{"request_id": request, "revision": 0}], applied["questions"])
         self.assertEqual(
@@ -819,7 +893,7 @@ class AllOrNothingTests(BatchCase):
         return {
             "claim": True,
             "update": {"title": "Renamed"},
-            "checklist": {"items": ["one", "two"]},
+            "checklist": {"items": ["one", {"text": "two", "done": True}]},
             "checklist_ticks": [{"item_id": self.step}],
             "refs": [{"kind": "memory", "value": "abc1234"}],
             "links": [{"other": self.other, "kind": "relates-to"}],
@@ -827,7 +901,7 @@ class AllOrNothingTests(BatchCase):
             "resolutions": [{"comment_id": self.root, "resolution": "Settled"}],
             "questions": [QUESTION, QUESTION, QUESTION],
             "summary": SUMMARY,
-            "transition": {"state": "review"},
+            "transition": REVIEW,
             **wrong,
         }
 
@@ -896,8 +970,9 @@ class PublishedSchemaTests(unittest.TestCase):
     def test_the_description_states_the_order(self) -> None:
         tool = next(entry for entry in tools.TOOLS if entry["name"] == BATCH)
         self.assertIn(
-            "claim, subscribe, update, checklist, checklist_ticks, refs, commits, links, comment or"
-            " comments, resolutions, questions, summary, transition",
+            "claim, subscribe, update, convert, checklist, checklist_ticks, refs, commits, links,"
+            " comment or comments, resolutions, questions, summary, then one of transition,"
+            " defer or move_out",
             tool["description"],
         )
 
