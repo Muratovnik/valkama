@@ -179,7 +179,6 @@ STALE_SECONDS = 86400.0
 _LOCK_ATTEMPTS = 25
 _LOCK_PAUSE = 0.02
 _PLAIN = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:-")
-_FILE_SAFE = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
 
 
 # --- input and output ---------------------------------------------------------
@@ -376,17 +375,16 @@ def holder_suffix(session_id: str, agent_id: str | None) -> str:
     return f" agent {label_id(agent_id)} {suffix}" if agent_id else suffix
 
 
-def _file_key(value: str) -> str:
-    if 0 < len(value) <= 128 and all(ch in _FILE_SAFE for ch in value):
-        return value
-    import hashlib
-
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
-
-
 def recipient_key(session_id: str, agent_id: str | None) -> str:
-    key = _file_key(session_id)
-    return f"{key}--{_file_key(agent_id)}" if agent_id else key
+    """The name of a recipient's place files; a session's commit records start with its key.
+
+    Imported here: the call pair loads this module and needs no record.
+    """
+
+    from .commit_records import file_key
+
+    key = file_key(session_id)
+    return f"{key}--{file_key(agent_id)}" if agent_id else key
 
 
 # --- what is new ----------------------------------------------------------------
