@@ -73,6 +73,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'card-goal.json': (value) => validatePlanningWorkItemPayload(value),
   'card-deferred.json': (value) => validatePlanningWorkItemPayload(value),
   'card-returned.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-converted.json': (value) => validatePlanningWorkItemPayload(value),
   'comment-reply.json': validateCommentWritten,
   'comment-resolved.json': validateCommentResolved,
   'description-told.json': (value) => validateWorkItemRecord(value),
@@ -198,6 +199,21 @@ describe('the server fixtures', () => {
       'deleted',
     ])
     expect(back.events.at(-1)?.action).toBe('returned')
+  })
+
+  it('read a task converted into a goal as the goal it became', () => {
+    const goal = cardItem('card-converted.json')
+    expect([goal.kind, goal.state, goal.container_state, goal.labels]).toEqual([
+      'goal',
+      null,
+      'in_progress',
+      ['bug'],
+    ])
+    expect(goal.checklist.map((step) => [step.text, step.done])).toEqual([
+      ['Found', true],
+      ['Fix', false],
+    ])
+    expect(goal.events.at(-1)?.detail).toMatch(/^bug -> goal; leftover MAIN-\d+$/u)
   })
 
   it('carry what a path in a text can come to', () => {

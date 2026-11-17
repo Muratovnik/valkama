@@ -331,6 +331,28 @@ class _Scenario:
             ),
         }
 
+    def converted(self) -> dict[str, dict]:
+        """A bug at work converted into a goal, read as the card reads the goal it became.
+
+        The goal keeps the bug's steps and its kind as a label, and the work under way
+        goes on in the task it left under it.
+        """
+
+        bug = str(
+            self.tool(
+                "create_work_item", space=SPACE, title="Converted card", kind="bug", claim=True
+            )["reference"]
+        )
+        self.tool(
+            "apply_work_item_changes", id=bug, checklist=[{"text": "Found", "done": True}, "Fix"]
+        )
+        self.tool("apply_work_item_changes", id=bug, convert={"to": "goal"})
+        return {
+            "card-converted": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=bug)}"
+            )
+        }
+
     def executor_card(self) -> dict:
         """A card whose claim, steps and agents each name an executor."""
 
@@ -926,6 +948,7 @@ class _Scenario:
             **self.tree(),
             "request-session-gone": self.session_gone(),
             **self.put_off(),
+            **self.converted(),
         }
 
 
