@@ -22,7 +22,9 @@ import {
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { i18n, messages } from '@/shared/i18n/index.ts'
+import VIcon from '@/shared/ui/VIcon.vue'
 
+import { documentOrder } from '../support/documentOrder.ts'
 import { requestEntry, requestList } from '../support/inputRequests.ts'
 import { card, open, root, thread, unmountAll } from '../support/threadCard.ts'
 
@@ -153,10 +155,10 @@ describe('a list under a comment', () => {
     const article = thread(wrapper, 1)
     expect(article.element.tagName).toBe('ARTICLE')
     // Under the words of the comment, in its own sheet.
-    const parts = [...article.element.children]
-    expect(parts.findIndex((child) => child.classList.contains('comment-list'))).toBeGreaterThan(
-      parts.findIndex((child) => child.classList.contains('thread-text')),
-    )
+    expect(documentOrder(article.element, ['.thread-text', '.comment-list'])).toEqual([
+      '.thread-text',
+      '.comment-list',
+    ])
     // The question stands as a question; the list does not.
     expect(wrapper.findAll('.request-card')).toHaveLength(1)
     expect(wrapper.get('.request-card').text()).not.toContain('What to take on')
@@ -219,11 +221,14 @@ describe('a list under a comment', () => {
     const wrapper = discussion(card([root(1)]), [sent(['a', 'c'])])
     const rows = listIn(wrapper).findAll('.request-option')
     expect(rows).toHaveLength(3)
-    expect(rows.map((row) => row.find('.comment-list-mark svg').exists())).toEqual([
-      true,
-      false,
-      true,
-    ])
+    // The mark is the check glyph on a sent row, whatever the glyph is drawn with.
+    const marks = rows.map((row) =>
+      row
+        .get('.comment-list-mark')
+        .findAllComponents(VIcon)
+        .map((icon) => icon.props('name')),
+    )
+    expect(marks).toEqual([['check'], [], ['check']])
     const line = listIn(wrapper).get('.request-state').text()
     expect(line).toMatch(/^You ticked 2 of 3 · /u)
     // The time is one phrase that a line does not break inside.
