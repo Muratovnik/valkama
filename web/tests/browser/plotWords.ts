@@ -13,7 +13,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-export interface PlotWordsAsked {
+interface PlotWordsAsked {
   /** The figure, by the hook its component documents. */
   figure: string
   /** The region the figure ends on: nothing it holds stands under it. */
@@ -22,7 +22,7 @@ export interface PlotWordsAsked {
   regions: readonly string[]
 }
 
-export interface PlotWords {
+interface PlotWords {
   /** How many words each region holds, by its selector. */
   counted: Record<string, number>
   /** The words that stand in none of the regions. */
@@ -32,7 +32,7 @@ export interface PlotWords {
 }
 
 /** Runs in the page: every function it uses is its own. */
-export function plotWords({ figure, floor, regions }: PlotWordsAsked): PlotWords {
+function plotWords({ figure, floor, regions }: PlotWordsAsked): PlotWords {
   const chart = document.querySelector(figure)
   if (!chart) throw new Error(`${figure} is not drawn`)
   const bottom = chart.querySelector(floor)?.getBoundingClientRect().bottom
@@ -69,7 +69,7 @@ interface ChartWords {
 }
 
 /** What a chart of periods (`PeriodColumns`) may hold words in, and the region it ends on. */
-export const PERIOD_WORDS: ChartWords = {
+const PERIOD_WORDS: ChartWords = {
   regions: ['[data-hint-list="legend"]', '[data-region="scale"]', '[data-region="axis"]'],
   always: ['[data-region="scale"]', '[data-region="axis"]'],
   floor: '[data-region="frame"]',
