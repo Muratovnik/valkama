@@ -99,7 +99,7 @@ const resultSchema = strictObject({
   resource_type: text(120),
   snippet: text(500),
 })
-const searchSchema = strictObject({
+export const searchSchema = strictObject({
   capabilities: capabilitySchema,
   health: text(120),
   interface_version: z.literal('valkama-memory-api'),
@@ -127,7 +127,7 @@ const providerSchema = strictObject({
   root: text(),
   title: text(240),
 })
-const providersSchema = strictObject({
+export const providersSchema = strictObject({
   interface_version: z.literal('valkama-memory-api'),
   providers: z
     .array(providerSchema)
@@ -146,7 +146,7 @@ const linkSchema = strictObject({
   work_item_key: text(80),
   work_item_title: text(512),
 })
-const linksSchema = strictObject({
+export const linksSchema = strictObject({
   interface_version: z.literal('valkama-memory-api'),
   links: z
     .array(linkSchema)

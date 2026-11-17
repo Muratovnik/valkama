@@ -6,7 +6,7 @@
 import { parseContract, strictObject, z } from '@/shared/api/contract.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
-const keptSchema = strictObject({
+export const keptSchema = strictObject({
   work_item_id: z.string().min(1).max(64),
   sha256: z.string().regex(/^[0-9a-f]{64}$/u),
   media_type: z.enum(['image/gif', 'image/jpeg', 'image/png', 'image/webp']),

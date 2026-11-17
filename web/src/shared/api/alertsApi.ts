@@ -39,7 +39,7 @@ function invalid(path: string, detail: string): never {
   throw new AlertsRequestError('alerts_contract_invalid', null, null, `${path}: ${detail}`)
 }
 
-const settingsSchema = strictObject({
+export const settingsSchema = strictObject({
   enabled: z.boolean(),
   events: strictObject({
     question: z.boolean(),
@@ -59,7 +59,7 @@ const checkFields = {
 }
 const checkSchema = strictObject(checkFields)
 
-const statusSchema = strictObject({
+export const statusSchema = strictObject({
   /** The Start menu shortcut with Valkama's identity: without it Windows drops a toast. */
   shortcut: z.boolean(),
   windows: checkSchema,
@@ -73,7 +73,7 @@ const statusSchema = strictObject({
 })
 
 /** A test toast: what Windows answered, and whether the helper was started on it. */
-const trialSchema = strictObject({ ...checkFields, shown: z.boolean() })
+export const trialSchema = strictObject({ ...checkFields, shown: z.boolean() })
 
 export type AlertSettings = z.infer<typeof settingsSchema>
 export type AlertEvent = keyof AlertSettings['events']
