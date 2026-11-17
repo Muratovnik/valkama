@@ -59,14 +59,6 @@ const DEAD_USES = new Map<string, string>([
   ['browser/ui-charts.spec.ts .step-readout', REPAIRED_BY_FIX],
   ['browser/ui-system.spec.ts .context-activity', REPAIRED_BY_FIX],
   ['components/analyticsQuota.spec.ts .quota-account-head', REPAIRED_BY_FIX],
-  ['components/inspectorChain.spec.ts .chain-origins', REPAIRED_BY_FIX],
-  ['components/periodColumns.spec.ts .period-markers', REPAIRED_BY_FIX],
-  ['components/periodColumns.spec.ts .period-notes', REPAIRED_BY_FIX],
-  ['components/periodColumns.spec.ts .period-readout', REPAIRED_BY_FIX],
-  ['components/planningPortfolio.spec.ts .binding-reason', REPAIRED_BY_FIX],
-  ['components/spendingBars.spec.ts .donut-share', REPAIRED_BY_FIX],
-  ['components/spendingDays.spec.ts .period-notes', REPAIRED_BY_FIX],
-  ['components/spendingDays.spec.ts .period-readout', REPAIRED_BY_FIX],
 ])
 
 /** Where the classes a library writes at runtime begin; no source of this app names them. */
