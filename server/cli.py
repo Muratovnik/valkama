@@ -377,9 +377,16 @@ def _uninstalled_git_hook() -> dict[str, object]:
 
 
 def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace) -> None:
-    # The hooks run the launcher's shim, so they are taken out before it. A failure
-    # is said in the answer and does not keep the launcher from being removed.
-    uninstalled_hook = _uninstalled_git_hook() if options.launcher_action == "uninstall" else {}
+    # The hooks run the launcher's shim, so they are taken out before it, but only once
+    # the launcher's own refusal has passed: a refused uninstall changes nothing. A failure
+    # of the hook removal is said in the answer and does not keep the launcher from going.
+    uninstalled_hook: dict[str, object] = {}
+    if options.launcher_action == "uninstall":
+        try:
+            launcher.check_uninstall(options.directory, force=options.force)
+        except launcher.LauncherError as error:
+            parser.error(str(error))
+        uninstalled_hook = _uninstalled_git_hook()
     try:
         if options.launcher_action == "autostart":
             result = _autostart_main(options)

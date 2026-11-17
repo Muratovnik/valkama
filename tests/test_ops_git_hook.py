@@ -528,19 +528,56 @@ class LauncherUninstallTests(GitHookCase):
                 effects=NO_PORT,
             )
 
-    def launcher_uninstall(self) -> tuple[int, dict]:
+    def own_launcher(self) -> Path:
+        """A launcher of this test's own, which a test may spoil without touching the class's."""
+
+        directory = self.root / "launcher"
+        launcher.install(
+            directory,
+            python=sys.executable,
+            checkout=self.checkout,
+            releases=self.releases,
+            effects=NO_PORT,
+        )
+        return directory
+
+    def launcher_uninstall(self, *options: str, directory: Path | None = None) -> tuple[int, dict]:
         """`launcher uninstall` through the command line, reading no process on the port."""
 
         real = launcher.uninstall
 
-        def uninstall(*arguments, **options):
-            return real(*arguments, effects=NO_PORT, **options)
+        def uninstall(*arguments, **keywords):
+            return real(*arguments, effects=NO_PORT, **keywords)
 
         with mock.patch.object(cli.launcher, "uninstall", side_effect=uninstall):
             code, out, _ = self.cli(
-                "launcher", "uninstall", "--directory", str(self.launcher_directory)
+                "launcher",
+                "uninstall",
+                "--directory",
+                str(directory or self.launcher_directory),
+                *options,
             )
         return code, json.loads(out)
+
+    def assert_refused_keeps_hooks(
+        self, directory: Path, state: str, expected: dict[str, str]
+    ) -> None:
+        """Without `--force`, `launcher uninstall` of a launcher in `state` is refused and
+        takes no hook out: the global file stays as it was and every hook keeps its command.
+        `expected` is the installed commands, read while the launcher was still whole."""
+
+        for event, name in hook.NAMES.items():
+            self.assertEqual([expected[event]], self.values(f"hook.{name}.command"))
+        before = self.global_file.read_bytes()
+
+        code, _, errors = self.cli("launcher", "uninstall", "--directory", str(directory))
+
+        self.assertEqual(2, code)
+        self.assertIn(f"refusing to remove {state} launcher", errors)
+        self.assertEqual(before, self.global_file.read_bytes())
+        for event, name in hook.NAMES.items():
+            self.assertEqual([expected[event]], self.values(f"hook.{name}.command"))
+        self.assertNotEqual("missing", launcher.status(directory)["state"])
 
     def test_launcher_uninstall_takes_the_hooks_out_and_then_the_launcher(self) -> None:
         git_hook.install(str(self.launcher_directory))
@@ -590,6 +627,39 @@ class LauncherUninstallTests(GitHookCase):
             {key: answer["git_hook"][key] for key in ("removed", "changed")},
         )
         self.assertEqual(FOREIGN, self.global_file.read_bytes())
+
+    def test_an_unmanaged_launcher_is_refused_and_keeps_its_hooks(self) -> None:
+        directory = self.own_launcher()
+        git_hook.install(str(directory))
+        expected = git_hook.commands(str(directory))
+        assert expected is not None
+        (directory / launcher.MANIFEST_NAME).unlink()
+
+        self.assert_refused_keeps_hooks(directory, "unmanaged", expected)
+
+    def test_a_drifted_launcher_is_refused_and_keeps_its_hooks(self) -> None:
+        directory = self.own_launcher()
+        git_hook.install(str(directory))
+        expected = git_hook.commands(str(directory))
+        assert expected is not None
+        with (directory / launcher.SHIM_NAME).open("ab") as shim:
+            shim.write(b"# changed by hand\n")
+
+        self.assert_refused_keeps_hooks(directory, "drifted", expected)
+
+    def test_a_drifted_launcher_taken_out_with_force_takes_its_hooks_too(self) -> None:
+        directory = self.own_launcher()
+        git_hook.install(str(directory))
+        with (directory / launcher.SHIM_NAME).open("ab") as shim:
+            shim.write(b"# changed by hand\n")
+
+        code, answer = self.launcher_uninstall("--force", directory=directory)
+
+        self.assertEqual(0, code)
+        self.assertEqual("missing", answer["state"])
+        self.assertTrue(answer["git_hook"]["changed"])
+        for name in hook.NAMES.values():
+            self.assertEqual([], self.values(f"hook.{name}.command"))
 
 
 if __name__ == "__main__":

@@ -1126,6 +1126,27 @@ def _settle_on_demand(
     return {"state": "restarted" if was_running else "started", "port": port, "pid": pid}
 
 
+def check_uninstall(
+    directory: str | os.PathLike[str] | None = None,
+    *,
+    force: bool = False,
+    platform_name: str | None = None,
+) -> dict[str, object]:
+    """The launcher's status when `uninstall` may remove it; raises `LauncherError` on its refusal.
+
+    Callers that remove something else first (the Git hook) run this before they do,
+    so a refused removal changes nothing.
+    """
+
+    current = status(directory, platform_name=platform_name)
+    if current["state"] in {"unmanaged", "drifted"} and not force:
+        raise LauncherError(
+            f"refusing to remove {current['state']} launcher at {current['directory']}:"
+            f" {current.get('detail')}"
+        )
+    return current
+
+
 def uninstall(
     directory: str | os.PathLike[str] | None = None,
     *,
@@ -1136,13 +1157,9 @@ def uninstall(
     platform = platform_name or os.name
     root = Path(directory).expanduser().resolve() if directory else default_directory(platform)
     paths = _paths(root, platform)
-    current = status(root, platform_name=platform)
+    current = check_uninstall(root, force=force, platform_name=platform)
     if current["state"] == "missing":
         return current
-    if current["state"] in {"unmanaged", "drifted"} and not force:
-        raise LauncherError(
-            f"refusing to remove {current['state']} launcher at {root}: {current.get('detail')}"
-        )
     # Only a value naming this launcher's shim is this launcher's to remove, and a
     # listener holding the port on demand cannot be proved once the manifest is gone.
     used = effects or ListenerEffects()
