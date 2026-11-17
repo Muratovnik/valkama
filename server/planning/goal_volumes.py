@@ -24,7 +24,6 @@ whether a row is priced and by its quality, however many goals it reads.
 
 from __future__ import annotations
 
-import datetime as dt
 import json
 import sqlite3
 from collections.abc import Iterable, Sequence
@@ -40,8 +39,7 @@ A_TASK = "{reference} is a task: goal volumes read goals and stages"
 #: The moment usage was first counted to an item, and each item's rows added up by
 #: whether they are priced and by their quality: one statement, one row at least.
 _SPENDING = (
-    "SELECT f.first, g.* FROM"  # noqa: S608 - constant text
-    " (SELECT MIN(started_at) AS first FROM usage_segments WHERE work_item_id IS NOT NULL) f"
+    f"SELECT f.first, g.* FROM ({usage.FIRST_COUNTED}) f"  # noqa: S608 - constant text
     " LEFT JOIN (SELECT work_item_id, quality, SUM(seconds) AS seconds, "
     + ", ".join(f"SUM({column}) AS {column}" for _kind, column in usage.TOKEN_KINDS)
     + ", SUM(estimated_api_cost_usd) AS estimated_api_cost_usd FROM usage_segments"
@@ -63,13 +61,6 @@ _ITEMS = (
     " LEFT JOIN planning_spaces upp ON upp.planning_space_id = up.planning_space_id"
     " WHERE i.work_item_id IN (SELECT value FROM json_each(?))"
 )
-
-
-def _micro(text: str) -> int:
-    moment = dt.datetime.fromisoformat(text)
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=dt.UTC)
-    return usage.micro(moment)
 
 
 @dataclass
@@ -158,7 +149,7 @@ def rows(
             summed.with_cancelled.add(row)
             if not cancelled(identity):
                 summed.spent.add(row)
-    started = None if first is None else _micro(str(first))
+    started = None if first is None else usage.stored_micro(str(first))
     for identity, item in items.items():
         if not item["kept"]:
             for summed in over(identity):
@@ -166,7 +157,7 @@ def rows(
             continue
         if item["kind"] == model.CONTAINER_KIND or started is None:
             continue
-        if _micro(str(item["begun"])) < started:
+        if usage.stored_micro(str(item["begun"])) < started:
             for summed in over(identity):
                 summed.with_cancelled.partly_measured += 1
                 if not cancelled(identity):

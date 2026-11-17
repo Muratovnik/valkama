@@ -21,7 +21,6 @@ rather than counted short.
 
 from __future__ import annotations
 
-import datetime as dt
 import sqlite3
 from collections.abc import Callable
 from typing import NamedTuple
@@ -190,13 +189,6 @@ def _standing(
     ).fetchall()
 
 
-def _micro(text: str) -> int:
-    moment = dt.datetime.fromisoformat(text)
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=dt.UTC)
-    return usage.micro(moment)
-
-
 def category_counts(
     conn: sqlite3.Connection, scope: Scope, period: Period | None = None
 ) -> dict[str, dict]:
@@ -217,7 +209,7 @@ def category_counts(
     first: dict[str, tuple] = {}
     for row in rows:
         category = str(row["category"])
-        since = _micro(str(row["since"]))
+        since = usage.stored_micro(str(row["since"]))
         if period is not None and category in model.TERMINAL_CATEGORIES and not period.holds(since):
             continue
         counted = found[category]
@@ -272,7 +264,7 @@ def _goals(conn: sqlite3.Connection, request: Request) -> list[dict]:
             conn, scope, "i.kind = ?", "i.parent_id IS NULL", parameters=(model.CONTAINER_KIND,)
         )
         if str(row["category"]) not in model.TERMINAL_CATEGORIES
-        or request.period.holds(_micro(str(row["since"])))
+        or request.period.holds(usage.stored_micro(str(row["since"])))
     ]
     found.sort(key=lambda row: (str(row["space_key"]), int(row["number"])))
     return goal_volumes.rows(
@@ -291,9 +283,7 @@ def _goals(conn: sqlite3.Connection, request: Request) -> list[dict]:
 def measured_from(conn: sqlite3.Connection) -> str | None:
     """When usage was first counted to an item in this store: before it, work is counted short."""
 
-    row = conn.execute(
-        "SELECT MIN(started_at) FROM usage_segments WHERE work_item_id IS NOT NULL"
-    ).fetchone()
+    row = conn.execute(usage.FIRST_COUNTED).fetchone()
     return None if row is None or row[0] is None else str(row[0])
 
 
