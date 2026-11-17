@@ -473,9 +473,9 @@ def _publish(
 ) -> bool:
     """One write, keeping the bytes it replaces for `rollback`.
 
-    `first` marks the write that brings a registry to a machine with none: it also
-    keeps that state for `downgrade`, unless an upgrade snapshot already holds an
-    earlier one.
+    `first` marks the write that brings a registry to a machine with none, or to one
+    with no project: it also keeps that state for `downgrade`, unless an upgrade
+    snapshot already holds an earlier one.
     """
 
     if before_inventory == desired_inventory and before_target == desired_target:
@@ -528,28 +528,62 @@ def _carry_across(
     return True
 
 
-def _is_current(inventory: bytes | None, target: bytes | None) -> bool:
-    """Whether the registry is already in the current format, by its version alone."""
+def _is_current(inventory: bytes) -> bool:
+    """Whether the inventory is already in the current format, by its version alone."""
 
-    if inventory is not None:
-        return _version(_toml(inventory)) == SCHEMA_VERSION
-    return target is not None and _projection_version(target) == project_registry.SCHEMA_VERSION
+    return _version(_toml(inventory)) == SCHEMA_VERSION
+
+
+def _write_current(
+    inventory: Path,
+    target: Path,
+    before_inventory: bytes | None,
+    before_target: bytes | None,
+    projects: list[dict[str, Any]],
+) -> bool:
+    """Write `projects` in the current formats, keeping each file that already holds exactly them.
+
+    A registry with no project is the same as none: a machine with neither file, and an
+    import into an empty registry, both reach this as their first write.
+    """
+
+    held = [] if before_inventory is None else parse_inventory(before_inventory)
+    shown = [] if before_target is None else _existing_projection(before_target)
+    return _publish(
+        inventory,
+        target,
+        before_inventory,
+        before_target,
+        before_inventory
+        if before_inventory is not None and held == projects
+        else render_inventory(projects),
+        before_target
+        if before_target is not None and shown == projects
+        else render_projection(projects),
+        first=not held and not shown,
+    )
 
 
 def upgrade(inventory: Path, target: Path) -> bool:
-    """Carry an inventory of format 1 and its projection of format 3 to formats 2 and 4."""
+    """Carry an inventory of format 1 and its projection of format 3 to formats 2 and 4.
+
+    On a machine with neither file there is no project to carry: it gets the empty
+    registry of those formats, as an import into it would write.
+    """
 
     _safe_state(inventory, target)
     with _lock(target):
         before_inventory = _read(inventory)
         before_target = _read(target)
-        if _is_current(before_inventory, before_target):
-            return False
         if before_inventory is None:
-            raise RegistryOwnerError(
-                f"project inventory is missing: {inventory};"
-                " import the former one with valkama projects import --source <file>"
-            )
+            if before_target is not None:
+                raise RegistryOwnerError(
+                    f"project inventory is missing: {inventory};"
+                    " import the former one with valkama projects import --source <file>"
+                )
+            return _write_current(inventory, target, None, None, [])
+        if _is_current(before_inventory):
+            return False
         projects = _former_projects(before_inventory, projection=False)
         if before_target is not None and (
             _former_projects(before_target, projection=True) != projects
@@ -585,7 +619,7 @@ def import_inventory(inventory: Path, target: Path, source: Path) -> bool:
                 if old
                 else parse_inventory(before_inventory)
             )
-            if held != projects:
+            if held and held != projects:
                 raise RegistryOwnerError(
                     "Valkama inventory differs from import; refusing to overwrite it"
                 )
@@ -597,7 +631,7 @@ def import_inventory(inventory: Path, target: Path, source: Path) -> bool:
                 if old
                 else _existing_projection(before_target)
             )
-            if shown != projects:
+            if shown and shown != projects:
                 raise RegistryOwnerError("projection differs from import; refusing to overwrite it")
         if len(set(former)) > 1:
             raise RegistryOwnerError(
@@ -605,15 +639,7 @@ def import_inventory(inventory: Path, target: Path, source: Path) -> bool:
             )
         if any(former):
             return _carry_across(inventory, target, before_inventory, before_target, projects)
-        return _publish(
-            inventory,
-            target,
-            before_inventory,
-            before_target,
-            render_inventory(projects) if before_inventory is None else before_inventory,
-            render_projection(projects) if before_target is None else before_target,
-            first=before_inventory is None and before_target is None,
-        )
+        return _write_current(inventory, target, before_inventory, before_target, projects)
 
 
 def downgrade(inventory: Path, target: Path) -> bool:

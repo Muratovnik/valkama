@@ -421,6 +421,33 @@ class RegistryOwnerTests(unittest.TestCase):
         self.assertEqual(inventory, self.inventory.read_bytes())
         self.assertFalse(snapshot.exists())
 
+    def test_upgrade_of_a_machine_with_no_registry_writes_the_empty_one(self) -> None:
+        self.assertTrue(registry_owner.upgrade(self.inventory, self.target))
+        self.assertTrue(self.inventory.read_bytes().startswith(b"schema_version = 2\n"))
+        projection = json.loads(self.target.read_bytes())
+        self.assertEqual((4, []), (projection["schema_version"], projection["projects"]))
+        kept = json.loads(registry_owner.upgrade_path(self.target).read_bytes())
+        self.assertEqual(
+            {"inventory": None, "projection": None, "rollback": None},
+            {name: kept[name] for name in ("inventory", "projection", "rollback")},
+        )
+
+        upgraded = self._state()
+        self.assertFalse(registry_owner.upgrade(self.inventory, self.target))
+        self.assertEqual(upgraded, self._state())
+
+        self.assertTrue(registry_owner.downgrade(self.inventory, self.target))
+        self.assertEqual(dict.fromkeys(self._state()), self._state())
+
+    def test_a_projection_without_an_inventory_still_refuses_in_either_format(self) -> None:
+        for projection in (_former_projection([]), registry_owner.render_projection([])):
+            self.target.write_bytes(projection)
+            with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "inventory is missing"):
+                registry_owner.upgrade(self.inventory, self.target)
+            self.assertEqual(projection, self.target.read_bytes())
+            self.assertFalse(self.inventory.exists())
+            self.assertFalse(registry_owner.upgrade_path(self.target).exists())
+
     def test_downgrade_refuses_a_snapshot_whose_hash_does_not_match(self) -> None:
         self._former([self.entry])
         registry_owner.upgrade(self.inventory, self.target)
@@ -540,6 +567,26 @@ class RegistryOwnerTests(unittest.TestCase):
         # The registry can be taken in again after that.
         self.assertTrue(registry_owner.import_inventory(self.inventory, self.target, source))
         self.assertEqual(imported, (self.inventory.read_bytes(), self.target.read_bytes()))
+
+    def test_import_into_the_empty_registry_upgrade_wrote_takes_its_projects(self) -> None:
+        registry_owner.upgrade(self.inventory, self.target)
+        source = self.directory / "former.toml"
+        source.write_bytes(_former_inventory([dict(self.entry, planning_binding=_space("EX"))]))
+        self.assertTrue(registry_owner.import_inventory(self.inventory, self.target, source))
+        self.assertEqual({"example": ("EX", True)}, self._bindings())
+        self.assertTrue(self._check()["bytes_match"])
+        self.assertTrue(registry_owner.downgrade(self.inventory, self.target))
+        self.assertEqual(dict.fromkeys(self._state()), self._state())
+
+    def test_import_still_refuses_a_registry_holding_a_project_that_differs(self) -> None:
+        registry_owner.upgrade(self.inventory, self.target)
+        self._add("second")
+        source = self.directory / "former.toml"
+        source.write_bytes(_former_inventory([self.entry]))
+        before = self._state()
+        with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "differs"):
+            registry_owner.import_inventory(self.inventory, self.target, source)
+        self.assertEqual(before, self._state())
 
     def test_import_beside_a_former_projection_carries_it_across_for_downgrade(self) -> None:
         source = self.directory / "former.toml"
