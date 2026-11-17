@@ -103,9 +103,10 @@ Item and step claims are independent: a step's holder need not hold the item.
 
 **One call for several writes.** Writes to one item go in one
 `apply_work_item_changes` call, applied in this order and all or nothing:
-`claim`, `update`, `checklist`, `checklist_ticks`, `refs`, `links`, `comment`
-or `comments`, `resolutions`, `questions`, `summary`, `transition`. Every write
-to an item's fields, steps, refs, links, discussion, summary and state goes
+`claim`, `update`, `checklist`, `checklist_ticks`, `refs`, `commits`, `links`,
+`comment` or `comments`, `resolutions`, `questions`, `summary`, `transition`.
+Every write to an item's fields, steps, refs, commits, links, discussion,
+summary and state goes
 through these groups; `questions` takes what `create_work_item_request` does.
 Every group but `claim` and `subscribe` is JSON, never bare text: `comment` is
 `{"body": "…"}`, `summary` `{"done": "…", "next": "…"}`, `transition`
@@ -123,9 +124,10 @@ hook": see [the tool reference](references/tools.md#claude-codes-auto-mode).
 
 **Commits and refs.** Valkama attaches each commit your session makes to the
 task you hold and says so in the hook answer after the command; when it cannot
-tell which task, the answer names the candidates. The `refs` group records a
-`commit`, a `memory` record id materially used, or a `url`. Your own session
-needs no ref: Valkama records every write's.
+tell which task, the answer names the candidates. Attach or move one with the
+`commits` group. The `refs` group records a `commit`, a `memory` record id
+materially used, or a `url`. Your own session needs no ref: Valkama records
+every write's.
 
 **What a person said.** A write's answer carries `from_person` when the owner
 did something on the item in Valkama since an agent last wrote there: a comment,

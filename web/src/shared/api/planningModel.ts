@@ -33,7 +33,7 @@ import {
   TITLE,
 } from '@/shared/api/planningSpaceModel.ts'
 import { actor, callField, holderField, serverText } from '@/shared/api/planningText.ts'
-import { enumField, ID, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
+import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 
 export { SPACE_KEY, TITLE } from '@/shared/api/planningSpaceModel.ts'
 
@@ -233,6 +233,23 @@ const refSchema = strictObject({
 })
 
 /**
+ * A commit attached to the item, as its full record lists them, the newest first.
+ * `repository` is null for a commit whose repository is not known, and the time
+ * is Git's committer time, with its offset.
+ */
+const commitSchema = strictObject({
+  repository: boundedText(PROJECT_ID, 160).nullable(),
+  display_name: boundedText(/^[^\u{0}]{1,200}$/u, 200).nullable(),
+  hash: boundedText(/^[0-9a-f]{7,64}$/u, 64),
+  subject: blankable(10_000),
+  committed_at: boundedText(/^\d{4}-\d{2}-\d{2}T[^\s]{1,80}$/u, 96).nullable(),
+  session: callField(),
+  agent: callField(),
+  attached_by: enumField(['server', 'manual', 'migrated'] as const),
+  label: blankable(200),
+})
+
+/**
  * A root's resolved mark: who set it, when, and the one-line decision, which may
  * be blank. `by_person` is the server's fact about the call, as on a comment.
  */
@@ -419,6 +436,8 @@ const workItemSchema = recordObject({
   // The server counts neither, so neither does the card.
   links: z.array(linkSchema),
   refs: z.array(refSchema),
+  // Every full record carries them; optional while no view reads them.
+  commits: z.array(commitSchema).optional(),
   // Unbounded on purpose: the server sends the whole record, however long the
   // discussion and the history grew, and a card refused for its length is lost.
   // Each entry stays bounded.

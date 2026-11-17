@@ -76,7 +76,7 @@ Every tool carries a `title`, a description, a JSON Schema, and MCP behaviour
 ### Removed tools
 
 The catalogue holds one tool per capability. A write to one item's fields,
-steps, refs, links, discussion, summary or state is a group of
+steps, refs, commits, links, discussion, summary or state is a group of
 `apply_work_item_changes` (see
 [Several changes in one call](#several-changes-in-one-call)); the tools that
 made one such write each are no longer published, and the HTTP writes behind
@@ -602,9 +602,9 @@ whole record and took `full`, is in
 | `events` | integer, 1 to 1000 | that many of the newest history events |
 | `section` | a section key, or a list of them | those sections of the description, with their text |
 
-The parts are `card`, `comments`, `events`, `links`, `refs`, `questions`,
-`mentions`, `sessions`, `images`, `subscribers`, `claim`, `sections` and
-`participants`. Without `parts` and without a mode the read is `["card"]`. A
+The parts are `card`, `comments`, `events`, `links`, `refs`, `commits`,
+`questions`, `mentions`, `sessions`, `images`, `subscribers`, `claim`, `sections`
+and `participants`. Without `parts` and without a mode the read is `["card"]`. A
 mode without `parts` reads only the part it cuts: `unresolved`, `thread` and
 `comments_after` the comments, `events` the events, `section` the sections, and
 several modes read each of their parts. Each of these is refused with
@@ -612,7 +612,7 @@ several modes read each of their parts. Each of these is refused with
 
 | Call | Refusal |
 | --- | --- |
-| a part no item has | `unknown part 'history'; parts are card, comments, events, links, refs, questions, mentions, sessions, images, subscribers, claim, sections, participants` |
+| a part no item has | `unknown part 'history'; parts are card, comments, events, links, refs, commits, questions, mentions, sessions, images, subscribers, claim, sections, participants` |
 | a mode beside a `parts` without its part | `thread reads the comments part: add comments to parts or leave parts out`, and the same for `unresolved` and `comments_after`; `events reads the events part: …`; `section reads the sections part: …` |
 | `events` outside its bounds | `events must be between 1 and 1000` |
 | `thread` with `comments_after` or `unresolved` | `thread and comments_after exclude each other`, or `thread and unresolved …` |
@@ -632,6 +632,7 @@ at, and beside them the fields of each part named:
 | `mentions` | `mentions`, the newest 50, oldest first, and `mentions_total`; see [Mentions](#mentions) |
 | `sections` | `sections`, as [Sections of the description](#sections-of-the-description) says |
 | `claim` | `claim`, the lease as [Claims are leases](#claims-are-leases) shows it, `null` while nobody holds the item |
+| `commits` | `commits`, as [The commits part](#the-commits-part) says |
 | `links`, `refs`, `questions`, `sessions`, `images`, `subscribers` | the field of that name, as described below and in [Reading a question](#reading-a-question) |
 | `participants` | on a goal or a stage, the field of that name, as [Participants](#participants) shows it; a task has no such part, and naming it is refused with `unknown part 'participants'; a task's parts are card, comments, …` |
 
@@ -673,6 +674,7 @@ nothing in it:
 | `questions` | `count` and `open`, the questions to the owner, and `addressed_open`, the open requests asked of agent sessions; it stands while any of them is above 0 |
 | `sections` | `count`, and only for a description longer than 2,000 characters; a shorter one is cheaper to read whole |
 | `claim` | `count`, 1 while somebody holds the item |
+| `commits` | `count`, the commits attached now |
 | `links`, `refs`, `mentions`, `sessions`, `images`, `subscribers`, `participants` | `count` |
 
 ```json
@@ -737,6 +739,31 @@ counts its calls. A call is counted on the item it acted on first: a link counts
 for its source item, not its target. Because Valkama records this itself, a
 caller does not attach its own session id as a ref.
 
+#### The commits part
+
+**Since 3.0.** `commits` lists the commits attached to the item now, the newest
+attachment first. Valkama attaches the commits a session makes; a caller
+attaches one by hand with the `commits` group of
+[Several changes in one call](#several-changes-in-one-call). A commit a rewrite
+replaced is not listed: its attachments moved to the commit that replaced it.
+`delete_work_item` takes the item's attachments with it, and the commits stay.
+
+```json
+{"repository": "valkama", "display_name": "Valkama", "hash": "3f2a9c1…",
+ "subject": "fix(hooks): read the record once", "committed_at": "2026-11-20T10:31:02+03:00",
+ "session": "019a…", "agent": null, "attached_by": "server", "label": ""}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `repository` | the registered project's id; `null` for a commit whose repository is not known |
+| `display_name` | the project's name in the registry, read when the item is; `null` while the registry does not record the project, and beside a `null` `repository` |
+| `hash` | the whole hash, in lower case |
+| `subject`, `committed_at` | the commit's subject and committer time; `""` and `null` for a commit attached by its whole hash on a machine without the project's root |
+| `session`, `agent` | the session and agent that made it; `null` for a commit no session reported |
+| `attached_by` | `server` (Valkama, from the session's work), `manual` (a caller or a person) or `migrated` |
+| `label` | the words the attachment was given, `""` without them |
+
 #### Sections of the description
 
 **Since 3.0.** A card carries its description whole; an agent that wants to
@@ -788,7 +815,7 @@ inside `work_item`, and reads `unresolved`, `thread`, `comments_after` and
 record, as before 3.0, and the parameters below are the cuts of that record.
 
 The full record carries every current field of the item -- state, checklist,
-links, refs, summary, the lease as `claim`, its followers as `subscribers` --
+links, refs, commits, summary, the lease as `claim`, its followers as `subscribers` --
 with every comment and every history event, oldest first, and `mentions` with
 `mentions_total`, the texts on other items that named this one (see
 [Mentions](#mentions)). A cut adds `comments_total`, `threads_total`,
@@ -2167,7 +2194,7 @@ most 50.
 
 `apply_work_item_changes` applies several writes to one item in one call, all or
 nothing. It is the one MCP tool that edits an item's fields, sets and ticks its
-steps, attaches refs, links it, writes and resolves its discussion, records its
+steps, attaches refs and commits, links it, writes and resolves its discussion, records its
 summary and moves its state. It takes `id`, `author`, `expected_revision`,
 `verbose` and any of these groups, and applies them in this order:
 
@@ -2179,6 +2206,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `checklist` | the steps' list, or `{items, force?}`; each step text or `{text, done?}` | `/checklist` |
 | `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `/checklist/tick` |
 | `refs` | list of `{kind, value, label?}` | `/ref` |
+| `commits` | list of `{repository, hash, label?, remove?}` | only here |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `/link` |
 | `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `/comment` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
@@ -2240,6 +2268,40 @@ in `reply_to` must already exist when that entry is written: the id of a
 comment the same call writes is not known to the caller, so a reply to it is a
 second call. The same holds for `resolutions`.
 
+**Since 3.0.** `commits` attaches commits by hand, or detaches them with
+`remove: true`. Valkama attaches the commits a session makes and says so in the
+hook answer, as `docs/hook-contract.md` describes; this group places a commit it
+could not place, one made outside a session, or one on the wrong item, which
+moves by a `remove` there and an attachment on the right one.
+
+- `repository` is a registered project's id. `hash` is a whole hash or its
+  start of at least 7 hex digits, in either case.
+- An attachment asks the project's root `git rev-parse --verify <hash>^{commit}`
+  for the whole hash, and records a commit Valkama did not know with its subject
+  and time and no session. On a machine without the project's root a whole hash
+  is recorded as it is.
+- The attachment is signed `manual`. On a task it adds the commit's project with
+  the source `commits`, as
+  [The projects an item changes](#the-projects-an-item-changes) says; a goal or
+  stage takes the commit and no project.
+- A detach names one of the commits attached to the item, by its whole hash or
+  a start, and asks no repository. The commit stays, and a session's commit
+  attached nowhere else is on no card again. A task loses the commit's project
+  when it held it by its commits alone and no other attached commit is of it.
+- Each attachment and detachment writes the history event `commit_attached` or
+  `commit_detached` with the detail `<repository> <hash>`. An attachment the item
+  has already writes nothing.
+
+An entry is refused with `invalid_request`:
+
+| Entry | Refusal |
+| --- | --- |
+| a project the registry does not record | `[commit] <repository> is not a registered project: <ids>` |
+| a hash its repository holds no commit of, or one that is no hash | `[commit] <hash> is not a commit in <repository>` |
+| a start of a hash, on a machine without the project's root | `[commit] <repository> has no root on this machine, so the short hash <hash> cannot be resolved: send the full hash` |
+| a start that more than one object of the repository begins with | `[commit] <hash> is ambiguous in <repository>: send more digits` |
+| `remove` of a commit the item does not have | `[commit] <repository> <hash> is not attached to <REF>` |
+
 `questions` asks up to 100 questions, each with what `create_work_item_request`
 takes and checked by the same rules. Without `addressees` each is that tool's
 question: it waits in the owner's list and raises the owner's alert once the call
@@ -2270,6 +2332,9 @@ one call with its identity, and every row its steps write points to that call.
 
 The acknowledgement's `applied` names only the groups that changed something.
 `update` lists the fields sent;
+`commits` is `{attached, removed, unchanged}`: the `{repository, hash}` of each
+commit attached and removed, and how many entries named a commit attached
+already;
 `comments` and `questions` list every comment and question the call wrote, so
 a reply or a withdrawal needs no read first. A question with `addressees` lists its
 `requests`, each `request_id` with its `addressee`, in place of `request_id` and
@@ -2282,7 +2347,10 @@ hear the items an `update`'s description named stands beside `applied`, as
 ```json
 {"claim": true, "update": ["title", "priority"],
  "checklist": [{"item_id": "…", "text": "write it", "done": false}],
- "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1, "links": 1,
+ "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1,
+ "commits": {"attached": [{"repository": "valkama", "hash": "3f2a9c1…"}], "removed": [],
+             "unchanged": 0},
+ "links": 1,
  "comments": [{"comment_id": 41, "reply_to": null, "reply_to_request": null}],
  "questions": [{"request_id": "…", "revision": 0}],
  "summary": {"summary_comment_id": 42}, "transition": {"state": "review"}}
@@ -2364,6 +2432,9 @@ What moves to the survivor:
   item, and the replies under a question move with the question. `moved.comments`
   counts the rows that moved;
 - the refs, except one the survivor already has, which stays where it was;
+- **since 3.0**, the attached commits, except one the survivor has already,
+  whose attachment to the merged item goes; `moved.commits` counts those that
+  moved. The projects they gave move with the item's projects;
 - the [pin](#pins), which the survivor keeps when it has one already;
 - the links, each in its own direction: `MAIN-13 blocks MAIN-20` becomes
   `MAIN-12 blocks MAIN-20`. A link to the survivor or to another item of the
@@ -2376,8 +2447,8 @@ What moves to the survivor:
 
 Each merged item is then linked `duplicates` to the survivor, gets a summary
 naming it ("Merged into MAIN-12, which now holds its 2 steps, 1 comment, 0 refs,
-1 link and 0 projects.", `next` "Continue in MAIN-12.", `why` the reason), loses
-its claim and closes in the first `cancelled` state its workflow reaches from
+3 commits, 1 link and 0 projects.", `next` "Continue in MAIN-12.", `why` the
+reason), loses its claim and closes in the first `cancelled` state its workflow reaches from
 where it stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
 saying what came in. What describes the merged item itself stays with it: its
 history, the [mentions](#mentions) of it, its reports, its description, labels and
@@ -2406,7 +2477,8 @@ and `warnings` and `overridden` when there are any:
 ```json
 {"reference": "MAIN-12", "revision": 9, "merged": [
   {"reference": "MAIN-13", "work_item_id": "…", "state": "cancelled",
-   "moved": {"steps": 2, "comments": 1, "refs": 0, "links": 1}}],
+   "moved": {"steps": 2, "comments": 1, "refs": 0, "commits": 3, "links": 1,
+             "projects": 0}}],
  "warnings": ["MAIN-13 stays under MAIN-4; MAIN-12 keeps its own parent"]}
 ```
 

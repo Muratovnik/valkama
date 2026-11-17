@@ -689,6 +689,7 @@ class OrderTests(BatchCase):
                 "checklist",
                 "checklist_ticks",
                 "refs",
+                "commits",
                 "links",
                 "comment",
                 "comments",
@@ -895,7 +896,7 @@ class PublishedSchemaTests(unittest.TestCase):
     def test_the_description_states_the_order(self) -> None:
         tool = next(entry for entry in tools.TOOLS if entry["name"] == BATCH)
         self.assertIn(
-            "claim, subscribe, update, checklist, checklist_ticks, refs, links, comment or"
+            "claim, subscribe, update, checklist, checklist_ticks, refs, commits, links, comment or"
             " comments, resolutions, questions, summary, transition",
             tool["description"],
         )
