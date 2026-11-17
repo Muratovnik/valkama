@@ -37,7 +37,7 @@ row's call on.
   call and the time; the agent reads the words in its answer (`delivered`). A
   session hears each act once: a delivery gives one entry per container and leaves out
   the acts that session already got through any row of that container, while both rows
-  stay as the record.
+  stay as the record. A container with nothing left for the session is no entry.
 
 A row never lapses: words are not stale because nobody was there to hear them.
 A delivered one stays as the record of who got them, and a row goes with its item.
@@ -270,13 +270,31 @@ def new_words(
     ]
 
 
+def containers_left(
+    conn: sqlite3.Connection, session_id: str, starts: Iterable[tuple[str, int]], call: int
+) -> list[tuple[str, list[tuple[int, dict]]]]:
+    """The containers in `starts`, each with its `new_words` before `call`, if any are left.
+
+    Every reader of delivered rows takes its containers from here: a container with
+    nothing left for the session is no entry in the claim's answer nor in the feed.
+    """
+
+    found = []
+    for container, first in starts:
+        words = new_words(conn, session_id, container, first, call)
+        if words:
+            found.append((container, words))
+    return found
+
+
 def delivered(conn: sqlite3.Connection, call: int) -> list[dict]:
     """The words the rows delivered by `call` hold, for the claiming agent's answer.
 
-    One entry per container, though a claim can take both of its rows: the container's
-    `reference` and `title`, and `said`, what waits on it from the earliest of those rows
-    on, less what this session already got (`new_words`), in the entries of `from_person`,
-    the newest `person_events.MOST_SHOWN`, with `omitted` counting the earlier ones.
+    One entry per container that still has words left for the session, though a claim
+    can take both of its rows: the container's `reference` and `title`, and `said`, what
+    waits on it from the earliest of those rows on, less what this session already got
+    (`new_words`), in the entries of `from_person`, the newest `person_events.MOST_SHOWN`,
+    with `omitted` counting the earlier ones.
     """
 
     rows = conn.execute(_DELIVERED, (call,)).fetchall()
@@ -288,8 +306,8 @@ def delivered(conn: sqlite3.Connection, call: int) -> list[dict]:
         container = str(work_item_id)
         starts[container] = min(starts.get(container, int(from_call)), int(from_call))
     found = []
-    for container, first in starts.items():
-        said = [entry for _call, entry in new_words(conn, session, container, first, call)]
+    for container, words in containers_left(conn, session, starts.items(), call):
+        said = [entry for _call, entry in words]
         shown = said[-person_events.MOST_SHOWN :]
         item = read_model.item_by_id(conn, container)
         entry: dict = {

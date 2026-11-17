@@ -730,7 +730,8 @@ def _handed(
 ) -> tuple[list[tuple[str, bool, list[tuple[int, dict]]]], int]:
     """The words left waiting that claims of this session took after the claim call `after`:
     per claim and goal or stage, whether a subagent took them, and the words it handed over,
-    with their calls (`waiting.new_words`); and the last claim call read.
+    with their calls (`waiting.containers_left`: a goal or stage with nothing left for the
+    session is not listed); and the last claim call read.
 
     The place is a claim's call, not a row's number: a row is numbered when it is left and
     handed over later, so a row left before another can be handed after it. A claim that
@@ -750,10 +751,10 @@ def _handed(
     for item, start, call, agent in rows:
         claim = claims.setdefault((str(item), int(call)), [int(start), bool(agent)])
         claim[0] = min(claim[0], int(start))
-    found = [
-        (item, agent, waiting.new_words(conn, session_id, item, start, call))
-        for (item, call), (start, agent) in claims.items()
-    ]
+    found = []
+    for (item, call), (start, agent) in claims.items():
+        for _container, words in waiting.containers_left(conn, session_id, [(item, start)], call):
+            found.append((item, agent, words))
     return found, max([after, *(int(row[2]) for row in rows)])
 
 
