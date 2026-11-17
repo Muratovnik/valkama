@@ -138,14 +138,18 @@ describe('the server fixtures', () => {
     })
   })
 
-  it('give every quota code the doctor reports a title and a detail in each language', () => {
+  it('give every quota and commit-hook code the doctor reports a title and a detail in each language', () => {
     // Read from the server's source, so a code the server adds fails here until it has words.
-    const { quota } = read('doctor-vocabulary.json') as { quota: string[] }
+    const { commit, quota } = read('doctor-vocabulary.json') as {
+      commit: string[]
+      quota: string[]
+    }
     expect(quota.length).toBeGreaterThan(0)
+    expect(commit.length).toBeGreaterThan(0)
     const missing = (['en', 'ru'] as const).flatMap((locale) => {
       const findings: Record<string, { detail?: unknown; title?: unknown } | undefined> =
         messages[locale].health.finding
-      return quota
+      return [...quota, ...commit]
         .filter((code) => {
           const words = findings[code]
           return typeof words?.title !== 'string' || typeof words.detail !== 'string'

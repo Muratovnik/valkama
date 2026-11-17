@@ -18,5 +18,15 @@
     "quota-statusline-silent",
     "quota-statusline-unreadable",
     "quota-statusline-working"
+  ],
+  "commit": [
+    "commit-hook-disabled",
+    "commit-hook-installed",
+    "commit-hook-missing",
+    "commit-hook-stale",
+    "commit-hook-unsupported",
+    "commit-records-current",
+    "commit-records-rejected",
+    "commit-records-waiting"
   ]
 }

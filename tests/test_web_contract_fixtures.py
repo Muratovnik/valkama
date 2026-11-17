@@ -40,7 +40,7 @@ from urllib.parse import urlencode
 from server import http_surface, mcp_surface, session_open, sessions, store
 from server.analytics import quota as analytics_quota
 from server.hooks import ingest, normalize
-from server.ops import doctor, url_schemes
+from server.ops import doctor, git_hook, url_schemes
 from server.planning import calls, read_model, requests, service, subscriptions
 from server.projects import project_registry
 from server.quota import samples
@@ -896,7 +896,7 @@ class _Scenario:
             **self.open_plans(),
             "live-frame": self.live_frame(),
             **self.usage(),
-            "doctor-vocabulary": {"quota": _doctor_quota_codes()},
+            "doctor-vocabulary": {"quota": _doctor_quota_codes(), "commit": _doctor_commit_codes()},
             "analytics-quota": self.quota(),
             # Last, so the references the answers above name stay theirs.
             **self.tree(),
@@ -931,6 +931,30 @@ def _doctor_quota_codes() -> list[str]:
     if built:
         raise ValueError(f"doctor.py builds a quota presentation code at run time: {built}")
     return sorted(text for text in texts if _QUOTA_CODE.fullmatch(text))
+
+
+_RECORDS_CODE = re.compile(r"commit-records-[a-z]+")
+
+
+def _doctor_commit_codes() -> list[str]:
+    """Every presentation code the commit-hook and commit-records checks of `valkama doctor` report.
+
+    The records' codes are written out whole in `server/ops/doctor.py`, and read from it. The
+    hook's is built from the state the hook reads as, `commit-hook-{state}`, and every such
+    state is one of `git_hook.STATES`, so those are the hook's codes.
+    """
+
+    tree = ast.parse(Path(doctor.__file__).read_text(encoding="utf-8"))
+    records = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and _RECORDS_CODE.fullmatch(node.value)
+    }
+    if not records:
+        raise ValueError("doctor.py writes no commit-records presentation code")
+    return sorted([*(f"commit-hook-{state}" for state in git_hook.STATES), *records])
 
 
 def _everything_but_cursor() -> url_schemes.Installed:
