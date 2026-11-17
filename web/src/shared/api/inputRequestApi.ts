@@ -41,6 +41,19 @@ async function request(url: string, init?: RequestInit): Promise<unknown> {
   return payload
 }
 
+/** The most questions one page of the server's list holds. */
+const PAGE = 200
+
+const entryIdentity = (entry: InputRequestEntry) =>
+  `${entry.target.space_ref.data_scope_id}/${entry.request.request_id}`
+
+/**
+ * Every question the read names, page after page while the server says more follow.
+ *
+ * A page that brings nothing new ends the read with `has_more` still true, so a list that
+ * moved under the read says it is incomplete rather than reading forever; a source one
+ * page could not read stays unavailable in the whole.
+ */
 export async function fetchInputRequests(
   options: {
     signal?: AbortSignal
@@ -50,15 +63,46 @@ export async function fetchInputRequests(
 ): Promise<InputRequestList> {
   const { target, signal } = options
   const status = options.status ?? 'pending'
-  const parameters = new URLSearchParams({
+  const query = {
     scope_kind: target ? 'space' : 'global',
     ...(status === 'all' ? {} : { status }),
-    limit: '100',
+    limit: String(PAGE),
     ...(target ? { ...serializePlanningTarget(target), reference: target.reference } : {}),
-  })
-  return validateInputRequestList(
-    await request(`/api/modules/planning/requests?${parameters}`, { signal }),
+  }
+  const read = async (offset: number) => {
+    const parameters = new URLSearchParams({
+      ...query,
+      ...(offset ? { offset: String(offset) } : {}),
+    })
+    return validateInputRequestList(
+      await request(`/api/modules/planning/requests?${parameters}`, { signal }),
+    )
+  }
+  let page = await read(0)
+  let offset = page.items.length
+  const items = [...page.items]
+  const seen = new Set(items.map((entry) => entryIdentity(entry)))
+  const skipped = new Map<string, InputRequestList['coverage'][number]>()
+  const note = (list: InputRequestList) => {
+    for (const source of list.coverage) {
+      const key = JSON.stringify(source.space_ref)
+      if (source.status === 'unavailable' && !skipped.has(key)) skipped.set(key, source)
+    }
+  }
+  note(page)
+  while (page.has_more) {
+    page = await read(offset)
+    note(page)
+    offset += page.items.length
+    const fresh = page.items.filter((entry) => !seen.has(entryIdentity(entry)))
+    if (!fresh.length) break
+    for (const entry of fresh) seen.add(entryIdentity(entry))
+    items.push(...fresh)
+  }
+  const coverage = page.coverage.map(
+    (source) => skipped.get(JSON.stringify(source.space_ref)) ?? source,
   )
+  return { ...page, items, coverage }
 }
 
 export async function fetchInputRequest(

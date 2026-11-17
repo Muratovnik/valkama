@@ -2800,6 +2800,11 @@ def claim_ready_work_item(
     list's `project` keeps them, so a task naming none is kept by no project; each
     narrows that one queue, never reorders it.
 
+    Where the owner hands out work by hand, the switch `queue` of the participation
+    setting off in that space (as the set `manual` has it), the call is refused
+    (`model.QueueOffError`) before it writes anything or releases a lease; an item
+    there is taken by its number with `claim_work_item`.
+
     Choosing and writing are two statements, so the item chosen can be taken by
     somebody else before this claim lands. The guarded write is what catches
     that, and the loser looks for the next candidate instead of being handed an
@@ -2810,6 +2815,14 @@ def claim_ready_work_item(
     """
 
     scope = _queue_scope(conn, space, within, label, project)
+    settings = participation.load(conn)
+    if not settings.on(scope.space_id, "queue"):
+        # Before anything is written: the queue that is off releases no lease either.
+        key = _space_row(conn, scope.space_id)["key"]
+        raise model.QueueOffError(
+            f"the owner hands out work in {key} by hand: take the item they named with"
+            " claim_work_item"
+        )
     holder = calls.holder(author)
     # An expired lease is not a holder, so the queue sees through it: released
     # first, the item then reads unheld to the rule below. A lease in its grace
@@ -2817,7 +2830,6 @@ def claim_ready_work_item(
     expire_leases(conn, space_id=scope.space_id)
     # So does work put off until a day that came: the queue reads the space as it is.
     return_due(conn, space_id=scope.space_id)
-    settings = participation.load(conn)
     lost: model.RevisionConflictError | None = None
     for _ in range(_READY_CLAIM_ATTEMPTS):
         chosen = _next_given(conn, scope)

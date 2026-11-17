@@ -47,7 +47,7 @@ describe('input request wire contract', () => {
     ).searchParams
     expect(Object.fromEntries(query)).toEqual({
       scope_kind: 'space',
-      limit: '100',
+      limit: '200',
       data_scope_id: entry.target.space_ref.data_scope_id,
       space_key: 'TASK',
       reference: 'TASK-7',

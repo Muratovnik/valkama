@@ -46,6 +46,8 @@ ITEM_QUESTIONS = 5
 MOST_ADDRESSEES = 5
 #: How often one session may ask one other session within the hour.
 MOST_ASKS_PER_HOUR = 3
+#: The most requests one page of a list holds: the person's list reads every page.
+PAGE = 200
 
 #: The requests one session's confirmed calls asked of one other session within the last
 #: hour, counted by their `request_created` events: from the requests asked of that
@@ -411,7 +413,7 @@ def list_page(
     addressed: bool = False,
     session: str | None = None,
 ) -> dict:
-    """One page of requests, and whether more follow.
+    """One page of requests, at most `PAGE` of them, and whether more follow.
 
     Newest first, or, asked for what was answered after a time, oldest answer first
     by `resolved_at` and then `request_id`, so a reader that keeps the last time it
@@ -467,7 +469,7 @@ def list_page(
         if after is not None
         else " ORDER BY r.created_at DESC,r.request_id LIMIT ? OFFSET ?"
     )
-    bounded = max(1, min(int(limit), 201))
+    bounded = max(1, min(int(limit), PAGE))
     start = model.count_field(offset, "offset")
     result: list[dict] = []
     at = request_model.now()

@@ -15,8 +15,9 @@ from collections.abc import Mapping
 from unittest import mock
 
 from server import store
-from server.planning import api, calls, participation, service
+from server.planning import api, calls, model, participation, service, tools
 from server.planning import store as planning_store
+from tests.planning_fixtures import standing_in
 
 #: Each point and switch in the sets minimal, default, maximal and manual.
 DESIGNED = {
@@ -429,6 +430,89 @@ class LabelTests(Harness):
         with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK"):
             self.conn.execute("INSERT INTO label_settings(label, updated_at) VALUES('flow', 'x')")
         self.conn.rollback()
+
+
+class QueueTests(Harness):
+    """The switch `queue`: the queue hands work out while it is on, and work is taken by
+    number while it is off."""
+
+    def ready(self, key: str = "ALPHA") -> str:
+        return str(standing_in(self.conn, "ready", space=key, title="Ready")["reference"])
+
+    def take_next(self, key: str = "ALPHA") -> dict:
+        with calls.bind(AGENT, "claim_ready_work_item"):
+            answer = service.claim_ready_work_item(self.conn, space=key)
+        self.conn.commit()
+        assert answer is not None
+        return answer
+
+    def store(self) -> tuple[list[tuple], int, int]:
+        """What a call may write: every item's hold and revision, the history, the store's
+        own count of changes."""
+
+        rows = self.conn.execute(
+            "SELECT work_item_id, claim_ref, claim_call_id, revision, state_id"
+            " FROM work_items ORDER BY work_item_id"
+        ).fetchall()
+        events = int(self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0])
+        return [tuple(row) for row in rows], events, self.conn.total_changes
+
+    def test_the_queue_hands_out_work_while_it_is_on(self) -> None:
+        task = self.ready()
+        self.conn.commit()
+        taken = self.take_next()
+        self.assertEqual(task, taken["reference"])
+        self.assertEqual("ready", taken["started"]["from"])
+        self.assertIn("session-a", taken["claim_ref"])
+        # The space's own `on` holds against a common setting that hands work out by hand.
+        self.person(space=None, set="manual")
+        self.person(space="ALPHA", key="queue", value="on")
+        second = self.ready()
+        self.conn.commit()
+        self.assertEqual(second, self.take_next()["reference"])
+
+    def test_manual_work_refuses_the_queue_and_keeps_claims_by_number(self) -> None:
+        self.person(space="ALPHA", set="manual")
+        task = self.ready()
+        # A hold quiet past its lease, which a queue that runs releases first.
+        lapsed = str(service.create_work_item(self.conn, space="ALPHA", title="Held")["reference"])
+        service.claim_work_item(self.conn, lapsed, author="worker-a")
+        self.conn.execute(
+            "UPDATE work_item_events SET created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)",
+            ("-30 days",),
+        )
+        self.conn.commit()
+        before = self.store()
+        with (
+            calls.bind(AGENT, "claim_ready_work_item"),
+            self.assertRaises(model.QueueOffError) as caught,
+        ):
+            service.claim_ready_work_item(self.conn, space="ALPHA")
+        self.assertEqual(before, self.store())
+        self.assertEqual(
+            "worker-a", service.get_work_item(self.conn, lapsed)["claim_ref"], "lease kept"
+        )
+        status, body = api.error_response(caught.exception)
+        text = (
+            "the owner hands out work in ALPHA by hand: take the item they named with"
+            " claim_work_item"
+        )
+        self.assertEqual((409, {"code": "queue_off", "message": text}), (status, body["error"]))
+        # The tool says so to the agent before it calls.
+        [tool] = [entry for entry in tools.TOOLS if entry["name"] == "claim_ready_work_item"]
+        self.assertIn(
+            "Refused with queue_off where the owner hands out work by hand.", tool["description"]
+        )
+        # By number the same task is taken, as the owner's word hands it over.
+        with calls.bind(AGENT, "claim_work_item"):
+            claimed = service.claim_work_item(self.conn, task)
+        self.conn.commit()
+        self.assertEqual((task, "ready"), (claimed["reference"], claimed["started"]["from"]))
+        self.assertIn("session-a", claimed["claim_ref"])
+        # Only that space hands work out by hand: the next one's queue still runs.
+        other = self.ready("BETA")
+        self.conn.commit()
+        self.assertEqual(other, self.take_next("BETA")["reference"])
 
 
 if __name__ == "__main__":
