@@ -165,6 +165,12 @@ const reachStyle = ({ reach }: StepTargetPlace) => ({
   inlineSize: reach.size ?? 'auto',
 })
 /** Where a place's mark stands, as its style: its top and its foot, at its stretch's side. */
+/**
+ * The class of a place's ring by its kind, written whole: a class composed from a template hides
+ * from a search, and from the guard over the tests' selectors, which class the line writes.
+ */
+const PLACE_MARK = { now: 'step-now-mark', reset: 'step-reset-mark' } as const
+
 const targetMark = ({ mark }: StepTargetPlace) => ({
   '--step-high': mark.high,
   '--step-low': mark.low,
@@ -383,7 +389,7 @@ function stand(index: number) {
           ><span
             class="step-target-mark"
             aria-hidden="true"
-            :class="[`step-${target.kind}-mark`, markClass(stopOf(index))]"
+            :class="[PLACE_MARK[target.kind], markClass(stopOf(index))]"
             :style="targetMark(target)"
             data-hint-mark
         /></span>
