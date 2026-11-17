@@ -1141,6 +1141,15 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   scroll-driven animation, the heading row lagged a frame behind the rows and shook as the page
   scrolled. Each heading sorts by its column, and a line over the table says how many rows it
   shows of how many, how they are sorted, and downloads what it shows in that order.
+  `DonutChart` is a ring of how one whole splits among a few parts, for a dimension of a few
+  values, as effort and environment are, and for the tokens by kind: a sector a part, largest
+  first from the top, five at most with the smaller past them folded into one rest in the
+  folded tail's neutral; each part in the hue its value has on the page, a legend naming the
+  parts in the ring's order beside it, and a sector's share written on it where it fits, in the
+  near-black that reads on every series hue (`--color-text-on-series`). A sector's one hint
+  gives its figure and share, and the rest's each part it holds; the sectors are one Tab stop
+  walked round with the arrows. Rows that are no part of the whole close it by name and figure
+  under the legend. Its table twin is `RankedBarsTable`.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole
@@ -2469,7 +2478,9 @@ panel scrolls rather than the chart shrinking, and a tall window's room under th
 to the chart.
 
 A dimension's section answers «of what»: the same cells, then its values three ways. The
-ranked bars list the first twelve and say how many more the table holds; the small charts
+ranked bars list the first twelve and say how many more the table holds — by effort and by
+environment, a few values that split one whole, a ring (`DonutChart`) instead while the section
+is not split, its smaller parts past five folded into one; the small charts
 draw each leading value's days on one scale; the table lists every value with the figures
 of the period and of the period before. Work with no value in the dimension — on no task,
 of an unknown model — is ranked where its figure puts it, in the neutral colour. A value
@@ -2508,7 +2519,8 @@ each is described by its whole pair before its figures: described by its figures
 and the medium row of one model sounded alike to a screen reader.
 
 The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
-figure counts add up to it, cache reads stand beside them and reasoning is part of output.
+figure counts add up to it and are the sectors of its ring, cache reads stand beside them under
+its legend and reasoning is part of output.
 
 The quota's two sections read where each account's quota stands now, which no period or
 filter changes, and read it again on the live interval whatever the period; that the period and

@@ -1,14 +1,16 @@
 <script setup lang="ts">
 /**
- * The panel of the period's tokens by kind, laid out as a dimension's panel is: the kinds ranked
- * (`RankedBars`) beside a small chart of the period for each on one scale (`SmallMultiples`), and
- * under them the table of each kind beside the period before (`TokenKindsTable`). Every chart is
- * drawn or read as its table, as every chart of the page is (`ChartSection`).
+ * The panel of the period's tokens by kind, laid out as a dimension's panel is: how the kinds
+ * split the tokens, as a ring (`DonutChart`), beside a small chart of the period for each on one
+ * scale (`SmallMultiples`), and under them the table of each kind beside the period before
+ * (`TokenKindsTable`). Every chart is drawn or read as its table, as every chart of the page is
+ * (`ChartSection`); the ring's table ranks the kinds (`RankedBarsTable`).
  *
- * The kinds the tokens figure counts — input, the cache writes, output — rank with a bar, each in
- * its own hue (`KIND_SLOTS`), and add up to the «Tokens» figure of the summary, which the panel
- * says at its top. The cache reads and the reasoning, a part of output, stand after them as notes
- * with their figures and no bar, and never set a scale: the summary leaves them out as well.
+ * The kinds the tokens figure counts — input, the cache writes, output — are the ring's sectors,
+ * each in its own hue (`KIND_SLOTS`), and add up to the «Tokens» figure of the summary, which the
+ * panel says at its top. The cache reads and the reasoning, a part of output, stand under the
+ * ring's legend as notes with their figures, and are no part of its whole: the summary leaves
+ * them out as well.
  *
  * It reads the page's own answer, whatever dimension that was read by: its total and its steps
  * hold the tokens by kind. An answer whose period before could not be read says so at the top.
@@ -30,8 +32,9 @@ import { countedTotal, KIND_SLOTS, kindLines } from '@/pages/analytics/utils/tok
 
 import type { Usage } from '@/shared/api/analyticsApi.ts'
 import type { RankedRow, RankedWords } from '@/shared/ui/chartGeometry.ts'
+import DonutChart from '@/shared/ui/DonutChart.vue'
+import type { DonutWords } from '@/shared/ui/DonutChart.vue'
 import type { MultiplesWords, SmallMultiple } from '@/shared/ui/multiplesGeometry.ts'
-import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
 import SmallMultiples from '@/shared/ui/SmallMultiples.vue'
 import SmallMultiplesTable from '@/shared/ui/SmallMultiplesTable.vue'
@@ -68,6 +71,10 @@ const barWords = computed<RankedWords>(() => ({
   category: t('analytics.kinds.kind'),
   value: words.measure('tokens'),
   empty: t('analytics.bars.empty'),
+}))
+const ringWords = computed<DonutWords>(() => ({
+  empty: t('analytics.bars.empty'),
+  rest: (count) => t('analytics.values.other', { count }, count),
 }))
 
 /** The chart's full name; its section heading is the short form of the same, as the sibling's is. */
@@ -133,10 +140,12 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
           :narrow="narrow"
         >
           <template #chart>
-            <RankedBars
+            <DonutChart
               :label="barsTitle"
               :rows="bars"
-              :words="barWords"
+              :words="ringWords"
+              :format-value="formatValue"
+              :format-part="words.share"
               :format-share="words.markShare"
             />
           </template>

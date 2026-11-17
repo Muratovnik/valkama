@@ -255,6 +255,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'a period prints nothing of itself, and its segments are blocks of hue that speak through it: its sum against the period before, what changed and its series with their shares are its hint',
   ],
   [
+    'shared/ui/DonutChart.vue <path> v-tooltip.detail="hintOf(sector)"',
+    'a sector is a band of hue: its name, figure and share of the whole, and for the rest each part it holds, are its hint',
+  ],
+  [
     'shared/ui/RankedBars.vue <component> v-tooltip.detail="namedHint(row, whole, formatShare)"',
     'a row prints its name and figure; its share of the whole and the whole id of a value it names by the start are on no mark; while the name is cut, it comes first, whole',
   ],

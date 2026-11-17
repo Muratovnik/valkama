@@ -16,7 +16,10 @@ import { pressedLast, takesTyping } from '@/shared/lib/pressFocus.ts'
  * back on a closing stays a plain `focus()`: a ring there would stand around something
  * nobody pressed.
  */
-export function moveFocus(target: HTMLElement | null | undefined, options: FocusOptions = {}) {
+export function moveFocus(
+  target: HTMLElement | SVGElement | null | undefined,
+  options: FocusOptions = {},
+) {
   if (!target) return
   target.focus(takesTyping(target) ? options : { ...options, focusVisible: !pressedLast() })
 }

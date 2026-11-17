@@ -74,11 +74,15 @@ describe('the assignment', () => {
 describe('the palette', () => {
   test('every slot the assignment hands out is a token, and one fill rule draws each', () => {
     const fill = readFileSync(new URL('../src/shared/ui/seriesFill.css', import.meta.url), 'utf8')
-    assert.match(fill, /\.series-fill \{\s*background: var\(--color-series-1\);/u)
+    // One hue a mark is drawn in, painting a box's background and a drawn shape's fill alike.
+    assert.match(
+      fill,
+      /\.series-fill \{\s*--series-hue: var\(--color-series-1\);\s*background: var\(--series-hue\);\s*fill: var\(--series-hue\);/u,
+    )
     for (const slot of [...slots.slice(1), ...NEUTRALS] as const) {
       hue(slot)
       const rule = new RegExp(
-        String.raw`\[data-slot='${slot}'\] \{\s*background: var\(--color-series-${slot}\);`,
+        String.raw`\[data-slot='${slot}'\] \{\s*--series-hue: var\(--color-series-${slot}\);`,
         'u',
       )
       assert.match(fill, rule, `no fill for slot ${slot}`)

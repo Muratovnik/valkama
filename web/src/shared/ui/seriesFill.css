@@ -1,53 +1,58 @@
 /*
  * The hue a series' mark is filled with, read by each chart as its own scoped style: a mark
  * carries `.series-fill` and the `data-slot` that `seriesSlots()` (`seriesColors.ts`) gave its
- * series. One place maps a slot to its token, so a ranked bar, a stacked segment and a legend's
- * swatch cannot disagree about which hue an account is.
+ * series. One place maps a slot to its token, so a ranked bar, a stacked segment, a ring's sector
+ * and a legend's swatch cannot disagree about which hue an account is. A box is painted by its
+ * background, a shape of a drawing (`DonutChart`) by its fill, both from the one hue.
  *
  * A forced palette clears every fill, so a mark there names the palette's ink itself and keeps
  * the gaps between marks: the legend's order and the table say which series is which.
  */
 .series-fill {
-  background: var(--color-series-1);
+  --series-hue: var(--color-series-1);
+
+  background: var(--series-hue);
+  fill: var(--series-hue);
 
   &[data-slot='2'] {
-    background: var(--color-series-2);
+    --series-hue: var(--color-series-2);
   }
 
   &[data-slot='3'] {
-    background: var(--color-series-3);
+    --series-hue: var(--color-series-3);
   }
 
   &[data-slot='4'] {
-    background: var(--color-series-4);
+    --series-hue: var(--color-series-4);
   }
 
   &[data-slot='5'] {
-    background: var(--color-series-5);
+    --series-hue: var(--color-series-5);
   }
 
   &[data-slot='6'] {
-    background: var(--color-series-6);
+    --series-hue: var(--color-series-6);
   }
 
   &[data-slot='apart'] {
-    background: var(--color-series-apart);
+    --series-hue: var(--color-series-apart);
   }
 
   &[data-slot='other'] {
-    background: var(--color-series-other);
+    --series-hue: var(--color-series-other);
   }
 
   @media (forced-colors: active) {
     &,
     &[data-slot] {
-      background: CanvasText;
+      --series-hue: CanvasText;
+
       forced-color-adjust: none;
     }
 
     &[data-slot='apart'],
     &[data-slot='other'] {
-      background: GrayText;
+      --series-hue: GrayText;
     }
   }
 }

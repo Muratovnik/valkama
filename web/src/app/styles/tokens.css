@@ -549,6 +549,11 @@
   --color-series-apart: var(--color-gray-300);
   --color-series-other: var(--color-gray-150);
 
+  /* Words written on a series' fill, a share on a ring's sector: the near-black
+     holds 4.9:1 or more on every hue and both greys above, where white held
+     3.1:1 on the ochre. */
+  --color-text-on-series: var(--color-gray-1000);
+
   /* The margin a module keeps from the panel edge, and how wide its content
      column grows before it stops. Five files had written one or the other out
      longhand and no two agreed: the column existed at 1360, 1120, 1180 and

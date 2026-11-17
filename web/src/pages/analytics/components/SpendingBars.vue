@@ -15,6 +15,11 @@
  * It lists the first twelve values; past them one line says how many more there are and, pressed,
  * asks for the table, sent out as `more`, since the table lists them all (`SpendingTableLink`).
  *
+ * By effort and by environment, a few values that split one whole, it is a ring instead
+ * (`DonutChart`): each value a sector in its hue, the smaller past the fifth folded into one, and
+ * its table the same ranked rows. Split by a second dimension, its pairs are ranked bars again,
+ * since a ring of a pair each would tell the pairs of one value apart by hue alone.
+ *
  * A bar acts as its value does (`useRankedLines`): by task, a task's bar is a link to it; a value
  * the read can filter by — work with no task, or any value of another dimension it can — is a
  * control that narrows the view to it, sent out as `narrow`. The rows that are neither stay lines
@@ -32,6 +37,8 @@ import { breakdownOf, measureOf, rankedLines } from '@/pages/analytics/utils/usa
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
+import DonutChart from '@/shared/ui/DonutChart.vue'
+import type { DonutWords } from '@/shared/ui/DonutChart.vue'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
 
@@ -53,6 +60,9 @@ const emit = defineEmits<{ more: []; narrow: [value: string | null, label: strin
 /** How many values the list names before it leaves the rest to the table. */
 const LISTED = 12
 
+/** The dimensions whose few values split one whole, drawn as a ring while the section is not split. */
+const RING_DIMENSIONS: ReadonlySet<UsageDimension> = new Set(['effort', 'environment'])
+
 const { t } = useI18n()
 const words = useSpendingWords()
 
@@ -66,7 +76,10 @@ const all = computed(() =>
     Number.POSITIVE_INFINITY,
   ),
 )
-const lines = computed(() => all.value.slice(0, LISTED))
+/** Whether the values are drawn as a ring: by a dimension of a few, and not split by a second. */
+const ring = computed(() => !props.across && RING_DIMENSIONS.has(props.by))
+/** The ring folds its own rest, so it is handed every value; the list its first twelve. */
+const lines = computed(() => (ring.value ? all.value : all.value.slice(0, LISTED)))
 /** What every value adds up to, listed or not: what each bar's hint says its share of. */
 const whole = computed(() =>
   all.value.reduce((sum, line) => sum + (measureOf(props.measure, line.spent) ?? 0), 0),
@@ -97,6 +110,11 @@ const barWords = computed(() => ({
   value: words.measure(props.measure),
   empty: t('analytics.bars.empty'),
 }))
+const ringWords = computed<DonutWords>(() => ({
+  empty: t('analytics.bars.empty'),
+  rest: (count) => t('analytics.values.other', { count }, count),
+}))
+const formatValue = (amount: number) => words.scale(props.measure, amount)
 </script>
 
 <template>
@@ -107,7 +125,19 @@ const barWords = computed(() => ({
     :notice="notice"
   >
     <template #chart>
+      <DonutChart
+        v-if="ring"
+        :label="title"
+        :rows="bars"
+        :words="ringWords"
+        :format-value="formatValue"
+        :format-part="words.share"
+        :format-share="words.markShare"
+        @follow="follow"
+        @select="select"
+      />
       <RankedBars
+        v-else
         :label="title"
         :rows="bars"
         :words="barWords"

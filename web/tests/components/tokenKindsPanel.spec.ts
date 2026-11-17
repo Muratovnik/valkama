@@ -2,6 +2,8 @@
  * The panel of the tokens by kind on an answer as the read gives it. The oracle is the summary's
  * rule: the counted kinds add up to the «Tokens» figure, the cache reads and the reasoning stand
  * apart from that sum, and an answer without its period before has no column for it and says so.
+ * Its chart is a ring of the counted kinds alone, each in its kind's hue, the kinds apart named
+ * with their figures beside it and no part of its whole.
  */
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -74,6 +76,34 @@ describe('the panel of the tokens by kind', () => {
       'Итого',
       'Чтение кэша',
       'Рассуждения',
+    ])
+  })
+})
+
+describe('the ring of the tokens by kind', () => {
+  it('draws the counted kinds as its sectors and lists the kinds apart under its legend', () => {
+    const panel = mountPanel(true)
+    const ring = panel.get('.kinds-bars .donut-chart')
+
+    // Each counted kind in its own hue, wherever the page draws it (`KIND_SLOTS`).
+    expect(
+      ring
+        .findAll('.donut-sector')
+        .map((one) => [one.attributes('data-key'), one.attributes('data-slot')]),
+    ).toEqual([
+      ['input', '1'],
+      ['output', '4'],
+      ['cache_write_5m', '2'],
+    ])
+    expect(ring.findAll('.chart-key-name').map((one) => one.text())).toEqual([
+      'Input',
+      'Output',
+      'Cache write, 5 min',
+    ])
+    // The cache reads and the reasoning are no part of the ring's whole: notes under its legend.
+    expect(ring.findAll('.donut-note').map((one) => one.text())).toEqual([
+      'Cache read60M',
+      'Reasoning600K',
     ])
   })
 })

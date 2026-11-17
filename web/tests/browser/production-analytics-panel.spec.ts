@@ -10,8 +10,8 @@
  * small charts beside it are titled in one line each, and so is the line over the table that
  * counts its rows, in Russian as in English; on a phone no name in a chart's table breaks inside a
  * word. The section of the tokens by kind is such a panel too: its counted kinds add up to the
- * summary's «Tokens» figure, the cache reads stand apart from them, and its address gives it
- * back. Each run prints what it measured.
+ * summary's «Tokens» figure and are the sectors of its ring, the cache reads stand apart from
+ * them, and its address gives it back. Each run prints what it measured.
  */
 import { readFile } from 'node:fs/promises'
 
@@ -451,15 +451,16 @@ test('the tokens by kind are a panel whose counted kinds add up to the «Tokens�
   await expect(about).toContainText(/reasoning is part of output/u)
   await panel.locator('.level-about-press').click()
 
-  // Ranked with a bar: the counted kinds; after them, with no bar, the two the figure leaves out.
-  const bars = panel.locator('.kinds-bars')
-  await expect(bars.locator('ol .ranked-label')).toHaveText([
+  // A ring of the counted kinds, named by its legend; beside it, no part of it, the two the
+  // figure leaves out.
+  const ring = panel.locator('.kinds-bars .donut-chart')
+  await expect(ring.locator('.chart-key-name')).toHaveText([
     'Input',
     'Output',
     'Cache write, 5 min',
   ])
-  await expect(bars.locator('.ranked-rest .ranked-label')).toHaveText(['Cache read', 'Reasoning'])
-  await expect(bars.locator('.ranked-rest .ranked-bar')).toHaveCount(0)
+  await expect(ring.locator('.donut-sector')).toHaveCount(3)
+  await expect(ring.locator('.donut-note-name')).toHaveText(['Cache read', 'Reasoning'])
   // A small chart of each counted kind on one scale, the cache reads apart by their figure.
   await expect(panel.locator('.kinds-multiples h3')).toHaveText('Per day, by kind')
   expect(await parts(page), 'parts that spill or overlap').toEqual([])
