@@ -23,6 +23,61 @@ import type { StepAhead, StepPoint, StepWords } from '@/shared/ui/windowGeometry
 const style = (element: { attributes: (name: string) => string | undefined }) =>
   element.attributes('style') ?? ''
 
+/** A figure to the hundredth, so a check holds the number and not how many digits print it. */
+const hundredths = (value: number) => Math.round(value * 100) / 100
+
+type Point = [number, number]
+
+/**
+ * How each command a line of steps draws with moves the pen from where it stands, and how many
+ * numbers one move takes: a line to a point, a run across, a run up or down.
+ */
+const MOVES: Record<string, { take: number; to: (at: Point, values: number[]) => Point }> = {
+  M: { take: 2, to: (_, [x = Number.NaN, y = Number.NaN]) => [x, y] },
+  L: { take: 2, to: (_, [x = Number.NaN, y = Number.NaN]) => [x, y] },
+  H: { take: 1, to: ([, y], [x = Number.NaN]) => [x, y] },
+  V: { take: 1, to: ([x], [y = Number.NaN]) => [x, y] },
+}
+
+/**
+ * The corners a step line's path runs through, in the drawing's units, however its commands are
+ * written: absolute or relative, a run across or up and down, or a line to a point. A curve, or
+ * any command a line of steps does not draw with, throws, so it fails the check that reads it.
+ */
+function corners(d = ''): Point[] {
+  const found: Point[] = []
+  let at: Point = [0, 0]
+  for (const [, command = '', given = ''] of d.matchAll(/([A-Za-z])([^A-Za-z]*)/gu)) {
+    const move = MOVES[command.toUpperCase()]
+    if (!move) throw new Error(`a step line draws with no «${command}»: ${d}`)
+    const values = given
+      .trim()
+      .split(/[\s,]+/u)
+      .filter(Boolean)
+      .map(Number)
+    const relative = command !== command.toUpperCase()
+    for (let first = 0; first + move.take <= values.length; first += move.take) {
+      const taken = values.slice(first, first + move.take)
+      const [x, y] = relative ? move.to([0, 0], taken) : move.to(at, taken)
+      at = relative ? [at[0] + x, at[1] + y] : [x, y]
+      found.push([hundredths(at[0]), hundredths(at[1])])
+    }
+  }
+  return found
+}
+
+/** Where a stretch stands across the plot and how wide it is, in percent, however it is written. */
+function placement(element: { attributes: (name: string) => string | undefined }) {
+  const declared = new Map(
+    style(element)
+      .split(';')
+      .map((one) => one.split(':').map((part) => part.trim()))
+      .filter(([name]) => name)
+      .map(([name = '', value = '']) => [name, hundredths(Number.parseFloat(value))]),
+  )
+  return { start: declared.get('inset-inline-start'), size: declared.get('inline-size') }
+}
+
 const START = Date.UTC(2030, 2, 6, 11)
 const HOUR = 3_600_000
 const point = (key: string, hours: number, value: number): StepPoint => ({
@@ -113,7 +168,12 @@ describe('the step line', () => {
   it('draws readings as steps held to the moment read, never a slope between them', async () => {
     // Over five hours on a plot 300 wide and 100 high: an hour is 60 across, a percent 1 up.
     const line = await stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50)])
-    expect(line.get('.step-path').attributes('d')).toBe('M60.00,80.00 H90.00 V50.00 H180.00')
+    expect(corners(line.get('.step-path').attributes('d'))).toEqual([
+      [60, 80],
+      [90, 80],
+      [90, 50],
+      [180, 50],
+    ])
     // The pace runs from nothing at the start to the whole at the reset.
     const even = line.get('.step-even')
     expect([even.attributes('y1'), even.attributes('x2'), even.attributes('y2')]).toEqual([
@@ -133,25 +193,37 @@ describe('the step line', () => {
   it('sets its top at the highest reading where one ran past the whole', async () => {
     const line = await stepLine([point('12:00', 1, 50), point('13:00', 2, 125)])
     // 50 of 125 stands at 60 of 100; 125 at the top.
-    expect(line.get('.step-path').attributes('d')).toBe('M60.00,60.00 H120.00 V0.00 H180.00')
+    expect(corners(line.get('.step-path').attributes('d'))).toEqual([
+      [60, 60],
+      [120, 60],
+      [120, 0],
+      [180, 0],
+    ])
   })
 
   // A line over the plot once said one reading at a time; each reading now has its own hint.
-  it('gives each reading a hint over the whole step it holds', async () => {
+  it('gives each reading a hint over the whole step it holds, and no line over the plot', async () => {
     const line = await stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50)])
     const reach = line.findAll('.step-reach')
     expect(reach.map((one) => one.attributes('data-tooltip'))).toEqual(['12:00: 20%', '12:30: 50%'])
     expect(reach.map((one) => one.attributes('data-tooltip-kind'))).toEqual(['detail', 'detail'])
     // An hour in to half past, and half past to the moment read, of a five-hour plot.
-    expect(reach.map((one) => one.attributes('style'))).toEqual([
-      'inset-inline-start: 20%; inline-size: 10%;',
-      'inset-inline-start: 30%; inline-size: 30%;',
+    expect(reach.map((one) => placement(one))).toEqual([
+      { start: 20, size: 10 },
+      { start: 30, size: 30 },
     ])
+    // What the figure prints is its head, its top and its ends: no reading's words, at rest or
+    // while one is pointed at, since a reading says itself in its hint alone.
+    const printed = () => line.get('[data-chart="steps"]').text()
+    const said = ['12:00', '12:30', '20%', '50%']
+    expect([WORDS.top, 'h0', 'h5'].filter((words) => printed().includes(words))).toHaveLength(3)
+    expect(said.filter((words) => printed().includes(words))).toEqual([])
     await reach[0]?.trigger('pointerenter')
     expect(line.findAll('.step-mark').map((one) => one.classes('step-shown'))).toEqual([
       true,
       false,
     ])
+    expect(said.filter((words) => printed().includes(words))).toEqual([])
   })
 
   it('makes its readings one Tab stop, the latest, walked with the arrows', async () => {
@@ -187,7 +259,12 @@ describe('the step line', () => {
       ['Whole window', 'false'],
     ])
     // Four hours across 300: an hour is 75, so now, three hours in, stands at 225 of 300.
-    expect(line.get('.step-path').attributes('d')).toBe('M75.00,80.00 H112.50 V50.00 H225.00')
+    expect(corners(line.get('.step-path').attributes('d'))).toEqual([
+      [75, 80],
+      [112.5, 80],
+      [112.5, 50],
+      [225, 50],
+    ])
     // Steady use at the span's end, four hours of five, is 80 %.
     const even = line.get('.step-even')
     expect([even.attributes('y1'), even.attributes('y2')]).toEqual(['100', '20'])
@@ -210,7 +287,10 @@ describe('the step line', () => {
     expect(line.find('[role="radiogroup"]').exists()).toBe(false)
     expect(line.findAll('.step-axis span').map((one) => one.text())).toEqual(['h0', 'h5'])
     // Five hours across 300: the line holds to three hours in, 180, not to the reset.
-    expect(line.get('.step-path').attributes('d')).toBe('M60.00,80.00 H180.00')
+    expect(corners(line.get('.step-path').attributes('d'))).toEqual([
+      [60, 80],
+      [180, 80],
+    ])
     line.unmount()
   })
 
