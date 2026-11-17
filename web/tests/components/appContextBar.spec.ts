@@ -1,3 +1,8 @@
+/**
+ * The context bar's choice of resource: it is offered only where there is a choice, a project the
+ * bar can name with at least two resources its module owns. One resource is no choice, a global
+ * scope has none, and a scope not yet named offers nothing beside it.
+ */
 import { createI18n } from 'vue-i18n'
 
 import { mount } from '@vue/test-utils'
@@ -31,13 +36,16 @@ function manifest(moduleId: string) {
   return result
 }
 
-function mountBar(moduleId: string) {
+type BarProps = InstanceType<typeof AppContextBar>['$props']
+
+function mountBar(moduleId: string, props: Partial<BarProps> = {}) {
   return mount(AppContextBar, {
     props: {
       projects,
-      resources: selectableProjectResources(manifest(moduleId), resources),
+      resources: selectableProjectResources(manifest(moduleId), props.resources ?? resources),
       scope,
       title: 'Title',
+      ...props,
     },
     global: {
       plugins: [
@@ -61,19 +69,42 @@ function mountBar(moduleId: string) {
         }),
       ],
       stubs: {
-        ChoiceSelect: { template: '<button class="choice-select-stub" />' },
+        // A choice says the options it offers, each by its name.
+        ChoiceSelect: {
+          props: ['options'],
+          template: '<ul data-choice><li v-for="one in options">{{ one.label }}</li></ul>',
+        },
       },
     },
   })
 }
 
+/** The choices the bar offers, each by the names of its options. */
+const choices = (bar: ReturnType<typeof mountBar>) =>
+  bar.findAll('[data-choice]').map((choice) => choice.findAll('li').map((one) => one.text()))
+
+const SCOPES = ['Global', 'Alpha']
+
 describe('AppContextBar manifest-owned project resources', () => {
-  it('shows two mapped planning spaces for Work', () => {
-    expect(mountBar('planning').find('.resource-scope').exists()).toBe(true)
+  it('offers the two mapped planning spaces of a project for Work', () => {
+    expect(choices(mountBar('planning'))).toEqual([
+      SCOPES,
+      ['planning-space-1', 'planning-space-2'],
+    ])
   })
 
   it('hides Planning resources from modules whose manifests do not own them', () => {
     for (const moduleId of ['memory', 'settings'])
-      expect(mountBar(moduleId).find('.resource-scope').exists()).toBe(false)
+      expect(choices(mountBar(moduleId))).toEqual([SCOPES])
+  })
+
+  it('offers no choice of one resource', () => {
+    expect(choices(mountBar('planning', { resources: resources.slice(0, 1) }))).toEqual([SCOPES])
+  })
+
+  it('offers no resource in the global scope, nor before the projects are read', () => {
+    expect(choices(mountBar('planning', { scope: { kind: 'global' } }))).toEqual([SCOPES])
+    // Unread, the scope's own selector keeps its place with only «Global» to name.
+    expect(choices(mountBar('planning', { projects: null }))).toEqual([['Global']])
   })
 })

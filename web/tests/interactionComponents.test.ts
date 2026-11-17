@@ -193,9 +193,9 @@ test('the session inspector separates identity from controls and detail content 
 test('info tips escape clipped ancestors and calculate a viewport-fixed position', () => {
   assert.match(infoTip, sets('to', 'body'))
   assert.match(infoTip, renders('Teleport'))
-  assert.match(infoTip, /getBoundingClientRect\(\)/)
   assert.match(infoTip, /position:\s*fixed/)
-  assert.match(infoTip, /window\.innerWidth/)
+  // Where the open tip stands, at its control and clear of every edge of the viewport, also
+  // when the window changes size: components/infoTip.spec.ts.
 })
 
 test('a work-item tile is one control, not a card with an arrow footer', () => {

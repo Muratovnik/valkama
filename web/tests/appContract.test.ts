@@ -160,8 +160,8 @@ test('clean entry restores the last server-side route without legacy storage', (
   // preference no longer mapped being dropped: platformEntryRestore.test.ts.
   assert.match(app, calls('usePlatformEntryRestore'))
   assert.match(entryRestore, calls('savePlatformUiPrefs'))
-  // The bar offers a resource only where there is a choice between two.
-  assert.match(contextBar, /resourceOptions\.length\s*>\s*1/)
+  // The bar offers a resource only where there is a choice between two, in a project it can
+  // name: components/appContextBar.spec.ts.
   for (const shellSource of [app, entryRestore]) {
     assert.doesNotMatch(
       shellSource,
