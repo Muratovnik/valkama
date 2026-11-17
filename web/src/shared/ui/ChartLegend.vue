@@ -8,7 +8,8 @@
  * compared with names that mark last (`outline`), beside a short line in the ink the plot draws
  * it in at the height that period reached. Neither key acts, and neither is a series: each is a
  * key of a mark (`chart-mark`, `data-mark`), never a `chart-key` with a series' key, so whatever
- * reads the series reads them alone and no series' key can meet a mark's.
+ * reads the series reads them alone and no series' key can meet a mark's. The hatch's key, with
+ * nothing to add, says its name whole while it is cut, as an entry with no hint of its own does.
  *
  * A legend given a figure for its entries (`figures`), as a ring's is, lists down, an entry a
  * line, each figure at the end of its line in the quiet ink, ending where the others end: a
@@ -150,6 +151,7 @@ const figureOf = (key: string) => props.figures?.get(key)
       class="chart-entry chart-entry-mark"
     >
       <span
+        v-tooltip.clipped="hatch"
         class="chart-mark"
         data-mark="hatch"
       >

@@ -132,6 +132,9 @@ describe('period columns that open nothing', () => {
     // The key only shows: no link, no button, no focus.
     expect(key.element.tagName).toBe('SPAN')
     expect(key.attributes('tabindex')).toBeUndefined()
+    // Its hint is an entry's with nothing to add: its name, whole while it is cut.
+    expect(key.attributes('data-tooltip')).toBe('in progress')
+    expect(key.attributes('data-tooltip-kind')).toBe('clipped')
 
     const over = mountColumns({ columns: finished })
     expect(over.find('.chart-mark[data-mark="hatch"]').exists()).toBe(false)
