@@ -722,8 +722,14 @@ def create_work_item(
     with no parent and no `acceptance` is the owner's to decide on, by the setting
     of its space (`proposed_goal`): left to the agent, it is accepted at once on the
     basis `agent`; kept for the owner, it lies in triage and the answer's
-    `waits_for_owner` names the question about it. Either acceptance an agent makes
-    alone, `agent` or `assignment`, is marked in the summary of decisions.
+    `waits_for_owner` names the question about it. A task an agent files under such a
+    chain meets the setting `task_in_goal` the same way: left to the agent it is
+    `inherited`; kept for the owner it lies under its goal in triage, whatever state it
+    named, and the question `task` asks about it. A task that would lie in triage
+    under no accepted chain is accepted on `label_rule` when one of its labels has the
+    rule `ready` in its space (`_ruling_label`). Each acceptance an agent makes alone,
+    `agent`, `assignment`, a task in a goal or a label it chose, is marked in the
+    summary of decisions.
     Accepted work stands in ready, and a goal or stage accepted at once stands in
     the service state: `created` names no state for it, and `accepted` and `opened`
     follow. A named
@@ -755,6 +761,16 @@ def create_work_item(
     if proposed == participation.AGENT:
         entry = model.AGENT_BASIS
     given = _given(conn, parent_id, entry)
+    in_goal = _task_in_goal(conn, space_id, stored_kind, given, entry)
+    if in_goal == participation.HUMAN:
+        # Kept for the owner, it lies under the goal in triage, whatever state it named.
+        given, state = None, None
+    tagged = model.labels(labels)
+    ruled = None
+    if given is None and in_goal is None and stored_kind != model.CONTAINER_KIND:
+        ruled = _ruling_label(conn, space_id, parent_id, tagged)
+        if ruled is not None:
+            given = LABEL_RULE
     if state:
         target = states.resolve(conn, workflow_id, state)
     elif given is not None:
@@ -786,7 +802,7 @@ def create_work_item(
         basis=basis,
         started=True if starts else None,
         description=model.multiline_field(description, "work_item.description"),
-        labels=model.labels(labels),
+        labels=tagged,
         source=model.text_field(source, "work_item.source", limit=512, required=False),
     )
     item_projects.replace(conn, item_id, changes)
@@ -794,12 +810,19 @@ def create_work_item(
     # A goal or stage accepted at once names no state: its opening says where it stands.
     _log(conn, item_id, "created", "" if opened else str(target["key"]), author)
     if basis is not None:
-        accepted = _log(conn, item_id, "accepted", basis, author)
-        # An agent's own decision, and its word that the owner gave the work, are the
-        # owner's to read in the summary of decisions.
-        point = {model.AGENT_BASIS: "proposed_goal", model.NAMED_BASIS: "assignment"}.get(basis)
+        ruling = None if basis != LABEL_RULE else ruled
+        accepted = _log(conn, item_id, "accepted", _accepted_detail(basis, ruling), author)
+        # An agent's own decision, its word that the owner gave the work, and the label
+        # it chose that a rule accepts, are the owner's to read in the summary of decisions.
+        point = {
+            model.AGENT_BASIS: "proposed_goal",
+            model.NAMED_BASIS: "assignment",
+            LABEL_RULE: "finding",
+        }.get(basis)
+        if in_goal == participation.AGENT and basis == "inherited":
+            point = "task_in_goal"
         if point is not None and calls.from_agent():
-            decisions.mark(conn, accepted, point, _accepted_what(conn, item_id))
+            decisions.mark(conn, accepted, point, _accepted_what(conn, item_id, ruled=ruling))
     if opened:
         _log(conn, item_id, "opened", "", author)
     creator = subscriptions.agent_session(calls.current())
@@ -810,6 +833,8 @@ def create_work_item(
     waits = None
     if proposed == participation.HUMAN and target["category"] == "triage":
         waits = _ask_about_goal(conn, item_id, author, by_agent=True)
+    if in_goal == participation.HUMAN and parent_id is not None:
+        waits = _ask_about_task(conn, item_id, parent_id, author)
     words.bring_current(conn)
     answer = read_model.present(conn, read_model.item_by_id(conn, item_id), full=True)
     if waits is not None:
@@ -838,10 +863,141 @@ def _proposed_goal(
     return participation.load(conn).mode(space_id, "proposed_goal")
 
 
-def _accepted_what(conn: sqlite3.Connection, identity: str) -> str:
-    """What the summary of decisions says of an acceptance: `accepted MAIN-12`."""
+#: The basis a rule of a label gives a task in triage.
+LABEL_RULE = "label_rule"
 
-    return f"accepted {read_model.reference(conn, read_model.item_by_id(conn, identity))}"
+
+def _task_in_goal(
+    conn: sqlite3.Connection, space_id: str, kind: str, given: str | None, entry: str | None
+) -> str | None:
+    """Who decides on a task an agent files under goals and stages all accepted and open,
+    on no one's word, `agent` or `human` by the owner's setting of its space; None for
+    any other new item.
+
+    Such a task would be `inherited`. The owner's own write and an agent's
+    `assignment` are the owner's word, and a goal or stage filed there adds no work of
+    its own: the tasks filed under it are asked about.
+    """
+
+    if kind == model.CONTAINER_KIND or given != "inherited" or entry is not None:
+        return None
+    if not calls.from_agent():
+        return None
+    return participation.load(conn).mode(space_id, "task_in_goal")
+
+
+def _ruling_label(
+    conn: sqlite3.Connection, space_id: str, parent_id: str | None, labels: Sequence[str]
+) -> str | None:
+    """The label whose rule accepts a task lying in triage under no accepted chain, or None.
+
+    The first of `labels` whose rule in force in the space makes a finding ready. A
+    task under a goal or stage whose group of findings waits on the owner's question
+    (`triage`) is decided by that answer, so no rule takes it.
+    """
+
+    if not labels:
+        return None
+    ruled = participation.load(conn).ready_label(space_id, labels)
+    if ruled is None or _grouped(conn, parent_id):
+        return None
+    return ruled
+
+
+#: Whether a question to the owner about a group of findings stands open on any of the
+#: items of a JSON array.
+_GROUP_ASKED = (
+    "SELECT 1 FROM work_item_requests r WHERE r.purpose = 'triage' AND "  # noqa: S608 - constant text
+    + questions.OWNER_QUESTION
+    + " AND r.work_item_id IN (SELECT value FROM json_each(?)) LIMIT 1"
+)
+
+
+def _grouped(conn: sqlite3.Connection, parent_id: str | None) -> bool:
+    """Whether a goal or stage over the item, from `parent_id` up, waits on the owner's
+    question about its group of findings."""
+
+    if parent_id is None:
+        return False
+    chain = [identity for identity, _kind, _category in item_tree.above(conn, parent_id)]
+    return conn.execute(_GROUP_ASKED, (json.dumps(chain),)).fetchone() is not None
+
+
+def _accepted_detail(basis: str, ruled: str | None) -> str:
+    """The detail of an `accepted` event: the basis, and the label a rule accepted by."""
+
+    return basis if ruled is None else f"{basis}: {ruled}"
+
+
+def _accepted_what(conn: sqlite3.Connection, identity: str, *, ruled: str | None = None) -> str:
+    """What the summary of decisions says of an acceptance: `accepted MAIN-12`, with the
+    goal or stage it stands under (`under MAIN-3`) or the label a rule took it by
+    (`by the label docs`)."""
+
+    row = read_model.item_by_id(conn, identity)
+    said = f"accepted {read_model.reference(conn, row)}"
+    if ruled is not None:
+        return f"{said} by the label {ruled}"
+    if row["parent_id"] is not None:
+        parent = read_model.item_by_id(conn, str(row["parent_id"]))
+        said += f" under {read_model.reference(conn, parent)}"
+    return said
+
+
+def _last_accepted(conn: sqlite3.Connection, identity: str) -> int:
+    """The `accepted` event a move of the item wrote last."""
+
+    return int(
+        conn.execute(
+            "SELECT MAX(id) FROM work_item_events WHERE work_item_id = ? AND action = 'accepted'",
+            (identity,),
+        ).fetchone()[0]
+    )
+
+
+def _ask_about_task(
+    conn: sqlite3.Connection,
+    identity: str,
+    goal_id: str,
+    author: str | None,
+    *,
+    moved_from: sqlite3.Row | None = None,
+) -> pending.Waiting:
+    """Ask the owner whether to take on a task an agent filed under the accepted goal or
+    stage `goal_id`, which lies there in triage, or, with `moved_from` the task as it
+    stands, one it moves there, which stays where it was; the action waits on the answer
+    (`requests.carry_out`)."""
+
+    row = read_model.item_by_id(conn, identity)
+    reference = read_model.reference(conn, row)
+    goal = read_model.reference(conn, read_model.item_by_id(conn, goal_id))
+    if moved_from is None:
+        proposal = pending.Proposal(
+            "accept", {"parent": goal_id}, f"accepted {reference} under {goal}"
+        )
+        prompt = f"An agent files the task {reference} in {goal}: {row['title']}."
+    else:
+        done = "moved" if moved_from["acceptance"] is not None else "accepted"
+        proposal = pending.Proposal(
+            "parent",
+            {"parent": goal_id},
+            f"{done} {reference} under {goal}",
+            seen={
+                "parent": moved_from["parent_id"],
+                "accepted": moved_from["acceptance"] is not None,
+            },
+        )
+        prompt = f"An agent moves the task {reference} into {goal}: {row['title']}."
+    return pending.ask(
+        conn,
+        identity,
+        "task_in_goal",
+        proposal,
+        purpose="task",
+        prompt=prompt + " Take it on, put it off, leave it out of the goal, or drop it.",
+        fields=request_model.fields(request_model.task_fields(moving=moved_from is not None)),
+        author=author,
+    )
 
 
 def _ask_about_goal(
@@ -978,6 +1134,14 @@ def update_work_item(
     `projects` replaces the projects the item names, each then `named`
     (`item_projects.replace`); the item stays in its space. It is an edit with no
     history event.
+
+    A task an agent moves under goals and stages all accepted and open meets the
+    owner's setting `task_in_goal`, as one filed there does: left to the agent, the
+    move accepts it from triage as `inherited`, marked in the summary of decisions;
+    kept for the owner, the task stays where it was, the rest of the edit is made, and
+    the answer's `waits_for_owner` names the question `task` about the move. A label
+    the edit puts on a task in triage under no accepted chain may accept it on its
+    rule (`_accept_by_label`).
     """
 
     row = _row_for_write(conn, reference, expected_revision)
@@ -1012,6 +1176,8 @@ def update_work_item(
         updates.append("kind = ?")
         parameters.append(_edited_kind(conn, row, kind))
     moved_under: sqlite3.Row | None = None
+    kept_from: str | None = None
+    in_goal: str | None = None
     if parent is not None:
         if not parent.strip():
             raise model.PlanningError(
@@ -1021,9 +1187,14 @@ def update_work_item(
             )
         parent_row = _parent_row(conn, str(row["planning_space_id"]), parent, item=row)
         moved_to = None if parent_row is None else str(parent_row["work_item_id"])
-        updates.append("parent_id = ?")
-        parameters.append(moved_to)
-        if parent_row is not None and str(row["parent_id"]) != moved_to:
+        in_goal = _moved_into_goal(conn, row, moved_to)
+        if in_goal == participation.HUMAN:
+            # The owner decides on a task moved into accepted work: it stays where it was.
+            kept_from = moved_to
+        else:
+            updates.append("parent_id = ?")
+            parameters.append(moved_to)
+        if kept_from is None and parent_row is not None and str(row["parent_id"]) != moved_to:
             moved_under = parent_row
             # The container it leaves and the one it joins each derive from it.
             closing.note(conn, row["parent_id"], author)
@@ -1036,32 +1207,95 @@ def update_work_item(
         for name in (_edited(row, updates, parameters), "projects" if reprojected else None)
         if name
     )
+    identity = str(row["work_item_id"])
     if edited:
-        calls.call_id(conn, str(row["work_item_id"]), edited=edited)
+        calls.call_id(conn, identity, edited=edited)
     if not updates and not reprojected:
-        return read_model.present(conn, row, full=True)
+        answer = read_model.present(conn, row, full=True)
+        if kept_from is not None:
+            answer["waits_for_owner"] = _ask_about_task(
+                conn, identity, kept_from, author, moved_from=row
+            ).answer()
+        return answer
     _write(conn, row, updates, parameters)
     if reprojected and changes is not None:
-        item_projects.replace(conn, str(row["work_item_id"]), changes)
+        item_projects.replace(conn, identity, changes)
     under = None if moved_under is None else read_model.reference(conn, moved_under)
     if moved_under is not None and row["parent_id"] is not None:
         _left(conn, row, f"moved under {under}", author)
     # Any other field's edit is no audited action; the revision and the call row carry it.
     if change is not None:
-        _log(
-            conn,
-            str(row["work_item_id"]),
-            "labels_changed",
-            change,
-            author,
-            limit=model.LABELS_DETAIL_LIMIT,
+        _log(conn, identity, "labels_changed", change, author, limit=model.LABELS_DETAIL_LIMIT)
+    if moved_under is not None and _accept_moved(conn, row, f"moved under {under}", author):
+        if in_goal == participation.AGENT:
+            decisions.mark(
+                conn, _last_accepted(conn, identity), "task_in_goal", _accepted_what(conn, identity)
+            )
+    if labels is not None and change is not None:
+        _accept_by_label(
+            conn, identity, [label for label in labels if label not in current], author
         )
-    if moved_under is not None:
-        _accept_moved(conn, row, f"moved under {under}", author)
+    waits = None
+    if kept_from is not None:
+        waits = _ask_about_task(conn, identity, kept_from, author, moved_from=row)
     words.bring_current(conn)
-    return read_model.present(
-        conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
-    )
+    answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    if waits is not None:
+        answer["waits_for_owner"] = waits.answer()
+    return answer
+
+
+def _moved_into_goal(
+    conn: sqlite3.Connection, row: sqlite3.Row, moved_to: str | None
+) -> str | None:
+    """Who decides on a task an agent moves under goals and stages all accepted and open,
+    `agent` or `human` by the owner's setting of its space; None for any other edit.
+
+    Moving work there is filing it there. A task closed or put off is no work joining
+    the goal: it comes back, or is reopened, through the owner's own questions.
+    """
+
+    if moved_to is None or row["kind"] == model.CONTAINER_KIND or str(row["parent_id"]) == moved_to:
+        return None
+    if not calls.from_agent() or not item_tree.accepted_chain(conn, moved_to):
+        return None
+    category = read_model.state_by_id(conn, str(row["state_id"]))["category"]
+    if category in (*model.TERMINAL_CATEGORIES, "deferred"):
+        return None
+    return participation.load(conn).mode(str(row["planning_space_id"]), "task_in_goal")
+
+
+def _accept_by_label(
+    conn: sqlite3.Connection, identity: str, added: Sequence[str], author: str | None
+) -> None:
+    """Accept a task lying in triage under no accepted chain on the rule of a label an
+    edit just put on it (`label_rule`), moving it to the first ready state it reaches.
+
+    The rule acts on the write that puts the label on, whoever writes it: switching the
+    rule on accepts nothing already lying there. A label an agent chose that a rule
+    accepted by is marked in the summary of decisions, as `finding`.
+    """
+
+    row = read_model.item_by_id(conn, identity)
+    if row["kind"] == model.CONTAINER_KIND or row["acceptance"] is not None:
+        return
+    if read_model.state_by_id(conn, str(row["state_id"]))["category"] != "triage":
+        return
+    parent = None if row["parent_id"] is None else str(row["parent_id"])
+    if item_tree.accepted_chain(conn, parent):
+        return
+    ruled = _ruling_label(conn, str(row["planning_space_id"]), parent, added)
+    target = None if ruled is None else states.reachable(conn, row, "ready")
+    if ruled is None or target is None:
+        return
+    _transition(conn, identity, str(target["state_id"]), author=author, ruled=ruled)
+    if calls.from_agent():
+        decisions.mark(
+            conn,
+            _last_accepted(conn, identity),
+            "finding",
+            _accepted_what(conn, identity, ruled=ruled),
+        )
 
 
 def _left(conn: sqlite3.Connection, row: sqlite3.Row, reason: str, author: str | None) -> None:
@@ -1077,8 +1311,9 @@ def _left(conn: sqlite3.Connection, row: sqlite3.Row, reason: str, author: str |
 
 def _accept_moved(
     conn: sqlite3.Connection, row: sqlite3.Row, reason: str, author: str | None
-) -> None:
-    """Accept an item in triage that a move put under goals and stages all accepted and open.
+) -> bool:
+    """Accept an item in triage that a move put under goals and stages all accepted and
+    open; whether it did.
 
     Moving it there is filing it there: it takes the basis `inherited`, a task moves
     to the first ready state its workflow reaches and a goal or stage to the service
@@ -1091,11 +1326,12 @@ def _accept_moved(
     if current["category"] != "triage" or not item_tree.accepted_chain(
         conn, str(read_model.item_by_id(conn, identity)["parent_id"])
     ):
-        return
+        return False
     target = states.reachable(conn, row, "ready")
     if target is None:
-        return
+        return False
     _transition(conn, identity, str(target["state_id"]), reason=reason, author=author)
+    return True
 
 
 @_marked
@@ -1652,8 +1888,10 @@ def _transition(
     spared: frozenset[str] = frozenset(),
     to_check: object = None,
     cancels: object = None,
+    ruled: str | None = None,
 ) -> dict:
-    """`transition_work_item`, sparing the refusals named in `spared`."""
+    """`transition_work_item`, sparing the refusals named in `spared`; `ruled` is the
+    label whose rule accepts the item on this move (`label_rule`)."""
 
     row = _row_for_write(conn, reference, expected_revision)
     named = model.named_basis(acceptance)
@@ -1673,7 +1911,7 @@ def _transition(
     )
     check = _to_check(to_check, into_review, target)
     note = transition_reason(reason, str(target["key"]))
-    gives = _basis(conn, row, target, named)
+    gives = LABEL_RULE if ruled is not None else _basis(conn, row, target, named)
     refusals, warnings = transitions.findings(
         conn,
         row,
@@ -1714,7 +1952,7 @@ def _transition(
         warnings += _cancel_under(conn, cancelling, note, author, returned)
     _write(conn, row, updates, parameters)
     if gives is not None:
-        _log(conn, identity, "accepted", gives, author)
+        _log(conn, identity, "accepted", _accepted_detail(gives, ruled), author)
     if opened:
         # Entering the service state names no state: it is the goal's or stage's opening.
         _log(conn, identity, "opened", note, author)

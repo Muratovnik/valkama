@@ -639,13 +639,15 @@ def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         with service.one_write(conn):
             findings, applied = _run_steps(conn, base, steps)
         answer = service.get_work_item(conn, str(item["work_item_id"]))
-    # What the creation itself said: the task a part was split off and the steps it took.
-    said = {name: item[name] for name in _SPLIT_ANSWER if name in item}
+    # What the creation itself said: the task a part was split off and the steps it took,
+    # or the question the owner answers before it is taken on.
+    said = {name: item[name] for name in _CREATED_ANSWER if name in item}
     return {**answer, **said, **findings, "applied": applied}
 
 
-#: What a creation that split a part off says beside the part.
-_SPLIT_ANSWER = ("split_from", "moved_steps", "overridden")
+#: What a creation says beside the item: of a part split off, the task and the steps it
+#: took; of an item the owner decides on, what waits for their answer.
+_CREATED_ANSWER = ("split_from", "moved_steps", "overridden", "waits_for_owner")
 
 
 def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
@@ -1406,9 +1408,10 @@ def _apply_step(
     if group == "update":
         # Who hears the items its description named stands where the single edit puts it.
         edited = _update(conn, {**entry, **base})
-        return {name: edited[name] for name in (TOLD,) if name in edited}, model.updated_fields(
-            entry
-        )
+        # A move the owner decides on waits, and the batch's answer says so as the edit's does.
+        return {
+            name: edited[name] for name in (TOLD, "waits_for_owner") if name in edited
+        }, model.updated_fields(entry)
     if group == "checklist":
         replaced = _checklist(conn, {**entry, **base})
         return _forced_findings(replaced), [

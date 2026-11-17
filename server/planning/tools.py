@@ -880,7 +880,10 @@ TOOLS = [
         " changed, and from_person when a person acted on the item since an agent"
         " last wrote, each text whole up to 1500 characters and marked cut past them."
         " The call is one write: its comment does not lift a closing"
-        " transition's person_spoke refusal.",
+        " transition's person_spoke refusal. Some writes are the owner's to make, by a"
+        " setting only the server reads: such a write is not made, the answer names it in"
+        " waits_for_owner with the question the owner answers, and the server makes it"
+        " then if it still applies.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,

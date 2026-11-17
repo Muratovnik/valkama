@@ -54,7 +54,12 @@ says what it is:
   (`assignment`). `agent` is an agent's own decision where the owner's setting
   leaves it to the agent: a goal you file with no parent is accepted at once on it,
   or, where the owner decides, stays in `triage` and the answer says
-  `waits_for_owner` with the question they answer.
+  `waits_for_owner` with the question they answer. A task you file or move under
+  goals and stages that are all accepted and open meets the owner's setting the
+  same way: it is `inherited`, or it waits for their answer, a new one in `triage`
+  under the goal and a moved one where it was. A task lying in `triage` outside
+  them is accepted on `label_rule` when the call that files it, or puts a label on
+  it, gives it a label the owner's rule makes ready.
   Other work an agent files without a `state` stays in `triage` unless it sends
   `acceptance: "assignment"`, on the owner's word; an item with no basis moved to
   `ready`, `active`, `review`, `blocked` or `completed` without it is refused with
@@ -96,7 +101,7 @@ await confirmation: check each and complete it, as the skill's Close section say
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task; `waits_for_owner` (`action`, `point`, `question`, `what`) when the owner decides on it and it waits in `triage` for their answer |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `waits_for_owner` (as `create_work_item` gives it) when the owner decides on a move of `update` under a goal, `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
 `claim_ready_work_item` takes the first workable task in the order of work —
