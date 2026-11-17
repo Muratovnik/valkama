@@ -289,11 +289,8 @@ def _made_now(cwd: str, started: float, deadline: float) -> list[dict]:
     )
     if before.returncode != 0 or before.stdout.strip().lower() != commit["parents"][0]:
         return []
-    ident = git_worktrees.git_text(
-        cwd, "var", "GIT_COMMITTER_IDENT", timeout=_left(deadline), errors="replace"
-    )
-    own = ident.stdout.rpartition("<")[2].partition(">")[0]
-    if ident.returncode != 0 or not own or own.lower() != address.lower():
+    own = git_worktrees.committer_address(cwd, timeout=_left(deadline))
+    if own is None or own.lower() != address.lower():
         return []
     return [commit]
 

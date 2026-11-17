@@ -116,7 +116,7 @@ changed. `url` is described in [The address of a work item](#the-address-of-a-wo
 | `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)); `project_roots` unless it released |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`, `by_previous_holder`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim` |
+| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim`; `unreported_commits`, `unreported_total` and `unreported_unread` when a close found any (see [The net at a close](#the-net-at-a-close)) |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
 `project_roots` is the root of each project the claimed task changes, or of its
@@ -662,7 +662,8 @@ The card leaves out what its reference and parts stand for: `work_item_id`,
 `comment_count`, the `state_id` and `is_terminal` of the state, the lease (the
 `claim` part) and every list of the history. A write's answer keeps, beside the
 card, what the write itself reports, such as `applied`, `started`, `requeued`,
-`released`, `merged`, `similar`, `warnings`, `overridden` and `from_person`.
+`released`, `merged`, `similar`, `warnings`, `overridden`, `from_person` and the
+`unreported_*` fields of a close.
 
 `parts` names each other part with what it holds, and leaves out a part with
 nothing in it:
@@ -918,6 +919,65 @@ anything; attaching a commit the item holds already changes nothing.
             "committed_at": "2026-11-20T10:31:02+03:00", "session": "019a…",
             "agent": null, "attached_by": "manual", "label": ""},
  "changed": true}
+```
+
+### The net at a close
+
+**Since 3.0.** A commit no hook reported -- one a person made, a client without a
+session, a session whose hook is off, or `git am` and a commit inside
+`rebase -i`, which fire no commit hook -- reaches no item on its own. So a
+transition into a `review` or `completed` state names the commits made in the
+card's repositories while the work was held, and attaches none of them: the
+agent attaches the ones that belong with the `commits` group of
+[Several changes in one call](#several-changes-in-one-call).
+
+The window opens where the work began, read in the same write before the
+transition ends the claim, by the first of these that holds:
+
+1. the item is claimed: when the call that claimed it arrived;
+2. it is not, and the caller's holder holds one of its steps: the newest claim or
+   takeover of that step by a call of the caller's session, the earliest of them
+   when it holds several;
+3. neither: the newest claim or takeover of the item by a call of the closing
+   session, as for a close from review, whose entry ended the claim;
+4. none of these: there is no window, and the answer says nothing of commits.
+
+Once the transition has committed, the records the commit hook left that no
+client hook has taken yet -- the closing session's and those of a commit in the
+card's projects -- are taken first, in a transaction of their own, so a commit a
+hook did report is known before anything is named. Then Git is asked, outside any
+transaction and for at most 5 seconds, in each root of the card's projects that
+is on this machine with a repository of its own:
+`git log --branches --tags HEAD --since=<window>`. Of what it lists, a commit is
+named when its committer address is the one Git commits with in that root
+(`git var GIT_COMMITTER_IDENT`, the environment and then the configuration) and
+the store does not hold it for that project. `refs/stash`, a remote's branches
+and the notes are not read, and a commit somebody else committed into a local
+branch, such as one a pull brought, has another address. A commit of the same
+address from another machine, pulled into a local branch while the work was
+held, is named too; the agent leaves it.
+
+The answer of the transition -- the acknowledgement and the `verbose` card of
+`apply_work_item_changes`, and the HTTP transition of the interface -- carries
+each field only when it is not empty:
+
+| Field | Holds |
+| --- | --- |
+| `unreported_commits` | up to 20 commits, newest first, each `{repository, hash, subject, committed_at}` as [the commits part](#the-commits-part) means them |
+| `unreported_total` | how many there are, when there are more than the 20 listed |
+| `unreported_unread` | the ids of the projects whose root did not answer: the transition stands all the same |
+
+A line among the answer's `warnings` names them to the agent: "These commits in
+the card's repositories were made while you held it and no hook reported them:
+valkama 3f2a9c1d0, valkama 7b1e2a9c4 and 3 more. Attach the ones that belong here
+with the commits group."
+
+```json
+{"reference": "MAIN-12", "state": {"key": "review", "name": "Review", "is_terminal": false},
+ "applied": {"transition": {"state": "review", "released": "codex (session 019a…)"}},
+ "unreported_commits": [{"repository": "valkama", "hash": "3f2a9c1d0…",
+                         "subject": "docs: note the limit",
+                         "committed_at": "2026-11-20T10:31:02+03:00"}]}
 ```
 
 ### Pictures on an item

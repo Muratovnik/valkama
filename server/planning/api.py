@@ -678,17 +678,24 @@ def _refuse_retired_fields(payload: Mapping[str, object]) -> None:
 
 
 def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """A move to a state; one into review or completed leaves the window the net looks
+    behind once the write commits (`commits.closes`)."""
+
     _refuse_retired_fields(payload)
-    return service.transition_work_item(
+    reference, author = _text(payload, "id"), _author(payload)
+    before = commits.before_transition(conn, reference, author)
+    answer = service.transition_work_item(
         conn,
-        _text(payload, "id"),
+        reference,
         _text(payload, "state"),
         reason=str(payload.get("reason") or ""),
         force=_flag(payload, "force"),
         expected_revision=_optional_int(payload, "expected_revision"),
-        author=_author(payload),
+        author=author,
         acceptance=payload.get("acceptance"),
     )
+    commits.after_transition(before, answer)
+    return answer
 
 
 def _claim(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
