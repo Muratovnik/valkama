@@ -3,8 +3,8 @@
  * apart (`windowBar.spec.ts`). The oracle is the requirement, worked out by hand. A step line draws
  * readings as steps — flat to the next reading and up or down there, never a slope — held to the
  * moment the answer was read, beside a line of steady pace from nothing to the whole; each
- * reading says itself in a hint over the step it holds, one Tab stop walked by the arrows, and no
- * line stands over the plot. A running window opens on its start to now and a third as long past
+ * reading says itself in a hint over the step it holds, one Tab stop walked by the arrows. A
+ * running window opens on its start to now and a third as long past
  * it, now at three quarters of the plot, and its switch shows the whole window; a frame stretched
  * with Shift and an arrow narrows the line to the readings it covers, and the switch takes it
  * back. Past the last reading it points at «now» and runs the forecast's corridor to the reset,
@@ -137,9 +137,8 @@ describe('the step line', () => {
   })
 
   // A line over the plot once said one reading at a time; each reading now has its own hint.
-  it('gives each reading a hint over the whole step it holds, and no line over the plot', async () => {
+  it('gives each reading a hint over the whole step it holds', async () => {
     const line = await stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50)])
-    expect(line.find('.step-readout').exists()).toBe(false)
     const reach = line.findAll('.step-reach')
     expect(reach.map((one) => one.attributes('data-tooltip'))).toEqual(['12:00: 20%', '12:30: 50%'])
     expect(reach.map((one) => one.attributes('data-tooltip-kind'))).toEqual(['detail', 'detail'])
@@ -193,6 +192,8 @@ describe('the step line', () => {
     const even = line.get('.step-even')
     expect([even.attributes('y1'), even.attributes('y2')]).toEqual(['100', '20'])
     expect(line.findAll('.step-axis span').map((one) => one.text())).toEqual(['h0', 'h4'])
+    // Its switch, which a window past its reset has not.
+    expect(line.find('[role="radiogroup"]').exists()).toBe(true)
     line.unmount()
   })
 
@@ -393,6 +394,7 @@ describe('the step line past its readings', () => {
     expect(line.findAll('.step-target')).toHaveLength(0)
     expect(line.find('.step-ahead').exists()).toBe(false)
     // With no «now» after it, the last reading is as wide as a pointer can hit, as every other.
+    expect(line.findAll('.step-reach')).toHaveLength(READ.length)
     expect(line.findAll('.step-reach').some((one) => style(one).includes('min-inline-size'))).toBe(
       false,
     )

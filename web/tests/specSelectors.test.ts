@@ -54,7 +54,6 @@ const DEAD_USES = new Map<string, string>([
   ['browser/production-shell.spec.ts .board-scope', REPAIRED_BY_FIX],
   ['browser/production-state-name-room.spec.ts .flow-node', REPAIRED_BY_FIX],
   ['browser/production-work-item-link.spec.ts .app-context-bar', REPAIRED_BY_FIX],
-  ['browser/ui-charts-window.spec.ts .step-readout', REPAIRED_BY_FIX],
   ['browser/ui-charts.spec.ts .period-readout', REPAIRED_BY_FIX],
   ['browser/ui-charts.spec.ts .step-readout', REPAIRED_BY_FIX],
   ['browser/ui-system.spec.ts .context-activity', REPAIRED_BY_FIX],
@@ -67,7 +66,6 @@ const DEAD_USES = new Map<string, string>([
   ['components/spendingBars.spec.ts .donut-share', REPAIRED_BY_FIX],
   ['components/spendingDays.spec.ts .period-notes', REPAIRED_BY_FIX],
   ['components/spendingDays.spec.ts .period-readout', REPAIRED_BY_FIX],
-  ['components/windowCharts.spec.ts .step-readout', REPAIRED_BY_FIX],
 ])
 
 /** Where the classes a library writes at runtime begin; no source of this app names them. */

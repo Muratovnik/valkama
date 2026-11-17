@@ -20,6 +20,7 @@ import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
+import { messages } from '@/shared/i18n/index.ts'
 
 import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
@@ -68,12 +69,13 @@ const accountNamed = (page: VueWrapper, name: string) => {
 /** Words as a reader reads them: the app keeps a figure and its unit together with a no-break space. */
 const plain = (text: string) => text.replaceAll(' ', ' ')
 
-/** Shows the panel as a table by its own switch, not a step line's span. */
+/** Shows the panel as a table by its own switch, named «Table», not a step line's span. */
 async function showTable(page: VueWrapper) {
   const table = page
-    .findAll('.quota-panel [role="radio"]:not([aria-checked="true"])')
-    .find((one) => one.element.closest('.step-views') === null)
-  await table?.trigger('click')
+    .findAll('[role="radio"]')
+    .filter((one) => one.text() === messages.en.analytics.shown.table)
+  expect(table).toHaveLength(1)
+  await table[0]?.trigger('click')
   await flushPromises()
 }
 /**

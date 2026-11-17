@@ -38,6 +38,7 @@ describe('the window bar', () => {
     expect(style(bar.get('.window-fill'))).toContain('inline-size: 62%')
     expect(style(bar.get('.window-tick'))).toContain('inset-inline-start: 40%')
     expect(bar.get('.window-value').text()).toBe('62% used')
+    expect(bar.find('.window-words').exists()).toBe(true)
     expect(bar.find('.window-ahead').exists()).toBe(false)
   })
 
