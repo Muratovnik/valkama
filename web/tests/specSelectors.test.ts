@@ -5,7 +5,7 @@
  * neither says so: the class was renamed or removed in the product and the spec kept asking for
  * it. So every class a test under `browser/`, `components/` or `support/` names in a selector has
  * to be written somewhere a test can render it — the app's sources and page, the browser harness,
- * or the test file itself — and a use that is not is refused, unless a list below still names it.
+ * or the test file itself — and a use that is not is refused, unless a library writes it at runtime.
  *
  * The scan reads text, so "written" means the name appears in that text as a whole word, or is
  * one a template there can compose, keeping its fixed parts, as `module-${…}` composes
@@ -29,15 +29,6 @@ interface Gaps {
   stale: string[]
   unregistered: string[]
 }
-
-const REPAIRED_BY_FIX = "check of a class removed from the product; repaired by the group's fix"
-
-/**
- * The dead uses still awaiting repair, as `<file under web/tests> .<class>`, in file order so a
- * repair removes whole lines. An entry whose use is gone is refused as stale: the list only shrinks.
- */
-const DEAD_USES = new Map<string, string>([
-])
 
 /** Where the classes a library writes at runtime begin; no source of this app names them. */
 const LIBRARY_PREFIXES = ['lucide-', 'reka-', 'vue-flow__'] as const
@@ -158,46 +149,35 @@ function deadUses(sources: readonly Source[], corpus: string): Map<string, numbe
 
 const classOf = (key: string) => key.slice(key.lastIndexOf(' .') + 2)
 
-/** What the uses and the two lists disagree on, both ways. */
+/** What the uses and the library list disagree on, both ways. */
 function registerGaps(
   uses: ReadonlyMap<string, number[]>,
-  register: ReadonlyMap<string, string> = DEAD_USES,
   library: ReadonlyMap<string, string> = LIBRARY_CLASSES,
 ): Gaps {
   const unregistered = [...uses]
-    .filter(([key]) => !register.has(key) && !library.has(classOf(key)))
+    .filter(([key]) => !library.has(classOf(key)))
     .map(
       ([key, lines]) =>
         `${key} (line ${lines.join(', ')}): selects a class nothing writes; select by a contract hook`,
     )
   const selected = new Set([...uses.keys()].map((key) => classOf(key)))
-  const stale = [
-    ...[...register.keys()]
-      .filter((key) => !uses.has(key))
-      .map((key) => `${key}: registered as a dead use, and gone`),
-    ...[...library.keys()]
-      .filter((name) => !selected.has(name))
-      .map((name) => `.${name}: allowed as a library class, and no test selects it`),
-  ]
+  const stale = [...library.keys()]
+    .filter((name) => !selected.has(name))
+    .map((name) => `.${name}: allowed as a library class, and no test selects it`)
   return { stale, unregistered }
 }
 
 const without = <T>(map: ReadonlyMap<string, T>, key: string) =>
   new Map([...map].filter(([entry]) => entry !== key))
 
-test('every class the tests select is written, or still listed with its reason', () => {
+test('every class the tests select is written, or is one a library writes', () => {
   assert.deepEqual(registerGaps(deadUses(testSources(), corpusText())), {
     stale: [],
     unregistered: [],
   })
 })
 
-test('the register is in file order, and the allowance holds library classes only', () => {
-  const keys = [...DEAD_USES.keys()]
-  assert.deepEqual(
-    keys,
-    keys.toSorted((left, right) => left.localeCompare(right)),
-  )
+test('the allowance holds library classes only', () => {
   for (const name of LIBRARY_CLASSES.keys())
     assert.ok(
       LIBRARY_PREFIXES.some((prefix) => name.startsWith(prefix)),
@@ -267,26 +247,20 @@ test('the scan refuses an empty domain', () => {
   assert.throws(() => deadUses([spec], ' \n'), /read an empty corpus/u)
 })
 
-test('either list fails both ways: on a use it leaves out and on an entry that is gone', () => {
+test('a dead use is refused, and the library list fails both ways', () => {
   const uses = deadUses(testSources(), corpusText())
-  const [site = ''] = DEAD_USES.keys()
-  const [library = ''] = LIBRARY_CLASSES.keys()
-  const left = registerGaps(uses, without(DEAD_USES, site)).unregistered
-  assert.ok(
-    left.some((line) => line.startsWith(`${site} (line`)),
-    left.join('\n'),
-  )
-  const fake = new Map([...DEAD_USES, ['browser/gone.spec.ts .gone-class', REPAIRED_BY_FIX]])
-  assert.deepEqual(registerGaps(uses, fake).stale, [
-    'browser/gone.spec.ts .gone-class: registered as a dead use, and gone',
+  const dead = new Map([...uses, ['browser/gone.spec.ts .gone-class', [3]]])
+  assert.deepEqual(registerGaps(dead).unregistered, [
+    'browser/gone.spec.ts .gone-class (line 3): selects a class nothing writes; select by a contract hook',
   ])
-  const unallowed = registerGaps(uses, DEAD_USES, without(LIBRARY_CLASSES, library)).unregistered
+  const [library = ''] = LIBRARY_CLASSES.keys()
+  const unallowed = registerGaps(uses, without(LIBRARY_CLASSES, library)).unregistered
   assert.ok(
     unallowed.some((line) => line.includes(` .${library} (line`)),
     unallowed.join('\n'),
   )
   const allowed = new Map([...LIBRARY_CLASSES, ['vue-flow__gone', 'a fake entry']])
-  assert.deepEqual(registerGaps(uses, DEAD_USES, allowed).stale, [
+  assert.deepEqual(registerGaps(uses, allowed).stale, [
     '.vue-flow__gone: allowed as a library class, and no test selects it',
   ])
 })

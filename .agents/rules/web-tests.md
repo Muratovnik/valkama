@@ -33,9 +33,9 @@ A check that can fail:
   shown present where the thing does appear, in the same spec or in one it names.
 - A selector on a class nothing writes matches nothing, so its absence cannot
   fail and its presence cannot pass. `web/tests/specSelectors.test.ts` refuses
-  one in `web/tests/browser`, `web/tests/components` and `web/tests/support`. Its
-  register lists the dead uses still awaiting repair, and a repair removes its
-  line; a new dead use is fixed by selecting by a hook, not by a register entry.
+  one in `web/tests/browser`, `web/tests/components` and `web/tests/support`. It
+  allows only a class a library writes at runtime, listed with what writes it; a
+  dead use is fixed by selecting by a hook, never by a list entry.
 - An expected value comes from the fixture or the rule, written in the test, never
   from a production helper that computes the same thing.
 - A guard over source files fails on a known-invalid control, fails both ways on
