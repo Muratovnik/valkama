@@ -510,6 +510,28 @@ class WatchedTests(Harness):
             "the fixture covers each way in and out",
         )
 
+    def test_the_roots_are_found_without_reading_every_root_of_the_store(self) -> None:
+        """A climb from a session's tasks reads the roots above them, not every root."""
+
+        for number in range(60):
+            self.made(f"Unrelated goal {number}", "goal")
+        self.agent("claim_work_item", AS_A2, id=self.t3)
+        goal = read_model.item_row(self.conn, self.goal)["work_item_id"]
+        self.assertEqual(frozenset({goal}), notify.watched(self.conn, A))
+        plan = [
+            str(row[3])
+            for row in self.conn.execute(
+                "EXPLAIN QUERY PLAN " + notify._WATCHED,
+                (A, notify.holder_suffix(A, None), notify.MOST_DEPTH),
+            )
+        ]
+        self.assertFalse([step for step in plan if "AUTOMATIC" in step], plan)
+        self.assertFalse([step for step in plan if step.startswith("SCAN w")], plan)
+        self.assertFalse(
+            [step for step in plan if "work_items_parent" in step],
+            f"the parent index holds every root, a search on it reads them all: {plan}",
+        )
+
     def test_the_channels_are_the_planning_rules(self) -> None:
         self.assertEqual(set(calls._CHANNEL_NAMES), set(notify.CHANNELS))
 
