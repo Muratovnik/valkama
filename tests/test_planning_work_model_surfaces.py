@@ -268,6 +268,7 @@ HTTP_READS: dict[str, list[Args]] = {
         _q(lambda _case: {"scope_kind": "global", **VOLUMES_PERIOD}),
         lambda case: _exact_read(case, **VOLUMES_PERIOD),
     ],
+    "/api/planning/goal-volumes": [_q(_ids(id=name)) for name in ("G", "S")],
 }
 HTTP_WRITES: dict[str, list[Args]] = {
     "/api/planning/spaces": [lambda _case: {"name": "Other", "key": "OX"}],

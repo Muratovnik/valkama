@@ -1696,9 +1696,11 @@ key into its account.
 
 The Volumes read counts the work of a scope by where it stands: how much waits in each
 category now, which card has stood there longest, and how much came to be completed or
-cancelled in a period. It answers `GET /api/planning/volumes` with `interface_version`
-`valkama-planning-api` and `volumes`. A later build only adds fields and sections to
-this answer. No MCP tool reads it: the numbers would cost an agent context.
+cancelled in a period, and what each goal took. It answers `GET /api/planning/volumes`
+with `interface_version` `valkama-planning-api` and `volumes`; `GET
+/api/planning/goal-volumes` gives the rows of the goals and stages it is asked for,
+whole (see [A goal's row](#a-goals-row)). A later build only adds fields and sections to
+these answers. No MCP tool reads them: the numbers would cost an agent context.
 
 | Parameter | What it takes |
 | --- | --- |
@@ -1732,7 +1734,8 @@ of another space that the space's items name keeps only the space's own.
         "oldest": {"work_item_id": "6f1c2a8e-0000-4000-8000-000000000012",
                    "reference": "MAIN-12", "since": "2030-01-03T10:00:00Z"}},
        {"category": "completed", "tasks": 31, "goals": 1, "stages": 0, "oldest": null},
-       {"…": "the other six categories"}]}}}
+       {"…": "the other six categories"}]},
+   "goals": [{"…": "a goal's row, with the rows of its stages in children"}]}}
 ```
 
 | Field | What it holds |
@@ -1741,6 +1744,7 @@ of another space that the space's items name keeps only the space's own.
 | `period` | the period asked for, with `from` and `to` at the caller's offset |
 | `measured_from` | the start of the first stretch of agent work counted to an item in this store, as the usage rows hold it, or `null` when none is: an item started before it may have spent more than its usage says (see [How much work an item took](#how-much-work-an-item-took)) |
 | `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest` |
+| `goals` | the scope's open goals and the goals that came to be completed or cancelled inside the period, by space key and number, each a [goal's row](#a-goals-row) |
 
 A category counts the items of the scope that stand in a state of it. An accepted open
 goal or stage stands in no category and is in none of these counts. Work in an open
@@ -1765,6 +1769,72 @@ attached store is refused rather than counted short.
 | `no project <id>` | neither the projects registry nor any item of the store names the project |
 | the period's refusals of [What agent work spent in a period](#what-agent-work-spent-in-a-period), in its words: `from must be a date or a time with its offset` (and the same of `to`), `to must be later than from`, `from and to must lie between 1970 and 9999, …`, `the period holds more than 2400 steps of one day`, `utc_offset must be from -840 to 840 minutes` | the period |
 | `utc_offset must be a whole number of minutes`, `<name> is required`, `<name> must occur at most once`, `<name> is not a parameter` | a parameter missing, repeated or not one of these |
+
+#### A goal's row
+
+A row says what a goal or a stage took over all its time, whatever the period. The
+`goals` of the Volumes read holds one for each goal, with the rows of the stages under
+it in `children`, in number order; `GET /api/planning/goal-volumes` gives the rows of
+the goals and stages it names, without `children`, in the order named.
+
+```json
+{"work_item_id": "6f1c2a8e-0000-4000-8000-000000000007", "reference": "MAIN-7",
+ "title": "Ship the importer", "kind": "goal",
+ "state": null, "container_state": "in_progress", "open": true, "parent_reference": null,
+ "other_space": null, "partial": false,
+ "spent": {"agent_seconds": 79200.0,
+           "tokens": {"input": 120000, "cached_read": 9000000, "cache_write_5m": 300000,
+                      "cache_write_1h": null, "output": 410000, "reasoning": null},
+           "estimated_api_cost_usd": 412.5, "unpriced_tokens": 0, "quality": "mixed",
+           "partly_measured": 0},
+ "spent_with_cancelled": {"agent_seconds": 81000.0, "…": "the same figures"},
+ "children": [{"…": "the row of each stage directly under it"}]}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `kind` | `goal`, or `stage` for one under a parent |
+| `state`, `container_state` | where it stands, as a record says it: `state` a public state, or `null` for an accepted open goal or stage, whose `container_state` is what it derives (see [The work model](#the-work-model)) |
+| `open` | whether it stands in neither completed nor cancelled |
+| `parent_reference` | the goal or stage it is filed under, or `null` |
+| `other_space` | `{key, name}` of the goal's space when that is not the space read; `null` for the space's own goals, in a `global` read and in `goal-volumes` |
+| `partial` | some of the items under it are outside the scope, which adds up only the rest |
+| `spent` | what its items spent, leaving out every item that stands cancelled now |
+| `spent_with_cancelled` | what all its items spent |
+
+The items of a goal are the items under it now, at any depth, with the goal itself.
+An item moved out of it, or filed under another goal, leaves with what it spent; a move
+between its own stages changes nothing of the goal. A goal's spending leaves out the
+items that were cancelled; the sum with them stands beside it. An item cancelled takes
+only its own work out of `spent`, and the items under it count by where each stands: a
+stage cancelled takes its work and its cancelled tasks out, and a task done under it
+stays. For each of the two numbers, a row is its own work, the rows of its stages and
+the work of the tasks directly under it, and `spent_with_cancelled` of a goal read
+whole is what [How much work an item took](#how-much-work-an-item-took) gives for it
+with scope `tree`.
+
+Each number holds `agent_seconds`, `tokens` by kind, `estimated_api_cost_usd` and
+`unpriced_tokens` as an item's usage holds them, with `quality` and `partly_measured` of
+the items it adds up. Time is agent time, the sum of the stretches: it adds up from
+tasks to goals; the union a card's line shows does not. `partly_measured` counts the
+tasks it adds up that started before `measured_from`, or were created before it when
+they never started: each may have spent more than its usage says.
+
+A space's read adds up what its scope holds of each goal. A goal of the space is all
+its own work there, unless a project narrows the read; a goal of another space comes
+into it through the tasks that name one of the space's projects, and only they and
+the goals and stages over them are added up. A row with anything else under it is
+`partial`.
+
+`goal-volumes` takes `id`, a reference or a work item id, from 1 to 100 times, and reads
+each goal or stage whole: its row is never `partial` and names no `other_space`. It
+answers `interface_version` `valkama-planning-api` and `goals`.
+
+| Refusal | When |
+| --- | --- |
+| `400` `invalid_request`: `id takes 1 to 100 goals or stages` | no `id`, or more than 100 |
+| `400` `invalid_request`: `<REF> is a task: goal volumes read goals and stages` | an `id` names a task |
+| `404` `not_found`: `no work item <id>` | an `id` names no item |
 
 ### How often each analytics surface is opened
 

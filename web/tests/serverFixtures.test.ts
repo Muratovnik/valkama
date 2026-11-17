@@ -47,7 +47,7 @@ import {
   validatePlanningWorkItemBriefPayload,
   validatePlanningWorkItemPayload,
 } from '@/shared/api/platformPlanningPayload.ts'
-import { validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
+import { validateGoalVolumesAnswer, validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 const STEP_KINDS = [
@@ -83,6 +83,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'documents-resolve-unbound.json': validateResolved,
   'documents-resolve.json': validateResolved,
   'documents-search.json': validateFound,
+  'goal-volumes.json': validateGoalVolumesAnswer,
   'live-frame.json': validateLiveFrame,
   'open-places.json': validateOpenPlaces,
   'open-plan-copy.json': validateOpenPlan,

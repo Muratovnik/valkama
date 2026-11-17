@@ -24,6 +24,7 @@ from . import (
     calls,
     chain,
     commits,
+    goal_volumes,
     held,
     images,
     item_projects,
@@ -585,6 +586,15 @@ def _volumes(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> d
     }
 
 
+def _goal_volumes(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """What each goal or stage named took, whole, in the order named."""
+
+    return {
+        "interface_version": PLANNING_API_INTERFACE,
+        "goals": goal_volumes.read(conn, parameters.get("id", [])),
+    }
+
+
 #: The reads under `/api/planning/` that name their scope exactly, by `data_scope_id` and
 #: `space_key`, and answer for the store this service writes. Every other read here
 #: takes no data scope.
@@ -609,6 +619,7 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/held": _held,
     "/api/planning/commits/unattached": _unattached,
     "/api/planning/volumes": _volumes,
+    "/api/planning/goal-volumes": _goal_volumes,
 }
 
 
