@@ -120,23 +120,23 @@ export const DETAIL_TOOLTIPS = new Map([
   ],
   [
     'shared/ui/DonutChart.vue <path> v-tooltip.detail="hintOf(sector)"',
-    'a sector is a band of hue: its name, figure and share of the whole, and for the rest each part it holds, are its hint',
+    'a sector is a band of hue: its name, figure and share of the whole, and for the rest its largest parts, are its hint',
   ],
   [
-    'shared/ui/RankedBars.vue <component> v-tooltip.detail="namedHint(row, whole, formatShare)"',
-    'a row prints its name and figure; its share of the whole and the whole id of a value it names by the start are on no mark; while the name is cut, it comes first, whole',
+    'shared/ui/RankedBars.vue <component> v-tooltip.detail="namedHint(rowMark(row), whole, formatShare)"',
+    'a row prints its name and figure; its share of the whole and the whole id of a value it names by the start are on no mark; its name heads them, whole, beside its bar’s hue',
   ],
   [
     'shared/ui/SmallMultiples.vue <component> v-tooltip.detail="nameHint(one)"',
-    'a small chart prints its name and figure; its share of the whole is on no mark; while the name is cut, it comes first, whole',
+    'a small chart prints its name and figure; its share of the whole is on no mark; its name heads it, whole, beside its hue',
   ],
   [
     'shared/ui/SmallMultiples.vue <span> v-tooltip.detail="periodHint(one, index)"',
     'a small chart’s column has no name or figure on the screen: its period and figure are its hint',
   ],
   [
-    'shared/ui/StepLine.vue <span> v-tooltip.detail="point.text"',
-    'a reading is a dot on a line: its moment, its share and its source are its hint',
+    'shared/ui/StepLine.vue <span> v-tooltip.detail="readingHint(point, 1)"',
+    'a reading is a dot on a line: its moment, its share and its source are its hint, beside its line’s hue',
   ],
   [
     'shared/ui/RichInlines.vue <a> v-tooltip.detail="hoverTitle(node.reference)"',

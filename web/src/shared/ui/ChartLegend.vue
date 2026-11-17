@@ -11,8 +11,9 @@
  * column of numbers to read down beside the names.
  *
  * An entry is a mark of its chart: its hint says what the name does not (`hints`, by series key,
- * `outline` for the mark of the period compared with). It names a series rather than standing
- * for a value, so it is no plot mark: its hint is a detail under it, clear of the entries beside it that a reader
+ * `outline` for the mark of the period compared with), under its name beside its swatch where the
+ * caller draws it so (`markHints.ts`). It names a series rather than standing for a value, so it
+ * is no plot mark: its hint is a detail under it, clear of the entries beside it that a reader
  * reads it against (`hintPlacement.ts`). A series that acts (`MarkAction`) is
  * pressed here as on its segments: a link sent out as `follow` with the press, a button as
  * `select` with its key. The rest only show. An entry named by what it does is described by its
@@ -24,6 +25,7 @@ import { useId } from 'vue'
 
 import type { PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 import { markPartId, markTag, markType } from '@/shared/ui/chartGeometry.ts'
+import type { TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
@@ -31,7 +33,7 @@ const props = defineProps<{
   /** The figure each entry gives at the end of its line, by series key; none for a legend of names. */
   figures?: ReadonlyMap<string, string>
   /** What each entry says in its hint, by series key; `outline` for the period compared with. */
-  hints?: ReadonlyMap<string, string>
+  hints?: ReadonlyMap<string, TooltipValue>
   /** The name of the mark of the period compared with, when the chart draws one. */
   outline?: string
 }>()

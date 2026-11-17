@@ -117,13 +117,17 @@ const whole = ref(false)
  */
 const apart = ' '
 /**
- * What assistive technology reads of a hint drawn as a grid: its text, rather than the grid's
- * cells run together, which are drawn for the eye alone. A hint of words is its own tooltip and
- * reads as it shows: a copy of them beside the words once said every hint twice.
+ * What assistive technology reads of a hint drawn as a grid: its text, after the element's cut
+ * words as a hint of words says them, rather than the grid's cells run together, which are drawn
+ * for the eye alone. A hint of words is its own tooltip and reads as it shows: a copy of them
+ * beside the words once said every hint twice.
  */
-const copy = computed(() =>
-  hint.value?.body ? [hint.value.text, hint.value.note].filter(Boolean).join('\n') : '',
-)
+const copy = computed(() => {
+  const now = hint.value
+  if (!now?.body) return ''
+  const said = whole.value && now.words ? `${now.words}${apart}${now.text}` : now.text
+  return [said, now.note].filter(Boolean).join('\n')
+})
 /** A hint of words is the tooltip itself; a grid's tooltip is its copy. */
 const role = computed(() => (hint.value?.body ? undefined : 'tooltip'))
 /** A grid's note is in its copy, so as drawn it is for the eye alone. */

@@ -57,13 +57,17 @@ const readingAt = (line: Locator, index: number) =>
     }
   }, index)
 
-/** The one hint shown, once it stands still for two frames; null where none shows. */
+/**
+ * The one hint shown, once it stands still for two frames, with what it says: a grid's copy for
+ * assistive technology, else its words; null where none shows.
+ */
 async function hintNow(page: Page) {
   const read = () =>
     page.evaluate(() =>
       [...document.querySelectorAll('.tooltip-hint')].map((hint) => {
         const { left, top, right, bottom } = hint.getBoundingClientRect()
-        return { text: hint.textContent ?? '', box: { left, top, right, bottom } }
+        const said = hint.querySelector('[role="tooltip"]') ?? hint
+        return { text: said.textContent ?? '', box: { left, top, right, bottom } }
       }),
     )
   let last: Awaited<ReturnType<typeof read>> = []
@@ -105,6 +109,15 @@ function cornerOf(hint: Box, mark: Box) {
     across: side === 'right' ? hint.left - mark.right : mark.left - hint.right,
     down: level === 'over' ? mark.top - hint.bottom : hint.top - mark.bottom,
   }
+}
+
+/** How far, in px, a hint's width worked out before it is drawn may be off its drawn width. */
+const ESTIMATE = 2
+
+/** The sides a hint may take with `room` px to spare on the right: either, within `ESTIMATE`. */
+function sidesFor(room: number) {
+  if (Math.abs(room) <= ESTIMATE) return ['right', 'left']
+  return [room >= 0 ? 'right' : 'left']
 }
 
 const middleOf = (box: Box) => ({ x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 })
@@ -157,9 +170,13 @@ for (const width of [1440, 1280, 360])
         placed.push({ words, mark, frame, hint, corner })
         sides.add(corner.side)
         expect(hint?.text, `${words}: its own hint`).toBe(words)
-        // On the right where the line's frame holds it, else on the left.
-        const roomRight = frame.right - mark.right - OFFSET >= width
-        expect(corner.side, `${words}: the side`).toBe(roomRight ? 'right' : 'left')
+        // On the right where the line's frame holds it, else on the left: decided as the hint
+        // opens, on the mark as it stood before the pointer came, since the host decides on the
+        // pointer's way in, before the line draws the reading under it larger, and on the
+        // hint's width as worked out before it is drawn, a pixel or two off; either side where
+        // the room is within that of the width.
+        const room = frame.right - before.mark.right - OFFSET - width
+        expect(sidesFor(room), `${words}: the side`).toContain(corner.side)
         // Over the mark where the window holds it, else under it.
         expect(corner.level, `${words}: over or under`).toBe(
           mark.top - OFFSET - height >= 8 ? 'over' : 'under',

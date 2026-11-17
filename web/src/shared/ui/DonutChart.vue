@@ -16,9 +16,10 @@
  * which no hue of the palette held well. The sectors stand apart by a gap of ground.
  *
  * A sector is a mark of its chart: its one hint, under the pointer or the keyboard, gives its
- * figure and its share of the whole, and for the rest each part it holds (`markHints.ts` draws the
- * same grid for a period). It stands at the top right of the middle of the sector's band, as a
- * chart's hint stands at its point (`data-hint-point`, `hintPlacement.ts`). The sectors are one stop for Tab, walked round the ring with the arrows,
+ * name beside its hue, its figure and its share of the whole, and for the rest its five largest
+ * parts and one line for the others (`ringHint` in `markHints.ts`). It stands at the top right of
+ * the middle of the sector's band, as a chart's hint stands at its point (`data-hint-point`,
+ * `hintPlacement.ts`). The sectors are one stop for Tab, walked round the ring with the arrows,
  * Home and End; a sector whose row opens something (`actionable`) is a button there, pressed with
  * Enter or Space as with the pointer, and sent out as `select` with the row's key, as its legend
  * entry is. A row that leads somewhere (`href`) is followed from its legend entry and the table.
@@ -32,12 +33,11 @@ import { computed, nextTick, ref } from 'vue'
 
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import type { PeriodSeries, RankedRow } from '@/shared/ui/chartGeometry.ts'
-import { shareWords } from '@/shared/ui/chartGeometry.ts'
 import ChartLegend from '@/shared/ui/ChartLegend.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import type { RingSector } from '@/shared/ui/donutGeometry.ts'
 import { bandMiddle, RING_BOX, ringOf, sectorPath } from '@/shared/ui/donutGeometry.ts'
-import type { TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
+import { ringHint, ringPart } from '@/shared/ui/markHints.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 /** The words a ring needs from its caller. */
@@ -81,42 +81,19 @@ const drawn = computed(() =>
     .filter((sector) => sector.path),
 )
 
-const nameOf = (sector: RingSector) =>
-  sector.row ? sector.row.label : props.words.rest(sector.members.length)
-const figureOf = (sector: RingSector) => sector.row?.valueText ?? props.formatValue(sector.value)
-const shareOf = (sector: RingSector) =>
-  shareWords(sector.value, ring.value.whole, props.formatShare)
+/** How a sector's hint and its legend entry read its figures and name the rest. */
+const hintChart = computed(() => ({
+  formatValue: props.formatValue,
+  formatPart: props.formatPart,
+  formatShare: props.formatShare,
+  rest: props.words.rest,
+}))
+const partOf = (sector: RingSector) => ringPart(sector, ring.value.whole, hintChart.value)
+const nameOf = (sector: RingSector) => partOf(sector).label
 const pressable = (sector: RingSector) => Boolean(sector.row?.actionable)
 
-const lines = (...parts: readonly (string | null | undefined)[]) =>
-  parts.filter((part): part is string => Boolean(part)).join('\n')
-
-/**
- * A sector's hint: its name and figure, and its share of the whole, as a grid; for the rest, each
- * part it holds with its figure and bare share. What the name leaves out (`detail`) closes it.
- */
-function hintOf(sector: RingSector): TooltipValue {
-  const share = shareOf(sector)
-  const detail = sector.row?.detail
-  const parts = sector.members.map((member) => ({
-    key: member.key,
-    name: member.label,
-    figure: member.valueText,
-    share: shareWords(member.value, ring.value.whole, props.formatPart) || undefined,
-  }))
-  return {
-    text: lines(
-      [figureOf(sector), share].filter(Boolean).join(', '),
-      ...parts.map((part) => `${part.name}: ${part.figure}`),
-      detail,
-    ),
-    body: {
-      head: { name: nameOf(sector), figure: figureOf(sector) },
-      rows: parts,
-      notes: [share, detail].filter((note): note is string => Boolean(note)),
-    },
-  }
-}
+/** A sector's hint (`ringHint`): its name beside its hue, its figure and share, the rest's parts. */
+const hintOf = (sector: RingSector) => ringHint(sector, ring.value.whole, hintChart.value)
 
 /** The legend's entries, in the ring's order: a row's acts as its sector does. */
 const legend = computed<PeriodSeries[]>(() =>
@@ -136,7 +113,7 @@ const figures = computed(
     new Map(
       ring.value.sectors.map((sector) => [
         sector.key,
-        [figureOf(sector), props.formatPart?.(sector.share)].filter(Boolean).join(' · '),
+        [partOf(sector).figure, props.formatPart?.(sector.share)].filter(Boolean).join(' · '),
       ]),
     ),
 )

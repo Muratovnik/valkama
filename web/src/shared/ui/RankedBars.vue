@@ -14,10 +14,11 @@
  * label where the action names a part of it, as a pair's names its first value. A row is a
  * mark of its chart: its hint, under the pointer or the keyboard, says what it does not print —
  * its share of the whole where the caller says how a share reads (`formatShare`), and what the
- * label leaves out (`detail`) — and stands at its bar, the mark it declares (`data-hint-mark`),
- * or at the row where it draws none. A row's name takes one line, ends in an ellipsis where it is
- * cut and is then said whole first in that hint (`markHints.ts`); a name of two parts keeps its
- * end whole and cuts its first part (`labelEnd`, `PairName`). The values stand in one column whatever
+ * label leaves out (`detail`) — under its name beside its series' swatch (`markHints.ts`), and
+ * stands at its bar, the mark it declares (`data-hint-mark`), or at the row where it draws none.
+ * A row's name takes one line and ends in an ellipsis where it is cut, said whole in that hint;
+ * a name of two parts keeps its end whole and cuts its first part (`labelEnd`, `PairName`).
+ * The values stand in one column whatever
  * the names do. In a narrow container the name takes a line of its own over its bar, and so does
  * a pair's at every width: its second part is a whole value's name, as wide as a model's, which
  * the one-line column of two-fifths of the row could not hold beside any of the first. A `dense`
@@ -97,6 +98,11 @@ function lineAttrs(row: PlacedRow) {
 const barSlot = (row: PlacedRow) => row.slot ?? 1
 /** The row is its own hint's mark where it draws no bar (`data-hint-mark`). */
 const lineMark = (row: PlacedRow) => (row.length === null ? '' : undefined)
+/** A row as its hint names it: beside its bar's hue where it draws one. */
+const rowMark = (row: PlacedRow) => ({
+  ...row,
+  slot: row.length === null ? undefined : barSlot(row),
+})
 const barStyle = (length: number) => ({ inlineSize: `${length * 100}%` })
 
 function press(row: PlacedRow, event: MouseEvent) {
@@ -141,7 +147,7 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
         >
           <component
             :is="markTag(row, 'div')"
-            v-tooltip.detail="namedHint(row, whole, formatShare)"
+            v-tooltip.detail="namedHint(rowMark(row), whole, formatShare)"
             class="ranked-line row-state"
             :data-key="row.key"
             :data-hint-mark="lineMark(row)"

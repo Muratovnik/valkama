@@ -1046,7 +1046,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   Every mark of a chart — a period, a segment of one, a small chart's name, a legend entry, a
   ranked row — keeps one contract. Pointing at it, or focusing it from the keyboard, shows its
   hint at the mark through the one hint host, a segment's being its period's: the mark's series, its value, its share and the
-  period before, leaving out what the mark already prints, as every hint does. A period, which
+  period before, leaving out what the mark already prints, as every hint does. Every such hint
+  is a grid, and a mark of one series — a sector, a ranked row, a small chart, a legend entry, a
+  reading — names it in the grid's head beside the legend's swatch of its hue, so the hint says
+  which colour it speaks for; a ring's rest lists its five largest parts and one line for the
+  others. A period, which
   the keyboard walks, says its sum against the period before, what is said of it and its series
   largest first, each with its share of the period. A segment has no hint of its own: the period
   is one place for the pointer, its whole height and its half of the gap to each neighbour, its

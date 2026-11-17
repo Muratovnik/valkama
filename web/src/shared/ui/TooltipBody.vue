@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
  * A hint with a structure (`TooltipBody` in `tooltipAnchors.ts`), drawn as one grid inside the
- * window's one hint (`TooltipHost`): what it is about, semibold, with its figure; quiet rows in
- * the quiet ink; a main row for each part, its series' swatch before its name as the legend draws
- * it; and notes under the rows, each a line of its own across the whole hint. Figures and shares
+ * window's one hint (`TooltipHost`): what it is about, semibold, with its figure, and its series'
+ * swatch before its name where it is one series; quiet rows in the quiet ink; a main row for each
+ * part, its series' swatch before its name as the legend draws it; and notes under the rows, each
+ * a line of its own across the whole hint. Figures and shares
  * stand in columns of their own, at their right edge in figures of one width, and never wrap; a
  * name wraps where the hint has no room for it.
  *
@@ -25,7 +26,11 @@ const props = defineProps<{
   current?: string | null
 }>()
 
-const swatches = computed(() => props.body.rows.some((row) => row.slot !== undefined))
+/** The head is one series, drawn with its swatch. */
+const series = computed(() => props.body.head.slot !== undefined)
+const swatches = computed(
+  () => series.value || props.body.rows.some((row) => row.slot !== undefined),
+)
 const shares = computed(() => props.body.rows.some((row) => Boolean(row.share)))
 
 /** Whether the row is the one the pointer or the keyboard stands on. */
@@ -40,7 +45,15 @@ const heldName = (row: TooltipRow) => (row.key ? row.name : undefined)
     class="tooltip-body"
     :class="{ 'tooltip-body-swatches': swatches, 'tooltip-body-shares': shares }"
   >
-    <div class="tooltip-body-row tooltip-body-head">
+    <div
+      class="tooltip-body-row tooltip-body-head"
+      :class="{ 'tooltip-body-series': series }"
+    >
+      <span
+        v-if="series"
+        class="tooltip-body-swatch series-fill"
+        :data-slot="body.head.slot"
+      />
       <span class="tooltip-body-name">{{ body.head.name }}</span>
       <span
         v-if="body.head.figure"
@@ -132,11 +145,12 @@ const heldName = (row: TooltipRow) => (row.key ? row.name : undefined)
   border-radius: calc(var(--radius-status) / 2);
 }
 
-/* A head or quiet row has no swatch: its name starts where the swatch would. */
+/* A head or quiet row has no swatch, unless the head is one series: its name starts where the
+   swatch would. */
 .tooltip-body-name {
   grid-column: swatch / figure;
 
-  .tooltip-body-main & {
+  :is(.tooltip-body-main, .tooltip-body-series) & {
     grid-column: name / figure;
   }
 

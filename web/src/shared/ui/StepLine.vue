@@ -41,6 +41,7 @@
 import { computed, nextTick, ref } from 'vue'
 
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { readingHint } from '@/shared/ui/markHints.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { FRAME_KEYS, useAxisFrame, useKeyFrame } from '@/shared/ui/useAxisFrame.ts'
@@ -281,11 +282,10 @@ function stand(index: number) {
         <span
           v-for="(point, index) in readings.inside"
           :key="point.key"
-          v-tooltip.detail="point.text"
+          v-tooltip.detail="readingHint(point, 1)"
           class="step-reach"
           role="img"
           :aria-keyshortcuts="FRAME_KEYS"
-          :aria-label="point.text"
           :data-reading="index"
           :tabindex="tabOf(index)"
           :style="stepStyle(index)"

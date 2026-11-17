@@ -11,10 +11,10 @@
  * A column is drawn in its value's hue (`seriesFill.css`), the one the value has wherever the page
  * draws it, and a name always stands beside it: a hue never speaks alone.
  *
- * Every mark has its hint (`markHints.ts`): a chart's name says its share of the whole where the
- * caller says how a share reads (`formatShare`), and while the name is cut says it whole first; a
- * period of a chart, where the caller names the periods (`periods`), says its name and its figure.
- * A hint stands at its mark (`data-hint-mark`): a name's at the name, a period's at its
+ * Every mark has its hint (`markHints.ts`), beside its value's swatch: a chart's name says its
+ * share of the whole where the caller says how a share reads (`formatShare`), whole however it is
+ * cut; a period of a chart, where the caller names the periods (`periods`), says its figure and
+ * its name. A hint stands at its mark (`data-hint-mark`): a name's at the name, a period's at its
  * column, or at its floor where it has none, and may stand over a neighbouring chart.
  * Presentational: a name whose value acts (`MarkAction`) is pressed as its value's row is, a link
  * sent out as `follow` with the press, a button as `select` with the key; the rest only show. A
@@ -25,7 +25,7 @@ import { computed, useId } from 'vue'
 import { markPartId, markTag, roundAxis } from '@/shared/ui/chartGeometry.ts'
 import type { ValueAxis } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import { namedHint } from '@/shared/ui/markHints.ts'
+import { multiplePeriodHint, namedHint } from '@/shared/ui/markHints.ts'
 import { placeMultiples } from '@/shared/ui/multiplesGeometry.ts'
 import type {
   MultiplePeriod,
@@ -68,8 +68,16 @@ const figureOf = (one: SmallMultiple) =>
 /** What every chart adds up to, of which each name's hint says its share. */
 const whole = computed(() => props.multiples.reduce((sum, one) => sum + figureOf(one), 0))
 
+/** The hue a chart's swatch draws in: its columns', where it draws a chart; none apart. */
+const slotOf = (one: PlacedMultiple) =>
+  placed.value.shared.includes(one) ? (one.slot ?? 'other') : undefined
+
 const nameHint = (one: PlacedMultiple) =>
-  namedHint({ label: one.label, value: figureOf(one) }, whole.value, props.formatShare)
+  namedHint(
+    { label: one.label, value: figureOf(one), slot: slotOf(one) },
+    whole.value,
+    props.formatShare,
+  )
 
 /** A period of a chart in its hint: its name and its figure, where the periods are named. */
 function periodHint(one: PlacedMultiple, index: number) {
@@ -77,7 +85,9 @@ function periodHint(one: PlacedMultiple, index: number) {
   const value = one.values[index]
   const figure =
     value === null || value === undefined ? (props.words.absent ?? '—') : props.formatValue(value)
-  return period ? `${one.label}\n${period.label}: ${figure}` : undefined
+  return period
+    ? multiplePeriodHint({ label: one.label, slot: slotOf(one) }, period.label, figure)
+    : undefined
 }
 
 const ids = useId()

@@ -89,10 +89,11 @@ export interface TooltipRow extends TooltipLine {
 
 /**
  * A hint drawn as a grid: what it is about with its figure, quiet rows in the quiet ink, a main
- * row for each part, and notes under the rows, each a line of its own across the whole hint.
+ * row for each part, and notes under the rows, each a line of its own across the whole hint. A
+ * head that is one series has its hue (`slot`), drawn before its name as a row's is.
  */
 export interface TooltipBody {
-  head: Omit<TooltipLine, 'share'>
+  head: Omit<TooltipLine, 'share'> & { slot?: SeriesSlot }
   rows: readonly TooltipRow[]
   notes?: readonly string[]
   quiet?: readonly Omit<TooltipLine, 'share'>[]

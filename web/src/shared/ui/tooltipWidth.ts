@@ -27,8 +27,8 @@ export function hintWidth(lines: readonly string[]): number {
 
 /**
  * How wide a hint drawn as a grid is (`TooltipBody.vue`), its padding and border included: its
- * widest name, figure and share with the room between its columns and a swatch where a row has
- * one, or its widest note, each inside a row's inset. A name a row can mark is measured semibold,
+ * widest name, figure and share with the room between its columns and a swatch where a row or
+ * its head has one, or its widest note, each inside a row's inset. A name a row can mark is measured semibold,
  * as the grid holds its width.
  */
 export function bodyWidth(body: TooltipBody): number {
@@ -38,11 +38,14 @@ export function bodyWidth(body: TooltipBody): number {
     Math.max(0, ...texts.map((text = '') => drawnWidth(text, drawn)))
   // `.tooltip-body`: the room between columns, and the swatch's size.
   const gap = px('--space-2')
-  const swatch = body.rows.some((row) => row.slot !== undefined) ? px('--space-2') + gap : 0
+  const series = body.head.slot !== undefined
+  const swatched = series || body.rows.some((row) => row.slot !== undefined)
+  const swatch = swatched ? px('--space-2') + gap : 0
   const quiet = body.quiet ?? []
-  // A head or quiet name starts where the swatch does; a row's name after it.
+  // A quiet name starts where the swatch does, and so does a head's that is no series; a row's
+  // name, and a series head's, after it.
   const name = Math.max(
-    widest([body.head.name], label) - swatch,
+    widest([body.head.name], label) - (series ? 0 : swatch),
     widest(quiet.map((line) => line.name)) - swatch,
     ...body.rows.map((row) => drawnWidth(row.name, row.key ? label : note)),
   )

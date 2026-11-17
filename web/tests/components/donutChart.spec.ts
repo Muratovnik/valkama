@@ -91,7 +91,7 @@ describe('the ring of shares', () => {
     expect(chart.get('[data-series="low"] .chart-swatch').attributes('data-slot')).toBe('3')
   })
 
-  it('gives each sector one hint: its figure and share, and for the rest each part it holds', () => {
+  it('gives each sector one hint: its name beside its hue, figure and share, and the rest’s parts', () => {
     const chart = mountRing()
     const high = tooltipOf(sectors(chart)[0]?.element as Element)
     const rest = tooltipOf(sectors(chart)[4]?.element as Element)
@@ -99,13 +99,13 @@ describe('the ring of shares', () => {
     expect(high?.kind).toBe('detail')
     expect(high?.text).toBe('250 min, 50% of the total')
     expect(high?.body).toEqual({
-      head: { name: 'high', figure: '250 min' },
+      head: { name: 'high', figure: '250 min', slot: 1 },
       rows: [],
       notes: ['50% of the total'],
     })
     // The rest's figure is no row's: it is the sum of its parts, 20 + 10, as the caller formats it.
     expect(rest?.body).toEqual({
-      head: { name: 'Other, 2 more', figure: '30 min' },
+      head: { name: 'Other, 2 more', figure: '30 min', slot: 'other' },
       rows: [
         { key: 'none', name: 'No effort', figure: '20 min', share: '4%' },
         { key: 'xhigh', name: 'xhigh', figure: '10 min', share: '2%' },

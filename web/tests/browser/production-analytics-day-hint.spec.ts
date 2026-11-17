@@ -245,7 +245,9 @@ test('in a window 360px wide a day’s hint stands beside its stack or over it, 
   const placed: ReturnType<typeof besideStack>[] = []
   for (let index = 0; index < count; index += 1) {
     const parts = await dayParts(page, index)
-    await page.mouse.move(0, 0)
+    // In from the window's edge level with the plot's top: from over the chart, the way would
+    // cross the legend, whose hint under it reaches the plot's top in a window this narrow.
+    await page.mouse.move(0, parts.field.top + 2)
     await expect(page.locator('.tooltip-hint')).toHaveCount(0)
     await page.mouse.move(middleOf(parts.column).x, parts.field.top + 2, { steps: 4 })
     const shown = await settledHint(page)

@@ -199,7 +199,7 @@ const legendHints = computed(() => {
   const hints = new Map(
     props.series.map((one) => [
       one.key,
-      seriesHint(one.key, chart.value.columns, props.formatValue, props.formatShare),
+      seriesHint(one, chart.value.columns, props.formatValue, props.formatShare),
     ]),
   )
   const before = props.columns.reduce((sum, column) => sum + (column.before ?? 0), 0)
