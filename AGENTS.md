@@ -26,7 +26,9 @@ is complete on its own.
   and item record fields, the scope `tree`, `acceptance`, the computed order of
   work and its queue (`rank` retired, `within`, `label`, `project`, the
   session's space, `queue_order`, `withheld`, `lapsed_claim`,
-  `by_previous_holder`), and the retired words
+  `by_previous_holder`), a close that ends its item's requests (`expired_reason`
+  `item_completed` and `item_cancelled`, `[item_closed]`, `purpose`), and the
+  retired words
   refused on input — for spaces and projects — the registry formats 2 and 4, a
   space without `project_id`, an optional `space` on `create_work_item`, the
   scope `space` and the module levels — and for reading an item by parts — the

@@ -22,7 +22,7 @@ hold other work at any depth and are never claimed; there are eight categories;
 work is accepted on a recorded basis; and an accepted open goal or stage shows
 what it derives from the work under it instead of a state. The order work is
 taken in was set by hand, a `rank` stored as the item's `position`; in 3.0 it is
-computed from the work model. The store moves to schema 18 through
+computed from the work model. The store moves to schema 19 through
 `valkama migrate work-model`.
 
 Several of the old names would mean something else under the new model. A
@@ -61,6 +61,11 @@ and no compatibility layer.
    - in a read of one space, an item of another space that names one of its
      projects carries `outside_space` in `withheld`: that space's queue does
      not give it;
+   - a close ends the requests pending on its item in the same write: a request
+     record's `expired_reason` takes `item_completed` and `item_cancelled`
+     where it read `task_closed`, reopening brings none back, a change of an
+     answer on a closed item is refused with `[item_closed]`, and the record
+     carries `purpose`;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -128,6 +133,8 @@ and no compatibility layer.
 | one project binds a space | each binding says `default`; a space has one default project |
 | `create_planning_space` with `project_id` | `{name, key}`; `valkama projects bind` joins a project |
 | scope `project` | scope `space`, the project an optional refinement |
+| `expired_reason: "task_closed"`, read until the item reopens | `"item_completed"` or `"item_cancelled"`, written by the close |
+| `[task_closed]` on an answer change | `[item_closed]` |
 
 ## Consequences
 

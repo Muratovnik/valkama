@@ -647,7 +647,7 @@ Graph; its chip leaves it in every view.
 
 ### Migrating an older store
 
-This build opens only a store at its own schema, 18, and migrates none as it opens
+This build opens only a store at its own schema, 19, and migrates none as it opens
 it. A store Valkama 2.9 left -- schema 17 with its word index -- is refused with
 "run `valkama migrate work-model` once" and left as it was. An older store, or one
 at 17 without the index, is refused with "open it with Valkama 2.9 first" and left
@@ -703,7 +703,7 @@ the store, delete the `-wal` and `-shm` files beside it, put the `pre3.0` snapsh
 place of the database and its `.images` folder in place of `images`, as described
 below, and only then pin the 2.9 release with `launcher install --revision
 <commit>`; everything written since the migration is lost. A 2.9 build refuses a
-store at 18.
+store at 19.
 
 The paragraphs below describe the snapshots the earlier upgrades took and how to go
 back from them.
