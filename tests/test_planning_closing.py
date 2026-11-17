@@ -1011,7 +1011,12 @@ class OwnerQuestionTests(Waiting):
         self.assertEqual([(self.goal, ["question_answered"])], self.heard(outside))
         self.assertEqual(["tree"], self.open_notices(self.goal), "the space row went to the claim")
         created = self.agent(
-            "create_work_item", AS_A, space="MAIN", title="T under the goal", parent=self.goal, claim=True
+            "create_work_item",
+            AS_A,
+            space="MAIN",
+            title="T under the goal",
+            parent=self.goal,
+            claim=True,
         )
         self.assertEqual(
             [(self.goal, ["steps_edited", "awaiting_confirmation"])],
@@ -1025,7 +1030,12 @@ class OwnerQuestionTests(Waiting):
         self.answer(asked, "leave")
         self.agent("claim_work_item", AS_A, id=self.made("T outside the goal"))
         created = self.agent(
-            "create_work_item", AS_B, space="MAIN", title="T under the goal", parent=self.goal, claim=True
+            "create_work_item",
+            AS_B,
+            space="MAIN",
+            title="T under the goal",
+            parent=self.goal,
+            claim=True,
         )
         self.assertEqual(
             [(self.goal, ["steps_edited", "awaiting_confirmation", "question_answered"])],

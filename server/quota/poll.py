@@ -56,6 +56,7 @@ import re
 import sqlite3
 import ssl
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from email.utils import parsedate_to_datetime
@@ -486,14 +487,32 @@ def status_path(store_path: str) -> str:
     return f"{store_path}.quota-poll.json"
 
 
+#: How long a status write waits for a reader to let the file go. Windows refuses to replace a
+#: file another handle holds open, and the doctor may be reading it at that moment; a write that
+#: gave up at once lost its state, the last one a stopped poll writes among them.
+_REPLACE_SECONDS = 2.0
+
+
 def write_status(store_path: str, status: Status) -> None:
-    """Replace the status file whole, so a reader never sees half of one."""
+    """Replace the status file whole, so a reader never sees half of one.
+
+    A reader holding the file open is waited out for at most `_REPLACE_SECONDS`, then the
+    refusal is raised as it came.
+    """
 
     path = status_path(store_path)
     partial = f"{path}.partial"
     with open(partial, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(asdict(status), handle, sort_keys=True)
-    os.replace(partial, path)
+    deadline = time.monotonic() + _REPLACE_SECONDS
+    while True:
+        try:
+            os.replace(partial, path)
+            return
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
 
 
 def read_status(store_path: str) -> Status | None:

@@ -778,5 +778,34 @@ class DoctorTests(_Profile):
         self.assertIn("quota-poll", [check["id"] for check in capabilities["checks"]])
 
 
+class StatusWriteTests(unittest.TestCase):
+    """A status write lands while a reader has the file open, as the doctor may at any moment.
+
+    Windows refuses to replace a file another handle holds open; a write that gave up then lost
+    the state it carried, the last one a stopped poll writes among them.
+    """
+
+    def test_every_write_lands_while_a_reader_keeps_reading(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            path = str(Path(root) / "valkama.sqlite3")
+            poll.write_status(path, poll.Status(poll.OK, "2030-03-05T12:00:00.000Z"))
+            done = threading.Event()
+
+            def read() -> None:
+                while not done.is_set():
+                    poll.read_status(path)
+
+            reader = threading.Thread(target=read, daemon=True)
+            reader.start()
+            try:
+                for n in range(200):
+                    poll.write_status(path, poll.Status(poll.OK, f"2030-03-05T12:00:{n % 60:02}Z"))
+                poll.write_status(path, poll.Status(poll.STOPPED, "2030-03-05T12:10:00.000Z"))
+            finally:
+                done.set()
+                reader.join(5)
+            self.assertEqual(poll.STOPPED, getattr(poll.read_status(path), "state", None))
+
+
 if __name__ == "__main__":
     unittest.main()
