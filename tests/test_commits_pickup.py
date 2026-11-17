@@ -31,6 +31,8 @@ OTHER_AGENT = "019a3c2e-bbbb-7c11-9e0f-2f4b6d8a1c3e"
 #: The default project of the space, and a project bound to no space.
 DEFAULT = "beta"
 UNBOUND = "gamma"
+#: The default project of a neighbouring space NEXT, in the tests that make one.
+NEIGHBOUR = "lib"
 #: How many runs each cost figure is the median of.
 RUNS = 200
 
@@ -278,25 +280,31 @@ class RuleCase(PickupCase):
         service.create_planning_space(self.conn, name="Work", key="MAIN")
         self.conn.commit()
 
-    def registry(self, default: str) -> None:
+    def registry(self, default: str, *, neighbour: bool = False) -> None:
+        """The registry; with `neighbour`, `lib` too, the default project of a space NEXT."""
+
         scope = str(read_store_metadata(self.conn)["data_scope_id"])
-        space = planning_space_entity({"data_scope_id": scope, "space_key": "MAIN"})
         entries = []
-        for project, root, bound in (
-            (PROJECT, self.place.repository, True),
-            (DEFAULT, self.place.base / DEFAULT, True),
-            (UNBOUND, self.place.base / UNBOUND, False),
-        ):
+        places = [
+            (PROJECT, self.place.repository, "MAIN"),
+            (DEFAULT, self.place.base / DEFAULT, "MAIN"),
+            (UNBOUND, self.place.base / UNBOUND, None),
+        ]
+        if neighbour:
+            places.append((NEIGHBOUR, self.place.base / NEIGHBOUR, "NEXT"))
+        for project, root, home in places:
             Path(root).mkdir(exist_ok=True)
             entry = project_entry(project, root)
-            if bound:
-                entry["planning_binding"] = {**space, "default": project == default}
+            if home is not None:
+                space = planning_space_entity({"data_scope_id": scope, "space_key": home})
+                default_here = project == (default if home == "MAIN" else NEIGHBOUR)
+                entry["planning_binding"] = {**space, "default": default_here}
             entries.append(entry)
         (self.place.local / "Valkama" / "projects.json").write_bytes(registry_bytes(entries))
 
-    def task(self, title: str, *projects: str) -> str:
+    def task(self, title: str, *projects: str, space: str = "MAIN") -> str:
         made = service.create_work_item(
-            self.conn, space="MAIN", title=title, projects=list(projects) or None
+            self.conn, space=space, title=title, projects=list(projects) or None
         )
         self.conn.commit()
         return str(made["reference"])
@@ -569,6 +577,57 @@ class RecentCloseTests(RuleCase):
         self.claim(now)
         _commit, line = self.commit()
         self.assertTrue(line.endswith(f"to {now}."), line)
+
+
+class SpacePeriodTests(RuleCase):
+    """The period is the `recent_close_minutes` of the closed task's own space: MAIN and
+    a neighbouring space NEXT, each task naming R, so only the period tells them apart."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.registry(DEFAULT, neighbour=True)
+        service.create_planning_space(self.conn, name="Next", key="NEXT")
+        self.conn.commit()
+
+    def period(self, space: str, minutes: int) -> None:
+        """The owner sets the space's period, as the participation screen does."""
+
+        payload = {"space": space, "key": "recent_close_minutes", "value": minutes}
+        with calls.bind(calls.browser(), "participation"):
+            status, _body = api.handle_post(self.conn, "/api/planning/participation", payload)
+        self.conn.commit()
+        self.assertEqual(200, status)
+
+    def test_a_space_s_longer_period_takes_a_close_past_the_default(self) -> None:
+        self.period("MAIN", 60)
+        t1 = self.task("Reviewed", PROJECT)
+        self.closed(t1, 45)
+        commit, line = self.commit()
+        self.assertIn(f"to {t1}, which you closed 45 min ago.", line)
+        self.assertEqual([(t1, commit, "server", "valkama")], self.attached())
+
+    def test_a_neighbouring_space_at_the_default_does_not(self) -> None:
+        self.period("MAIN", 60)
+        t1 = self.task("Reviewed next door", PROJECT, NEIGHBOUR, space="NEXT")
+        self.closed(t1, 45)
+        _commit, line = self.commit()
+        self.assertIn("is on no card", line)
+        self.assertEqual([], self.attached())
+        # The same close fits once its own space sets the longer period.
+        self.period("NEXT", 60)
+        commit, line = self.commit()
+        self.assertIn(f"to {t1}, which you closed 45 min ago.", line)
+        self.assertEqual([(t1, commit, "server", "valkama")], self.attached())
+
+    def test_a_newer_close_past_its_period_does_not_hide_an_older_one_within(self) -> None:
+        self.period("NEXT", 5)
+        older = self.task("Reviewed first", PROJECT)
+        self.closed(older, 20)
+        newer = self.task("Reviewed next door", PROJECT, NEIGHBOUR, space="NEXT")
+        self.closed(newer, 10)
+        commit, line = self.commit()
+        self.assertIn(f"to {older}, which you closed 20 min ago.", line)
+        self.assertEqual([(older, commit, "server", "valkama")], self.attached())
 
 
 class LeftoverTests(RuleCase):
