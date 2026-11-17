@@ -355,8 +355,9 @@ def schema_change(
     transaction that wrote anything, schema or rows, commits only if
     `PRAGMA foreign_key_check` comes back empty; otherwise it rolls back with
     `DanglingReferenceError`. One that wrote nothing commits without the check, so an
-    open of a store that is already current does not pay for it. After the commit
-    the keys are on again, as every connection of the package holds them.
+    open of a store that is already current does not pay for it. After the commit,
+    or the rollback of a failed change, the keys are on again, as every connection
+    of the package holds them.
     `committing` surrounds the check and the commit, for a caller that times them.
     """
 
@@ -375,7 +376,8 @@ def schema_change(
     except BaseException:
         conn.rollback()
         raise
-    conn.execute("PRAGMA foreign_keys=ON")
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
 
 
 def _schema_cookie(conn: sqlite3.Connection) -> int:

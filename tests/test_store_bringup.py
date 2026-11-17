@@ -175,6 +175,18 @@ class ProcedureTests(Harness):
             checked = [sql for sql in statements if "foreign_key_check" in sql.lower()]
             self.assertEqual(checks, len(checked), checked)
 
+    def test_a_failed_schema_change_rolls_back_and_turns_foreign_keys_on(self) -> None:
+        conn = sqlite3.connect(":memory:", isolation_level=None)
+        self.addCleanup(conn.close)
+        conn.execute("PRAGMA foreign_keys=ON")
+        with self.assertRaisesRegex(RuntimeError, "step failed"), store.schema_change(conn):
+            conn.execute("CREATE TABLE written (x)")
+            raise RuntimeError("step failed")
+        self.assertFalse(conn.in_transaction)
+        self.assertEqual(1, conn.execute("PRAGMA foreign_keys").fetchone()[0])
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE name = 'written'").fetchall()
+        self.assertEqual([], tables)
+
     def test_widening_on_a_connection_with_foreign_keys_on_is_refused(self) -> None:
         conn = store.connect()
         self.addCleanup(conn.close)
