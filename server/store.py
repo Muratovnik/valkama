@@ -28,7 +28,7 @@ import platform
 import sqlite3
 import sys
 import tempfile
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
 from . import store_adoption, store_backups, store_lock, store_rename, store_steps
@@ -324,6 +324,66 @@ class WorkModelPreconditionError(RuntimeError):
     def __init__(self, message: str, report: dict[str, Any]) -> None:
         super().__init__(message)
         self.report = report
+
+
+class DanglingReferenceError(RuntimeError):
+    """A schema change that would leave rows naming a parent that is not there.
+
+    Raised before the commit, which therefore never happens: the store is left as it
+    was before the transaction. `tables` names each table holding such a row.
+    """
+
+    def __init__(self, tables: list[str]) -> None:
+        super().__init__(
+            "the schema change would leave rows naming a missing parent in "
+            f"{', '.join(tables)}; it was rolled back and nothing was written"
+        )
+        self.tables = tables
+
+
+@contextlib.contextmanager
+def schema_change(
+    conn: sqlite3.Connection,
+    *,
+    committing: Callable[[], contextlib.AbstractContextManager[object]] = contextlib.nullcontext,
+) -> Iterator[None]:
+    """One transaction that may change the schema, by SQLite's procedure for it.
+
+    Foreign keys go off before `BEGIN IMMEDIATE`, where SQLite takes the pragma: a
+    table rebuilt inside drops its old copy, and while keys are enforced that drop
+    deletes its rows and cascades into every table that references them. A
+    transaction that wrote anything, schema or rows, commits only if
+    `PRAGMA foreign_key_check` comes back empty; otherwise it rolls back with
+    `DanglingReferenceError`. One that wrote nothing commits without the check, so an
+    open of a store that is already current does not pay for it. After the commit,
+    or the rollback of a failed change, the keys are on again, as every connection
+    of the package holds them.
+    `committing` surrounds the check and the commit, for a caller that times them.
+    """
+
+    conn.execute("PRAGMA foreign_keys=OFF")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        schema = _schema_cookie(conn)
+        changes = conn.total_changes
+        yield
+        with committing():
+            if conn.total_changes != changes or _schema_cookie(conn) != schema:
+                found = conn.execute("PRAGMA foreign_key_check").fetchall()
+                if found:
+                    raise DanglingReferenceError(sorted({str(row[0]) for row in found}))
+            conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
+
+
+def _schema_cookie(conn: sqlite3.Connection) -> int:
+    """The counter SQLite moves on every change to the schema."""
+
+    return int(conn.execute("PRAGMA schema_version").fetchone()[0])
 
 
 DATA_ROOT = ".valkama"
@@ -753,111 +813,113 @@ def connect(path: str | None = None) -> sqlite3.Connection:
                 )
 
             conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA foreign_keys=ON")
-            conn.execute("BEGIN IMMEDIATE")
-            if source_identity is not None:
-                store_backups.integrity_check(conn, source="source store")
-                if store_backups.logical_identity(conn) != source_identity:
-                    raise RuntimeError("source store drifted after its migration snapshot")
+            with schema_change(conn):
+                if source_identity is not None:
+                    store_backups.integrity_check(conn, source="source store")
+                    if store_backups.logical_identity(conn) != source_identity:
+                        raise RuntimeError("source store drifted after its migration snapshot")
 
-            if store_rename.predates_rename(conn):
-                store_rename.migrate_off_former_name(conn)
-            if platform_migrations.module_registry_migration_needed(conn):
-                platform_migrations.migrate_module_registry(conn)
-            # A table this build adds, schema 10's included, is declared in
-            # `SCHEMA` alone, with its name in `SCHEMA_TABLES`: run against an
-            # upgraded store inside this transaction and under its recovery
-            # point, the script creates it exactly as in a fresh store, and
-            # `_assert_current_catalog` checks it by that name.
-            _execute_script(conn, SCHEMA)
-            if before_schema9:
-                # The steps below were written against schema 8's catalog, which
-                # this build no longer declares; the last step drops it again.
-                platform_migrations.ensure_schema8_catalog(conn)
-            planning_store.migrate_discussion(conn)
-            planning_store.migrate_interactions(conn)
-            planning_store.migrate_identity(conn)
-            _migrate_session_identity(conn)
-            # Schema 10: columns cannot come from the script, which leaves an
-            # existing table alone, so they are appended here.
-            planning_store.migrate_threads(conn)
-            # A mirror written between the read above and this transaction would be
-            # deleted with no recovery point holding it: refused, the next open takes one.
-            if (
-                planning_store.symmetric_mirrors_present(conn)
-                and source_identity is None
-                and pretable_backup is None
-            ):
-                raise RuntimeError("merging mirrored links requires a pre-mutation snapshot")
-            planning_store.migrate_symmetric_links(conn)
-            _migrate_session_place(conn)
-            # Schema 16: the usage columns, and one row per request in the whole store.
-            usage_store.migrate(conn)
-            # The word index, after every step that adds a column its triggers name.
-            planning_words.migrate(conn)
-            audit_migration = platform_migrations.schema_migration_needed(conn)
-            audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)
-            authorization_migration = platform_migrations.authorization_owner_migration_needed(conn)
-            owner_migration = store_metadata.store_owner_migration_needed(conn)
-            if (
-                (
-                    audit_migration
-                    or audit_order_migration
-                    or authorization_migration
-                    or owner_migration
+                if store_rename.predates_rename(conn):
+                    store_rename.migrate_off_former_name(conn)
+                if platform_migrations.module_registry_migration_needed(conn):
+                    platform_migrations.migrate_module_registry(conn)
+                # A table this build adds, schema 10's included, is declared in
+                # `SCHEMA` alone, with its name in `SCHEMA_TABLES`: run against an
+                # upgraded store inside this transaction and under its recovery
+                # point, the script creates it exactly as in a fresh store, and
+                # `_assert_current_catalog` checks it by that name.
+                _execute_script(conn, SCHEMA)
+                if before_schema9:
+                    # The steps below were written against schema 8's catalog, which
+                    # this build no longer declares; the last step drops it again.
+                    platform_migrations.ensure_schema8_catalog(conn)
+                planning_store.migrate_discussion(conn)
+                planning_store.migrate_interactions(conn)
+                planning_store.migrate_identity(conn)
+                _migrate_session_identity(conn)
+                # Schema 10: columns cannot come from the script, which leaves an
+                # existing table alone, so they are appended here.
+                planning_store.migrate_threads(conn)
+                # A mirror written between the read above and this transaction would be
+                # deleted with no recovery point holding it: refused, the next open takes one.
+                if (
+                    planning_store.symmetric_mirrors_present(conn)
+                    and source_identity is None
+                    and pretable_backup is None
+                ):
+                    raise RuntimeError("merging mirrored links requires a pre-mutation snapshot")
+                planning_store.migrate_symmetric_links(conn)
+                _migrate_session_place(conn)
+                # Schema 16: the usage columns, and one row per request in the whole store.
+                usage_store.migrate(conn)
+                # The word index, after every step that adds a column its triggers name.
+                planning_words.migrate(conn)
+                audit_migration = platform_migrations.schema_migration_needed(conn)
+                audit_order_migration = platform_migrations.registry_audit_order_migration_needed(
+                    conn
                 )
-                and pretable_backup is None
-                and source_identity is None
-            ):
-                # This branch is retained for additive pre-ratchet stores. The
-                # schema-4 cutover always used the verified snapshot above.
-                raise RuntimeError("platform migration requires a pre-mutation snapshot")
-            if audit_migration:
-                platform_migrations.migrate_schema(conn)
-            if audit_migration or audit_order_migration:
-                # `migrate_schema` appends the column, so a store that has just
-                # gained it needs the same normalization as one that gained it
-                # long ago.
-                platform_migrations.migrate_registry_audit_order(conn)
-            if owner_migration:
-                store_metadata.migrate_store_owner(conn)
-            if authorization_migration:
-                platform_migrations.migrate_authorization_owner_model(conn)
-            if historical and source_generation not in {
-                "planning-only",
-                "neutral-catalog",
-            }:
-                platform_migrations.migrate_product_model(conn)
-            if historical:
-                platform_migrations.retire_work_support_modules(conn)
-            if before_schema9:
-                # Schema 9: the registry's tables, the module rows with their
-                # audit, and the integration switches nothing has written since
-                # the registry replaced them. The recovery point holds them.
-                platform_migrations.drop_retired_tables(conn)
-                conn.execute("DROP TABLE IF EXISTS integration_settings")
-            # No "is this a new store" flag: bring-up writes the store's
-            # identity only when it is missing, which is the same answer for a
-            # store being created and one being upgraded.
-            platform_core.initialize(conn, path, caller_owns_transaction=True)
-            platform_migrations.assert_product_model_postconditions(conn)
-            _assert_current_catalog(conn)
-            # The full check reads every page, so it runs where something was
-            # migrated -- a recovery point was taken or the stamp moves -- and
-            # not on every open of a store that is already current.
-            if (
-                stored_version != STORE_SCHEMA_VERSION
-                or source_identity is not None
-                or pretable_backup is not None
-            ):
-                store_backups.integrity_check(conn, source="post-migration store")
-            # Under this open's write lock, so no upload stands between its file and
-            # its row: a picture file no row names is nobody's and goes.
-            planning_images.sweep(conn)
-            # The schema ratchet is the final statement in the same transaction.
-            if stored_version != STORE_SCHEMA_VERSION:
-                conn.execute(f"PRAGMA user_version={STORE_SCHEMA_VERSION}")
-            conn.commit()
+                authorization_migration = platform_migrations.authorization_owner_migration_needed(
+                    conn
+                )
+                owner_migration = store_metadata.store_owner_migration_needed(conn)
+                if (
+                    (
+                        audit_migration
+                        or audit_order_migration
+                        or authorization_migration
+                        or owner_migration
+                    )
+                    and pretable_backup is None
+                    and source_identity is None
+                ):
+                    # This branch is retained for additive pre-ratchet stores. The
+                    # schema-4 cutover always used the verified snapshot above.
+                    raise RuntimeError("platform migration requires a pre-mutation snapshot")
+                if audit_migration:
+                    platform_migrations.migrate_schema(conn)
+                if audit_migration or audit_order_migration:
+                    # `migrate_schema` appends the column, so a store that has just
+                    # gained it needs the same normalization as one that gained it
+                    # long ago.
+                    platform_migrations.migrate_registry_audit_order(conn)
+                if owner_migration:
+                    store_metadata.migrate_store_owner(conn)
+                if authorization_migration:
+                    platform_migrations.migrate_authorization_owner_model(conn)
+                if historical and source_generation not in {
+                    "planning-only",
+                    "neutral-catalog",
+                }:
+                    platform_migrations.migrate_product_model(conn)
+                if historical:
+                    platform_migrations.retire_work_support_modules(conn)
+                if before_schema9:
+                    # Schema 9: the registry's tables, the module rows with their
+                    # audit, and the integration switches nothing has written since
+                    # the registry replaced them. The recovery point holds them.
+                    platform_migrations.drop_retired_tables(conn)
+                    conn.execute("DROP TABLE IF EXISTS integration_settings")
+                # No "is this a new store" flag: bring-up writes the store's
+                # identity only when it is missing, which is the same answer for a
+                # store being created and one being upgraded.
+                platform_core.initialize(conn, path, caller_owns_transaction=True)
+                platform_migrations.assert_product_model_postconditions(conn)
+                _assert_current_catalog(conn)
+                # The full check reads every page, so it runs where something was
+                # migrated -- a recovery point was taken or the stamp moves -- and
+                # not on every open of a store that is already current.
+                if (
+                    stored_version != STORE_SCHEMA_VERSION
+                    or source_identity is not None
+                    or pretable_backup is not None
+                ):
+                    store_backups.integrity_check(conn, source="post-migration store")
+                # Under this open's write lock, so no upload stands between its file and
+                # its row: a picture file no row names is nobody's and goes.
+                planning_images.sweep(conn)
+                # The schema ratchet is the final statement in the same transaction.
+                if stored_version != STORE_SCHEMA_VERSION:
+                    conn.execute(f"PRAGMA user_version={STORE_SCHEMA_VERSION}")
             return conn
         except BaseException:
             conn.rollback()
@@ -1078,9 +1140,7 @@ def _migrate_work_model(path: str, report: dict[str, Any], item_projects: str | 
                 for name, seconds in timings.items()
             ]
             report["recovery_point"] = recovery_point
-            conn.execute("PRAGMA foreign_keys=OFF")
-            conn.execute("BEGIN IMMEDIATE")
-            try:
+            with schema_change(conn, committing=lambda: store_steps.phase(report, "commit")):
                 with store_steps.phase(report, "identity_in_transaction"):
                     before = store_backups.logical_identity(conn)
                 context = store_steps.Context(
@@ -1100,12 +1160,6 @@ def _migrate_work_model(path: str, report: dict[str, Any], item_projects: str | 
                     report=report,
                     schema=STORE_SCHEMA_VERSION,
                 )
-                with store_steps.phase(report, "commit"):
-                    conn.commit()
-            except BaseException:
-                conn.rollback()
-                raise
-            conn.execute("PRAGMA foreign_keys=ON")
             with store_steps.phase(report, "bring_current"):
                 conn.execute("BEGIN IMMEDIATE")
                 planning_words.bring_current(conn)

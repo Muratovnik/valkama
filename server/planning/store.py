@@ -708,9 +708,28 @@ def rebuild_table(conn: sqlite3.Connection, table: str, definition: str, rows: s
 
     Dropping a table others reference cascades into them while foreign keys are
     enforced, so a caller rebuilding such a table turns them off first, outside its
-    transaction, where SQLite takes the pragma.
+    transaction, where SQLite takes the pragma (`store.schema_change` does). With
+    them on, such a table is refused before anything is written.
     """
 
+    if conn.execute("PRAGMA foreign_keys").fetchone()[0]:
+        referencing = sorted(
+            {
+                str(row[0])
+                for row in conn.execute(
+                    "SELECT m.name FROM sqlite_master m, pragma_foreign_key_list(m.name) f"
+                    " WHERE m.type = 'table' AND m.name != ? COLLATE NOCASE"
+                    ' AND f."table" = ? COLLATE NOCASE',
+                    (table, table),
+                )
+            }
+        )
+        if referencing:
+            raise RuntimeError(
+                f"rebuilding {table} with foreign keys on would delete the rows of"
+                f" {', '.join(referencing)} that reference it; turn foreign keys off"
+                " outside the transaction first"
+            )
     stored = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
     ).fetchone()

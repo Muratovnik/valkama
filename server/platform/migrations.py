@@ -1568,6 +1568,5 @@ def assert_product_model_postconditions(conn: sqlite3.Connection) -> None:
     _assert_exact_catalog(conn, generation="current", prefix="platform_")
     for row in conn.execute("SELECT key,record_json,updated_at FROM platform_ui_prefs"):
         _neutral_ui_prefs_record(row, legacy=False)
-    foreign_keys = conn.execute("PRAGMA foreign_key_check").fetchall()
-    if foreign_keys:
-        raise CatalogMigrationError("post-migration foreign-key check failed")
+    # The foreign keys are checked by `store.schema_change`, the transaction this runs
+    # in, once every step of the bring-up has written.
