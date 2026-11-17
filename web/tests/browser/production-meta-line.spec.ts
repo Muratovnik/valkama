@@ -9,7 +9,8 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { expectDateHeld } from './metaLine.ts'
-import { asked, openQuestion, routeField } from './questionBackend.ts'
+import { asked, routeField } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const LONG = 'an-agent-with-a-remarkably-long-working-name-that-runs-past-the-line'

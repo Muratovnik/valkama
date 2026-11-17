@@ -98,6 +98,7 @@ export function routedPage() {
     },
     unroute: () => Promise.resolve(),
     addInitScript: () => Promise.resolve(),
+    on: () => {},
   }
   /** What the routes answer `url` (a path on the served origin), or null when none does. */
   async function ask(url: string, sent: Request = {}): Promise<Fulfilled | null> {

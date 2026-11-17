@@ -11,7 +11,6 @@ import { now } from './planningFixtures.ts'
 import {
   answerMark,
   asked,
-  openQuestion,
   question,
   QUESTION_ID,
   ROUTE_ASKED,
@@ -19,6 +18,7 @@ import {
   send,
   wordsField,
 } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const navCount = (page: Page) =>

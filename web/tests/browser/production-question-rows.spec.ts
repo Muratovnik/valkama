@@ -8,7 +8,8 @@ import type { Locator, Page } from '@playwright/test'
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
 import { box, settledBox } from './editorPage.ts'
-import { asked, crowdedField, mixedField, openQuestion, routeField } from './questionBackend.ts'
+import { asked, crowdedField, mixedField, routeField } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 type Asked = NonNullable<Parameters<typeof asked>[0]>

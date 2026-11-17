@@ -5,7 +5,8 @@ import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
 import { asRoot } from '../support/threads.ts'
 import { centre } from './boardPage.ts'
-import { openQuestion, question } from './questionBackend.ts'
+import { question } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 
 /**
  * What the tests of presses on questions share: a real mouse, and two questions stacked so

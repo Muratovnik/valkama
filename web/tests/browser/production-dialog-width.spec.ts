@@ -12,7 +12,8 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { spaceScope } from './planningFixtures.ts'
-import { asked, crowdedField, openQuestion } from './questionBackend.ts'
+import { asked, crowdedField } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 /** Where a box stands across the window, in whole pixels. */

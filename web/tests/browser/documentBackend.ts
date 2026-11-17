@@ -1,7 +1,8 @@
 import type { Locator, Page } from '@playwright/test'
 
 import { NESTED, NESTED_PATH } from './nestedDocumentFixture.ts'
-import { asked, openQuestion } from './questionBackend.ts'
+import { asked } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 
 /**
  * A project with Markdown files in it, and a card whose question names one, for the journeys

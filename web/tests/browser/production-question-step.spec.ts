@@ -8,7 +8,8 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { centre } from './boardPage.ts'
-import { openQuestion, question, send } from './questionBackend.ts'
+import { question, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import {
   answeredElsewhere,
   asked,

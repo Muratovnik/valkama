@@ -24,7 +24,8 @@ import { installBackend } from './backend.ts'
 import { boardRoute } from './boardPage.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
-import { asked, openQuestion } from './questionBackend.ts'
+import { asked } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 /** The levels, from the top down. */

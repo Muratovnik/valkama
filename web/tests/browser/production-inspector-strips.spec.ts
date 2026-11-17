@@ -15,7 +15,8 @@ import { expectStripOnColumn } from './confirmStrip.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { openCard } from './editorPage.ts'
 import { spaceScope } from './planningFixtures.ts'
-import { asked, openQuestion } from './questionBackend.ts'
+import { asked } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const WORDS = {

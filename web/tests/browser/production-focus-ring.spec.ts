@@ -9,7 +9,8 @@ import type { Locator, Page } from '@playwright/test'
 
 import { focusColour } from './editorPage.ts'
 import { frames } from './frames.ts'
-import { asked, openQuestion, question, routeField, send } from './questionBackend.ts'
+import { asked, question, routeField, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { inTheList, pair } from './questionPress.ts'
 import { test } from './test.ts'
 

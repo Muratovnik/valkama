@@ -10,7 +10,8 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { centre } from './boardPage.ts'
-import { mixedField, openQuestion, question, send } from './questionBackend.ts'
+import { mixedField, question, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import {
   decline,
   inCard,

@@ -10,7 +10,8 @@ import type { Locator, Page } from '@playwright/test'
 
 import { boxes, openList } from './commentListBackend.ts'
 import { frames } from './frames.ts'
-import { asked, mixedField, openQuestion } from './questionBackend.ts'
+import { asked, mixedField } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const FOLDED = 'Rewrite the reader'

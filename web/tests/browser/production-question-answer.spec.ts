@@ -9,14 +9,8 @@ import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
 import { expectDateHeld } from './metaLine.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import {
-  asked,
-  mixedField,
-  openQuestion,
-  QUESTION_ID,
-  routeField,
-  send,
-} from './questionBackend.ts'
+import { asked, mixedField, QUESTION_ID, routeField, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const OWN = 'Your own option'

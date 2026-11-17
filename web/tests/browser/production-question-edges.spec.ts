@@ -11,7 +11,8 @@ import type { Locator, Page } from '@playwright/test'
 
 import { REVIEW_PROMPT, reviewFields } from '../support/reviewQuestion.ts'
 import { drawnBox, startOf } from './edges.ts'
-import { asked, openQuestion, send } from './questionBackend.ts'
+import { asked, send } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 
 const GROUPS = [...new Set(reviewFields.map((field) => field.group).filter(Boolean))] as string[]

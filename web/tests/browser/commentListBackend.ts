@@ -8,7 +8,8 @@ import card from '../fixtures/server/card.json' with { type: 'json' }
 import served from '../fixtures/server/requests.json' with { type: 'json' }
 import { asRoot } from '../support/threads.ts'
 import { devState, doneState, workItem, workItemRef } from './planningFixtures.ts'
-import { openQuestion, question } from './questionBackend.ts'
+import { question } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 
 type Request = InputRequestEntry['request']
 

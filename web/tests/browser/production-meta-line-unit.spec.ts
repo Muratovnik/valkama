@@ -12,7 +12,8 @@ import type { Page } from '@playwright/test'
 
 import { launchedSessionId } from './executionFixtures.ts'
 import { expectSessionWithName } from './metaLine.ts'
-import { asked, openQuestion } from './questionBackend.ts'
+import { asked } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 import { reply, root, talkedOn } from './threadFixtures.ts'
 
@@ -30,9 +31,9 @@ const LONG = 'retrospective-reviewer'
  *  ordinary space broke off under the whole name there. */
 function talk() {
   const authors: Record<number, string> = {
-    3: `elko (session ${UNKNOWN})`,
-    5: `elko (session ${KNOWN})`,
-    8: `kolo (session ${UNKNOWN})`,
+    3: `worker-a (session ${UNKNOWN})`,
+    5: `worker-a (session ${KNOWN})`,
+    8: `worker-b (session ${UNKNOWN})`,
     9: `${LONG} (session ${UNKNOWN})`,
     10: `${LONG} (session ${KNOWN})`,
   }
@@ -44,9 +45,9 @@ function talk() {
     root(11, 'A root with a reply from a session the server knows.', {
       author: `mira (session ${UNKNOWN})`,
     }),
-    reply(12, 11, 'A reply under it.', { author: `kolo (session ${KNOWN})` }),
+    reply(12, 11, 'A reply under it.', { author: `worker-b (session ${KNOWN})` }),
     root(13, 'Does the import keep the order?', {
-      author: `kolo (session ${KNOWN})`,
+      author: `worker-b (session ${KNOWN})`,
       awaits_reply: true,
       answered: false,
     }),
@@ -63,7 +64,7 @@ async function openHeads(page: Page, locale: 'en' | 'ru', width: number) {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.setViewportSize({ width, height: 900 })
-  const opened = await openQuestion(page, [asked({ author: `kolo (session ${UNKNOWN})` })])
+  const opened = await openQuestion(page, [asked({ author: `worker-b (session ${UNKNOWN})` })])
   opened.backend.item.comments.push(...talk())
   await page.reload()
   const { drawer, card } = opened

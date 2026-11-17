@@ -6,7 +6,8 @@ import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
 import { openCard } from './editorPage.ts'
-import { asked, openQuestion, routeField, wordsField } from './questionBackend.ts'
+import { asked, routeField, wordsField } from './questionBackend.ts'
+import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
 
