@@ -59,8 +59,12 @@ says what it is:
   `deferred` it accepts the work in `triage` under it, stopping at a deferred goal
   or stage.
 - `started_at` is when work on it began, `waits_for` the open items blocking it,
-  and `workable` whether a task may be taken now: unheld, in `triage` or
-  `ready`, with nothing unfinished blocking it.
+  `workable` whether its space's queue may give it now, and `withheld` why not,
+  as codes such as `not_ready`, `held`, `waits`, `question` or
+  `ancestor_triage`: empty exactly when it is `workable`.
+- `lapsed_claim` (`holder`, `reason`, `at`) names whose claim the sweep released,
+  why and when, until the next claim; a step marked `by_previous_holder` was
+  ticked by that holder and waits for a tick that confirms it (see Claims).
 - `get_work_item_chain` with `scope: "tree"` reads everything under an item at
   any depth; `scope: "chain"`, the default, adds what was discovered from it.
 
@@ -285,14 +289,15 @@ outside 1 to 1000.
 answer with too: `reference`, `title`, `kind`, `priority`, `state` (`key`,
 `name`, `category`; null for an accepted open goal or stage), `open`,
 `container_state`, `acceptance`, `started_at`, `waits_for`, `workable`,
-`projects` (the projects the item changes, each with its `project_id`, the
+`withheld`, `projects` (the projects the item changes, each with its `project_id`, the
 registry's `display_name`, null while the registry does not record it, and its
 `source`: `named`, `commits` or `migrated`; a goal's or stage's are those of
 every task under it), `claim_ref`, `claim_state`, `last_claim_ref`,
-`closed_at`, `labels`, `source`, `revision`, `created_at`, `updated_at`, `url`,
+`lapsed_claim`, `closed_at`, `labels`, `source`, `revision`, `created_at`, `updated_at`, `url`,
 `parent` (a reference or null),
 `description` whole, `checklist` (each step's `id`, `text` and `done`, and
-`claimed_by` and `done_by` when they are set), `summary` when there is one, and
+`claimed_by` and `done_by` when they are set, and `by_previous_holder: true` when
+a lapsed holder ticked it), `summary` when there is one, and
 `parts`: each other part the item has, with its size. A part with nothing in it
 is left out.
 
@@ -394,7 +399,10 @@ was released: `session-ended`, `session-missing` or `lease-expired`, the last fo
 3 quiet days. The release marks every step the lapsed holder ticked
 `by_previous_holder`, at work or blocked, until a tick confirms it, and the
 item's `lapsed_claim` (`holder`, `reason`, `at`) names that release until the
-next claim. `release: true` requeues an item that was
+next claim. After a resume or a compaction the session's Valkama note names such
+a step `(to confirm)` and lists the items whose claim or step the sweep released
+since the session's last write call in `No longer held by you: …`, a subagent
+only its own. `release: true` requeues an item that was
 in its active state unless one of its steps is still claimed. A task at work stands
 held: with no ready state to requeue it in, a release, the tick or release of its
 last held step and a takeover of its stale claim are refused, and its lapsed lease

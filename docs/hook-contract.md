@@ -1210,8 +1210,8 @@ After a resume or a compaction an agent goes on with the work it holds, but its
 context no longer says where that work stood, and without help it reads each
 item again to find out. `valkama hook <client> session-start` answers such a
 start with a short note instead: what the agent holds, each item's state, next
-condition and project root, and a last line saying that the note stands for that
-read.
+condition and project root, what the lease expiry took from it since its last
+call, and a last line saying that the note stands for that read.
 
 - **When.** Only when the input's `source` is `resume` or `compact`. `startup`,
   `clear` and `fork` open a session with a new id, which holds nothing, so they
@@ -1234,9 +1234,10 @@ read.
 ```text
 Valkama now: this session holds 4 open items; the 3 it wrote to last:
 - MAIN-12 «Widen the check», Dev. Next condition 2/5: «Add the probe for the second client». 3 open threads; 1 new answer. Stage MAIN-3 of goal MAIN-1.
-- MAIN-14 «Retire the old reader», Dev, held by a condition. Next condition 1/4: «Measure the cold start».
+- MAIN-14 «Retire the old reader», Dev, held by a condition. Next condition 1/4: «Measure the cold start» (to confirm). 1 to confirm.
 - MAIN-9 «Draft the release note», Blocked. All 3 conditions ticked. 1 open question. Goal MAIN-1.
 Root of these items: ../main.
+No longer held by you: MAIN-7.
 Current: read an item only for what this note leaves out.
 ```
 
@@ -1251,14 +1252,18 @@ Each item's line says:
 - its number, its title and its state, then `held by a condition` when the
   recipient holds a step of the item and not its claim;
 - `Next condition 2/5:` with that condition's text: the first step not yet
-  ticked that the recipient holds, or failing that the first step not yet
-  ticked. The numbers are the ticked steps and all of them. With no such step
-  it says `All 3 conditions ticked.`, and `No conditions.` for an item without
+  ticked that the recipient holds, or failing that the first step in order that
+  is not ticked or is marked `by_previous_holder`. A marked step was ticked by a
+  holder whose claim lapsed, so it counts as a tick to confirm, not as a ticked
+  step: it is named with `(to confirm)` after its text. The numbers are the
+  ticked steps, the marked ones left out, and all of them. With no such step it
+  says `All 3 conditions ticked.`, and `No conditions.` for an item without
   steps;
 - how many of the item's threads are open (a root without a resolved mark), how
-  many of its questions wait for a person, and how many questions were answered
+  many of its questions wait for a person, how many questions were answered
   after the recipient's newest write on the item, every answered one when it
-  wrote nothing there. A count of zero is left out;
+  wrote nothing there, and how many steps are marked `by_previous_holder`
+  (`1 to confirm`). A count of zero is left out;
 - `Stage MAIN-3 of goal MAIN-1.` for an item in a stage, and `Goal MAIN-1.` for
   one directly under a goal;
 - `Root ../main (+1).`: the first of the roots a claim of the item names in
@@ -1273,12 +1278,25 @@ Each item's line says:
 When every item shown names the same root, the root stands once, in the line
 `Root of these items: ../main.` after the items.
 
+The line `No longer held by you: MAIN-7, MAIN-5 and 2 more.` names the open items
+the recipient lost to the lease expiry after its last call, the newest loss
+first. The recipient's last call is its newest write call whose session was
+confirmed; a session start is no call, so the start the note answers does not
+hide the losses it is to tell. An item is lost when the
+expiry released its claim, held under the recipient's label, and nobody claimed
+it since (its `lapsed_claim`), or a step of it, when the newest claim of a step
+with that text before the release was the recipient's call. A step whose text
+changed between the two is not named. A subagent is told only its own losses,
+its orchestrator those of the whole session. The line is left out when there is
+no loss.
+
 ### How long it is
 
 The note is at most 600 characters, and that bound holds by construction, not by
 what the store happens to hold. The note tries three items, then two, then one.
 For each count it tries titles of at most 60, 44 and 32 characters with next
-conditions of at most 72, 52 and 36, and one item also gets 20 and 24. It takes
+conditions of at most 72, 52 and 36 and 3, 2 and 1 numbers in the line of
+losses, and one item also gets 20 and 24 with 1. It takes
 the first version that fits. Inside a field every run of whitespace is one
 space, so a field never breaks a line; a field that is cut ends with `…`; a
 state is at most 20 characters; and a number past 999 is `999+`. A root is at
@@ -1291,20 +1309,24 @@ it is at most 48.
 Beside a start with another `source`, there is no note when notices are
 [switched off](#switching-it-off) or the store is protected, when the store is
 missing, at another schema, or cannot be opened to read, and when the recipient
-holds nothing. The hook prints nothing then and exits 0.
+holds nothing and lost nothing since its last call. The hook prints nothing then
+and exits 0.
 
 The note is a stage of its own: the lifecycle event of the start is recorded in
 every case, and a note that fails is reported on stderr and costs nothing else.
 The start is recorded first and the note read after it. A normal exit ends the
 session, and the claims and steps of an ended session read `stale`; the resume
 makes the session active again, so the note it gets names what the session
-holds. When the store cannot take the start and it waits in the spool, the note
-reads the session as it was before the start: a session that ended gets no note
+holds. A session that comes back after the 12 hours its claims are kept past an
+end finds them released by the sweep, and its note names them in the line of
+losses instead. When the store cannot take the start and it waits in the spool,
+the note reads the session as it was before the start: a session that ended gets no note
 then.
 
 ### What it reads
 
-The store, opened read-only and only at the schema this build writes, and the
+The store, opened read-only and only at the schema this build writes, the
+history of what the lease expiry released for the line of losses, and the
 project registry, once for every item. The note writes nothing, and it neither reads nor moves the places
 [the notices keep](#where-each-agents-place-is-kept), so news that arrived
 before or after the compaction is still told at the next tool call. The planning

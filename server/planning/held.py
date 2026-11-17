@@ -2,7 +2,8 @@
 
 Two readers ask it: `held_by_session`, behind `GET /api/planning/held`, and
 `held_for_note`, the facts a session's resume note tells it of the work it holds.
-Both take the holds by one rule.
+Both take the holds by one rule. `lost_since_last_call` gives the note the other
+side: what the lease expiry took from the session since its last call.
 
 A session holds an item while the item's claim, or a step of its checklist that
 is not done, carries a holder label of that session: the rule `subscriptions`
@@ -75,7 +76,37 @@ _REFERENCES = (
     " WHERE w.work_item_id IN (SELECT value FROM json_each(?))"
 )
 #: The mark a step carries when a previous holder ticked it: a tick to confirm, not a done step.
-FLAG = "by_previous_holder"
+FLAG = model.PREVIOUS_HOLDER
+
+#: The newest confirmed write call of a session, or of one agent of it: the recipient's
+#: last call. A session start is a lifecycle event, not a call, so a resume does not
+#: move it past the losses it is to be told.
+_LAST_CALL = (
+    "SELECT MAX(id) FROM execution_events WHERE session_id = ? AND kind = ?"
+    " AND identity_state = ? AND (? IS NULL OR agent_id = ?)"
+)
+#: Each hold the lease expiry released on an open item after a call, the newest first:
+#: an item's claim (`released`, whose detail names its holder) or a step
+#: (`checklist_released`, whose detail is the step's text).
+_SWEPT = (
+    "SELECT e.id AS event_id, e.action, e.detail, w.*, p.key AS space_key"
+    " FROM execution_events c JOIN work_item_events e ON e.call_id = c.id"
+    " JOIN work_items w ON w.work_item_id = e.work_item_id"
+    " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+    " JOIN workflow_states s ON s.state_id = w.state_id"
+    " WHERE c.tool = ? AND c.id > ? AND s.is_terminal = 0"
+    " AND (e.action = 'checklist_released' OR (e.action = 'released' AND instr(e.detail, ?) > 0))"
+    " ORDER BY e.id DESC"
+)
+#: Who took a step of this text on the item last before an event: the call behind its
+#: newest claim or takeover. Both events record the step's text as its release does.
+_STEP_TAKEN = (
+    "SELECT c.session_id, c.agent_id, c.identity_state FROM work_item_events e"
+    " LEFT JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.work_item_id = ? AND e.id < ? AND e.detail = ?"
+    " AND e.action IN ('checklist_claimed', 'checklist_taken_over')"
+    " ORDER BY e.id DESC LIMIT 1"
+)
 
 
 @read_model.whole_store_read()
@@ -148,6 +179,58 @@ def held_for_note(
     # A stable sort: items with no write keep the order of `held_by_session`.
     items.sort(key=lambda item: (item["last_write"] is None, -(item["last_write"] or 0)))
     return items
+
+
+@read_model.whole_store_read()
+def lost_since_last_call(
+    conn: sqlite3.Connection, session: object, agent: str | None = None
+) -> list[str]:
+    """The open items a session, or one agent of it, lost to the lease expiry since its last call.
+
+    The last call is the recipient's newest confirmed write call, whatever agent of
+    the session made it when no `agent` is named. A loss is a hold the expiry
+    released after that call:
+
+    - the item's claim, when the item's `lapsed_claim`, read by the code the
+      record reads it with, names a holder label of the recipient: so not once
+      somebody claimed the item again;
+    - a step, when the newest claim or takeover of a step with that text on the
+      item before the release was a call of the recipient. A step whose text
+      changed between the two is not paired, and so not named.
+
+    Taking an item back is a call of the recipient's, so what it took back is
+    behind its last call. By reference, the newest loss first, each item once.
+    Read-only.
+    """
+
+    session = _required(session)
+    agent = agent or None
+    suffix = subscriptions.holder_suffix(session, agent)
+    last = conn.execute(
+        _LAST_CALL, (session, calls.KIND, calls.CONFIRMED, agent, agent)
+    ).fetchone()[0]
+    swept = conn.execute(_SWEPT, (leases.EXPIRY_TOOL, last or 0, suffix)).fetchall()
+    lost: dict[str, str] = {}
+    for row in swept:
+        identity = str(row["work_item_id"])
+        if identity in lost:
+            continue
+        if row["action"] == "released":
+            lapsed = read_model.lapsed_claims(conn, [row]).get(identity)
+            mine = lapsed is not None and str(lapsed["holder"]).endswith(suffix)
+        else:
+            taken = conn.execute(
+                _STEP_TAKEN, (identity, int(row["event_id"]), row["detail"])
+            ).fetchone()
+            mine = (
+                taken is not None
+                and taken["identity_state"] == calls.CONFIRMED
+                and taken["session_id"] == session
+                and (agent is None or taken["agent_id"] == agent)
+            )
+        if mine:
+            lost[identity] = model.human_id(str(row["space_key"]), int(row["number"]))
+    return list(lost.values())
 
 
 def _required(session: object) -> str:

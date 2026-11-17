@@ -1005,7 +1005,14 @@ class SessionStartNoteCase(StoreCase):
 
     def setUp(self) -> None:
         super().setUp()
-        patch = mock.patch.dict(os.environ, {"VALKAMA_PROTECTED_STORE": LIVE_STORE})
+        patch = mock.patch.dict(
+            os.environ,
+            {
+                "VALKAMA_PROTECTED_STORE": LIVE_STORE,
+                # No registry there: the note reads no project root of this machine.
+                "LOCALAPPDATA": os.path.join(self.home.name, "local"),
+            },
+        )
         patch.start()
         self.addCleanup(patch.stop)
         service.create_planning_space(self.conn, name="Note", key="NT")
@@ -1081,6 +1088,57 @@ class SessionStartNoteTests(SessionStartNoteCase):
                 # The store cannot take the event, so it waits in the spool.
                 self.assertEqual(1, len(spool.pending(spool.directory(path))))
         self.assertFalse(os.path.exists(missing))
+
+    def test_a_resume_after_an_exit_is_told_what_the_sweep_took_meanwhile(self) -> None:
+        meta = {"sessionId": NOTE_SESSION, "threadId": NOTE_SESSION}
+        stepped = str(service.create_work_item(self.conn, space="NT", title="Stepped")["reference"])
+        applied = mcp_surface.call_tool(
+            self.conn,
+            "apply_work_item_changes",
+            {"id": stepped, "checklist": {"items": ["Only step"]}},
+            meta=meta,
+        )
+        step = applied["applied"]["checklist"][0]["item_id"]
+        mcp_surface.call_tool(
+            self.conn, "claim_work_item_checklist_item", {"id": stepped, "item_id": step}, meta=meta
+        )
+        self.conn.commit()
+        ended = {"session_id": NOTE_SESSION, "hook_event_name": "SessionEnd", "reason": "other"}
+        stdin = io.BytesIO(json.dumps(ended).encode())
+        self.assertEqual(0, entry.main(["claude", "session-end"], stdin, io.BytesIO()))
+        self.assertEqual("ended", self.session(NOTE_SESSION)["status"])
+        # The exit was long enough ago for the sweep to release what the session held.
+        self.conn.execute(
+            "UPDATE sessions SET ended_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-13 hours')"
+            " WHERE id = ?",
+            (NOTE_SESSION,),
+        )
+        self.assertEqual(2, service.expire_leases(self.conn))
+        self.conn.commit()
+
+        code, out, err = self.run_hook("claude", self.start("resume"))
+        self.assertEqual((0, ""), (code, err))
+        self.assertEqual(
+            "\n".join(
+                (
+                    "Valkama now: this session holds no open item.",
+                    f"No longer held by you: {stepped} and {self.reference}.",
+                    "Current: read an item only for what this note leaves out.",
+                )
+            ),
+            json.loads(out)["hookSpecificOutput"]["additionalContext"],
+        )
+        # The start was recorded before the note was read, and still the losses stand.
+        self.assertEqual(1, self.starts_recorded())
+        # Once the session calls again, what it lost is behind that call.
+        mcp_surface.call_tool(
+            self.conn,
+            "apply_work_item_changes",
+            {"id": stepped, "comment": {"body": "Back to it"}},
+            meta=meta,
+        )
+        self.conn.commit()
+        self.assertEqual((0, b""), self.run_hook("claude", self.start("compact"))[:2])
 
     def test_a_note_that_fails_costs_only_the_note(self) -> None:
         with mock.patch.object(held_note, "note", side_effect=sqlite3.OperationalError("busy")):

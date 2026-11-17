@@ -538,8 +538,118 @@ class HeldTests(unittest.TestCase):
                     set(note_item),
                 )
 
+    def end(self, session: str) -> None:
+        """End `session` past the grace its claims keep, as a normal exit long ago would."""
+
+        self.sql(
+            "UPDATE sessions SET status = 'ended',"
+            " ended_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-13 hours') WHERE id = ?",
+            session,
+        )
+
+    def sweep(self) -> None:
+        service.expire_leases(self.conn)
+        self.conn.commit()
+
+    def test_a_tick_the_sweep_marked_is_the_next_condition_to_confirm(self) -> None:
+        reference = self.item("Handed on", ("first", "second", "third"))
+        self.claim(OTHER, reference)
+        first, _second, third = self.step_ids(reference)
+        self.agent(
+            "apply_work_item_changes", OTHER, reference, checklist_ticks=[{"item_id": first}]
+        )
+        self.end(OTHER)
+        self.sweep()
+        [marked, *_] = service.get_work_item(self.conn, reference)["checklist"]
+        self.assertEqual((True, True), (marked["done"], marked["by_previous_holder"]))
+        self.claim(SESSION, reference)
+
+        def told() -> dict:
+            return self.noted(SESSION)[reference]
+
+        # Ticked, but by nobody who stands behind it: first in order and not counted done.
+        self.assertEqual(
+            {"text": "first", "done": 0, "total": 3, "flagged": True}, told()["next_condition"]
+        )
+        self.assertEqual(1, told()["to_confirm"])
+        # A step the recipient holds itself still comes first.
+        self.agent("claim_work_item_checklist_item", SESSION, reference, item_id=third)
+        self.assertEqual(
+            {"text": "third", "done": 0, "total": 3, "flagged": False}, told()["next_condition"]
+        )
+        self.agent(
+            "claim_work_item_checklist_item", SESSION, reference, item_id=third, release=True
+        )
+        # A tick again confirms it, and the next condition is the first step not ticked.
+        self.agent(
+            "apply_work_item_changes", SESSION, reference, checklist_ticks=[{"item_id": first}]
+        )
+        self.assertEqual(
+            ({"text": "second", "done": 1, "total": 3, "flagged": False}, 0),
+            (told()["next_condition"], told()["to_confirm"]),
+        )
+
+    def test_the_losses_are_the_holds_the_sweep_took_after_the_last_call(self) -> None:
+        claimed = self.item("Claimed")
+        self.claim(SESSION, claimed)
+        stepped = self.item("Stepped", ("one", "two"))
+        self.claim(OTHER, stepped)
+        self.claim_step(SESSION, stepped, 1)
+        by_child = self.item("By the subagent")
+        self.claim(SESSION, by_child, thread=CHILD)
+        # The recipient held this step and let it go; the session whose id starts
+        # the same took the step of that text after it.
+        passed_on = self.item("Passed on", ("only",))
+        self.claim_step(SESSION, passed_on, 0)
+        self.agent(
+            "claim_work_item_checklist_item",
+            SESSION,
+            passed_on,
+            item_id=self.step_ids(passed_on)[0],
+            release=True,
+        )
+        self.claim_step(PREFIX, passed_on, 0)
+        prefixed = self.item("Prefixed")
+        self.claim(PREFIX, prefixed)
+        kept = self.item("Still held")
+        self.claim(OTHER, kept)
+        self.end(SESSION)
+        self.end(PREFIX)
+        self.sweep()
+
+        lapsed = service.get_work_item(self.conn, claimed)["lapsed_claim"]
+        self.assertEqual(
+            ("session-ended", f"codex (session {SESSION})"), (lapsed["reason"], lapsed["holder"])
+        )
+        # Each item once, the newest loss first: the sweep went by number.
+        self.assertEqual(
+            [by_child, stepped, claimed], held.lost_since_last_call(self.conn, SESSION)
+        )
+        self.assertEqual([by_child], held.lost_since_last_call(self.conn, SESSION, CHILD))
+        self.assertEqual([], held.lost_since_last_call(self.conn, SESSION, SIBLING))
+        self.assertEqual([prefixed, passed_on], held.lost_since_last_call(self.conn, PREFIX))
+        self.assertEqual([], held.lost_since_last_call(self.conn, OTHER))
+
+        # Claimed again by another session, an item is no loss: its lapsed claim is gone.
+        self.claim(OTHER, claimed)
+        self.assertIsNone(service.get_work_item(self.conn, claimed)["lapsed_claim"])
+        self.assertEqual([by_child, stepped], held.lost_since_last_call(self.conn, SESSION))
+        # The recipient's own claim is a call, made after every loss it had: none is named.
+        self.claim(PREFIX, prefixed)
+        self.assertEqual([], held.lost_since_last_call(self.conn, PREFIX))
+        # A closed item is no loss.
+        self.sql(
+            "UPDATE work_items SET state_id ="
+            " (SELECT state_id FROM workflow_states WHERE key = 'done') WHERE title = 'Stepped'"
+        )
+        self.assertEqual([by_child], held.lost_since_last_call(self.conn, SESSION))
+        # The session's own next call leaves its losses behind it; its subagent's
+        # last call is the subagent's own.
+        self.agent("apply_work_item_changes", SESSION, kept, comment={"body": "Back"})
+        self.assertEqual([], held.lost_since_last_call(self.conn, SESSION))
+        self.assertEqual([by_child], held.lost_since_last_call(self.conn, SESSION, CHILD))
+
     def test_a_step_a_previous_holder_ticked_is_to_confirm_and_not_done(self) -> None:
-        # No write of this build marks a step so; the mark is read where a record has it.
         own = f"codex (session {SESSION})"
         steps = [
             {"text": "ticked", "done": True, "claimed_by": "", "by_previous_holder": False},

@@ -645,14 +645,14 @@ it. It carries, in this order:
 | --- | --- |
 | `reference`, `title`, `kind`, `priority` | as [The work model](#the-work-model) names them |
 | `state` | `key`, `name` and `category`; `null` for an accepted open goal or stage. `open` says whether the work is over |
-| `open`, `container_state`, `acceptance`, `started_at`, `waits_for`, `workable` | as [The work model](#the-work-model) says |
+| `open`, `container_state`, `acceptance`, `started_at`, `waits_for`, `workable`, `withheld` | as [The work model](#the-work-model) says |
 | `projects` | the projects the item changes, each with its `project_id`, `display_name` and `source`, as [The projects an item changes](#the-projects-an-item-changes) says |
-| `claim_ref`, `claim_state`, `last_claim_ref`, `closed_at` | who holds it and how the lease stands; who held it last and when it closed, `null` while it is open |
+| `claim_ref`, `claim_state`, `last_claim_ref`, `lapsed_claim`, `closed_at` | who holds it and how the lease stands; who held it last; whose claim the sweep released, as [Claims are leases](#claims-are-leases) says; and when it closed, `null` while it is open |
 | `labels`, `source`, `revision`, `created_at`, `updated_at` | as in the full record |
 | `url` | the item's [address](#the-address-of-a-work-item) |
 | `parent` | the parent's reference, or `null` |
 | `description` | the whole text |
-| `checklist` | each step as `id`, `text` and `done`, plus `claimed_by` and `done_by` only when they are set |
+| `checklist` | each step as `id`, `text` and `done`, plus `claimed_by` and `done_by` only when they are set, and `by_previous_holder: true` only when a lapsed holder ticked it |
 | `summary` | the closing summary, only when there is one |
 | `parts` | every other part the item has, with its size |
 
@@ -2585,6 +2585,13 @@ steps held, whose release names a step rather than its holder. It is derived
 from the history, never stored, and stands in the full record and in every
 brief record; the compact rows of `list_work_items` and `search_work_items` do
 not carry it.
+
+A session that resumes or is compacted is told these releases in its
+[resume note](hook-contract.md#the-resume-note): a step marked
+`by_previous_holder` stands there `(to confirm)`, and the line
+`No longer held by you: …` names the open items whose claim, by this
+`lapsed_claim`, or whose claimed step the sweep released after the session's
+last write call.
 
 `stale` says nobody is working the item now, not that the claim is gone. A
 session that ended may come back: a client restart ends the session and resumes
