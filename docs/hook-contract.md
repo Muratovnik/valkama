@@ -2119,7 +2119,13 @@ pair moved or united gets one history event `commit_rewritten`, signed
 pair did not touch gets none, and the event is not news to anyone. The new
 commit of a pair is always live: a mark it carries goes, so a rewrite back --
 two amends at a pinned committer time that make the first commit again --
-returns that commit to its cards and hides the one between. A pair whose old
+returns that commit to its cards and hides the one between. A pair applies only
+when its record was written later than the last pair applied to its old or its
+new commit, the pairs of one record not counting against each other (a squash
+names one new commit several times). A record read again, which the sweep does
+until its next pass and a hook does with another session's record, therefore
+changes nothing and is worked off: without this, a rewrite back read again
+would hide the first commit and return it on every pass. A pair whose old
 and new hash are one changes nothing. A card's projects stay as they are: the
 repository is the same. When the old commit is unknown nothing is recorded for
 the pair: after an amend the new commit is the session's own, and

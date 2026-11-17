@@ -16,7 +16,9 @@ transaction from a file nobody deletes before it commits.
 
 A rewrite, an amend or a rebase, carries the links of each old commit Valkama
 knows to its new one and marks the old one `rewritten_to` it (`_rewrite`); a
-squash unites the links of its old commits. A commit that a rewrite in the same
+squash unites the links of its old commits. A pair applies only when its record
+is newer than the last pair applied to either of its commits, so a record read
+again never undoes a later one. A commit that a rewrite in the same
 batch replaces is not decided on its own, so `commit && commit --amend` in one
 shell call ends with one decision. A leftover, a record no hook took within its
 window, and the records the sweep takes after an hour (`sweep`), are decided by
@@ -340,7 +342,7 @@ def _take(conn: sqlite3.Connection, entries: list[_Entry], reader: str | None) -
             agent = None if entry.leftover else agent_of(hook, record)
             changed = _record(conn, decision, record, agent, replacing, lines)
         else:
-            changed = _rewrite(conn, record, hook, lines)
+            changed = _rewrite(conn, record, hook, lines, _written(entry.path))
         if not changed:
             taken.worked_off.append(entry.path)
         elif ours:
@@ -447,14 +449,26 @@ def _insert(
 
 def _known(conn: sqlite3.Connection, project_id: str, commit_hash: str) -> sqlite3.Row | None:
     return conn.execute(
-        "SELECT commit_id, session_id, agent_id, client, rewritten_to FROM commits"
+        "SELECT commit_id, session_id, agent_id, client, rewritten_to, rewrite_recorded_ns"
+        " FROM commits"
         " WHERE COALESCE(project_id, '') = ? AND hash = ?",
         (project_id, commit_hash),
     ).fetchone()
 
 
-def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str]) -> bool:
+def _rewrite(
+    conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str], recorded: int
+) -> bool:
     """Carry each known old commit's links to its new one; whether anything changed.
+
+    `recorded` is when the record was written, the nanosecond its file name carries.
+    A pair applies only when that is later than `rewrite_recorded_ns` of both its
+    commits, as they stood before this record (a squash's pairs share one new
+    commit), and applying it sets that time on both. An older record is one read
+    again: the sweep keeps a record it applied until its next pass, and a hook
+    leaves another session's record to that session. Applied over a later pair it
+    would undo it: a rewrite back, c -> c' and then c' -> c, read again, would hide
+    c and return it on every pass. Such a pair changes nothing.
 
     The new commit gets a row with the old one's session and agent unless it has
     one, the old one's attachments move to it (several old ones of a squash unite
@@ -474,6 +488,7 @@ def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str
     project_id = str(record["project_id"])
     details = {str(commit["hash"]): commit for commit in record["commits"]}
     changed = False
+    stamped: set[int] = set()
     for pair in record["rewritten"]:
         if pair["from"] == pair["to"]:
             continue
@@ -481,6 +496,8 @@ def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str
         if old is None or pair["to"] not in details:
             continue
         new = _known(conn, project_id, pair["to"])
+        if not all(_older(row, recorded, stamped) for row in (old, new) if row is not None):
+            continue
         if new is None:
             who = (old["session_id"], old["agent_id"], old["client"])
             made = _insert(conn, project_id, details[pair["to"]], who, hook.now)
@@ -490,6 +507,11 @@ def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str
             new_id = int(new["commit_id"])
         if new_id is None or new_id == int(old["commit_id"]):
             continue
+        conn.execute(
+            "UPDATE commits SET rewrite_recorded_ns = ? WHERE commit_id IN (?, ?)",
+            (recorded, old["commit_id"], new_id),
+        )
+        stamped.update((int(old["commit_id"]), new_id))
         cards = [
             str(row[0])
             for row in conn.execute(
@@ -525,6 +547,14 @@ def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str
                 f" to the rewritten commit {pair['to'][:SHORT_HASH]}."
             )
     return changed
+
+
+def _older(row: sqlite3.Row, recorded: int, stamped: set[int]) -> bool:
+    """Whether a commit's last applied rewrite was recorded before `recorded`: never, earlier,
+    or by the record being applied now (`stamped`)."""
+
+    last = row["rewrite_recorded_ns"]
+    return last is None or int(last) < recorded or int(row["commit_id"]) in stamped
 
 
 def _place(

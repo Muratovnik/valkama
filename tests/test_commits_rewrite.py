@@ -27,6 +27,8 @@ from .test_commits_pickup import RuleCase, context
 SQUASH_SECOND = "sed -i -e '2s/^pick/squash/'"
 #: A second Claude Code session, S2.
 OTHER = "019a3c2e-cccc-7c11-9e0f-2f4b6d8a1c3e"
+#: One committer and author time, so an amend that restores a tree restores its hash.
+PINNED = {"GIT_COMMITTER_DATE": "2026-11-20T10:00:00Z", "GIT_AUTHOR_DATE": "2026-11-20T10:00:00Z"}
 
 
 class RewriteCase(RuleCase):
@@ -202,41 +204,85 @@ class AmendTests(RewriteCase):
         self.assertEqual([(t1, new, "server", "valkama")], self.attached())
         self.assertEqual({new: None}, self.rewritten())
 
-    def test_a_rewrite_back_returns_the_first_commit(self) -> None:
-        """Two amends at a pinned committer time: the second makes the first commit again."""
+    def rewritten_back(self) -> tuple[str, str, str]:
+        """T1 holds a commit c, taken; two amends at a pinned committer time, c -> c' and
+        c' -> c, the second making c again, lie on disk. T1, c and c'."""
 
-        pinned = {
-            "GIT_COMMITTER_DATE": "2026-11-20T10:00:00Z",
-            "GIT_AUTHOR_DATE": "2026-11-20T10:00:00Z",
-        }
         t1 = self.task("Held", PROJECT)
         self.claim(t1)
         (self.repository / "one.txt").write_text("one", encoding="utf-8")
         self.git("add", "one.txt")
-        self.git("commit", "-qm", "feat: one", **pinned)
+        self.git("commit", "-qm", "feat: one", **PINNED)
         first = self.place.head()
         self.taken()
+        second = self.amended_pinned()
+        self.git("rm", "-q", "amended.txt")
+        self.git("commit", "-q", "--amend", "--no-edit", **PINNED)
+        self.assertEqual(first, self.place.head(), "the second amend made the first commit again")
+        return t1, first, second
+
+    def amended_pinned(self) -> str:
         (self.repository / "amended.txt").write_text("amended", encoding="utf-8")
         self.git("add", "amended.txt")
-        self.git("commit", "-q", "--amend", "--no-edit", **pinned)
-        second = self.place.head()
-        self.git("rm", "-q", "amended.txt")
-        self.git("commit", "-q", "--amend", "--no-edit", **pinned)
-        self.assertEqual(first, self.place.head(), "the second amend made the first commit again")
+        self.git("commit", "-q", "--amend", "--no-edit", **PINNED)
+        return self.place.head()
+
+    def events(self) -> int:
+        return int(self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0])
+
+    def test_a_rewrite_back_returns_the_first_commit(self) -> None:
+        t1, first, second = self.rewritten_back()
         self.assertEqual(f"{self.moved(first, second)}\n{self.moved(second, first)}", self.taken())
         self.assertEqual([(t1, first, "server", "valkama")], self.attached())
         self.assertEqual({first: None, second: first}, self.rewritten())
         card = self.tool("get_work_item", id=t1, parts="commits")
         self.assertEqual([first], [commit["hash"] for commit in card["commits"]])
         self.assertEqual([], self.waiting(), "the second commit is hidden")
-        written = self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
-        self.git("commit", "-q", "--amend", "--no-edit", **pinned)
+        written = self.events()
+        self.git("commit", "-q", "--amend", "--no-edit", **PINNED)
         self.assertEqual(first, self.place.head(), "an amend that changes nothing: c -> c")
         self.assertEqual("", self.taken(), "a pair of one hash changes nothing")
         self.assertEqual([(t1, first, "server", "valkama")], self.attached())
         self.assertEqual({first: None, second: first}, self.rewritten())
+        self.assertEqual(written, self.events())
+        self.assertEqual([], self.place.everywhere())
+
+    def test_a_rewrite_back_read_again_changes_nothing(self) -> None:
+        """The sweep keeps the records it applied until its next pass, which reads them
+        again: the pair c -> c', older than the c' -> c applied after it, hides nothing."""
+
+        t1, first, second = self.rewritten_back()
+        for path in self.place.everywhere():
+            self.aged(path, 61 * 60)
+        step = [found for found in sweep.STEPS if found.name == sweep.COMMITS]
+        self.assertGreater(sweep.run_pass(self.conn, steps=step).changed[sweep.COMMITS], 0)
+        self.assertEqual([(t1, first, "server", "valkama")], self.attached())
+        self.assertEqual({first: None, second: first}, self.rewritten())
+        self.assertEqual(2, len(self.rewrites()), "c -> c' and c' -> c, on T1")
+        self.assertNotEqual([], self.place.everywhere(), "applied: kept for the next pass")
+        written = self.events()
+
+        self.assertEqual({sweep.COMMITS: 0}, sweep.run_pass(self.conn, steps=step).changed)
+        self.assertEqual([(t1, first, "server", "valkama")], self.attached())
+        self.assertEqual({first: None, second: first}, self.rewritten())
+        self.assertEqual(written, self.events(), "no commit_rewritten nor any other event")
+        self.assertEqual([], self.place.everywhere(), "worked off, and deleted")
+
+        self.assertEqual({}, sweep.run_pass(self.conn, steps=step).changed, "nothing to take")
+
+    def test_an_amend_after_a_rewrite_back_carries_the_commit_again(self) -> None:
+        """A later amend c -> c', the same pair as the first amend but recorded after the
+        rewrite back, is new work on the commit: it applies."""
+
+        t1, first, second = self.rewritten_back()
+        self.taken()
+        written = len(self.rewrites())
+        self.assertEqual(second, self.amended_pinned(), "the same tree at the same time: c'")
+        self.assertEqual(self.moved(first, second), self.taken())
+        self.assertEqual([(t1, second, "server", "valkama")], self.attached())
+        self.assertEqual({first: second, second: None}, self.rewritten())
         self.assertEqual(
-            written, self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+            [(t1, f"{PROJECT} {first} -> {second}", "valkama")], self.rewrites()[written:]
         )
         self.assertEqual([], self.place.everywhere())
 

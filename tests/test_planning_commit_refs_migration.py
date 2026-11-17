@@ -591,17 +591,17 @@ class CarriedCommitRefsTests(CommitRefsCase):
             (row[0], str(row[1])): tuple(row[2:])
             for row in self.read(
                 "SELECT project_id, hash, subject, committed_at IS NOT NULL, session_id,"
-                " reported_at, rewritten_to FROM commits"
+                " reported_at, rewritten_to, rewrite_recorded_ns FROM commits"
             )
         }
         self.assertEqual(
             {
-                # Reported when its earliest ref was made, by no session.
-                ("work-model", self.a): ("work model", 1, None, T0, None),
-                ("work-model", self.b): ("second commit", 1, None, T2, None),
-                ("remote", "1234567"): ("", 0, None, T1, None),
-                ("shared", self.s): ("shared", 1, None, T1, None),
-                (None, "abcdef1"): ("", 0, None, T2, None),
+                # Reported when its earliest ref was made, by no session, rewritten by none.
+                ("work-model", self.a): ("work model", 1, None, T0, None, None),
+                ("work-model", self.b): ("second commit", 1, None, T2, None, None),
+                ("remote", "1234567"): ("", 0, None, T1, None, None),
+                ("shared", self.s): ("shared", 1, None, T1, None, None),
+                (None, "abcdef1"): ("", 0, None, T2, None, None),
             },
             commits,
         )
@@ -658,6 +658,11 @@ class CarriedCommitRefsTests(CommitRefsCase):
                 "commits-attached",
                 "names the session",
                 lambda _ids: [("UPDATE commits SET session_id = 'a-session'", ())],
+            ),
+            (
+                "commits-attached",
+                "carries a rewrite recorded at 1",
+                lambda _ids: [("UPDATE commits SET rewrite_recorded_ns = 1", ())],
             ),
             (
                 "commits-attached",

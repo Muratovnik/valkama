@@ -2624,7 +2624,8 @@ def _p29(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
 
 
 def _p30(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
-    """Every commit is attached somewhere, reported by no session and rewritten to none."""
+    """Every commit is attached somewhere, reported by no session and rewritten by no
+    record."""
 
     del context
     found = [
@@ -2632,12 +2633,13 @@ def _p30(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
         + (" is attached to nothing" if not attached else "")
         + (f" names the session {session}" if session is not None else "")
         + (f" was rewritten to {rewritten}" if rewritten is not None else "")
-        for project, hash_, session, rewritten, attached in conn.execute(
-            "SELECT COALESCE(project_id, ''), hash, session_id, rewritten_to,"
+        + (f" carries a rewrite recorded at {recorded}" if recorded is not None else "")
+        for project, hash_, session, rewritten, recorded, attached in conn.execute(
+            "SELECT COALESCE(project_id, ''), hash, session_id, rewritten_to, rewrite_recorded_ns,"
             " EXISTS (SELECT 1 FROM work_item_commits a WHERE a.commit_id = c.commit_id)"
             " FROM commits c ORDER BY commit_id"
         )
-        if not attached or session is not None or rewritten is not None
+        if not attached or session is not None or rewritten is not None or recorded is not None
     ]
     _unmet(found, "commits")
     return {"commits": int(conn.execute("SELECT COUNT(*) FROM commits").fetchone()[0])}
