@@ -104,6 +104,20 @@ const listed = (wrapper: ReturnType<typeof mountAccounts>) =>
 const changes = (wrapper: ReturnType<typeof mountAccounts>) =>
   wrapper.findAll('.account-change').map((row) => read(row))
 
+/**
+ * Where each element stands along the strip and how long it is, in percent of the strip, read
+ * from the two properties that place it: a number each, whatever else the style holds.
+ */
+const placed = (found: readonly { element: Element }[], property: string) =>
+  found.map((one) =>
+    Number.parseFloat((one.element as HTMLElement).style.getPropertyValue(property)),
+  )
+/** As many values as expected, each within a millionth of a percent of its own. */
+function expectClose(actual: readonly number[], expected: readonly number[]) {
+  expect(actual).toHaveLength(expected.length)
+  for (const [index, value] of expected.entries()) expect(actual[index]).toBeCloseTo(value, 6)
+}
+
 describe('the organizations an item ran under', () => {
   afterEach(() => document.body.replaceChildren())
 
@@ -111,9 +125,9 @@ describe('the organizations an item ran under', () => {
     const wrapper = mountAccounts(usageOf([stretch(known(ORG_A), '2030-03-04T09:00:00Z', 3600)]))
     const parts = wrapper.findAll('.account-part')
     expect(parts).toHaveLength(1)
-    expect(parts[0].attributes('style')).toContain('inline-size: 100%')
+    expectClose(placed(parts, 'inline-size'), [100])
     expect(wrapper.findAll('.account-mark')).toHaveLength(0)
-    expect(wrapper.find('.account-changes').exists()).toBe(false)
+    expect(changes(wrapper)).toEqual([])
     expect(listed(wrapper)).toEqual([expect.stringMatching(/^3fa1b2c4 100% of the time /u)])
   })
 
@@ -126,18 +140,16 @@ describe('the organizations an item ran under', () => {
       ]),
     )
     const parts = wrapper.findAll('.account-part')
-    expect(parts.map((part) => part.attributes('style'))).toEqual([
-      'inset-inline-start: 0%; inline-size: 50%;',
-      'inset-inline-start: 50%; inline-size: 33.33333333333333%;',
-      'inset-inline-start: 83.33333333333333%; inline-size: 16.666666666666664%;',
-    ])
+    // Half an hour, twenty minutes and ten of fifty minutes, each from where the last ended.
+    expectClose(placed(parts, 'inset-inline-start'), [0, 50, (50 / 60) * 100])
+    expectClose(placed(parts, 'inline-size'), [50, (20 / 60) * 100, (10 / 60) * 100])
     // The same account keeps its hue wherever it stands; the other one has its own.
     const slots = parts.map((part) => part.attributes('data-slot'))
     expect(slots[0]).toBe(slots[2])
     expect(slots[0]).not.toBe(slots[1])
-    expect(wrapper.findAll('.account-mark').map((mark) => mark.attributes('style'))).toEqual([
-      'inset-inline-start: 50%;',
-      'inset-inline-start: 83.33333333333333%;',
+    expectClose(placed(wrapper.findAll('.account-mark'), 'inset-inline-start'), [
+      50,
+      (50 / 60) * 100,
     ])
     expect(wrapper.findAll('.chart-tick').map((tick) => words(tick.text()))).toEqual(['1', '2'])
     expect(listed(wrapper)).toEqual([
@@ -174,7 +186,7 @@ describe('the organizations an item ran under', () => {
     // a change: nothing says the organization was another.
     expect(wrapper.findAll('.account-mark')).toHaveLength(0)
     expect(wrapper.findAll('.chart-tick')).toHaveLength(0)
-    expect(wrapper.find('.account-changes').exists()).toBe(false)
+    expect(changes(wrapper)).toEqual([])
   })
 
   it('one organization around work nobody recorded the organization of has no change', () => {
@@ -202,7 +214,7 @@ describe('the organizations an item ran under', () => {
     ])
     expect(wrapper.findAll('.account-mark')).toHaveLength(0)
     expect(wrapper.findAll('.chart-tick')).toHaveLength(0)
-    expect(wrapper.find('.account-changes').exists()).toBe(false)
+    expect(changes(wrapper)).toEqual([])
   })
 
   it('two organizations with work nobody recorded between them change once, where the second starts', () => {
@@ -214,9 +226,8 @@ describe('the organizations an item ran under', () => {
       ]),
     )
     expect(wrapper.findAll('.account-part')).toHaveLength(3)
-    expect(wrapper.findAll('.account-mark').map((mark) => mark.attributes('style'))).toEqual([
-      'inset-inline-start: 66.66666666666666%;',
-    ])
+    // The second starts after half an hour and ten minutes, of an hour in all.
+    expectClose(placed(wrapper.findAll('.account-mark'), 'inset-inline-start'), [(40 / 60) * 100])
     expect(wrapper.findAll('.chart-tick').map((tick) => words(tick.text()))).toEqual(['1'])
     expect(changes(wrapper)).toEqual(['From the start 3fa1b2c4', '1 Mar 04, 11:45 9c0d77e1'])
   })
