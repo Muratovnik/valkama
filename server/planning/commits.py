@@ -6,13 +6,21 @@ no store; it leaves a record beside it (`hooks.commit_records`), and the client
 hook of the session that made the commit takes it here, in a transaction of its
 own, after the shell call the commit was made in.
 
-`take` records the commits of each record, oldest first, and attaches each new
-one to the task its agent works on. Taking a record twice inserts nothing the
-second time: the pair is unique, and only a commit inserted now is attached. A
-record that changes nothing is worked off, and whoever reads it may delete its
-file, inside a transaction not yet committed as well: what makes it worked off is
-either committed already or written in that same transaction from a file nobody
-deletes before it commits.
+`take` records the commits of each record, strictly by the time it was written,
+and attaches each new one to the task its agent works on. Taking a record twice
+inserts nothing the second time: the pair is unique, and only a commit inserted
+now is attached. A record that changes nothing is worked off, and whoever reads
+it may delete its file, inside a transaction not yet committed as well: what
+makes it worked off is either committed already or written in that same
+transaction from a file nobody deletes before it commits.
+
+A rewrite, an amend or a rebase, carries the links of each old commit Valkama
+knows to its new one and marks the old one `rewritten_to` it (`_rewrite`); a
+squash unites the links of its old commits. A commit that a rewrite in the same
+batch replaces is not decided on its own, so `commit && commit --amend` in one
+shell call ends with one decision. A leftover, a record no hook took within its
+window, and the records the sweep takes after an hour (`sweep`), are decided by
+their session, their agent not being known.
 
 Which task. The holds count by the rule of `held`, for one holder at a time,
 in two levels: first the agent that made the commit, then, for a subagent, the
@@ -42,17 +50,19 @@ task holds by its commits takes that project away (the projects rule).
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import re
 import sqlite3
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from .. import git_worktrees
+from ..hooks import commit_records, notify
 from ..projects import project_registry
-from . import calls, held, item_projects, model, read_model
+from . import calls, held, item_projects, leases, model, read_model
 
 #: The tool a client hook's own call is bound under (`calls.bind`): what it writes is
 #: Valkama's, and the session and agent of the commit live on the commit's row.
@@ -251,41 +261,146 @@ def agent_of(hook: Hook, record: dict) -> str | None:
     return None
 
 
-def take(conn: sqlite3.Connection, records: Iterable[tuple[str, dict]], hook: Hook) -> Taken:
-    """Record the commits of each record inside the caller's transaction, oldest first,
-    and attach each new one; the lines that tell the agent where each went."""
+def take(conn: sqlite3.Connection, records: Iterable[tuple[str, dict, bool]], hook: Hook) -> Taken:
+    """Take records inside the caller's transaction, strictly by the time each was written;
+    the lines that tell the agent where each commit went.
+
+    Each record comes with its file and whether it is a leftover, whose agent is
+    not known, so its session decides. A commit a rewrite in this same batch
+    replaces, the old commit known by then, is recorded without a decision of its
+    own: the rewrite gives it the old one's links when its turn comes, so an amend
+    reported twice is decided once.
+    """
 
     taken = Taken()
     decision = _Decision(conn, hook)
-    for path, record in records:
-        agent = agent_of(hook, record)
-        changed = False
-        for commit in record["commits"]:
-            cursor = conn.execute(
-                "INSERT OR IGNORE INTO commits(project_id, hash, subject, committed_at,"
-                " session_id, agent_id, client, reported_at) VALUES (?,?,?,?,?,?,?,?)",
-                (
-                    record["project_id"],
-                    commit["hash"],
-                    commit["subject"],
-                    commit["committed_at"],
-                    hook.session_id,
-                    agent,
-                    hook.client,
-                    hook.now,
-                ),
-            )
-            if cursor.rowcount > 0 and cursor.lastrowid is not None:
-                changed = True
-                made = _Commit(
-                    cursor.lastrowid,
-                    str(record["project_id"]),
-                    str(commit["hash"]),
-                    str(commit["subject"]),
-                )
-                taken.lines.append(_place(conn, decision, made, agent))
+    batch = sorted(records, key=lambda found: str(found[1]["occurred_at"]))
+    replacing: dict[tuple[str, str], list[str]] = {}
+    for _path, record, _leftover in batch:
+        for pair in record["rewritten"]:
+            replacing.setdefault((str(record["project_id"]), pair["to"]), []).append(pair["from"])
+    for path, record, leftover in batch:
+        if record["rewrite"] is None:
+            agent = None if leftover else agent_of(hook, record)
+            changed = _record(conn, decision, record, agent, replacing, taken.lines)
+        else:
+            changed = _rewrite(conn, record, hook, taken.lines)
         (taken.applied if changed else taken.worked_off).append(path)
     return taken
+
+
+def _record(
+    conn: sqlite3.Connection,
+    decision: _Decision,
+    record: dict,
+    agent: str | None,
+    replacing: dict[tuple[str, str], list[str]],
+    lines: list[str],
+) -> bool:
+    """Record the commits a commit or a merge reported and place each new one; whether any
+    was new."""
+
+    hook = decision.hook
+    project_id = str(record["project_id"])
+    changed = False
+    for commit in record["commits"]:
+        made = _insert(conn, project_id, commit, (hook.session_id, agent, hook.client), hook.now)
+        if made is None:
+            continue
+        changed = True
+        olds = replacing.get((project_id, made.hash), [])
+        if any(_known(conn, project_id, old) is not None for old in olds):
+            continue  # the rewrite that replaces a known commit with it brings its links
+        lines.append(_place(conn, decision, made, agent))
+    return changed
+
+
+def _insert(
+    conn: sqlite3.Connection,
+    project_id: str,
+    commit: dict,
+    who: tuple[str | None, str | None, str | None],
+    now: str,
+) -> _Commit | None:
+    """The commit's row, inserted now; None when the pair is recorded already."""
+
+    session_id, agent_id, client = who
+    cursor = conn.execute(
+        "INSERT OR IGNORE INTO commits(project_id, hash, subject, committed_at,"
+        " session_id, agent_id, client, reported_at) VALUES (?,?,?,?,?,?,?,?)",
+        (
+            project_id,
+            commit["hash"],
+            commit["subject"],
+            commit["committed_at"],
+            session_id,
+            agent_id,
+            client,
+            now,
+        ),
+    )
+    if cursor.rowcount <= 0 or cursor.lastrowid is None:
+        return None
+    return _Commit(cursor.lastrowid, project_id, str(commit["hash"]), str(commit["subject"]))
+
+
+def _known(conn: sqlite3.Connection, project_id: str, commit_hash: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT commit_id, session_id, agent_id, client, rewritten_to FROM commits"
+        " WHERE COALESCE(project_id, '') = ? AND hash = ?",
+        (project_id, commit_hash),
+    ).fetchone()
+
+
+def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str]) -> bool:
+    """Carry each known old commit's links to its new one; whether anything changed.
+
+    The new commit gets a row with the old one's session and agent unless it has
+    one, the old one's attachments move to it (several old ones of a squash unite
+    there), and the old one is marked `rewritten_to` it, once: a mark already set
+    stays, so taking the record again changes nothing. A card's projects stay as
+    they are, the repository being the same. An old commit Valkama does not know
+    gives nothing: after an amend its new commit is the session's own and its
+    `post-commit` decides it, and a rebase of commits nobody reported is no new work.
+    """
+
+    project_id = str(record["project_id"])
+    details = {str(commit["hash"]): commit for commit in record["commits"]}
+    changed = False
+    for pair in record["rewritten"]:
+        old = _known(conn, project_id, pair["from"])
+        if old is None or pair["to"] not in details:
+            continue
+        new = _known(conn, project_id, pair["to"])
+        if new is None:
+            who = (old["session_id"], old["agent_id"], old["client"])
+            made = _insert(conn, project_id, details[pair["to"]], who, hook.now)
+            new_id = made.commit_id if made is not None else None
+            changed = True
+        else:
+            new_id = int(new["commit_id"])
+        if new_id is None or new_id == int(old["commit_id"]):
+            continue
+        moved = conn.execute(
+            "UPDATE OR IGNORE work_item_commits SET commit_id = ? WHERE commit_id = ?",
+            (new_id, old["commit_id"]),
+        ).rowcount
+        moved += conn.execute(
+            "DELETE FROM work_item_commits WHERE commit_id = ?", (old["commit_id"],)
+        ).rowcount
+        if old["rewritten_to"] is None:
+            conn.execute(
+                "UPDATE commits SET rewritten_to = ? WHERE commit_id = ?",
+                (new_id, old["commit_id"]),
+            )
+            changed = True
+        if moved > 0:
+            changed = True
+            lines.append(
+                f"Valkama moved the links of {project_id} {pair['from'][:SHORT_HASH]}"
+                f" to the rewritten commit {pair['to'][:SHORT_HASH]}."
+            )
+    return changed
 
 
 def _place(
@@ -356,6 +471,92 @@ def _listed(references: Sequence[str]) -> str:
     if len(references) == 1:
         return references[0]
     return ", ".join(references[:-1]) + " and " + references[-1]
+
+
+# -- the sweep's step ------------------------------------------------------------
+
+#: How old a record no client hook took is when the planning sweep takes it.
+SWEEP_AGE_NS = 60 * 60 * 1_000_000_000
+#: How old a file that is no record is when the sweep sets it aside in `rejected/`.
+REJECT_AGE_NS = 7 * 24 * 60 * 60 * 1_000_000_000
+
+
+def _now_ns() -> int:
+    now = leases.utc_now()
+    return int(now.timestamp()) * 1_000_000_000 + now.microsecond * 1_000
+
+
+def _due(
+    conn: sqlite3.Connection, now_ns: int
+) -> Iterator[tuple[str, dict, tuple[str, str]] | str]:
+    """The records the sweep takes now, oldest first: each with its file and whose it is,
+    or, for a file that is no record of anyone's and is past `REJECT_AGE_NS`, its path.
+
+    Records wait beside the store this connection is open on and in the Git
+    directory of each registered project, as a client hook looks for them. One
+    that cannot be read and is younger than that is neither: it waits.
+    """
+
+    databases = conn.execute("PRAGMA database_list").fetchall()
+    store_path = next((str(row[2]) for row in databases if row[1] == "main" and row[2]), None)
+    if store_path is None:
+        return
+    directories = commit_records.record_directories(store_path, notify.loads)
+    for at, key, path in commit_records.every(directories):
+        if at > now_ns - SWEEP_AGE_NS:
+            break
+        record = commit_records.read(path, notify.loads)
+        owner = _owner(record, key) if record is not None else None
+        if record is not None and owner is not None:
+            yield path, record, owner
+        elif at <= now_ns - REJECT_AGE_NS:
+            yield path
+
+
+def sweep_pending(conn: sqlite3.Connection) -> bool:
+    """Whether a record has waited past `SWEEP_AGE_NS`; read without the write lock."""
+
+    return next(_due(conn, _now_ns()), None) is not None
+
+
+def sweep(conn: sqlite3.Connection, *, limit: int) -> int:
+    """The planning sweep's step: take the oldest `limit` records nobody took for an hour.
+
+    Each is decided by the session its file is named for, as a leftover is: which
+    agent made it is not known. The step answers nobody. It runs inside the pass's
+    transaction and has no moment after it commits, so it deletes only the records
+    that changed nothing, which whatever made them so has committed already or
+    writes in this transaction: a record it applied stays until the next pass or
+    its session's hook finds it worked off. A file that is no record goes to
+    `rejected/` once it is a week old. How many records changed the store.
+    """
+
+    now_ns = _now_ns()
+    batches: dict[tuple[str, str], list[tuple[str, dict, bool]]] = {}
+    for due in itertools.islice(_due(conn, now_ns), limit):
+        if isinstance(due, str):
+            commit_records.reject(due)
+            continue
+        path, record, owner = due
+        batches.setdefault(owner, []).append((path, record, True))
+    changed = 0
+    for (client, session), records in batches.items():
+        hook = Hook(client, session, None, commit_records.timestamp(now_ns))
+        taken = take(conn, records, hook)
+        changed += len(taken.applied)
+        for path in taken.worked_off:
+            commit_records.remove(path)
+    return changed
+
+
+def _owner(record: dict, key: str) -> tuple[str, str] | None:
+    """The client and session whose file this record is, by the key of its name."""
+
+    for client in ("claude", "codex"):
+        own = record.get(client)
+        if isinstance(own, dict) and commit_records.file_key(str(own["session_id"])) == key:
+            return client, str(own["session_id"])
+    return None
 
 
 # -- by hand -------------------------------------------------------------------

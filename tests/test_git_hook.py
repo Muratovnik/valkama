@@ -155,11 +155,38 @@ class RepositoryTests(unittest.TestCase):
                 before = place.head(where)
                 place.git(where, "rebase", "-q", "@{-1}", environ=claude)
                 self.assertNotEqual(before, place.head(where), "the rebase made new commits")
-                self.assertEqual([], place.everywhere())
+                # The rebase reports its pairs once, at its end; no commit of it does.
+                [rebased] = place.beside_the_store()
+                self.assertEqual(
+                    ("post-rewrite", "rebase"), (_read(rebased)["event"], _read(rebased)["rewrite"])
+                )
+                rebased.unlink()
                 place.commit(where, "after", environ=claude)
                 self.assertEqual(
                     1, len(place.beside_the_store()), "control: a plain commit is recorded"
                 )
+
+
+class RewriteRecordTests(unittest.TestCase):
+    """What `post-rewrite` leaves: its kind, Git's pairs and each new commit once."""
+
+    def test_an_amend_leaves_its_pair_and_its_new_commit(self) -> None:
+        place = CommitPlace(self)
+        claude = place.sessions(CLAUDE_CODE_SESSION_ID=CLAUDE)
+        place.commit(place.repository, "one", environ=claude)
+        old = place.head()
+        (place.repository / "one.txt").write_text("changed", encoding="utf-8")
+        place.git(place.repository, "commit", "-q", "-a", "--amend", "--no-edit", environ=claude)
+        new = place.head()
+        records = [_read(path) for path in place.beside_the_store()]
+        self.assertEqual(
+            [("post-commit", None), ("post-commit", None), ("post-rewrite", "amend")],
+            [(record["event"], record["rewrite"]) for record in records],
+        )
+        rewrite = records[-1]
+        self.assertEqual([{"from": old, "to": new}], rewrite["rewritten"])
+        self.assertEqual([new], [commit["hash"] for commit in rewrite["commits"]])
+        self.assertTrue(commit_records.valid(rewrite))
 
 
 class PlaceTests(unittest.TestCase):
@@ -226,11 +253,24 @@ class CommandTests(unittest.TestCase):
                     os.environ["LOCALAPPDATA"] = local
                 self.assertEqual(project_registry.registry_path(), commit_records.registry_path())
 
-    def test_another_event_records_nothing_yet(self) -> None:
-        environ = {"CLAUDE_CODE_SESSION_ID": CLAUDE}
-        for event in ("post-rewrite", "post-merge", "unknown"):
-            with self.subTest(event=event):
-                self.assertEqual([], git_hook.run([event, "amend"], environ))
+    def test_an_event_without_what_it_reports_records_nothing(self) -> None:
+        """Each ends before Git is asked anything: the place is no repository at all."""
+
+        place = CommitPlace(self)
+        environ = place.sessions(CLAUDE_CODE_SESSION_ID=CLAUDE)
+        pair = f"{'a' * 40} {'b' * 40}\n"
+        for arguments, stdin in (
+            (["post-rewrite", "amend"], ""),  # no pairs
+            (["post-rewrite", "amend"], "not a pair\n"),
+            (["post-rewrite", "reword"], pair),  # a kind of rewrite Git does not send
+            (["post-merge", "1"], None),  # a squash merge makes no commit
+            (["unknown"], None),
+        ):
+            with self.subTest(arguments=arguments, stdin=stdin):
+                self.assertEqual(
+                    [], git_hook.run(arguments, environ, cwd=str(place.home), stdin=stdin)
+                )
+        self.assertEqual([], place.everywhere())
         self.assertEqual(0, git_hook.main([]))
 
 

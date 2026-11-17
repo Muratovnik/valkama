@@ -264,7 +264,9 @@ class RefusalTests(ManualCase):
 class ContainerTests(ManualCase):
     def test_a_goal_takes_a_commit_by_hand_and_no_project(self) -> None:
         goal = str(
-            service.create_work_item(self.conn, space="WRK", title="Goal", kind="goal")["reference"]
+            service.create_work_item(self.conn, space="MAIN", title="Goal", kind="goal")[
+                "reference"
+            ]
         )
         self.conn.commit()
         commit = self.made("goal")
@@ -278,10 +280,12 @@ class ContainerTests(ManualCase):
 
     def test_the_server_attaches_to_the_task_under_a_goal_never_the_goal(self) -> None:
         goal = str(
-            service.create_work_item(self.conn, space="WRK", title="Goal", kind="goal")["reference"]
+            service.create_work_item(self.conn, space="MAIN", title="Goal", kind="goal")[
+                "reference"
+            ]
         )
         task = str(
-            service.create_work_item(self.conn, space="WRK", title="Under", parent=goal)[
+            service.create_work_item(self.conn, space="MAIN", title="Under", parent=goal)[
                 "reference"
             ]
         )

@@ -1956,7 +1956,7 @@ repository can turn one off for itself with
 
 `valkama git-hook run <event>` prints nothing and always exits 0: a `post-*`
 event cannot change what Git did, and anything printed would show in every
-commit. Its own Git calls share five seconds. For `post-commit` it:
+commit. Its own Git calls share five seconds. It:
 
 1. reads the sessions from the environment: `CLAUDE_CODE_SESSION_ID` for Claude
    Code; `CODEX_SESSION_ID`, or else `CODEX_THREAD_ID`, for Codex, with
@@ -1966,13 +1966,36 @@ commit. Its own Git calls share five seconds. For `post-commit` it:
 2. finds the repository with one `git rev-parse`: the parent of the common Git
    directory when that is named `.git`, which is the main checkout for a linked
    worktree too, and otherwise the top level. `git -C nested commit` is the
-   nested repository's. While a rebase is under way the run ends here;
+   nested repository's. While a rebase is under way a `post-commit` run ends
+   here: the rebase reports its old and new hashes together when it ends;
 3. looks that root up in the project registry, exactly and, on Windows,
    without case. A repository the registry does not name is not recorded, and
    nobody is told: a project registered later gets its commits from then on;
-4. reads the commit with one `git log` and leaves the record.
+4. reads the event's commits with `git log` and leaves the record.
 
-`post-rewrite` and `post-merge` record nothing in this release.
+What each event reports:
+
+- `post-commit`: HEAD, the commit just made. An amend and a cherry-pick run it
+  too.
+- `post-rewrite amend` and `post-rewrite rebase`: the `old new` pairs Git writes
+  to the hook's stdin, as `rewritten`, and each new commit once in `commits`. A
+  squash gives several pairs with one new hash. A `fixup!` squashed inside
+  `rebase -i --autosquash` gives a `post-rewrite amend` inside the rebase and then
+  the rebase's own `post-rewrite rebase`; both are recorded.
+- `post-merge`: HEAD, only when this merge made it. Git runs `post-merge` after a
+  fast-forward too, also to a merge commit somebody else made, so HEAD counts
+  only when it has two parents or more, its first parent is where HEAD was
+  before (`HEAD@{1}`), its committer's time is no earlier than two minutes
+  before the hook started, and its committer's address is the one Git makes
+  commits with here (`git var GIT_COMMITTER_IDENT`). The commits a merge or a
+  fast-forward brings are never recorded, and a squash merge (`post-merge 1`)
+  makes no commit. A merge commit by the same committer made in the last two
+  minutes in another clone and then fast-forwarded here is recorded as this
+  session's.
+
+Commits that `git am`, `git stash` or `commit-tree` with `update-ref` make run
+no `post-commit`, and a new commit made inside `rebase -i` (`exec git commit`, a
+split) is skipped with the rebase's own: none of them is recorded.
 
 ### The record
 
@@ -1986,6 +2009,10 @@ One JSON file per run and session:
  "rewritten": [], "claude": {"session_id": "…"}, "codex": null,
  "occurred_at": "2026-11-20T07:31:02.415Z"}
 ```
+
+A `post-rewrite` record carries `amend` or `rebase` in `rewrite` and its pairs
+in `rewritten`, each `{"from": "<40 hex>", "to": "<40 hex>"}`; for the other
+events they are `null` and empty.
 
 It is named `<session key>--<nanoseconds>-<16 hex>.json`, the key being the one
 the notice's place files use, so a client hook finds its own session's records
@@ -2017,17 +2044,31 @@ takes:
   is the input's `session_id`, written within the call's `duration_ms` before
   now and two seconds more; without `duration_ms`, within ten minutes, the
   longest a shell call takes by default.
+- **Leftovers**, on any call of either client: the records of its session that
+  no hook took for eleven minutes, a background command's or one that outlasted
+  its window. Which agent made them is not known, so the session decides
+  (below).
 
 With none, the hook is what it was, a reader: the store is not opened for
 writing. With some, it opens the store for writing with the same one-second
-wait as a lifecycle event, and in one transaction of Valkama's own records each
-commit once per pair of project and hash, with the session, the agent (the
-input's `agent_id`; for Codex without it, a `CODEX_THREAD_ID` that is not the
-session), the client and the time. After the transaction commits it deletes
-those files. A record that changes nothing, because its commit is recorded
-already, is deleted as well: that is how the second file of a nested client's
-commit goes. A busy store, or one of another schema, leaves every record where
-it is for the session's next hook, and the answer says nothing of it.
+wait as a lifecycle event, and in one transaction of Valkama's own takes the
+records strictly in the order they were written. It records each commit once
+per pair of project and hash, with the session, the agent (the input's
+`agent_id`; for Codex without it, a `CODEX_THREAD_ID` that is not the session),
+the client and the time. After the transaction commits it deletes those files.
+A record that changes nothing, because its commit is recorded already, is
+deleted as well: that is how the second file of a nested client's commit goes.
+A busy store, or one of another schema, leaves every record where it is for the
+session's next hook, and the answer says nothing of it.
+
+The planning sweep of a long-lived process takes what no hook took: its
+`commits` step, every ten minutes, takes up to 200 records an hour old or more
+from the same places, each decided by the session its file is named for, and
+answers nobody. It writes as Valkama's own call under the step's name. The step
+cannot act after the pass commits, so it deletes only records that change
+nothing: a record it applied stays until the next pass, or until a hook of its
+session, finds it changing nothing and deletes it. A file there that is no
+readable record is moved into `rejected/` beside it once it is a week old.
 
 ### Which task a commit goes to
 
@@ -2056,10 +2097,26 @@ that holds a task decides:
 Only tasks: nobody holds a goal or a stage. An attachment gives the task the
 commit's project with the source `commits`, unless the task names it already.
 
+A leftover, or a record the sweep takes, has no known agent: the session's own
+holder is its first level, and the session's subagents its second.
+
+A rewrite is not decided: it carries what was decided for the old commit. For
+each pair whose old commit Valkama knows, the new commit gets a row with the old
+commit's session and agent, unless it has one, the old commit's attachments move
+to it, and the old commit is marked as rewritten to it. A squash unites the
+attachments of its old commits on the new one. A card's projects stay as they
+are: the repository is the same. When the old commit is unknown nothing is
+recorded for the pair: after an amend the new commit is the session's own, and
+its `post-commit` decides it; a rebase of commits nobody reported is no new work.
+A commit that a rewrite later in the same batch replaces is recorded without a
+decision of its own, so `git commit && git commit --amend` in one shell call is
+decided once, for the first commit, and the amend then moves that attachment.
+
 ### The answer
 
 The lines about the commits come first in the hook's `additionalContext`, one
-per commit, five at most and then one that counts the rest:
+per commit decided and one per old commit whose attachments a rewrite moved,
+five at most and then one that counts the rest:
 
 | When | Line |
 | --- | --- |
@@ -2068,9 +2125,11 @@ per commit, five at most and then one that counts the rest:
 | to a task closed lately | `Valkama attached your commit <repo> <short> "<subject>" to <REF>, which you closed <n> min ago. If it belongs elsewhere, move it with the commits group of apply_work_item_changes.` |
 | several tasks fit, or none | `Your commit <repo> <short> "<subject>" fits <REF1> and <REF2>, which you hold. Attach it to the right one: apply_work_item_changes {"id": "<REF>", "commits": [{"repository": "<repo>", "hash": "<short>"}]}.` |
 | no task | `Your commit <repo> <short> "<subject>" is on no card: you hold no task it fits. Claim the task before the work; to attach this commit, use the commits group of apply_work_item_changes on its card.` |
+| rewritten, its attachments moved | `Valkama moved the links of <repo> <old> to the rewritten commit <short>.` |
 | past five | `And <n> more commits: see the cards.` |
 
-`<repo>` is the project id, `<short>` the first nine digits of the hash and
+`<repo>` is the project id, `<short>` the first nine digits of the hash, `<old>`
+those of the commit a rewrite replaced, and
 `<subject>` the subject, cut to 72 characters. On `post-tool-use` a notice, when
 there is one, follows the lines in the same `additionalContext`, after an empty
 line, and keeps to what the lines leave of its bound. A Codex subagent gets its

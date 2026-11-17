@@ -23,7 +23,10 @@ and no `git status` sees it. A store the configuration protects
 
 Which records a client hook takes is `taken`: a Codex hook the ones whose
 `tool_call_id` is its `tool_use_id`, a Claude Code hook on its shell tools the
-ones written within the call's duration.
+ones written within the call's duration, and any hook of the session the ones
+nobody took for eleven minutes. The planning sweep takes the rest after an hour
+(`planning.commits.sweep`), and sets aside in `rejected/` a file it could not
+read for a week.
 
 This module imports only `os` at load: the Git hook runs it on every commit an
 agent makes, and the client hook on every tool call. JSON comes in through the
@@ -58,6 +61,11 @@ WINDOW_SLACK_NS = 2_000_000_000
 #: The window when the input carries no `duration_ms`: the longest a shell call may take
 #: by default (`BASH_MAX_TIMEOUT_MS`).
 DEFAULT_WINDOW_NS = 600_000_000_000
+#: How old a record no hook took is when any next hook of its session takes it as a
+#: leftover: past the longest default window, and a minute more.
+LEFTOVER_NS = 660_000_000_000
+#: Where the sweep moves a record it could not read for a week, beside the records.
+REJECTED = "rejected"
 
 REWRITES = (None, "amend", "rebase")
 
@@ -267,14 +275,21 @@ def write(
 def occurred_ns(name: str, key: str) -> int | None:
     """The time in a record file's name when the file is one of `key`'s, else None."""
 
-    prefix = key + _SEPARATOR
-    if not (name.startswith(prefix) and name.endswith(SUFFIX)):
+    named = name_parts(name)
+    return named[1] if named is not None and named[0] == key else None
+
+
+def name_parts(name: str) -> tuple[str, int] | None:
+    """The session key and the time a record file's name carries, or None for another file."""
+
+    # The last separator: a session key may hold one, the time and the hex part do not.
+    key, separator, rest = name.rpartition(_SEPARATOR)
+    if not (key and separator and rest.endswith(SUFFIX)):
         return None
-    stem = name[len(prefix) : -len(SUFFIX)]
-    time_part, dash, hex_part = stem.partition("-")
+    time_part, dash, hex_part = rest[: -len(SUFFIX)].partition("-")
     if not (dash and time_part.isdigit() and len(hex_part) == 16 and set(hex_part) <= _HEX):
         return None
-    return int(time_part)
+    return key, int(time_part)
 
 
 def scan(directories: Iterable[str], key: str) -> list[tuple[int, str]]:
@@ -292,6 +307,35 @@ def scan(directories: Iterable[str], key: str) -> list[tuple[int, str]]:
                 found.append((at, entry.path))
     found.sort()
     return found
+
+
+def every(directories: Iterable[str]) -> list[tuple[int, str, str]]:
+    """Every record file in these directories, oldest first: its time, session key and path."""
+
+    found = []
+    for directory in directories:
+        try:
+            entries = list(os.scandir(directory))
+        except OSError:
+            continue
+        for entry in entries:
+            named = name_parts(entry.name)
+            if named is not None and entry.is_file():
+                found.append((named[1], named[0], entry.path))
+    found.sort()
+    return found
+
+
+def reject(path: str) -> bool:
+    """Move a record that cannot be read into `rejected/` beside it; false when it is gone."""
+
+    directory = os.path.join(os.path.dirname(path), REJECTED)
+    try:
+        _ensure(directory, False)
+        os.replace(path, os.path.join(directory, os.path.basename(path)))
+    except OSError:
+        return False
+    return True
 
 
 def _text(value: object, limit: int = 4096) -> bool:
@@ -384,6 +428,14 @@ def _window(payload: Mapping[str, object]) -> int:
     return DEFAULT_WINDOW_NS
 
 
+def record_directories(
+    store_path: str, loads: Callable[[str], object], environ: Mapping[str, str] | None = None
+) -> list[str]:
+    """Where records may wait: beside the store, and in each registered project's Git."""
+
+    return [store_directory(store_path), *own_fallbacks(registry_roots(loads, environ))]
+
+
 def taken(
     client: str,
     payload: Mapping[str, object],
@@ -391,14 +443,18 @@ def taken(
     loads: Callable[[str], object],
     now_ns: int,
     environ: Mapping[str, str] | None = None,
-) -> list[tuple[str, dict]]:
-    """The records this hook call takes, oldest first, each with its file.
+) -> list[tuple[str, dict, bool]]:
+    """The records this hook call takes, oldest first, each with its file and whether it
+    is a leftover.
 
     - Codex: the records of its session whose `tool_call_id` is the input's
       `tool_use_id`, the call the commit was made in.
     - Claude Code, on `Bash` or `PowerShell`: the records of its session written
       within `duration_ms` of now, and the slack; without it, within the longest
       a shell call takes by default.
+    - Leftovers, on any call of either client: the records of its session no hook
+      took for `LEFTOVER_NS`, a background command's or one that outlasted its
+      window. Which agent made them is not known, so the session decides.
 
     Nothing is opened but the directory listings, the registry and, for a
     candidate, its own file.
@@ -407,30 +463,27 @@ def taken(
     session = payload.get("session_id")
     if not _text(session, 256) or not isinstance(session, str):
         return []
+    call: object = None
+    earliest: int | None = None
     if client == "codex":
-        call = payload.get("tool_use_id")
-        if not _text(call, 256):
-            return []
-        earliest = 0
+        call = payload.get("tool_use_id") if _text(payload.get("tool_use_id"), 256) else None
     elif client == "claude":
-        if payload.get("tool_name") not in WINDOW_TOOLS:
-            return []
-        call = None
-        earliest = now_ns - _window(payload)
+        if payload.get("tool_name") in WINDOW_TOOLS:
+            earliest = now_ns - _window(payload)
     else:
         return []
-    directories = [store_directory(store_path), *own_fallbacks(registry_roots(loads, environ))]
     found = []
-    for at, path in scan(directories, file_key(session)):
-        if at < earliest or at > now_ns:
+    for at, path in scan(record_directories(store_path, loads, environ), file_key(session)):
+        windowed = earliest is not None and earliest <= at <= now_ns
+        left = at <= now_ns - LEFTOVER_NS
+        if not (windowed or left or (call is not None and at <= now_ns)):
             continue
         record = read(path, loads)
-        if record is None:
+        own = record.get(client) if record is not None else None
+        if record is None or not isinstance(own, dict) or own.get("session_id") != session:
             continue
-        own = record.get(client)
-        if not isinstance(own, dict) or own.get("session_id") != session:
-            continue
-        if call is not None and own.get("tool_call_id") != call:
-            continue
-        found.append((path, record))
+        if windowed or (call is not None and own.get("tool_call_id") == call):
+            found.append((path, record, False))
+        elif left:
+            found.append((path, record, True))
     return found
