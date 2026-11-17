@@ -9,51 +9,20 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
-
-import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { overviewSpace } from './served/graphs.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 /** Eight letters of the widest kind and nine digits: the most a reference can be. */
 const LONGEST = ['WWWWWWWW-888888888', 'ABCDEFGH-123456789']
 
 async function serve(page: Page) {
-  const { model } = broadSpace()
-  // Two the field draws as cards at this size, standing in an open frame.
-  const drawn = (reference: string) => {
-    const found = model.work_items.find((item) => item.reference === reference)
-    if (!found) throw new Error(`the broad space holds ${reference}`)
-    return found
-  }
-  const [working, held] = [drawn('MAIN-220'), drawn('MAIN-221')]
-  const live: Record<string, LiveWork> = {
-    [working.work_item_id]: { state: 'working' },
-    [held.work_item_id]: { state: 'held' },
-  }
-  const items = model.work_items.map((item) => {
-    if (item === working) return { ...item, reference: LONGEST[0], claim_ref: 'an-agent' }
-    if (item === held) return { ...item, reference: LONGEST[1], claim_ref: 'an-agent' }
-    return item
-  })
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = model.workflow
-      body.work_items = items
-      body.links = model.links
-      body.live_work = live
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, overviewSpace(LONGEST))),
+  )
 }
 
 /** Open the field and take the camera out to its farthest. */

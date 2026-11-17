@@ -8,7 +8,6 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { boardSpace } from './boardFixtures.ts'
 import { centre } from './boardPage.ts'
 import {
   addressState,
@@ -21,6 +20,7 @@ import {
   openSpace,
   shownTiles,
 } from './filterPage.ts'
+import { sixtyLabelSpace } from './served/filter.ts'
 import { test } from './test.ts'
 
 const everywhere = (text: string) => `Search for “${text}” in all projects`
@@ -397,14 +397,7 @@ test('on a phone the menu stands under the bar and inside the screen', async ({ 
 test('a long list of labels scrolls under a head that stays, and the arrows stay clear of it', async ({
   page,
 }) => {
-  const labels = Array.from({ length: 60 }, (_, index) => `label-${String(index).padStart(2, '0')}`)
-  // An item holds twenty at most, so three of them hold all of these.
-  const carriers = ['MAIN-402', 'MAIN-403', 'MAIN-404']
-  const items = boardSpace().map((item) => {
-    const at = carriers.indexOf(item.reference)
-    return { ...item, labels: at < 0 ? [] : labels.slice(at * 20, (at + 1) * 20) }
-  })
-  await openSpace(page, { items })
+  await openSpace(page, { items: sixtyLabelSpace() })
   await openFacet(page, 'Label')
 
   const list = menu(page)

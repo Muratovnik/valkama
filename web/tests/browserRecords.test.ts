@@ -6,91 +6,33 @@
  * trace says nothing about the schema. Here the same records meet the same
  * validators in a unit run, so a broken one fails in seconds and by name.
  *
- * Two populations. The backend double's own route table is driven as the page would
- * ask it, under every set of options a spec gives it. The records a helper or a spec
- * adds on top of it live in `tests/browser/served/`, each module listing what it
- * serves, and both the spec and this test read them from there.
+ * The records a helper or a spec serves live in `tests/browser/served/`, and both the
+ * spec and this test read them from there. Each module lists the answers it serves,
+ * and the route tables that compose answers (the backend double among them) are
+ * driven as the page asks them, under the arguments the specs give them.
  */
 import { describe, expect, it } from 'vitest'
 
-import { installBackend } from './browser/backend.ts'
-import type { BackendOptions } from './browser/backend.ts'
-import { PLAN_PATH } from './browser/planDocumentFixture.ts'
-import {
-  attachedDataScopeId,
-  blockedWorkItem,
-  dataScopeId,
-  workItem,
-  workItemRef,
-} from './browser/planningFixtures.ts'
 import { routedPage } from './browser/routeDriver.ts'
 import { served as kindColorsServed } from './browser/served/kindColors.ts'
 import { uiSystemCard, served as uiSystemServed } from './browser/served/uiSystem.ts'
 import { SPACE_READ } from './browser/servedAnswers.ts'
 import { checkServed } from './browser/servedContracts.ts'
 import type { Served } from './browser/servedContracts.ts'
+import { backendReads, backendRoutes } from './browser/servedRoutes.ts'
+import type { DrivenRoutes } from './browser/servedRoutes.ts'
 
-const space = (scopeId = dataScopeId) =>
-  new URLSearchParams({ scope_kind: 'space', data_scope_id: scopeId, space_key: 'MAIN' })
-
-/** The reads the page makes of the backend double, one per route it answers strictly. */
-function backendReads(options: BackendOptions): string[] {
-  const scopes = [dataScopeId, ...(options.includeAttachedDuplicate ? [attachedDataScopeId] : [])]
-  const items = [workItemRef.reference, blockedWorkItem.reference]
-  return [
-    '/api/modules',
-    '/api/platform/context?scope_kind=global',
-    '/api/platform/planning?scope_kind=global',
-    ...scopes.flatMap((scope) => [
-      `/api/planning?data_scope_id=${scope}&space_key=MAIN`,
-      `/api/platform/planning?${space(scope)}`,
-      ...items.flatMap((reference) => {
-        const query = new URLSearchParams({ ...Object.fromEntries(space(scope)), reference })
-        return [
-          `/api/modules/planning/work-item?${query}`,
-          `/api/modules/planning/work-item?${query}&brief=true`,
-        ]
-      }),
-    ]),
-    `/api/planning/work-item/chain?id=${workItem.work_item_id}&scope=space`,
-    `/api/planning/work-item/usage?id=${workItem.work_item_id}`,
-    '/api/planning/session/usage?id=session',
-    '/api/modules/planning/requests?scope_kind=global',
-    '/api/execution/capabilities',
-    `/api/execution/history?work_item=${workItemRef.reference}`,
-    '/api/execution/history?work_item=MAIN-1',
-    '/api/memory/search?project=example-project&q=plan',
-    '/api/memory/providers',
-    '/api/memory/linked?project=example-project',
-    '/api/alerts/settings',
-    '/api/alerts/status',
-    '/api/quota/settings',
-    '/api/quota/account-names',
-    '/api/doctor',
-    '/api/open-places',
-    `/api/documents/resolve?path=${PLAN_PATH}&path=src/a.ts&path=missing.md`,
-    '/api/documents/search?q=plan',
-    `/api/documents/read?path=${PLAN_PATH}`,
-  ]
-}
-
-async function backendServes(label: string, options: BackendOptions): Promise<Served[]> {
+/** What a driven route table answers the page's reads with, each found answer a record. */
+async function drive({ install, name, reads }: DrivenRoutes): Promise<Served[]> {
   const { page, ask } = routedPage()
-  await installBackend(page, options)
+  await install(page)
   const served: Served[] = []
-  for (const url of backendReads(options)) {
-    const answer = await ask(url)
-    if (answer?.status === 200)
-      served.push({ name: `backend.ts (${label})`, url, body: answer.body })
+  for (const read of reads) {
+    const { url, method = 'GET', body } = typeof read === 'string' ? { url: read } : read
+    const answer = await ask(url, { method, body })
+    if (answer && answer.status >= 200 && answer.status < 300)
+      served.push({ name, method, url, body: answer.body })
   }
-  const test = await ask('/api/alerts/test', { method: 'POST', body: {} })
-  if (test?.status === 200)
-    served.push({
-      name: `backend.ts (${label})`,
-      method: 'POST',
-      url: '/api/alerts/test',
-      body: test.body,
-    })
   return served
 }
 
@@ -98,25 +40,27 @@ async function backendServes(label: string, options: BackendOptions): Promise<Se
 const failuresOf = (served: readonly Served[]) =>
   served.map((entry) => checkServed(entry)).filter((failure) => failure !== null)
 
-/** Each module under `served/`, with the answers it lists and the backend options it gives. */
-const modules = import.meta.glob<{
-  backendOptions?: Record<string, BackendOptions>
-  served?: Served[]
-}>('./browser/served/*.ts', { eager: true })
+/** Each module under `served/`, with the answers it lists and the route tables it drives. */
+const modules = import.meta.glob<{ routes?: DrivenRoutes[]; served?: Served[] }>(
+  './browser/served/*.ts',
+  { eager: true },
+)
 
 describe('the records the browser specs serve', () => {
   it.each(Object.entries(modules))(
     '%s serves only records its contracts take',
     async (_, module) => {
-      expect(module.served?.length ?? 0).toBeGreaterThan(0)
-      const options = Object.entries(module.backendOptions ?? {})
-      const driven = await Promise.all(options.map(([label, given]) => backendServes(label, given)))
-      expect(failuresOf([...(module.served ?? []), ...driven.flat()])).toStrictEqual([])
+      const driven = await Promise.all((module.routes ?? []).map((routes) => drive(routes)))
+      const served = [...(module.served ?? []), ...driven.flat()]
+      expect(served.length).toBeGreaterThan(0)
+      expect(failuresOf(served)).toStrictEqual([])
     },
   )
 
   it('the backend double answers every strict read it serves with a valid record', async () => {
-    const served = await backendServes('default', {})
+    const served = await drive(backendRoutes('default'))
+    // Every read is answered: a route the double stopped answering is not a pass.
+    expect(served).toHaveLength(backendReads().length)
     expect(failuresOf(served)).toStrictEqual([])
   })
 

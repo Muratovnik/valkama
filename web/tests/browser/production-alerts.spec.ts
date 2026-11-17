@@ -9,6 +9,7 @@ import { ALERT_SETTINGS, installAlerts, READINESS_CASES } from './alertsFixtures
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
+import { REFUSED_TRIAL } from './served/alerts.ts'
 import { test } from './test.ts'
 
 const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: spaceScope })
@@ -55,10 +56,7 @@ test('the longest Russian words fit a phone, in the readiness row and after a re
   await installBackend(page)
   await installAlerts(page, {
     status: READINESS_CASES.find(({ name }) => name === 'disabled-for-application')?.status,
-    test: {
-      ...READINESS_CASES.find(({ name }) => name === 'helper-unavailable')?.status.windows,
-      shown: false,
-    },
+    test: REFUSED_TRIAL,
   })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(SETTINGS)

@@ -12,46 +12,20 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
-
-import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
 import { settledZoom } from './graphFieldCamera.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { workingSpace } from './served/graphs.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 const LONGEST = 'WWWWWWWW-888888888'
 
 async function serve(page: Page, width = 1500, height = 900) {
-  const { model } = broadSpace()
-  const filed = model.work_items.filter((item) => !item.state?.is_terminal && item.parent_id)
-  const unfiled = model.work_items.filter(
-    (item) => !item.state?.is_terminal && !item.parent_id && !WORK_ITEM_TREE.isContainer(item),
-  )
-  const working = [...filed.filter((_, index) => index % 2 === 0), ...unfiled.slice(0, 3)]
-  const live = Object.fromEntries(working.map((item) => [item.work_item_id, { state: 'working' }]))
-  // The goal of the first worked-on item takes the longest reference.
-  const renamed = working[0]?.parent_id
-  const items = model.work_items.map((item) =>
-    item.work_item_id === renamed ? { ...item, reference: LONGEST } : item,
-  )
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = model.workflow
-      body.work_items = items
-      body.links = model.links
-      body.live_work = live
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, workingSpace(LONGEST))),
+  )
   await page.setViewportSize({ width, height })
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()

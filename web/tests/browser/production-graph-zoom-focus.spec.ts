@@ -11,31 +11,19 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
 import { frames } from './frames.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { broadRead } from './served/graphs.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 async function openBroadSpace(page: Page, width: number) {
-  const { model } = broadSpace()
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = model.workflow
-      body.work_items = model.work_items
-      body.links = model.links
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, broadRead())),
+  )
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
 }

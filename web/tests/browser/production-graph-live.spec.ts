@@ -9,10 +9,10 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { broadSpace, liveWorkFor } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { liveSpace } from './served/graphs.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 /** Holders a live card meets: a name longer than a card, a short one, and a session's. */
@@ -27,29 +27,10 @@ const HOLDERS = {
  * `holder`, every live claim is held under that name.
  */
 async function serveLiveSpace(page: Page, { holder = '' } = {}) {
-  const { model } = broadSpace()
-  const live = liveWorkFor(model)
-  const items = holder
-    ? model.work_items.map((item) =>
-        item.work_item_id in live ? { ...item, claim_ref: holder } : item,
-      )
-    : model.work_items
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = model.workflow
-      body.work_items = items
-      body.links = model.links
-      body.live_work = live
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, liveSpace(holder))),
+  )
 }
 
 /** How many animations run on the sign of the first card in that live state. */

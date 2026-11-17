@@ -9,42 +9,18 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
-
-import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { cometSpace } from './served/graphs.ts'
+import { spaceAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 /** The space with its open items being worked on, or as many as `working` that have lines. */
 async function serveWorking(page: Page, working = Number.POSITIVE_INFINITY) {
-  const { model } = broadSpace()
-  const linked = new Set(model.links.flatMap((link) => [link.from, link.to]))
-  const open = model.work_items
-    .filter(
-      (item) => !item.state?.is_terminal && (working === Infinity || linked.has(item.work_item_id)),
-    )
-    .slice(0, working)
-  const live: Record<string, LiveWork> = Object.fromEntries(
-    open.map((item) => [item.work_item_id, { state: 'working' }]),
-  )
   await installBackend(page)
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      const body = response.body as unknown as Record<string, unknown>
-      body.workflow = model.workflow
-      body.work_items = model.work_items
-      body.links = model.links
-      body.live_work = live
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, cometSpace(working))),
+  )
 }
 
 /** Each comet's line and what the browser computed for the comet on it. */
