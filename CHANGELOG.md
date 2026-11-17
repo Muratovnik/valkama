@@ -46,7 +46,9 @@ checkouts are therefore distinguishable even at the same version.
   on a closed item is refused with `[item_closed]`, a question or list in the call
   that closes its item is refused as one that would end unanswered in the same
   write, and a request record carries `purpose`. The migration ends the requests
-  2.9 left pending on closed items the same way, with no event.
+  2.9 left pending on closed items the same way, with no event. A request whose
+  deadline or execution had already ended it keeps that reason, `deadline` or
+  `execution_closed`, and the close tells nobody of it.
 - **The service state stays out of reach.** `get_planning_space` lists the eight category
   states and the moves between them only. `container` named as a state, in a transition
   or a list filter, or as a category is refused with the text that says what replaces

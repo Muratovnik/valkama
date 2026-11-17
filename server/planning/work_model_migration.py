@@ -53,7 +53,9 @@ otherwise cascade into them:
   a question to the owner may carry and the reasons a close stores: a request still
   pending on a closed item, which 2.9 read `task_closed` and left pending, ends
   `expired` as `item_completed` or `item_cancelled` by the category its item stands
-  in, with no event, as does one that stored `task_closed`.
+  in, with no event, as does one that stored `task_closed`. One that had already
+  lapsed, past its deadline or on an execution that ended, ends as it lapsed,
+  `deadline` or `execution_closed`.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -274,9 +276,11 @@ class Oracle:
     numbers: set[tuple[str, int]] = field(default_factory=set)
     request_ids: frozenset[str] = frozenset()
     #: Each request's item, kind and status, and the reason `ended-requests` ends it with, by id:
-    #: one pending on a closed item, or one that stored `task_closed`.
+    #: the close's for one still waiting on a closed item or one that stored
+    #: `task_closed`, and its lapse's for one pending there that had lapsed.
     requests: dict[str, tuple[str, str, str]] = field(default_factory=dict)
     ended: dict[str, str] = field(default_factory=dict)
+    lapsed: dict[str, str] = field(default_factory=dict)
     containers: int = 0
     started_from_created: int = 0
     #: The rows `item-projects` leaves in `work_item_projects`, a table the store `oracle`
@@ -451,24 +455,32 @@ def _derived(conn: sqlite3.Connection, query: str, containers: Iterable[str]) ->
 
 
 def _read_requests(
-    conn: sqlite3.Connection, oracle: Oracle, states: Mapping[str, sqlite3.Row]
+    conn: sqlite3.Connection, oracle: Oracle, states: Mapping[str, sqlite3.Row], at: str
 ) -> None:
-    """`oracle`'s reading of the requests `ended-requests` ends, in Python: every pending one, and every one
-    that stored `task_closed`, on an item standing in a state that closes it."""
+    """The oracle's reading of the requests `ended-requests` ends, in Python: every
+    pending one, and every one that stored `task_closed`, on an item standing in a
+    state that closes it. A pending one that has lapsed at `at`, as the service reads a
+    lapse (`questions.lapse`), ends as it lapsed; the others as their item closed."""
 
     places = {
         str(row[0]): states.get(str(row[1]))
         for row in conn.execute("SELECT work_item_id, state_id FROM work_items")
     }
     for row in conn.execute(
-        "SELECT request_id, work_item_id, kind, status, expired_reason FROM work_item_requests"
+        "SELECT r.request_id, r.work_item_id, r.kind, r.status, r.expired_reason,"
+        " r.expires_at, r.execution_id, x.execution_id IS NOT NULL AS execution_found,"
+        " x.ended_at AS execution_ended_at, x.status AS execution_status"
+        " FROM work_item_requests r LEFT JOIN executions x ON x.execution_id = r.execution_id"
     ):
         identity = str(row["request_id"])
         oracle.requests[identity] = (str(row["work_item_id"]), str(row["kind"]), str(row["status"]))
         state = places.get(str(row["work_item_id"]))
         if state is None or not state["is_terminal"]:
             continue
-        if row["status"] == "pending" or row["expired_reason"] == "task_closed":
+        lapsed = questions.lapse(row, at) if row["status"] == "pending" else None
+        if lapsed is not None:
+            oracle.lapsed[identity] = lapsed
+        elif row["status"] == "pending" or row["expired_reason"] == "task_closed":
             oracle.ended[identity] = questions.closed_reason(str(state["category"]))
 
 
@@ -704,7 +716,7 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
     )
     oracle.data_scope_id = _data_scope_id(conn)
     oracle.spaces = _spaces(conn)
-    _read_requests(conn, oracle, states)
+    _read_requests(conn, oracle, states, context.now)
     context.memo["oracle"] = oracle
     context.memo["renames"] = renames
     return {
@@ -1631,11 +1643,28 @@ _ENDS = "s.is_terminal = 1 AND (r.status = 'pending' OR r.expired_reason = 'task
 #: The reason it ends with, by the category of that state, read apart from
 #: `questions.closed_reason`, which `oracle` reads with.
 _ENDED_REASON = "CASE s.category WHEN 'cancelled' THEN 'item_cancelled' ELSE 'item_completed' END"
+#: The rows with their item's state `s` and their execution `x`.
 _REQUEST_STATES = (
     " FROM work_item_requests r"
     " LEFT JOIN work_items w ON w.work_item_id = r.work_item_id"
     " LEFT JOIN workflow_states s ON s.state_id = w.state_id"
+    " LEFT JOIN executions x ON x.execution_id = r.execution_id"
 )
+
+
+def _lapse(now: str) -> str:
+    """Why a pending row `r` has lapsed at `now`, or null while it waits: past its
+    deadline, or on an execution that is gone, ended or not live, in SQL apart from
+    `questions.lapse`, which `oracle` reads with."""
+
+    return (
+        "CASE WHEN r.status != 'pending' THEN NULL"
+        f" WHEN coalesce(r.expires_at, '') != '' AND r.expires_at <= '{now}' THEN 'deadline'"
+        " WHEN coalesce(r.execution_id, '') != '' AND (x.execution_id IS NULL"
+        " OR coalesce(x.ended_at, '') != ''"
+        " OR coalesce(x.status, '') NOT IN ('starting', 'running')) THEN 'execution_closed'"
+        " END"
+    )
 
 
 def _requests_needed(conn: sqlite3.Connection, context: Context) -> bool:
@@ -1657,7 +1686,9 @@ def _end_requests(conn: sqlite3.Connection, context: Context) -> Mapping[str, An
     one that stored `task_closed`, which goes as a reason, ends `expired`: as
     `item_cancelled` on a cancelled item and as `item_completed` on any other closed
     one, at the moment of the migration if nothing closed it before, with its revision
-    raised as any write of a request raises it, and with no event. A request that
+    raised as any write of a request raises it, and with no event. A pending one that
+    had lapsed ends as it lapsed, `deadline` or `execution_closed`, resolved when it
+    lapsed where that is known, as the service's close writes it. A request that
     stored `task_closed` on an item that is open again is refused: which close ended
     it is not known, and nothing may guess.
     """
@@ -1674,17 +1705,23 @@ def _end_requests(conn: sqlite3.Connection, context: Context) -> Mapping[str, An
             f"requests {reopened[:5]} stored task_closed on an item that is open:"
             " which close ended them is not known"
         )
+    lapse = _lapse(context.now)
+    reason = f"coalesce({lapse}, {_ENDED_REASON})"
     ended = Counter(
-        str(row[0])
-        for row in conn.execute(f"SELECT {_ENDED_REASON}{_REQUEST_STATES} WHERE {_ENDS}")
+        str(row[0]) for row in conn.execute(f"SELECT {reason}{_REQUEST_STATES} WHERE {_ENDS}")
     )
     definition, carried = _fresh_rebuild(conn, context, _REQUESTS)
+    lapsed_at = (
+        f"CASE {lapse} WHEN 'deadline' THEN r.expires_at"
+        " WHEN 'execution_closed' THEN nullif(x.ended_at, '') END"
+    )
     changed = {
         "status": f"CASE WHEN {_ENDS} THEN 'expired' ELSE r.status END",
-        "expired_reason": f"CASE WHEN {_ENDS} THEN {_ENDED_REASON} ELSE r.expired_reason END",
-        "answered_by": f"CASE WHEN {_ENDS} AND r.status = 'pending' THEN '{AUTHOR}'"
-        " ELSE r.answered_by END",
-        "resolved_at": f"CASE WHEN {_ENDS} THEN coalesce(r.resolved_at, '{context.now}')"
+        "expired_reason": f"CASE WHEN {_ENDS} THEN {reason} ELSE r.expired_reason END",
+        "answered_by": f"CASE WHEN {_ENDS} AND r.status = 'pending' AND {lapse} IS NULL"
+        f" THEN '{AUTHOR}' ELSE r.answered_by END",
+        "resolved_at": f"CASE WHEN {_ENDS}"
+        f" THEN coalesce(r.resolved_at, {lapsed_at}, '{context.now}')"
         " ELSE r.resolved_at END",
         "revision": f"CASE WHEN {_ENDS} THEN r.revision + 1 ELSE r.revision END",
     }
@@ -2461,7 +2498,8 @@ def _holds_requests_kept(conn: sqlite3.Connection, context: Context) -> Mapping[
         now = after.get(identity)
         if now is None:
             continue
-        expected = (item, kind, "expired" if identity in oracle.ended else status)
+        ended = identity in oracle.ended or identity in oracle.lapsed
+        expected = (item, kind, "expired" if ended else status)
         if now != expected:
             found.append(f"the request {identity} reads {now}, not {expected}")
     _unmet(found, "requests")
@@ -2488,11 +2526,19 @@ def _holds_no_closed_waits(conn: sqlite3.Connection, context: Context) -> Mappin
     return {"pending_on_closed": 0}
 
 
-def _p29(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _holds_requests_ended(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     """The requests a close ended are the ones `oracle` foresaw, each with the reason of its
-    item's category."""
+    item's category, and those that had lapsed say why."""
 
     oracle = _oracle(context)
+    lapsed = {
+        str(row[0]): str(row[1])
+        for row in conn.execute(
+            "SELECT request_id, expired_reason FROM work_item_requests"
+            " WHERE request_id IN (SELECT value FROM json_each(?))",
+            (json.dumps(sorted(oracle.lapsed)),),
+        )
+    }
     rows = conn.execute(
         f"SELECT r.request_id, r.expired_reason, s.category{_REQUEST_STATES}"
         " WHERE r.expired_reason IN ('item_completed', 'item_cancelled')"
@@ -2506,11 +2552,16 @@ def _p29(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
         for row in rows
         if row[1] != questions.closed_reason(str(row[2]))
     ]
+    if lapsed != oracle.lapsed:
+        found.append(f"the requests that had lapsed read {lapsed}, not {oracle.lapsed}")
     _unmet(found, "requests a close ended")
-    return {"ended": dict(sorted(Counter(held.values()).items()))}
+    return {
+        "ended": dict(sorted(Counter(held.values()).items())),
+        "lapsed": dict(sorted(Counter(lapsed.values()).items())),
+    }
 
 
-def _holds_second_run(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
     return {"steps_needed_again": again}

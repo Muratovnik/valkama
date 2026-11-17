@@ -556,3 +556,84 @@ class ClosingEndsQuestionsTests(unittest.TestCase):
         self.assertEqual(("expired", "item_completed"), self.stored(asked))
         self.assertEqual(("expired", "item_completed"), self.stored(decided))
         self.assertEqual(("pending", None), self.stored(elsewhere))
+
+    def test_a_close_keeps_the_reason_of_a_question_that_had_lapsed_and_tells_nothing_of_it(
+        self,
+    ) -> None:
+        """A question its deadline or its execution had ended says so after the close, with
+        no `request_expired`; only the one still waiting ends as the item closed."""
+
+        waiting = self.ask()
+        overdue = requests.create(
+            self.conn,
+            self.ref,
+            kind="question",
+            prompt="By noon?",
+            fields=[field()],
+            expires_at="2999-01-01T00:00:00Z",
+        )["request_id"]
+        identity = service.get_work_item(self.conn, self.ref)["work_item_id"]
+        self.conn.execute(
+            "INSERT INTO executions(execution_id, work_item_id, client_family, role,"
+            " environment, expected_effect, status) VALUES ('run-1',?,'claude','r','e','x','running')",
+            (identity,),
+        )
+        bound = requests.create(
+            self.conn,
+            self.ref,
+            kind="question",
+            prompt="During the run?",
+            fields=[field()],
+            execution_id="run-1",
+        )["request_id"]
+        # The deadline passes and the run ends before anybody closes the item.
+        deadline = "2026-01-01T00:00:00.000000Z"
+        ended_at = "2026-01-02T00:00:00.000000Z"
+        self.conn.execute(
+            "UPDATE work_item_requests SET expires_at=? WHERE request_id=?", (deadline, overdue)
+        )
+        self.conn.execute(
+            "UPDATE executions SET status='complete', ended_at=? WHERE execution_id='run-1'",
+            (ended_at,),
+        )
+        self.conn.commit()
+        self.person(
+            "/api/planning/work-item/summary", id=self.ref, summary={"done": "Done", "next": "None"}
+        )
+        self.move("done")
+        self.assertEqual(("expired", "item_completed"), self.stored(waiting))
+        self.assertEqual(1, self.ended_events(waiting))
+        self.assertEqual(("expired", "deadline"), self.stored(overdue))
+        self.assertEqual(("expired", "execution_closed"), self.stored(bound))
+        self.assertEqual((0, 0), (self.ended_events(overdue), self.ended_events(bound)))
+        resolved = dict(
+            self.conn.execute(
+                "SELECT request_id, resolved_at FROM work_item_requests WHERE request_id IN (?,?)",
+                (overdue, bound),
+            ).fetchall()
+        )
+        self.assertEqual({overdue: deadline, bound: ended_at}, resolved, "when each lapsed")
+        told = [
+            entry.get("request_id")
+            for entry in person_events.since_last_agent_write(self.conn, identity)
+            if entry["kind"] == "question_withdrawn"
+        ]
+        self.assertEqual([waiting], told)
+        self.assertEqual(
+            0,
+            self.conn.execute(
+                "SELECT COUNT(*) FROM work_item_requests WHERE work_item_id=? AND status='pending'",
+                (identity,),
+            ).fetchone()[0],
+        )
+        self.move("ready")
+        self.assertEqual(
+            [
+                ("expired", "item_completed"),
+                ("expired", "deadline"),
+                ("expired", "execution_closed"),
+            ],
+            [self.stored(asked) for asked in (waiting, overdue, bound)],
+        )
+        read = requests.get(self.conn, overdue)
+        self.assertEqual(("expired", "deadline"), (read["status"], read["expired_reason"]))
