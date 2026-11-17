@@ -463,6 +463,25 @@ TOOLS = [
             },
             "parent": _PARENT,
             "acceptance": _ACCEPTANCE,
+            "split_from": {
+                **WORK_ITEM_REFERENCE,
+                "description": "An open task to split a part off: the new item stands beside"
+                " it under the same parent, accepted as it is, and takes the steps named in"
+                " steps with their ids and ticks. Refused for a task in review and with a"
+                " parent, state or acceptance of its own. The answer names split_from and"
+                " the moved_steps.",
+            },
+            "steps": {
+                "type": "array",
+                "maxItems": model.MAX_CHECKLIST,
+                "items": {"type": "string"},
+                "description": "With split_from: the ids of its steps the part takes.",
+            },
+            "force": {
+                "type": "boolean",
+                "description": "With split_from: split a part off a task another session"
+                " holds, recorded as overridden on it.",
+            },
             "claim": {
                 "type": "boolean",
                 "description": "true claims the new item as claim_work_item does,"

@@ -606,10 +606,37 @@ def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         with service.one_write(conn):
             findings, applied = _run_steps(conn, base, steps)
         answer = service.get_work_item(conn, str(item["work_item_id"]))
-    return {**answer, **findings, "applied": applied}
+    # What the creation itself said: the task a part was split off and the steps it took.
+    said = {name: item[name] for name in _SPLIT_ANSWER if name in item}
+    return {**answer, **said, **findings, "applied": applied}
+
+
+#: What a creation that split a part off says beside the part.
+_SPLIT_ANSWER = ("split_from", "moved_steps", "overridden")
 
 
 def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    if payload.get("split_from") is not None:
+        return split.split_off(
+            conn,
+            _text(payload, "split_from"),
+            steps=payload.get("steps"),
+            title=_text(payload, "title"),
+            kind=payload.get("kind"),
+            priority=payload.get("priority"),
+            description=payload.get("description"),
+            labels=payload.get("labels"),
+            source=payload.get("source"),
+            projects=payload.get("projects"),
+            set_by_source={name: payload.get(name) for name in ("parent", "state", "acceptance")},
+            force=_flag(payload, "force"),
+            author=_author(payload),
+        )
+    if payload.get("steps") is not None:
+        raise model.PlanningError(
+            f"[{split.SPLIT}] steps names the steps a part takes from split_from: send split_from"
+            " with it"
+        )
     return service.create_work_item(
         conn,
         space=_optional_text(payload, "space"),
@@ -1367,7 +1394,16 @@ def _apply_step(
     for name in ("cancelled", "released", "freed", "returned", "review_request_id"):
         if answer.get(name):
             moved[name] = answer[name]
+    # Entering review or completing names the steps that are no longer as they were:
+    # what the owner checks, or what the close stands for, is the steps as they are now.
+    entered = None if answer["state"] is None else answer["state"]["category"]
+    if entered in _NAMES_CHANGED_CONDITIONS and answer.get("conditions_changed"):
+        moved["conditions_changed"] = answer["conditions_changed"]
     return found, moved
+
+
+#: The states whose entry answers with `conditions_changed`, by category.
+_NAMES_CHANGED_CONDITIONS = frozenset({"review", "completed"})
 
 
 def _deferred(conn: sqlite3.Connection, payload: Mapping[str, object]) -> tuple[dict, object]:

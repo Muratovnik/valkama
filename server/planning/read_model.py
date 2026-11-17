@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 
@@ -902,7 +903,64 @@ def present(
     if record["container_state"] == closing_rules.AWAITING:
         record["confirmation"] = closing_rules.confirmation(conn, row)
     record.update(_put_off(conn, identity, record["state"]))
+    changed = conditions_changed(conn, identity)
+    if changed is not None:
+        record["conditions_changed"] = changed
     return record
+
+
+#: The history that says an item's steps changed under it: a step taken off or reworded,
+#: a part split off with some, and a conversion that left its work in a new task.
+_CONDITIONS_CHANGED = (
+    "SELECT action, detail FROM work_item_events WHERE work_item_id = ?"
+    " AND action IN ('checklist_removed', 'split_off', 'converted') ORDER BY id"
+)
+#: How a `split_off` detail names the part and how many steps it took.
+_SPLIT_OFF = re.compile(r"^(?P<to>\S+): (?P<count>\d+) steps$")
+#: How a `converted` detail names the task it left (`split.convert`).
+_LEFTOVER = re.compile(r"; leftover (?P<to>[A-Z][A-Z0-9]*-\d+)")
+
+
+def conditions_changed(conn: sqlite3.Connection, identity: str) -> dict | None:
+    """What became of steps that are no longer on the item as they were, or None.
+
+    `removed` holds the text of each step an edit took off and the former text of each
+    step reworded by its id (`checklist_removed`, cut to 120 characters); `moved` each
+    item that took steps away with their work: a part split off it with how many
+    (`split_off`), and the task a conversion left, with the steps that task holds now,
+    since a conversion records which task and not how many. None when nothing of the
+    kind is in the history, which counts from this build on. The full record carries
+    it, and the answers of entering review and of completing name it; the card does not.
+    """
+
+    removed: list[str] = []
+    moved: list[dict] = []
+    for action, detail in conn.execute(_CONDITIONS_CHANGED, (identity,)):
+        text = str(detail)
+        if action == "checklist_removed":
+            removed.append(text)
+            continue
+        if action == "split_off":
+            found = _SPLIT_OFF.match(text)
+            if found is not None:
+                moved.append({"to": found["to"], "count": int(found["count"])})
+            continue
+        left = _LEFTOVER.search(text)
+        if left is not None:
+            moved.append({"to": left["to"], "count": _steps_of(conn, left["to"])})
+    if not removed and not moved:
+        return None
+    return {"removed": removed, "moved": moved}
+
+
+def _steps_of(conn: sqlite3.Connection, reference: str) -> int:
+    """How many steps the item `reference` holds, or 0 when it is gone."""
+
+    try:
+        row = item_row(conn, reference)
+    except model.WorkItemNotFoundError:
+        return 0
+    return len(model.checklist(row["checklist"]))
 
 
 def _put_off(conn: sqlite3.Connection, identity: str, state: Mapping | None) -> dict:
@@ -1081,9 +1139,12 @@ CARD_STEP_MARKS = ("claimed_by", "done_by", "by_previous_holder")
 #: The state's fields on the card; whether work is over in it is `open`.
 CARD_STATE = ("key", "name", "category")
 #: What the full record holds that is neither on the card nor a part: the ids the
-#: card's `reference` and `parent` stand for, the summary's comment, and the counts
-#: and marks of a cut history, which the table of contents and the parts carry.
+#: card's `reference` and `parent` stand for, the summary's comment, the counts
+#: and marks of a cut history, which the table of contents and the parts carry, and
+#: what became of steps no longer on the item as they were (`conditions_changed`),
+#: which entering review and completing answer with.
 OFF_CARD = (
+    "conditions_changed",
     "work_item_id",
     "planning_space_id",
     "number",

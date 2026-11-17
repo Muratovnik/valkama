@@ -493,6 +493,32 @@ class DeferralFieldTests(CardCase):
         self.assertNotIn("returned", self.read(), "a move of its own to triage is no return")
 
 
+class ConditionsChangedTests(CardCase):
+    """`conditions_changed`: a task closed after a step went."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.ref = self.item("Changed")
+        self.agent("apply_work_item_changes", id=self.ref, claim=True, checklist=["X", "Y"])
+        kept = service.get_work_item(self.conn, self.ref)["checklist"][1]
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            checklist=[{"id": kept["id"], "text": "Y", "done": True}],
+            summary={"done": "Y holds", "next": "Nothing"},
+            transition={"state": "done"},
+        )
+
+    def test_only_the_full_http_record_carries_it(self) -> None:
+        full = self.http()
+        self.assertEqual({"removed": ["X"], "moved": []}, full["conditions_changed"])
+        self.assertNotIn("conditions_changed", self.read())
+        self.assertNotIn("conditions_changed", self.read(parts=["card", "events"]))
+        self.assertIn("conditions_changed", read_model.OFF_CARD)
+        placed = set(read_model.CARD_FIELDS) | set(read_model.PARTS) | set(read_model.OFF_CARD)
+        self.assertEqual(set(), set(self.http(sessions="true")) - placed)
+
+
 class SizeTests(unittest.TestCase):
     def test_what_the_card_adds(self) -> None:
         """The table with every part at nine digits, and the frame of a flagged step."""

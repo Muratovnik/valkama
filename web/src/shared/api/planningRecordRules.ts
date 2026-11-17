@@ -4,8 +4,14 @@
  * beyond each field's own shape.
  */
 
-import type { z } from '@/shared/api/contract.ts'
-import { blankable, boundedText, strictObject, uniqueList } from '@/shared/api/contract.ts'
+import {
+  blankable,
+  boundedText,
+  positiveInt,
+  strictObject,
+  uniqueList,
+  z,
+} from '@/shared/api/contract.ts'
 import { enumField, ISO } from '@/shared/api/platformApiGuards.ts'
 
 /**
@@ -74,6 +80,17 @@ export const returnedField = () =>
     because: enumField(RETURN_CAUSES),
     item: REFERENCE().nullable(),
     at: boundedText(ISO, 96),
+  })
+
+/**
+ * What became of steps no longer on the item as they were, only when its history says so:
+ * the texts taken off or reworded, each cut to 120 characters, and the items that took
+ * steps away with their work. The history keeps them all, so neither list is bounded.
+ */
+export const conditionsChangedField = () =>
+  strictObject({
+    removed: z.array(blankable(120)),
+    moved: z.array(strictObject({ to: REFERENCE(), count: positiveInt(true) })),
   })
 
 /**

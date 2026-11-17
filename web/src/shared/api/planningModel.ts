@@ -27,6 +27,7 @@ import {
   LABELS_DETAIL_MAX,
 } from '@/shared/api/planningEventActions.ts'
 import {
+  conditionsChangedField,
   deferredField,
   lapsedClaimField,
   recordObject,
@@ -446,6 +447,8 @@ const workItemSchema = recordObject({
   // Why it waits while put off, and why it came back while it stands in triage after that.
   deferred: deferredField().optional(),
   returned: returnedField().optional(),
+  // What became of steps taken off, reworded or moved to another item, once any were.
+  conditions_changed: conditionsChangedField().optional(),
   // A transition answers with these; a plain read does not.
   warnings: z.array(serverText()).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),
