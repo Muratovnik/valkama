@@ -316,11 +316,11 @@ it, and how to write an absolute path or one with spaces, is in
 
 ## Blocked work
 
-When another item blocks the work, link it: `blocks` from the blocking item to
-this one (the `links` group on the blocker, `other` this item). When the
-blocker is outside Valkama, transition to the blocked state with a `reason` and
-say what would unblock it in a comment. A transition to a blocked state is
-refused without a linked blocker or a reason.
+When the work waits on another item, link it: `blocks` from the blocking item to
+this one (the `links` group on the blocker, `other` this item); it stays where it
+is and its `waits_for` names the blocker. Only a cause outside Valkama takes the
+blocked state: transition there with a `reason` and say what would unblock it in
+a comment. A transition to a blocked state is refused without a reason.
 
 ## Asking the owner
 
@@ -397,11 +397,8 @@ option refused; `status` tells a list not sent yet (`pending`) from one sent emp
 ## Merging items that are one change
 
 When two items turn out to be one change — the same finding filed twice, one
-cause found from two places — `merge_work_items` folds them into the item that
-survives (`id`), with `items` the ones that fold in and a `reason`. Each merged
-item is linked `duplicates` to it and closes in its cancelled state; what moves,
-what stays and when it is refused is in [the tool reference](references/tools.md#merging).
-Merge before handing the work to anyone.
+cause found from two places — fold them into one with `merge_work_items`, as
+[the tool reference](references/tools.md#merging) says.
 
 ## Close
 

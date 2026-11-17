@@ -297,7 +297,7 @@ refused. An edit changes a kind only among `task`, `bug` and `improvement`.
 | `active` | being worked: it always has a holder |
 | `review` | done and waiting for the owner's answer |
 | `completed` | done |
-| `blocked` | waiting on something else |
+| `blocked` | stopped by hand, with a stated reason, for a cause outside Valkama; work that waits on another item is linked `blocks` and stays where it is |
 | `cancelled` | not to be done |
 
 The whole record of an item -- the answer of `GET /api/planning/work-item`, an
@@ -354,7 +354,8 @@ gives the basis in one order, whoever makes it:
 
 A basis is given only to an item that has none: one in `triage` or `deferred`,
 or cancelled before it was accepted, when it moves to `ready`, `active`,
-`review`, `blocked` or `completed`, is created there, or is claimed. Accepted work
+`review`, `blocked` or `completed`, is created in `ready` or `active`, or is
+claimed. Accepted work
 keeps its basis through a close and a reopening; a move to `triage` takes it away.
 An agent's `create_work_item` with no `state` and no basis to give therefore
 files the item in `triage` rather than refusing it. `migrated` is the basis the
@@ -2342,6 +2343,14 @@ The answer adds `applied`, in the batch's style: `{"claim": true, "links": 2}`.
 The call is recorded once with its identity, and the creation's, the claim's and
 both ends of each link's events point to it. Without `claim`, `checklist` or
 `links`, the call and its answer are what they were before.
+
+A named `state` meets the refusals a move there does. A new item stands in
+`triage`, `ready` or, with `claim`, its active state: a state of the categories
+`review`, `blocked`, `completed` or `cancelled` is refused with the `new_item`
+guard (`409 workflow_guard`), which `force` does not carry, before anything is
+written. Entering one asks for what a creation does not carry — what the owner
+is to check, the reason, the summary — so the item is created, then moved there
+with a transition.
 
 ### Merging items that are one change
 

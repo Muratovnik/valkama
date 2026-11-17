@@ -612,7 +612,7 @@ comments.
 
 Guards refuse a move the board could not honestly report: `dev` needs an
 executor, `done` needs every checklist item closed and a summary, `blocked`
-needs a linked blocker or a stated reason. A refusal names its guard, and
+needs a stated reason. A refusal names its guard, and
 `force=true` carries the move through as a recorded override.
 
 **Concurrent moves are resolved, not raced.** A drag sends the revision of the

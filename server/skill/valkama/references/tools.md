@@ -356,8 +356,9 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 | a completed state | every step done and a summary |
 | a review or completed state | no step marked `by_previous_holder`: tick it again to confirm it, or reopen it (`previous_holder`) |
 | a cancelled state | a summary; open steps stay open |
-| a blocked state | an unfinished item linked `blocks` to it, or a `reason` |
+| a blocked state | a `reason`, for a cause outside Valkama; work that waits on an item is linked `blocks` and stays where it is |
 | any state | a transition the workflow allows from where the item stands |
+| review, blocked, completed or cancelled, for an item being created | refused (`new_item`): create it, then move it there; `force` does not carry this |
 
 A move to review without a session or commit ref warns but is not refused.
 An agent's move to a completed or cancelled state is also refused with
@@ -375,7 +376,8 @@ the refusal names what they did. A `comment` sent in the same
 | `workflow_guard` with `[executor]` | Claim the item or a step before moving it to an active state. |
 | `workflow_guard` with `[acceptance]` | Send `acceptance: "assignment"` only on the owner's word; otherwise leave the item to the owner to accept. |
 | `workflow_guard` with `[checklist]` or `[summary]` | Tick what was done, move undone work to an item of its own, record the summary, then close. |
-| `workflow_guard` with `[blocker]` | Link the blocking item, or give the reason. |
+| `workflow_guard` with `[blocker]` | Give the reason: blocking by hand is for a cause outside Valkama; link `blocks` for work that waits on an item. |
+| `workflow_guard` with `[new_item]` | Create the item, then move it. |
 | `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
 | `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |
@@ -575,6 +577,7 @@ the fourth is refused with `ask_limit`. The batch's `questions` take `addressees
 
 ## Merging
 
+Merge before handing the work to anyone.
 `merge_work_items` takes `id` (the survivor), `items` (1 to 20), and optionally
 `reason`, `force`, `expected_revision` (the survivor's) and `author`. What
 moves: steps (their ids, ticks and step claims kept), discussion threads whole,
