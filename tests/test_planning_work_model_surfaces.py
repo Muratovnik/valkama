@@ -54,6 +54,7 @@ from server.planning import (
     item_tree,
     leases,
     live_frame,
+    participation,
     person_events,
     service,
     states,
@@ -500,7 +501,7 @@ def _every_stale_claim(conn: sqlite3.Connection) -> list[dict]:
 
     later = datetime.now(UTC) + timedelta(days=3650)
     with mock.patch.object(leases, "utc_now", return_value=later):
-        return views.stale_claims(conn, space=KEY)
+        return views.stale_claims(conn, settings=participation.load(conn), space=KEY)
 
 
 def _walk(value: object, path: str = "") -> Iterator[tuple[str, object]]:

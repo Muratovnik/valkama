@@ -286,6 +286,74 @@ class ScopeTests(Harness):
                 read(self.space, name)
 
 
+class NumberTests(Harness):
+    """The numbers beside the points are read where they are used, by the item's space."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.person(space=None, key="lease_quiet_days", value=3)
+        self.person(space="ALPHA", key="lease_quiet_days", value=5)
+
+    def held_and_silent(self, author: str | None, days: int) -> dict[str, str]:
+        """An item in each space claimed by `author` (by session A when None), quiet `days`."""
+
+        found = {}
+        for key in ("ALPHA", "BETA"):
+            reference = service.create_work_item(self.conn, space=key, title="Held")["reference"]
+            if author is None:
+                with calls.bind(AGENT, "claim_work_item"):
+                    service.claim_work_item(self.conn, reference)
+            else:
+                service.claim_work_item(self.conn, reference, author=author)
+            found[key] = str(reference)
+        then = f"-{days} days"
+        self.conn.execute(
+            "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)", (then,)
+        )
+        self.conn.execute(
+            "UPDATE work_item_events SET created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)",
+            (then,),
+        )
+        self.conn.commit()
+        return found
+
+    def claims(self, found: Mapping[str, str]) -> dict[str, str | None]:
+        return {
+            key: service.get_work_item(self.conn, reference)["claim_ref"] or None
+            for key, reference in found.items()
+        }
+
+    def test_the_numbers_are_read_by_the_items_space(self) -> None:
+        self.conn.execute(
+            "INSERT INTO sessions(id, client, last_seen) VALUES(?, 'claude', ?)",
+            (AGENT.session_id, "2030-01-01T00:00:00Z"),
+        )
+        found = self.held_and_silent(None, days=4)
+        states = {
+            key: service.get_work_item(self.conn, reference)["claim"]["state"]
+            for key, reference in found.items()
+        }
+        self.assertEqual({"ALPHA": "live", "BETA": "stale"}, states)
+        held = self.claims(found)
+        self.assertEqual(1, service.expire_leases(self.conn))
+        self.assertEqual({"ALPHA": held["ALPHA"], "BETA": None}, self.claims(found))
+        self.assertIsNotNone(held["ALPHA"])
+        self.person(space="ALPHA", key="recent_close_minutes", value=60)
+        settings = participation.load(self.conn)
+        self.assertEqual(
+            (60, 30),
+            (
+                settings.number(self.space, "recent_close_minutes"),
+                settings.number(self.other, "recent_close_minutes"),
+            ),
+        )
+
+    def test_a_hold_no_session_proved_ages_by_its_items_space(self) -> None:
+        found = self.held_and_silent("worker-a", days=4)
+        self.assertEqual(1, service.expire_leases(self.conn))
+        self.assertEqual({"ALPHA": "worker-a", "BETA": None}, self.claims(found))
+
+
 class LabelTests(Harness):
     def label(self, read: dict, name: str) -> dict:
         return next(entry for entry in read["labels"] if entry["label"] == name)

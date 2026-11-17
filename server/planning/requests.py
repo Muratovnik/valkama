@@ -27,6 +27,7 @@ from . import (
     deferral,
     leases,
     model,
+    participation,
     questions,
     read_model,
     request_model,
@@ -95,7 +96,8 @@ def _expired(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> str | None:
     if addressee is not None and not leases.session_live(
         conn.execute(
             "SELECT status, ended_at, last_seen FROM sessions WHERE id=?", (addressee,)
-        ).fetchone()
+        ).fetchone(),
+        settings=participation.load(conn),
     ):
         return "session_gone"
     return None
@@ -692,6 +694,7 @@ def _addressees(conn: sqlite3.Connection, sessions: object) -> list[str]:
     own = (
         identity.session_id if identity is not None and identity.state == calls.CONFIRMED else None
     )
+    settings = participation.load(conn)
     asked: list[str] = []
     for value in sessions:
         session = model.text_field(value, "sessions", limit=128)
@@ -712,7 +715,7 @@ def _addressees(conn: sqlite3.Connection, sessions: object) -> list[str]:
                 f"session {session} is a subagent's; ask the session it works for,"
                 f" {row['parent_session_id']}"
             )
-        if not leases.session_live(row):
+        if not leases.session_live(row, settings=settings):
             raise model.PlanningError(
                 f"session {session} has ended or gone quiet past its lease, and would not answer"
             )

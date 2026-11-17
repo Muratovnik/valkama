@@ -39,7 +39,7 @@ from unittest import mock
 from server import housekeeping, http_surface, mcp_surface, store
 from server.hooks import ingest, normalize
 from server.ops import tray
-from server.planning import leases, requests, service, sweep, views
+from server.planning import leases, participation, requests, service, sweep, views
 
 PROTOCOL = {"io.modelcontextprotocol/protocolVersion": mcp_surface.MODERN_PROTOCOL}
 ONE = "019a3c2e-0001-7c11-9e0f-2f4b6d8a1c3e"
@@ -556,7 +556,12 @@ class HookedLeaseTestCase(LeaseTestCase):
 
     def abandoned(self, moment: datetime) -> list[str]:
         with self.clock(moment):
-            return [claim["reference"] for claim in views.stale_claims(self.conn, space="LSE")]
+            return [
+                claim["reference"]
+                for claim in views.stale_claims(
+                    self.conn, settings=participation.load(self.conn), space="LSE"
+                )
+            ]
 
 
 END = datetime(2026, 10, 1, 20, 2, 23, tzinfo=UTC)
@@ -931,7 +936,9 @@ class AbandonedClaimTests(LeaseTestCase):
     def abandoned(self) -> list[tuple[str, str | None]]:
         return [
             (claim["reference"], claim["claim_state"])
-            for claim in views.stale_claims(self.conn, space="LSE")
+            for claim in views.stale_claims(
+                self.conn, settings=participation.load(self.conn), space="LSE"
+            )
         ]
 
     def test_a_lease_is_judged_by_its_session_not_by_quiet(self) -> None:

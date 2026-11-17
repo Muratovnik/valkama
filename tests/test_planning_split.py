@@ -22,7 +22,7 @@ they did. The refusals that lead to converting name the word it passes with.
 
 from __future__ import annotations
 
-from server.planning import leases, service
+from server.planning import leases, participation, service
 from tests.test_planning_closing import (
     APPLY,
     AS_A,
@@ -313,7 +313,12 @@ class ConvertingTree(SplitTree):
         row = self.conn.execute(
             "SELECT * FROM work_items WHERE work_item_id = ?", (self.identity(reference),)
         ).fetchone()
-        found = leases.of_step(self.conn, row, holder) if holder else leases.lease(self.conn, row)
+        settings = participation.load(self.conn)
+        found = (
+            leases.of_step(self.conn, row, holder, settings=settings)
+            if holder
+            else leases.lease(self.conn, row, settings=settings)
+        )
         assert found is not None
         return found.state
 

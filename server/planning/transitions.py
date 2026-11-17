@@ -15,7 +15,16 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping
 
-from . import calls, deferral, item_tree, leases, model, person_events, questions
+from . import (
+    calls,
+    deferral,
+    item_tree,
+    leases,
+    model,
+    participation,
+    person_events,
+    questions,
+)
 
 Finding = tuple[str, str]
 
@@ -144,6 +153,7 @@ def findings(
     basis: object = None,
     held: bool | None = None,
     to_check: str = "",
+    settings: participation.Settings,
 ) -> tuple[list[Finding], list[str]]:
     """Hard refusals and soft warnings for moving `item` to `target` state.
 
@@ -151,7 +161,8 @@ def findings(
     whether a holder stands on the item after the write, for a write that takes
     the claim itself; left out, it is read from the item. `to_check` is what the
     owner is to check, which a move into review needs: it becomes the owner's
-    question there, and review asks what a close asks besides.
+    question there, and review asks what a close asks besides. `settings` is the
+    write's snapshot of the participation setting, which the lease is read by.
     """
 
     current = conn.execute(
@@ -203,7 +214,7 @@ def findings(
                     " checklist steps before starting it",
                 )
             )
-        warning = lease_warning(conn, item, reference)
+        warning = lease_warning(conn, item, reference, settings=settings)
         if warning:
             warnings.append(warning)
     if target["category"] == "review" and entering:
@@ -439,15 +450,22 @@ def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) ->
     )
 
 
-def lease_warning(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+def lease_warning(
+    conn: sqlite3.Connection,
+    item: sqlite3.Row,
+    reference: str,
+    *,
+    settings: participation.Settings,
+) -> str:
     """What to say when the executor the guard accepted may not be there.
 
     A claim still counts as an executor: refusing an unconfirmed one would
     refuse every claim made before identity existed and every client without
-    it. A claim the owner took in the browser needs no such remark.
+    it. A claim the owner took in the browser needs no such remark. `settings`
+    is the snapshot of the write that asks.
     """
 
-    lease = leases.lease(conn, item)
+    lease = leases.lease(conn, item, settings=settings)
     if lease is None or lease.source == calls.BROWSER:
         return ""
     if lease.state == leases.UNCONFIRMED:

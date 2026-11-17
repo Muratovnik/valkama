@@ -38,11 +38,13 @@ from unittest import mock
 from server import store
 from server.hooks import ingest, normalize
 from server.http_surface import EventFrames
-from server.planning import calls, leases, live_work, service, views
+from server.planning import calls, leases, live_work, participation, service, views
 from tests.planning_fixtures import bulk_items
 
 NOW = datetime(2030, 1, 1, 12, 0, 0, tzinfo=UTC)
 SPACE = "LW"
+#: The common quiet period of a lease on a store with no setting: three days.
+LEASE_PERIOD = timedelta(days=3)
 
 
 def ago(**delta: float) -> str:
@@ -478,13 +480,13 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
     (
         "silent exactly the lease period",
         None,
-        _silent_for(leases.QUIET_PERIOD, "user-prompt-submit"),
+        _silent_for(LEASE_PERIOD, "user-prompt-submit"),
         {"state": "quiet", "quiet_since": second(days=3)},
     ),
     (
         "silent the lease period and a second",
         None,
-        _silent_for(leases.QUIET_PERIOD + timedelta(seconds=1), "user-prompt-submit"),
+        _silent_for(LEASE_PERIOD + timedelta(seconds=1), "user-prompt-submit"),
         None,
     ),
     ("working beside quiet", ["step"], _two_sessions(True, "user-prompt-submit"), WORKING),
@@ -570,16 +572,37 @@ class RuleTests(LiveWorkCase):
         statements: list[str] = []
         self.conn.set_trace_callback(statements.append)
         self.addCleanup(self.conn.set_trace_callback, None)
-        found = live_work.live_work(self.conn, [service.get_work_item(self.conn, reference)])
+        found = live_work.live_work(
+            self.conn,
+            [service.get_work_item(self.conn, reference)],
+            settings=participation.load(self.conn),
+        )
         self.assertEqual(
             {"state": "quiet", "quiet_since": second(days=2)}, found[self.identity(reference)]
         )
         self.assertFalse(any("session_start" in statement for statement in statements))
 
     def test_no_items_and_no_space_read_an_empty_map(self) -> None:
-        self.assertEqual({}, live_work.live_work(self.conn, []))
+        self.assertEqual(
+            {}, live_work.live_work(self.conn, [], settings=participation.load(self.conn))
+        )
         self.conn.execute("DELETE FROM planning_spaces")
         self.assertEqual({}, views.planning_payload(self.conn)["live_work"])
+
+    def test_a_session_is_live_within_the_common_quiet_period_not_its_spaces(self) -> None:
+        reference = self.item()
+        _silent_for(timedelta(days=4), "user-prompt-submit")(self, reference)
+        self.assertIsNone(self.state_of(reference), "past the three days of a store with none")
+        # A session works in several spaces: its space's own period is not its own.
+        space = str(service.get_planning_space(self.conn, SPACE)["planning_space_id"])
+        participation.write_value(self.conn, space, "lease_quiet_days", 5)
+        self.assertIsNone(self.state_of(reference))
+        participation.write_value(self.conn, None, "lease_quiet_days", 5)
+        self.assertEqual(
+            {"state": "quiet", "quiet_since": second(days=4)},
+            self.state_of(reference),
+            "within the common five days",
+        )
 
 
 class SubagentWorkTests(LiveWorkCase):
@@ -1038,18 +1061,23 @@ class StoreAgeTests(unittest.TestCase):
         for claim_column, parent_column in ((False, False), (False, True), (True, False)):
             with self.subTest(claim=claim_column, parent=parent_column):
                 conn = self.old_store(claim_column=claim_column, parent_column=parent_column)
-                self.assertEqual({}, live_work.live_work(conn, items))
+                self.assertEqual(
+                    {}, live_work.live_work(conn, items, settings=participation.load(conn))
+                )
 
     def test_the_same_store_with_both_columns_reads_its_attempt(self) -> None:
         conn = self.old_store(claim_column=True, parent_column=True)
         items = [{"work_item_id": "w", "checklist": []}]
-        self.assertEqual({"w": {"state": "working"}}, live_work.live_work(conn, items))
+        self.assertEqual(
+            {"w": {"state": "working"}},
+            live_work.live_work(conn, items, settings=participation.load(conn)),
+        )
 
     def test_a_store_without_attempts_reads_empty(self) -> None:
         conn = self.old_store(claim_column=True, parent_column=True)
         conn.execute("DROP TABLE executions")
         items = [{"work_item_id": "w", "checklist": []}]
-        self.assertEqual({}, live_work.live_work(conn, items))
+        self.assertEqual({}, live_work.live_work(conn, items, settings=participation.load(conn)))
 
 
 class StreamTests(LiveWorkCase):
@@ -1091,10 +1119,12 @@ class CostTests(LiveWorkCase):
         statements: list[str] = []
         original = live_work.live_work
 
-        def measured(conn: sqlite3.Connection, items: object) -> dict[str, dict]:
+        def measured(
+            conn: sqlite3.Connection, items: object, *, settings: participation.Settings
+        ) -> dict[str, dict]:
             inside[0] = True
             try:
-                return original(conn, items)  # type: ignore[arg-type]
+                return original(conn, items, settings=settings)  # type: ignore[arg-type]
             finally:
                 inside[0] = False
 
