@@ -220,6 +220,7 @@ resolves its discussion, records its summary and moves its state:
 | `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | asks as `create_work_item_request` does |
 | `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
 | `transition` | `{"state": "completed", "reason": "…", "force": false}` | moves the state |
+| `move_out` | `{"reason": "…", "force": false}`, not with `transition` | takes the item out of its goal or stage, to triage |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
 the item already had and a `checklist` in the same call kept; send a new step
@@ -397,6 +398,8 @@ owner is open on it, `force` or not; cancelling is not.
 | `cancel_list` | Read the list, then send the same transition with `cancels` set to `list_token`. |
 | `owner_only` | The owner answers this question in Valkama: leave it. |
 | `[purpose]` | A question with a purpose (review, confirm) takes one of its two answers, and its answer is not changed or declined. |
+| `[move_out]` | Give the reason the item leaves its goal or stage; an item under none, or closed, has nothing to move out of. |
+| `[parent]` | Clear a parent with `move_out`, not an edit; accept the goal or stage first, or move the item out, before accepted work goes under it. |
 | `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
 | `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |

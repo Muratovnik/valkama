@@ -86,6 +86,17 @@ began, Valkama asks the owner, once in that wait. Only the owner answers:
 session that takes work in the space, which hears it as words left for it. A
 session that confirms it meanwhile ends the question.
 
+Work that does not belong to its goal or stage leaves it with the reason
+(`move_out`): it goes to the top level and to triage, keeps that it started,
+and loses its claims and its basis; the goal or stage records the reason, and a
+confirmer reads it. A goal or stage moved out takes its work along and becomes
+a goal. An edit does not clear a parent (`[parent]`), so the reason is never
+skipped. Moving an item under another goal or stage is an edit of `parent`, and
+the one it left records `moved under` it. Accepted work does not move under a
+goal or stage that is not accepted (`[parent]`): accept that one first, or move
+the item out. Work in triage moved under goals and stages all accepted is
+accepted with them, as if filed there.
+
 ## Sources
 
 Read on 2026-11-01.

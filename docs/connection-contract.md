@@ -2188,6 +2188,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?, addressees?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
 | `transition` | `{state, reason?, force?, acceptance?, to_check?, cancels?}` | `/transition` |
+| `move_out` | `{reason, force?}`; not with `transition` | `/move-out`, see [Moving work out of a goal or stage](#moving-work-out-of-a-goal-or-stage) |
 
 Each path in the last column is under `POST /api/planning/work-item`.
 
@@ -2233,8 +2234,12 @@ refused; both are `invalid_request` before anything is written.
 It belongs to the call: `update` takes none of its own.
 
 `update` edits the item: a field that is absent or
-null is left alone, `parent: ""` clears the parent, and an edit writes no
-history event. It is applied after the claim.
+null is left alone, and an edit writes no history event. It is applied after
+the claim. `parent` moves the item under another goal or stage; `parent: ""`,
+which cleared the parent, is refused with `[parent]`, `invalid_request`, naming
+`move_out`: an item leaves its goal or stage only with the reason that group
+records. `transition` and `move_out` each change the state, and a call that
+names both is refused with `invalid_request` before anything is written.
 
 `comments` writes up to 100 comments in the order sent, each as `comment`
 writes one. The older `comment` group, one comment, still
@@ -3058,6 +3063,50 @@ A cancel of a task, or of a goal or stage with nothing open under it, is one cal
 Any close, completed or cancelled, adds `freed`: the open items it blocked that
 nothing open blocks any more, by reference. An open item still linked `blocks` to a
 cancelled one names it in `cancelled_blockers`.
+
+### Moving work out of a goal or stage
+
+An item leaves its goal or stage with a reason, by the `move_out` group of
+`apply_work_item_changes` or `POST /api/planning/work-item/move-out` with
+`{id, reason, force?, expected_revision?, author?}`. In one write:
+
+- it goes to the top level, and to the first `triage` state its workflow reaches
+  from where it stands, or stays in the `triage` state it is in; its
+  `transitioned` detail reads `triage: moved out of MAIN-3: <reason>`;
+- it keeps `started_at`, its claims and step claims end (`released`), and its
+  basis goes, as every move to triage takes it;
+- a goal or stage takes the work under it along and becomes a goal; an accepted
+  one goes to triage too, though no move puts one there, and the work under it
+  stays as it was, which the queue does not give while the goal stands in triage;
+- the goal or stage it left records `child_left` with the detail `MAIN-12:
+  <reason>`, which its [`confirmation` part](#completing-a-goal-or-stage) reads,
+  and comes to await confirmation when nothing under it is open any more.
+
+The answer adds `moved_out: {from, reason}`, `from` the reference of the goal or
+stage it left; over MCP the acknowledgement carries it, and `applied.move_out`
+says `state`, the key of the triage state, and `released`. It is refused with
+`invalid_request`, nothing written, without a `reason` (`[move_out]`), for an item
+under no goal or stage or a closed one (`[move_out]`), for one whose workflow
+reaches no `triage` state (`[move_out]`), and for one another session holds:
+`MAIN-12 is held by …; pass force to move it out anyway`. `force` carries the
+last through and records `overridden` with `claim`.
+
+**Moving under another goal or stage** is the edit `update {parent}`. The goal
+or stage it left records `child_left` with the detail `MAIN-12: moved under
+MAIN-7`, and both come to await confirmation, or stop, in that write. The new
+parent meets the rules of a creation's, and two more:
+
+- an accepted open item, one with a basis and in neither `triage` nor
+  `deferred`, is refused under a goal or stage that, or one over which, stands in
+  `triage` or `deferred`: `[parent] an accepted item does not move under a goal or
+  stage that is not accepted: accept it first, or move the item out`;
+- an item in `triage` moved under goals and stages all accepted and open is
+  accepted with them, as if filed there: basis `inherited`, a task in the first
+  `ready` state its workflow reaches, a goal or stage in the service state with
+  the work in triage under it, and the reason `moved under MAIN-7`. An item put
+  off stays put off.
+
+A parent in another space is refused as before.
 
 ### Review asks the owner
 
