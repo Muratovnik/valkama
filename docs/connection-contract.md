@@ -3414,7 +3414,7 @@ takes every word waiting on the goals and stages over the task, in the claim's
 own transaction: a refused claim takes nothing. The MCP answer of the claim --
 `claim_work_item`, `claim_ready_work_item`, `claim_work_item_checklist_item`, and
 `apply_work_item_changes` or `create_work_item` with `claim` -- then carries
-`waiting`, one entry per goal or stage:
+`waiting`, one entry per goal or stage that still holds words for the session:
 
 ```json
 "waiting": [{"reference": "MAIN-10", "title": "Release 3.0",
@@ -3428,9 +3428,11 @@ claim, as the entries of `from_person`, and such a record of Valkama's with
 earlier ones when there are more, and each text whole up to 1500 characters, a
 longer one cut there with `cut: true`. A whole text has no `cut`. The words are
 taken once: the next claim under the same goal gets nothing until a person acts
-there again with nobody working. They never lapse, and they go with their item.
-The key is absent when nothing waited, and the HTTP answer of a claim never has
-it: the interface takes no work for an agent.
+there again with nobody working. A session also hears each act once: a goal or
+stage whose acts it already got through another of its open words is no entry,
+though both stay as the record. They never lapse, and they go with their item.
+The key is absent when nothing waited for the session, and the HTTP answer of a
+claim never has it: the interface takes no work for an agent.
 
 ### A close over what a person did
 
