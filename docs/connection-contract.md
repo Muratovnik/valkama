@@ -2820,6 +2820,7 @@ A pass runs its steps in order, each in a transaction of its own:
 | `leases` | releases every lapsed claim and claimed step, as [above](#who-holds-a-claim-or-a-step), and marks the lapsed holder's ticks |
 | `waiting` | leaves [words waiting](#words-that-wait-for-a-session) on a goal or stage that a session stopped working on while its claim, step or subscription still stands -- it ended, or went quiet past the lease -- once no live session works there; the words are what a person did there after that session's last call, and they wait under a call of `valkama` with the tool `waiting-recovery` |
 | `subscriptions` | removes every [subscription](#subscriptions) and mute whose session lapsed |
+| `commits` | takes the commit records no client hook took within an hour, each decided by its session, and deletes those that change nothing, as the [hook contract](hook-contract.md#taking-the-records) describes; a record it applied is deleted at the next pass |
 
 Every step keeps the same contract:
 

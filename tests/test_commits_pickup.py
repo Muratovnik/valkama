@@ -90,6 +90,15 @@ class PickupCase(unittest.TestCase):
         finally:
             conn.close()
 
+    def aged(self, path: Path, seconds: float) -> Path:
+        """The same record, named as if it were written `seconds` ago."""
+
+        key, _, rest = path.name.partition("--")
+        at, _, tail = rest.partition("-")
+        older = path.with_name(f"{key}--{int(at) - int(seconds * 1e9)}-{tail}")
+        path.rename(older)
+        return older
+
     def claude(self, session: str = CLAUDE, **extra: object) -> tuple:
         return self.hook(
             "claude", **{"session_id": session, "tool_name": "Bash", "duration_ms": 60_000, **extra}
@@ -139,15 +148,6 @@ class FirstSliceTests(PickupCase):
 
 
 class ClaudeWindowTests(PickupCase):
-    def aged(self, path: Path, seconds: float) -> Path:
-        """The same record, named as if it were written `seconds` ago."""
-
-        key, _, rest = path.name.partition("--")
-        at, _, tail = rest.partition("-")
-        older = path.with_name(f"{key}--{int(at) - int(seconds * 1e9)}-{tail}")
-        path.rename(older)
-        return older
-
     def test_the_window_is_the_call_s_duration_and_its_slack(self) -> None:
         [record] = self.committed(CLAUDE_CODE_SESSION_ID=CLAUDE)
         record = self.aged(record, 5)
@@ -159,10 +159,10 @@ class ClaudeWindowTests(PickupCase):
 
     def test_without_a_duration_the_window_is_ten_minutes(self) -> None:
         [record] = self.committed(CLAUDE_CODE_SESSION_ID=CLAUDE)
-        record = self.aged(record, 11 * 60)
+        record = self.aged(record, 10.5 * 60)
         self.hook("claude", session_id=CLAUDE, tool_name="Bash")
         self.assertEqual([], self.rows())
-        self.assertTrue(record.exists(), "it waits for the leftovers")
+        self.assertTrue(record.exists(), "past the window, and not yet a leftover")
         self.aged(record, -2 * 60)
         self.hook("claude", session_id=CLAUDE, tool_name="PowerShell")
         self.assertEqual(1, len(self.rows()))
@@ -557,6 +557,44 @@ class RecentCloseTests(RuleCase):
         self.claim(now)
         _commit, line = self.commit()
         self.assertTrue(line.endswith(f"to {now}."), line)
+
+
+class LeftoverTests(RuleCase):
+    def test_leftovers_go_to_the_session(self) -> None:
+        """A record no window took is any next hook's of its session after
+        eleven minutes, and its session decides, whichever agent's call that hook is."""
+
+        own, agents = self.task("Coordinator's", PROJECT), self.task("Agent's", PROJECT)
+        self.claim(own)
+        self.claim(agents, SUBAGENT)
+        [record] = self.committed(CLAUDE_CODE_SESSION_ID=CLAUDE)
+        record = self.aged(record, 5 * 60)
+        self.hook("claude", session_id=CLAUDE, tool_name="Read", agent_id=SUBAGENT)
+        self.assertEqual([], self.rows(), "five minutes old: still its own call's to take")
+        record = self.aged(record, 7 * 60)
+        stdout, stderr = self.hook("claude", session_id=CLAUDE, tool_name="Read", agent_id=SUBAGENT)
+        self.assertEqual("", stderr)
+        commit = self.place.head()
+        self.assertEqual(
+            f"Valkama attached your commit {self.short(commit)} to {own}.",
+            context(stdout).split("\n\n", 1)[0],
+        )
+        self.assertEqual([(own, commit, "server", "valkama")], self.attached())
+        self.assertEqual([None], [row[4] for row in self.rows()], "no agent is known")
+        self.assertFalse(record.exists(), "deleted once the hook's transaction committed")
+
+    def test_a_codex_leftover_is_any_call_s_of_its_session(self) -> None:
+        own = self.task("Coordinator's", PROJECT)
+        self.claim(own)
+        [record] = self.committed(
+            CODEX_SESSION_ID=CLAUDE, CODEX_THREAD_ID=SUBAGENT, CODEX_TOOL_CALL_ID=CALL
+        )
+        self.hook("codex", session_id=CLAUDE, tool_use_id="call_later")
+        self.assertEqual([], self.rows())
+        self.aged(record, 12 * 60)
+        self.hook("codex", session_id=CLAUDE, tool_use_id="call_later")
+        self.assertEqual([(own, self.place.head(), "server", "valkama")], self.attached())
+        self.assertEqual([None], [row[4] for row in self.rows()], "not the thread's agent")
 
 
 class AnswerTests(RuleCase):

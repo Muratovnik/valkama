@@ -79,6 +79,9 @@ class LeaseTestCase(unittest.TestCase):
                 "VALKAMA_DB": str(self.root / "valkama.sqlite3"),
                 "HOME": str(self.root),
                 "USERPROFILE": str(self.root),
+                # The registry too: a pass of the sweep takes the commit records waiting
+                # in each registered project's Git directory into the store it runs on.
+                "LOCALAPPDATA": str(self.root / "local"),
             },
         )
         environment.start()
@@ -876,6 +879,7 @@ class StartUpTests(unittest.TestCase):
                 f"planning sweep leases: {later}",
                 f"planning sweep waiting: {later}",
                 f"planning sweep subscriptions: {later}",
+                f"planning sweep commits: {later}",
                 "quota retention: no time left; it runs at the next start",
             ],
             report.failures,
