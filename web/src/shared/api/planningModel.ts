@@ -66,7 +66,14 @@ export const WORK_ITEM_KINDS = ['bug', 'goal', 'improvement', 'stage', 'task'] a
  */
 export const CONTAINER_STATES = ['not_started', 'in_progress', 'awaiting_confirmation'] as const
 /** Why accepted work was accepted. */
-const ACCEPTANCE_BASES = ['owner', 'assignment', 'inherited', 'label_rule', 'migrated'] as const
+const ACCEPTANCE_BASES = [
+  'owner',
+  'assignment',
+  'inherited',
+  'label_rule',
+  'agent',
+  'migrated',
+] as const
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 export const LINK_KINDS = ['blocks', 'discovered-from', 'duplicates', 'relates-to'] as const
 const REF_KINDS = ['commit', 'memory', 'session', 'url'] as const

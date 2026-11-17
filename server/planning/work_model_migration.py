@@ -19,7 +19,8 @@ otherwise cascade into them:
 - **history** renames those keys in the history, only where a key stands.
 - **items** rebuilds `work_items`: an epic, or any item with children, becomes a
   container; accepted work gets the basis `migrated`; a task gets the time its work
-  started. The events table takes the new actions. `sessions` is rebuilt to the
+  started. The fresh declaration it takes holds every basis, `agent` among them,
+  though no item gets it here. The events table takes the new actions. `sessions` is rebuilt to the
   fresh declaration when the Board cutover left it another: that cutover renamed
   `card_id` to `work_item_id` and kept its type `INTEGER`.
 - **containers** clears every claim on a container and puts each accepted open one in the
@@ -80,6 +81,9 @@ otherwise cascade into them:
   its answer acted on by the agent. Its postcondition of the same name holds the table
   empty, no request naming an action or carrying a purpose of the owner's
   participation, and no `action_dropped` in the history.
+
+The postcondition **agent-basis** holds that no item stands accepted on an agent's own
+decision (`agent`): before 3.0 no setting let an agent decide, so nothing was.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -2103,6 +2107,27 @@ def _pending_none(conn: sqlite3.Connection, context: Context) -> Mapping[str, An
     return {"actions": actions, "requests": len(named) + len(purposed), "dropped": dropped}
 
 
+# -- agent-basis: no item accepted on an agent's own decision ------------------------
+
+#: The postcondition that holds no item to the basis of an agent's own decision.
+AGENT_BASIS = "agent-basis"
+
+
+def _agent_basis_none(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """No item is accepted on the basis `agent`: no setting of 2.9 let an agent decide."""
+
+    del context
+    references = _references(conn)
+    found = [
+        f"{references[str(row[0])]} has the basis agent"
+        for row in conn.execute(
+            "SELECT work_item_id FROM work_items WHERE acceptance = 'agent' ORDER BY number"
+        )
+    ]
+    _unmet(found, "an agent's own decision")
+    return {"accepted_by_agent": len(found)}
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -3056,6 +3081,7 @@ POSTCONDITIONS = (
     ),
     Postcondition(AGENT_DECISIONS, "no decision marked", _decisions_empty),
     Postcondition(PENDING_ACTIONS, "no request waits on an action", _pending_none),
+    Postcondition(AGENT_BASIS, "no item accepted on an agent's own decision", _agent_basis_none),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 

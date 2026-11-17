@@ -73,7 +73,8 @@ class VocabularyTests(unittest.TestCase):
 
     def test_the_acceptance_bases_and_the_events_of_schema_18(self) -> None:
         self.assertEqual(
-            ("owner", "assignment", "inherited", "label_rule", "migrated"), model.ACCEPTANCE_BASES
+            ("owner", "assignment", "inherited", "label_rule", "agent", "migrated"),
+            model.ACCEPTANCE_BASES,
         )
         self.assertLessEqual({"accepted", "opened", "child_left"}, set(model.EVENT_ACTIONS))
         self.assertEqual(("created", "transitioned", "opened"), model.STATE_ENTRY_ACTIONS)

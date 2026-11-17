@@ -312,7 +312,7 @@ model; the card's `state` has no `is_terminal`:
 | `state` | `key`, `name`, `category` and `is_terminal` of its workflow state; `null` exactly for an accepted open goal or stage |
 | `open` | whether its work is still open: false in a `completed` or `cancelled` state. A reader decides openness by it, since an accepted open goal or stage has no `state` to read `is_terminal` from |
 | `container_state` | for an accepted open goal or stage, `not_started`, `in_progress` or `awaiting_confirmation`; `null` for every other item, a goal or stage in `triage`, `deferred`, `completed` or `cancelled` included, whose `state` says where it stands |
-| `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule` or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
+| `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule`, `agent` (an agent's own decision where the owner's participation setting leaves it to the agent) or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
 | `cancelled_blockers` | the cancelled items still linked `blocks` to it, by reference, which `waits_for` no longer names: the work it waited for will not be done. Only on open work and only when there is one; it lasts while the link stands |
