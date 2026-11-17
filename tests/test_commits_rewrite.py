@@ -90,6 +90,17 @@ class RewriteCase(RuleCase):
     def moved(self, old: str, new: str) -> str:
         return f"Valkama moved the links of {PROJECT} {old[:9]} to the rewritten commit {new[:9]}."
 
+    def rewrites(self) -> list[tuple[str, str, str]]:
+        """Each `commit_rewritten` event: its card, its detail and who signed it."""
+
+        return [
+            (self.reference(str(row[0])), str(row[1]), str(row[2]))
+            for row in self.conn.execute(
+                "SELECT work_item_id, detail, author FROM work_item_events"
+                " WHERE action = 'commit_rewritten' ORDER BY id"
+            )
+        ]
+
 
 class AmendTests(RewriteCase):
     """An amend replaces the commit on its card, whichever call reports which."""
@@ -151,6 +162,33 @@ class AmendTests(RewriteCase):
         self.taken()
         self.assertEqual({(t1, new), (t2, new)}, {row[:2] for row in self.attached()})
         self.assertFalse(post_commit.exists())
+        self.assertEqual(
+            [(t1, f"{PROJECT} {old} -> {new}", "valkama")],
+            self.rewrites(),
+            "the card whose attachment the rewrite carried over; T2 had the new commit already",
+        )
+
+    def test_a_rewrite_leaves_an_event_on_each_card_it_moved(self) -> None:
+        t1, t2, t3 = (self.task(title, PROJECT) for title in ("Held", "Other", "Also"))
+        self.claim(t1)
+        old = self.made("one")
+        self.taken()
+        self.attach(t3, old)
+        self.attach(t2, self.made("two", session=False))
+        self.git("reset", "-q", "--hard", old)
+        new = self.amended()
+        self.assertEqual(self.moved(old, new), self.taken(), "the event is no news")
+        self.assertEqual(
+            [
+                (t1, f"{PROJECT} {old} -> {new}", "valkama"),
+                (t3, f"{PROJECT} {old} -> {new}", "valkama"),
+            ],
+            sorted(self.rewrites()),
+        )
+        self.assertEqual([], [event for event in self.rewrites() if event[0] == t2])
+        stdout, _ = self.claude(**{"duration_ms": 600_000})
+        self.assertEqual(b"", stdout, "taken again, the record moves nothing")
+        self.assertEqual(2, len(self.rewrites()), "one per card and pair")
 
     def test_an_amend_of_an_unknown_commit_is_the_session_s_commit(self) -> None:
         t1 = self.task("Held", PROJECT)
@@ -482,8 +520,9 @@ class ConcurrentPickupTests(RewriteCase):
         for thread in threads:
             thread.join()
         self.assertEqual(2, len(answers))
-        # Two rows, one attachment, one event; whichever process came second wrote nothing.
-        self.assertEqual((before[0] + 2, before[1] + 1, before[2] + 1), self.counts())
+        # Two rows, one attachment, and its two events, attached and rewritten; whichever
+        # process came second wrote nothing.
+        self.assertEqual((before[0] + 2, before[1] + 1, before[2] + 2), self.counts())
         self.assertEqual(1, self.decisions())
         self.assertEqual(1, sum(1 for answer in answers if answer), "one of them answers")
         self.assertEqual([], self.place.everywhere())
@@ -527,7 +566,7 @@ class ConcurrentPickupTests(RewriteCase):
         for thread in threads:
             thread.join()
         self.assertEqual([], failures)
-        self.assertEqual((before[0] + 2, before[1] + 1, before[2] + 1), self.counts())
+        self.assertEqual((before[0] + 2, before[1] + 1, before[2] + 2), self.counts())
         first, second = sorted(results, key=lambda taken: len(taken.worked_off))
         self.assertEqual((3, []), (len(first.applied), first.worked_off))
         self.assertEqual(([], 3), (second.applied, len(second.worked_off)), "the second: nothing")

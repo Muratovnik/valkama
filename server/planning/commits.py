@@ -459,7 +459,10 @@ def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str
     The new commit gets a row with the old one's session and agent unless it has
     one, the old one's attachments move to it (several old ones of a squash unite
     there), and the old one is marked `rewritten_to` it, once: a mark already set
-    stays, so taking the record again changes nothing. The new commit is always
+    stays, so taking the record again changes nothing. Each card whose attachment
+    moved or united gets one `commit_rewritten` event, signed `valkama`, with
+    `<project_id> <old> -> <new>`: a card's commits do not change without a trace
+    in its history. The new commit is always
     live: a mark it carries goes, so a rewrite back, which makes an earlier commit
     again, returns that commit to its cards and hides the one it replaced. A pair
     of one hash changes nothing. A card's projects stay as they are, the
@@ -487,6 +490,13 @@ def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str
             new_id = int(new["commit_id"])
         if new_id is None or new_id == int(old["commit_id"]):
             continue
+        cards = [
+            str(row[0])
+            for row in conn.execute(
+                "SELECT work_item_id FROM work_item_commits WHERE commit_id = ?",
+                (old["commit_id"],),
+            )
+        ]
         moved = conn.execute(
             "UPDATE OR IGNORE work_item_commits SET commit_id = ? WHERE commit_id = ?",
             (new_id, old["commit_id"]),
@@ -494,6 +504,11 @@ def _rewrite(conn: sqlite3.Connection, record: dict, hook: Hook, lines: list[str
         moved += conn.execute(
             "DELETE FROM work_item_commits WHERE commit_id = ?", (old["commit_id"],)
         ).rowcount
+        rewrite = {"repository": project_id, "hash": pair["from"], "to": pair["to"]}
+        for card in cards:
+            _commit_event(
+                conn, card, "commit_rewritten", rewrite, AUTHOR, calls.call_id(conn, card)
+            )
         if old["rewritten_to"] is None:
             conn.execute(
                 "UPDATE commits SET rewritten_to = ? WHERE commit_id = ?",
@@ -1313,14 +1328,14 @@ def _commit_event(
     author: str,
     call: int | None,
 ) -> None:
+    """One history event about a commit: `<project_id> <hash>`, or for a rewrite
+    `<project_id> <old> -> <new>` when the pair names the new commit in `to`."""
+
+    detail = f"{pair['repository']} {pair['hash']}"
+    if "to" in pair:
+        detail += f" -> {pair['to']}"
     conn.execute(
         "INSERT INTO work_item_events(work_item_id, action, detail, author, call_id)"
         " VALUES (?,?,?,?,?)",
-        (
-            identity,
-            model.event_action(action),
-            f"{pair['repository']} {pair['hash']}",
-            author,
-            call,
-        ),
+        (identity, model.event_action(action), detail, author, call),
     )
