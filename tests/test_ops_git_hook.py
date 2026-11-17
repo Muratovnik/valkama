@@ -515,5 +515,82 @@ class LauncherInstallTests(GitHookCase):
         self.assertEqual(before, self.global_file.read_bytes())
 
 
+class LauncherUninstallTests(GitHookCase):
+    def setUp(self) -> None:
+        super().setUp()
+        # Every test removes the launcher the class installed, so each one installs it again.
+        if launcher.status(self.launcher_directory)["state"] != "installed":
+            launcher.install(
+                self.launcher_directory,
+                python=sys.executable,
+                checkout=self.checkout,
+                releases=self.releases,
+                effects=NO_PORT,
+            )
+
+    def launcher_uninstall(self) -> tuple[int, dict]:
+        """`launcher uninstall` through the command line, reading no process on the port."""
+
+        real = launcher.uninstall
+
+        def uninstall(*arguments, **options):
+            return real(*arguments, effects=NO_PORT, **options)
+
+        with mock.patch.object(cli.launcher, "uninstall", side_effect=uninstall):
+            code, out, _ = self.cli(
+                "launcher", "uninstall", "--directory", str(self.launcher_directory)
+            )
+        return code, json.loads(out)
+
+    def test_launcher_uninstall_takes_the_hooks_out_and_then_the_launcher(self) -> None:
+        git_hook.install(str(self.launcher_directory))
+
+        code, answer = self.launcher_uninstall()
+
+        self.assertEqual(0, code)
+        self.assertEqual("missing", answer["state"])
+        self.assertNotIn("git_hook_error", answer)
+        self.assertTrue(answer["git_hook"]["changed"])
+        self.assertEqual(sorted(hook.NAMES.values()), sorted(answer["git_hook"]["removed"]))
+        for name in hook.NAMES.values():
+            self.assertEqual([], self.values(f"hook.{name}.command"))
+        self.assertEqual(FOREIGN, self.global_file.read_bytes())
+        self.assertEqual("missing", launcher.status(self.launcher_directory)["state"])
+
+    def test_a_failed_hook_removal_is_named_and_the_launcher_is_still_removed(self) -> None:
+        git_hook.install(str(self.launcher_directory))
+        expected = self.expected()  # read while the launcher is still there
+        before = self.global_file.read_bytes()
+        real = git_hook._run
+
+        def refused(argv: list[str]) -> processes.TextResult:
+            if "--remove-section" in argv:
+                return processes.TextResult(255, "", "error: could not lock config file")
+            return real(argv)
+
+        with mock.patch.object(git_hook, "_run", side_effect=refused):
+            code, answer = self.launcher_uninstall()
+
+        self.assertEqual(0, code)
+        self.assertEqual("missing", answer["state"])
+        self.assertNotIn("git_hook", answer)
+        self.assertIn("could not lock config file", answer["git_hook_error"])
+        self.assertEqual("missing", launcher.status(self.launcher_directory)["state"])
+        self.assertEqual(before, self.global_file.read_bytes())
+        self.assertEqual([expected["post-commit"]], self.values("hook.valkama-commit.command"))
+
+    def test_without_a_hook_launcher_uninstall_removes_none(self) -> None:
+        code, answer = self.launcher_uninstall()
+
+        self.assertEqual(0, code)
+        self.assertEqual("missing", answer["state"])
+        self.assertNotIn("git_hook_error", answer)
+        self.assertEqual(
+            {"removed": [], "changed": False},
+            {key: answer["git_hook"][key] for key in ("removed", "changed")},
+        )
+        self.assertEqual(FOREIGN, self.global_file.read_bytes())
+
+
 if __name__ == "__main__":
     unittest.main()

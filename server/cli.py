@@ -368,7 +368,18 @@ def _autostart_main(options: argparse.Namespace) -> dict[str, object]:
     return launcher.autostart_status(options.directory)
 
 
+def _uninstalled_git_hook() -> dict[str, object]:
+    """`git-hook uninstall`'s answer for `launcher uninstall`, or the failure named in it."""
+    try:
+        return {"git_hook": git_hook.uninstall()}
+    except git_hook.GitHookError as error:
+        return {"git_hook_error": str(error)}
+
+
 def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace) -> None:
+    # The hooks run the launcher's shim, so they are taken out before it. A failure
+    # is said in the answer and does not keep the launcher from being removed.
+    uninstalled_hook = _uninstalled_git_hook() if options.launcher_action == "uninstall" else {}
     try:
         if options.launcher_action == "autostart":
             result = _autostart_main(options)
@@ -404,7 +415,7 @@ def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace)
             result = {**result, "git_hook": git_hook.refresh(options.directory)}
         except git_hook.GitHookError as error:
             result = {**result, "git_hook_error": str(error)}
-    launcher_queries.print_document(result)
+    launcher_queries.print_document({**result, **uninstalled_hook})
 
 
 def _skill_parser(commands: argparse._SubParsersAction) -> None:
