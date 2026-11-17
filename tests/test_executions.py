@@ -176,6 +176,11 @@ class LaunchLifecycleTests(LaunchHarness):
         self.assertEqual("ready", detail["state"]["key"])
         self.assertEqual("", detail["claim_ref"])
         self.assertIn("launch_failed", detail["comments"][-1]["body"])
+        self.assertNotIn(
+            "active",
+            [row[0] for row in self.conn.execute("SELECT status FROM sessions")],
+            "the session its claim opened never ran, so it is not left open",
+        )
 
     def test_stopping_records_the_stop_on_the_item_and_the_session(self) -> None:
         reference = self.item("stop me")
@@ -220,19 +225,104 @@ class LaunchLifecycleTests(LaunchHarness):
         self.processes[0].code = 0
         executions.reap_launches(self.conn)
         self.conn.commit()
+        # The launch's claim is a lease of the session the launch started: held through
+        # the grace an ended session has to come back, released by the sweep after it.
+        self.assert_lapses_after_the_grace(reference)
+        detail = planning.get_work_item(self.conn, reference)
+        self.assertEqual("", detail["claim_ref"])
+        self.assertEqual(started, detail["started_at"], "it stays started")
+        self.assertIn(
+            ("released", "session-ended: claude:executor"),
+            [(event["action"], event["detail"]) for event in detail["events"]],
+        )
+
+    def sessions(self) -> list[tuple[str, str]]:
+        """Every session row, by its id and status."""
+
+        return [(row[0], row[1]) for row in self.conn.execute("SELECT id, status FROM sessions")]
+
+    def assert_lapses_after_the_grace(self, reference: str) -> None:
+        """The sweep holds the item at work until `ENDED_GRACE` after its session ended."""
+
         ended = leases.utc_now()
-        # The launch's claim is its own, proved by no session: it lapses with the item's
-        # silence, not with the session the launch ran.
         for after, state in (
-            (leases.ENDED_GRACE + timedelta(minutes=1), "dev"),
-            (leases.QUIET_PERIOD + timedelta(minutes=1), "ready"),
+            (leases.ENDED_GRACE - timedelta(minutes=1), "dev"),
+            (leases.ENDED_GRACE + timedelta(minutes=1), "ready"),
         ):
             with mock.patch.object(leases, "utc_now", return_value=ended + after):
                 sweep.run_pass(self.conn)
-            detail = planning.get_work_item(self.conn, reference)
-            self.assertEqual(state, detail["state"]["key"], after)
-        self.assertEqual("", detail["claim_ref"])
-        self.assertEqual(started, detail["started_at"], "it stays started")
+            self.assertEqual(
+                state, planning.get_work_item(self.conn, reference)["state"]["key"], after
+            )
+
+    def test_a_launch_claims_as_a_lease_of_the_session_it_starts(self) -> None:
+        reference = self.item("lease me")
+        started = executions.launch_work_item(self.conn, self.packet(reference))
+        session = started["client_session_id"]
+        claim = planning.get_work_item(self.conn, reference)["claim"]
+        # Proved by the launch, which assigned the session, and recorded as the launch's.
+        self.assertEqual(
+            ("claude:executor", "live", session, "launch"),
+            (claim["holder"], claim["state"], claim["session_id"], claim["source"]),
+        )
+        self.assertEqual([(session, "active")], self.sessions())
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        # One session, opened and ended under the one id the claim names.
+        self.assertEqual([(session, "ended")], self.sessions())
+        self.assertEqual("stale", planning.get_work_item(self.conn, reference)["claim"]["state"])
+
+    def test_the_queue_hands_out_a_task_whose_launch_ended_past_its_grace(self) -> None:
+        reference = self.item("hand me out")
+        executions.launch_work_item(self.conn, self.packet(reference))
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        self.conn.commit()
+        ended = leases.utc_now()
+        with mock.patch.object(
+            leases, "utc_now", return_value=ended + leases.ENDED_GRACE - timedelta(minutes=1)
+        ):
+            self.assertIsNone(planning.claim_ready_work_item(self.conn, space="TST"))
+        with mock.patch.object(
+            leases, "utc_now", return_value=ended + leases.ENDED_GRACE + timedelta(minutes=1)
+        ):
+            taken = planning.claim_ready_work_item(self.conn, space="TST", author="worker-b")
+        assert taken is not None
+        self.assertEqual((reference, "worker-b"), (taken["reference"], taken["claim_ref"]))
+
+    def test_a_resumed_launch_holds_by_the_same_session_and_lapses_by_the_same_rule(
+        self,
+    ) -> None:
+        reference = self.item("resume and leave")
+        first = executions.launch_work_item(self.conn, self.packet(reference))
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        executions.launch_work_item(self.conn, self.packet(reference, resume=True))
+        detail = planning.get_work_item(self.conn, reference)
+        session = first["client_session_id"]
+        self.assertEqual(
+            ("live", session, "launch"),
+            (detail["claim"]["state"], detail["claim"]["session_id"], detail["claim"]["source"]),
+        )
+        self.assertNotIn("released", [event["action"] for event in detail["events"]])
+        self.processes[1].code = 0
+        executions.reap_launches(self.conn)
+        self.conn.commit()
+        self.assertEqual([(session, "ended")], self.sessions())
+        self.assert_lapses_after_the_grace(reference)
+
+    def test_a_client_announcing_its_own_session_leaves_the_claim_unconfirmed(self) -> None:
+        # Its identity exists only once it runs, so the claim can name no session yet.
+        reference = self.item("announce it")
+        with (
+            mock.patch.dict(os.environ, {"VALKAMA_CODEX_BIN": sys.executable}),
+            mock.patch.object(tempfile, "tempdir", self._dir.name),
+        ):
+            executions.launch_work_item(self.conn, self.packet(reference, client="codex"))
+        claim = planning.get_work_item(self.conn, reference)["claim"]
+        self.assertEqual(("codex:executor", "unconfirmed"), (claim["holder"], claim["state"]))
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
 
     def test_zero_exit_without_structured_delivery_does_not_advance(self) -> None:
         reference = self.item("empty success")

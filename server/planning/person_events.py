@@ -56,6 +56,9 @@ if TYPE_CHECKING:
 #: What `execution_events.identity_source` says about a call; `calls` publishes these.
 BROWSER = "browser"
 VALKAMA = "valkama"
+#: A launch's claim (`calls.launch`): its session is proved by the launch, not by the
+#: client, so it is no agent speaking, as it was not while it rode the interface's call.
+LAUNCH = "launch"
 #: What `execution_events.kind` says about a Planning write call.
 KIND = "planning_write"
 
@@ -136,12 +139,12 @@ _ITEM_FIELDS = (
 _LAST_AGENT_EVENT = (
     "SELECT MAX(c.id) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
     " WHERE e.work_item_id = ? AND c.work_item_id = ?"
-    " AND c.identity_source NOT IN (?,?) AND c.id <> ?"
+    " AND c.identity_source NOT IN (?,?,?) AND c.id <> ?"
 )
 _LAST_AGENT_COMMENT = (
     "SELECT MAX(c.id) FROM work_item_comments m JOIN execution_events c ON c.id = m.call_id"
     " WHERE m.work_item_id = ? AND c.work_item_id = ?"
-    " AND c.identity_source NOT IN (?,?) AND c.id <> ?"
+    " AND c.identity_source NOT IN (?,?,?) AND c.id <> ?"
 )
 #: A person's writes come through Planning's own paths, under both of its mounts: the
 #: interface answers a question through the module surface (`interactions.WRITE_PATHS`)
@@ -232,13 +235,13 @@ _AGENT_COMMENTS = (
     " m.created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?) FROM work_item_comments m"
     " JOIN execution_events c ON c.id = m.call_id"
     " WHERE m.work_item_id = ? AND m.call_id > ? AND c.identity_state = 'confirmed'"
-    " AND c.identity_source NOT IN (?,?) AND c.session_id IS NOT NULL ORDER BY m.id"
+    " AND c.identity_source NOT IN (?,?,?) AND c.session_id IS NOT NULL ORDER BY m.id"
 )
 _AGENT_EVENTS = (
     "SELECT e.id, e.action, e.detail, e.created_at, e.call_id, c.session_id, c.agent_id"
     " FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
     " WHERE e.work_item_id = ? AND e.call_id > ? AND c.identity_state = 'confirmed'"
-    " AND c.identity_source NOT IN (?,?) AND c.session_id IS NOT NULL ORDER BY e.id"
+    " AND c.identity_source NOT IN (?,?,?) AND c.session_id IS NOT NULL ORDER BY e.id"
 )
 
 
@@ -257,7 +260,7 @@ def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> lis
     """
 
     found: list[tuple[tuple[int, int, int], dict]] = []
-    bound = (work_item_id, after, BROWSER, VALKAMA)
+    bound = (work_item_id, after, BROWSER, VALKAMA, LAUNCH)
     reports: set[int] = set()
     for row in conn.execute(_AGENT_COMMENTS, (ASKS_FOR, *bound)).fetchall():
         if row[2]:
@@ -498,6 +501,8 @@ def _feed_speaker(source: object, state: object, tool: object, session: object) 
         return BROWSER if isinstance(tool, str) and tool.startswith(_PERSON_TOOLS) else None
     if source == VALKAMA:
         return VALKAMA
+    if source == LAUNCH:
+        return None
     if state != "confirmed" or session is None:
         return None
     return str(session)
@@ -608,7 +613,10 @@ def _answers(row: tuple, session_id: str) -> bool:
         tool = str(row[5] or "")
         return tool.startswith(("/api/planning/", "/api/modules/planning/"))
     return (
-        row[3] == "confirmed" and row[4] != VALKAMA and row[6] is not None and row[6] != session_id
+        row[3] == "confirmed"
+        and row[4] not in (VALKAMA, LAUNCH)
+        and row[6] is not None
+        and row[6] != session_id
     )
 
 
@@ -668,7 +676,7 @@ def blocker_changes(
         if source == BROWSER:
             if str(row[8] or "").startswith(("/api/planning/", "/api/modules/planning/")):
                 found.append((int(row[5]), entry))
-        elif row[6] == "confirmed" and source != VALKAMA and row[9] is not None:
+        elif row[6] == "confirmed" and source not in (VALKAMA, LAUNCH) and row[9] is not None:
             found.append((int(row[5]), _spoken(entry, row[9], row[10])))
     return found
 
@@ -737,7 +745,7 @@ def _boundary_and_edits(
     """
 
     excluded = -1 if own_call is None else own_call
-    bound = (work_item_id, work_item_id, BROWSER, VALKAMA, excluded)
+    bound = (work_item_id, work_item_id, BROWSER, VALKAMA, LAUNCH, excluded)
     boundary = 0
     for query in (_LAST_AGENT_EVENT, _LAST_AGENT_COMMENT):
         boundary = max(boundary, conn.execute(query, bound).fetchone()[0] or 0)
@@ -757,7 +765,7 @@ def _boundary_and_edits(
         if source == BROWSER:
             if row[2] == _EDIT_TOOL and row[3]:
                 edits.append(row)
-        elif source != VALKAMA:
+        elif source not in (VALKAMA, LAUNCH):
             boundary = int(row[0])
             edits.clear()
     return boundary, edits

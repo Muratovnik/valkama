@@ -152,6 +152,7 @@ class WhatCountsTests(Harness):
     def test_the_browser_and_kind_spellings_are_the_call_rows_own(self) -> None:
         self.assertEqual(calls.BROWSER, person_events.BROWSER)
         self.assertEqual(calls.VALKAMA, person_events.VALKAMA)
+        self.assertEqual(calls.LAUNCH, person_events.LAUNCH)
         self.assertEqual(calls.KIND, person_events.KIND)
 
     def test_a_comment_says_what_it_said_and_where_it_came_from(self) -> None:
@@ -472,6 +473,16 @@ class WhoCountsTests(Harness):
             service.comment_work_item(self.conn, self.ref, "started", author="codex:worker")
         self.conn.commit()
         self.assertEqual([], self.window())
+
+    def test_a_launch_claiming_for_its_session_is_no_agent_speaking(self) -> None:
+        # The launch proves the session it starts, and the claim is that session's lease;
+        # but the launched agent wrote nothing, so the person's words still wait for it.
+        self.says()
+        with calls.bind(calls.launch("launched-session", "claude"), "launch_work_item"):
+            service.claim_work_item(self.conn, self.ref, author="claude:executor")
+        self.conn.commit()
+        self.assertEqual(["comment"], self.kinds())
+        self.assertEqual([], person_events.agents_since(self.conn, self.id, 0))
 
     def test_a_lapsed_claim_released_by_valkama_does_not_end_the_window(self) -> None:
         self.says()
