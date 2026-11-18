@@ -5,18 +5,28 @@ rows are inserted on them. Every expected number is the item read of usage
 (`usage.for_item` with scope `item`) added up here over the items the case names, by
 the rule the rows state: a goal's bounds are the items under it now with the goal
 itself; `spent` leaves out each item standing cancelled, whose children count by their
-own state, and `spent_with_cancelled` holds them all. The registry binds `app` to MAIN
-and `lib` to ALPHA.
+own state, and `spent_with_cancelled` holds them all. A row's tasks, sessions and
+commits are counted here from the tables the case wrote, each once however many items
+of the goal hold it. The registry binds `app` to MAIN and `lib` to ALPHA.
 """
 
 from __future__ import annotations
 
-from server.planning import api, usage
-from tests.test_planning_volumes import VolumesCase
+from server.planning import api, calls, service, usage
+from tests.test_planning_volumes import CATEGORIES, VolumesCase
 
 #: The four figures of a number that add up from item to item.
 ADDED = ("agent_seconds", "tokens", "estimated_api_cost_usd", "unpriced_tokens")
 TOKENS = tuple(kind for kind, _column in usage.TOKEN_KINDS)
+#: What a row counts of its items besides what they spent.
+COUNTED = (
+    "tasks",
+    "baseline",
+    "baseline_absent",
+    "sessions",
+    "commits",
+    "commits_unknown_repository",
+)
 
 
 def _plus(*parts: dict) -> dict:
@@ -64,6 +74,7 @@ class GoalCase(VolumesCase):
         cost: float | None = 0.25,
         quality: str = "observed",
         started: str | None = None,
+        session: str = "s",
     ) -> None:
         """A usage row on the item: its seconds, tokens of their own, priced or not."""
 
@@ -74,8 +85,8 @@ class GoalCase(VolumesCase):
             "INSERT INTO usage_segments(run_id, session_id, model, started_at, ended_at,"
             " seconds, work_item_id, input_tokens, cached_read_tokens, cache_write_5m_tokens,"
             " cache_write_1h_tokens, output_tokens, reasoning_tokens, estimated_api_cost_usd,"
-            " quality) VALUES (?, 's', 'model-a', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (self.run, moment, moment, seconds, identity, *tokens, cost, quality),
+            " quality) VALUES (?, ?, 'model-a', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (self.run, session, moment, moment, seconds, identity, *tokens, cost, quality),
         )
 
     def own(self, *identities: str) -> dict:
@@ -93,6 +104,28 @@ class GoalCase(VolumesCase):
     def ref(self, name: str) -> str:
         space, _, short = name.partition(":")
         return self.trees[space].refs[short]
+
+    def tasks_of(self, identity: str, within: set[str]) -> dict:
+        """The tasks under an item at any depth that `within` holds, counted from the rows."""
+
+        rows = self.rows()
+        found = dict.fromkeys(CATEGORIES, 0)
+        pending = [identity]
+        while pending:
+            parent = pending.pop()
+            for child, row in rows.items():
+                if row["parent_id"] == parent:
+                    pending.append(child)
+                    if row["kind"] != "container" and child in within:
+                        found[row["category"]] += 1
+        closed = found["completed"] + found["cancelled"]
+        return {
+            "total": sum(found.values()),
+            "closed": closed,
+            "completed": found["completed"],
+            "cancelled": found["cancelled"],
+            "by_category": found,
+        }
 
     @staticmethod
     def by_reference(rows: list[dict]) -> dict[str, dict]:
@@ -215,7 +248,7 @@ class DepthTests(GoalCase):
             {
                 name: value
                 for name, value in stage.items()
-                if name not in ("spent", "spent_with_cancelled")
+                if name not in ("spent", "spent_with_cancelled", *COUNTED)
             },
         )
         self.assertIsNone(self.goal_volumes(self.ref("MAIN:G"))[0]["parent_reference"])
@@ -366,8 +399,195 @@ class SelectionTests(GoalCase):
         )
 
 
+class TaskTests(GoalCase):
+    """G over a task moved out, a cancelled one, a stage with a `bug` and an `improvement`,
+    and a task in triage; H of ALPHA over a task of `app` and one of none."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        main = "MAIN"
+        self.items = {
+            "G": self.place(main, "G", kind="goal", state="container"),
+            "a": self.place(main, "a", state="dev", parent="G", started=True, projects=("app",)),
+            "b": self.place(main, "b", state="cancelled", parent="G", projects=("app",)),
+            "S": self.place(main, "S", kind="stage", state="container", parent="G"),
+            "c": self.place(
+                main, "c", kind="bug", state="done", parent="S", started=True, projects=("app",)
+            ),
+            "d": self.place(
+                main, "d", kind="improvement", state="ready", parent="S", projects=("lib",)
+            ),
+            "e": self.place(main, "e", parent="G", projects=("app",)),
+            "H": self.place("ALPHA", "H", kind="goal", state="container"),
+            "h1": self.place(
+                "ALPHA", "h1", state="dev", parent="H", started=True, projects=("app",)
+            ),
+            "h2": self.place("ALPHA", "h2", state="review", parent="H", started=True),
+        }
+        for name in ("G", "a", "b", "c"):
+            self.spend(self.items[name], 100.0)
+        self.trees["MAIN"].leave("a")
+        self.conn.commit()
+
+    def test_moved_out_work_leaves_and_cancelled_work_stands_apart(self) -> None:
+        items = self.items
+        goal = self.goal_volumes(self.ref("MAIN:G"))[0]
+        stays = ("G", "S", "c", "d", "e")
+        self.assertEqual(
+            self.own(*(items[name] for name in (*stays, "b"))), _added(goal["spent_with_cancelled"])
+        )
+        self.assertEqual(self.own(*(items[name] for name in stays)), _added(goal["spent"]))
+        # a left with what it spent; b, cancelled, is among the tasks and closed.
+        self.assertEqual(
+            {
+                "total": 4,
+                "closed": 2,
+                "completed": 1,
+                "cancelled": 1,
+                "by_category": {
+                    **dict.fromkeys(CATEGORIES, 0),
+                    "triage": 1,
+                    "ready": 1,
+                    "completed": 1,
+                    "cancelled": 1,
+                },
+            },
+            goal["tasks"],
+        )
+
+    def test_a_row_counts_the_tasks_its_scope_holds(self) -> None:
+        reads = [
+            (space, project) for space in ("MAIN", "ALPHA") for project in (None, "app", "lib")
+        ]
+        for space, project in [*reads, (None, None)]:
+            with self.subTest(space=space, project=project):
+                within = self.board_set(space, project)
+                rows = self.by_reference(self.volumes(space, project)["goals"])
+                self.assertTrue(rows)
+                for row in rows.values():
+                    self.assertEqual(
+                        self.tasks_of(row["work_item_id"], within), row["tasks"], row["reference"]
+                    )
+        whole = self.goal_volumes(self.ref("MAIN:G"), self.ref("MAIN:S"), self.ref("ALPHA:H"))
+        for row in whole:
+            self.assertEqual(self.tasks_of(row["work_item_id"], set(self.rows())), row["tasks"])
+
+
+class CommitTests(GoalCase):
+    def commit(self, project: str | None, hash_text: str, rewritten_to: int | None = None) -> int:
+        found = self.conn.execute(
+            "INSERT INTO commits(project_id, hash, reported_at, rewritten_to)"
+            " VALUES (?, ?, '2026-11-12T10:00:00Z', ?)",
+            (project, hash_text, rewritten_to),
+        ).lastrowid
+        assert found is not None
+        return found
+
+    def attach(self, identity: str, *commits: int) -> None:
+        for commit in commits:
+            self.conn.execute(
+                "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+                " VALUES (?, ?, 'manual')",
+                (identity, commit),
+            )
+
+    def test_commits_of_no_known_repository_stand_apart(self) -> None:
+        goal = self.place("MAIN", "G", kind="goal", state="container")
+        a = self.place("MAIN", "a", state="dev", parent="G", started=True)
+        b = self.place("MAIN", "b", state="dev", parent="G", started=True)
+        known = self.commit("app", "a1" * 20)
+        self.attach(a, known, self.commit("app", "b2" * 20, rewritten_to=known))
+        self.attach(goal, known)
+        # One commit of no known repository, written under two abbreviations.
+        self.attach(b, self.commit(None, "3f2a9c1"), self.commit(None, "3f2a9c1d"))
+        self.conn.commit()
+        row = self.goal_volumes(self.ref("MAIN:G"))[0]
+        self.assertEqual((1, 2), (row["commits"], row["commits_unknown_repository"]))
+
+
+class SessionTests(GoalCase):
+    def write(self, session: str, reference: str) -> None:
+        """A confirmed write of `session` to the item."""
+
+        identity = calls.Identity(
+            state=calls.CONFIRMED,
+            source=calls.CLAUDE_HOOK,
+            session_id=session,
+            agent_id=None,
+            client="claude",
+        )
+        with calls.bind(identity, "comment_work_item"):
+            service.comment_work_item(self.conn, reference, "a note")
+        self.conn.commit()
+
+    def test_a_goal_counts_each_session_once(self) -> None:
+        self.place("MAIN", "G", kind="goal", state="container")
+        a = self.place("MAIN", "a", state="dev", parent="G", started=True)
+        b = self.place("MAIN", "b", state="dev", parent="G", started=True)
+        self.spend(a, 10.0, session="sess-x")
+        self.spend(b, 10.0, session="sess-x")
+        self.spend(a, 10.0, session="sess-y")
+        self.conn.commit()
+        self.write("sess-z", self.ref("MAIN:b"))
+        # Each task's own read counts two; their sum would count sess-x twice.
+        self.assertEqual(
+            [2, 2], [usage.for_item(self.conn, task, "item")["sessions"] for task in (a, b)]
+        )
+        self.assertEqual(3, self.goal_volumes(self.ref("MAIN:G"))[0]["sessions"])
+
+
+class BaselineTests(GoalCase):
+    def test_a_missing_count_at_acceptance_names_its_reason(self) -> None:
+        main = "MAIN"
+        self.place(main, "T", kind="goal")
+        self.place(main, "C", kind="goal", state="cancelled", entries=("2026-11-12T00:00:00Z",))
+        self.place(main, "E", kind="goal", state="container")
+        # From before the work model, with nothing under it started.
+        self.place(main, "M", kind="goal", state="container", basis="migrated")
+        goal = self.place(main, "G", kind="goal", state="container")
+        for name, project in (("g1", "app"), ("g2", "app"), ("g3", "lib")):
+            self.place(main, name, state="ready", parent="G", projects=(project,))
+        self.conn.execute(
+            "INSERT INTO work_item_baselines(work_item_id, tasks, basis, taken_at)"
+            " VALUES (?, 3, 'accepted', '2026-11-11T09:00:00Z')",
+            (goal,),
+        )
+        self.conn.commit()
+        count = {"tasks": 3, "basis": "accepted", "taken_at": "2026-11-11T09:00:00Z"}
+
+        def shown(rows: list[dict]) -> dict[str, tuple]:
+            return {row["reference"]: (row["baseline"], row["baseline_absent"]) for row in rows}
+
+        self.assertEqual(
+            {
+                self.ref("MAIN:T"): (None, "not_accepted"),
+                self.ref("MAIN:C"): (None, "not_accepted"),
+                self.ref("MAIN:E"): (None, "not_started"),
+                self.ref("MAIN:M"): (None, "migrated"),
+                self.ref("MAIN:G"): (count, None),
+            },
+            shown(self.volumes(main)["goals"]),
+        )
+        # Read through a project, G is a part of itself, which its count is not of.
+        self.assertEqual(
+            {self.ref("MAIN:G"): (None, "partial")}, shown(self.volumes(main, "app")["goals"])
+        )
+        self.assertEqual(
+            {self.ref("MAIN:G"): (count, None)}, shown(self.goal_volumes(self.ref("MAIN:G")))
+        )
+
+
+#: The tables each part of a row is read from, besides the items themselves.
+PARTS = {
+    "usage rows": "GROUP BY work_item_id",
+    "sessions": "execution_events",
+    "commits": "work_item_commits",
+    "counts at acceptance": "work_item_baselines",
+}
+
+
 class StatementTests(GoalCase):
-    def test_a_read_takes_the_usage_rows_in_one_statement(self) -> None:
+    def test_a_read_takes_each_part_in_one_statement(self) -> None:
         references = []
         for index in range(3):
             goal = self.place("MAIN", f"G{index}", kind="goal", state="container")
@@ -380,18 +600,22 @@ class StatementTests(GoalCase):
         self.conn.set_trace_callback(statements.append)
         self.addCleanup(self.conn.set_trace_callback, None)
 
-        def reading_usage() -> list[str]:
-            found = [text for text in statements if "usage_segments" in text]
+        def reading() -> dict[str, int]:
+            found = {
+                part: len([text for text in statements if marker in text])
+                for part, marker in PARTS.items()
+            }
+            found["of usage"] = len([text for text in statements if "usage_segments" in text])
             statements.clear()
             return found
 
+        # Every part once for six rows; the usage rows and the sessions read usage.
+        once = {**dict.fromkeys(PARTS, 1), "of usage": 2}
         self.goal_volumes(*references)
-        self.assertEqual(1, len(reading_usage()))
+        self.assertEqual(once, reading())
         self.assertEqual(3, len(self.volumes("MAIN")["goals"]))
-        found = reading_usage()
-        # The frame's first counted moment, and every goal's rows at once.
-        self.assertEqual(2, len(found))
-        self.assertEqual(1, len([text for text in found if "GROUP BY work_item_id" in text]))
+        # The frame's first counted moment reads usage too.
+        self.assertEqual({**once, "of usage": 3}, reading())
 
 
 class RefusalTests(GoalCase):

@@ -14,12 +14,22 @@ stretches: it adds up from tasks to goals, and the union a card's line shows doe
 A task that started before usage was first counted to an item spent more than its rows
 say, and each number counts its tasks of that kind as `partly_measured`.
 
-A read narrowed to some items, as the Volumes read of a project is, adds up those
-items alone; a row whose bounds hold others is `partial`. A row names the space of a
-goal from another space than the one read, as `other_space`.
+A row counts its tasks (`task`, `bug`, `improvement`) by category, the cancelled
+among them, beside how many stood under it when it was accepted (`baselines`). Its
+sessions are the sessions behind any of its items, each once, and its commits the
+commits attached to any of its items, each once: a session or a commit on two items
+is one, so a row's number is never the sum of its stages' and tasks'. A commit of no
+known repository is counted apart, by its records (`read_model.attached_commits`).
 
-The usage rows of every item a read takes are one statement, grouped by item, by
-whether a row is priced and by its quality, however many goals it reads.
+A read narrowed to some items, as the Volumes read of a project is, adds up those
+items alone; a row whose bounds hold others is `partial`, and shows no count at
+acceptance. A row names the space of a goal from another space than the one read, as
+`other_space`.
+
+Each part a read takes from the store is one statement, however many goals it reads:
+the usage rows of every item it keeps, grouped by item, by whether a row is priced
+and by its quality; their sessions; their commits; and the counts at acceptance of
+the rows it shows.
 """
 
 from __future__ import annotations
@@ -29,7 +39,7 @@ import sqlite3
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
-from . import item_tree, model, read_model, states, usage
+from . import baselines, item_tree, model, read_model, states, usage
 
 #: How many goals and stages one `goal-volumes` read takes.
 MOST_READ = 100
@@ -50,7 +60,7 @@ _SPENDING = (
 #: What a row says of each item in the bounds, and whether the read keeps it.
 _ITEMS = (
     "SELECT i.work_item_id, i.number, i.title, i.kind, i.parent_id,"
-    " COALESCE(i.started_at, i.created_at) AS begun, i.planning_space_id,"
+    " COALESCE(i.started_at, i.created_at) AS begun, i.planning_space_id, i.acceptance,"
     " p.key AS space_key, p.name AS space_name,"
     " s.key, s.name, s.category, s.is_terminal,"
     " up.number AS parent_number, upp.key AS parent_key,"
@@ -90,6 +100,29 @@ class _Row:
     spent: _Sum = field(default_factory=_Sum)
     with_cancelled: _Sum = field(default_factory=_Sum)
     partial: bool = False
+    tasks: dict[str, int] = field(default_factory=lambda: dict.fromkeys(model.PUBLIC_CATEGORIES, 0))
+    sessions: set[str] = field(default_factory=set)
+    commits: set[int] = field(default_factory=set)
+    commits_unknown: set[int] = field(default_factory=set)
+
+    def add(self, sessions: set[str], commits: set[tuple[int, bool]]) -> None:
+        """An item's sessions and commits, each counted once however many items hold it."""
+
+        self.sessions |= sessions
+        for commit, known in commits:
+            (self.commits if known else self.commits_unknown).add(commit)
+
+    def counted(self) -> dict:
+        """Its tasks: how many, how many closed and how, and how many in each category."""
+
+        completed, cancelled = self.tasks["completed"], self.tasks["cancelled"]
+        return {
+            "total": sum(self.tasks.values()),
+            "closed": completed + cancelled,
+            "completed": completed,
+            "cancelled": cancelled,
+            "by_category": dict(self.tasks),
+        }
 
 
 def rows(
@@ -130,6 +163,9 @@ def rows(
             and items[identity]["parent_id"] is not None
         }
     sums = {identity: _Row() for identity in shown}
+    sessions = read_model.session_ids(conn, kept)
+    commits = read_model.attached_commits(conn, kept)
+    counts = baselines.taken(conn, sorted(shown))
 
     def over(identity: str) -> Iterable[_Row]:
         """The rows the item adds to: its own, when it has one, and every one above it."""
@@ -155,7 +191,13 @@ def rows(
             for summed in over(identity):
                 summed.partial = True
             continue
-        if item["kind"] == model.CONTAINER_KIND or started is None:
+        for summed in over(identity):
+            summed.add(sessions.get(identity, set()), commits.get(identity, set()))
+        if item["kind"] == model.CONTAINER_KIND:
+            continue
+        for summed in over(identity):
+            summed.tasks[str(item["category"])] += 1
+        if started is None:
             continue
         if usage.stored_micro(str(item["begun"])) < started:
             for summed in over(identity):
@@ -171,6 +213,9 @@ def rows(
         item = items[identity]
         summed = sums[identity]
         own = space_id is None or str(item["planning_space_id"]) == space_id
+        baseline, absent = baselines.shown(
+            counts.get(identity), item["acceptance"], partial=summed.partial
+        )
         found = {
             "work_item_id": identity,
             "reference": model.human_id(str(item["space_key"]), int(item["number"])),
@@ -186,8 +231,14 @@ def rows(
             if own
             else {"key": str(item["space_key"]), "name": str(item["space_name"])},
             "partial": summed.partial,
+            "tasks": summed.counted(),
+            "baseline": baseline,
+            "baseline_absent": absent,
             "spent": summed.spent.answer(),
             "spent_with_cancelled": summed.with_cancelled.answer(),
+            "sessions": len(summed.sessions),
+            "commits": len(summed.commits),
+            "commits_unknown_repository": len(summed.commits_unknown),
         }
         if children:
             found["children"] = [answer(child) for child in under.get(identity, [])]

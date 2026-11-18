@@ -80,6 +80,29 @@ const spentSchema = strictObject({
   partly_measured: count(),
 })
 
+/**
+ * Its tasks (`task`, `bug`, `improvement`) under it now at any depth, in any state: how
+ * many, how many are closed and how, and how many stand in each category.
+ */
+const tasksSchema = strictObject({
+  total: count(),
+  closed: count(),
+  completed: count(),
+  cancelled: count(),
+  /** Every one of the eight categories. */
+  by_category: z.record(enumField(STATE_CATEGORIES), count()),
+})
+
+/** How many tasks stood under it when it was accepted, or when work under it first started. */
+const baselineSchema = strictObject({
+  tasks: count(),
+  basis: enumField(['accepted', 'started'] as const),
+  taken_at: boundedText(ISO, 96),
+})
+
+/** Why a row shows no count at acceptance: the first that holds. */
+const BASELINE_ABSENT = ['filtered', 'partial', 'not_accepted', 'not_started', 'migrated'] as const
+
 const goalRowShape = {
   work_item_id: boundedText(UUID, 36),
   reference: reference(),
@@ -99,15 +122,32 @@ const goalRowShape = {
   other_space: strictObject({ key: boundedText(SPACE_KEY, 8), name: title() }).nullable(),
   /** Some of its items are outside the scope, which adds up only the rest. */
   partial: z.boolean(),
+  tasks: tasksSchema,
+  baseline: baselineSchema.nullable(),
+  baseline_absent: enumField(BASELINE_ABSENT).nullable(),
   /** Without the items standing cancelled now; their children count by their own state. */
   spent: spentSchema,
   spent_with_cancelled: spentSchema,
+  /** The sessions that spent on or wrote to any of its items, each once. */
+  sessions: count(),
+  /** The commits of a known repository attached to any of its items, each once. */
+  commits: count(),
+  /** Records of commits of no known repository: one commit may stand as two abbreviations. */
+  commits_unknown_repository: count(),
 }
 
-/** A row stands in a state or derives one, never both. */
-const standing = (row: { container_state: unknown; state: unknown }) =>
-  (row.state === null) !== (row.container_state === null)
-const STANDING = { message: 'expected a state or a container state' }
+/** A row stands in a state or derives one, never both; it shows a count or says why not. */
+const standing = (row: {
+  baseline: unknown
+  baseline_absent: unknown
+  container_state: unknown
+  state: unknown
+}) =>
+  (row.state === null) !== (row.container_state === null) &&
+  (row.baseline === null) !== (row.baseline_absent === null)
+const STANDING = {
+  message: 'expected a state or a container state, and a baseline or why it is absent',
+}
 
 const goalRowSchema = strictObject(goalRowShape).refine(standing, STANDING)
 
