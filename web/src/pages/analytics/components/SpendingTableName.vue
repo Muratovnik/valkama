@@ -3,9 +3,9 @@
  * The name that heads a row of a dimension's table, on one line: cut with an ellipsis where the
  * column is narrower than it, a pair's in its first value (`PairName`), and said whole in its
  * hint while it is cut, under the pointer and the keyboard's focus: a name that is a press holds
- * the hint itself, since the focus lands on the press. A value the page names by the start of its
- * id, an account, has the whole id after its name on the same line, and the line holds the hint,
- * which that id may be cut from while the press is not.
+ * the hint itself, since the focus lands on the press. A value with a detail, a session named by
+ * its title, has its client and the start of its id after its name on the same line, and the line
+ * holds the hint, which that detail may be cut from while the press is not.
  *
  * It acts as its value does in the bars (`useLineActions`): a press opens the value's side panel,
  * sent out as `inspect`, and a task's name is a link to its card as well, which a press with a

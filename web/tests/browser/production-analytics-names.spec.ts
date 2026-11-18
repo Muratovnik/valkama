@@ -1,7 +1,8 @@
 /**
- * Analytics names a session by the title its client gave it and an account by the name the owner
- * gave it in Settings, with the id in the hint, so no label made only of hex characters stands for
- * a value whose name is known: in the rail, the overview's cards, a section's bars and its table.
+ * Analytics names a session by the title its client gave it, with its id in the hint, and an
+ * account by the name the owner gave it in Settings, with no hint of its id, which the quota
+ * panel's menu copies instead; so no label made only of hex characters stands for a value whose
+ * name is known: in the rail, the overview's cards, a section's bars and its table.
  * A session with no title, and an account with no name, keep the labels they had. The name is the
  * one the owner types in Settings → General → Accounts, kept in Valkama, which this follows from the
  * field through the server to the page; and the names a device kept before move there once, never
@@ -89,17 +90,20 @@ async function texts(labels: Locator) {
   return said.map((text) => text.trim()).filter(Boolean)
 }
 
-test('a session is named by its title and an account by the owner’s name, the ids in the hint', async ({
+test('a session is named by its title, its id in the hint, and an account by the owner’s name', async ({
   page,
 }) => {
   await serve(page, { [MAIN_ID]: 'Main account' })
   const analytics = await open(page)
 
-  // The rail: the first value of each, by its name, its id in the hint.
+  // The rail: the first value of each, by its name; a session's id in the hint, an account's not.
   await expect(lead(analytics, 'executor')).toHaveText('Fix the rail')
   await expect(lead(analytics, 'executor')).toHaveAttribute('data-tooltip', /claude · 1a2b3c4d/u)
   await expect(lead(analytics, 'account')).toHaveText('Main account')
-  await expect(lead(analytics, 'account')).toHaveAttribute('data-tooltip', new RegExp(MAIN_ID, 'u'))
+  await expect(lead(analytics, 'account')).not.toHaveAttribute(
+    'data-tooltip',
+    new RegExp(MAIN_ID, 'u'),
+  )
 
   // The overview's cards hold no hex-only label either.
   for (const label of await texts(analytics.locator('.ranked-label')))
@@ -119,9 +123,15 @@ test('a session is named by its title and an account by the owner’s name, the 
   expect(names[0]).toContain('claude · 1a2b3c4d')
   for (const name of names) expect(name.split(' ')[0]).not.toMatch(HEX_ONLY)
 
-  // The account's section: the named one by its name, the other by the start of its id.
+  // The account's section: the named one by its name, the other by the start of its id, and no
+  // row's hint says a whole id.
   const accounts = await open(page, { by: 'account' })
   expect(await texts(accounts.locator('.ranked-label'))).toEqual(['Main account', '9c0de5b1'])
+  for (const [index, id] of [MAIN_ID, SIDE_ID].entries())
+    await expect(accounts.locator('.ranked-line').nth(index)).not.toHaveAttribute(
+      'data-tooltip',
+      new RegExp(id, 'u'),
+    )
 })
 
 test('a name typed in Settings is the name Analytics gives the account', async ({ page }) => {
@@ -139,10 +149,6 @@ test('a name typed in Settings is the name Analytics gives the account', async (
   const accounts = await open(page, { by: 'account' })
   const labels = accounts.locator('.ranked-label')
   await expect(labels.nth(1)).toHaveText('Night shift')
-  await expect(accounts.locator('.ranked-line').nth(1)).toHaveAttribute(
-    'data-tooltip',
-    new RegExp(SIDE_ID, 'u'),
-  )
 
   // Cleared, the account reads as before.
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: globalScope }))

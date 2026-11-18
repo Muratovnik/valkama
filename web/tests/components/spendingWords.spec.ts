@@ -188,12 +188,13 @@ describe('the name of an executor and an account', () => {
     expect(words.valueDetail('executor', session(null))).toBeUndefined()
   })
 
-  it('names an account by the owner’s name for it, with its whole id in the hint', () => {
+  it('names an account by the owner’s name for it, and leaves its whole id out of any hint', () => {
     const words = wordsIn('ru')
     expect(words.valueLabel('account', account)).toBe('f0f0f0f0')
     useAccountNamesStore().names = { [account.id]: 'Основной' }
     expect(words.valueLabel('account', account)).toBe('Основной')
-    expect(words.valueDetail('account', account)).toBe(account.id)
+    // The whole id is copied from the account's menu in the quota panel, never read in a hint.
+    expect(words.valueDetail('account', account)).toBeUndefined()
     expect(words.accounts([account], [account, { id: 'b7', unknown: false }])).toBe(
       'Смена аккаунта: Основной → Основной, b7',
     )
@@ -203,7 +204,6 @@ describe('the name of an executor and an account', () => {
     useAccountNamesStore().names = { other: 'Other' }
     const words = wordsIn('en')
     expect(words.valueLabel('account', account)).toBe('f0f0f0f0')
-    expect(words.valueDetail('account', account)).toBe(account.id)
-    expect(words.valueDetail('account', { id: 'b7', unknown: false })).toBeUndefined()
+    expect(words.valueDetail('account', account)).toBeUndefined()
   })
 })

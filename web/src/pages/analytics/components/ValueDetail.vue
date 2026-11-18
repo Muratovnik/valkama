@@ -135,7 +135,7 @@ function openCard(event: MouseEvent) {
 const pageFilter = usePageFilter()
 const filtered = computed(() => pageFilter?.has(props.by, props.value) ?? false)
 const addWords = computed(() =>
-  filtered.value ? t('analytics.detail.inFilter') : t('analytics.detail.addToFilter'),
+  filtered.value ? t('analytics.filters.held') : t('analytics.filters.add'),
 )
 /** A read again that failed, said beside the actions while what it replaced stays. */
 const failedAgain = computed(() => state.value.status === 'ready' && state.value.failedAgain)

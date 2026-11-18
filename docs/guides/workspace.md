@@ -32,8 +32,9 @@ each remember their own.
 The usage records hold only the id of the organization work was billed to. Under
 Settings → General → Accounts, each account the past year saw is listed with its
 id and its share of agent time, and you can give it a name or clear one.
-Analytics then labels the account by that name, with the id in the hint, and
-quota alerts say it. Names are kept in Valkama's store, so every browser and the
+Analytics then labels the account by that name, and
+quota alerts say it. In the quota panel, the menu beside an account's name renames
+it, adds it to the page's filter and copies its id. Names are kept in Valkama's store, so every browser and the
 desktop app say the same one; names a device kept on its own before are moved
 there once.
 

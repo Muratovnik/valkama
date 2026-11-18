@@ -1,6 +1,7 @@
 /**
  * How the quota's tiles and panel say what they show: a window by its name, an account by the
- * name the owner gave it or else the start of its id, with the whole id in its hint, a share in
+ * name the owner gave it or else the start of its id — the whole id is copied from the account's
+ * menu, never said in a hint (`QuotaAccount`) — a share in
  * the page's whole percents, a moment by its clock time on the day of the answer and with its
  * date on another, and a span the way the app says one.
  *
@@ -33,10 +34,6 @@ import type {
 import { agoWords, spanWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import type { StepPoint, StepTarget, WindowAhead } from '@/shared/ui/windowGeometry.ts'
 
-/** An account by its owner's name, or else by the start of its id or its organization's. */
-const accountName = (account: QuotaAccount) =>
-  account.name ?? agentIdStart(account.account_uuid ?? account.organization)
-
 /** Whether a window is silent at `now` (ms), by the answer's threshold `freshFor` (s). */
 const silent = (window: QuotaWindow, now: number, freshFor: number) =>
   stateAt(window, now, freshFor) === 'silent'
@@ -47,6 +44,16 @@ export function useQuotaWords() {
   const span = spanWordsOf(t)
 
   const sectionName = (section: QuotaSection) => t(`analytics.quota.sections.${section}`)
+
+  /**
+   * An account by its owner's name, or else by the start of its id or its organization's. The
+   * name Valkama keeps now comes first, so a rename shows before the quota is read again; the
+   * answer's own name stands until the names are read.
+   */
+  const accountName = (account: QuotaAccount) =>
+    words.accountName(account.organization) ??
+    account.name ??
+    agentIdStart(account.account_uuid ?? account.organization)
 
   const windowName = (window: QuotaWindow) =>
     window.kind === 'week_model'
@@ -75,15 +82,6 @@ export function useQuotaWords() {
   function shareRange(low: number, high: number) {
     const [from, to] = [share(low), share(high)]
     return from === to ? from : `${from}–${to}`
-  }
-
-  /** What the name leaves out: the whole ids, said for the hint. */
-  function accountDetail(account: QuotaAccount) {
-    const { organization } = account
-    if (account.account_uuid)
-      return t('analytics.quota.panel.account', { account: account.account_uuid, organization })
-    if (account.seat) return t('analytics.quota.panel.seat', { seat: account.seat, organization })
-    return t('analytics.quota.panel.organization', { organization })
   }
 
   /** A moment of the answer by its clock time on the answer's day, with its date on another. */
@@ -304,7 +302,6 @@ export function useQuotaWords() {
     })
 
   return {
-    accountDetail,
     accountName,
     ago,
     barLabel,

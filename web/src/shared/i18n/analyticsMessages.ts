@@ -165,6 +165,8 @@ export const analyticsMessages = {
         failed: 'The values could not be read.',
         noMatches: 'No matches',
         full: 'The link to this view cannot hold more values of the {dimension} filter, so this one was not added.',
+        add: 'Add to filter',
+        held: 'Already in filter',
       },
       frame: {
         sections: 'Sections of the usage',
@@ -357,6 +359,8 @@ export const analyticsMessages = {
         failed: 'Не удалось прочитать значения.',
         noMatches: 'Ничего не найдено',
         full: 'Ссылка на этот вид не вмещает больше значений фильтра «{dimension}», поэтому это значение не добавлено.',
+        add: 'Добавить в фильтр',
+        held: 'Уже в фильтре',
       },
       frame: {
         sections: 'Разделы расхода',

@@ -316,8 +316,9 @@ describe('the bars on the page', () => {
 
 /**
  * An account is an organization's id, which no store names: the page names it by the start of
- * the id, as an item's card does, so the same account reads the same everywhere, and keeps the
- * whole id for its hint and its table. Work no organization was recorded for stays unknown.
+ * the id, as an item's card does, so the same account reads the same everywhere. The whole id is
+ * in no hint and no table: the quota panel's menu copies it. Work no organization was recorded
+ * for stays unknown.
  */
 describe('the bars by account', () => {
   const FIRST = '3f9a1b2c-5d6e-4f70-8a9b-0c1d2e3f4a5b'
@@ -331,18 +332,18 @@ describe('the bars by account', () => {
     ],
   )
 
-  it('name each by the start of its id and keep the whole id for its hint and its table', async () => {
+  it('name each by the start of its id and say the whole id nowhere', async () => {
     const bars = await mountShownBars(accounts.usage.rows, 'account')
 
     expect(barsOf(bars).map((row) => [row.label, row.detail])).toEqual([
-      ['3f9a1b2c', FIRST],
-      ['77de0a1c', SECOND],
+      ['3f9a1b2c', undefined],
+      ['77de0a1c', undefined],
       ['Unknown', undefined],
     ])
     expect(bars.text()).not.toContain(FIRST)
   })
 
-  it('say the whole id under the name in the table', () => {
+  it('say no whole id under the name in the table', () => {
     const table = mountBars(accounts.usage.rows, 'account', { narrow: true })
 
     expect(
@@ -350,7 +351,7 @@ describe('the bars by account', () => {
         .getComponent(RankedBarsTable)
         .findAll('th[scope="row"]')
         .map((name) => name.text()),
-    ).toEqual([`3f9a1b2c${FIRST}`, `77de0a1c${SECOND}`, 'Unknown'])
+    ).toEqual(['3f9a1b2c', '77de0a1c', 'Unknown'])
   })
 })
 

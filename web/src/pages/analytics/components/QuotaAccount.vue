@@ -1,7 +1,10 @@
 <script setup lang="ts">
 /**
- * One account of the quota panel: its name — the owner's, or else the start of its id, the whole
- * id in its hint — its plan, and each window of the section on show (`QuotaWindow`), the week
+ * One account of the quota panel: its name — the owner's, or else the start of its id — with the
+ * menu of what can be done with the account beside it (`useAccountActions`: rename it in a field
+ * that takes the name's place, add it to the page's filter, copy its whole id, which no hint
+ * says), a copy's note after the menu, its plan, and each window of the section on show
+ * (`QuotaWindow`), the week
  * before each model's week. As a table its windows are one table of their figures — the share,
  * the pace, the state with how long a silent one has been silent, and the forecast, or past the
  * reset that it has reset — each window's facts and readings after it.
@@ -18,14 +21,17 @@
  * nothing between, the moment ending one window's axis and the one starting the next stood a few
  * pixels apart and read as one axis.
  *
- * What a reader of the page selects it by: the account is `data-account`, its name; the two parts
- * of its head are `data-account-head`, `name` for its name and `facts` for what stands beside it.
+ * What a reader of the page selects it by: the account is `data-account`, its name; the parts of
+ * its head are `data-account-head`, `name` for its name, `field` for the field that renames it,
+ * which stands in the name's place while the name is kept for the outline unseen, `menu` for its
+ * menu and `facts` for what stands beside it.
  */
-import { computed } from 'vue'
+import { computed, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import QuotaWindow from '@/pages/analytics/components/QuotaWindow.vue'
+import { useAccountActions } from '@/pages/analytics/composables/useAccountActions.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import {
   sectionWindows,
@@ -34,9 +40,14 @@ import {
   windowKey,
 } from '@/pages/analytics/utils/quotaFigures.ts'
 
+import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
+
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type { QuotaAccount } from '@/shared/api/analyticsApi.ts'
+import { MAX_ACCOUNT_ALIAS_LENGTH } from '@/shared/lib/accountAliases.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import VMenu from '@/shared/ui/VMenu.vue'
+import VTextInput from '@/shared/ui/VTextInput.vue'
 import WindowBarTable from '@/shared/ui/WindowBarTable.vue'
 import type { WindowRow, WindowWords } from '@/shared/ui/windowGeometry.ts'
 
@@ -55,11 +66,26 @@ const props = defineProps<{
   today: string
 }>()
 
+/** The account's name was saved, which the quota's answer says only once it is read again. */
+const emit = defineEmits<{ renamed: [] }>()
+
 const { t } = useI18n()
 const words = useQuotaWords()
 
 const name = computed(() => words.accountName(props.account))
-const detail = computed(() => words.accountDetail(props.account))
+
+const menuBox = useTemplateRef<HTMLElement>('menuBox')
+const fieldId = `${useId()}-name`
+const actions = useAccountActions({
+  account: () => props.account,
+  fieldId,
+  focusMenu: () => menuBox.value?.querySelector<HTMLElement>('button')?.focus(),
+  renamed: () => emit('renamed'),
+})
+const { draft, entries, failure, note, noteFailed } = actions
+/** Whether the field stands in the name's place, the name kept unseen for the outline. */
+const renaming = computed(() => draft.value !== null)
+const menuLabel = computed(() => t('analytics.quota.actions.menu', { account: name.value }))
 const windows = computed(() => sectionWindows(props.account, props.section))
 /**
  * The windows of money, as the windows of a share say themselves: its name and state on the line
@@ -111,15 +137,45 @@ const tableWords = computed<WindowWords>(() => ({
       <span
         class="quota-account-name"
         data-account-head="name"
+        :class="{ 'visually-hidden': renaming }"
+        >{{ name }}</span
       >
-        <span v-tooltip.detail="{ text: detail, words: name }">{{ name }}</span>
-      </span>
     </template>
-    <template
-      v-if="account.plan || account.seat"
-      #beside
-    >
+    <template #beside>
+      <VTextInput
+        v-if="draft !== null"
+        class="quota-account-field"
+        data-account-head="field"
+        autocomplete="off"
+        size="compact"
+        :control-id="fieldId"
+        :model-value="draft"
+        :label="t('analytics.quota.actions.name')"
+        :maxlength="MAX_ACCOUNT_ALIAS_LENGTH"
+        :error="failure"
+        hide-label
+        @update:model-value="actions.type"
+        @keydown="actions.press"
+        @focusout="actions.save"
+      />
+      <span
+        ref="menuBox"
+        class="quota-account-menu"
+        data-account-head="menu"
+      >
+        <VMenu
+          size="compact"
+          align="start"
+          :label="menuLabel"
+          :entries="entries"
+        />
+        <IdentityNote
+          :failed="noteFailed"
+          :text="note"
+        />
+      </span>
       <p
+        v-if="account.plan || account.seat"
         class="quota-account-facts"
         data-account-head="facts"
       >
@@ -213,6 +269,19 @@ const tableWords = computed<WindowWords>(() => ({
   .quota-account-window:not(:nth-child(3n + 1 of .quota-account-window))::before {
     display: block;
   }
+}
+
+/* The menu at the name, with a copy's note after it on the name's line. */
+.quota-account-menu {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* The field that renames the account, in the name's place, as wide as a name reads. */
+.quota-account-field {
+  flex: 0 1 20rem;
+  min-width: 0;
 }
 
 /* What is not a window takes the group's whole width, over or under its windows. */

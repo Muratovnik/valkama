@@ -65,7 +65,7 @@ function accountOf(stretch: Stretch, index: number) {
 }
 
 /** The week so far, and the same Monday a week before, which this week is compared with. */
-const WORLD: TimedStretch[] = [
+export const WORLD: TimedStretch[] = [
   ...STRETCHES.map((stretch, index) => ({
     at: on(9 + stretch.day),
     group: { ...stretch.group, account: accountOf(stretch, index) },
@@ -161,7 +161,8 @@ const weekBefore = (query: URLSearchParams) => query.get('from')?.includes('T') 
  * second handler on its way up, as a press on a day's coloured stack does on its way to the day.
  * Nothing here needs the moment held: a run takes seconds of a Wednesday afternoon.
  *
- * `backend` is what the rest of the app's double answers, a task's card among it.
+ * `backend` is what the rest of the app's double answers, a task's card among it; the double is
+ * returned, so a run can read what the page wrote to it.
  */
 export async function serve(
   page: Page,
@@ -170,7 +171,7 @@ export async function serve(
   backend: BackendOptions = {},
 ) {
   await page.clock.setSystemTime(NOW)
-  await installBackend(page, backend)
+  const installed = await installBackend(page, backend)
   await serveQuota(page, quotaAt(NOW))
   await page.route('**/api/analytics/usage?*', async (route) => {
     if (answer === 'hold') return
@@ -184,6 +185,7 @@ export async function serve(
       body: JSON.stringify(serveUsage(answer, query)),
     })
   })
+  return installed
 }
 
 /** The app's search finds the task by its reference; each count of a use is kept. */

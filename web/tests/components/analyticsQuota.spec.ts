@@ -172,9 +172,11 @@ describe('the quota panel', () => {
       'Week, model-a',
     ])
     expect(work.text()).toContain('Plan: Max')
-    // The whole ids are the name's hint.
-    expect(work.get('.quota-account-name span').attributes('data-tooltip')).toContain(
-      `Account ${'0b7d4e19-1c2d-4e3f-8a4b-5c6d7e8f9a0b'} of organization`,
+    // No hint says the whole id: the account's menu, named for it, copies it.
+    expect(work.get('.quota-account-name').attributes('data-tooltip')).toBeUndefined()
+    expect(work.html()).not.toContain('0b7d4e19-1c2d-4e3f-8a4b-5c6d7e8f9a0b')
+    expect(work.get('[data-account-head="menu"] .menu-trigger').attributes('aria-label')).toBe(
+      'Account actions: Work',
     )
     expect(accountNamed(page, 'a1b2c3d4').text()).toContain('Known by its seat for this week only')
     // The usage credits are a line of their name and state, never a figure, and how old their
@@ -254,11 +256,12 @@ describe('the quota panel', () => {
       'No quota source has read this account’s work in the past seven days.',
     )
     // No money stands beside a share, and no share is a total: what used a window is a block of
-    // its own under the readings (`analyticsQuotaSpent.spec.ts`). Each account's head is its name,
-    // and its facts beside it where it has a plan or a seat: «Work» and the seat «a1b2c3d4».
+    // its own under the readings (`analyticsQuotaSpent.spec.ts`). Each account's head is its name
+    // and its menu, and its facts beside them where it has a plan or a seat: «Work» and the seat
+    // «a1b2c3d4».
     const heads = five.findAll('[data-account-head]')
     expect(heads.map((one) => one.attributes('data-account-head')).join(' ')).toBe(
-      'name facts name name name facts',
+      'name menu facts name menu name menu name menu facts',
     )
     // Each of the three windows of five hours has its bar, its facts and its line; «Work» alone
     // has a window of money, its credits.

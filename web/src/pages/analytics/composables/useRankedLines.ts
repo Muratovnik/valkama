@@ -1,6 +1,6 @@
 /**
  * The values of a breakdown as the rows of a ranked chart, wherever one stands — a section's bars
- * or a card of first values: each row its value's name, its whole id where the name is its start,
+ * or a card of first values: each row its value's name, what the name leaves out (`valueDetail`),
  * its figure in the measure, and what pressing it does (`useLineMarks`): a value the read can
  * filter by opens its side panel, sent to `inspect` with its name, and a task's row is a link to
  * its card as well, which a press with a modifier or the middle button opens elsewhere.

@@ -76,8 +76,8 @@ export interface RankedRow extends MarkAction {
   /** The value as the reader reads it: formatted by the caller, units and all. */
   valueText: string
   /**
-   * What the label leaves out, said in its hint: the whole id of a value the label names by
-   * the start of it.
+   * What the label leaves out, said in its hint: the client and the start of the id of a session
+   * the label names by its title.
    */
   detail?: string
   kind?: RankedRowKind

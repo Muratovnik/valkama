@@ -5,9 +5,9 @@
  * its id, and an account by the name the owner gave it in Settings, as Valkama keeps it, else by
  * the start of its id as an item's card does. What a name leaves out is its `valueDetail`, which
  * the page says in the hint or beside the name: a titled session's client and the start of its
- * id, so two of one title can be told apart, and an account's whole id. Work with no value — no task, a session's own
- * run — and a value nobody can place say so in words of their own, per dimension: «unknown» is
- * said only of what nobody can place.
+ * id, so two of one title can be told apart; an account's whole id is never a hint. Work with no
+ * value — no task, a session's own run — and a value nobody can place say so in words of their
+ * own, per dimension: «unknown» is said only of what nobody can place.
  */
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
@@ -67,6 +67,17 @@ const sessionPlace = (value: UsageGroupValue & { id: string }) =>
   [value.family, value.id.slice(0, SESSION_PREFIX)].filter(Boolean).join(' · ')
 
 /**
+ * What a value's name leaves out, for its hint and its table: the client and the start of the id
+ * of a session named by its title; nothing for any other value. An account's whole id is no
+ * hint: it is the owner's to copy where the account's menu offers it, never a line to read.
+ */
+function valueDetail(name: UsageDimension, value: UsageGroupValue | null): string | undefined {
+  const id = value?.id
+  if (!value || !id) return
+  if (name === 'executor') return value.title ? sessionPlace({ ...value, id }) : undefined
+}
+
+/**
  * A figure as a line says it, with what it leaves out apart: the tokens a cost has no price for,
  * «40 тыс. токенов без цены», empty where it leaves none out. A table lays the remark under the
  * figure; everything else says the two as one (`besides`).
@@ -88,20 +99,8 @@ export function useSpendingWords() {
   const usage = useUsageWords()
   const { names } = storeToRefs(useAccountNamesStore())
 
-  /** The owner's name for an account, or null where it has none. */
+  /** The owner's name for an account, by its organization's id, or null where it has none. */
   const accountName = (id: string) => aliasOf(names.value, id)
-
-  /**
-   * What a value's name leaves out, for its hint and its table: the client and the start of the id
-   * of a session named by its title; the whole id of an account named by the owner's name or by the
-   * start of its id; nothing where the name is the whole of what it says.
-   */
-  function valueDetail(name: UsageDimension, value: UsageGroupValue | null): string | undefined {
-    const id = value?.id
-    if (!value || !id) return
-    if (name === 'executor') return value.title ? sessionPlace({ ...value, id }) : undefined
-    if (name === 'account' && (accountName(id) !== null || agentIdStart(id) !== id)) return id
-  }
 
   const compact = (value: number) =>
     new Intl.NumberFormat(i18n.locale.value, {
@@ -512,6 +511,7 @@ export function useSpendingWords() {
   const markShare = (ratio: number) => t('analytics.marks.share', { share: share(ratio) })
 
   return {
+    accountName,
     accounts,
     axis,
     breakdownBy,
