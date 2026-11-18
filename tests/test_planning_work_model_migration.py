@@ -2716,6 +2716,34 @@ class RollbackTests(StoreCase):
         self.assertIn("the disk is full", report["steps"][-1]["error"])
         self.assertEqual([], report["postconditions"])
 
+    def test_a_failed_run_leaves_the_quota_names_as_2_9_left_them(self) -> None:
+        """At 17 the run renames the names' key before the step that fails, and the
+        rollback takes the rename back; at 18 there is nothing to rename."""
+
+        def broken(_conn: sqlite3.Connection, _context: store_steps.Context) -> None:
+            raise RuntimeError("the disk is full")
+
+        for schema, key in ((17, "organization"), (18, "account")):
+            with self.subTest(schema=schema):
+                directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+                self.addCleanup(directory.cleanup)
+                self.path = os.path.join(directory.name, "valkama.sqlite3")
+                self.ids = build(self.path, schema)
+                self.file = item_projects_file(self.path, directory.name)
+                report = self.refused(store_steps.Step("item-projects", "broken", broken))
+                [quota_names] = [step for step in report["steps"] if step["name"] == "quota-names"]
+                self.assertEqual(schema == 17, quota_names["needed"])
+                self.assertEqual(schema, identity(self.path)[0])
+                self.assertEqual(
+                    QUOTA_NAMES,
+                    [
+                        tuple(row)
+                        for row in self.read(
+                            f"SELECT {key}, name, updated_at FROM quota_account_names ORDER BY 1"
+                        )
+                    ],
+                )
+
     def test_each_postcondition_refuses_a_store_that_breaks_it(self) -> None:
         for name, sql, parameters in FAULTS:
             with self.subTest(postcondition=name):
