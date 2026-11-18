@@ -238,6 +238,10 @@ const goalTreeSchema: z.ZodType<VolumesGoalTree> = z.lazy(() =>
   strictObject({ ...goalRowShape, children: z.array(goalTreeSchema) }).refine(standing, STANDING),
 )
 
+/** Under a filter a row's count at acceptance, taken of all its tasks, is never shown. */
+const allFiltered = (rows: VolumesGoalTree[]): boolean =>
+  rows.every((row) => row.baseline_absent === 'filtered' && allFiltered(row.children))
+
 /**
  * What one day, or the whole period, brought: tasks created, tasks that came to be completed
  * or cancelled, the owner's decisions made in the interface, and commits of a known repository.
@@ -322,20 +326,27 @@ const volumesSchema = strictObject({
      */
     unattached_commits: count().nullable(),
   }),
-  /** The open goals and those that came to a close in the period. */
+  /**
+   * The open goals and those that came to a close in the period. Under a filter only those with
+   * a task that matches, each adding up those tasks alone, without its own work.
+   */
   goals: z.array(goalTreeSchema),
   outside: outsideSchema,
   flow: flowSchema,
   estimates: estimatesSchema,
-}).refine(
-  (read) =>
-    read.counts.categories.every(
-      (row) =>
-        (row.goals === null) === (read.filter !== null) &&
-        (row.stages === null) === (read.filter !== null),
-    ),
-  { message: 'expected goals and stages counted exactly when no filter keeps only tasks' },
-)
+})
+  .refine(
+    (read) =>
+      read.counts.categories.every(
+        (row) =>
+          (row.goals === null) === (read.filter !== null) &&
+          (row.stages === null) === (read.filter !== null),
+      ),
+    { message: 'expected goals and stages counted exactly when no filter keeps only tasks' },
+  )
+  .refine((read) => read.filter === null || allFiltered(read.goals), {
+    message: 'expected no count at acceptance on any goal row under a filter',
+  })
 
 const interfaceVersion = z.literal('valkama-planning-api', {
   message: 'expected valkama-planning-api',

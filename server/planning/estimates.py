@@ -29,7 +29,13 @@ cost. A task's cost is what its priced rows cost. The mean, not the median, is w
 up over a goal's tasks, and the table gives both. About half of the goals checked halfway
 through their work came within a factor of two: an estimate is a rough figure.
 
-The basis is one statement over the usage rows, with one walk of the items' projects.
+A filter of kinds and labels narrows the table to the done tasks it keeps, and its label
+rows to the labels it names; it never narrows the groups an estimate is judged by, so what
+a task has left does not depend on it.
+
+The basis is one statement over the usage rows, with one walk of the items' projects: the
+store's tasks, each saying whether the read keeps it. A read takes it once, for its goals'
+estimates and its table alike.
 """
 
 from __future__ import annotations
@@ -146,10 +152,12 @@ class Left:
 
 
 class Basis:
-    """The done tasks the estimates are judged by, read across the store."""
+    """The done tasks the estimates are judged by, read across the store, with the part of
+    them a read keeps (`kept`), which its table describes."""
 
-    def __init__(self, tasks: Sequence[Task]) -> None:
+    def __init__(self, tasks: Sequence[Task], kept: Sequence[Task]) -> None:
         self.tasks = tasks
+        self.kept = kept
         self._wholes: dict[tuple, list[Task]] = {}
         for done in tasks:
             self._wholes.setdefault(done.whole, []).append(done)
@@ -236,9 +244,9 @@ class Remaining:
 
 def read(
     conn: sqlite3.Connection, where: str = "1 = 1", parameters: Sequence[object] = ()
-) -> tuple[Basis, list[Task]]:
-    """The basis of the whole store, and the part of it that `where` and its `parameters`,
-    conditions on `work_items i`, keep."""
+) -> Basis:
+    """The basis of the whole store, keeping the part of it that `where` and its
+    `parameters`, conditions on `work_items i`, keep."""
 
     rows = conn.execute(
         _BASIS.format(where=where), (*parameters, json.dumps(sorted(model.TASK_KINDS)))
@@ -263,19 +271,18 @@ def read(
         tasks.append(found)
         if row["kept"]:
             kept.append(found)
-    return Basis(tasks), kept
+    return Basis(tasks, kept)
 
 
 # -- the table -------------------------------------------------------------------
 
 
-def table(
-    conn: sqlite3.Connection, where: str = "1 = 1", parameters: Sequence[object] = ()
-) -> dict:
-    """The basis the scope holds described: a row for each project and kind, the most tasks
-    first, each followed by a row for each label its tasks carry, the most tasks first."""
+def table(basis: Basis, labels: Sequence[str] = ()) -> dict:
+    """The part of the basis a read keeps described: a row for each project and kind, the
+    most tasks first, each followed by a row for each label its tasks carry, the most tasks
+    first. With `labels` named, the label rows are only theirs."""
 
-    _basis, kept = read(conn, where, parameters)
+    kept = basis.kept
     groups: dict[tuple, list[Task]] = {}
     for done in kept:
         groups.setdefault(done.group, []).append(done)
@@ -294,7 +301,8 @@ def table(
         by_label: dict[str, list[Task]] = {}
         for done in found:
             for label in done.labels:
-                by_label.setdefault(label, []).append(done)
+                if not labels or label in labels:
+                    by_label.setdefault(label, []).append(done)
         for label, labelled in sorted(
             by_label.items(), key=lambda entry: (-len(entry[1]), entry[0])
         ):
