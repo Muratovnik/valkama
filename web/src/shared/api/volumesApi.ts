@@ -257,8 +257,12 @@ const volumesSchema = strictObject({
     /** The eight categories, always all, in the model's order. */
     categories: z.array(categorySchema).length(STATE_CATEGORIES.length),
     waiting_owner: waitingOwnerSchema,
-    /** The commits on no card of the scope's projects, or of the whole store: their list's total. */
-    unattached_commits: count(),
+    /**
+     * The commits on no card of the scope's projects, or of the whole store: their list's total.
+     * Null when that list cannot be read for the scope, a project only items name or a space
+     * while the registry cannot be read: there is no list for the number to open.
+     */
+    unattached_commits: count().nullable(),
   }),
   /** The open goals and those that came to a close in the period. */
   goals: z.array(goalTreeSchema),

@@ -290,16 +290,24 @@ def _waiting_owner(conn: sqlite3.Connection, scope: Scope) -> dict:
     }
 
 
-def _unattached_commits(conn: sqlite3.Connection, scope: Scope) -> int:
+def _unattached_commits(conn: sqlite3.Connection, scope: Scope) -> int | None:
     """How many commits stand on no card of the project read, of the space's projects or of
-    the whole store: the total of the list the number opens."""
+    the whole store: the total of the list the number opens.
 
-    if scope.project is not None:
-        listed = commits.unattached(conn, project=scope.project, limit=0)
-    elif scope.space is not None:
-        listed = commits.unattached(conn, space=str(scope.space["key"]), limit=0)
-    else:
-        listed = commits.unattached(conn, limit=0)
+    None when that list cannot be read for the scope: a project only items name, which
+    the registry does not list, or a space or project while the registry cannot be read.
+    The number has no list to open then, and the rest of the read still answers.
+    """
+
+    try:
+        if scope.project is not None:
+            listed = commits.unattached(conn, project=scope.project, limit=0)
+        elif scope.space is not None:
+            listed = commits.unattached(conn, space=str(scope.space["key"]), limit=0)
+        else:
+            listed = commits.unattached(conn, limit=0)
+    except commits.UnknownProjectsError:
+        return None
     return int(listed["total"])
 
 

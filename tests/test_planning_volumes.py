@@ -20,7 +20,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import store
-from server.planning import api, service
+from server.planning import api, commits, model, service
 from server.projects import scopes
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -699,6 +699,38 @@ class UnattachedCommitTests(VolumesCase):
             " AND c.commit_id NOT IN (SELECT commit_id FROM work_item_commits)"
         ).fetchone()[0]
         self.assertEqual(directly, self.volumes()["counts"]["unattached_commits"])
+
+    def test_a_scope_whose_list_cannot_be_read_has_no_number_and_still_answers(self) -> None:
+        # A project only an item names: the registry lists no `zed`, so its list refuses it.
+        self.place("MAIN", "z", projects=("zed",))
+        self.conn.commit()
+        with self.assertRaises(commits.UnknownProjectsError):
+            self.listed(project="zed")
+        read = self.volumes("MAIN", "zed")
+        self.assertIsNone(read["counts"]["unattached_commits"])
+        self.assertEqual(1, self.categories(read)["triage"]["tasks"])
+        self.assertEqual(1, read["outside"]["tasks"])
+        self.assertEqual(7, len(read["flow"]["days"]))
+
+        # A space while the registry cannot be read: its list refuses, and the whole store's
+        # still reads, needing the registry only for names.
+        (self.root / "local" / "Valkama" / "projects.json").write_bytes(b"{")
+        with self.assertRaises(commits.UnknownProjectsError):
+            self.listed(space="MAIN")
+        read = self.volumes("MAIN")
+        self.assertIsNone(read["counts"]["unattached_commits"])
+        self.assertEqual(2, self.categories(read)["triage"]["tasks"])
+        self.assertEqual(2, read["outside"]["tasks"])
+        # The commit attached to a still flows; no project binds to MAIN, so none on no card.
+        self.assertEqual(1, read["flow"]["totals"]["commits"])
+        self.assertEqual(3, self.volumes()["counts"]["unattached_commits"])
+
+        # Any other refusal of the list is the read's refusal still.
+        other = model.PlanningError("the list refused something else")
+        with mock.patch.object(commits, "unattached", side_effect=other):
+            with self.assertRaises(model.PlanningError) as caught:
+                self.volumes()
+        self.assertIs(other, caught.exception)
 
 
 class FrameTests(VolumesCase):

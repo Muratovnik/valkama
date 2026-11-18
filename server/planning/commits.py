@@ -1029,6 +1029,17 @@ UNATTACHED_MOST = 500
 UNATTACHED_LIMIT = 100
 UNATTACHED_BOTH = "[commit] the commits on no card are read by a space or by a project, not both"
 
+
+class UnknownProjectsError(model.PlanningError):
+    """The projects a commit is held to cannot be known: the registry lists no such
+    project, or it cannot be read at all.
+
+    Its own class, refused as any planning refusal is, so a reader that only counts the
+    commits on no card can tell a scope whose list cannot be read from any other refusal
+    without reading its words.
+    """
+
+
 #: A commit on no card: a session's, attached to no item, and not one a rewrite replaced.
 #: A commit no session reported, migrated or attached by hand, is never on the list. Kept
 #: to the projects of `:projects`, a JSON array, or to none when it is null: the whole store.
@@ -1273,7 +1284,7 @@ def registered(
     found = _readable(project_registry.read_registry() if listing is None else listing)
     roots = {str(entry["project_id"]): str(entry["canonical_root"]) for entry in found["projects"]}
     if repository not in roots:
-        raise model.PlanningError(
+        raise UnknownProjectsError(
             f"[commit] {repository} is not a registered project: {', '.join(sorted(roots))}"
         )
     return {"project_id": repository, "root": roots[repository]}
@@ -1283,7 +1294,7 @@ def _readable(listing: project_registry.RegistryResult) -> project_registry.Regi
     """The registry as read, refused when it could not be: no project is known then."""
 
     if listing["status"] != "available":
-        raise model.PlanningError(item_projects.REGISTRY_UNREADABLE)
+        raise UnknownProjectsError(item_projects.REGISTRY_UNREADABLE)
     return listing
 
 

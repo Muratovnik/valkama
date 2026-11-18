@@ -1796,7 +1796,7 @@ of another space that the space's items name keeps only the space's own.
 | `measured_from` | the start of the first stretch of agent work counted to an item in this store, as the usage rows hold it, or `null` when none is: an item started before it may have spent more than its usage says (see [How much work an item took](#how-much-work-an-item-took)) |
 | `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest` |
 | `counts.waiting_owner` | the questions to the owner still open on the scope's items: `count`, and `oldest`, the one asked first, with `request_id`, the `reference` of its item and its `created_at` as `since`, or `null` when none waits |
-| `counts.unattached_commits` | how many commits stand on no card: the `total` of [Commits on no card](#commits-on-no-card) read by the project, by the space, or, for `global`, of the whole store |
+| `counts.unattached_commits` | how many commits stand on no card: the `total` of [Commits on no card](#commits-on-no-card) read by the project, by the space, or, for `global`, of the whole store; `null` when that list refuses the scope, a project only items name or a space or project read while the projects registry cannot be read, and the rest of the answer stands |
 | `goals` | the scope's open goals and the goals that came to be completed or cancelled inside the period, by space key and number, each a [goal's row](#a-goals-row) |
 | `outside` | the scope's tasks under no goal: `tasks`, how many, and the rows `by_project` and `by_label` (see below) |
 | `flow` | how work flowed through the scope: `days`, `totals` and `pace` (see [The flow](#the-flow)) |
@@ -1842,7 +1842,6 @@ attached store is refused rather than counted short.
 | `volumes read the store this service writes; <KEY> lives in an attached store` | the space is in an attached store |
 | `no planning space <KEY>` | the store holds no such space, or the `data_scope_id` is no store this service knows |
 | `no project <id>` | neither the projects registry nor any item of the store names the project |
-| `[commit] <id> is not a registered project: <ids>`, and the refusal of a registry that cannot be read | the commits on no card of the scope cannot be read, as [Commits on no card](#commits-on-no-card) refuses them: a project only items name, or a space or project read while the registry cannot be |
 | the period's refusals of [What agent work spent in a period](#what-agent-work-spent-in-a-period), in its words: `from must be a date or a time with its offset` (and the same of `to`), `to must be later than from`, `from and to must lie between 1970 and 9999, …`, `the period holds more than 2400 steps of one day`, `utc_offset must be from -840 to 840 minutes` | the period |
 | `utc_offset must be a whole number of minutes`, `<name> is required`, `<name> must occur at most once`, `<name> is not a parameter` | a parameter missing, repeated or not one of these |
 
