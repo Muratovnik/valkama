@@ -183,7 +183,7 @@ describe('the overview on the page', () => {
       query.get('group_by') === 'model' ? { status: 500 } : serveUsage(WORLD, query),
     )
     const page = await mountAnalytics()
-    expect(words(card(page, 'model').text())).toContain('The values could not be read.')
+    expect(words(card(page, 'model').text())).toContain('The values could not be loaded.')
     expect(card(page, 'project').findAll('.ranked-row')).toHaveLength(2)
   })
 
@@ -223,7 +223,7 @@ describe('the overview on the page', () => {
     const page = await mountAnalytics()
     const changes = page.get('.overview-changes')
     expect(words(changes.text())).toContain(
-      'The period before could not be read, so nothing is compared.',
+      'The period before could not be loaded, so nothing is compared.',
     )
     expect(changes.findAll('.overview-changes-line')).toHaveLength(0)
 
@@ -240,7 +240,7 @@ describe('the overview on the page', () => {
     const page = await mountAnalytics()
     const days = page.get('.spending-days')
     expect(words(days.text())).toContain(
-      'The period before could not be read, so it is not outlined.',
+      'The period before could not be loaded, so it is not outlined.',
     )
     // The chart is handed its three periods with no figure of a period before to outline; the
     // test of the period before below shows the same figures handed over where it was read.

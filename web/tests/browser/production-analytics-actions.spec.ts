@@ -188,8 +188,8 @@ const TABLE_STATES = [
     unread: true,
     columns: 4,
     notes: {
-      en: ['The period before was not read, so this table shows this period alone.'],
-      ru: ['Предыдущий период не прочитан, поэтому таблица показывает только этот период.'],
+      en: ['The period before was not loaded, so this table shows this period alone.'],
+      ru: ['Предыдущий период не загружен, поэтому таблица показывает только этот период.'],
     },
   },
 ]

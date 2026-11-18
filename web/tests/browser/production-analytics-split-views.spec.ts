@@ -102,7 +102,7 @@ async function workSpend(page: Page) {
     .locator('.quota-account')
     .filter({ has: page.locator('.quota-account-name', { hasText: /^Work$/u }) })
     .locator('.quota-window[data-window="five_hour"]')
-    .getByRole('button', { name: 'Where the window went' })
+    .getByRole('button', { name: 'Breakdown', exact: true })
     .click()
   const panel = page.getByRole('dialog', { name: 'Details: Five hours · Work' })
   await expect(panel).toHaveCSS('transform', 'none')

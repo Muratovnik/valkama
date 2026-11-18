@@ -8,7 +8,7 @@ export const analyticsOverviewMessages = {
     risenFrom: '↑ from {before} in {period}',
     before: {
       word: 'period before',
-      failed: 'The period before could not be read, so it is not outlined.',
+      failed: 'The period before could not be loaded, so it is not outlined.',
     },
     changes: {
       title: 'What changed',
@@ -16,14 +16,14 @@ export const analyticsOverviewMessages = {
       up: 'Rose most',
       down: 'Fell most',
       still: 'Compared with {period}, no task moved.',
-      unread: 'The period before could not be read, so nothing is compared.',
+      unread: 'The period before could not be loaded, so nothing is compared.',
       newly: 'Nothing before',
       gone: 'Nothing now',
     },
     cards: {
       label: 'The first values of the period',
       open: 'Open the section',
-      failed: 'The values could not be read.',
+      failed: 'The values could not be loaded.',
       empty: 'Nothing spent in this period.',
       work_item: 'Tasks',
       model: 'Models',
@@ -35,7 +35,7 @@ export const analyticsOverviewMessages = {
     risenFrom: '↑ с {before} за период {period}',
     before: {
       word: 'прошлый период',
-      failed: 'Прошлый период не удалось прочитать, поэтому он не обведён.',
+      failed: 'Не удалось загрузить прошлый период, поэтому он не обведён.',
     },
     changes: {
       title: 'Что изменилось',
@@ -43,14 +43,14 @@ export const analyticsOverviewMessages = {
       up: 'Выросло сильнее всего',
       down: 'Упало сильнее всего',
       still: 'По сравнению с периодом {period} ни одна задача не изменилась.',
-      unread: 'Прошлый период не удалось прочитать, поэтому сравнивать не с чем.',
+      unread: 'Не удалось загрузить прошлый период, поэтому сравнения нет.',
       newly: 'Раньше ничего',
       gone: 'Сейчас ничего',
     },
     cards: {
       label: 'Первые значения периода',
       open: 'Открыть раздел',
-      failed: 'Не удалось прочитать значения.',
+      failed: 'Не удалось загрузить значения.',
       empty: 'За этот период ничего не потрачено.',
       work_item: 'Задачи',
       model: 'Модели',

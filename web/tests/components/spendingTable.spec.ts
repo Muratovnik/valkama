@@ -329,7 +329,7 @@ describe('the breakdown beside the period before', () => {
     expect(words(wrapper.get('h2').text())).toBe('Spending by task')
     expect(wrapper.findAll('.spending-table-note')).toHaveLength(1)
     expect(wrapper.get('.spending-table-note').text()).toBe(
-      'The period before was not read, so this table shows this period alone.',
+      'The period before was not loaded, so this table shows this period alone.',
     )
     expect(headings(wrapper)).toEqual(['Task', 'Agent time', 'Tokens', 'Cost'])
     // Gamma worked only before, which was not read: it is not here.
@@ -345,7 +345,7 @@ describe('the breakdown beside the period before', () => {
     const wrapper = table('time', null, 'ru')
     expect(words(wrapper.get('h2').text())).toBe('Расход по задачам')
     expect(wrapper.get('.spending-table-note').text()).toBe(
-      'Предыдущий период не прочитан, поэтому таблица показывает только этот период.',
+      'Предыдущий период не загружен, поэтому таблица показывает только этот период.',
     )
     expect(rows(table('cost', BEFORE, 'ru')).map((row) => row.at(-1))).toEqual([
       // A percentage as Russian writes it, a space before its sign.
@@ -375,7 +375,7 @@ describe('the breakdown beside the period before', () => {
       global: { plugins: [analyticsI18n()] },
     })
     expect(wrapper.find('table').exists()).toBe(false)
-    expect(wrapper.text()).toContain('This period spent nothing to break down.')
+    expect(wrapper.text()).toContain('Nothing to break down: nothing was spent in this period.')
   })
 })
 
@@ -452,7 +452,7 @@ describe('the table of a section split by a second dimension', () => {
 
     // A failed read says so in the alert, and announces no wait.
     const failed = crossedTable({ status: 'failed' })
-    expect(failed.get('[role="alert"]').text()).toBe('The breakdown by model could not be read.')
+    expect(failed.get('[role="alert"]').text()).toBe('The breakdown by model could not be loaded.')
     await failed.get('.spending-table-waiting button').trigger('click')
     expect(failed.emitted('reread')).toHaveLength(1)
   })

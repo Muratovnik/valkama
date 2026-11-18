@@ -2660,7 +2660,7 @@ windows side by side where the width allows, 32px apart with a hairline in the r
 between two neighbours: 16px apart with nothing between, the moment ending one window's axis and
 the one starting the next stood a few pixels apart and read as one axis. Every window, the five hours, the week and a
 model's week, has the same three parts 12px apart: what stands now, the `StepLine` of its
-readings and «Where the window went», which opens what used it in the side panel.
+readings and «Breakdown», which opens what used it in the side panel.
 The menu beside an account's name, named «Account actions: Work», holds three entries and no
 more. «Rename» puts a field in the name's place that saves through the same names and rules as
 Settings, by the account's key, and on the group of an organization no source read by the
@@ -2672,7 +2672,7 @@ value panel's button does, and the section stays where it is; once the filter ho
 is disabled and reads «Already in filter», and where no filter can take it the entry is absent.
 «Copy ID» copies the account's whole id with the copy's usual note. No hint says that id.
 What stands now leads with one line, the share as the window's figure and its state beside it,
-«41% used · fresh», «13% used · silent 5 h», over its bar, its share solid and its forecast a
+«41% used · up to date», «13% used · no data for 5 h», over its bar, its share solid and its forecast a
 hatched tail; then, right under that tail, its forecast in the text's ink after «Forecast ·», the
 name the step line's legend gives the hatch, its words starting where the lines under it do and
 nothing of it in the card's inset — the five hours a point, lasting to the reset with the share spent by
@@ -2695,12 +2695,12 @@ with a switch to the whole window (Charts), points at «now» and at its forecas
 past its readings, and a frame dragged along it narrows that line alone. An account no source
 read says so and draws no window; a silent window is as solid as a fresh one, says how long it
 has been silent and, in its bar's hint, since when it has not changed; a fresh 0 % draws an
-empty track and says «0% used · fresh». A window of money past a limit is a line of its name and
+empty track and says «0% used · up to date». A window of money past a limit is a line of its name and
 its state, its age and its source in the line's hint as a window of a share keeps them in its
 bar's and in words as a table, with no figure. No share is added to another, of two windows or
 two accounts, and no dollar stands beside one.
 
-Under each window that names its start stands «Where the window went», a button that opens the
+Under each window that names its start stands «Breakdown», a button that opens the
 side panel on that window of that account, titled «Five hours · Work»: the work Valkama
 recorded on the account from the window's start to the answer's moment, held to the last five
 minutes, as ranked bars — the first five items by the API price estimate, each with its share

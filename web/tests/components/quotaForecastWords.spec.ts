@@ -69,8 +69,8 @@ describe('a week’s forecast that reaches 100 %', () => {
   it('says the window runs out before the reset, and about when at the slower pace', () => {
     // 80 % now, 180 % by a reset ten hours on: the slower pace adds 10 % an hour, so 100 % at 12:00.
     const window = week(80, 10 * HOUR, 180, 200)
-    expect(said('en', window)).toBe('Runs out before the reset, by about 12:00')
-    expect(said('ru', window)).toBe('Кончится до сброса, примерно к 12:00')
+    expect(said('en', window)).toBe('Limit runs out before the reset, by about 12:00')
+    expect(said('ru', window)).toBe('Лимит закончится до сброса, примерно к 12:00')
   })
 
   it('names the day of a time on another day, and never a share past 100 %', () => {
@@ -82,15 +82,15 @@ describe('a week’s forecast that reaches 100 %', () => {
       expect(text, locale).toMatch(/12.*03:22$/u)
       expect(text, locale).not.toMatch(/%/u)
     }
-    expect(said('en', window)).toMatch(/^Runs out before the reset, by about /u)
-    expect(said('ru', window)).toMatch(/^Кончится до сброса, примерно к /u)
+    expect(said('en', window)).toMatch(/^Limit runs out before the reset, by about /u)
+    expect(said('ru', window)).toMatch(/^Лимит закончится до сброса, примерно к /u)
   })
 
   it('says only that it runs out before the reset where the pace gives no time', () => {
     // The reset is already behind the answer's moment, so no stretch is left to place a time in.
     const window = week(80, -HOUR, 120, 140)
-    expect(said('en', window)).toBe('Runs out before the reset')
-    expect(said('ru', window)).toBe('Кончится до сброса')
+    expect(said('en', window)).toBe('Limit runs out before the reset')
+    expect(said('ru', window)).toBe('Лимит закончится до сброса')
   })
 
   it('says a window already spent is spent, as the five hours do', () => {
@@ -103,8 +103,8 @@ describe('a week’s forecast that reaches 100 %', () => {
 describe('a week’s forecast that crosses 100 %', () => {
   it('says the window may run out before the reset, with no share past 100 %', () => {
     const window = week(60, 48 * HOUR, 97.5, 104.2)
-    expect(said('en', window)).toBe('May run out before the reset: 98% or more by then')
-    expect(said('ru', window)).toBe('Может кончиться до сброса: к нему 98 % или больше')
+    expect(said('en', window)).toBe('By the reset: 98% or more — the limit may run out')
+    expect(said('ru', window)).toBe('К сбросу: 98 % и больше — лимит может закончиться')
   })
 })
 

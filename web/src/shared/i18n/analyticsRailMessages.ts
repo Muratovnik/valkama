@@ -8,7 +8,7 @@ export const analyticsRailMessages = {
   en: {
     values: '{count} value | {count} values',
     noData: 'No data',
-    failed: 'Could not be read',
+    failed: 'Could not be loaded',
     from: '↑ from {before}',
     unread: 'Nothing to compare with',
     shares: 'Shares of {measure}: {parts}',
@@ -17,7 +17,7 @@ export const analyticsRailMessages = {
   ru: {
     values: '{count} значение | {count} значения | {count} значений',
     noData: 'Нет данных',
-    failed: 'Не удалось прочитать',
+    failed: 'Не удалось загрузить',
     from: '↑ с {before}',
     unread: 'Не с чем сравнить',
     shares: 'Доли, {measure}: {parts}',

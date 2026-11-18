@@ -15,9 +15,9 @@ export const analyticsMessages = {
   en: {
     analytics: {
       title: 'Usage of agent work',
-      failed: 'The usage of agent work could not be read.',
+      failed: 'The usage of agent work could not be loaded.',
       rail: analyticsRailMessages.en,
-      unread: 'The period before could not be read, so no change is shown.',
+      unread: 'The period before could not be loaded, so no change is shown.',
       empty: {
         title: 'Nothing was spent in this period',
         description:
@@ -69,7 +69,7 @@ export const analyticsMessages = {
         environment: 'by environment',
       },
       bars: {
-        empty: 'This period spent nothing to break down.',
+        empty: 'Nothing to break down: nothing was spent in this period.',
       },
       days: {
         title: '{measure} {per}, {by}',
@@ -77,11 +77,10 @@ export const analyticsMessages = {
         hatch: 'in progress',
         note: 'Note',
         total: 'total',
-        empty: 'No day in this period spent anything.',
+        empty: 'Nothing was spent on any day of this period.',
         other: 'Other',
         accounts: 'Account change: {before} → {after}',
-        accountsFailed:
-          'The accounts that worked could not be read, so their changes are not marked.',
+        accountsFailed: 'The account data could not be loaded, so account changes are not marked.',
         absent: { tokens: 'No tokens counted', cost: 'No price' },
       },
       marks: { share: '{share} of the total' },
@@ -105,7 +104,7 @@ export const analyticsMessages = {
         down: '↓ {change} against {period}',
         same: 'The same as {period}',
         none: 'Nothing spent in {period} to compare with',
-        unread: 'The period before was not read, nothing to compare with',
+        unread: 'The period before was not loaded, nothing to compare with',
         absent: {
           tokens: {
             before: 'No tokens counted in {period} to compare with',
@@ -123,7 +122,7 @@ export const analyticsMessages = {
         title: 'Spending {by}',
         crossTitle: 'Spending {by} and {across}',
         change: 'Change',
-        unread: 'The period before was not read, so this table shows this period alone.',
+        unread: 'The period before was not loaded, so this table shows this period alone.',
         download: 'Download CSV',
         nothingToDownload: 'Nothing to download: this view holds no value.',
         moved: {
@@ -156,7 +155,7 @@ export const analyticsMessages = {
         any: 'Any',
         clear: 'Clear filters',
         remove: 'Remove {label}',
-        failed: 'The values could not be read.',
+        failed: 'The values could not be loaded.',
         noMatches: 'No matches',
         full: 'The link to this view cannot hold more values of the {dimension} filter, so this one was not added.',
         add: 'Add to filter',
@@ -202,9 +201,9 @@ export const analyticsMessages = {
   ru: {
     analytics: {
       title: 'Расход работы агентов',
-      failed: 'Не удалось прочитать расход работы агентов.',
+      failed: 'Не удалось загрузить расход работы агентов.',
       rail: analyticsRailMessages.ru,
-      unread: 'Предыдущий период не удалось прочитать, поэтому изменение не показано.',
+      unread: 'Не удалось загрузить предыдущий период, поэтому изменение не показано.',
       empty: {
         title: 'За этот период ничего не потрачено',
         description:
@@ -256,7 +255,7 @@ export const analyticsMessages = {
         environment: 'по средам',
       },
       bars: {
-        empty: 'В этом периоде нечего разбивать: ничего не потрачено.',
+        empty: 'Нет данных для разбивки: за этот период ничего не потрачено.',
       },
       days: {
         title: '{measure} {per}, {by}',
@@ -268,7 +267,7 @@ export const analyticsMessages = {
         other: 'Остальное',
         accounts: 'Смена аккаунта: {before} → {after}',
         accountsFailed:
-          'Не удалось прочитать, какие аккаунты работали, поэтому их смены не отмечены.',
+          'Не удалось загрузить данные аккаунтов, поэтому смены аккаунтов не отмечены.',
         absent: { tokens: 'Токены не учтены', cost: 'Нет цены' },
       },
       marks: { share: '{share} от всего' },
@@ -292,7 +291,7 @@ export const analyticsMessages = {
         down: '↓ {change} к периоду {period}',
         same: 'Столько же, сколько за период {period}',
         none: 'За период {period} ничего не потрачено, сравнивать не с чем',
-        unread: 'Предыдущий период не прочитан, сравнивать не с чем',
+        unread: 'Предыдущий период не загружен, сравнивать не с чем',
         absent: {
           tokens: {
             before: 'За период {period} токены не учтены, сравнивать не с чем',
@@ -310,9 +309,9 @@ export const analyticsMessages = {
         title: 'Расход {by}',
         crossTitle: 'Расход {by} и {across}',
         change: 'Изменение',
-        unread: 'Предыдущий период не прочитан, поэтому таблица показывает только этот период.',
+        unread: 'Предыдущий период не загружен, поэтому таблица показывает только этот период.',
         download: 'Скачать CSV',
-        nothingToDownload: 'Скачивать нечего: в этом виде нет ни одного значения.',
+        nothingToDownload: 'Нет данных для скачивания: в этом виде нет значений.',
         moved: {
           up: '↑ {change}',
           down: '↓ {change}',
@@ -322,12 +321,12 @@ export const analyticsMessages = {
             tokens: {
               before: 'Раньше токены не учтены',
               now: 'Сейчас токены не учтены',
-              both: 'Токены не учтены ни там, ни там',
+              both: 'Токены не учтены ни в одном периоде',
             },
             cost: {
               before: 'Раньше нет цены',
               now: 'Сейчас нет цены',
-              both: 'Нет цены ни там, ни там',
+              both: 'Нет цены ни в одном периоде',
             },
           },
         },
@@ -343,7 +342,7 @@ export const analyticsMessages = {
         any: 'Любое',
         clear: 'Снять фильтры',
         remove: 'Убрать {label}',
-        failed: 'Не удалось прочитать значения.',
+        failed: 'Не удалось загрузить значения.',
         noMatches: 'Ничего не найдено',
         full: 'Ссылка на этот вид не вмещает больше значений фильтра «{dimension}», поэтому это значение не добавлено.',
         add: 'Добавить в фильтр',

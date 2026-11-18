@@ -61,7 +61,7 @@ describe('five hours that last to the reset', () => {
     expect(tileTail).toHaveLength(1)
     expect(tileTail[0]?.attributes('style')).toContain('inline-size: 35%')
     expect(tile(page, 'quota_five_hour').get('.window-track').attributes('aria-label')).toBe(
-      'Five hours: 0% used, steady use 20%, fresh. Forecast · Lasts to the reset, 35% by then',
+      'Five hours: 0% used, steady use 20%, up to date. Forecast · By the reset: 35%',
     )
     const window = accountNamed(page, '7e6d5c4b').get('.quota-window[data-window="five_hour"]')
     const tail = window.findAll('[data-mark="ahead"]')
@@ -69,9 +69,7 @@ describe('five hours that last to the reset', () => {
     expect(tail[0]?.attributes('style')).toContain('inline-size: 35%')
     // The line is its words alone: no swatch stands before «Forecast».
     expect(window.find('[data-fact="forecast"] [data-mark="hatch"]').exists()).toBe(false)
-    expect(plain(window.get('[data-fact="forecast"]').text())).toBe(
-      'Forecast · Lasts to the reset, 35% by then',
-    )
+    expect(plain(window.get('[data-fact="forecast"]').text())).toBe('Forecast · By the reset: 35%')
     // As a table the readings end with the forecast at the reset: the figure says it all.
     await showTable(page)
     const rows = accountNamed(page, '7e6d5c4b')
@@ -86,6 +84,6 @@ describe('five hours that last to the reset', () => {
     const said = accountNamed(ru, '7e6d5c4b').get(
       '.quota-window[data-window="five_hour"] [data-fact="forecast"]',
     )
-    expect(plain(said.text())).toBe('Прогноз · Хватит до сброса, к нему 35 %')
+    expect(plain(said.text())).toBe('Прогноз · К сбросу: 35 %')
   })
 })

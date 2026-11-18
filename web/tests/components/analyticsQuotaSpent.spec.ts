@@ -1,6 +1,6 @@
 /**
  * What used each window of the quota panel, against stand-ins for the usage and quota reads. The
- * oracle is the requirement: each window that has a start offers «Where the window went», which
+ * oracle is the requirement: each window that has a start offers «Breakdown», which
  * opens in the side panel over the page the work Valkama recorded on that account from the
  * window's start to the answer's moment, ranked by its API price estimate with
  * each item's share of that estimate, by task first and by project or model on choice, drawn or, by
@@ -56,7 +56,7 @@ function accountNamed(page: VueWrapper, name: string) {
   if (!found) throw new Error(`no account ${name}`)
   return found
 }
-/** A window's «Where the window went», which opens what used it in the side panel. */
+/** A window's «Breakdown», which opens what used it in the side panel. */
 const spendOf = (page: VueWrapper, name: string, kind = 'five_hour') =>
   accountNamed(page, name).get(`.quota-window[data-window="${kind}"] [data-spend]`)
 
@@ -154,7 +154,7 @@ describe('where a window went', () => {
     const sectionAbout = page.get(named)
     await sectionAbout.trigger('click')
     const basis =
-      'Where a window went is the API price estimate of the work Valkama recorded on the account, not quota points, without the work in claude.ai and the desktop app.'
+      'The window breakdown is the API price estimate of the work Valkama recorded on the account, not quota points, without the work in claude.ai and the desktop app.'
     expect(document.querySelector('.info-tip-panel')?.textContent).toContain(basis)
     await sectionAbout.trigger('click')
     expect(document.querySelectorAll('.info-tip-panel')).toHaveLength(0)
@@ -162,9 +162,9 @@ describe('where a window went', () => {
     // Under the panel's name, one rank under it: the section's «ⓘ» is under the panel, so the
     // panel's own «ⓘ» says what the figures are and are not, and neither the panel nor the block
     // says it as a line.
-    expect(block.get('h3').text()).toBe('Where the window went from 11:30 to 14:30')
+    expect(block.get('h3').text()).toBe('Window breakdown: 11:30 – 14:30')
     const frame = document.querySelector('[data-detail="window"]')?.closest('.drawer-frame')
-    expect(frame?.textContent).toContain('Where the window went from 11:30 to 14:30')
+    expect(frame?.textContent).toContain('Window breakdown: 11:30 – 14:30')
     expect(frame?.textContent).not.toContain('quota points')
     const about = [...(frame?.querySelectorAll('button') ?? [])].filter(
       (button) => button.getAttribute('aria-label') === 'About these figures',
@@ -176,7 +176,7 @@ describe('where a window went', () => {
     expect(tips).toHaveLength(1)
     expect(tips[0]?.textContent).toContain(basis)
     expect(block.get('.ranked-bars').attributes('aria-label')).toBe(
-      'Where Five hours of Work went by task, by API price estimate',
+      'Breakdown of Five hours of Work by task, by API price estimate',
     )
   })
 
@@ -296,7 +296,7 @@ describe('where a window went', () => {
     stubAnalyticsReads(usage, quota)
     const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
     const week = await openSpend(page, 'Work', 'week')
-    expect(week.get('h3').text()).toContain('from Nov 7, 14:30 to 14:30')
+    expect(week.get('h3').text()).toContain(': Nov 7, 14:30 – 14:30')
     expect(lines(week)[0]).toEqual(['MAIN-9 Earlier', '≈ $50.00 · 79%'])
   })
 })
@@ -337,7 +337,9 @@ describe('the states of what used a window', () => {
     expect(waiting.attributes('data-state')).toBe('loading')
     expect(waiting.get('.window-spend-body').text()).toBe('Loading')
     // The panel's own figures stand meanwhile.
-    expect(accountNamed(page, 'Work').get('.quota-window-lead').text()).toBe('62% used · fresh')
+    expect(accountNamed(page, 'Work').get('.quota-window-lead').text()).toBe(
+      '62% used · up to date',
+    )
     for (const held of reads.held) held.release(usage(held.query))
     await flushPromises()
     // What it read waits for the minimum the wait was shown for, then takes its place.
@@ -356,10 +358,12 @@ describe('the states of what used a window', () => {
     const failed = await openSpend(page, 'Work')
     expect(failed.attributes('data-state')).toBe('failed')
     expect(failed.get('.window-spend-body').text()).toBe(
-      'What used this window could not be read. Retry',
+      'The window breakdown could not be loaded. Retry',
     )
-    expect(page.text()).not.toContain('The quota could not be read.')
-    expect(accountNamed(page, 'Work').get('.quota-window-lead').text()).toBe('62% used · fresh')
+    expect(page.text()).not.toContain('The quota could not be loaded.')
+    expect(accountNamed(page, 'Work').get('.quota-window-lead').text()).toBe(
+      '62% used · up to date',
+    )
     fails = false
     await failed.get('.window-spend-failed button').trigger('click')
     await flushPromises()

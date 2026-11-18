@@ -2,7 +2,7 @@
  * The words of the Analytics page are said once, where they belong. In the state with data, in
  * Russian and in English, no block shows by default a sentence longer than 90 characters; each
  * caveat of a section — that a cost is an estimate and not a bill, what the tokens count, that
- * the period does not reach the quota, what «Where the window went» is — stands in exactly one
+ * the period does not reach the quota, what «Breakdown» is — stands in exactly one
  * hint, the «ⓘ» of the section's heading, and nowhere on the page; and no word is «пока» or «so
  * far», which read as a goodbye under the period still running. The side panel a window opens on
  * what used it says what that is in its own «ⓘ» alone, never as a line of the panel. Each block

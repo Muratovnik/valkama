@@ -8,7 +8,7 @@
  * A tile says one account's one window and never a sum. Where it has no window to name it says
  * why in words of its own, so no source, a window that reset since it was read and a fresh 0 %
  * never read alike: an organization nobody's source read is «No source», a fresh 0 % is the
- * account with «0%» and «fresh», a silent window says «silent» and for how long, its share as
+ * account with «0%» and «up to date», a silent window says «no data» and for how long, its share as
  * solid as a fresh one's. Before its first answer the tile waits as the others do (`RailTile`),
  * and a read that failed says so.
  */

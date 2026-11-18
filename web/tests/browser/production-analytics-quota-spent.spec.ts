@@ -2,7 +2,7 @@
  * What used each quota window, in the real app, at the widths it is used at — beside the rail at
  * 1440 pixels, in place of the list at 1024 and 390 — in the light and the dark theme.
  *
- * Under each window of an account that has one stands «Where the window went», which opens the
+ * Under each window of an account that has one stands «Breakdown», which opens the
  * side panel on that window of that account: what the account's work in the window went to,
  * ranked, under a heading that names its period. The quota's own bar and readings carry no
  * dollar, and the spend no quota share. Its parts start at the panel's one edge, nothing in it is
@@ -49,7 +49,7 @@ async function openFiveHours(page: Page) {
 async function openSpend(page: Page, name: string) {
   await accountNamed(page, name)
     .locator('.quota-window[data-window="five_hour"]')
-    .getByRole('button', { name: 'Where the window went' })
+    .getByRole('button', { name: 'Breakdown', exact: true })
     .click()
   const spend = spendOf(page, name)
   await expect(panelOf(page, name)).toHaveCSS('transform', 'none')
@@ -107,7 +107,7 @@ for (const colorScheme of ['light', 'dark'] as const)
       const shares = await quotaParts.allTextContents()
       expect(shares.join(' '), 'figures read on the page').toContain('%')
       expect(shares.join(' '), 'no dollar among the shares').not.toContain('$')
-      await expect(page.getByRole('button', { name: 'Where the window went' })).toHaveCount(3)
+      await expect(page.getByRole('button', { name: 'Breakdown', exact: true })).toHaveCount(3)
 
       const work = await openSpend(page, 'Work')
       // The panel's own switch, chosen by its width.
@@ -118,7 +118,7 @@ for (const colorScheme of ['light', 'dark'] as const)
         .textContent()
 
       // The spend's heading names its period; what it is and leaves out is the panel's «ⓘ».
-      await expect(work.locator('h3')).toHaveText('Where the window went from 11:30 to 14:30')
+      await expect(work.locator('h3')).toHaveText('Window breakdown: 11:30 – 14:30')
       await expect(work).not.toContainText('quota points')
       await expect(work).toHaveAttribute('data-state', 'spent')
       // The first line of its chart, or of its table where the panel shows tables.
@@ -208,14 +208,14 @@ test('a spend that waits says so in its panel, and one whose read failed retries
   await expect(page.locator('.quota-account')).toHaveCount(4)
   await accountNamed(page, 'Work')
     .locator('.quota-window[data-window="five_hour"]')
-    .getByRole('button', { name: 'Where the window went' })
+    .getByRole('button', { name: 'Breakdown', exact: true })
     .click()
   const work = spendOf(page, 'Work')
   await expect(work).toHaveAttribute('data-state', 'loading')
   await expect(work.locator('.window-spend-body')).toHaveText('Loading')
   // The window's own figures stand meanwhile, under the panel.
   await expect(accountNamed(page, 'Work').locator('.quota-window-lead').first()).toHaveText(
-    '62% used · fresh',
+    '62% used · up to date',
   )
   await panelOf(page, 'Work').screenshot(shot(info, 'quota-spent-waiting.png'))
 
@@ -225,10 +225,10 @@ test('a spend that waits says so in its panel, and one whose read failed retries
   await expect(page.locator('.quota-account')).toHaveCount(4)
   await expect(work).toHaveAttribute('data-state', 'failed')
   await expect(work.locator('.window-spend-failed')).toContainText(
-    'What used this window could not be read.',
+    'The window breakdown could not be loaded.',
   )
   await expect(page.locator('.quota-panel')).toContainText('Work')
-  await expect(page.locator('.quota-panel')).not.toContainText('The quota could not be read.')
+  await expect(page.locator('.quota-panel')).not.toContainText('The quota could not be loaded.')
   await panelOf(page, 'Work').screenshot(shot(info, 'quota-spent-failed.png'))
 
   answer = 'serve'

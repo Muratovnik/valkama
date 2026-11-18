@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
  * One window of one account in the quota panel, in three parts 12px apart: what stands now, the
- * step line of its readings (`StepLine`) and «Where the window went», which opens what used the
+ * step line of its readings (`StepLine`) and «Breakdown», which opens what used the
  * window in the side panel over the page (`WindowDetail`).
  *
  * What stands now leads with one line, the share spent as the window's figure and its state in
- * words beside it, «75% used · silent 3 d», over the bar with its pace tick (`WindowBar`), then
+ * words beside it, «75% used · no data for 3 d», over the bar with its pace tick (`WindowBar`), then
  * the forecast in the text's ink and when the window resets, in absolute and relative time,
  * quieter. The bar draws the forecast as a hatched tail past the share spent, and the forecast's
  * line, right under it, leads with «Forecast ·», as the step line's legend names its corridor: the
@@ -24,8 +24,8 @@
  * forecasts a range, said never past 100 % (`useQuotaWords`); both are drawn from one mapping
  * (`forecastCourses`). A window too new for a forecast says so in the quiet ink and draws no
  * tail. A silent window's share is as solid as a fresh one's, since a reading is final however
- * old: it says «silent» and for how long, and its hint when its reading last changed; a fresh 0 %
- * is a bar with no fill that says «0% used» and «fresh». While the window stands, its step line
+ * old: it says «no data» and for how long, and its hint when its reading last changed; a fresh 0 %
+ * is a bar with no fill that says «0% used» and «up to date». While the window stands, its step line
  * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`); a
  * silent window's line stops at its last reading, since nothing was measured after it, while a
  * fresh one's holds to now, a source writing a reading only when a value changes. A window past
@@ -345,7 +345,7 @@ const readingsCaption = computed(() =>
   color: var(--color-text-muted);
 }
 
-/* «Where the window went» is a control of the window, at its start rather than across it. */
+/* «Breakdown» is a control of the window, at its start rather than across it. */
 .quota-window-uses {
   justify-self: start;
 }

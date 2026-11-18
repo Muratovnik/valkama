@@ -4,7 +4,7 @@
  * quota read knows, in the answer's order, with every window of the section (`QuotaAccount`).
  *
  * It reads the quota (`useQuotaRead`), not the page's usage: the period and the filters do not
- * apply to it, which the «ⓘ» of its heading says once, with what «Where the window went» is and
+ * apply to it, which the «ⓘ» of its heading says once, with what «Breakdown» is and
  * leaves out (`useSectionCaveats`); no line of the panel says either again. Its windows are drawn
  * or read as their tables, as every chart of the page is (`ChartSection`). No figure here is added to another: each is one
  * account's share of one window, and no money stands beside one.

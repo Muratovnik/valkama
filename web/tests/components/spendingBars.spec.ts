@@ -290,14 +290,14 @@ describe('the bars', () => {
   it('say a period that spent nothing spent nothing, in every measure and as a table', () => {
     for (const measure of ['time', 'tokens', 'cost'] as const) {
       expect(mountBars([], 'work_item', { measure }).text()).toContain(
-        'This period spent nothing to break down.',
+        'Nothing to break down: nothing was spent in this period.',
       )
       expect(mountBars([], 'work_item', { measure, narrow: true }).text()).toContain(
-        'This period spent nothing to break down.',
+        'Nothing to break down: nothing was spent in this period.',
       )
     }
     expect(mountBars([], 'work_item', { locale: 'ru' }).text()).toContain(
-      'В этом периоде нечего разбивать: ничего не потрачено.',
+      'Нет данных для разбивки: за этот период ничего не потрачено.',
     )
   })
 })

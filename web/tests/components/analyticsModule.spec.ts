@@ -303,7 +303,7 @@ describe('the Analytics page', () => {
     await flushPromises()
     expect(page.findAll('.period-mark')).toHaveLength(0)
     expect(page.get('.spending-days-note').text()).toBe(
-      'The accounts that worked could not be read, so their changes are not marked.',
+      'The account data could not be loaded, so account changes are not marked.',
     )
   })
 
@@ -396,7 +396,7 @@ describe('the Analytics page', () => {
   it('says a failed read failed, and asks again on retry', async () => {
     const reads = stubAnalyticsReads(() => ({ status: 500 }))
     const page = await mountAnalytics()
-    expect(page.get('[role="alert"]').text()).toContain('could not be read')
+    expect(page.get('[role="alert"]').text()).toContain('could not be loaded')
     const asked = reads.grouped('work_item').length
     await page.get('.platform-state-retry').trigger('click')
     await flushPromises()
@@ -419,9 +419,9 @@ describe('the Analytics page', () => {
     expect(time(page)).toBe('0 min')
     const unread = page.get('.spending-unread')
     expect(unread.get('[role="status"]').text()).toBe(
-      'The period before could not be read, so no change is shown.',
+      'The period before could not be loaded, so no change is shown.',
     )
-    expect(change(page)).toBe('The period before was not read, nothing to compare with')
+    expect(change(page)).toBe('The period before was not loaded, nothing to compare with')
 
     failing = false
     const asked = reads.asked.filter((query) => weekBefore(query)).length
@@ -437,7 +437,7 @@ describe('the Analytics page', () => {
     const page = await mountAnalytics({ routeState: { by: 'work_item' } }, 'ru')
     expect(time(page)).toBe('3 ч')
     expect(page.get('.spending-unread [role="status"]').text()).toBe(
-      'Предыдущий период не удалось прочитать, поэтому изменение не показано.',
+      'Не удалось загрузить предыдущий период, поэтому изменение не показано.',
     )
     expect(page.get('.spending-unread button').text()).toBe('Повторить')
   })

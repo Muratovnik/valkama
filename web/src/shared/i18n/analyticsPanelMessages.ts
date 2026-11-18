@@ -65,7 +65,7 @@ export const analyticsPanelMessages = {
         az: 'A to Z',
         za: 'Z to A',
       },
-      failed: 'The breakdown {across} could not be read.',
+      failed: 'The breakdown {across} could not be loaded.',
       kinds: {
         note: 'Tokens count input, output and cache writes; cache reads stand apart, and reasoning is part of output.',
         input: 'Input',
@@ -138,7 +138,7 @@ export const analyticsPanelMessages = {
         az: 'от А до Я',
         za: 'от Я до А',
       },
-      failed: 'Разрез {across} не прочитан.',
+      failed: 'Не удалось загрузить разрез {across}.',
       kinds: {
         note: 'Токены — это вход, выход и запись в кэш; чтение кэша стоит отдельно, а рассуждения входят в выход.',
         input: 'Вход',

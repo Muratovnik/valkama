@@ -185,7 +185,7 @@ const READ_STATES: {
       await expect(analytics.locator('.tile-figure[data-measure="tokens"]')).toHaveText('0')
       await expect(analytics.locator('.spending-tiles .tile-change').first()).toContainText('↓ 100')
       await expect(analytics.locator('.spending-bars')).toContainText(
-        ru ? 'нечего разбивать' : 'spent nothing to break down',
+        ru ? 'Нет данных для разбивки' : 'Nothing to break down',
       )
     },
   },
@@ -196,8 +196,8 @@ const READ_STATES: {
       const unread = analytics.locator('.spending-unread')
       await expect(unread.getByRole('status')).toHaveText(
         ru
-          ? 'Предыдущий период не удалось прочитать, поэтому изменение не показано.'
-          : 'The period before could not be read, so no change is shown.',
+          ? 'Не удалось загрузить предыдущий период, поэтому изменение не показано.'
+          : 'The period before could not be loaded, so no change is shown.',
       )
       await expect(unread.getByRole('button')).toHaveText(ru ? 'Повторить' : 'Retry')
     },

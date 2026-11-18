@@ -287,7 +287,7 @@ for (const locale of ['en', 'ru'] as const)
 
       // A window's spend, from its block in the quota's section.
       await page.goto(pageAt(shownAt(width, { by: 'quota_five_hour' })))
-      const opens = page.getByRole('button', { name: said.detail.window.open })
+      const opens = page.getByRole('button', { name: said.detail.window.open, exact: true })
       await expect(opens).toHaveCount(3)
       await opens.first().click()
       const window = page.getByRole('dialog')

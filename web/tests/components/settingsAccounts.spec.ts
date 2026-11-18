@@ -317,7 +317,7 @@ describe('the accounts in Settings', () => {
   it('says when the accounts could not be read, by either read, and reads both again on request', async () => {
     serve(() => ({ status: 503 }))
     const failed = await mountAccounts()
-    expect(statusOf(failed).text()).toBe('Could not read the accounts work was billed to.')
+    expect(statusOf(failed).text()).toBe('Could not load the accounts work was billed to.')
     serve((query) => serveUsage(STRETCHES, query))
     await retryOf(failed).trigger('click')
     await flushPromises()
@@ -331,14 +331,14 @@ describe('the accounts in Settings', () => {
       () => ({ status: 503 }),
     )
     const unread = await mountAccounts()
-    expect(statusOf(unread).text()).toBe('Could not read the accounts work was billed to.')
+    expect(statusOf(unread).text()).toBe('Could not load the accounts work was billed to.')
     expect(rowsOf(unread)).toEqual([])
   })
 
   it('lists no field until Valkama’s names are read, and reads them again on request', async () => {
     names.refuse({ status: 503 })
     const wrapper = await mountAccounts()
-    expect(statusOf(wrapper).text()).toBe('Could not read the names Valkama keeps for accounts.')
+    expect(statusOf(wrapper).text()).toBe('Could not load the account names kept in Valkama.')
     expect(rowsOf(wrapper)).toEqual([])
     await retryOf(wrapper).trigger('click')
     await flushPromises()

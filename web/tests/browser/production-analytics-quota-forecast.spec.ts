@@ -300,12 +300,12 @@ const casesIn = (cases: Record<string, Drawn>, lang: 'en' | 'ru') =>
     ]),
   )
 
-/** A window's state at the end of its lead: «fresh», or «silent» and for how long. */
+/** A window's state at the end of its lead: «up to date», or «no data» and for how long. */
 const stateWords = (lang: 'en' | 'ru') => {
-  const { states } = messages[lang].analytics.quota
+  const { states, silentFor } = messages[lang].analytics.quota
   return {
     fresh: new RegExp(`· ${states.fresh}$`, 'u'),
-    silent: new RegExp(`· ${states.silent} [0-9]`, 'u'),
+    silent: new RegExp(`· ${silentFor.replace('{for}', '[0-9]')}`, 'u'),
   } as Record<string, RegExp>
 }
 
