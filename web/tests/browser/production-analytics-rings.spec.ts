@@ -5,11 +5,11 @@
  * in its order, five sectors at most with the smaller past them folded into one rest; a sector
  * pointed at or reached with the keyboard shows one hint with its figure and share; the section's
  * «Table» shows every value as before; split by a second dimension, the section draws its pairs as
- * ranked bars again; a sector of a value pressed narrows the view to it; a sector reached from the
- * keyboard shows its focus ring, in the forced palette's highlight there, and a pointer press shows
- * none. At 1440 and 360 pixels the
- * ring stands inside its column and its legend clear of it, and no words stand on a sector. Each
- * run prints what it measured and keeps a picture of each section.
+ * ranked bars again; a sector of a value pressed opens the value's side panel over the view; a
+ * sector reached from the keyboard shows its focus ring, in the forced palette's highlight there,
+ * and a pointer press shows none. At 1440 and 360 pixels the ring stands inside its column and its
+ * legend clear of it, and no words stand on a sector. Each run prints what it measured and keeps a
+ * picture of each section.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -194,7 +194,7 @@ test('split by a second dimension, the effort section draws its pairs as ranked 
   await expect(section.locator('.donut-chart')).toHaveCount(0)
 })
 
-test('agent time by environment is a ring whose sector narrows the view to its value', async ({
+test('agent time by environment is a ring whose sector opens its value’s side panel', async ({
   page,
 }, info) => {
   const section = await openRing(page, { by: 'environment' }, 1440)
@@ -212,12 +212,14 @@ test('agent time by environment is a ring whose sector narrows the view to its v
   const band = await largestBand(chart)
   await page.mouse.click(band.x, band.y)
   await expect.poll(() => page.url()).not.toBe(address)
-  // The address's state, read back, filters by the environment pressed.
+  // The address's state, read back, keeps the view and opens the environment pressed in the panel.
   const state = () => {
     const encoded = new URL(page.url()).searchParams.get('state') ?? ''
-    return Buffer.from(encoded, 'base64').toString('utf8')
+    return JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) as Record<string, string>
   }
-  await expect.poll(state).toContain(String.raw`\"environment\":[\"local\"]`)
+  await expect.poll(() => state().detail).toBe('{"by":"environment","value":"local"}')
+  expect(state()).toEqual({ by: 'environment', detail: '{"by":"environment","value":"local"}' })
+  await expect(page.getByRole('dialog', { name: 'Details: local' })).toBeVisible()
 })
 
 for (const width of [1440, 360])

@@ -10,7 +10,8 @@
  * somewhere else. Laid over its element, the whole text opens under a pointer that stays still
  * without going and coming back, covers no other row of its list on one line, keeps itself up
  * while the pointer is anywhere on it, and lets a press through to what it covers: a rail's row
- * and a task's name open their card, a list's row its card, and a lane's head folds the lane.
+ * opens its card, a task's name in the Analytics table its side panel, a list's row its card, and
+ * a lane's head folds the lane.
  * Each run prints what it measured, how many of the texts wrapped among it.
  */
 import { expect } from '@playwright/test'
@@ -288,7 +289,7 @@ for (const width of [1440, 1024]) {
       })
     })
 
-    test('a task’s name the Analytics table cuts reads on over its row, and a press opens its card', async ({
+    test('a task’s name the Analytics table cuts reads on over its row, and a press opens its side panel', async ({
       page,
     }, info) => {
       await serveAnalytics(page, [
@@ -305,7 +306,7 @@ for (const width of [1440, 1024]) {
         anchor: name,
         answered: async () => {
           await expect.poll(() => page.url()).not.toBe(before)
-          await expect(page.locator('.drawer')).toHaveCount(1)
+          await expect(page.getByRole('dialog', { name: /^Details: MAIN-264 /u })).toBeVisible()
         },
         name: 'analytics',
         rows: '.spending-table tbody tr',

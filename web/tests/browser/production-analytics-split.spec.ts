@@ -6,8 +6,9 @@
  * inside its own frame (`production-analytics-one-scroll.spec.ts` holds that nothing else in it
  * scrolls on its own). Each row of the table and its heading row is one line, and the figures'
  * columns are as narrow as what they hold. A wheel over the table scrolls it in its frame, the
- * panel and the document standing still, and the names stay pinned at the frame's start. The ranked list's last line and «To the table» bring the table
- * into view with the focus on it. Each run prints what it measured.
+ * panel and the document standing still, and the names stay pinned at the frame's start. «To the
+ * table» brings the table into view with the focus on it, and the ranked list's last line, «All
+ * 30», opens every task in the side panel. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -207,7 +208,7 @@ for (const [width, height] of [
     expect(name).toBe('sticky')
   })
 
-test('the ranked list names ten tasks and the rest in one row, and its last line brings the table into view, focused', async ({
+test('the ranked list names ten tasks and the rest in one row, and its last line opens all thirty in the side panel', async ({
   page,
 }) => {
   await openSplit(page, 1440, 900)
@@ -215,13 +216,12 @@ test('the ranked list names ten tasks and the rest in one row, and its last line
   await expect(page.locator('.spending-bars .ranked-rest .ranked-label')).toHaveText([
     'Other, 20 more',
   ])
-  const more = page
-    .locator('.spending-bars')
-    .getByRole('button', { name: '20 more — in the table' })
-  await more.click()
-  await expect.poll(() => tableFocused(page)).toEqual({ focused: true, top: 0 })
-  // The charts are still there over the table, in the same scroll.
-  await expect(page.locator('.spending-bars')).toBeAttached()
+  await page.locator('.spending-bars').getByRole('button', { name: 'All 30' }).click()
+  const every = page.getByRole('dialog', { name: 'Details: Task: every value' })
+  await expect(every.locator('tbody').getByRole('row')).toHaveCount(30)
+  // The page stays under the panel as it was: its charts and its table, in the same scroll.
+  await expect(page.locator('.analytics-panel .spending-bars')).toBeAttached()
+  await expect(page.locator('.analytics-panel .spending-table')).toBeAttached()
   await expect(page.getByRole('button', { name: /^(Expand|Collapse) table$/u })).toHaveCount(0)
 })
 

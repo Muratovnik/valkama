@@ -309,8 +309,9 @@ for (const width of WIDTHS)
     await page.goForward()
     await page.goForward()
     await expect.poll(() => path(page)).toBe(narrowed)
+    // The task's bar is named by its action, and its row in the table by the task it heads.
     const task = 'MAIN-264 Import the planning documents'
-    const link = bars.getByRole('link', { name: `Details of ${task}` })
+    const link = bars.getByRole('link', { name: new RegExp(`^(Details of )?${task}$`, 'u') })
     await expect(link).toHaveAttribute('href', '/open/MAIN-264')
     await link.click()
     const taskDetail = JSON.stringify({ by: 'work_item', value: IMPORT.id })
@@ -350,6 +351,13 @@ for (const width of WIDTHS)
     await page.keyboard.press('Escape')
     await expect.poll(() => path(page)).toBe(byModel)
     await expect(days).toHaveAttribute('data-shown', 'chart')
+    // The focus is back on the segment, whose hint the key brings; the next Escape closes it.
+    await expect(stack).toBeFocused()
+    const hint = page.getByRole('tooltip')
+    await expect(hint).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(hint).toHaveCount(0)
+    expect(path(page)).toBe(byModel)
     // Over the stack, where no segment stands, the press is the day's own.
     const dayAt = await tuesdaySlot.locator('.period-column').boundingBox()
     const dayPoint = { x: (dayAt?.x ?? 0) + (dayAt?.width ?? 0) / 2, y: (dayAt?.y ?? 0) + 2 }

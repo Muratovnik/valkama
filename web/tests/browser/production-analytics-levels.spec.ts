@@ -218,6 +218,7 @@ test('at 1440×900 the quota numbers its accounts and their windows under its se
   await record(info, 'outline quota 1440x900', read)
   const { offStep, ranks } = nesting(read)
   expect(offStep, 'a heading not one step under the heading over it').toEqual([])
-  // The section, its accounts, their windows and where each window went.
-  expect(ranks).toEqual([2, 3, 4, 5])
+  // The section, its accounts and their windows; where a window went opens in the side panel,
+  // under the panel's own heading.
+  expect(ranks).toEqual([2, 3, 4])
 })

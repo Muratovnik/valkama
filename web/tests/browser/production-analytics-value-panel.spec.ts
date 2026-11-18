@@ -131,6 +131,8 @@ async function panelNamed(page: Page, name: string) {
 }
 
 const round = (amount: number) => Math.round(amount * 100) / 100
+/** The height a box's middle stands at. */
+const middle = (box: { bottom: number; top: number }) => (box.top + box.bottom) / 2
 
 /** The element with the focus: whether it is what the panel is read with, and the ring drawn. */
 const focused = (page: Page) =>
@@ -232,7 +234,9 @@ for (const locale of ['en', 'ru'] as const)
         `a task's panel at ${width}px in ${locale}`,
         '[role="dialog"] [data-figure] :is(dt, dd), [role="dialog"] h3',
       )
-      await page.keyboard.press('Escape')
+      // Closed by its own control: a pointer resting in the panel may raise a hint there, which
+      // an Escape closes first.
+      await task.getByRole('button', { name: said.detail.close }).click()
       await expect(task).toBeHidden()
 
       // Every value of the section, from «All N» under the list.
@@ -258,7 +262,7 @@ for (const locale of ['en', 'ru'] as const)
         `every value at ${width}px in ${locale}`,
         '[role="dialog"]',
       )
-      await page.keyboard.press('Escape')
+      await every.getByRole('button', { name: said.detail.close }).click()
       await expect(every).toBeHidden()
 
       // A window's spend, from its block in the quota's section.
@@ -275,6 +279,15 @@ for (const locale of ['en', 'ru'] as const)
       const windowParts = { shown: window.getByRole('radiogroup').first(), spend }
       const windowPlaced = await placed(page, window, windowParts)
       expectPlaced(windowPlaced, 3)
+      // The panel's «ⓘ» stands after its switch on the switch's line, inside the panel.
+      const about = await edges(window.getByRole('button', { name: said.detail.window.about }))
+      const { shown } = windowPlaced.parts
+      expect(about.left, '«ⓘ» after the switch').toBeGreaterThanOrEqual(shown.right)
+      expect(about.right, '«ⓘ» inside the panel').toBeLessThanOrEqual(windowPlaced.panel.right)
+      expect(
+        Math.abs(middle(about) - middle(shown)),
+        '«ⓘ» on the switch’s line',
+      ).toBeLessThanOrEqual(1)
       await expectNoSilentClipping(
         page,
         `a window's spend at ${width}px in ${locale}`,
@@ -284,7 +297,7 @@ for (const locale of ['en', 'ru'] as const)
       await record(info, `value panel ${locale} ${width}`, {
         task: taskPlaced,
         every: everyPlaced,
-        window: windowPlaced,
+        window: { ...windowPlaced, about },
       })
     })
 
