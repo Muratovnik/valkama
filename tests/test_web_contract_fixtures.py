@@ -774,6 +774,9 @@ class _Scenario:
             waiting = item("Tree goal not accepted yet", kind="goal")
             loose = item("Tree stage not accepted yet", kind="stage", parent=waiting)
             item("Tree work under the stage not accepted", parent=loose)
+            # A review saw the goal and left it waiting: the board reads its mark, and the
+            # items of the stack nobody marked read theirs as empty.
+            service.mark_triage(conn, waiting, True, author="worker-a")
             conn.commit()
         finally:
             conn.close()

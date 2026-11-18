@@ -25,9 +25,9 @@ FOLLOWER = "019a3c2e-7777-7c11-9e0f-2f4b6d8a1c3e"
 CARD = frozenset(
     {
         "reference", "title", "kind", "priority", "revision", "created_at", "updated_at",
-        "labels", "source", "state", "open", "container_state", "acceptance", "started_at",
-        "waits_for", "cancelled_blockers", "deferred", "returned", "workable", "withheld",
-        "projects", "claim_ref", "claim_state",
+        "labels", "source", "state", "open", "container_state", "acceptance", "triage_stack",
+        "started_at", "waits_for", "cancelled_blockers", "deferred", "returned", "workable",
+        "withheld", "projects", "claim_ref", "claim_state",
         "last_claim_ref", "closed_at", "lapsed_claim", "url", "parent", "description",
         "checklist", "summary",
     }

@@ -160,14 +160,15 @@ class PlanningScaleTests(unittest.TestCase):
             self.assertEqual(few_cost, many_cost)
 
     def test_a_brief_read_costs_the_same_however_long_the_history(self) -> None:
-        """The preview's read: at most 14 statements and one size for 2 or 200 comments.
+        """The preview's read: at most 15 statements and one size for 2 or 200 comments.
 
         Counted on the whole exact-scope answer, binding included, for each shape
         that asks one more statement: open and startable (its blockers), held by a
         recorded call (that call and the participation setting its lease is read
         by), and finished while still held (those and when it closed). The projects
-        the item names, its open questions to the owner and the claim the sweep
-        released are one statement each.
+        the item names, its open questions to the owner, the claim the sweep
+        released and, for an item in triage, as the open and the held one are, its
+        place in the triage stack (`triage.field`) are one statement each.
         """
 
         with tempfile.TemporaryDirectory() as directory:
@@ -260,4 +261,4 @@ class PlanningScaleTests(unittest.TestCase):
                     with self.subTest(shape=shape):
                         few, many = read(items[2]), read(items[200])
                         self.assertEqual(few, many)
-                        self.assertLessEqual(few[0], 14)
+                        self.assertLessEqual(few[0], 15)

@@ -213,6 +213,7 @@ def list_work_items(
     owner: str | None = None,
     parent: str | None = None,
     project: str | None = None,
+    triage_stack: str | None = None,
     other_spaces: bool = False,
     limit: int | None = 200,
     offset: int = 0,
@@ -247,6 +248,12 @@ def list_work_items(
     does not give it. Every row the filters keep is loaded, ordered and then cut,
     so on a store nothing writes to the pages of one walk neither repeat nor skip.
 
+    `triage_stack` keeps the items that wait in the triage stack (`triage.waiting`):
+    `unseen` those no review marked, `seen` those it did. They come in the stack's
+    order instead, oldest entry first, then by the space's key and the number, which
+    is total as well, and every other filter narrows them as it narrows any list.
+    Each record of an item in the stack carries its `triage_stack`.
+
     Nothing here caps the count: a caller that wants a bounded page with an
     honest account of what it left out asks `list_work_items_page`.
     """
@@ -254,6 +261,11 @@ def list_work_items(
     space_row = read_model.space_row(conn, space) if space is not None else None
     space_id = str(space_row["planning_space_id"]) if space_row is not None else None
     wanted = item_projects.project_id(project, "project") if project is not None else None
+    seen = (
+        model.enum_field(triage_stack, triage.FILTERS, "triage_stack")
+        if triage_stack is not None
+        else None
+    )
     marked = space_row is not None and other_spaces
     clauses, parameters = item_projects.space_read(
         conn, space_row, wanted, other_spaces=other_spaces
@@ -285,6 +297,9 @@ def list_work_items(
     if parent is not None:
         clauses.append("i.parent_id = ?")
         parameters.append(str(read_model.item_row(conn, parent)["work_item_id"]))
+    if seen is not None:
+        # The stack stands in triage; what else it asks is `triage.waiting`'s, below.
+        clauses.append("s.category = 'triage'")
     start = model.count_field(offset, "offset")
     query = with_clauses(
         "SELECT i.*, s.position AS state_position, p.key AS space_key, p.name AS space_name"
@@ -296,10 +311,22 @@ def list_work_items(
     # Every row the filters keep, ordered and cut here rather than in SQL: the order
     # of work reads the tree, which the read loads anyway, once for the spaces read.
     rows = conn.execute(query, parameters).fetchall()
+    stack: dict[str, dict] | None = None
+    if seen is not None:
+        listed = triage.listed(conn, [str(row["work_item_id"]) for row in rows], seen)
+        place = {found.work_item_id: index for index, found in enumerate(listed)}
+        stack = {found.work_item_id: triage.shown(found) for found in listed}
+        rows = sorted(
+            (row for row in rows if str(row["work_item_id"]) in place),
+            key=lambda row: place[str(row["work_item_id"])],
+        )
     spaces = {str(row["planning_space_id"]) for row in rows}
     tree = item_tree.of_spaces(conn, spaces)
-    rows.sort(key=lambda row: queue.list_key(row, tree))
+    if seen is None:
+        rows.sort(key=lambda row: queue.list_key(row, tree))
     rows = rows[start:] if limit is None else rows[start : start + max(1, int(limit))]
+    if stack is None:
+        stack = read_model.triage_stacks(conn, rows)
     # A row's place in its space's queue: one count of the queue of each space read.
     places = queue.places(
         queue.of_spaces(conn, {str(row["planning_space_id"]) for row in rows}, tree)
@@ -322,6 +349,7 @@ def list_work_items(
             projects=projects,
             read_space=read_space,
             settings=settings,
+            stack=stack,
         )
         outside = marked and str(row["planning_space_id"]) != space_id
         record["queue_order"] = None if outside else places.get(str(row["work_item_id"]))
@@ -349,6 +377,7 @@ def list_work_items_page(
     owner: str | None = None,
     parent: str | None = None,
     project: str | None = None,
+    triage_stack: str | None = None,
     other_spaces: bool = False,
     limit: int = 200,
     offset: int = 0,
@@ -365,6 +394,7 @@ def list_work_items_page(
         owner=owner,
         parent=parent,
         project=project,
+        triage_stack=triage_stack,
         other_spaces=other_spaces,
         limit=size + 1,
         offset=offset,
@@ -478,7 +508,8 @@ def search_work_items(
             tree = _page_tree(conn, rows)
             projects = item_projects.of_items(conn, rows)
             settings = participation.load(conn)
-            return [_word_hit(conn, row, found, tree, projects, settings) for row in rows]
+            stack = read_model.triage_stacks(conn, rows)
+            return [_word_hit(conn, row, found, tree, projects, settings, stack) for row in rows]
     return _phrase_search(conn, text, space_id=space_id, limit=limit, offset=offset)
 
 
@@ -489,11 +520,14 @@ def _word_hit(
     tree: item_tree.Tree,
     projects: Mapping[str, list[dict]],
     settings: participation.Settings,
+    stack: Mapping[str, dict],
 ) -> dict:
     """One item a word search found, with the lines that say why (`words.hits`)."""
 
     return {
-        **read_model.present(conn, row, tree=tree, projects=projects, settings=settings),
+        **read_model.present(
+            conn, row, tree=tree, projects=projects, settings=settings, stack=stack
+        ),
         **words.hits(conn, row, found),
     }
 
@@ -555,8 +589,11 @@ def _phrase_search(
     tree = _page_tree(conn, rows)
     projects = item_projects.of_items(conn, rows)
     settings = participation.load(conn)
+    stack = read_model.triage_stacks(conn, rows)
     for row in rows:
-        item = read_model.present(conn, row, tree=tree, projects=projects, settings=settings)
+        item = read_model.present(
+            conn, row, tree=tree, projects=projects, settings=settings, stack=stack
+        )
         comment_hit = row["comment_hit"] or decisions.get(str(row["work_item_id"]))
         if comment_hit:
             item["comment_hit"] = str(comment_hit)[:240]

@@ -155,15 +155,37 @@ def mark(
     return {"seen_at": str(conn.execute(_SEEN_AT, (work_item_id,)).fetchone()[0])}
 
 
-def field(conn: sqlite3.Connection, ids: Iterable[str]) -> Mapping[str, dict]:
+def field(
+    conn: sqlite3.Connection, ids: Iterable[str], space: str | None = None
+) -> Mapping[str, dict]:
     """The `triage_stack` of each of these items that waits in the stack, in one read:
     `{seen_at, seen_by}`, both None for an item no review has marked. An item not in
-    the stack has none."""
+    the stack has none. `space`, by id, is where they all lie, which spares a read of
+    their spaces."""
 
-    return {
-        found.work_item_id: {"seen_at": found.seen_at, "seen_by": found.seen_by}
-        for found in waiting(conn, items=ids)
-    }
+    return {found.work_item_id: shown(found) for found in waiting(conn, space, items=ids)}
+
+
+def shown(found: Waiting) -> dict:
+    """An item's `triage_stack` as a record carries it."""
+
+    return {"seen_at": found.seen_at, "seen_by": found.seen_by}
+
+
+#: What the list's `triage_stack` filter takes: the items of the stack no review marked,
+#: or those it did.
+UNSEEN = "unseen"
+SEEN = "seen"
+FILTERS = frozenset({UNSEEN, SEEN})
+
+
+def listed(conn: sqlite3.Connection, ids: Iterable[str], seen: str) -> list[Waiting]:
+    """Those of these items that wait in the stack, unmarked (`UNSEEN`) or marked (`SEEN`),
+    in the stack's order: oldest entry first, then by space key and number."""
+
+    return [
+        found for found in waiting(conn, items=ids) if (found.seen_at is not None) == (seen == SEEN)
+    ]
 
 
 def refusal(conn: sqlite3.Connection, work_item_id: str) -> str:
@@ -190,4 +212,16 @@ def refusal(conn: sqlite3.Connection, work_item_id: str) -> str:
     return "it waits in the stack already"
 
 
-__all__ = ["Waiting", "entered", "field", "mark", "refusal", "waiting"]
+__all__ = [
+    "FILTERS",
+    "SEEN",
+    "UNSEEN",
+    "Waiting",
+    "entered",
+    "field",
+    "listed",
+    "mark",
+    "refusal",
+    "shown",
+    "waiting",
+]

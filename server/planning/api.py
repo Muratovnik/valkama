@@ -297,6 +297,7 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             owner=_first(parameters, "owner"),
             parent=_first(parameters, "parent"),
             project=_first(parameters, "project"),
+            triage_stack=_first(parameters, "triage_stack"),
             # The list of a space is a read of it: other spaces' items naming its projects too.
             other_spaces=True,
             limit=_int(_first(parameters, "limit"), "limit", 200),

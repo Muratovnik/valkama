@@ -31,6 +31,7 @@ from . import (
     request_model,
     requests,
     service,
+    triage,
     waiting,
     words,
 )
@@ -682,7 +683,9 @@ TOOLS = [
         " space's items and other spaces' items that name one of its projects, marked"
         " other_space. project keeps the items that name that project, in every space"
         " unless space is given; a goal or stage names what a task under it names."
-        " kind=goal lists the goals, kind=stage the stages."
+        " kind=goal lists the goals, kind=stage the stages. triage_stack unseen lists the"
+        " items a triage review is to decide that no review marked, oldest first; seen lists"
+        " the marked ones."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -706,6 +709,7 @@ TOOLS = [
                 "description": "Only the items that name this project, by its id in the"
                 " project registry.",
             },
+            "triage_stack": {"type": "string", "enum": [triage.UNSEEN, triage.SEEN]},
             "limit": _INT,
             "offset": _OFFSET,
             "verbose": _VERBOSE_ROWS,
@@ -2044,6 +2048,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
             "owner",
             "parent",
             "project",
+            "triage_stack",
             "limit",
             "offset",
         )
