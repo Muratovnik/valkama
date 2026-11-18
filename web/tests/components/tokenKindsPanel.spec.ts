@@ -135,13 +135,12 @@ describe('the ring of the tokens by kind', () => {
       'Cache read60M',
       'Reasoning600K',
     ])
-    const hinted = bars
-      .findAll('.ranked-list:not(.ranked-rest) .ranked-line')
-      .map((line) => line.attributes('data-tooltip'))
-    expect(hinted.map((hint, at) => hint?.includes(`${shares[at]} of the total`))).toEqual([
-      true,
-      true,
-      true,
-    ])
+    // Each counted kind prints the ring's share after its figure, as no strip stands over the bars
+    // (DESIGN.md, Charts); the kinds apart, above, print none.
+    const printed = bars
+      .findAll('.ranked-list:not(.ranked-rest) .ranked-value')
+      .map((value) => value.text().split(' · ')[1])
+    expect(shares).toHaveLength(3)
+    expect(printed).toEqual(shares)
   })
 })

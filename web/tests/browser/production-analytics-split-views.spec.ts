@@ -43,14 +43,14 @@ const legendFigures = (chart: Locator) =>
       ]),
     )
 
-/** Each ranked row: its name and its figure. */
+/** Each ranked row: its name and its figure, before the share the row prints after it. */
 const barFigures = (chart: Locator) =>
   chart
     .locator('.ranked-row')
     .evaluateAll((rows) =>
       rows.map((row) => [
         row.querySelector('.ranked-label')?.textContent ?? '',
-        row.querySelector('.ranked-value')?.textContent ?? '',
+        (row.querySelector('.ranked-value')?.textContent ?? '').split(' · ')[0] ?? '',
       ]),
     )
 

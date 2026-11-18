@@ -5,9 +5,12 @@
  * a bar on the same scale in the neutral hue and their names in the quiet ink, since work on no
  * task can be the largest share of a period; a list of free text, below, sets them apart with that
  * bar instead. Each bar is passed its amount in the measure's own
- * units, hours and not a share. A bar takes its value's hue on the page (`slots`), the neutral for
- * a value the day chart folds away. A session named by its title carries its client and the start
- * of its id as its detail; an account carries none, its whole id copied from the quota panel.
+ * units, hours and not a share; its figure says its share of every value of the period after its
+ * amount, «4 d 1 h · 78 %» (`lineShare`), the folded and the unlisted ones counted, so the bars
+ * need no strip of the whole over them. A bar takes its value's hue on the page (`slots`), the
+ * neutral for a value the day chart folds away. A session named by its title carries its client
+ * and the start of its id as its detail; an account carries none, its whole id copied from the
+ * quota panel.
  *
  * With the section split by a second dimension (`across`) the rows are of the read by both, and
  * each bar is a pair, «claude-opus-5-5 · high», ranked, coloured and folded as a value is; it acts
@@ -25,7 +28,7 @@
  *
  * Values named by free text, tasks and sessions, on either side of a pair (`namedByText`), are a
  * list only, switched with the table alone: the bars of a list of free text (`RankedBars`'s
- * `freeText`), each name on lines of its own, the strip of the whole over them. It lists the first
+ * `freeText`), each name on lines of its own. It lists the first
  * ten values, folds the rest into one row, and closes with it and work with no value under a rule,
  * each with its bar; the line under it still counts every value and opens the full table.
  *
@@ -104,7 +107,7 @@ const views = computed(() => {
   if (listOnly.value) return ['chart'] as const
   return props.across ? (['bars'] as const) : (['ring', 'bars'] as const)
 })
-/** What every value adds up to, listed or not: what each bar's hint says its share of. */
+/** What every value adds up to, listed or not: what each bar's figure says its share of. */
 const whole = computed(() =>
   all.value.reduce((sum, line) => sum + (measureOf(props.measure, line.spent) ?? 0), 0),
 )
@@ -125,6 +128,7 @@ const ranked = useRankedLines({
   by: () => props.by,
   lines: () => all.value,
   measure: () => props.measure,
+  whole: () => whole.value,
   inspect: (value, label) => emit('inspect', value, label),
   more: (line) => ({
     kind: line.kind,
@@ -132,9 +136,14 @@ const ranked = useRankedLines({
   }),
 })
 const { follow, select } = ranked
-/** The ring folds its own rest, so it is handed every value; the list and its table the first. */
+/**
+ * The ring folds its own rest, so it is handed every value, each figure alone since its legend says
+ * the shares; the list and its table the first, each figure with its share.
+ */
 const parts = computed(() => ranked.rows.value)
-const bars = computed(() => (listOnly.value ? parts.value : parts.value.slice(0, LISTED)))
+const bars = computed(() =>
+  listOnly.value ? ranked.shared.value : ranked.shared.value.slice(0, LISTED),
+)
 
 /** A breakdown with no row is a period that spent nothing, in whatever measure it is drawn. */
 const barWords = computed(() => ({
@@ -175,8 +184,6 @@ const formatValue = (amount: number) => words.scale(props.measure, amount)
         :label="title"
         :rows="bars"
         :words="barWords"
-        :whole="whole"
-        :format-share="words.markShare"
         :rank-all="!listOnly"
         :free-text="listOnly"
         @follow="follow"

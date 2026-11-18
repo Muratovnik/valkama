@@ -21,9 +21,6 @@ const rows: RankedRow[] = [
   { key: 'other', label: 'Other (4)', value: 15, valueText: '15 min', kind: 'other' },
 ]
 
-/** A share as the caller says it, the words its own. */
-const share = (ratio: number) => `${Math.round(ratio * 100)}% of the total`
-
 const mountBars = (given: RankedRow[] = rows) =>
   mount(RankedBars, { props: { label: 'Time by project', rows: given, words } })
 
@@ -88,47 +85,32 @@ describe('ranked bars', () => {
     )
   })
 
-  it('keeps a name to one line, and gives its row a hint of what the row does not print', () => {
+  it('keeps a name to one line, prints the figure it is given, and hints what it does not print', () => {
     const chart = mount(RankedBars, {
       props: {
         label: 'Time by project',
         words,
-        formatShare: share,
         rows: [
           {
             key: 'acct',
             label: 'a1b2c3d4',
             detail: 'a1b2c3d4-0000-4000-8000-00000000abcd',
             value: 3,
-            valueText: '3 h',
+            valueText: '3 h · 75%',
           },
-          { key: 'web', label: 'Web', value: 1, valueText: '1 h' },
+          { key: 'web', label: 'Web', value: 1, valueText: '1 h · 25%' },
         ],
       },
     })
     const account = chart.get('[data-key="acct"]')
-    const web = chart.get('[data-key="web"]')
 
     expect(account.get('.ranked-label').classes()).toContain('one-line')
-    // The row is the mark: its hint is what it leaves out and its share, never its printed words.
+    // The figure with its share is printed whole, so the hint says only what the label leaves out.
+    expect(account.get('.ranked-value').text()).toBe('3 h · 75%')
     expect(account.attributes('data-tooltip-kind')).toBe('detail')
-    expect(account.attributes('data-tooltip')).toBe(
-      'a1b2c3d4-0000-4000-8000-00000000abcd\n75% of the total',
-    )
+    expect(account.attributes('data-tooltip')).toBe('a1b2c3d4-0000-4000-8000-00000000abcd')
     expect(tooltipOf(account.element)?.words).toBe('a1b2c3d4')
     expect(tooltipOf(account.element)?.clipped).toBe(false)
-    expect(web.attributes('data-tooltip')).toBe('25% of the total')
-    // A whole given where the rows are not all of it.
-    const part = mount(RankedBars, {
-      props: {
-        label: 'x',
-        words,
-        formatShare: share,
-        whole: 10,
-        rows: [{ key: 'web', label: 'Web', value: 1, valueText: '1 h' }],
-      },
-    })
-    expect(part.get('[data-key="web"]').attributes('data-tooltip')).toBe('10% of the total')
   })
 
   it('with nothing to add, gives a row the hint of its name, shown only while it is cut', () => {
@@ -165,7 +147,8 @@ describe('ranked bars', () => {
  * A list of names of free text, tasks by their titles: each name on lines of its own, two at most,
  * where the one-line chart cuts it to one; the rows that are not categories apart under a rule with
  * a bar each in a neutral, on one scale with the categories, where the chart of identifiers draws
- * them none; and a strip of the whole over the rows, every row a part in its hue, in their order.
+ * them none; and no strip of the whole over the rows, which read as one more row: each row's figure
+ * says its share instead (DESIGN.md, Charts).
  */
 describe('a ranked list of free text', () => {
   const tasks: RankedRow[] = [
@@ -210,26 +193,12 @@ describe('a ranked list of free text', () => {
     expect(bar('t2').attributes('data-slot')).toBe('2')
   })
 
-  it('draws the strip of the whole over the rows, every row in its hue and in their order, none of it hatched', () => {
-    const strip = mountList(true).get('.mini-share-bar')
-    // A picture of what the rows say, so nothing a screen reader reads twice.
-    expect(strip.attributes('aria-hidden')).toBe('true')
-    expect(
-      strip
-        .findAll('.mini-share-part')
-        .map((part) => [
-          part.attributes('data-key'),
-          part.attributes('data-slot'),
-          part.attributes('style'),
-          part.classes('hatched'),
-        ]),
-    ).toEqual([
-      ['t1', '1', 'flex-grow: 0.3;', false],
-      ['t2', '2', 'flex-grow: 0.15;', false],
-      ['other', 'other', 'flex-grow: 0.1;', false],
-      ['none', 'apart', 'flex-grow: 0.45;', false],
-    ])
-    expect(mountList(false).find('.mini-share-bar').exists()).toBe(false)
+  it('draws no strip of the whole over the rows, whose bars are the only marks', () => {
+    // The control, the strip present where a tile's rows draw nothing, is in analyticsRail.spec.ts.
+    const list = mountList(true)
+    expect(list.findAll('.ranked-row')).toHaveLength(tasks.length)
+    expect(list.find('.mini-share-bar').exists()).toBe(false)
+    expect(list.findAll('.series-fill')).toHaveLength(tasks.length)
   })
 
   it('puts each part of a pair on a line of its own', () => {

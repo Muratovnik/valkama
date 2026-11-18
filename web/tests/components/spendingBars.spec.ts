@@ -396,11 +396,13 @@ describe('the drawings of the split', () => {
     // Each part its name, then its figure and its bare share at the end of its line.
     expect(ring).toEqual(['model-a3 h · 50%', 'model-b2 h · 33%', 'model-c1 h · 17%'])
 
+    // The bars print the same share after the figure, as no strip of the whole stands over them
+    // (DESIGN.md, Charts).
     await showView(section, '.spending-bars', 'Bars')
     expect(barsOf(section).map((row) => [row.label, spaced(row.valueText)])).toEqual([
-      ['model-a', '3 h'],
-      ['model-b', '2 h'],
-      ['model-c', '1 h'],
+      ['model-a', '3 h · 50%'],
+      ['model-b', '2 h · 33%'],
+      ['model-c', '1 h · 17%'],
     ])
     await showView(section, '.spending-bars', 'Table')
     expect(
@@ -408,7 +410,7 @@ describe('the drawings of the split', () => {
         .getComponent(RankedBarsTable)
         .findAll('tbody tr')
         .map((row) => spaced(row.text())),
-    ).toEqual(['model-a3 h', 'model-b2 h', 'model-c1 h'])
+    ).toEqual(['model-a3 h · 50%', 'model-b2 h · 33%', 'model-c1 h · 17%'])
     // Back to the ring, which the reader chose last: the choice stands.
     await showView(section, '.spending-bars', 'Ring')
     expect(viewsOf(section, '.spending-bars').shown).toBe('Ring')

@@ -144,13 +144,14 @@ export function seriesHint(
 }
 
 /**
- * What a mark that prints its name and its figure says besides: its share of the whole and what
- * its name leaves out (`detail`), under its whole name beside its hue. While the name is cut and
- * there is nothing besides, the host says it whole (`words`).
+ * What a mark that prints its name and its figure says besides: its share of the whole where the
+ * host gives one (`whole` and `share`) and what its name leaves out (`detail`), under its whole
+ * name beside its hue. While the name is cut and there is nothing besides, the host says it whole
+ * (`words`).
  */
 export function namedHint(
   mark: Named & { value: number; detail?: string },
-  whole: number,
+  whole = 0,
   share?: ShareFormat,
 ): TooltipValue {
   const notes = notesOf(mark.detail, shareWords(mark.value, whole, share))

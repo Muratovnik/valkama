@@ -121,8 +121,11 @@ test('a figure chooses the measure, pressed by a check, from the keyboard, into 
   await expect(radios.nth(1).locator('.tile-chosen')).toBeVisible()
   await expect(figures.locator('.tile-chosen')).toHaveCount(1)
   await expect(panel.locator('.spending-days h3')).toHaveText('Tokens per day, by task')
-  // The cards and what changed say the measure chosen.
-  await expect(panel.locator('[data-card="model"] .ranked-value').first()).toHaveText('1.3M')
+  // The cards and what changed say the measure chosen: model-a's 13 hours of the week's 19, at
+  // a hundred thousand tokens an hour, and their share of the whole.
+  await expect(panel.locator('[data-card="model"] .ranked-value').first()).toHaveText(
+    /^1\.3M \u{B7} 68%$/u,
+  )
   await page.reload()
   await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true')
 })
@@ -318,7 +321,12 @@ test('a card’s figure is as wide as itself, and the name of its row takes the 
   await serve(page, MODELS)
   const panel = await openOverview(page, 1440, 900)
   const models = panel.locator('[data-card="model"]')
-  await expect(models.locator('.ranked-value')).toHaveText([/^3\sh$/u, /^2\sh$/u, 'under a minute'])
+  // Each figure with its share of the week's 5 hours and 30 seconds.
+  await expect(models.locator('.ranked-value')).toHaveText([
+    /^3\sh \u{B7} 60%$/u,
+    /^2\sh \u{B7} 40%$/u,
+    'under a minute · <1%',
+  ])
   const rows = await models.locator('.ranked-line').evaluateAll((lines) =>
     lines.map((line) => {
       const label = line.querySelector('.ranked-label')

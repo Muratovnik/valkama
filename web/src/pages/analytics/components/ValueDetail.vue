@@ -16,7 +16,8 @@
  *   says them on the page stands under the panel;
  * - its period step by step, with the period before marked (`ValueDays`);
  * - the models and the accounts it ran on, ranked in the page's measure, each in its hue of the
- *   page (`RankedBars`, dense); a value of the models or the accounts has no list of its own.
+ *   page with its share of the value's own figure after its amount (`RankedBars`, dense); a value
+ *   of the models or the accounts has no list of its own.
  *
  * A task deleted since has no card to open. The first read's wait is
  * one quiet line, reported to the panel's status region (`useReadWaitReport`); a first read that
@@ -202,10 +203,20 @@ const hue = computed(() => {
 
 const weight = (line: SpendingLine) => measureOf(props.measure, line.spent) ?? 0
 
-/** The models or the accounts the value ran on, ranked in the measure, each in its page's hue. */
+/**
+ * The models or the accounts the value ran on, ranked in the measure, each in its page's hue and
+ * with its share of what they all add up to.
+ */
 function rankedOf(breakdown: ValueBreakdown, usage: Usage): RankedRow[] {
   const hues = rankedSlots(places.rows(breakdown) ?? usage.rows, breakdown, props.measure)
-  return spendingLines(usage.rows, breakdownOf(breakdown), props.measure, Number.POSITIVE_INFINITY)
+  const all = spendingLines(
+    usage.rows,
+    breakdownOf(breakdown),
+    props.measure,
+    Number.POSITIVE_INFINITY,
+  )
+  const whole = all.reduce((sum, line) => sum + weight(line), 0)
+  return all
     .filter((line) => line.kind !== 'other' && figureOf(props.measure, line.spent) !== 0)
     .sort((left, right) => weight(right) - weight(left))
     .map((line) => ({
@@ -213,7 +224,7 @@ function rankedOf(breakdown: ValueBreakdown, usage: Usage): RankedRow[] {
       label: words.lineLabel(breakdown, line),
       detail: words.valueDetail(breakdown, line.value),
       value: weight(line),
-      valueText: words.lineFigure(props.measure, line.spent),
+      valueText: words.lineShare(props.measure, line.spent, whole),
       slot: hues.get(line.key) ?? 'other',
       quiet: line.kind !== 'category',
     }))

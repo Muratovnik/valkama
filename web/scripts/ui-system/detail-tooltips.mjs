@@ -123,8 +123,8 @@ export const DETAIL_TOOLTIPS = new Map([
     'a sector is a band of hue: its name, figure and share of the whole, and for the rest its largest parts, are its hint',
   ],
   [
-    'shared/ui/RankedBars.vue <component> v-tooltip.detail="namedHint(rowMark(row), whole, formatShare)"',
-    'a row prints its name and figure; its share of the whole and the whole id of a value it names by the start are on no mark; its name heads them, whole, beside its bar’s hue',
+    'shared/ui/RankedBars.vue <component> v-tooltip.detail="namedHint(rowMark(row))"',
+    'a row prints its name and its figure with its share; the whole id of a value it names by the start is on no mark; its name heads it, whole, beside its bar’s hue',
   ],
   [
     'shared/ui/SmallMultiples.vue <component> v-tooltip.detail="nameHint(one)"',

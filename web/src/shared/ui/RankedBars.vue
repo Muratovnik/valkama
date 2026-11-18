@@ -10,15 +10,19 @@
  * layout that sets them apart.
  * `RankedBarsTable` is the same rows as a table.
  *
+ * A row's figure (`valueText`) is the caller's words, and where the rows split a whole it says the
+ * row's share after its amount, «4 d 1 h · 78 %»: the bars compare the rows on one base, and the
+ * figure says how much of the whole each one is. No strip of the whole stands over the rows: as
+ * thin as their bars and with no words of its own, it read as one more row.
+ *
  * Presentational: rows and words come in, a press on a row that opens something goes out as
  * `select` with the row's key, and a press on a row that leads somewhere (`href`) as `follow`
  * with the press, for the host to open it in place or leave it to the browser. A row that acts
  * is named by what it does (`action`) or by its label, and its value describes it, after its whole
  * label where the action names a part of it, as a pair's names its first value. A row is a
- * mark of its chart: its hint, under the pointer or the keyboard, says what it does not print —
- * its share of the whole where the caller says how a share reads (`formatShare`), and what the
- * label leaves out (`detail`) — under its name beside its series' swatch (`markHints.ts`), and
- * stands at its bar, the mark it declares (`data-hint-mark`), or at the row where it draws none.
+ * mark of its chart: its hint, under the pointer or the keyboard, says what it does not print,
+ * what the label leaves out (`detail`), under its name beside its series' swatch (`markHints.ts`),
+ * and stands at its bar, the mark it declares (`data-hint-mark`), or at the row where it draws none.
  * A row's name takes one line and ends in an ellipsis where it is cut, said whole in that hint;
  * a name of two parts keeps its end whole and cuts its first part (`labelEnd`, `PairName`).
  * The values stand in one column whatever the names do. In a narrow container the name takes a
@@ -35,9 +39,7 @@
  * never cut; a pair takes a line a part, each cut at its own end (`PairName`'s `stacked`). The rows
  * that are not categories close the list under a rule, unranked, each with a bar in its neutral on
  * one scale with the categories (`rankRows`'s `drawApart`), so a large «no task» still reads as
- * large. Over the list a thin strip (`MiniShareBar`) splits the whole among every row in its hue,
- * in the list's order: a picture of the figures the rows under it say, so it says nothing itself
- * to a screen reader.
+ * large.
  */
 import { computed, useId } from 'vue'
 
@@ -46,8 +48,6 @@ import type { PlacedRow, RankedRow, RankedWords } from '@/shared/ui/chartGeometr
 import { markPartId, markTag, rankRows } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { namedHint } from '@/shared/ui/markHints.ts'
-import MiniShareBar from '@/shared/ui/MiniShareBar.vue'
-import type { SharePart } from '@/shared/ui/MiniShareBar.vue'
 import PairName from '@/shared/ui/PairName.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
@@ -59,16 +59,12 @@ const props = defineProps<{
   /** Each row a line of name and value over a thin bar, for a few rows in a small space. */
   dense?: boolean
   /**
-   * The rows are named by free text: each name on lines of its own, two at most, the rows that
-   * are not categories apart with their bars, and the strip of the whole over them.
+   * The rows are named by free text: each name on lines of its own, two at most, and the rows
+   * that are not categories apart with their bars.
    */
   freeText?: boolean
   /** Rank work with no value and unknown work by their figures, with a bar (`rankRows`). */
   rankAll?: boolean
-  /** What the shares are of, where the rows are not all of it; what the rows add up to otherwise. */
-  whole?: number
-  /** A share of the whole as the reader reads it, «42 % of the total», for each row's hint. */
-  formatShare?: (ratio: number) => string
 }>()
 
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
@@ -78,16 +74,6 @@ const placed = computed(() => rankRows(props.rows, props.rankAll, props.freeText
 const pairs = computed(() => !props.dense && props.rows.some((row) => row.labelEnd))
 /** Names of free text on lines of their own, two at most; a dense chart keeps its one line. */
 const freeText = computed(() => !props.dense && props.freeText)
-/** What each row's hint says its share of: the whole given, else what every row adds up to. */
-const whole = computed(
-  () =>
-    props.whole ??
-    props.rows.reduce(
-      (sum, row) => sum + (Number.isFinite(row.value) ? Math.max(0, row.value) : 0),
-      0,
-    ),
-)
-
 /** The ranked categories as an ordered list, and the rows that are not ranked after them. */
 const groups = computed(() =>
   [
@@ -134,19 +120,6 @@ const rowMark = (row: PlacedRow) => ({
 })
 const barStyle = (length: number) => ({ inlineSize: `${length * 100}%` })
 
-/** The strip of the whole over a list of free text: every row with a share, in the list's order. */
-const strip = computed<SharePart[]>(() =>
-  freeText.value && whole.value > 0
-    ? [...placed.value.ranked, ...placed.value.rest]
-        .filter((row) => Number.isFinite(row.value) && row.value > 0)
-        .map((row) => ({
-          key: row.key,
-          share: row.value / whole.value,
-          slot: barSlot(row),
-        }))
-    : [],
-)
-
 function press(row: PlacedRow, event: MouseEvent) {
   if (row.href) emit('follow', row.key, event)
   else if (row.actionable) emit('select', row.key)
@@ -170,73 +143,67 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
       :description="words.emptyDescription"
       compact
     />
-    <template v-else>
-      <MiniShareBar
-        v-if="freeText"
-        class="ranked-whole"
-        aria-hidden="true"
-        :label="label"
-        :parts="strip"
-      />
-      <div class="ranked-grid">
-        <component
-          :is="group.tag"
-          v-for="group in groups"
-          :key="group.tag"
-          class="ranked-list"
-          :class="{ 'ranked-rest': group.rest }"
+    <div
+      v-else
+      class="ranked-grid"
+    >
+      <component
+        :is="group.tag"
+        v-for="group in groups"
+        :key="group.tag"
+        class="ranked-list"
+        :class="{ 'ranked-rest': group.rest }"
+      >
+        <li
+          v-for="row in group.rows"
+          :key="row.key"
+          class="ranked-row"
+          :data-kind="row.kind"
         >
-          <li
-            v-for="row in group.rows"
-            :key="row.key"
-            class="ranked-row"
-            :data-kind="row.kind"
+          <component
+            :is="markTag(row, 'div')"
+            v-tooltip.detail="namedHint(rowMark(row))"
+            class="ranked-line row-state"
+            :data-key="row.key"
+            :data-hint-mark="lineMark(row)"
+            v-bind="lineAttrs(row)"
+            @click="(event: MouseEvent) => press(row, event)"
+            @auxclick="(event: MouseEvent) => pressAside(row, event)"
           >
-            <component
-              :is="markTag(row, 'div')"
-              v-tooltip.detail="namedHint(rowMark(row), whole, formatShare)"
-              class="ranked-line row-state"
-              :data-key="row.key"
-              :data-hint-mark="lineMark(row)"
-              v-bind="lineAttrs(row)"
-              @click="(event: MouseEvent) => press(row, event)"
-              @auxclick="(event: MouseEvent) => pressAside(row, event)"
+            <span
+              :id="labelId(row)"
+              class="ranked-label"
+              :class="{
+                'one-line': !freeText,
+                'ranked-clamp': freeText && !row.labelEnd,
+                'ranked-quiet': row.quiet,
+              }"
+              ><PairName
+                :name="row.label"
+                :end="row.labelEnd"
+                :stacked="freeText"
+            /></span>
+            <span
+              class="ranked-track"
+              aria-hidden="true"
             >
               <span
-                :id="labelId(row)"
-                class="ranked-label"
-                :class="{
-                  'one-line': !freeText,
-                  'ranked-clamp': freeText && !row.labelEnd,
-                  'ranked-quiet': row.quiet,
-                }"
-                ><PairName
-                  :name="row.label"
-                  :end="row.labelEnd"
-                  :stacked="freeText"
-              /></span>
-              <span
-                class="ranked-track"
-                aria-hidden="true"
-              >
-                <span
-                  v-if="row.length !== null"
-                  class="ranked-bar series-fill"
-                  :data-slot="barSlot(row)"
-                  :style="barStyle(row.length)"
-                  data-hint-mark
-                />
-              </span>
-              <span
-                :id="valueId(row)"
-                class="ranked-value"
-                >{{ row.valueText }}</span
-              >
-            </component>
-          </li>
-        </component>
-      </div>
-    </template>
+                v-if="row.length !== null"
+                class="ranked-bar series-fill"
+                :data-slot="barSlot(row)"
+                :style="barStyle(row.length)"
+                data-hint-mark
+              />
+            </span>
+            <span
+              :id="valueId(row)"
+              class="ranked-value"
+              >{{ row.valueText }}</span
+            >
+          </component>
+        </li>
+      </component>
+    </div>
   </figure>
 </template>
 
@@ -401,12 +368,6 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
   overflow: hidden;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-}
-
-/* The strip of the whole stands over the rows, from where their names start to where their
-   values end. */
-.ranked-whole {
-  margin: 0 var(--space-2) var(--space-3);
 }
 
 /* Dense, at any width: the name and the value on one line, the bar a thin line under both. Each

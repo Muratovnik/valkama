@@ -115,7 +115,6 @@ export const analyticsQuotaMessages = {
         'Where a window went is the API price estimate of the work Valkama recorded on the account, not quota points, without the work in claude.ai and the desktop app.',
       label: 'Where {window} of {account} went {by}, by API price estimate',
       value: 'Cost and its share',
-      share: '{cost} · {share}',
       none: 'No work was recorded on this account in this window.',
       unplaced:
         'No work was recorded on this account in this window. Not counted here: {cost} of work in its organization with the account unknown.',
@@ -247,7 +246,6 @@ export const analyticsQuotaMessages = {
         'На что ушло окно — оценка API-цены работы, которую Valkama записала на аккаунте, а не пункты квоты, и без работы в claude.ai и настольном приложении.',
       label: 'На что ушло окно «{window}», {account}, {by}, по оценке API-цены',
       value: 'Стоимость и её доля',
-      share: '{cost} · {share}',
       none: 'На этом аккаунте в этом окне работа не записана.',
       unplaced:
         'На этом аккаунте в этом окне работа не записана. Здесь не учтено: работа организации на {cost} без известного аккаунта.',

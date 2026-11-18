@@ -62,8 +62,9 @@ test('work with no task on the card of tasks is added to the filter from its pan
   await serve(page, WORLD)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(pageAt())
-  // The fixture's hours on no task, as the page writes a whole number of hours.
-  const hours = `${NO_TASK_HOURS.reduce((sum, one) => sum + one, 0)}\u{A0}h`
+  // The fixture's hours on no task, as the page writes a whole number of hours, and their share of
+  // the week's ten: the tasks' seven and these three.
+  const hours = `${NO_TASK_HOURS.reduce((sum, one) => sum + one, 0)}\u{A0}h · 30%`
   const row = page
     .locator('[data-card="work_item"]')
     .getByRole('button', { name: 'Details of No task' })

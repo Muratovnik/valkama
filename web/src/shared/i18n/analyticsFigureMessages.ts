@@ -19,6 +19,7 @@ export const analyticsFigureMessages = {
     cacheReads: 'Cache reads: {count}',
     trend: '{measure} {per} from {from} to {to}: highest {top} ({day}), last {last}',
     trendNone: '{measure} {per}: {figure}',
+    withShare: '{figure} · {share}',
     perHour: {
       cost: '${now}/h',
       costWas: '${now}/h, was {was}',
@@ -43,6 +44,7 @@ export const analyticsFigureMessages = {
     cacheReads: 'Чтение кэша: {count}',
     trend: '{measure} {per} с {from} по {to}: наибольшее {top} ({day}), последнее {last}',
     trendNone: '{measure} {per}: {figure}',
+    withShare: '{figure} · {share}',
     perHour: {
       cost: '{now}\u{A0}$/ч',
       costWas: '{now}\u{A0}$/ч, было {was}',

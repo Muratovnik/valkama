@@ -275,9 +275,10 @@ describe('the breakdown beside the period before', () => {
     })
     const bar = (bars.getComponent(RankedBars).props('rows') as RankedRow[])[0]
 
-    // The bars' words, with any space in them read as one, as the table's cells are read.
+    // The bars' words, with any space in them read as one, as the table's cells are read: the
+    // table's figure, then the bar's share of the whole (DESIGN.md, Charts).
     const barWords = words(bar?.valueText ?? '')
-    expect(barWords).toBe('≈ $1.00, 500 tokens without a price')
+    expect(barWords).toBe('≈ $1.00, 500 tokens without a price · 100%')
     expect(rows(shown)).toEqual([
       [
         'MAIN-4 Delta',
@@ -288,8 +289,9 @@ describe('the breakdown beside the period before', () => {
         '↑ 100%, 500 tokens without a price',
       ],
     ])
-    expect(rows(shown)[0]?.[3]).toBe(barWords)
-    expect(rows(shown)[0]?.[5]?.endsWith(barWords.slice(barWords.indexOf(', ')))).toBe(true)
+    const barFigure = barWords.slice(0, barWords.lastIndexOf(' · '))
+    expect(rows(shown)[0]?.[3]).toBe(barFigure)
+    expect(rows(shown)[0]?.[5]?.endsWith(barFigure.slice(barFigure.indexOf(', ')))).toBe(true)
   })
 
   it('says beside a change of cost the tokens both periods leave out', () => {

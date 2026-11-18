@@ -1022,8 +1022,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   pair a line a part, each cut at its own end. It lists the first ten values; the folded tail,
   «no task» and «unknown» close it under a rule, unranked, each with a bar in its neutral on one
   scale with the values, which the longest row of all sets, so a large «no task» still reads as
-  large. Over the rows a thin strip (`MiniShareBar`) splits the whole among every row in its hue
-  and in the list's order, a picture of the figures the rows give, said to no screen reader.
+  large. Wherever the rows split a whole, each row's figure says its share of it after the
+  amount, «4 дн. 1 ч · 78 %», in the figure's own ink and never in the row's hue, the rows the list
+  leaves out counted in that whole; the table twin says the same figure. No strip of the whole
+  stands over rows that draw their own bars: as thin as the bars and with no words of its own,
+  it read as one more row. Parts are compared by ranked bars on one base; a thin segmented strip
+  belongs only over rows that print a name and a number and draw nothing, as a rail tile's
+  `MiniShareBar` does.
   `PeriodColumns` stands a column per day or hour, stacked by a few series. `SmallMultiples`
   draws one small chart of the span per leading value, all on one scale whose top is written
   once over them, each with its name on one line and its figure; the folded tail shares the
