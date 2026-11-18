@@ -1162,7 +1162,7 @@ def _carry_action(
     if action.kind == "group":
         # The owner's answer about a group of findings: it moves out the tasks they did
         # not keep before it decides whether it still applies (`groups.carry_out`).
-        return groups.carry_out(conn, row, action, answers, author)
+        return groups.carry_out(conn, row, action, answers, note, author)
     carrier = CARRIERS.get(action.point)
     given = answers.get(request_model.REVIEW_ANSWER)
     why = pending.inapplicable(conn, action)

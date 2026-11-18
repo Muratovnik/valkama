@@ -16,15 +16,36 @@ from __future__ import annotations
 import functools
 import json
 import unittest
+from unittest import mock
 
-from server.planning import api, calls, participation, pending, service, triage
-from tests.test_planning_pending_actions import AGENT, OTHER, REFUSED, SettingHarness
+from server.planning import (
+    api,
+    calls,
+    leases,
+    model,
+    participation,
+    pending,
+    service,
+    sweep,
+    triage,
+)
+from tests.test_planning_pending_actions import (
+    AGENT,
+    ASKER,
+    CAME,
+    OTHER,
+    REFUSED,
+    UNTIL,
+    SettingHarness,
+)
 
 #: Why the agent groups its findings.
 WHY = "They are one change to the export"
 #: The longest why a group takes, as the contract states it: 386 characters, which is the
 #: defer reason's 400 less `agent: later: `. Written as the contract's number on purpose.
 LONGEST_WHY = "x" * 386
+#: How the events of the owner's answer name the agent that asked about the group.
+ASKED = f"as asked by {ASKER}"
 #: The conditions of a group's goal.
 CONDITIONS = ["The export writes every field"]
 
@@ -403,12 +424,14 @@ class OwnerAnswerTests(GroupHarness):
     carried out in the write that gives it: the tasks left unticked go back to the stack,
     a ticked one that left the group takes no part, and the answer acts on the goal."""
 
-    def waiting_group(self, count: int = 4, answer: str = "do") -> tuple[str, list[str], str]:
+    def waiting_group(
+        self, count: int = 4, answer: str = "do", **more: object
+    ) -> tuple[str, list[str], str]:
         """A group of `count` findings waiting for the owner: the goal, its tasks and the
         question."""
 
         tasks = self.findings(count)
-        written = self.group(tasks, answer)
+        written = self.group(tasks, answer, **more)
         return str(written["reference"]), tasks, str(written["waits_for_owner"]["question"])
 
     def owner_answers(self, question: str, answer: str, items: list[str], **more: object) -> dict:
@@ -521,6 +544,97 @@ class OwnerAnswerTests(GroupHarness):
         for task in tasks:
             self.assertEqual(("triage", None, None), self.where(task))
         self.assertEqual("answered", self.request(question)["status"])
+
+    def test_later_defers_the_group_whole(self) -> None:
+        goal, tasks, question = self.waiting_group(3, "later", group={"until": "2026-12-01"})
+        [action] = self.waiting_on(goal)
+        record = self.owner_answers(question, "later", tasks, until=UNTIL)
+        self.assertEqual({"answer": "later", "moved_out": [], "skipped": []}, record["carried_out"])
+        self.assertEqual("carried_out", self.action(action.id)["outcome"])
+        # The owner's day stands over the agent's, with the owner's reason.
+        self.assertEqual(("deferred", None, None), self.where(goal))
+        self.assertEqual(
+            [f"deferred: until {UNTIL}: owner: later; {ASKED}"], self.events(goal, "transitioned")
+        )
+        for task in tasks:
+            self.assertEqual(("triage", None, goal), self.where(task))
+            self.assertIn("ancestor_deferred", self.card(task)["withheld"])
+        # After the day the goal comes back to triage with its tasks under it, and the owner
+        # is asked about it again.
+        with mock.patch.object(leases, "utc_now", lambda: CAME):
+            done = sweep.run_pass(self.conn)
+        self.assertEqual({sweep.RETURNS: 1}, done.changed)
+        self.assertEqual(("triage", None, None), self.where(goal))
+        self.assertEqual(1, len(self.events(goal, "returned")))
+        [returned] = self.waiting_on(goal)
+        asked = self.conn.execute(
+            "SELECT purpose FROM work_item_requests WHERE action_id = ? AND status = 'pending'",
+            (returned.id,),
+        ).fetchall()
+        self.assertEqual([("goal",)], [tuple(row) for row in asked])
+        for task in tasks:
+            self.assertEqual(("triage", None, goal), self.where(task))
+
+    def test_later_without_a_day_takes_the_agents(self) -> None:
+        goal, tasks, question = self.waiting_group(2, "later", group={"until": "2026-12-01"})
+        self.owner_answers(question, "later", tasks)
+        self.assertEqual(
+            [f"deferred: until 2026-12-01: owner: later; {ASKED}"],
+            self.events(goal, "transitioned"),
+        )
+
+    def test_drop_cancels_what_is_ticked(self) -> None:
+        goal, tasks, question = self.waiting_group()
+        [action] = self.waiting_on(goal)
+        record = self.owner_answers(question, "drop", tasks[:3])
+        self.assertEqual(
+            {"answer": "drop", "moved_out": [tasks[3]], "skipped": []}, record["carried_out"]
+        )
+        self.assertEqual("declined", self.action(action.id)["outcome"], "the agent said do")
+        for task in tasks[:3]:
+            self.assertEqual(("cancelled", None, goal), self.where(task))
+            self.assertEqual(
+                [f"cancelled: owner: not to be done; {ASKED}"], self.events(task, "transitioned")
+            )
+            self.assertEqual(
+                {"done": "Nothing: it is not to be done.", "next": "Nothing."},
+                json.loads(self.row(task)["summary"]),
+            )
+        self.assertEqual(("triage", None, None), self.where(tasks[3]))
+        self.assertEqual(("cancelled", None, None), self.where(goal))
+        self.assertEqual(
+            {"done": "Not needed: the owner answered not to do it", "next": "Nothing."},
+            json.loads(self.row(goal)["summary"]),
+        )
+        self.assertEqual(
+            [f"cancelled: owner: not to be done; {ASKED}"], self.events(goal, "transitioned")
+        )
+
+    def test_drop_over_accepted_work_confirms_the_list(self) -> None:
+        goal, tasks, question = self.waiting_group()
+        self.person("/api/planning/work-item/transition", id=tasks[2], state="ready")
+        self.assertEqual(("ready", "owner", goal), self.where(tasks[2]))
+        self.assertEqual("pending", self.request(question)["status"])
+        before = (self.counts(), self.items())
+        with self.assertRaises(model.PlanningError) as refused:
+            self.owner_answers(question, "drop", tasks)
+        status, body = api.error_response(refused.exception)
+        self.assertEqual((409, "cancel_list"), (status, body["error"]["code"]))
+        self.assertEqual([tasks[2]], [entry["reference"] for entry in body["error"]["cancels"]])
+        self.assertEqual(before, (self.counts(), self.items()), "nothing written")
+        self.assertEqual("pending", self.request(question)["status"])
+        for task in (tasks[0], tasks[1], tasks[3]):
+            self.assertEqual(("triage", None, goal), self.where(task))
+        record = self.owner_answers(question, "drop", tasks, cancels=body["error"]["list_token"])
+        self.assertEqual(
+            {"answer": "drop", "moved_out": [], "skipped": [tasks[2]]}, record["carried_out"]
+        )
+        for task in (tasks[0], tasks[1], tasks[3]):
+            self.assertEqual(
+                [f"cancelled: owner: not to be done; {ASKED}"], self.events(task, "transitioned")
+            )
+        self.assertEqual("cancelled", self.where(tasks[2])[0], "cancelled by the list")
+        self.assertEqual(("cancelled", None, None), self.where(goal))
 
 
 if __name__ == "__main__":

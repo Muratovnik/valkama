@@ -572,10 +572,20 @@ them, leaves it by `move_out` with the reason `owner: not in this group`: it
 goes back to the triage stack, unmarked, entering it with the answer. A ticked
 task that no longer lies under the goal in `triage` (moved out, accepted,
 closed or merged meanwhile) takes no part and stays as it is. Then `do` accepts
-the goal on `owner`, and the ticked tasks under it in `triage` take `inherited`.
-A `do` with no ticked task left under the goal in `triage` no longer applies:
-the action ends `dropped` (`finding: no item ticked lies under the goal in
-triage`), the goal staying in `triage` as a card of the stack; so does any
+the goal on `owner`, and the ticked tasks under it in `triage` take `inherited`;
+`later` puts the goal off until the answer's `until`, or the agent's when it
+names none, with the reason `owner: later`, the tasks lying under it; `drop`
+cancels each ticked task under the goal in `triage` with the reason `owner: not
+to be done`, then the goal, whose summary says `Not needed: the owner answered
+not to do it` unless it said what was done (the note, when given, is the `why`
+of these summaries). Open work not in `triage` under the goal, such as a task a
+person accepted meanwhile, was not in the question, and the goal's cancel would
+close it: `drop` is then refused with `cancel_list` (409), the list and its
+token; answered again with that token in `cancels`, it cancels the goal by the
+list, that work with it.
+A `do` or `later` with no ticked task left under the goal in `triage` no longer
+applies: the action ends `dropped` (`finding: no item ticked lies under the goal
+in triage`), the goal staying in `triage` as a card of the stack; so does any
 answer once the goal left `triage` or was accepted, with nothing done. The
 action ends `carried_out` when the owner's answer is the agent's, `declined`
 otherwise. The answer's record says what was done:
@@ -589,9 +599,11 @@ otherwise. The answer's record says what was done:
 | `[group]` | 400 | the form: `[group] a group is a new goal without a parent, with its conditions in checklist and 2 to 20 items: <what is wrong>` |
 | `[group]` | 409 | a task that does not wait in the stack: `[group] MAIN-41 is not waiting for a triage review: <why>`, the why being `it is in another space`, `it is a goal or stage`, `it is not in triage`, `it lies under MAIN-3` or `it waits for the owner's answer` |
 | `[triage]` | 400 | the owner's answer: `do` or `later` with no task ticked, `[triage] tick what is to be done, or answer drop`; `later` with no `until` of its own or the agent's, `[triage] later needs until: a date (2026-12-01) or an item reference` |
+| `cancel_list` | 409 | `drop` while open work not in `triage` stands under the goal, and `cancels` is missing or names another list: the list and its `list_token`, as a cancel's first call hands them over |
 
-Either `[group]` refusal creates nothing and spends no number; a `[triage]`
-refusal writes nothing and leaves the question open.
+Either `[group]` refusal creates nothing and spends no number; a `[triage]` or
+`cancel_list` refusal of the owner's answer writes nothing and leaves the
+question open.
 
 #### Retired words
 

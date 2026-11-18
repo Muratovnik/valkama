@@ -400,13 +400,22 @@ def _carry_out(
         )
 
 
-def _close_summary(conn: sqlite3.Connection, reference: str, why: str, author: str | None) -> None:
-    """The summary a cancel by the group's `drop` needs: what the item said was done, or
-    that nothing is to be, and why."""
+def _close_summary(
+    conn: sqlite3.Connection,
+    reference: str,
+    why: str | None,
+    author: str | None,
+    *,
+    done: str = DROPPED_DONE,
+) -> None:
+    """The summary a cancel by a group's `drop` needs: what the item said was done, or
+    else `done`, that nothing comes next, and why, when there is a why."""
 
     said = model.summary(read_model.item_row(conn, reference)["summary"], required=False)
     kept = "" if said is None else str(said.get("done") or "").strip()
-    summary = {"done": kept or DROPPED_DONE, "next": DROPPED_NEXT, "why": why}
+    summary = {"done": kept or done, "next": DROPPED_NEXT}
+    if why:
+        summary["why"] = why
     service.set_summary(conn, reference, summary, author=author)
 
 
@@ -416,6 +425,12 @@ ANSWER_TAG = "[triage]"
 NOT_IN_GROUP = "owner: not in this group"
 #: Why the owner's `do` or `later` no longer applies when nothing it keeps is left to do.
 NOTHING_KEPT = "no item ticked lies under the goal in triage"
+#: The reason the owner's `later` puts the goal off with.
+OWNER_LATER = "owner: later"
+#: The reason the owner's `drop` cancels the tasks it keeps, and then the goal, with.
+OWNER_DROP = "owner: not to be done"
+#: What the goal the owner's `drop` cancels says was done, unless it said so itself.
+OWNER_DROPPED_DONE = "Not needed: the owner answered not to do it"
 
 
 def carry_out(
@@ -423,6 +438,7 @@ def carry_out(
     row: sqlite3.Row,
     action: pending.Action,
     answers: Mapping[str, object],
+    note: str,
     author: str | None,
 ) -> dict:
     """Carry out the owner's answer to the question `triage` about a group, as the owner's
@@ -440,8 +456,14 @@ def carry_out(
     2. A ticked task that no longer lies under the goal in triage takes no part and
        stays as it is.
     3. `do` with a ticked task left accepts the goal, and by the cascade the ticked
-       tasks under it in triage; `do` or `later` with none left no longer applies, and
-       the action ends `dropped`, the goal staying in triage.
+       tasks under it in triage; `later` puts the goal off until the answer's `until`,
+       or else the agent's, as `owner: later`, the tasks lying under it. `do` or `later`
+       with none left no longer applies, and the action ends `dropped`, the goal
+       staying in triage. `drop` cancels each ticked task under the goal in triage as
+       `owner: not to be done`, then the goal: by the cancel list (`cancel_list`, whose
+       token is the answer's `cancels`) when open work not in triage, which the owner
+       was not asked about, still stands under it. A list not confirmed refuses the
+       answer whole, and the question stays open.
 
     The action ends `carried_out` when the owner's answer is the agent's, `declined`
     otherwise. Answers what was done: the answer, the tasks moved out (`moved_out`) and
@@ -485,7 +507,7 @@ def carry_out(
     pending.end(conn, action, outcome, author=author)
     # The owner makes the write; its events say who asked for it, as the question does.
     with service.asked_by(pending.asker(conn, action, str(row["author"]))):
-        _answer(conn, goal, answer, author)
+        _answer(conn, action, goal, kept, answers, note, author)
     return done
 
 
@@ -514,15 +536,41 @@ def _triage_children(conn: sqlite3.Connection, goal: sqlite3.Row) -> list[sqlite
     )
 
 
-def _answer(conn: sqlite3.Connection, goal: sqlite3.Row, answer: str, author: str | None) -> None:
-    """The owner's answer on the goal, the tasks it keeps lying under it in triage."""
+def _answer(
+    conn: sqlite3.Connection,
+    action: pending.Action,
+    goal: sqlite3.Row,
+    kept: set[str],
+    answers: Mapping[str, object],
+    note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer on the goal, the tasks it keeps (`kept`) lying under it in
+    triage. The note, when it fits a summary, is the why of the summaries a drop writes."""
 
-    if answer != request_model.RETURN_DO:
-        raise model.PlanningError(
-            f"[purpose] this build carries out no answer {answer} on a group; withdraw the question"
-        )
+    reference = read_model.reference(conn, goal)
+    answer = answers.get(request_model.REVIEW_ANSWER)
+    if answer == request_model.RETURN_DO:
+        service.transition_work_item(conn, reference, _state(conn, goal, "ready"), author=author)
+        return
+    if answer == request_model.RETURN_LATER:
+        until = answers.get(request_model.RETURN_UNTIL) or action.params.get("until")
+        service.defer_work_item(conn, reference, until=until, reason=OWNER_LATER, author=author)
+        return
+    why = note[: model.SUMMARY_LIMIT] or None
+    cancelled = _state(conn, goal, "cancelled")
+    for identity in [identity for identity in action.params.get("items") or [] if identity in kept]:
+        task = read_model.reference(conn, read_model.item_by_id(conn, str(identity)))
+        _close_summary(conn, task, why, author)
+        service.transition_work_item(conn, task, cancelled, reason=OWNER_DROP, author=author)
+    _close_summary(conn, reference, why, author, done=OWNER_DROPPED_DONE)
     service.transition_work_item(
-        conn, read_model.reference(conn, goal), _state(conn, goal, "ready"), author=author
+        conn,
+        reference,
+        cancelled,
+        reason=OWNER_DROP,
+        author=author,
+        cancels=answers.get(request_model.RETURN_CANCELS) or None,
     )
 
 
