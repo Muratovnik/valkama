@@ -39,6 +39,7 @@ from collections.abc import Callable, Mapping
 
 from ..store_identity.primitives import ContractError
 from ..store_identity.refs import planning_space_entity
+from ..ui_state import PlatformHttpError
 from . import modules as platform_modules
 
 # The current shape, borrowed rather than restated. A migration's last act is to
@@ -70,6 +71,7 @@ from .legacy_records import (
     validate_legacy_operating_scope,
 )
 from .module_manifest import validate_module_manifest
+from .ui_prefs import validate_ui_prefs
 
 
 class CatalogMigrationError(ContractError):
@@ -1120,6 +1122,25 @@ def _neutral_ui_prefs_record(row: Mapping[str, object], *, legacy: bool) -> dict
         ) from error
 
 
+def _current_ui_prefs_record(row: Mapping[str, object]) -> dict:
+    """A remembered route of a current store, held to the grammar the shell writes it in.
+
+    `_neutral_ui_prefs_record` reads an older catalog in the scope it was written in;
+    a current store's route is the shell's own, so its own validator is the proof.
+    """
+
+    try:
+        if row["key"] != "last-route":
+            raise TypeError("UI preference identity is invalid")
+        if not isinstance(row["updated_at"], str) or not row["updated_at"]:
+            raise TypeError("UI preference timestamp is invalid")
+        return validate_ui_prefs(json.loads(str(row["record_json"])))
+    except (TypeError, json.JSONDecodeError, ContractError, PlatformHttpError) as error:
+        raise CatalogMigrationError(
+            "persisted UI preference is not one this build writes"
+        ) from error
+
+
 def _space_entity_from_board_ref(value: object) -> dict:
     """One legacy `board_ref` as the planning-space entity it now names.
 
@@ -1567,6 +1588,6 @@ def assert_product_model_postconditions(conn: sqlite3.Connection) -> None:
             raise CatalogMigrationError(f"post-migration {table} shape is not exact")
     _assert_exact_catalog(conn, generation="current", prefix="platform_")
     for row in conn.execute("SELECT key,record_json,updated_at FROM platform_ui_prefs"):
-        _neutral_ui_prefs_record(row, legacy=False)
+        _current_ui_prefs_record(row)
     # The foreign keys are checked by `store.schema_change`, the transaction this runs
     # in, once every step of the bring-up has written.

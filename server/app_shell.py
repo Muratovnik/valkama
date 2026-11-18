@@ -18,9 +18,9 @@ from datetime import UTC, datetime
 
 from .planning.routing import PlanningRouting, scope_parameters
 from .platform import modules as platform_modules
+from .platform.ui_prefs import validate_ui_prefs
 from .projects import project_registry
 from .store_identity.primitives import ContractError
-from .store_identity.refs import validate_entity_ref, validate_operating_scope
 from .ui_state import PlatformHttpError, envelope
 
 CONTEXT_INTERFACE = "valkama-context"
@@ -38,17 +38,6 @@ def _exact_object(value, allowed, *, required) -> None:
         raise ContractError("request body has missing or unknown fields")
 
 
-def _validated_ui_prefs(value) -> dict:
-    _exact_object(value, ("module_id", "scope", "resource_ref"), required=("module_id", "scope"))
-    module_id = value["module_id"]
-    if not isinstance(module_id, str) or module_id not in platform_modules.module_ids():
-        raise PlatformHttpError(400, "error", "UI preference names an unknown module")
-    prefs = {"module_id": module_id, "scope": validate_operating_scope(value["scope"])}
-    if "resource_ref" in value:
-        prefs["resource_ref"] = validate_entity_ref(value["resource_ref"])
-    return prefs
-
-
 def ui_prefs_record(conn: sqlite3.Connection) -> dict | None:
     """Last-route preference, or None when unset or unreadable."""
 
@@ -58,7 +47,7 @@ def ui_prefs_record(conn: sqlite3.Connection) -> dict | None:
     if row is None:
         return None
     try:
-        return _validated_ui_prefs(json.loads(str(row[0])))
+        return validate_ui_prefs(json.loads(str(row[0])))
     except Exception:  # noqa: BLE001 -- a corrupt row must never break the shell context
         return None
 
@@ -71,7 +60,7 @@ def save_ui_prefs(conn: sqlite3.Connection, payload) -> dict:
     )
     if payload["interface_version"] != UI_PREFS_INTERFACE:
         raise PlatformHttpError(400, "error", "UI preference payload version is not supported")
-    prefs = _validated_ui_prefs(
+    prefs = validate_ui_prefs(
         {key: value for key, value in payload.items() if key != "interface_version"}
     )
     conn.execute(
