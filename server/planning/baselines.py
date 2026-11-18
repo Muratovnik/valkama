@@ -56,9 +56,11 @@ _TAKEN = (
     " WHERE work_item_id IN (SELECT value FROM json_each(?))"
 )
 
-#: Why a row shows no count, besides `MIGRATED`: it reads only some of the items under
-#: its goal or stage, which the count does not; it is not accepted; it was accepted
-#: with no task under it, and no task under it has started yet.
+#: Why a row shows no count, besides `MIGRATED`: it adds up only the tasks a filter of
+#: kinds and labels keeps, which the count was not taken of; it reads only some of the
+#: items under its goal or stage, which the count does not; it is not accepted; it was
+#: accepted with no task under it, and no task under it has started yet.
+FILTERED = "filtered"
 PARTIAL = "partial"
 NOT_ACCEPTED = "not_accepted"
 NOT_STARTED = "not_started"
@@ -74,15 +76,19 @@ def taken(conn: sqlite3.Connection, ids: Sequence[str]) -> dict[str, dict]:
 
 
 def shown(
-    count: dict | None, acceptance: str | None, *, partial: bool
+    count: dict | None, acceptance: str | None, *, partial: bool, filtered: bool = False
 ) -> tuple[dict | None, str | None]:
     """The count a row shows, or none and why, the first reason that holds deciding.
 
-    A row of some of a goal's items shows none: the count is of all of them. A goal or
-    stage not accepted has none, and one accepted by the work-model migration never
-    gets one; an accepted one without a count has not started.
+    A row under a filter shows none: the count is of all the tasks, of every kind and
+    label, and a task's kind and labels change after it. A row of some of a goal's items
+    shows none either: the count is of all of them. A goal or stage not accepted has
+    none, and one accepted by the work-model migration never gets one; an accepted one
+    without a count has not started.
     """
 
+    if filtered:
+        return None, FILTERED
     if partial:
         return None, PARTIAL
     if count is not None:

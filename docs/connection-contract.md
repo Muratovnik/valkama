@@ -1942,6 +1942,7 @@ says why, the first of these that holds:
 
 | `baseline_absent` | When |
 | --- | --- |
+| `filtered` | the read names a `kind` or a `label`: the count is of all its tasks, of every kind and label, and a task's kind and labels change after it (see [Filtering by kind and label](#filtering-by-kind-and-label)) |
 | `partial` | the row is `partial`: the count is of all its tasks, `tasks` only of the scope's |
 | `not_accepted` | it is not accepted: it stands in triage or deferred, or was closed from there |
 | `migrated` | it was accepted before the work model, which kept no count of what stood under it then |
@@ -2056,14 +2057,18 @@ filter: a task matches when its kind is any of the kinds named, or any kind when
 is, and when it carries every label named. Both together keep what both keep:
 `kind=bug&kind=task&label=ui` keeps the bugs and the tasks labelled `ui`. A goal or a
 stage never matches: it has no kind of a task, and its labels are not labels of work.
+A filter narrows the tasks every section counts; a goal row then adds up only those
+tasks, without the work of its goals and stages, and carries no count at acceptance.
 
 | Part | Under a filter |
 | --- | --- |
 | `counts.categories` | `tasks` counts the tasks that match and `oldest` is the one of them that came to stand there first; `goals` and `stages` are `null`, not `0` |
 | `counts.waiting_owner` | the questions to the owner on the tasks that match |
 | `counts.unattached_commits` | as without a filter: a commit on no card has no task whose kind and labels could match, and the number opens the list a commit is attached from |
+| `goals` | the goals, and in `children` the stages, with a task that matches under them; the others have no row. A row is the rows of its stages and its tasks that match: `spent`, `spent_with_cancelled`, `sessions`, `commits`, `tasks` and `remaining` count those tasks alone, never the work of a goal or stage itself. `baseline` is `null` with `baseline_absent` `filtered`: the count was taken of every task, and how many of them were of a kind or carried a label then is not known. What each task has left is what it has left without a filter, since the groups it is judged by are read across the store; the filter only chooses whose estimates add up |
 | `outside` | the tasks that match with no parent; with a `label` named, `by_label` holds the rows of the labels named alone, since a row of another label would only show where it meets the filter |
 | `flow` | `created`, `closed` and `pace` read the tasks that match, `decisions` their requests and `commits` the commits attached to them; no commit on no card is counted |
+| `estimates` | the table describes the done tasks of the scope's basis that match, and `basis` counts them; with a `label` named, the rows of `level` `project_kind_label` are those of the labels named alone, since a row of another label would only show where it meets the filter |
 
 ### How often each analytics surface is opened
 

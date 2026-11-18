@@ -586,6 +586,82 @@ class BaselineTests(GoalCase):
         )
 
 
+class FilterTests(GoalCase):
+    def test_a_filter_adds_up_only_its_tasks(self) -> None:
+        goal = self.place("MAIN", "G", kind="goal", state="container")
+        stage = self.place("MAIN", "S1", kind="stage", state="container", parent="G")
+        x = self.place("MAIN", "x", kind="bug", state="dev", parent="G", projects=("app",))
+        y = self.place("MAIN", "y", state="dev", parent="G")
+        z = self.place("MAIN", "z", kind="bug", state="dev", parent="S1", projects=("lib",))
+        self.spend(x, 10.0, session="sess-y")
+        self.spend(z, 20.0, session="sess-y")
+        for identity, seconds in ((goal, 40.0), (stage, 80.0), (y, 160.0)):
+            self.spend(identity, seconds, session="sess-x")
+        commit = self.conn.execute(
+            "INSERT INTO commits(project_id, hash, reported_at) VALUES ('app', ?, ?)",
+            ("a1" * 20, "2026-11-12T10:00:00Z"),
+        ).lastrowid
+        self.conn.execute(
+            "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+            " VALUES (?, ?, 'manual')",
+            (y, commit),
+        )
+        self.conn.execute(
+            "INSERT INTO work_item_baselines(work_item_id, tasks, basis, taken_at)"
+            " VALUES (?, 3, 'accepted', '2026-11-11T09:00:00Z')",
+            (goal,),
+        )
+        # A goal with tasks of another kind alone.
+        self.place("MAIN", "H", kind="goal", state="container")
+        self.place("MAIN", "h", state="dev", parent="H")
+        self.conn.commit()
+
+        whole = self.by_reference(self.volumes("MAIN")["goals"])
+        self.assertEqual({self.ref("MAIN:G"), self.ref("MAIN:S1"), self.ref("MAIN:H")}, set(whole))
+        rows = self.by_reference(self.volumes("MAIN", kind="bug")["goals"])
+        # H holds no bug and has no row; S1 holds z.
+        self.assertEqual({self.ref("MAIN:G"), self.ref("MAIN:S1")}, set(rows))
+        g, s1 = rows[self.ref("MAIN:G")], rows[self.ref("MAIN:S1")]
+        # The bugs alone: neither G's nor S1's own work, nor y's.
+        for number in ("spent", "spent_with_cancelled"):
+            self.assertEqual(self.own(x, z), _added(g[number]))
+            self.assertEqual(self.own(z), _added(s1[number]))
+            self.assertEqual(_plus(_added(s1[number]), self.own(x)), _added(g[number]))
+        self.assertEqual((2, 1), (g["tasks"]["total"], s1["tasks"]["total"]))
+        # Only sess-y spent on the bugs, and the one commit is y's.
+        self.assertEqual((1, 0), (g["sessions"], g["commits"]))
+        self.assertEqual(
+            (False, None, "filtered"), (g["partial"], g["baseline"], g["baseline_absent"])
+        )
+        self.assertEqual((None, "filtered"), (s1["baseline"], s1["baseline_absent"]))
+        # Without the filter G shows its count, its own work and y's commit and session.
+        self.assertEqual(
+            ({"tasks": 3, "basis": "accepted", "taken_at": "2026-11-11T09:00:00Z"}, None, 2, 1),
+            (
+                whole[self.ref("MAIN:G")]["baseline"],
+                whole[self.ref("MAIN:G")]["baseline_absent"],
+                whole[self.ref("MAIN:G")]["sessions"],
+                whole[self.ref("MAIN:G")]["commits"],
+            ),
+        )
+
+        # Through `app`, G holds x of the bugs, and y and S1 are not the project's.
+        narrowed = self.volumes("MAIN", "app", kind="bug")["goals"]
+        self.assertEqual([self.ref("MAIN:G")], [row["reference"] for row in narrowed])
+        (part,) = narrowed
+        self.assertEqual(self.own(x), _added(part["spent"]))
+        self.assertEqual(
+            (1, [], True, None, "filtered"),
+            (
+                part["tasks"]["total"],
+                part["children"],
+                part["partial"],
+                part["baseline"],
+                part["baseline_absent"],
+            ),
+        )
+
+
 #: The tables each part of a row is read from, besides the items themselves.
 PARTS = {
     "usage rows": "GROUP BY work_item_id",
@@ -626,11 +702,12 @@ class StatementTests(GoalCase):
         self.assertEqual(3, len(self.volumes("MAIN")["goals"]))
         # The frame's first counted moment reads usage too, the flow reads the scope's commits
         # twice, those attached to its items and those on no card, whatever its goals, and the
-        # counts take how many stand on no card in one more. The table of the estimates reads
-        # the basis once more, whatever its goals.
-        self.assertEqual(
-            {**once, "of usage": 5, "commits": 4, "the basis of the estimates": 2}, reading()
-        )
+        # counts take how many stand on no card in one more. The goals and the table of the
+        # estimates take the one basis the read selects.
+        self.assertEqual({**once, "of usage": 4, "commits": 4}, reading())
+        # Under a filter too, which keeps the three goals' tasks.
+        self.assertEqual(3, len(self.volumes("MAIN", kind="task")["goals"]))
+        self.assertEqual(1, reading()["the basis of the estimates"])
 
 
 class RefusalTests(GoalCase):

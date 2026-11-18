@@ -251,6 +251,59 @@ class RemainderTests(EstimatesCase):
         )
 
 
+class FilterTests(EstimatesCase):
+    def test_a_filter_narrows_the_table_and_not_the_remainder(self) -> None:
+        # Six done bugs and six done tasks of `app` labelled `ui`, 200 … 700 s; three of the
+        # bugs carry `api` too.
+        for index in range(6):
+            seconds = 200.0 + 100.0 * index
+            self.done(f"bug{index}", seconds, kind="bug", labels=("ui", "api")[: 1 + index % 2])
+            self.done(f"task{index}", seconds, labels=("ui",))
+        self.goal("G")
+        self.work(self.item("open", state="dev", kind="bug", labels=("ui",), parent="G"), 100.0)
+        self.conn.commit()
+
+        def table(read: dict) -> list[tuple]:
+            return [
+                (row["level"], row["kind"], row["label"], row["tasks"])
+                for row in read["estimates"]["rows"]
+            ]
+
+        # The six bugs that spent more than 100 s: 100 … 600 s beyond it, 350 s on average.
+        left = (350.0, 6, 1, 0)
+
+        def remaining(read: dict) -> tuple:
+            found = read["goals"][0]["remaining"]
+            return (
+                found["agent_seconds"],
+                found["basis"],
+                found["estimated"],
+                found["unestimated"],
+            )
+
+        whole = self.volumes("MAIN")
+        self.assertEqual(12, whole["estimates"]["basis"])
+        self.assertEqual(left, remaining(whole))
+        bugs = self.volumes("MAIN", kind="bug")
+        self.assertEqual(6, bugs["estimates"]["basis"])
+        self.assertEqual(
+            [
+                ("project_kind", "bug", None, 6),
+                ("project_kind_label", "bug", "ui", 6),
+                ("project_kind_label", "bug", "api", 3),
+            ],
+            table(bugs),
+        )
+        self.assertEqual(left, remaining(bugs))
+        # With a label named, the rows of labels are only its own.
+        labelled = self.volumes("MAIN", kind="bug", label="ui")
+        self.assertEqual(
+            [("project_kind", "bug", None, 6), ("project_kind_label", "bug", "ui", 6)],
+            table(labelled),
+        )
+        self.assertEqual(left, remaining(labelled))
+
+
 def _figure(value: float, places: int) -> float:
     return round(value, places) if places else math.floor(value + 0.5)
 

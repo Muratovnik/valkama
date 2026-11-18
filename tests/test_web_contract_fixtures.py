@@ -755,7 +755,7 @@ class _Scenario:
         """What stands in the space, in its project and in the space filtered to its tasks
         with a label, over the days around today, and what the tree's goal and stage took:
         work on the goal, on a task done and on one cancelled under it, and on a task under
-        the stage, one of its rows of no known price."""
+        the stage, labelled, one of its rows of no known price."""
 
         conn = store.connect()
         try:
@@ -785,6 +785,10 @@ class _Scenario:
             under_stage = conn.execute(
                 "SELECT work_item_id FROM work_items WHERE title = 'Tree work under the stage'"
             ).fetchone()[0]
+            # The filtered read keeps it, so its goal and stage add up its work alone.
+            conn.execute(
+                "UPDATE work_items SET labels = '[\"ui\"]' WHERE work_item_id = ?", (under_stage,)
+            )
             run = conn.execute(
                 "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
                 " read_at) VALUES ('sess-goal', '', 'claude', 'goal.jsonl', ?, ?, ?)",

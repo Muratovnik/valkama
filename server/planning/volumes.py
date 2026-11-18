@@ -7,7 +7,9 @@ board on the same items. The period is the Analytics grammar (`usage.period`): a
 date is the start of that day in the caller's zone, and `to` is not in it.
 
 The read is a frame — the scope, the period and the moment usage was first counted
-to items — and its sections, each one function of the request (`SECTIONS`). The
+to items — and its sections, each one function of the reading (`SECTIONS`): the
+request with what more than one section takes from the store, the basis of the
+estimates, read once for the goals and the table alike (`Reading`). The
 counts by category are the first section: work in an open category is counted as
 it stands now, with the card longest in it, and work that came to be completed or
 cancelled is counted when it came to stand there inside the period. Beside them
@@ -26,8 +28,11 @@ estimates are judged by, described by project, kind and label (`estimates.table`
 A read may also name kinds of task and labels (`WorkFilter`), by the rules of the
 board's filter. It then keeps only the scope's tasks that match, by one condition every
 section takes (`Request.matching`): a goal or stage never matches, so the counts give
-no number of goals and stages, and the commits on no card, which have no task to
-match, are counted as without a filter and left out of the flow.
+no number of goals and stages, a goal's row adds up only the tasks that match under it,
+without its own work and with no count at acceptance, and the commits on no card, which
+have no task to match, are counted as without a filter and left out of the flow. The
+estimates of open tasks are judged by the whole store as without a filter; the table
+describes the done tasks that match.
 
 Only the store this service writes is read. Usage is written there alone, and an
 attached store is read as an earlier build left it, so a space of one is refused
@@ -155,6 +160,18 @@ class Request(NamedTuple):
             clauses=(*self.scope.clauses, *clauses),
             parameters=(*self.scope.parameters, *parameters),
         )
+
+
+class Reading(NamedTuple):
+    """One read under way: the store, the request, and what more than one section takes
+    from the store, read once by the read however many goals it holds."""
+
+    conn: sqlite3.Connection
+    request: Request
+    #: The basis of the estimates: the store's done work, by which the goals' open tasks
+    #: are judged, keeping the part the sections count (`Request.matching`), which the
+    #: table describes.
+    basis: estimates.Basis
 
 
 def scope(
@@ -387,7 +404,8 @@ def _unattached_commits(conn: sqlite3.Connection, scope: Scope) -> int | None:
     return int(listed["total"])
 
 
-def _counts(conn: sqlite3.Connection, request: Request) -> dict:
+def _counts(reading: Reading) -> dict:
+    conn, request = reading.conn, reading.request
     # A commit on no card has no task whose kind and labels a filter could test, and its
     # number opens the list it is attached from: no filter narrows it.
     return {
@@ -400,15 +418,17 @@ def _counts(conn: sqlite3.Connection, request: Request) -> dict:
 # -- the goals -------------------------------------------------------------------
 
 
-def _goals(conn: sqlite3.Connection, request: Request) -> list[dict]:
+def _goals(reading: Reading) -> list[dict]:
     """The scope's open goals and those that came to a close in the period, with their stages.
 
     In space key and number order. Each adds up what the scope holds of it
     (`goal_volumes.rows`): a goal of another space, or one read through a project,
-    may hold work the scope does not, and says so.
+    may hold work the scope does not, and says so. Under a filter each adds up the
+    tasks that match alone, and a goal with none under it has no row.
     """
 
-    scope = request.scope
+    conn, request = reading.conn, reading.request
+    scope, matching = request.scope, request.matching()
     found = [
         row
         for row in _standing(
@@ -423,6 +443,8 @@ def _goals(conn: sqlite3.Connection, request: Request) -> list[dict]:
         [str(row["work_item_id"]) for row in found],
         where=scope.where(),
         parameters=scope.parameters,
+        matching=None if request.work_filter is None else (matching.where(), matching.parameters),
+        basis=reading.basis,
         space_id=None if scope.space is None else str(scope.space["planning_space_id"]),
         children=True,
     )
@@ -431,7 +453,7 @@ def _goals(conn: sqlite3.Connection, request: Request) -> list[dict]:
 # -- the work outside goals ------------------------------------------------------
 
 
-def _outside(conn: sqlite3.Connection, request: Request) -> dict:
+def _outside(reading: Reading) -> dict:
     """The scope's tasks under no goal, by project and by label, counted by category.
 
     A task counts as it does in the counts (`_counted`). By project, each task stands
@@ -443,6 +465,7 @@ def _outside(conn: sqlite3.Connection, request: Request) -> dict:
     are only theirs: a row of another label would show only where it meets the filter.
     """
 
+    conn, request = reading.conn, reading.request
     shown = () if request.work_filter is None else request.work_filter.labels
     rows = [
         row
@@ -502,7 +525,7 @@ def _by_category(rows: list[sqlite3.Row]) -> dict[str, int]:
 # -- the flow --------------------------------------------------------------------
 
 
-def _flow(conn: sqlite3.Connection, request: Request) -> dict:
+def _flow(reading: Reading) -> dict:
     """The scope's tasks created and closed by day, the owner's decisions, its commits, its pace.
 
     Its commits on no card are those of the scope's projects: the project read, or the
@@ -511,6 +534,7 @@ def _flow(conn: sqlite3.Connection, request: Request) -> dict:
     to them; a commit on no card has no task to match, and none is counted.
     """
 
+    conn, request = reading.conn, reading.request
     scope, period = request.scope, request.period
     projects: list[str] | None = None
     if request.work_filter is not None:
@@ -535,12 +559,13 @@ def _flow(conn: sqlite3.Connection, request: Request) -> dict:
 # -- the estimates ---------------------------------------------------------------
 
 
-def _estimates(conn: sqlite3.Connection, request: Request) -> dict:
+def _estimates(reading: Reading) -> dict:
     """The scope's done work that estimates are judged by, described by project, kind and
-    label. A filter does not narrow it yet: it describes the scope's basis whole."""
+    label. Under a filter it is the done tasks that match, and with labels named the rows
+    by label are only theirs."""
 
-    scope = request.scope
-    return estimates.table(conn, scope.where(), scope.parameters)
+    work_filter = reading.request.work_filter
+    return estimates.table(reading.basis, () if work_filter is None else work_filter.labels)
 
 
 # -- the read --------------------------------------------------------------------
@@ -553,10 +578,10 @@ def measured_from(conn: sqlite3.Connection) -> str | None:
     return None if row is None or row[0] is None else str(row[0])
 
 
-Section = Callable[[sqlite3.Connection, Request], object]
+Section = Callable[[Reading], object]
 
 #: The sections of the answer after its frame, in the order it gives them. Each is one
-#: function of the request; a part of the read is added as one more entry here.
+#: function of the reading; a part of the read is added as one more entry here.
 SECTIONS: tuple[tuple[str, Section], ...] = (
     ("counts", _counts),
     ("goals", _goals),
@@ -569,10 +594,12 @@ SECTIONS: tuple[tuple[str, Section], ...] = (
 def read(conn: sqlite3.Connection, request: Request) -> dict:
     """What stands in the request's scope and what came to a close in its period."""
 
+    matching = request.matching()
+    reading = Reading(conn, request, estimates.read(conn, matching.where(), matching.parameters))
     return {
         "scope": request.scope.answer(),
         "period": request.period.answer(),
         "filter": None if request.work_filter is None else request.work_filter.answer(),
         "measured_from": measured_from(conn),
-        **{name: section(conn, request) for name, section in SECTIONS},
+        **{name: section(reading) for name, section in SECTIONS},
     }

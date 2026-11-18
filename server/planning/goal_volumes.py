@@ -31,11 +31,17 @@ the sum of their estimates (`estimates`), judged by done work of the whole store
 how many of them have an estimate and how many have none. A row with no open task has
 none.
 
+A read filtered by kinds and labels adds up only the tasks the filter keeps, which no
+goal or stage is: a row is then the rows of its stages and its tasks that match, without
+the work of the goal or stage itself, and a goal or stage with no such task under it has
+no row. Its tasks are those that match, and it shows no count at acceptance, which was
+taken of every task. What each task has left is what it has left without the filter.
+
 Each part a read takes from the store is one statement, however many goals it reads:
-the usage rows of every item it keeps, grouped by item, by whether a row is priced
+the usage rows of every item it adds up, grouped by item, by whether a row is priced
 and by its quality; their sessions; their commits; the counts at acceptance of
-the rows it shows; and, when it keeps an open task, the basis of the estimates and the
-projects of the open tasks.
+the rows it shows; and, when it keeps an open task, the projects of the open tasks and
+the basis of the estimates, unless the read hands that in.
 """
 
 from __future__ import annotations
@@ -70,7 +76,8 @@ _ITEMS = (
     " p.key AS space_key, p.name AS space_name,"
     " s.key, s.name, s.category, s.is_terminal,"
     " up.number AS parent_number, upp.key AS parent_key,"
-    " CASE WHEN {where} THEN 1 ELSE 0 END AS kept"
+    " CASE WHEN {where} THEN 1 ELSE 0 END AS kept,"
+    " CASE WHEN {matching} THEN 1 ELSE 0 END AS matched"
     " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
     " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
     " LEFT JOIN work_items up ON up.work_item_id = i.parent_id"
@@ -138,29 +145,44 @@ def rows(
     *,
     where: str = "1 = 1",
     parameters: Sequence[object] = (),
+    matching: tuple[str, Sequence[object]] | None = None,
+    basis: estimates.Basis | None = None,
     space_id: str | None = None,
     children: bool = False,
 ) -> list[dict]:
     """The row of each goal or stage of `roots`, in their order.
 
     `where` and its `parameters`, conditions on `work_items i`, keep the items the
-    read adds up; an item they leave out makes each row over it `partial`. `space_id`
-    is the space read, whose own goals name no `other_space`. With `children`, a row
-    holds the rows of the stages under it that the read keeps, in number order.
+    read adds up; an item they leave out makes each row over it `partial`. `matching`,
+    conditions of the same form with their parameters, is a filter's, which no goal or
+    stage matches: the rows then add up only the tasks it keeps, without the work of the
+    goals and stages, give no count at acceptance, and only the goals and stages with
+    such a task under them have a row. `basis` is the basis of the estimates when the
+    read holds it already. `space_id` is the space read, whose own goals name no
+    `other_space`. With `children`, a row holds the rows of the stages under it that
+    the read keeps, in number order.
     """
 
     if not roots:
         return []
     tree = item_tree.below(conn, roots)
+    filtered = matching is not None
+    condition, values = ("1 = 1", ()) if matching is None else matching
     items = {
         str(row["work_item_id"]): row
         for row in conn.execute(
-            _ITEMS.format(where=where), (*parameters, json.dumps(sorted(tree.nodes)))
+            _ITEMS.format(where=where, matching=condition),
+            (*parameters, *values, json.dumps(sorted(tree.nodes))),
         )
     }
     kept = [identity for identity, row in items.items() if row["kept"]]
-    spending = conn.execute(_SPENDING, (json.dumps(sorted(kept)),)).fetchall()
+    #: The items the rows add up: those the read keeps, or under a filter its tasks alone.
+    added = [identity for identity in kept if items[identity]["matched"]]
+    spending = conn.execute(_SPENDING, (json.dumps(sorted(added)),)).fetchall()
     first = spending[0]["first"]
+    holding = {over for identity in added for over in tree.ancestors(identity)}
+    if filtered:
+        roots = [identity for identity in roots if identity in holding]
     shown = set(roots)
     if children:
         shown |= {
@@ -168,11 +190,12 @@ def rows(
             for identity in kept
             if items[identity]["kind"] == model.CONTAINER_KIND
             and items[identity]["parent_id"] is not None
+            and (not filtered or identity in holding)
         }
     sums = {identity: _Row() for identity in shown}
-    sessions = read_model.session_ids(conn, kept)
-    commits = read_model.attached_commits(conn, kept)
-    counts = baselines.taken(conn, sorted(shown))
+    sessions = read_model.session_ids(conn, added)
+    commits = read_model.attached_commits(conn, added)
+    counts = {} if filtered else baselines.taken(conn, sorted(shown))
 
     def over(identity: str) -> Iterable[_Row]:
         """The rows the item adds to: its own, when it has one, and every one above it."""
@@ -200,6 +223,8 @@ def rows(
             for summed in over(identity):
                 summed.partial = True
             continue
+        if not item["matched"]:
+            continue
         for summed in over(identity):
             summed.add(sessions.get(identity, set()), commits.get(identity, set()))
         if item["kind"] == model.CONTAINER_KIND:
@@ -214,12 +239,13 @@ def rows(
 
     open_tasks = [
         identity
-        for identity in kept
+        for identity in added
         if items[identity]["kind"] != model.CONTAINER_KIND
         and str(items[identity]["category"]) not in model.TERMINAL_CATEGORIES
     ]
     if open_tasks:
-        basis, _kept = estimates.read(conn)
+        if basis is None:
+            basis = estimates.read(conn)
         projects = item_projects.ids_of_items(conn, open_tasks)
         for identity in open_tasks:
             item = items[identity]
@@ -245,7 +271,7 @@ def rows(
         summed = sums[identity]
         own = space_id is None or str(item["planning_space_id"]) == space_id
         baseline, absent = baselines.shown(
-            counts.get(identity), item["acceptance"], partial=summed.partial
+            counts.get(identity), item["acceptance"], partial=summed.partial, filtered=filtered
         )
         found = {
             "work_item_id": identity,

@@ -391,7 +391,7 @@ describe('the server fixtures', () => {
   it('carry a filter that keeps only tasks, and count no goals or stages under it', () => {
     const filtered = validateVolumesAnswer(read('volumes-filtered.json'))
     expect(filtered.filter).toEqual({ kinds: ['task', 'bug'], labels: ['ui'] })
-    expect(filtered.counts.categories.map((row) => row.tasks).reduce((all, n) => all + n)).toBe(1)
+    expect(filtered.counts.categories.map((row) => row.tasks).reduce((all, n) => all + n)).toBe(2)
     expect(filtered.outside.by_label.map((row) => row.label)).toEqual(['ui'])
     expect(validateVolumesAnswer(read('volumes-space.json')).filter).toBeNull()
     const counted = read('volumes-filtered.json') as {
@@ -399,6 +399,23 @@ describe('the server fixtures', () => {
     }
     counted.volumes.counts.categories[0].goals = 0
     expect(() => validateVolumesAnswer(counted)).toThrow()
+  })
+
+  it('add up under a filter only the tasks that match, and show no count at acceptance', () => {
+    // The goal holds the labelled task under its stage, which spent 300 s; the goal spent too.
+    const [goal] = validateVolumesAnswer(read('volumes-filtered.json')).goals
+    const [stage] = goal.children
+    expect([goal.tasks.total, goal.spent.agent_seconds, stage.spent.agent_seconds]).toEqual([
+      1, 300, 300,
+    ])
+    expect([goal.baseline_absent, stage.baseline_absent]).toEqual(['filtered', 'filtered'])
+    const whole = validateVolumesAnswer(read('volumes-space.json')).goals
+    expect(whole.find((row) => row.reference === goal.reference)?.spent.agent_seconds).toBe(900)
+    const shown = read('volumes-filtered.json') as {
+      volumes: { goals: { baseline_absent: string }[] }
+    }
+    shown.volumes.goals[0].baseline_absent = 'not_accepted'
+    expect(() => validateVolumesAnswer(shown)).toThrow()
   })
 
   it('carry the table of estimates and what open work has left', () => {
