@@ -779,6 +779,7 @@ class OrderTests(BatchCase):
                 "resolutions",
                 "questions",
                 "summary",
+                "triage_seen",
                 "transition",
                 "defer",
                 "move_out",
@@ -988,8 +989,8 @@ class PublishedSchemaTests(unittest.TestCase):
         tool = next(entry for entry in tools.TOOLS if entry["name"] == BATCH)
         self.assertIn(
             "claim, subscribe, update, convert, checklist, checklist_ticks, refs, commits, links,"
-            " comment or comments, resolutions, questions, summary, then one of transition,"
-            " defer or move_out",
+            " comment or comments, resolutions, questions, summary, triage_seen, then one of"
+            " transition, defer or move_out",
             tool["description"],
         )
 

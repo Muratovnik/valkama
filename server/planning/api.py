@@ -1434,6 +1434,8 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         ),
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
+    # A boolean, not an object: `_steps` takes it whole. It stands beside no state change.
+    ("triage_seen", frozenset()),
     (
         "transition",
         frozenset({"state", "reason", "force", "acceptance", "to_check", "cancels", "following"}),
@@ -1444,6 +1446,9 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
 #: The groups that each change the state: a batch names at most one of them. Converting
 #: changes what the item is, and where it stands with it.
 _STATE_CHANGES = ("convert", "transition", "defer", "move_out")
+#: The groups that take an item out of triage or put it elsewhere, which a triage mark
+#: may not stand beside: the mark holds only on an item the same call leaves in triage.
+_LEAVES_TRIAGE = ("transition", "defer", "move_out")
 #: What a creation may do to the item it just made, after making it and in this
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
 CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
@@ -1480,6 +1485,15 @@ def _apply_entries(payload: Mapping[str, object]) -> list[_Step]:
             "invalid_request",
             f"{' and '.join(changing)} each change the state: send one, and the other in a"
             " call of its own",
+        )
+    if payload.get("triage_seen") is not None and any(
+        payload.get(group) is not None for group in _LEAVES_TRIAGE
+    ):
+        raise PlanningHttpError(
+            400,
+            "invalid_request",
+            "[triage_seen] a mark stays only on an item that stays in triage: send it without"
+            " transition, defer or move_out",
         )
     steps = _steps(payload, APPLY_GROUPS)
     if not steps:
@@ -1518,6 +1532,11 @@ def _steps(
             if not isinstance(value, bool):
                 raise PlanningHttpError(400, "invalid_request", "subscribe must be a boolean")
             steps.append((group, 0, {"follows": value}))
+            continue
+        if group == "triage_seen":
+            if not isinstance(value, bool):
+                raise PlanningHttpError(400, "invalid_request", "triage_seen must be a boolean")
+            steps.append((group, 0, {"seen": value}))
             continue
         if group == "checklist" and isinstance(value, list):
             # The steps alone: the object form is needed only to carry `force`.
@@ -1639,6 +1658,11 @@ def _apply_step(
         if TOLD in answer:
             written["mentions"] = answer[TOLD]
         return {}, written
+    if group == "triage_seen":
+        marked = service.mark_triage(
+            conn, _text(base, "id"), bool(entry["seen"]), author=_author(base)
+        )
+        return {}, marked
     if group == "move_out":
         return _moved_out(conn, {**entry, **base})
     if group == "convert":

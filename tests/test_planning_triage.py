@@ -18,13 +18,37 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from datetime import UTC, datetime
+from unittest import mock
 
-from server.planning import questions, triage
+from server.planning import api, leases, model, questions, sweep, triage
 from tests.test_planning_closing import APPLY, AS_B, MERGE, UPDATE, Tree
 
 FIELD = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
 QUESTION = {"kind": "question", "prompt": "Is this one change or two?", "fields": [FIELD]}
+#: A decision recommends an answer in its one required field, as the batch's tests send it.
+DECISION = {
+    "kind": "decision",
+    "prompt": "Which path?",
+    "fields": [
+        {
+            "id": "path",
+            "label": "Which path?",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {"id": "near", "label": "Near", "recommended": True},
+                {"id": "far", "label": "Far"},
+            ],
+        }
+    ],
+}
 ANSWER = "/api/planning/request/answer"
+MOVE_OUT = "/api/planning/work-item/move-out"
+BATCH = "apply_work_item_changes"
+#: A deferral whose day comes on the next clock tick, after which the sweep brings it back.
+DEFER_UNTIL = "2026-11-18"
+DAY_CAME = datetime(2026, 11, 18, 0, 0, 1, tzinfo=UTC)
 T1 = "2026-11-10T09:00:00Z"
 T2 = "2026-11-11T09:00:00Z"
 T3 = "2026-11-12T09:00:00Z"
@@ -248,6 +272,156 @@ class MarkTests(Stack):
         )
         self.assertIn(s1, self.stack(), "back in the stack once answered")
         self.assertEqual({"seen_at": None, "seen_by": None}, triage.field(self.conn, [item])[item])
+
+
+class GroupTests(Stack):
+    """The batch's `triage_seen` group: what it marks, what it refuses, and what clears it."""
+
+    # -- writes and reads -------------------------------------------------------------
+
+    def batch(self, reference: str, **groups: object) -> dict:
+        return self.agent(BATCH, AS_B, id=reference, **groups)
+
+    def refused(self, reference: str, **groups: object) -> tuple[str, str, str]:
+        """The status, code and message of a refused batch, with nothing of it kept."""
+
+        with self.assertRaises((model.PlanningError, api.PlanningHttpError)) as caught:
+            self.batch(reference, **groups)
+        status, body = api.error_response(caught.exception)
+        error = body["error"]
+        assert isinstance(error, dict)
+        return str(status), str(error["code"]), str(error["message"])
+
+    def seen_events(self, reference: str) -> int:
+        return int(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM work_item_events WHERE work_item_id = ?"
+                " AND action = 'triage_seen'",
+                (self.identity(reference),),
+            ).fetchone()[0]
+        )
+
+    def state_of(self, reference: str) -> tuple:
+        return tuple(
+            self.conn.execute(
+                "SELECT revision, state_id FROM work_items WHERE work_item_id = ?",
+                (self.identity(reference),),
+            ).fetchone()
+        )
+
+    def merge_thread(self, item: str) -> None:
+        """A finding with a comment of its own, merged into `item`: its thread moves onto it."""
+
+        donor = self.found("f9, with a thread")
+        self.agent(BATCH, AS_B, id=donor, comment={"body": "Seen twice"})
+        self.person(MERGE, id=item, items=[donor])
+
+    def under_goal_and_back(self, item: str) -> None:
+        self.person(UPDATE, id=item, parent=self.goal)
+        self.person(MOVE_OUT, id=item, reason="Taken out again")
+
+    def deferred_and_back(self, item: str) -> None:
+        self.person(APPLY, id=item, defer={"until": DEFER_UNTIL, "reason": "Waits for a vendor"})
+        self.assertNotIn(item, self.stack(), "a deferred item is out of the stack")
+        with mock.patch.object(leases, "utc_now", lambda: DAY_CAME):
+            sweep.run_pass(self.conn)
+        self.conn.commit()
+        self.assertIn(item, self.stack(), "back in triage on its day")
+
+    # -- the cases ---------------------------------------------------------------------
+
+    def test_what_clears_the_mark(self) -> None:
+        """Each write on its own item, after the group marked it. Every write clears the mark
+        but one: a comment and the mark in one call, which marks after the comment and so
+        keeps it. The store takes a mark away with no event, so each item keeps one
+        `triage_seen` event, the mark's own."""
+
+        writes = {
+            "a comment of its own": lambda item: self.batch(item, comment={"body": "Still seen"}),
+            "a thread merged in": lambda item: self.merge_thread(item),
+            "a decision on it": lambda item: self.batch(item, questions=[DECISION]),
+            "moved under a goal and back": lambda item: self.under_goal_and_back(item),
+            "deferred and back": lambda item: self.deferred_and_back(item),
+        }
+        for name, write in writes.items():
+            with self.subTest(name):
+                item = self.found(f"marked before {name}")
+                answer = self.batch(item, triage_seen=True)
+                self.assertEqual({"seen_at"}, set(answer["applied"]["triage_seen"]))
+                write(item)
+                self.assertIsNone(self.mark_of(item), "the write cleared the mark")
+                self.assertEqual(1, self.seen_events(item), "the store wrote no event")
+
+    def test_a_comment_and_the_mark_in_one_call_keep_the_mark(self) -> None:
+        item = self.found("commented and marked in one call")
+
+        answer = self.batch(item, comment={"body": "Kept as it is"}, triage_seen=True)
+
+        self.assertEqual({"seen_at"}, set(answer["applied"]["triage_seen"]))
+        self.assertIsNotNone(self.mark_of(item))
+        self.assertEqual(1, self.seen_events(item))
+
+    def test_the_group_takes_the_mark_away_with_its_own_event(self) -> None:
+        item = self.found("taken off by its review")
+        self.batch(item, triage_seen=True)
+
+        answer = self.batch(item, triage_seen=False)
+
+        self.assertEqual({"cleared": True}, answer["applied"]["triage_seen"])
+        self.assertIsNone(self.mark_of(item))
+        self.assertEqual(2, self.seen_events(item), "the set and the take-away are both recorded")
+
+    def test_only_a_waiting_card_is_marked(self) -> None:
+        """An item under an unaccepted goal, one with an open question to the owner, and one
+        in ready are refused with the reason, both for a mark and for taking it away; a
+        batch that marks and changes the state is refused whole."""
+
+        unaccepted = self.found("a goal nobody accepted", "goal")
+        under = self.found("t, under the unaccepted goal", parent=unaccepted)
+        asked = self.found("s, with an open question")
+        self.asked(asked)
+        ready = self.found("r, moved to ready")
+        self.person(APPLY, id=ready, transition={"state": "ready"})
+        cases = {
+            under: f"it lies under {unaccepted}",
+            asked: "it waits for the owner's answer",
+            ready: "it is not in triage",
+        }
+        for item, reason in cases.items():
+            for mark in (True, False):
+                with self.subTest(item=item, mark=mark):
+                    status, code, message = self.refused(item, triage_seen=mark)
+                    self.assertEqual(("409", "workflow_guard"), (status, code))
+                    self.assertIn(
+                        f"[triage_seen] {item} is not waiting for a triage review: {reason}",
+                        message,
+                    )
+                    self.assertIsNone(self.mark_of(item))
+                    self.assertEqual(0, self.seen_events(item))
+
+        waiting = self.found("a finding that waits")
+        before = self.state_of(waiting)
+        for groups in (
+            {"transition": {"state": "ready"}},
+            {"defer": {"until": DEFER_UNTIL, "reason": "Waits"}},
+            {"move_out": {"reason": "Taken out"}},
+        ):
+            with self.subTest(groups=next(iter(groups))):
+                status, code, message = self.refused(waiting, triage_seen=True, **groups)
+                self.assertEqual(("400", "invalid_request"), (status, code))
+                self.assertIn(
+                    "[triage_seen] a mark stays only on an item that stays in triage: send it"
+                    " without transition, defer or move_out",
+                    message,
+                )
+                self.assertEqual(before, self.state_of(waiting), "nothing was written")
+                self.assertIsNone(self.mark_of(waiting))
+                self.assertEqual(0, self.seen_events(waiting))
+
+        _status, _code, message = self.refused(waiting, triage_seen="yes")
+        self.assertIn("triage_seen must be a boolean", message)
+        self.assertIsNone(self.mark_of(waiting))
+        self.assertEqual(0, self.seen_events(waiting))
 
 
 class QuestionTriggerTests(Stack):

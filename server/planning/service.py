@@ -45,6 +45,7 @@ from . import (
     store,
     subscriptions,
     transitions,
+    triage,
     volumes,
     waiting,
     words,
@@ -1769,6 +1770,32 @@ def pin_work_item(conn: sqlite3.Connection, reference: str, pinned: bool) -> str
     else:
         conn.execute("DELETE FROM pinned_work_items WHERE work_item_id = ?", (identity,))
     return identity
+
+
+def mark_triage(conn: sqlite3.Connection, reference: object, seen: bool, *, author: object) -> dict:
+    """Mark an item a triage review saw and left in the stack, or take the mark away: the
+    answer, `{seen_at}` or `{cleared: true}`.
+
+    Both refuse an item that does not wait in the stack, and say why. The event records
+    `seen` or `cleared`; no revision moves, since a mark changes nothing the item holds.
+    """
+
+    row = _row_for_write(conn, reference, None)
+    identity = str(row["work_item_id"])
+    if not triage.waiting(conn, items=[identity]):
+        raise model.WorkflowGuardError(
+            f"[triage_seen] {read_model.reference(conn, row)} is not waiting for a triage"
+            f" review: {triage.refusal(conn, identity)}"
+        )
+    answer = triage.mark(
+        conn,
+        identity,
+        seen,
+        author=model.actor(author),
+        call_id=calls.call_id(conn, identity),
+    )
+    _log(conn, identity, "triage_seen", "seen" if seen else "cleared", model.actor(author))
+    return answer
 
 
 def list_pins(conn: sqlite3.Connection, spaces: list[str]) -> list[dict]:

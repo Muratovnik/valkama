@@ -109,7 +109,8 @@ A step's claim lapses with its session as a claim does, and Valkama releases it.
 **One call for several writes.** Writes to one item go in one
 `apply_work_item_changes` call, applied in this order and all or nothing:
 `claim`, `update`, `checklist`, `checklist_ticks`, `refs`, `commits`, `links`,
-`comment` or `comments`, `resolutions`, `questions`, `summary`, `transition`.
+`comment` or `comments`, `resolutions`, `questions`, `summary`, `triage_seen`,
+`transition`.
 Every write to an item's fields, steps, refs, commits, links, discussion,
 summary and state goes
 through these groups; `questions` takes what `create_work_item_request` does.
