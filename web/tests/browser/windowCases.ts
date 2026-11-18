@@ -1,7 +1,9 @@
 /**
  * The windows of a limit the charts harness draws (`chartsSurface`), as their charts and tables
  * take them: a window bar in each state it draws, each with its forecast's ends, and five hours
- * of readings as a step line, with «now» and a forecast that may run out past its last reading.
+ * of readings as a step line, with «now» and a forecast that may run out past its last reading;
+ * and five hours read at their reset, two of whose readings stand minutes apart, «now» on the
+ * plot's right edge with no forecast past it.
  */
 import type {
   StepAhead,
@@ -90,24 +92,29 @@ export const windowWords: WindowWords = {
 /** Five hours from 11:00, read four times, the last one held to 14:30, the moment read. */
 const STEP_START = Date.UTC(2030, 2, 6, 11)
 const STEP_HOUR = 3_600_000
-export const stepPoints: StepPoint[] = [
+
+/** Readings at so many hours from 11:00, each with its value, as a step line takes them. */
+const readingsAt = (readings: number[][]): StepPoint[] =>
+  readings.map(([hours = 0, value = 0]) => {
+    const minutes = Math.round(hours * 60)
+    const time = `${11 + Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`
+    return {
+      key: time,
+      at: STEP_START + hours * STEP_HOUR,
+      value,
+      text: `${time}, ${value}%, the poll`,
+      timeText: time,
+      valueText: `${value}%`,
+      noteText: 'the poll',
+    }
+  })
+
+export const stepPoints = readingsAt([
   [0.5, 10],
   [1.25, 22],
   [2, 22.5],
   [3, 58],
-].map(([hours = 0, value = 0]) => {
-  const minutes = Math.round(hours * 60)
-  const time = `${11 + Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`
-  return {
-    key: time,
-    at: STEP_START + hours * STEP_HOUR,
-    value,
-    text: `${time}, ${value}%, the poll`,
-    timeText: time,
-    valueText: `${value}%`,
-    noteText: 'the poll',
-  }
-})
+])
 export const stepWords: StepWords = {
   ahead: 'To now and the forecast',
   whole: 'Whole window',
@@ -154,4 +161,25 @@ export const stepProps = {
   even: true,
   legend: { line: 'Used', even: 'Steady use', ahead: 'Forecast' },
   ahead: stepAhead,
+}
+
+/**
+ * Five hours read at their reset, 16:00: two readings five minutes apart, at 12:30 and 12:35, a
+ * step a pointer is wider than, and «now» at 45 % on the plot's right edge, with no forecast.
+ */
+export const stepCloseProps = {
+  ...stepProps,
+  label: 'Five hours from 11:00 to 16:00: 8% at 11:15, 30% at 12:30, 31% at 12:35, 45% at 14:00.',
+  end: STEP_START + 5 * STEP_HOUR,
+  points: readingsAt([
+    [0.25, 8],
+    [1.5, 30],
+    [1.5 + 5 / 60, 31],
+    [3, 45],
+  ]),
+  ahead: {
+    value: 45,
+    now: { name: 'Now', figure: '45%', notes: ['Last reading at 14:00, 2 h ago, from the poll'] },
+    forecast: null,
+  },
 }

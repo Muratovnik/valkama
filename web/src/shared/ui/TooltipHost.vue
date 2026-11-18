@@ -65,7 +65,8 @@ import WholeText from '@/shared/ui/WholeText.vue'
 const besideOf = (anchor: HTMLElement | null) => (anchor && !showsWhole(anchor) ? anchor : null)
 
 useHintKind('tooltip', {
-  pointedAnchor: (target) => (previewAnchorOf(target) ? null : besideOf(pointerAnchorOf(target))),
+  pointedAnchor: (target, at) =>
+    previewAnchorOf(target) ? null : besideOf(pointerAnchorOf(target, at)),
   focusedAnchor: (target) => (previewAnchorOf(target) ? null : besideOf(focusAnchorOf(target))),
   // Words hidden whole show only while they are hidden: a width that shows them takes it down.
   shows: (anchor) =>

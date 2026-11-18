@@ -54,6 +54,11 @@
  * over the whole tile does, marks the part its words stand in `data-tooltip-words`: the pointer
  * raises their whole words only over that part, and focus a key brings still shows them.
  *
+ * A layer that takes the pointer for hinted elements that take none themselves picks among them by
+ * where the pointer stands on it (`vHintPick`), as a step line's one layer over its field does
+ * among its readings and places: the pointer on the layer asks for the element it picks there,
+ * and asks again as it moves. Focus a key brings still lands on each element itself.
+ *
  * For assistive technology it does what `title` did. With nothing else naming the element
  * the hint is its name, as `aria-label`; otherwise it is its description, through
  * `aria-describedby` and a hidden copy of the words the host keeps, unless it says nothing
@@ -65,6 +70,7 @@ import type { Directive, DirectiveBinding } from 'vue'
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import { hintAnchorGone, hintAnchorResized } from '@/shared/ui/hintManager.ts'
 import type { Box, HintAlign, HintSide } from '@/shared/ui/hintPlacement.ts'
+import type { Point } from '@/shared/ui/hintWay.ts'
 
 /** A registered exception's argument: a side, and `-start` to stand level with the element's start. */
 type TooltipPlace = HintSide | `${HintSide}-start`
@@ -287,6 +293,29 @@ export const vTooltip: Directive<HTMLElement, TooltipValue, TooltipKind, Tooltip
   beforeUnmount: forget,
 }
 
+/** The hinted element a layer picks at a point of the window, or null where it picks none. */
+type HintPick = (x: number, y: number) => HTMLElement | null
+
+/** Each layer that picks among hinted elements, with how it picks (`vHintPick`). */
+const pickers = new WeakMap<Element, HintPick>()
+
+function pickBy(element: HTMLElement, { value }: DirectiveBinding<HintPick>) {
+  element.dataset.hintPick = ''
+  pickers.set(element, value)
+}
+
+export const vHintPick: Directive<HTMLElement, HintPick> = {
+  mounted: pickBy,
+  updated: pickBy,
+  beforeUnmount: (element) => pickers.delete(element),
+}
+
+/** How the layer the element stands in picks among hinted elements, if it stands in one. */
+const pickerOf = (element: Element) => {
+  const layer = element.closest('[data-hint-pick]')
+  return layer ? pickers.get(layer) : undefined
+}
+
 /** The area the element stands in, which speaks with the one hint it holds, if any. */
 const areaOf = (element: Element) => element.closest<HTMLElement>('[data-tooltip-area]')
 
@@ -300,11 +329,17 @@ export function tooltipAnchorOf(target: EventTarget | null): HTMLElement | null 
 }
 
 /**
- * The element whose hint the pointer on `target` asks for: its own, or, while its own is a
- * `clipped` hint of words that stand whole, the hint of what holds it. A one-line word inside a
- * control that has a hint of its own took the pointer from that hint everywhere it stood whole.
+ * The element whose hint the pointer on `target`, standing at `at`, asks for: the one a layer
+ * picks there (`vHintPick`); its own; or, while its own is a `clipped` hint of words that stand
+ * whole, the hint of what holds it. A one-line word inside a control that has a hint of its own
+ * took the pointer from that hint everywhere it stood whole.
  */
-export function pointerAnchorOf(target: EventTarget | null): HTMLElement | null {
+export function pointerAnchorOf(
+  target: EventTarget | null,
+  at: Point | null = null,
+): HTMLElement | null {
+  const pick = target instanceof Element ? pickerOf(target) : undefined
+  if (pick) return at ? pick(at.x, at.y) : null
   const element = tooltipAnchorOf(target)
   let speaker = element
   while (speaker && tooltipOf(speaker)?.clipped && !textIsClipped(speaker)) {

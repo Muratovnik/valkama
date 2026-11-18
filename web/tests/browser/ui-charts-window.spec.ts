@@ -17,7 +17,7 @@
  * (`WindowBar`, `StepLine`, their tables) or the harness gives it (`data-case`).
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { test } from './test.ts'
 
@@ -302,6 +302,16 @@ const paintedDots = (page: Page) =>
     ),
   )
 
+/**
+ * Moves the pointer to the middle of the step `reach` holds: the field's one layer takes the
+ * pointer there for the reading, since the step's own box takes none.
+ */
+async function pointOnStep(page: Page, reach: Locator) {
+  const box = await reach.boundingBox()
+  if (!box) throw new Error('the reading is not drawn')
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+}
+
 // A dot on every reading made a busy window a chain of dots over its own line.
 test('a step line paints no reading’s dot at rest, only the one pointed at or focused by a key', async ({
   page,
@@ -317,7 +327,7 @@ test('a step line paints no reading’s dot at rest, only the one pointed at or 
   await expect(figure.locator('[data-mark="reading"]')).toHaveCount(4)
   expect(await paintedDots(page), 'at rest').toEqual([])
   // The pointer on a reading's step paints that reading's dot alone; away from it, none.
-  await reach.nth(1).hover()
+  await pointOnStep(page, reach.nth(1))
   await expect(page.getByRole('tooltip')).toHaveText('12:15, 22%, the poll')
   expect(await paintedDots(page), 'the second pointed at').toEqual([1])
   await page.mouse.move(1, 1)
@@ -328,7 +338,7 @@ test('a step line paints no reading’s dot at rest, only the one pointed at or 
   await page.keyboard.press('Tab')
   await expect(reach.nth(3)).toBeFocused()
   expect(await paintedDots(page), 'the latest focused').toEqual([3])
-  await reach.nth(0).hover()
+  await pointOnStep(page, reach.nth(0))
   expect(await paintedDots(page), 'the latest focused, the first pointed at').toEqual([0, 3])
   await page.mouse.move(1, 1)
   expect(await paintedDots(page), 'the latest still focused').toEqual([3])

@@ -205,6 +205,45 @@ export function stepPath(frame: StepFrame, points: readonly StepPoint[], end: nu
   return parts.join(' ')
 }
 
+/**
+ * A place of a step line as the pointer finds it: the moment its mark stands at, and the moments
+ * of the stretch it takes the pointer along where no mark is near.
+ */
+export interface StepAim {
+  at: number
+  from: number
+  to: number
+}
+
+/**
+ * The place the pointer `x` pixels into a field `width` wide points at, of `aims` drawn over
+ * `frame`: the place whose mark stands nearest `x` within `radius` of it, the earlier of two as
+ * near; else the first whose stretch holds `x`, held inside the field; null where none does.
+ * A mark wins over a stretch, so a reading a few pixels from the next is found at its own mark
+ * and never under its neighbour's step.
+ */
+export function aimAt(
+  frame: StepFrame,
+  aims: readonly StepAim[],
+  x: number,
+  { width, radius }: { radius: number; width: number },
+): number | null {
+  const across = (at: number) => (stepX(frame, at) / STEP_WIDTH) * width
+  let nearest: number | null = null
+  let distance = radius
+  for (const [index, aim] of aims.entries()) {
+    const off = Math.abs(across(aim.at) - x)
+    if (off < distance || (nearest === null && off === distance)) {
+      nearest = index
+      distance = off
+    }
+  }
+  if (nearest !== null) return nearest
+  const inside = Math.min(Math.max(x, 0), width)
+  const found = aims.findIndex((aim) => inside >= across(aim.from) && inside <= across(aim.to))
+  return found === -1 ? null : found
+}
+
 /** An edge's share at a moment: straight between its turns, held at its ends. */
 function courseAt(course: StepCourse, at: number): number {
   let before: StepTurn | undefined

@@ -4,7 +4,9 @@
  * (`HintKind.reaches`): a board tile's open target is stretched over the whole tile, and its
  * title's whole words rise over the title alone. The pointer moving within one target brings
  * no new target to find an anchor from, so the last answer is kept with the target it was
- * found on, and a move across the edge of the reach asks again.
+ * found on, and a move across the edge of the reach asks again. A layer that picks its anchor by
+ * where the pointer stands on it (`data-hint-pick`, `vHintPick`) asks again at every move, since
+ * any move on it may stand over another anchor's place.
  */
 import type { Point } from '@/shared/ui/hintWay.ts'
 
@@ -26,7 +28,13 @@ export function reachedAt(
   return last.reached
 }
 
-/** Whether the pointer moved within `target` onto or off what an anchor found from it reaches. */
+/**
+ * Whether the pointer moved within `target` onto or off what an anchor found from it reaches, or
+ * moved on a layer that picks its anchor by the point.
+ */
 export function crossesReach(target: Element | null, at: Point): boolean {
-  return last?.target === target && last.reaches(last.anchor, at.x, at.y) !== last.reached
+  return (
+    Boolean(target?.closest('[data-hint-pick]')) ||
+    (last?.target === target && last.reaches(last.anchor, at.x, at.y) !== last.reached)
+  )
 }

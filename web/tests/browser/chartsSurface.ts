@@ -8,7 +8,8 @@
  * state its bar draws — a range ahead of the share spent, past the whole, a fresh nothing with a
  * tail ahead, silent, running out before the reset, no figure, and thin in a tile — on the
  * panel's ground, with a window's readings as a step line past which its forecast runs, and both
- * as their tables (`windowCases`).
+ * as their tables, and a window read at its reset whose readings stand minutes apart
+ * (`windowCases`).
  * What a press sent is written into one line, so a test reads the event the way a page would
  * receive it; the window's one hint host shows each mark's hint, as the app's does.
  */
@@ -44,6 +45,7 @@ import WindowBarTable from '@/shared/ui/WindowBarTable.vue'
 
 import {
   stepAhead,
+  stepCloseProps,
   stepPoints,
   stepProps,
   stepWords,
@@ -328,6 +330,7 @@ export function chartsSurface() {
         'canvas',
       ),
       section('step', [h(StepLine, stepProps)], 'canvas'),
+      section('step-close', [h(StepLine, stepCloseProps)], 'canvas'),
       section(
         'step-table',
         [

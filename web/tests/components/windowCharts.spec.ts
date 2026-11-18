@@ -3,7 +3,8 @@
  * apart (`windowBar.spec.ts`). The oracle is the requirement, worked out by hand. A step line draws
  * readings as steps — flat to the next reading and up or down there, never a slope — held to the
  * moment the answer was read, beside a line of steady pace from nothing to the whole; each
- * reading says itself in a hint over the step it holds, one Tab stop walked by the arrows. A
+ * reading says itself in a hint, found by the pointer at its mark or along the step it holds
+ * through one layer over the field, one Tab stop walked by the arrows. A
  * running window opens on its start to now and a third as long past
  * it, now at three quarters of the plot, and its switch shows the whole window; a frame stretched
  * with Shift and an arrow narrows the line to the readings it covers, and the switch takes it
@@ -97,6 +98,22 @@ const AHEAD: StepAhead = {
 }
 const READ = [point('12:00', 1, 20), point('12:30', 1.5, 50)]
 
+/** How far past each edge of the field its one layer runs, as the browser lays it out. */
+const HIT = 6
+
+/**
+ * Points at `x` of a field the browser draws 300 px wide, as its drawing's 300 across, or takes
+ * the pointer off the field with null. jsdom lays nothing out, so the field and its layer are
+ * given the boxes a browser gives them.
+ */
+async function pointAt(line: ReturnType<typeof openLine>, x: number | null) {
+  const field = line.get('[data-region="field"]').element
+  const layer = line.get('[data-region="hover"]')
+  field.getBoundingClientRect = () => new DOMRect(0, 0, 300, 100)
+  layer.element.getBoundingClientRect = () => new DOMRect(-HIT, 0, 300 + 2 * HIT, 100)
+  await (x === null ? layer.trigger('pointerleave') : layer.trigger('pointermove', { clientX: x }))
+}
+
 /** The span a step line shows, as the radio of its switch that is checked says it. */
 const checked = (line: ReturnType<typeof openLine>) =>
   line.findAll('[role="radio"]').map((one) => [one.text(), one.attributes('aria-checked')])
@@ -146,12 +163,13 @@ describe('the step line', () => {
   })
 
   // A line over the plot once said one reading at a time; each reading now has its own hint.
-  it('gives each reading a hint over the whole step it holds, and no line over the plot', async () => {
+  it('gives each reading a hint of its own and a box over the step it holds, no line over the plot', async () => {
     const line = await stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50)])
     const reach = line.findAll('.step-reach')
     expect(reach.map((one) => one.attributes('data-tooltip'))).toEqual(['12:00: 20%', '12:30: 50%'])
     expect(reach.map((one) => one.attributes('data-tooltip-kind'))).toEqual(['detail', 'detail'])
-    // An hour in to half past, and half past to the moment read, of a five-hour plot.
+    // An hour in to half past, and half past to the moment read, of a five-hour plot: the box
+    // the keyboard's ring is drawn on.
     expect(reach.map((one) => placement(one))).toEqual([
       { start: 20, size: 10 },
       { start: 30, size: 30 },
@@ -162,12 +180,33 @@ describe('the step line', () => {
     const said = ['12:00', '12:30', '20%', '50%']
     expect([WORDS.top, 'h0', 'h5'].filter((words) => printed().includes(words))).toHaveLength(3)
     expect(said.filter((words) => printed().includes(words))).toEqual([])
-    await reach[0]?.trigger('pointerenter')
+    // The first reading's step, an hour in to half past: 60 to 90 of 300.
+    await pointAt(line, 75)
     expect(line.findAll('.step-mark').map((one) => one.classes('step-shown'))).toEqual([
       true,
       false,
     ])
     expect(said.filter((words) => printed().includes(words))).toEqual([])
+    await pointAt(line, null)
+    expect(line.findAll('.step-mark').map((one) => one.classes('step-shown'))).toEqual([
+      false,
+      false,
+    ])
+  })
+
+  it('takes the pointer with one layer over its field, past which nothing in the plot takes it', async () => {
+    const line = await stepLine(READ)
+    await line.setProps({ ahead: AHEAD })
+    // One layer, half a mark past each edge of the field.
+    expect(line.findAll('[data-region="hover"]')).toHaveLength(1)
+    expect(line.get('[data-region="hover"]').classes()).toContain('step-hover')
+    // Each reading's box and each place's stands with no pointer handler of its own.
+    const stops = line.findAll('[data-stop]')
+    expect(stops).toHaveLength(4)
+    await stops[1]?.trigger('pointerenter')
+    await stops[1]?.trigger('pointermove', { clientX: 90 })
+    expect(line.findAll('.step-shown')).toHaveLength(0)
+    line.unmount()
   })
 
   it('makes its readings one Tab stop, the latest, walked with the arrows', async () => {
@@ -327,14 +366,20 @@ describe('the step line past its readings', () => {
       undefined,
       0,
     ])
-    await line.get('[data-target="reset"]').trigger('pointerenter')
+    // The forecast's ring at the plot's end, pointed at half a mark past the field's edge.
+    await pointAt(line, 300 + HIT - 1)
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, true])
     expect(line.findAll('.step-mark').map((one) => one.classes('step-shown'))).toEqual([
       false,
       false,
     ])
-    await line.get('[data-target="reset"]').trigger('pointerleave')
+    await pointAt(line, null)
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, false])
+    // Along the corridor, far from either ring, the forecast; at now's ring, now.
+    await pointAt(line, 240)
+    expect(targets(line).map(({ shown }) => shown)).toEqual([false, true])
+    await pointAt(line, 180 + HIT - 1)
+    expect(targets(line).map(({ shown }) => shown)).toEqual([true, false])
     // The reset's mark spans the corridor's end, from its faster edge at 100 % to its slower at 70 %.
     expect(declared(line.get('.step-reset-mark'))).toEqual({
       '--step-high': 0,

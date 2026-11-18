@@ -2,14 +2,16 @@
  * What a step line draws and points at past its readings (`StepLine`): the corridor of its
  * forecast in the span shown, as the outline its hatch is cut to, and the two places a reader
  * points at there — «now» where the line ends, and the forecast where the corridor ends — each
- * with its hint, the stretch of the plot it takes the pointer along, where its mark stands and the
- * moments it covers for a frame stretched with the keyboard.
+ * with its hint, where the pointer finds it (`aim`), the box the keyboard's ring is drawn on,
+ * where its mark stands and the moments it covers for a frame stretched with the keyboard.
  *
- * «Now» takes the pointer from the line's end: over a corridor only a pointer's width of it, so
- * the forecast takes the rest of the corridor; without one, to the plot's end; at the plot's end,
- * the last pointer's width before it, so the last reading keeps its own step before it. The
- * forecast's mark stands at the corridor's end, which is the plot's end, the reset or where the
- * span shown ends before it; there its hint says the reset stands past it (`words.past`).
+ * The pointer finds «now» at its ring, and without a corridor along the rest of the plot from the
+ * line's end; the forecast at its ring and along the corridor. The forecast's mark stands at the
+ * corridor's end, which is the plot's end, the reset or where the span shown ends before it; there
+ * its hint says the reset stands past it (`words.past`). A place's box, which the keyboard's ring
+ * is drawn on, starts at the place: «now»'s is the least width of a box (`--step-reach`) over a
+ * corridor, and that width before the plot's end where «now» stands there; the forecast's starts
+ * past «now»'s and runs to the plot's end.
  */
 import { computed } from 'vue'
 import type { ComputedRef } from 'vue'
@@ -25,14 +27,17 @@ import {
 } from '@/shared/ui/windowGeometry.ts'
 import type {
   StepAhead,
+  StepAim,
   StepFrame,
   StepPlace,
   StepSpan,
   StepWords,
 } from '@/shared/ui/windowGeometry.ts'
 
-/** A place past the readings: which, its hint, the stretch it takes the pointer along, its mark. */
+/** A place past the readings: which, its hint, where the pointer finds it, its box and its mark. */
 export interface StepTargetPlace {
+  /** Where the pointer finds it: at its mark, or along its stretch where no mark is near. */
+  aim: StepAim
   /** The moments it covers, for a frame stretched to it with the keyboard. */
   covers: StepSpan
   hint: ReturnType<typeof targetHint>
@@ -43,7 +48,7 @@ export interface StepTargetPlace {
    */
   mark: { high: number; low: number; side: '0%' | '100%' }
   /**
-   * The stretch it takes the pointer along: from `start` to the plot's end, or `size` wide from
+   * The box the keyboard's ring is drawn on: from `start` to the plot's end, or `size` wide from
    * `start`, or the last `size` of the plot where it has no `start`.
    */
   reach: { size: string | null; start: string | null }
@@ -106,6 +111,7 @@ export function useStepAhead(
         size: atEnd || corridor.value ? 'var(--step-reach)' : null,
       },
       mark: { high: down, low: down, side: atEnd ? '100%' : '0%' },
+      aim: { at: end, from: end, to: corridor.value ? end : frame.value.to },
       covers: { from: end, to: end },
     }
   }
@@ -118,6 +124,7 @@ export function useStepAhead(
     const low = drawn?.low.at(-1)
     if (!forecast || !drawn || !high || !low) return null
     const begins = Math.max(line().end, frame.value.from)
+    const ends = Math.min(frame.value.to, forecast.high.at(-1)?.at ?? begins)
     const after = nowShown.value ? ' + var(--step-reach)' : ''
     return {
       kind: 'reset',
@@ -127,7 +134,8 @@ export function useStepAhead(
         size: null,
       },
       mark: { high: high.y / STEP_HEIGHT, low: low.y / STEP_HEIGHT, side: '100%' },
-      covers: { from: begins, to: Math.min(frame.value.to, forecast.high.at(-1)?.at ?? begins) },
+      aim: { at: ends, from: begins, to: ends },
+      covers: { from: begins, to: ends },
     }
   }
 
