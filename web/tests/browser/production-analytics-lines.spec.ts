@@ -11,7 +11,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { task, value } from '../fixtures/analytics.ts'
+import { seatValue, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record, serve, shortfalls } from './analyticsPage.ts'
 import { test } from './test.ts'
@@ -26,7 +26,8 @@ const EVERY_DIMENSION: TimedStretch[] = Array.from({ length: 12 }, (_, index) =>
   at: new Date(2026, 10, 9 + (index % 3), 10),
   group: {
     work_item: task(index + 1, `Задача ${index + 1}`),
-    account: value(`account-${index % 2}`),
+    seat: seatValue(`organization-${index % 2}/account-${index % 4}`),
+    account: value(`organization-${index % 2}`),
     project: value(`project-${index % 3}`),
     executor: value(`executor-${index % 4}`),
     role: value(index % 2 ? 'main' : 'subagent'),

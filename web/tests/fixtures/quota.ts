@@ -225,6 +225,29 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
 /** The answer as the server sends it. */
 export const quotaAnswer = (quota: Quota) => ({ interface_version: 'valkama-analytics-api', quota })
 
+/** The short names of the days of the week from Sunday, as each language writes them. */
+const WEEKDAYS = {
+  en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+  ru: ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
+}
+
+/**
+ * What the page calls the account known by its weekly reset alone, which falls on Sunday at 09:00
+ * UTC, in the reader's own time and language: «a1b2c3d4 · resets Sun 12:00» at +03:00 in English.
+ */
+export function seatedName(locale: 'en' | 'ru' = 'en') {
+  // 7 January 2024 was a Sunday.
+  const reset = new Date(Date.UTC(2024, 0, 7, 9))
+  const time = [reset.getHours(), reset.getMinutes()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':')
+  const resets = locale === 'ru' ? 'сброс' : 'resets'
+  return `a1b2c3d4 · ${resets} ${WEEKDAYS[locale][reset.getDay()] ?? ''} ${time}`
+}
+export const SEATED_NAME = seatedName()
+/** What the page calls the organization that worked and that no source read. */
+export const UNREAD_NAME = '9f8e7d6c · account not known'
+
 /** Two more accounts like «Work», each a week and a model's week, by these names and ids. */
 const MORE = [
   {
@@ -247,7 +270,11 @@ export function quotaOfSix(now: Date | number, offset = -new Date(now).getTimezo
   const quota = quotaAt(now, offset)
   const [work] = quota.accounts
   if (!work) throw new Error('the four accounts start with «Work»')
-  const more = MORE.map((account) => ({ ...work, ...account }))
+  const more = MORE.map((account) => ({
+    ...work,
+    ...account,
+    account: `${account.organization}/${account.account_uuid}`,
+  }))
   return { ...quota, accounts: [...quota.accounts, ...more] }
 }
 

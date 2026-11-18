@@ -96,11 +96,11 @@ test('opens a plain address on the overview, its parts in order at 1440×900', a
     'Projects',
   ])
   // The page's read and the same days of the week before, the accounts, the steps of the week
-  // before for the outline, and the rail's nine, one a dimension; the rail's tiles of tasks and
+  // before for the outline, and the rail's ten, one a dimension; the rail's tiles of tasks and
   // accounts are the page's own reads, and each card the page's own read is not by is the rail's
   // tile of that dimension, so neither asks again.
   expect(new Set(asked).size).toBe(asked.length)
-  expect(asked).toHaveLength(11)
+  expect(asked).toHaveLength(12)
 })
 
 test('a figure chooses the measure, pressed by a check, from the keyboard, into the address', async ({

@@ -17,14 +17,16 @@ import { openPanel, pageAt, serve, WORLD } from './analyticsPage.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-/** The account the quota names «Work», by the organization Valkama keeps its name under. */
+/** The account the quota names «Work», by the key Valkama keeps its name under: its id. */
 const WORK_ORGANIZATION = '5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f'
 const WORK_UUID = '0b7d4e19-1c2d-4e3f-8a4b-5c6d7e8f9a0b'
+const WORK_ID = `${WORK_ORGANIZATION}/${WORK_UUID}`
+const NIGHT_ID = `${NIGHT.organization}/${NIGHT.account_uuid}`
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
 
 async function openQuota(page: Page) {
-  const backend = await serve(page, WORLD, false, { accountNames: { [WORK_ORGANIZATION]: 'Work' } })
+  const backend = await serve(page, WORLD, false, { accountNames: { [WORK_ID]: 'Work' } })
   await page.setViewportSize({ width: 1440, height: 900 })
   const analytics = await openPanel(page, pageAt({ by: 'quota_week' }))
   await expect(analytics.locator('[data-account="Work"]')).toBeVisible()
@@ -62,7 +64,7 @@ test('«Rename» saves the name Settings shows on Enter, leaves it on Escape, an
   await field.fill('Night shift')
   await field.press('Enter')
   await expect(field).toHaveCount(0)
-  await expect.poll(() => backend.accountNames[NIGHT.organization]).toBe('Night shift')
+  await expect.poll(() => backend.accountNames[NIGHT_ID]).toBe('Night shift')
   await expect(analytics.locator('[data-account="Night shift"] .quota-account-name')).toHaveText(
     'Night shift',
   )
@@ -84,9 +86,9 @@ test('«Rename» saves the name Settings shows on Enter, leaves it on Escape, an
 
   // Settings names the account by what was saved.
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: globalScope }))
-  await expect(
-    page.getByRole('textbox', { name: `Name of account ${NIGHT.organization}` }),
-  ).toHaveValue('Night shift')
+  await expect(page.getByRole('textbox', { name: `Name of account ${NIGHT_ID}` })).toHaveValue(
+    'Night shift',
+  )
 })
 
 test('«Add to filter» adds the account as a chip and keeps the section; then it is held', async ({
@@ -103,7 +105,7 @@ test('«Add to filter» adds the account as a chip and keeps the section; then i
   await expect(chips).toHaveText(['Account: Work'])
   await expect
     .poll(() => path(page))
-    .toBe(pageAt({ by: 'quota_week', filters: JSON.stringify({ account: [WORK_ORGANIZATION] }) }))
+    .toBe(pageAt({ by: 'quota_week', filters: JSON.stringify({ seat: [WORK_ID] }) }))
   await expect(section).toHaveText(before ?? '')
 
   const held = await openMenu(page, 'Work')

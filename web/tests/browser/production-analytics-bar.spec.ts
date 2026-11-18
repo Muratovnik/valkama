@@ -427,7 +427,7 @@ test('the list of filters opens over the panel and moves nothing', async ({ page
   await add.click()
   const list = page.locator('.analytics-filter-body')
   await expect(list).toBeVisible()
-  await expect(list.locator('[data-dimension]')).toHaveCount(9)
+  await expect(list.locator('[data-dimension]')).toHaveCount(10)
   const after = await panel.boundingBox()
   const over = await list.boundingBox()
   await record(info, 'bar-filter-list', { before, after, over })

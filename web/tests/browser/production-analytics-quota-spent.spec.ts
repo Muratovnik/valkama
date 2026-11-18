@@ -13,6 +13,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { SEATED_NAME } from '../fixtures/quota.ts'
 import { isSpendRead, SPENT_WORLD } from '../fixtures/quotaSpent.ts'
 import { openPanel, pageAt, record, serve, shortfalls } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
@@ -174,12 +175,12 @@ for (const colorScheme of ['light', 'dark'] as const)
       )
       await expect(none.getByRole('radio', { name: 'Ring' })).toHaveCount(0)
       await closeSpend(page, '7e6d5c4b')
-      const unplaced = await openSpend(page, 'a1b2c3d4')
+      const unplaced = await openSpend(page, SEATED_NAME)
       await expect(unplaced).toHaveAttribute('data-state', 'unplaced')
       await expect(unplaced).toContainText('with the account unknown')
       await expect(unplaced.getByRole('radio', { name: 'Tasks' })).toHaveCount(1)
       await expect(unplaced.getByRole('radio', { name: 'Ring' })).toHaveCount(0)
-      await closeSpend(page, 'a1b2c3d4')
+      await closeSpend(page, SEATED_NAME)
 
       await record(info, `quota spent ${width} ${colorScheme}`, {
         shown,

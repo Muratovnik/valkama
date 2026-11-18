@@ -1,19 +1,20 @@
 /**
  * Analytics names a session by the title its client gave it, with its id in the hint, and an
- * account by the name the owner gave it in Settings, with no hint of its id, which the quota
- * panel's menu copies instead; so no label made only of hex characters stands for a value whose
- * name is known: in the rail, the overview's cards, a section's bars and its table.
- * A session with no title, and an account with no name, keep the labels they had. The name is the
- * one the owner types in Settings → General → Accounts, kept in Valkama, which this follows from the
- * field through the server to the page; and the names a device kept before move there once, never
- * over a name Valkama has, and leave the device.
+ * organization or an account by the name the owner gave it in Settings, with no hint of its id,
+ * which the quota panel's menu copies instead; so no label made only of hex characters stands for
+ * a value whose name is known: in the rail, the overview's cards, a section's bars and its table.
+ * A session with no title, and an organization with no name, keep the labels they had; an account
+ * with none is said by its organization's name and the start of its UUID. The name is the one the
+ * owner types in Settings → General → Accounts, kept in Valkama, which this follows from the field
+ * through the server to the page; and the names a device kept before, by organization, move there
+ * once, never over a name Valkama has, and leave the device.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { serveUsage, task, value } from '../fixtures/analytics.ts'
+import { seatValue, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { quotaAt } from '../fixtures/quota.ts'
 import { pageAt, serveQuota } from './analyticsPage.ts'
@@ -27,8 +28,11 @@ const on = (day: number) => new Date(2026, 10, day, 10)
 
 const MAIN_ID = 'f0f0f0f0-1111-4222-8333-444455556666'
 const SIDE_ID = '9c0de5b1-2222-4333-8444-555566667777'
-const MAIN = value(MAIN_ID)
-const SIDE = value(SIDE_ID)
+/** Each organization's one account, which the work was spent on. */
+const MAIN_ACCOUNT = `${MAIN_ID}/a1a1a1a1-2222-4333-8444-555566667777`
+const SIDE_ACCOUNT = `${SIDE_ID}/b2b2b2b2-2222-4333-8444-555566667777`
+const MAIN = { account: value(MAIN_ID), seat: seatValue(MAIN_ACCOUNT) }
+const SIDE = { account: value(SIDE_ID), seat: seatValue(SIDE_ACCOUNT) }
 
 const session = (id: string, family: string, title: string | null) => ({
   id,
@@ -50,7 +54,7 @@ const WORLD: TimedStretch[] = [
 ].flatMap(({ executor, account, seconds }, index) =>
   [0, 1, 2].map((day) => ({
     at: on(9 + day),
-    group: { executor, account, work_item: task(index + 1, `Task ${index + 1}`) },
+    group: { executor, ...account, work_item: task(index + 1, `Task ${index + 1}`) },
     spend: { seconds, tokens: 1000, cost: 1 },
   })),
 )
@@ -123,11 +127,22 @@ test('a session is named by its title, its id in the hint, and an account by the
   expect(names[0]).toContain('claude · 1a2b3c4d')
   for (const name of names) expect(name.split(' ')[0]).not.toMatch(HEX_ONLY)
 
-  // The account's section: the named one by its name, the other by the start of its id, and no
-  // row's hint says a whole id.
-  const accounts = await open(page, { by: 'account' })
-  expect(await texts(accounts.locator('.ranked-label'))).toEqual(['Main account', '9c0de5b1'])
+  // The organizations' section: the named one by its name, the other by the start of its id, and
+  // no row's hint says a whole id.
+  const organizations = await open(page, { by: 'account' })
+  expect(await texts(organizations.locator('.ranked-label'))).toEqual(['Main account', '9c0de5b1'])
   for (const [index, id] of [MAIN_ID, SIDE_ID].entries())
+    await expect(organizations.locator('.ranked-line').nth(index)).not.toHaveAttribute(
+      'data-tooltip',
+      new RegExp(id, 'u'),
+    )
+  // The accounts' section: each by its organization's name, or its start, and its UUID's start.
+  const accounts = await open(page, { by: 'seat' })
+  expect(await texts(accounts.locator('.ranked-label'))).toEqual([
+    'Main account · a1a1a1a1',
+    'b2b2b2b2',
+  ])
+  for (const [index, id] of [MAIN_ACCOUNT, SIDE_ACCOUNT].entries())
     await expect(accounts.locator('.ranked-line').nth(index)).not.toHaveAttribute(
       'data-tooltip',
       new RegExp(id, 'u'),
@@ -138,26 +153,31 @@ test('a name typed in Settings is the name Analytics gives the account', async (
   const backend = await serve(page)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: globalScope }))
-  const field = page.getByRole('textbox', { name: `Name of account ${SIDE_ID}` })
+  const field = page.getByRole('textbox', { name: `Name of account ${SIDE_ACCOUNT}` })
   const status = page.locator('.accounts-status [role="status"]')
-  await expect(field).toHaveAttribute('placeholder', 'No name: Analytics shows 9c0de5b1')
+  await expect(field).toHaveAttribute('placeholder', 'No name: Analytics shows b2b2b2b2')
   await field.fill('Night shift')
   await field.blur()
-  await expect(status).toHaveText('Saved the name of account 9c0de5b1.')
-  expect(backend.accountNames).toEqual({ [SIDE_ID]: 'Night shift' })
+  await expect(status).toHaveText('Saved the name of account b2b2b2b2.')
+  expect(backend.accountNames).toEqual({ [SIDE_ACCOUNT]: 'Night shift' })
 
-  const accounts = await open(page, { by: 'account' })
+  const accounts = await open(page, { by: 'seat' })
   const labels = accounts.locator('.ranked-label')
   await expect(labels.nth(1)).toHaveText('Night shift')
 
-  // Cleared, the account reads as before.
+  // Cleared, the account reads as before; its organization named, it says that name first.
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: globalScope }))
-  await page.getByRole('button', { name: `Clear the name of account ${SIDE_ID}` }).click()
+  await page.getByRole('button', { name: `Clear the name of account ${SIDE_ACCOUNT}` }).click()
   await expect(field).toHaveValue('')
-  await expect(status).toHaveText('Cleared the name of account 9c0de5b1.')
+  await expect(status).toHaveText('Cleared the name of account b2b2b2b2.')
   expect(backend.accountNames).toEqual({})
-  const again = await open(page, { by: 'account' })
-  await expect(again.locator('.ranked-label').nth(1)).toHaveText('9c0de5b1')
+  const organization = page.getByRole('textbox', { name: `Name of organization ${SIDE_ID}` })
+  await expect(organization).toHaveAttribute('placeholder', 'No name: Analytics shows 9c0de5b1')
+  await organization.fill('Side')
+  await organization.press('Enter')
+  await expect(status).toHaveText('Saved the name of organization 9c0de5b1.')
+  const again = await open(page, { by: 'seat' })
+  await expect(again.locator('.ranked-label').nth(1)).toHaveText('Side · b2b2b2b2')
 })
 
 test('names a device kept move to Valkama once, never over a name it has, and leave the device', async ({

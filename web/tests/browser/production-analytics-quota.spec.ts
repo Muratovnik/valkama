@@ -112,7 +112,7 @@ for (const colorScheme of ['light', 'dark'] as const)
         'token_kind',
         'quota_five_hour',
         'quota_week',
-        'account',
+        'seat',
       ])
       await expect(entry(page, 'quota_five_hour')).toContainText('a1b2c3d4')
       await expect(entry(page, 'quota_five_hour')).toContainText('74%')

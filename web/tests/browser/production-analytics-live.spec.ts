@@ -132,9 +132,8 @@ test('«Now» is the last hour by the minute, held in the address and read whole
  * for the accounts that worked and the tile of the accounts together.
  */
 const roundsOf = (asked: readonly URLSearchParams[]) =>
-  new Set(
-    asked.filter((query) => query.get('group_by') === 'account').map((query) => query.get('to')),
-  ).size
+  new Set(asked.filter((query) => query.get('group_by') === 'seat').map((query) => query.get('to')))
+    .size
 
 test('«Now» reads itself again every 30 s while the page is seen, and never while hidden', async ({
   page,

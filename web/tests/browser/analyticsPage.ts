@@ -12,6 +12,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { noTask, serveUsage, task, unknownTask, value } from '../fixtures/analytics.ts'
 import type { Stretch, TimedStretch } from '../fixtures/analytics.ts'
 import { quotaAnswer, quotaAt } from '../fixtures/quota.ts'
+import { NIGHT_GROUP as NIGHT, WORK_GROUP as WORK } from '../fixtures/quotaSpent.ts'
 import { installBackend } from './backend.ts'
 import type { BackendOptions } from './backend.ts'
 import { globalScope, projectId, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
@@ -30,10 +31,6 @@ export const pageAt = (state: Record<string, string> = {}) =>
 /** Wednesday afternoon, so the week holds two whole days and one not over yet. */
 export const NOW = new Date(2026, 10, 11, 14, 30)
 const on = (day: number) => new Date(2026, 10, day, 10)
-
-/** Two accounts, each an organization's id as the store holds it; the page names it by its start. */
-const WORK = value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f')
-const NIGHT = value('d4e8a1f0-7c2b-4e5d-8f36-a1b2c3d4e5f6')
 
 /** Twelve tasks with long titles, work on no task and work nobody can place, over three days. */
 const STRETCHES: Stretch[] = [
@@ -68,12 +65,12 @@ function accountOf(stretch: Stretch, index: number) {
 export const WORLD: TimedStretch[] = [
   ...STRETCHES.map((stretch, index) => ({
     at: on(9 + stretch.day),
-    group: { ...stretch.group, account: accountOf(stretch, index) },
+    group: { ...stretch.group, ...accountOf(stretch, index) },
     spend: stretch.spend,
   })),
   {
     at: on(2),
-    group: { work_item: task(1, 'One'), account: WORK },
+    group: { work_item: task(1, 'One'), ...WORK },
     spend: { seconds: 90_000, tokens: 9e6, cost: 99 },
   },
 ]
@@ -96,7 +93,7 @@ export const SESSIONS: TimedStretch[] = Array.from({ length: 6 }, (_, index) => 
       opened_host: '',
       title: `Session ${index + 1}`,
     },
-    account: WORK,
+    ...WORK,
   },
   spend: { seconds: (7 - index) * 3600, tokens: (7 - index) * 100_000, cost: 7 - index },
 }))
@@ -110,14 +107,14 @@ export const SESSION_PLACE = /^claude · \d{8}$/mu
 /** One task the whole week: a chart of one value. */
 export const ONE_VALUE: TimedStretch[] = [0, 1, 2].map((day) => ({
   at: on(9 + day),
-  group: { work_item: task(1, 'The only task'), account: WORK },
+  group: { work_item: task(1, 'The only task'), ...WORK },
   spend: { seconds: 3600 * (day + 1), tokens: 1000, cost: 1 },
 }))
 
 /** Twenty-five tasks of an hour each: those past the named ones fold into a large «other». */
 export const LONG_TAIL: TimedStretch[] = Array.from({ length: 25 }, (_, index) => ({
   at: on(9 + (index % 3)),
-  group: { work_item: task(index + 1, `Task ${index + 1}`), account: WORK },
+  group: { work_item: task(index + 1, `Task ${index + 1}`), ...WORK },
   spend: { seconds: 3600, tokens: 1000, cost: 1 },
 }))
 
@@ -131,9 +128,9 @@ export const ONLY_WEEK_BEFORE: TimedStretch[] = WORLD.filter(
  * account beside more such work on Wednesday: one change of accounts, on Wednesday.
  */
 export const UNRECORDED_BETWEEN: TimedStretch[] = [
-  { at: on(9), group: { work_item: task(1, 'One'), account: WORK }, spend: { seconds: 3600 } },
+  { at: on(9), group: { work_item: task(1, 'One'), ...WORK }, spend: { seconds: 3600 } },
   { at: on(10), group: { work_item: task(1, 'One') }, spend: { seconds: 5400 } },
-  { at: on(11), group: { work_item: task(2, 'Two'), account: NIGHT }, spend: { seconds: 1800 } },
+  { at: on(11), group: { work_item: task(2, 'Two'), ...NIGHT }, spend: { seconds: 1800 } },
   { at: on(11), group: { work_item: task(2, 'Two') }, spend: { seconds: 900 } },
 ]
 
@@ -148,20 +145,20 @@ export const LONG_FIGURES: TimedStretch[] = [
     at: new Date(2026, 10, 11, 14, 20),
     group: {
       work_item: task(1, 'Rework the import of very long planning documents'),
-      account: WORK,
+      ...WORK,
     },
     spend: { seconds: 21 * 86_400 + 12 * 3600, tokens: 594_900_000, cost: 9584.68 },
   },
   ...Array.from({ length: 99 }, (_, index) => ({
     at: on(9 + (index % 3)),
-    group: { work_item: task(index + 2, `Task with tokens ${index + 2}`), account: WORK },
+    group: { work_item: task(index + 2, `Task with tokens ${index + 2}`), ...WORK },
     spend: { seconds: 3600, tokens: 1_000_000, cost: 1.25 },
   })),
   ...Array.from({ length: 45 }, (_, index) => ({
     at: on(10),
     group: {
       work_item: task(index + 101, `Task with agent time alone ${index + 101}`),
-      account: WORK,
+      ...WORK,
     },
     spend: { seconds: 1800 },
   })),
@@ -169,7 +166,7 @@ export const LONG_FIGURES: TimedStretch[] = [
     at: on(3),
     group: {
       work_item: task(index + 146, `Task of the week before ${index + 146}`),
-      account: WORK,
+      ...WORK,
     },
     spend: { seconds: 600, tokens: 10_000, cost: 0.1 },
   })),

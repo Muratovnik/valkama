@@ -8,13 +8,12 @@ import type { Page } from '@playwright/test'
 
 import { noTask, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
+import { WORK_GROUP } from '../fixtures/quotaSpent.ts'
 import { pageAt } from './analyticsPage.ts'
 
 /** Ten in the morning of a day of November 2026, in the browser's own time. */
 const on = (day: number, hour = 10) => new Date(2026, 10, day, hour)
 const HOUR = 3600
-
-export const ACCOUNT = value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f')
 
 /** A stretch of work on a day: its task, model, role and project, and its hours. */
 export function worked(
@@ -30,7 +29,7 @@ export function worked(
       model: value(model),
       role: value(role),
       project: value(project),
-      account: ACCOUNT,
+      ...WORK_GROUP,
     },
     spend: { seconds: hours * HOUR, tokens: hours * 100_000, cost: hours * 2 },
   }

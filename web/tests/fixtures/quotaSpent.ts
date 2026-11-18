@@ -31,6 +31,14 @@ export const seatOf = (account: QuotaAccount) =>
   seatValue(account.account, { weeklyReset: account.weekly_reset, shared: account.shared })
 /** An organization's work no reading places on an account. */
 const unplaced = (account: QuotaAccount) => seatValue(`${account.organization}/`)
+/** What a stretch of an account's work names: its organization, and the account as its seat. */
+const groupOf = (account: QuotaAccount) => ({
+  account: value(account.organization),
+  seat: seatOf(account),
+})
+/** What the work of «Work» names, and the work of the account with no name, each its own. */
+export const WORK_GROUP = groupOf(WORK)
+export const NIGHT_GROUP = groupOf(NIGHT)
 
 const project = (id: string, name: string): UsageGroupValue => ({ id, unknown: false, name })
 const ATLAS = project('p-atlas', 'Atlas')
@@ -38,7 +46,7 @@ const BEACON = project('p-beacon', 'Beacon')
 
 const onWork = (when: Date, group: TimedStretch['group'], cost: number): TimedStretch => ({
   at: when,
-  group: { account: value(WORK.organization), seat: seatOf(WORK), ...group },
+  group: { ...WORK_GROUP, ...group },
   spend: { seconds: 600, tokens: 1000, cost },
 })
 
@@ -68,11 +76,7 @@ export const SPENT_WORLD: TimedStretch[] = [
   },
   {
     at: at(13),
-    group: {
-      account: value(NIGHT.organization),
-      seat: seatOf(NIGHT),
-      work_item: task(1, 'Answer'),
-    },
+    group: { ...NIGHT_GROUP, work_item: task(1, 'Answer') },
     spend: { seconds: 600, tokens: 1000, cost: 100 },
   },
   // Work's organization and the weekly account's, with no account known.

@@ -10,14 +10,16 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { task, value } from '../fixtures/analytics.ts'
+import { seatValue, task } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { expectNoLineOverPlot } from './plotWords.ts'
 import { test } from './test.ts'
 
-const FIRST = value('f0f0f0f0-5d6e-4f70-8a9b-0c1d2e3f4a5b')
-const SECOND = value('2a2a2a2a-1111-4222-8333-444455556666')
+/** Two accounts of one organization, each said by the start of its UUID. */
+const ORGANIZATION = '0c0c0c0c-1111-4222-8333-444455556666'
+const FIRST = seatValue(`${ORGANIZATION}/f0f0f0f0-5d6e-4f70-8a9b-0c1d2e3f4a5b`)
+const SECOND = seatValue(`${ORGANIZATION}/2a2a2a2a-1111-4222-8333-444455556666`)
 const HOUR = 3600
 
 /** An hour of `hours` at ten on a day of November 2026, on a task, under an account. */
@@ -30,7 +32,7 @@ const worked = (
   at: new Date(2026, 10, day, 10),
   group: {
     work_item: task(number, `Rework the import of very long planning documents, part ${number}`),
-    account,
+    seat: account,
   },
   spend: { seconds: hours * HOUR, tokens: hours * 100_000, cost: hours * 2 },
 })
@@ -51,7 +53,7 @@ const TWO: TimedStretch[] = [
 /** The same work under the first account alone: no change, and every other part the same. */
 const NONE: TimedStretch[] = TWO.map((stretch) => ({
   ...stretch,
-  group: { ...stretch.group, account: FIRST },
+  group: { ...stretch.group, seat: FIRST },
 }))
 
 /** Opens the overview at a window size and waits for its chart of days to stand. */
@@ -137,7 +139,7 @@ const SWITCHING: TimedStretch[] = Array.from({ length: 13 }, (_, back) => ({
   at: new Date(2026, 10, 11 - back, 10),
   group: {
     work_item: task(1, 'Import the planning documents'),
-    account: back % 2 ? FIRST : SECOND,
+    seat: back % 2 ? FIRST : SECOND,
   },
   spend: { seconds: 3600 },
 }))

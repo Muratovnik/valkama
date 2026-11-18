@@ -22,7 +22,7 @@ import { messages } from '@/shared/i18n/index.ts'
 
 import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { NIGHT, quotaAnswer, quotaAt, UNREAD } from '../fixtures/quota.ts'
+import { NIGHT, quotaAnswer, quotaAt, SEATED_NAME, UNREAD, UNREAD_NAME } from '../fixtures/quota.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 import {
   accountNamed,
@@ -31,10 +31,8 @@ import {
   plain,
   radioNamed,
   says,
-  SEATED_NAME,
   showTable,
   tile,
-  UNREAD_NAME,
   windowOf,
 } from '../support/quotaPanel.ts'
 

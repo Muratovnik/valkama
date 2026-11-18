@@ -28,7 +28,7 @@ import WindowDetail from '@/pages/analytics/components/WindowDetail.vue'
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { momentAt, serveUsage } from '../fixtures/analytics.ts'
-import { quotaAnswer, quotaAt } from '../fixtures/quota.ts'
+import { quotaAnswer, quotaAt, SEATED_NAME, UNREAD_NAME } from '../fixtures/quota.ts'
 import {
   isSpendRead as isSpend,
   NIGHT,
@@ -40,7 +40,6 @@ import {
 } from '../fixtures/quotaSpent.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { seriesEntries } from '../support/legend.ts'
-import { SEATED_NAME, UNREAD_NAME } from '../support/quotaPanel.ts'
 
 /** The seats a window's read asks for: the account, and its organization's work on no account. */
 const seatsOf = (account: typeof WORK) => `${seatOf(account).id ?? ''},${account.organization}/`

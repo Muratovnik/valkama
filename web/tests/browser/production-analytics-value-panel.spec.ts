@@ -21,6 +21,7 @@ import { DRAWER_DEFAULT_WIDTH, DRAWER_NARROW_BREAKPOINT } from '@/shared/lib/she
 
 import { noTask, task, unknownTask, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
+import { NIGHT_GROUP as NIGHT, WORK_GROUP as WORK } from '../fixtures/quotaSpent.ts'
 import { NARROW_FRAME, pageAt, record, serve, serveTask, shortfalls } from './analyticsPage.ts'
 import { drawLined } from './drawnViews.ts'
 import { expectNoSilentClipping } from './overflow.ts'
@@ -30,8 +31,6 @@ import { test } from './test.ts'
 type Locale = 'en' | 'ru'
 
 const on = (day: number) => new Date(2026, 10, day, 10)
-const WORK = value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f')
-const NIGHT = value('d4e8a1f0-7c2b-4e5d-8f36-a1b2c3d4e5f6')
 
 /** The task the backend holds, whose card opens, under two models and two accounts. */
 const IMPORT = task(264, workItem.title)
@@ -45,12 +44,12 @@ const IMPORT_NAME = `MAIN-264 ${workItem.title}`
 const WORLD: TimedStretch[] = [
   {
     at: on(10),
-    group: { work_item: IMPORT, model: value('model-a'), account: WORK },
+    group: { work_item: IMPORT, model: value('model-a'), ...WORK },
     spend: { seconds: 7200, tokens: 2_000_000, cost: 20 },
   },
   {
     at: on(9),
-    group: { work_item: IMPORT, model: value('model-b'), account: NIGHT },
+    group: { work_item: IMPORT, model: value('model-b'), ...NIGHT },
     spend: { seconds: 3600, tokens: 800_000, cost: 8 },
   },
   ...Array.from({ length: 13 }, (_, index) => ({
@@ -58,13 +57,13 @@ const WORLD: TimedStretch[] = [
     group: {
       work_item: task(index + 2, `Write the release notes, part ${index + 1}`),
       model: value('model-b'),
-      account: index % 2 ? WORK : NIGHT,
+      ...(index % 2 ? WORK : NIGHT),
     },
     spend: { seconds: 1800 + index * 60, tokens: 100_000, cost: 1 },
   })),
   {
     at: on(9),
-    group: { work_item: noTask, model: value('model-a'), account: WORK },
+    group: { work_item: noTask, model: value('model-a'), ...WORK },
     spend: { seconds: 5400, tokens: 300_000, cost: 3 },
   },
   {
@@ -74,7 +73,7 @@ const WORLD: TimedStretch[] = [
   },
   {
     at: on(2),
-    group: { work_item: IMPORT, model: value('model-a'), account: WORK },
+    group: { work_item: IMPORT, model: value('model-a'), ...WORK },
     spend: { seconds: 3600, tokens: 500_000, cost: 5 },
   },
 ]
@@ -242,7 +241,7 @@ for (const locale of ['en', 'ru'] as const)
       // A task's panel, opened by pointer from its bar.
       await bars.getByRole('link', { name: fill(said.detail.open, { value: IMPORT_NAME }) }).click()
       const task = await panelNamed(page, fill(said.detail.label, { title: IMPORT_NAME }))
-      const parts = ['actions', 'figures', 'days', 'model', 'account'] as const
+      const parts = ['actions', 'figures', 'days', 'model', 'seat'] as const
       const taskParts = Object.fromEntries(
         parts.map((part) => [part, task.locator(`[data-part="${part}"]`)]),
       )
@@ -342,7 +341,7 @@ test('a model’s bar opens its panel from the keyboard, Escape and Back close i
     true,
   )
   // A model has no card, and is broken down by account alone: a task's panel has both parts.
-  await expect(panel.locator('[data-part="account"]')).toBeVisible()
+  await expect(panel.locator('[data-part="seat"]')).toBeVisible()
   await expect(panel.locator('[data-part="model"]')).toHaveCount(0)
   await expect(panel.getByRole('link', { name: 'Open the card' })).toHaveCount(0)
 

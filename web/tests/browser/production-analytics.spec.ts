@@ -90,7 +90,7 @@ for (const width of [1440, 1024, 390]) {
       await expect(drawn).not.toContainText('running')
     }
     await expect
-      .poll(() => daysSaying(analytics, 'Account change: 5b0c7e21 → 5b0c7e21, d4e8a1f0'))
+      .poll(() => daysSaying(analytics, 'Account change: 0b7d4e19 → 0b7d4e19, 7e6d5c4b'))
       .toBe(1)
 
     const measured = await measure(page)
@@ -207,7 +207,7 @@ const READ_STATES: {
     answer: UNRECORDED_BETWEEN,
     says: async (analytics, ru) => {
       // Said where the day is read, once: its day's hint on the chart, or its row of the table.
-      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: 5b0c7e21 → d4e8a1f0`
+      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: 0b7d4e19 → 7e6d5c4b`
       await expect.poll(() => daysSaying(analytics, said), 'days that say it').toBe(1)
     },
   },
