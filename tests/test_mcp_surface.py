@@ -2141,6 +2141,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "update",
                 "convert",
                 "checklist",
+                "checklist_reason",
                 "checklist_ticks",
                 "refs",
                 "commits",

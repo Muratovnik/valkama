@@ -238,6 +238,17 @@ def ask_owner(
     )
 
 
+def join(conn: sqlite3.Connection, action: Action, request_id: str) -> None:
+    """Let an action wait on a question to the owner that was asked already, about the same
+    write: the confirmation its goal's period of waiting asked. Its answer carries the
+    action out, and its end ends it."""
+
+    conn.execute(
+        "UPDATE work_item_requests SET action_id = ? WHERE request_id = ? AND work_item_id = ?",
+        (action.id, request_id, action.work_item_id),
+    )
+
+
 # -- the round of consent ---------------------------------------------------------
 
 #: How long the sessions asked about a cancel of their work have to answer: past it, the

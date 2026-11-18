@@ -18,13 +18,14 @@ import os
 import sqlite3
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from server import store
 from server.planning import (
     api,
     calls,
+    closing,
     decisions,
     leases,
     model,
@@ -1745,6 +1746,510 @@ class AcceptanceQuestionTests(SettingHarness):
         self.person("/api/planning/work-item/claim", id=task)
         self.assertEqual(("active", "inherited"), self.where(task))
         self.assertEqual(expected, self.decided())
+
+
+#: Why the agent removes or rewrites a step of a goal in these scenarios.
+STEPS_REASON = "the release covers it"
+
+
+class ConditionTests(SettingHarness):
+    """An agent's change of the steps of a goal: adding and ticking are free; removing or
+    rewording one needs `checklist_reason`, and by the owner's setting it is made and
+    marked `condition`, or it waits on the question `condition`, whose answers `allow` and
+    `keep` make it or leave the steps. A step that only clarifies its wording is written at
+    once at any setting and marked. The goal is the owner's, with the steps X and Y."""
+
+    def goal(self, title: str = "The owner's goal") -> tuple[str, dict[str, str]]:
+        """A goal of the owner's with the steps X and Y: its reference, and each step's id."""
+
+        goal = self.filed(title, kind="goal", by=calls.browser())
+        self.person("/api/planning/work-item/apply", id=goal, checklist=["X", "Y"])
+        return goal, {step["text"]: step["id"] for step in self.card(goal)["checklist"]}
+
+    def steps(self, reference: str) -> list[str]:
+        return [str(step["text"]) for step in self.card(reference)["checklist"]]
+
+    def edit(self, reference: str, steps: list[object], **more: object) -> dict:
+        return self.tool("apply_work_item_changes", id=reference, checklist=steps, **more)
+
+    def waiting_change(self) -> tuple[str, dict]:
+        """At the default set, the agent rewords Y and adds Z: the goal and the wait."""
+
+        self.at(participation.DEFAULT)
+        goal, ids = self.goal()
+        answer = self.edit(
+            goal,
+            [{"id": ids["Y"], "text": "Y said anew"}, "Z"],
+            checklist_reason=STEPS_REASON,
+        )
+        return goal, answer["waits_for_owner"]
+
+    def test_an_agent_removes_a_condition_when_it_decides(self) -> None:
+        self.at(participation.MINIMAL)
+        goal, ids = self.goal()
+        answer = self.edit(goal, [{"id": ids["Y"], "text": "Y"}], checklist_reason=STEPS_REASON)
+        self.assertNotIn("waits_for_owner", answer)
+        self.assertEqual(["Y"], self.steps(goal))
+        self.assertEqual(["X"], self.events(goal, "checklist_removed"))
+        self.assertEqual(f"1: {STEPS_REASON}", self.events(goal, "checklist_replaced")[-1])
+        self.assertEqual(([], []), (self.waiting_on(goal), self.owners_list()))
+        self.assertEqual([("condition", goal, f"removed step «X»: {STEPS_REASON}")], self.decided())
+
+    def test_removing_or_rewriting_a_condition_waits_and_adding_does_not(self) -> None:
+        self.at(participation.DEFAULT)
+        goal, ids = self.goal()
+        sent = [{"id": ids["Y"], "text": "Y said anew"}, "Z"]
+        # Without its reason the change is refused before anything is written.
+        before = (self.counts(), self.card(goal)["revision"])
+        with self.assertRaises(REFUSED) as refused:
+            self.edit(goal, sent)
+        status, body = api.error_response(refused.exception)
+        self.assertEqual(
+            (
+                400,
+                "checklist: [checklist] removing or rewriting a step of a goal or stage needs"
+                " checklist_reason",
+            ),
+            (status, body["error"]["message"]),
+        )
+        self.assertEqual(before, (self.counts(), self.card(goal)["revision"]))
+        answer = self.edit(goal, sent, checklist_reason=STEPS_REASON)
+        # Z is added, X stands where it stood, and Y keeps its text until the owner answers.
+        self.assertEqual(["X", "Y", "Z"], self.steps(goal))
+        self.assertEqual([], self.events(goal, "checklist_removed"))
+        waits = answer["waits_for_owner"]
+        [action] = self.waiting_on(goal)
+        self.assertEqual(
+            {
+                "action": action.id,
+                "point": "condition",
+                "question": waits["question"],
+                "what": f"removed step «X»; rewrote step «Y» → «Y said anew»: {STEPS_REASON}",
+            },
+            waits,
+        )
+        self.assertEqual(STEPS_REASON, action.reason)
+        question = self.request(waits["question"])
+        self.assertEqual(("condition", action.id), (question["purpose"], question["action_id"]))
+        for said in ("«X»", "«Y» → «Y said anew»", STEPS_REASON):
+            self.assertIn(said, question["prompt"])
+        [choice] = json.loads(question["fields_json"])
+        self.assertEqual(
+            [("allow", True), ("keep", False)],
+            [(option["id"], bool(option.get("recommended"))) for option in choice["options"]],
+        )
+        self.assertEqual(
+            {
+                "removed": [{"id": ids["X"], "text": "X"}],
+                "rewritten": [{"id": ids["Y"], "from": "Y", "to": "Y said anew"}],
+            },
+            requests.get(self.conn, waits["question"])["action"]["proposed"],
+        )
+        self.assertEqual([waits["question"]], self.owners_list())
+        self.assertEqual([], self.decided())
+        # Adding alone asks nothing and needs no reason.
+        added = self.edit(goal, ["X", "Y", "Z", "W"])
+        self.assertNotIn("waits_for_owner", added)
+        self.assertEqual(["X", "Y", "Z", "W"], self.steps(goal))
+        self.assertEqual([waits["question"]], self.owners_list())
+
+    def test_allow_applies_the_removed_and_rewritten_steps(self) -> None:
+        goal, waits = self.waiting_change()
+        record = self.answer(waits["question"], "allow")
+        self.assertEqual("carried_out", record["carried_out"])
+        self.assertEqual(["Y said anew", "Z"], self.steps(goal))
+        self.assertEqual(["X", "Y"], self.events(goal, "checklist_removed"))
+        self.assertEqual(f"2: {STEPS_REASON}", self.events(goal, "checklist_replaced")[-1])
+        self.assertEqual("carried_out", self.action(waits["action"])["outcome"])
+        # The owner made it: nothing goes into the summary of agent decisions.
+        self.assertEqual([], self.decided())
+        # In another run the owner keeps the steps.
+        kept, ids = self.goal("Another goal of the owner's")
+        question = self.edit(
+            kept,
+            [{"id": ids["Y"], "text": "Y said anew"}, "Z"],
+            checklist_reason=STEPS_REASON,
+        )["waits_for_owner"]["question"]
+        record = self.answer(question, "keep")
+        self.assertEqual("declined", record["carried_out"])
+        self.assertEqual(["X", "Y", "Z"], self.steps(kept))
+        self.assertEqual([], self.events(kept, "checklist_removed"))
+        self.assertEqual(([], []), (self.waiting_on(kept), self.owners_list()))
+
+    def test_a_clarified_condition_is_written_at_once_and_summarised(self) -> None:
+        self.at(participation.MANUAL)
+        goal, ids = self.goal()
+        answer = self.edit(
+            goal, ["X", {"id": ids["Y"], "text": "Y, said better", "clarifies": True}]
+        )
+        self.assertNotIn("waits_for_owner", answer)
+        self.assertEqual(["X", "Y, said better"], self.steps(goal))
+        self.assertEqual(([], []), (self.waiting_on(goal), self.owners_list()))
+        self.assertEqual(["Y"], self.events(goal, "checklist_removed"))
+        self.assertEqual("2, clarified 2", self.events(goal, "checklist_replaced")[-1])
+        self.assertEqual(
+            [("condition", goal, "clarified step «Y» → «Y, said better»")], self.decided()
+        )
+        # A step that is none of the item's, named by its id with a new text, is refused.
+        before = (self.counts(), self.card(goal)["revision"])
+        for sent in (
+            [{"text": "X", "clarifies": True}, "Y, said better"],
+            [{"id": ids["X"], "text": "X", "clarifies": True}, "Y, said better"],
+            [
+                "X",
+                "Y, said better",
+                {"id": "00000000-0000-4000-8000-000000000000", "text": "Z", "clarifies": True},
+            ],
+        ):
+            with self.subTest(sent=sent):
+                with self.assertRaises(REFUSED) as refused:
+                    self.edit(goal, sent)
+                self.assertEqual(
+                    "checklist: [checklist] clarifies marks a step of this item named by its id"
+                    " with a new text",
+                    api.error_response(refused.exception)[1]["error"]["message"],
+                )
+                self.assertEqual(before, (self.counts(), self.card(goal)["revision"]))
+
+    def test_a_tasks_steps_and_a_persons_change_meet_no_gate(self) -> None:
+        self.at(participation.MANUAL)
+        task = self.filed("The owner's task", by=calls.browser())
+        self.person("/api/planning/work-item/apply", id=task, checklist=["X", "Y"])
+        self.edit(task, ["Y"])
+        self.assertEqual(["Y"], self.steps(task))
+        goal, _ids = self.goal()
+        self.person("/api/planning/work-item/apply", id=goal, checklist=["Y2"])
+        self.assertEqual(["Y2"], self.steps(goal))
+        self.assertEqual(([], []), (self.owners_list(), self.decided()))
+        # The reason goes with a checklist only.
+        with self.assertRaises(REFUSED) as refused:
+            self.tool("apply_work_item_changes", id=goal, summary=SUMMARY, checklist_reason="why")
+        self.assertIn("send it with checklist", str(refused.exception))
+
+
+class GoalCloseTests(SettingHarness):
+    """An agent's confirmation of a goal whose work is all closed: by the owner's setting
+    it completes the goal, marked `goal_close`, or the steps and the summary it sent are
+    written and the close waits on the owner's question `confirm` of the goal's period of
+    waiting, whose answers `confirm` and `leave` make it or leave it to the next session."""
+
+    def awaiting(self, title: str = "The owner's goal") -> str:
+        """A goal of the owner's with one step, whose one task is done: it awaits confirmation."""
+
+        goal = self.filed(title, kind="goal", by=calls.browser())
+        self.person("/api/planning/work-item/apply", id=goal, checklist=["Ship it"])
+        task = self.filed("Its one task", parent=goal, by=calls.browser())
+        self.person(
+            "/api/planning/work-item/apply",
+            id=task,
+            summary={"done": "Done", "next": "Nothing"},
+            transition={"state": "completed"},
+        )
+        self.assertEqual("awaiting_confirmation", self.card(goal)["container_state"])
+        return goal
+
+    def confirm(self, goal: str) -> dict:
+        """The agent ticks the goal's step, which answers what the owner wrote to it, then
+        writes its summary and completes it in one call."""
+
+        [step] = self.card(goal)["checklist"]
+        self.tool("apply_work_item_changes", id=goal, checklist_ticks=[{"item_id": step["id"]}])
+        return self.tool(
+            "apply_work_item_changes",
+            id=goal,
+            summary=CLOSE_SUMMARY,
+            transition={"state": "completed"},
+        )
+
+    def period(self, goal: str) -> sqlite3.Row:
+        return self.conn.execute(
+            "SELECT * FROM work_item_confirmations WHERE work_item_id = ?", (self.id(goal),)
+        ).fetchone()
+
+    def test_an_agent_confirms_a_goal_by_the_default(self) -> None:
+        goal = self.awaiting()
+        answer = self.confirm(goal)
+        self.assertNotIn("waits_for_owner", answer)
+        card = self.card(goal)
+        self.assertEqual(
+            ("completed", CLOSE_SUMMARY["done"]),
+            (card["state"]["category"], card["summary"]["done"]),
+        )
+        self.assertEqual([("goal_close", goal, f"close {goal}")], self.decided())
+
+    def test_a_goal_close_waits_for_the_owner_at_maximal(self) -> None:
+        self.at(participation.MAXIMAL)
+        goal = self.awaiting()
+        waits = self.confirm(goal)["waits_for_owner"]
+        card = self.card(goal)
+        self.assertEqual(
+            ("awaiting_confirmation", [True], CLOSE_SUMMARY["done"]),
+            (
+                card["container_state"],
+                [step["done"] for step in card["checklist"]],
+                card["summary"]["done"],
+            ),
+        )
+        [action] = self.waiting_on(goal)
+        self.assertEqual(
+            {
+                "action": action.id,
+                "point": "goal_close",
+                "question": waits["question"],
+                "what": f"close {goal}",
+            },
+            waits,
+        )
+        question = self.request(waits["question"])
+        self.assertEqual(("confirm", action.id), (question["purpose"], question["action_id"]))
+        self.assertIn(CLOSE_SUMMARY["done"], question["prompt"])
+        self.assertEqual(
+            {"summary": CLOSE_SUMMARY},
+            requests.get(self.conn, waits["question"])["action"]["proposed"],
+        )
+        self.assertEqual(waits["question"], self.period(goal)["request_id"])
+        self.assertEqual([], self.decided())
+        # Past the hold, the sweep asks no second question: the period's is asked.
+        with mock.patch.object(leases, "utc_now", lambda: NOW + timedelta(days=2)):
+            self.assertEqual(0, closing.sweep_confirmations(self.conn, limit=10))
+        self.conn.commit()
+        self.assertEqual([waits["question"]], self.owners_list())
+
+    def test_a_goal_close_waits_on_the_question_the_sweep_asked(self) -> None:
+        self.at(participation.MAXIMAL)
+        goal = self.awaiting()
+        with mock.patch.object(leases, "utc_now", lambda: NOW + timedelta(days=2)):
+            self.assertEqual(1, closing.sweep_confirmations(self.conn, limit=10))
+        self.conn.commit()
+        [asked] = self.owners_list()
+        waits = self.confirm(goal)["waits_for_owner"]
+        self.assertEqual(asked, waits["question"])
+        self.assertEqual(waits["action"], self.request(asked)["action_id"])
+        self.assertEqual([asked], self.owners_list())
+        record = self.answer(asked, "confirm")
+        self.assertEqual("carried_out", record["carried_out"])
+        self.assertEqual(CLOSE_SUMMARY["done"], self.card(goal)["summary"]["done"])
+
+    def test_the_owner_confirms_the_agents_close(self) -> None:
+        self.at(participation.MAXIMAL)
+        goal = self.awaiting()
+        waits = self.confirm(goal)["waits_for_owner"]
+        record = self.answer(waits["question"], "confirm")
+        self.assertEqual("carried_out", record["carried_out"])
+        card = self.card(goal)
+        self.assertEqual(
+            ("completed", CLOSE_SUMMARY["done"]),
+            (card["state"]["category"], card["summary"]["done"]),
+        )
+        self.assertEqual("carried_out", self.action(waits["action"])["outcome"])
+        self.assertEqual([], self.decided())
+        # In another run the owner leaves it to the next session, as the sweep's question does.
+        left = self.awaiting("Another goal of the owner's")
+        question = self.confirm(left)["waits_for_owner"]["question"]
+        record = self.answer(question, "leave")
+        self.assertEqual("declined", record["carried_out"])
+        self.assertEqual("awaiting_confirmation", self.card(left)["container_state"])
+        self.assertIsNotNone(self.period(left)["left_at"])
+        notices = self.conn.execute(
+            "SELECT scope FROM work_item_waiting_notices WHERE work_item_id = ?"
+            " AND delivered_call IS NULL",
+            (self.id(left),),
+        ).fetchall()
+        self.assertIn("space", [str(row[0]) for row in notices])
+
+    def test_a_close_that_waits_goes_when_the_goal_stops_awaiting(self) -> None:
+        self.at(participation.MAXIMAL)
+        goal = self.awaiting()
+        waits = self.confirm(goal)["waits_for_owner"]
+        self.filed("New work under it", parent=goal, by=calls.browser())
+        self.assertEqual("dropped", self.action(waits["action"])["outcome"])
+        self.assertEqual(
+            ["goal_close: it no longer awaits confirmation"], self.events(goal, "action_dropped")
+        )
+        self.assertEqual("expired", self.request(waits["question"])["status"])
+
+    def test_the_asker_withdraws_and_the_sweep_asks_again(self) -> None:
+        self.at(participation.MAXIMAL)
+        goal = self.awaiting()
+        waits = self.confirm(goal)["waits_for_owner"]
+        self.withdraw(waits["question"])
+        self.assertEqual("withdrawn", self.action(waits["action"])["outcome"])
+        self.assertIsNone(self.period(goal)["request_id"])
+        with mock.patch.object(leases, "utc_now", lambda: NOW + timedelta(days=2)):
+            self.assertEqual(1, closing.sweep_confirmations(self.conn, limit=10))
+
+
+#: The summary the agent confirms a goal with.
+CLOSE_SUMMARY = {"done": "Shipped with the release.", "next": "Nothing."}
+#: The day the agent puts a goal off until, and the one the owner's answer names instead.
+PUT_OFF_UNTIL = "2026-12-01"
+OWNERS_UNTIL = "2026-12-05"
+PUT_OFF_REASON = "waits for the next release"
+
+
+class GoalDeferTests(SettingHarness):
+    """An agent's putting off of an accepted goal, which takes back the owner's acceptance:
+    by the owner's setting it is made and marked `goal_defer`, or it waits on the question
+    `goal`, whose answers `do`, `later` and `drop` keep the goal, put it off or cancel it."""
+
+    def accepted(self) -> tuple[str, str]:
+        """A goal of the owner's with a task under it: both references."""
+
+        goal = self.filed("The owner's goal", kind="goal", by=calls.browser())
+        return goal, self.filed("Work under it", parent=goal, by=calls.browser())
+
+    def put_off(self, goal: str) -> dict:
+        return self.tool(
+            "apply_work_item_changes",
+            id=goal,
+            defer={"until": PUT_OFF_UNTIL, "reason": PUT_OFF_REASON},
+        )
+
+    def waits_at_maximal(self) -> tuple[str, str, dict]:
+        self.at(participation.MAXIMAL)
+        goal, task = self.accepted()
+        return goal, task, self.put_off(goal)["waits_for_owner"]
+
+    def test_an_agent_puts_off_a_goal_by_the_default(self) -> None:
+        goal, _task = self.accepted()
+        answer = self.put_off(goal)
+        self.assertNotIn("waits_for_owner", answer)
+        card = self.card(goal)
+        self.assertEqual(("deferred", None), (card["state"]["category"], card["acceptance"]))
+        self.assertEqual(
+            [("goal_defer", goal, f"put off {goal} until {PUT_OFF_UNTIL}: {PUT_OFF_REASON}")],
+            self.decided(),
+        )
+
+    def test_putting_off_a_goal_waits_at_maximal(self) -> None:
+        self.at(participation.MAXIMAL)
+        goal, _task = self.accepted()
+        before = self.card(goal)
+        answer = self.put_off(goal)
+        waits = answer["waits_for_owner"]
+        card = self.card(goal)
+        self.assertEqual(
+            (before["state"], before["container_state"], before["acceptance"]),
+            (card["state"], card["container_state"], card["acceptance"]),
+        )
+        self.assertNotIn("deferred", answer["applied"]["defer"])
+        [action] = self.waiting_on(goal)
+        self.assertEqual(("goal_defer", "defer"), (action.point, action.kind))
+        self.assertEqual("goal_defer", waits["point"])
+        question = self.request(waits["question"])
+        self.assertEqual(("goal", action.id), (question["purpose"], question["action_id"]))
+        self.assertIn(PUT_OFF_REASON, question["prompt"])
+        choice, until, cancels = json.loads(question["fields_json"])
+        self.assertEqual(
+            [("do", False), ("later", True), ("drop", False)],
+            [(option["id"], bool(option.get("recommended"))) for option in choice["options"]],
+        )
+        self.assertEqual(
+            ("until", False, "later"), (until["id"], until["required"], until["under"]["option"])
+        )
+        self.assertIn(PUT_OFF_UNTIL, until["description"])
+        self.assertEqual("cancels", cancels["id"])
+        read = requests.get(self.conn, waits["question"])["action"]
+        self.assertEqual({"until": PUT_OFF_UNTIL}, read["proposed"])
+        self.assertIn("list_token", read["cancel_list"])
+        self.assertEqual([], self.decided())
+        # A task, and a goal nobody accepted, the agent puts off at any setting.
+        task = self.filed("The owner's task", by=calls.browser())
+        self.assertNotIn("waits_for_owner", self.put_off(task))
+        self.assertEqual("deferred", self.card(task)["state"]["category"])
+
+    def test_the_three_answers_to_putting_off_a_goal(self) -> None:
+        goal, _task, waits = self.waits_at_maximal()
+        record = self.answer(waits["question"], "do")
+        self.assertEqual("declined", record["carried_out"])
+        card = self.card(goal)
+        self.assertEqual(("owner", None), (card["acceptance"]["basis"], card["state"]))
+        # A second run: the owner puts it off until the day the answer names.
+        later, _task, waits = self.waits_at_maximal()
+        record = self.answer(waits["question"], "later", until=OWNERS_UNTIL)
+        self.assertEqual("carried_out", record["carried_out"])
+        card = self.card(later)
+        self.assertEqual(("deferred", None), (card["state"]["category"], card["acceptance"]))
+        self.assertTrue(card["deferred"]["until"].startswith(OWNERS_UNTIL), card["deferred"])
+        self.assertEqual(PUT_OFF_REASON, card["deferred"]["reason"])
+        # A third run: the owner drops it, by the list the question shows.
+        dropped, task, waits = self.waits_at_maximal()
+        token = requests.get(self.conn, waits["question"])["action"]["cancel_list"]["list_token"]
+        record = self.answer(waits["question"], "drop", cancels=token)
+        self.assertEqual("declined", record["carried_out"])
+        self.assertEqual(
+            ["cancelled", "cancelled"],
+            [self.card(reference)["state"]["category"] for reference in (dropped, task)],
+        )
+        self.assertEqual([], self.decided())
+
+    def test_later_left_empty_takes_the_agents_day(self) -> None:
+        goal, _task, waits = self.waits_at_maximal()
+        self.answer(waits["question"], "later")
+        self.assertTrue(self.card(goal)["deferred"]["until"].startswith(PUT_OFF_UNTIL))
+
+
+class CloseWithWaitingTests(SettingHarness):
+    def test_a_batch_that_closes_beside_a_waiting_action_writes_nothing(self) -> None:
+        goal = self.filed("The owner's goal", kind="goal", by=calls.browser())
+        stage = self.filed("A stage of the agent's", kind="stage", parent=goal)
+        self.assertIsNotNone(self.card(stage)["acceptance"])
+        self.tool("apply_work_item_changes", id=stage, checklist=["X"])
+        task = self.filed("Its one task", parent=stage, by=calls.browser())
+        self.person(
+            "/api/planning/work-item/apply",
+            id=task,
+            summary={"done": "Done", "next": "Nothing"},
+            transition={"state": "completed"},
+        )
+        before = (self.counts(), self.card(stage))
+        for move in ({"state": "completed"}, {"state": "cancelled", "reason": REASON}):
+            with self.subTest(move=move["state"]):
+                with self.assertRaises(REFUSED) as refused:
+                    self.tool(
+                        "apply_work_item_changes",
+                        id=stage,
+                        checklist=[],
+                        checklist_reason=STEPS_REASON,
+                        summary=SUMMARY,
+                        transition=move,
+                    )
+                status, body = api.error_response(refused.exception)
+                self.assertEqual(
+                    (
+                        409,
+                        "close_with_waiting",
+                        "transition: the checklist change in this call waits for the owner,"
+                        " so the item cannot close in it: close it after the answer, or send"
+                        " the change in another call",
+                        {"group": "transition", "index": 0},
+                    ),
+                    (
+                        status,
+                        body["error"]["code"],
+                        body["error"]["message"],
+                        body["error"]["step"],
+                    ),
+                )
+                self.assertEqual(before, (self.counts(), self.card(stage)))
+                self.assertEqual(["X"], [step["text"] for step in self.card(stage)["checklist"]])
+                self.assertEqual([], self.owners_list())
+
+
+class DescriptionTests(unittest.TestCase):
+    def test_the_batch_says_what_waits_and_what_a_step_change_needs(self) -> None:
+        [tool] = [entry for entry in tools.TOOLS if entry["name"] == "apply_work_item_changes"]
+        for sentence in (
+            "A call that closes the item while another of its writes waits is refused whole.",
+            "checklist_reason says why a step of a goal or stage is removed or rewritten; a step"
+            " sent by its id with clarifies: true only clarifies its wording and is written at"
+            " once.",
+        ):
+            self.assertIn(sentence, tool["description"])
+        schema = tool["inputSchema"]["properties"]
+        self.assertEqual(500, schema["checklist_reason"]["maxLength"])
+        step = schema["checklist"]["properties"]["items"]["items"]["anyOf"][1]
+        self.assertEqual({"id", "text", "done", "clarifies"}, set(step["properties"]))
 
 
 if __name__ == "__main__":

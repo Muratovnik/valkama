@@ -17,7 +17,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface
-from server.planning import service
+from server.planning import calls, commits, participation, requests, service
 
 from .commit_fixtures import CLAUDE, PROJECT
 from .test_commits_api import ApiCase
@@ -339,3 +339,79 @@ class WhoseCloseTests(NetCase, ApiCase):
         self.assertEqual([c], self.named(answer))
         self.assertIn(self.line(c), answer["warnings"])
         self.assertEqual([], self.attached())
+
+
+class HeldCloseTests(NetCase):
+    def test_a_close_that_waits_names_the_commits_and_the_owners_answer_does_not(self) -> None:
+        """At the maximal set, the session's close of a goal over a task of `alpha`, whose step it held
+        waits for the owner: its answer names c as the close would have, and the owner's
+        confirmation that makes the close runs no net and names nothing again."""
+
+        space = service.space_identity(self.conn, "MAIN")
+        participation.write_set(self.conn, space, participation.MAXIMAL)
+        with calls.bind(calls.browser(), "/api/planning/work-item/create"):
+            goal = str(
+                service.create_work_item(self.conn, space="MAIN", title="Goal", kind="goal")[
+                    "reference"
+                ]
+            )
+            task = str(
+                service.create_work_item(
+                    self.conn, space="MAIN", title="Its task", parent=goal, projects=[PROJECT]
+                )["reference"]
+            )
+            service.set_checklist(self.conn, goal, ["the step"], author="tester")
+            service.set_summary(self.conn, task, SUMMARY, author="tester")
+            service.transition_work_item(self.conn, task, "completed", author="tester")
+        self.conn.commit()
+        self.assertEqual(
+            "awaiting_confirmation", service.get_work_item(self.conn, goal)["container_state"]
+        )
+        [step] = service.get_work_item(self.conn, goal)["checklist"]
+        # No agent claims a goal or its step now, so the session's take of the step is
+        # written as a store an earlier build left it, in the session's own call.
+        self.tool("apply_work_item_changes", id=goal, comment={"body": "Taking the last step."})
+        self.conn.execute(
+            "INSERT INTO work_item_events (work_item_id, action, detail, author, call_id)"
+            " SELECT work_item_id, 'checklist_claimed', ?, 'claude', MAX(call_id)"
+            " FROM work_item_comments WHERE work_item_id = ?",
+            ("the step", self.identity(goal)),
+        )
+        self.dated(goal, "checklist_claimed", 60)
+        self.made("before", 50)
+        c = self.made("c", 70)
+        answer = mcp_surface.run_tool_call(
+            self.conn,
+            "apply_work_item_changes",
+            {
+                "id": goal,
+                "checklist_ticks": [{"item_id": step["id"]}],
+                "summary": SUMMARY,
+                "transition": {"state": "completed"},
+            },
+            meta=META,
+        )
+        assert isinstance(answer, dict)
+        waits = answer["waits_for_owner"]
+        self.assertEqual("goal_close", waits["point"])
+        self.assertEqual([c], self.named(answer), "the window is the close's own")
+        self.assertIn(self.line(c), answer["warnings"])
+        question = waits["question"]
+        revision = self.conn.execute(
+            "SELECT revision FROM work_item_requests WHERE request_id = ?", (question,)
+        ).fetchone()[0]
+        with commits.closes() as found:
+            with calls.bind(calls.browser(), "/api/planning/request/resolve"):
+                record = requests.resolve(
+                    self.conn,
+                    question,
+                    status="answered",
+                    expected_revision=int(revision),
+                    answers={"answer": "confirm"},
+                    author="user",
+                )
+            self.conn.commit()
+        self.assertEqual("carried_out", record["carried_out"])
+        self.assertEqual("completed", service.get_work_item(self.conn, goal)["state"]["category"])
+        self.assertEqual([], found, "the owner's answer notes no window")
+        self.says_nothing(commits.with_unreported(self.conn, found, dict(record)))
