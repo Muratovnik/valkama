@@ -74,7 +74,7 @@ export interface StackLine extends PeriodSeries {
  * (`useColourPlaces`), so a filter that takes a value away repaints none of the rest. Split by
  * `across`, the key is of the pairs, ranked the same way over every pair of the read, so a chart
  * that shows fewer of them paints each as the rest do; a pair with a value that is no category is
- * drawn in the darker neutral, as such a value is.
+ * drawn in the neutral of what is not a category, as such a value is.
  */
 export function rankedSlots(
   rows: readonly UsageRow[],

@@ -35,8 +35,8 @@ colors:
   series-4: "#bf51b0"
   series-5: "#c98500"
   series-6: "#9085e9"
-  series-apart: "#b3b3b3"
-  series-other: "#e6e6e6"
+  series-apart: "#e6e6e6"
+  series-other: "#a8a8a8"
 
 typography:
   scale:
@@ -1046,11 +1046,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   its hue from `seriesSlots()`, which pins a slot to the name — the whole domain in code-point
   order, never by rank, so a filter repaints nothing — out of six `--color-series-*` hues
   ordered so that neighbours in a stack stay apart under protanopia and deuteranopia. A
-  seventh series folds into `--color-series-other`, the lighter of two neutrals, which draws
-  the folded tail; the rows that are not categories, «no task» and «unknown», are the darker
+  seventh series folds into `--color-series-other`, the darker of two neutrals, which draws
+  the folded tail; the rows that are not categories, «no task» and «unknown», are the lighter
   `--color-series-apart`. Two greys and no hue: in a stack the two can stand on each other and
   are often a period's two largest parts, so they differ in lightness for every reader, and the
-  legend names them in the stack's order. In a section's
+  legend names them in the stack's order. The folded tail takes the darker grey because it is
+  often most of a period and says least; no grey can sit darker still, since a middle grey is
+  what several hues become under deuteranopia and protanopia and a darker one falls below 3:1 on
+  the sheet a chart can lie on. In a section's
   ranked chart named by identifiers and its small charts «no task» and «unknown» stand where
   their figures put them,
   drawn on the same scale in their neutral with their names in the quiet ink, since the largest

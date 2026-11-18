@@ -536,11 +536,14 @@
      dark band does beside them, so a ring names four parts at most and only the
      three pairs `CLOSE_SLOTS` lists fall short. `seriesColors.ts` hands out the
      slots; a series past the sixth folds into the neutral `other`. A row that is
-     not a category ("no task", "unknown") is the neutral `apart`, one step darker,
-     so the two greys that can stand on each other in a stack stay told apart for
-     every reader (OKLab ΔE ≥ 0.15): when they were one grey, a week's two largest
-     segments differed only in the hint. Both greys are light ones because a middle
-     grey is what several hues become under deuteranopia and protanopia: each keeps
+     not a category ("no task", "unknown") is the neutral `apart`, so the two greys
+     that can stand on each other in a stack stay told apart for every reader
+     (OKLab ΔE ≥ 0.15): when they were one grey, a week's two largest segments
+     differed only in the hint. The folded rest is the darker grey: it is often
+     most of a period and says least, so it must not be the loudest block of the
+     chart. No grey can sit darker than this one: a middle grey is what several
+     hues become under deuteranopia and protanopia, and a darker one falls below
+     3:1 on the sheet a chart can lie on, so both greys are light ones and keep
      apart from every slot. tests/seriesColors.test.ts holds all of it. */
   --color-series-1: var(--color-blue-600);
   --color-series-2: var(--color-orange-600);
@@ -548,8 +551,8 @@
   --color-series-4: var(--color-orchid-600);
   --color-series-5: var(--color-ochre-600);
   --color-series-6: var(--color-iris-500);
-  --color-series-apart: var(--color-gray-300);
-  --color-series-other: var(--color-gray-150);
+  --color-series-apart: var(--color-gray-150);
+  --color-series-other: var(--color-gray-350);
 
   /* The margin a module keeps from the panel edge, and how wide its content
      column grows before it stops. Five files had written one or the other out
