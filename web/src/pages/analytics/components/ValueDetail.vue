@@ -2,8 +2,10 @@
 /**
  * One value in the side panel over the Analytics page (`DetailPanel`), whatever pressed it: its
  * name in full, and under it what can be done with it — a task's card opened (`openCard`: a plain
- * press opens it over the page, one with a modifier elsewhere) and the page narrowed to the value
- * as a press of it once did, which also closes the panel (`narrow`). Then what it spent, read with
+ * press opens it over the page, one with a modifier elsewhere) and «Add to filter», which adds the
+ * value to its dimension's filter beside the values there and closes the panel (`add`), and which a
+ * value the filter holds already offers disabled, as «Already in filter» (`usePageFilter`). Then
+ * what it spent, read with
  * the page's period, steps and filters and its own filter (`useValueRead`):
  *
  * - its figures, the agent time, the tokens and the cost, and its share of the whole the page
@@ -16,8 +18,7 @@
  * - the models and the accounts it ran on, ranked in the page's measure, each in its hue of the
  *   page (`RankedBars`, dense); a value of the models or the accounts has no list of its own.
  *
- * A task deleted since has no card to open; work with no task is narrowed to as the page breaks
- * it down, by where it came from, which the action's description says. The first read's wait is
+ * A task deleted since has no card to open. The first read's wait is
  * one quiet line, reported to the panel's status region (`useReadWaitReport`); a first read that
  * failed says so with a retry, and a read again that failed keeps what it showed and says so as the
  * page's bar does (`RefreshFailed`). A value with nothing in the period says that.
@@ -35,6 +36,7 @@ import ValueDays from '@/pages/analytics/components/ValueDays.vue'
 import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
+import { usePageFilter } from '@/pages/analytics/composables/usePageFilter.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -80,7 +82,7 @@ const props = defineProps<{
   /** The filters the page's answer was read with. */
   filters: UsageFilters
   measure: Measure
-  /** Why the last narrowing asked here was not made, in words; empty otherwise. */
+  /** Why the last adding to the filter asked here was not made, in words; empty otherwise. */
   notice: string
   /** The page's answer the value is read for; null while there is none. */
   page: Usage | null
@@ -93,8 +95,8 @@ const props = defineProps<{
   /** Whether the period is live, «Now» or «Today». */
   live?: boolean
 }>()
-/** The panel closed; the page narrowed to the value, by its name; the name it heads the panel by. */
-const emit = defineEmits<{ close: []; named: [title: string]; narrow: [label: string] }>()
+/** The panel closed; the value added to the page's filter, by its name; the name it heads it by. */
+const emit = defineEmits<{ add: [label: string]; close: []; named: [title: string] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
@@ -129,7 +131,12 @@ function openCard(event: MouseEvent) {
     actions.openCard(card.value, event)
 }
 /** What narrowing does past narrowing, said where it is not plain; no description otherwise. */
-const narrowNote = computed(() => actions.narrowNote(props.by, props.value) ?? undefined)
+/** Whether the page's filter holds the value already, which leaves nothing to add. */
+const pageFilter = usePageFilter()
+const filtered = computed(() => pageFilter?.has(props.by, props.value) ?? false)
+const addWords = computed(() =>
+  filtered.value ? t('analytics.filters.held') : t('analytics.filters.add'),
+)
 /** A read again that failed, said beside the actions while what it replaced stays. */
 const failedAgain = computed(() => state.value.status === 'ready' && state.value.failedAgain)
 
@@ -260,10 +267,10 @@ const narrow = useNarrowCharts(body)
         >
         <VButton
           size="compact"
-          :aria-description="narrowNote"
-          @click="emit('narrow', name)"
+          :disabled="filtered"
+          @click="emit('add', name)"
         >
-          {{ t('analytics.detail.narrow') }}
+          {{ addWords }}
         </VButton>
         <RefreshFailed
           :failed="failedAgain"

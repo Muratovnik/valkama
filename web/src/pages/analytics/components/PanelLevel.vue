@@ -20,7 +20,8 @@
  * two sentences of what does not apply to it, which pushed its accounts down on every visit. What
  * the level holds stands one under the next, two side by side where both read well (`pair`), or as
  * many side by side as keep `columnMin` (`fit`); a part that must take the whole width says so on
- * its own root. A group may stand on a surface of its own.
+ * its own root. A group may stand on a surface of its own, and what it holds side by side may stand
+ * as far apart as the surface's inset (`apart`), as the windows of an account of the quota do.
  *
  * A heading that changes while the level stands, as a chart's names the page's measure, keeps the
  * room of every heading it takes in turn (`titles`): the others stand unseen in its place, so the
@@ -48,6 +49,8 @@ const props = withDefaults(
     about?: readonly string[]
     /** The «ⓘ»'s name, its button's and its caveats'; «About this section» where it is unset. */
     aboutLabel?: string
+    /** What the level holds side by side stands 32px apart, a surface's inset, not its level's gap. */
+    apart?: boolean
     /** The element the level is; a group of a list is its item. */
     as?: 'section' | 'div' | 'li'
     /** The element of what the level holds: a list of groups is a list. */
@@ -65,6 +68,7 @@ const props = withDefaults(
     titles?: readonly string[]
   }>(),
   {
+    apart: false,
     as: 'section',
     title: '',
     bodyAs: 'div',
@@ -106,7 +110,11 @@ const rivals = computed(() =>
   <component
     :is="as"
     class="panel-level"
-    :class="[`level-${level}`, `columns-${columns}`, { 'level-surface': surface }]"
+    :class="[
+      `level-${level}`,
+      `columns-${columns}`,
+      { 'level-surface': surface, 'level-apart': apart },
+    ]"
     :data-level="level"
     :style="{ '--level-column-min': columnMin }"
   >
@@ -288,6 +296,10 @@ const rivals = computed(() =>
 
 .level-group > .level-body {
   gap: var(--space-4);
+}
+
+.level-apart > .level-body {
+  column-gap: var(--space-8);
 }
 
 .level-block > .level-body {

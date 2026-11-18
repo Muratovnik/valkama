@@ -147,8 +147,10 @@
 
 /* The whole height of its period is what a pointer points at and presses, never only the painted
    part: above its stack and in the gaps between its segments, and its half of the gap to each
-   neighbour, so no strip between two periods points at nothing. A period that acts is a line of
-   the chart, not a control standing in it. */
+   neighbour, so no strip between two periods points at nothing. The first and the last period
+   have no neighbour past the plot's edge, and their zone stops at it: half a gap past the edge
+   stood outside the frame, which scrolled by that pixel and drew a scrollbar for it. A period that
+   acts is a line of the chart, not a control standing in it. */
 .period-column {
   position: relative;
   flex: 1;
@@ -168,6 +170,14 @@
     position: absolute;
     inset-block: 0;
     inset-inline: calc(-0.5 * var(--space-half));
+  }
+
+  .period-slot:first-child > &::after {
+    inset-inline-start: 0;
+  }
+
+  .period-slot:last-child > &::after {
+    inset-inline-end: 0;
   }
 }
 

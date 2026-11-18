@@ -172,9 +172,11 @@ describe('the quota panel', () => {
       'Week, model-a',
     ])
     expect(work.text()).toContain('Plan: Max')
-    // The whole ids are the name's hint.
-    expect(work.get('.quota-account-name span').attributes('data-tooltip')).toContain(
-      `Account ${'0b7d4e19-1c2d-4e3f-8a4b-5c6d7e8f9a0b'} of organization`,
+    // No hint says the whole id: the account's menu, named for it, copies it.
+    expect(work.get('.quota-account-name').attributes('data-tooltip')).toBeUndefined()
+    expect(work.html()).not.toContain('0b7d4e19-1c2d-4e3f-8a4b-5c6d7e8f9a0b')
+    expect(work.get('[data-account-head="menu"] .menu-trigger').attributes('aria-label')).toBe(
+      'Account actions: Work',
     )
     expect(accountNamed(page, 'a1b2c3d4').text()).toContain('Known by its seat for this week only')
     // The usage credits are a line of their name and state, never a figure, and how old their
@@ -203,7 +205,6 @@ describe('the quota panel', () => {
       state: 'fresh',
       lead: '41% used · fresh',
       tail: 2,
-      keyed: true,
       // The forecast, then the reset: the pace and the reading's age are the bar's hint.
       facts: ['forecast', 'reset'],
       even: 'Steady use would be at 57% now',
@@ -219,10 +220,9 @@ describe('the quota panel', () => {
       lead: '13% used · silent 5 h',
       filled: true,
       tail: 0,
-      keyed: false,
     })
     expect(silent.latest).toMatch(/^No change since \d{2}:\d{2}, 5 h ago, from the poll$/u)
-    // A week forecasts a range, said as one after the key of its hatch; one too new for a
+    // A week forecasts a range, said as one after «Forecast ·»; one too new for a
     // forecast says so, quieter, and draws no tail.
     expect(fresh.forecast).toBe('Forecast · By the reset: 57% to 61%')
     expect(fresh.reset).toMatch(/^Resets .+, in 3 d$/u)
@@ -238,8 +238,8 @@ describe('the quota panel', () => {
     stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
     const five = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
     const zero = windowOf(accountNamed(five, '7e6d5c4b'), 'five_hour')
-    // Lasting to the reset at 35 %: a tail from the track's start, keyed on the forecast's line.
-    expect(zero).toMatchObject({ lead: '0% used · fresh', filled: false, tail: 1, keyed: true })
+    // Lasting to the reset at 35 %: a tail from the track's start.
+    expect(zero).toMatchObject({ lead: '0% used · fresh', filled: false, tail: 1 })
     expect(zero.latest).toBe('Read 3 min ago from the status line')
     // The five hours forecast a point: it lasts with the share spent by the reset, or runs out at
     // a time, drawn to the track's end.
@@ -247,7 +247,6 @@ describe('the quota panel', () => {
     expect(windowOf(accountNamed(five, 'Work'), 'five_hour')).toMatchObject({
       forecast: expect.stringMatching(/^Forecast · Runs out at \d{2}:\d{2}$/u),
       tail: 1,
-      keyed: true,
     })
     expect(windowOf(accountNamed(five, 'Work'), 'five_hour').reset).toMatch(
       /^Resets \d{2}:\d{2}, in 2 h/u,
@@ -257,11 +256,12 @@ describe('the quota panel', () => {
       'No quota source has read this account’s work in the past seven days.',
     )
     // No money stands beside a share, and no share is a total: what used a window is a block of
-    // its own under the readings (`analyticsQuotaSpent.spec.ts`). Each account's head is its name,
-    // and its facts beside it where it has a plan or a seat: «Work» and the seat «a1b2c3d4».
+    // its own under the readings (`analyticsQuotaSpent.spec.ts`). Each account's head is its name
+    // and its menu, and its facts beside them where it has a plan or a seat: «Work» and the seat
+    // «a1b2c3d4».
     const heads = five.findAll('[data-account-head]')
     expect(heads.map((one) => one.attributes('data-account-head')).join(' ')).toBe(
-      'name facts name name name facts',
+      'name menu facts name menu name menu name menu facts',
     )
     // Each of the three windows of five hours has its bar, its facts and its line; «Work» alone
     // has a window of money, its credits.

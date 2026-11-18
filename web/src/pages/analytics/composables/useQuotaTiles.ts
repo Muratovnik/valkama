@@ -65,7 +65,7 @@ export function useQuotaTiles(options: {
       quiet: false,
       leadDetail: t('analytics.quota.tile.detail', {
         window: words.windowName(window),
-        account: `${name} — ${words.accountDetail(account)}`,
+        account: name,
       }),
       aside: words.share(window.latest.used_percent),
       count: words.stateWords(window, now, quota.fresh_for_seconds),

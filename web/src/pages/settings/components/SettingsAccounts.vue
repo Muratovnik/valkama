@@ -4,7 +4,7 @@
  * saw, the most agent time first and with its share of it, then any account already named that
  * the year did not see, so that name can still be taken away. A row is the account's whole id,
  * a field for its name and a way to clear it; the Analytics page and the quota alerts say the
- * name wherever they would have said the start of the id, and the id in the hint.
+ * name wherever they would have said the start of the id, and no hint says the id.
  *
  * The usage rows hold no name for an account, only its organization id, and nothing on this
  * machine names most of them: the name is the owner's, kept in Valkama by that id
@@ -23,8 +23,7 @@ import SettingsGroup from '@/pages/settings/components/SettingsGroup.vue'
 import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
 import { useSeenAccounts } from '@/pages/settings/composables/useSeenAccounts.ts'
 
-import { accountNamesRefusal } from '@/shared/api/quotaApi.ts'
-import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
+import { accountNamesFailure } from '@/shared/api/quotaApi.ts'
 import { aliasOf, cleanAlias, MAX_ACCOUNT_ALIAS_LENGTH } from '@/shared/lib/accountAliases.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -100,13 +99,6 @@ function forget(account: string, typed: string) {
   )
 }
 
-function failureText(error: unknown) {
-  const refusal = accountNamesRefusal(error)
-  if (refusal !== null) return refusal
-  const message = failureMessage(typedFailure(error))
-  return t(message.key, message.params ?? {})
-}
-
 /** Save what the field holds, where it differs from the name Valkama keeps. */
 async function commit(account: string) {
   const typed = drafts.value[account]
@@ -123,7 +115,8 @@ async function commit(account: string) {
     forget(account, typed)
     if (write === latest) outcome.value = { account, kind: said ? 'saved' : 'cleared' }
   } catch (error) {
-    if (write === latest) outcome.value = { account, kind: 'failed', reason: failureText(error) }
+    if (write === latest)
+      outcome.value = { account, kind: 'failed', reason: accountNamesFailure(error, t) }
   }
 }
 

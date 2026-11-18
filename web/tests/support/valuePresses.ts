@@ -129,12 +129,12 @@ export const panelOf = (host: VueWrapper) => host.getComponent(ValueDetail)
 /** Whether the side panel stands over the page. */
 export const panelShown = (host: VueWrapper) => host.findComponent(ValueDetail).exists()
 
-/** The panel's «Narrow the page to it». */
-export function narrowButton(host: VueWrapper) {
+/** The panel's button that adds its value to the page's filter, by what it says. */
+export function addButton(host: VueWrapper, words = 'Add to filter') {
   const found = panelOf(host)
     .findAll('button')
-    .find((one) => one.text() === 'Narrow the page to it')
-  if (!found) throw new Error('no narrowing in the panel')
+    .find((one) => one.text() === words)
+  if (!found) throw new Error(`no «${words}» in the panel`)
   return found
 }
 

@@ -2687,15 +2687,25 @@ name, with its share, its state in words beside the section's name and a thin `W
 its forecast's tail, which the bar's words and hint name «Forecast ·», since a tile has no room
 for a key. A tile with no window to name says why: no source read the work, the windows reset
 since they were read, or no reading. The panel has a group per account on a surface of its
-own, by the name its owner gave it or the start of its id, the whole id in its hint, its
-windows side by side where the width allows. Every window, the five hours, the week and a
+own, by the name its owner gave it or the start of its id, a menu beside the name and its
+windows side by side where the width allows, 32px apart with a hairline in the rule's ink midway
+between two neighbours: 16px apart with nothing between, the moment ending one window's axis and
+the one starting the next stood a few pixels apart and read as one axis. Every window, the five hours, the week and a
 model's week, has the same three parts 12px apart: what stands now, the `StepLine` of its
 readings and «Where the window went», which opens what used it in the side panel.
+The menu beside an account's name, named «Account actions: Work», holds three entries and no
+more. «Rename» puts a field in the name's place that saves through the same names and rules as
+Settings: Enter or leaving it saves, Escape leaves the name as it was, either gives the focus
+back to the menu's button, and a save that fails keeps the field with the reason under it.
+«Add to filter» adds the account to the page's filter beside the accounts already there, as the
+value panel's button does, and the section stays where it is; once the filter holds it, the entry
+is disabled and reads «Already in filter», and where no filter can take it the entry is absent.
+«Copy ID» copies the account's whole id with the copy's usual note. No hint says that id.
 What stands now leads with one line, the share as the window's figure and its state beside it,
 «41% used · fresh», «13% used · silent 5 h», over its bar, its share solid and its forecast a
-hatched tail; then its forecast in the text's ink after the key of that hatch, a swatch where a
-tail is drawn, hung in the card's start gutter so the line's words start where the lines under it
-do, and «Forecast ·» — the five hours a point, lasting to the reset with the share spent by
+hatched tail; then, right under that tail, its forecast in the text's ink after «Forecast ·», the
+name the step line's legend gives the hatch, its words starting where the lines under it do and
+nothing of it in the card's inset — the five hours a point, lasting to the reset with the share spent by
 then, or running out at a time; a week a range, said as a range and never past 100 %, which a quota cannot pass: a low
 end there says the week runs out before its reset and about when its slower pace spends it, a
 high end there that it may, and ends said alike one value — and when it resets in absolute and
@@ -2760,9 +2770,11 @@ ends the figures' heading says it for the value's own read, once and in that «�
 never as a line of the panel. Its days are the page's period and step with
 the period before marked, one series in the value's colour; under them dense ranked bars say the
 models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
-the value's filter added, and wait and fail as the page's do. «Narrow the page to it» does what
-pressing a value did: the page narrows to it, broken down by task — work with no task by where
-it came from — and the panel closes, a step of the history too. A press with a modifier or the
+the value's filter added, and wait and fail as the page's do. «Add to filter» adds the value to
+its dimension's filter beside the values already there, as choosing it in the filter's field
+does, so A and B and then C is A, B and C: the page stays on its section and the panel closes, a
+step of the history too. A value the filter holds already offers it disabled, «Already in
+filter»; a filter the link cannot hold says why in the panel. A press with a modifier or the
 middle button on a task still opens its card in a new tab, and a day, an hour or a minute still
 narrows the page. «All N» opens the section's whole table in the panel, every value with the
 period's figures and those of the period before, sorted as the table sorts and with a field that
@@ -2805,8 +2817,8 @@ its row, so its name can still be taken away. A name is saved when its field is 
 Enter is pressed, and the group's status line, where its reads say they are under way or
 failed, says the save under way, a save that failed with a retry beside it, a saved name
 and a cleared one; a field keeps what was typed until its save holds. Analytics says an
-account by that name and a session by the title its client gave it, with the id in the
-hint.
+account by that name, with no hint of its id, and a session by the title its client gave it,
+with the id in the hint.
 
 ## Accessibility
 

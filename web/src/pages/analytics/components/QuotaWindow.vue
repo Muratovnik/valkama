@@ -8,9 +8,10 @@
  * words beside it, «75% used · silent 3 d», over the bar with its pace tick (`WindowBar`), then
  * the forecast in the text's ink and when the window resets, in absolute and relative time,
  * quieter. The bar draws the forecast as a hatched tail past the share spent, and the forecast's
- * line leads with the key of that hatch, a swatch and «Forecast ·», the swatch while a tail is
- * drawn: the hatch was once a silent window's and nothing on the page said so. The swatch hangs in
- * the card's start gutter, so the line's words start where the lines under it do. Where steady use
+ * line, right under it, leads with «Forecast ·», as the step line's legend names its corridor: the
+ * hatch was once a silent window's and nothing on the page said so. The line starts where the
+ * lines under it do; a swatch hung in the card's gutter before it once said the same as the tail
+ * above it. Where steady use
  * would stand and how old the latest reading is and who read it are the bar's hint and its words
  * for a screen reader, not lines of the block: four lines of the same weight once stood over
  * every window. As a table the bar is a row of its account's table, which holds the share, the
@@ -26,7 +27,9 @@
  * old: it says «silent» and for how long, and its hint when its reading last changed; a fresh 0 %
  * is a bar with no fill that says «0% used» and «fresh». While the window stands, its step line
  * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`); a
- * window past its reset by the panel's moment has neither and shows its whole window alone, even
+ * silent window's line stops at its last reading, since nothing was measured after it, while a
+ * fresh one's holds to now, a source writing a reading only when a value changes. A window past
+ * its reset by the panel's moment has neither and shows its whole window alone, even
  * where its answer was read before the reset.
  *
  * What used the window is the work Valkama recorded on the account since the window's start, by
@@ -38,7 +41,7 @@
  *
  * What a reader of the page selects it by: the window is `data-window`, its kind, with its state
  * at the panel's moment in `data-state`; each line of its facts is `data-fact` (`forecast`, `reset`, `even`,
- * `latest`), and the forecast's key of the hatch is `data-mark="hatch"`.
+ * `latest`).
  */
 import { computed } from 'vue'
 import { Translation, useI18n } from 'vue-i18n'
@@ -108,8 +111,6 @@ const bar = computed(() => {
     label: words.barRead(window, now, today, freshFor),
     hint: words.meterHint(window, now, today, freshFor),
     forecast,
-    /** Whether the bar draws a tail, whose hatch the forecast's line names. */
-    hatched: forecast !== null && used < 100 && forecast.high > used,
   }
 })
 /** Whether the window has a pace: it named its start and its reset. */
@@ -124,29 +125,27 @@ function spend() {
 }
 
 /**
- * The facts said in words: the forecast after its key, in the text's ink where there is one, and
- * the reset; past the reset the reset alone, which says so. A table leaves the forecast to its
- * account's table and adds what the bar's hint holds and that table does not: the latest reading,
- * and that there is no pace, where that table has only a dash for it. `swatch` is whether the
- * line leads with the key of the bar's hatch.
+ * The facts said in words: the forecast, in the text's ink where there is one, and the reset; past
+ * the reset the reset alone, which says so. A table leaves the forecast to its account's table and
+ * adds what the bar's hint holds and that table does not: the latest reading, and that there is
+ * no pace, where that table has only a dash for it.
  */
 const facts = computed(() => {
   const { window, now, today, shown, freshFor } = props
-  const reset = { key: 'reset', text: words.reset(window, now, today), quiet: true, swatch: false }
+  const reset = { key: 'reset', text: words.reset(window, now, today), quiet: true }
   if (shown === 'chart') {
     const forecast = {
       key: 'forecast',
       text: words.forecastLine(window, today),
       quiet: window.forecast === null,
-      swatch: bar.value.hatched,
     }
     return ended.value ? [reset] : [forecast, reset]
   }
   const latest = { key: 'latest', text: words.latest(window, now, today, freshFor), quiet: true }
   return [
     reset,
-    ...(paced.value ? [] : [{ key: 'even', text: words.even(window), quiet: true, swatch: false }]),
-    { ...latest, swatch: false },
+    ...(paced.value ? [] : [{ key: 'even', text: words.even(window), quiet: true }]),
+    latest,
   ]
 })
 
@@ -200,6 +199,7 @@ const ahead = computed<StepAhead | null>(() => {
   return {
     value: window.latest.used_percent,
     now: words.nowTarget(window, now, today, freshFor),
+    silent: state.value === 'silent',
     forecast:
       found && ends ? { ...words.forecastTarget(window, ends, now, today), ...found } : null,
   }
@@ -252,12 +252,7 @@ const readingsCaption = computed(() =>
             :class="{ 'quota-window-quiet': fact.quiet }"
             :data-fact="fact.key"
           >
-            <span
-              v-if="fact.swatch"
-              class="quota-window-swatch hatched"
-              data-mark="hatch"
-              aria-hidden="true"
-            />{{ fact.text }}
+            {{ fact.text }}
           </li>
         </ul>
       </div>
@@ -296,8 +291,6 @@ const readingsCaption = computed(() =>
     </div>
   </PanelLevel>
 </template>
-
-<style scoped src="@/shared/ui/hatch.css"></style>
 
 <style scoped>
 /* The window's three parts — what stands now, its readings and what used it — stand as far apart
@@ -350,25 +343,5 @@ const readingsCaption = computed(() =>
 /* «Where the window went» is a control of the window, at its start rather than across it. */
 .quota-window-uses {
   justify-self: start;
-}
-
-/* The key of the bar's hatch, as the step line's legend draws it: a short bar of the stripes on
-   the line's baseline, before the words that name it. It hangs in the card's start gutter, its
-   width and the space after it outside the line, so the line's words start where the lines under
-   them do: led by the key, they started 16px further in. The gutter it hangs in is the account's
-   16px inset (`PanelLevel`), or the gap between two windows side by side, as wide. */
-.quota-window-swatch {
-  display: inline-block;
-  vertical-align: baseline;
-  inline-size: var(--space-3);
-  block-size: var(--space-2);
-  margin-inline: calc(-1 * var(--space-3) - var(--space-1)) var(--space-1);
-  background: var(--color-series-1);
-  border-radius: 999px;
-
-  @media (forced-colors: active) {
-    background: CanvasText;
-    forced-color-adjust: none;
-  }
 }
 </style>

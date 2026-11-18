@@ -51,10 +51,6 @@ export const DETAIL_TOOLTIPS = new Map([
     'where steady use from the window start would stand now, which a quota tile draws only as a tick on its bar, and its forecast, which it draws only as a hatched tail, named here, with the share and the state the tile says',
   ],
   [
-    'pages/analytics/components/QuotaAccount.vue <span> v-tooltip.detail="{ text: detail, words: name }"',
-    'the whole id of the account and of its organization, where the quota panel names the account by the name its owner gave it or the start of its id; while the name is cut, it comes first, whole',
-  ],
-  [
     'pages/analytics/components/QuotaAccount.vue <span> v-tooltip.detail="other.read"',
     'how old the reading of a window of money is and who read it, where its line names only the window and its state',
   ],

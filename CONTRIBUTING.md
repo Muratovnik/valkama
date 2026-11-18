@@ -127,10 +127,11 @@ something once.
 4. **Ratchets only tighten.** The mypy overrides list only empties, the coverage
    floor only rises. A module absent from a list is checked, not skipped.
 
-5. **`store.STORE_SCHEMA_VERSION` goes up in the same commit that changes what
-   an existing row means.** Migrations are forward-only and idempotent, so an
-   added column does not need it — a changed meaning does. This is what makes an
-   older build refuse a newer store instead of misreading it.
+5. **`store.STORE_SCHEMA_VERSION` goes up by one in the same commit that changes
+   the store's declaration or what an existing row means.** A build opens a store
+   only at its own number, so one number names one declaration: this is what
+   makes a build refuse a store of another declaration instead of misreading it.
+   `tests/test_store_schema_pin.py` fails a declaration change without the raise.
 
 6. **Supported external MCP handshake and tool schemas stay compatible.**
    Existing local data instead crosses a model change through a verified

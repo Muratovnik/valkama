@@ -40,7 +40,7 @@ const props = defineProps<{
   read: QuotaRead
   section: QuotaSection
 }>()
-/** Read the quota again. */
+/** Read the quota again: asked, or after an account's name was saved, which its answer says. */
 const emit = defineEmits<{ retry: [] }>()
 
 const { t } = useI18n()
@@ -91,6 +91,7 @@ const narrow = useNarrowCharts(root)
               :today="answerMoment(payload)"
               :now="now"
               :fresh-for="payload.fresh_for_seconds"
+              @renamed="emit('retry')"
             />
           </template>
           <template #table>
@@ -103,6 +104,7 @@ const narrow = useNarrowCharts(root)
               :today="answerMoment(payload)"
               :now="now"
               :fresh-for="payload.fresh_for_seconds"
+              @renamed="emit('retry')"
             />
           </template>
         </ChartSection>

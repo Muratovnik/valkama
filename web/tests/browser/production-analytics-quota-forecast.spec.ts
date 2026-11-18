@@ -9,8 +9,9 @@
  * answer says they spend by the reset; five hours that run out to the track's end; none for a
  * window too new for a forecast, for one spent or read past 100 %; and from the track's start at
  * 0 %. The
- * forecast's line leads with the hatch's key, «Forecast ·», with a swatch where a tail is drawn;
- * the swatch hangs in the card's start gutter, so the line's words start where the reset's do.
+ * forecast's line, right under the tail, leads with «Forecast ·», the name the step line's legend
+ * gives the hatch, and draws nothing but its words: they start where the reset's do, and nothing of
+ * the line stands left of them.
  * Each step line past its readings points at «now» and, where a forecast has a share to draw to,
  * runs its corridor to the reset and points at its end: the corridor inside the plot, each
  * place's hint at its mark and clear of the line's head, nothing moving while pointed at; the
@@ -29,7 +30,7 @@ import { messages } from '@/shared/i18n/index.ts'
 import { quotaAt, quotaOfEdges } from '../fixtures/quota.ts'
 import { NOW, openPanel, pageAt, record, serve, serveQuota } from './analyticsPage.ts'
 import { drawLined } from './drawnViews.ts'
-import { swatchLines } from './quotaSwatch.ts'
+import { forecastLines } from './quotaForecastLine.ts'
 import { aheadOfLines, cornersOutside, hintAtDot, latestHint } from './stepAhead.ts'
 import type { LineAhead } from './stepAhead.ts'
 import { test } from './test.ts'
@@ -49,8 +50,6 @@ interface Drawn {
   /** Where the fill ends, or null for none. */
   fill: number | null
   places: string[]
-  /** Whether the forecast's line leads with the hatch's swatch. */
-  swatch: boolean
   tail: [number, number][]
 }
 
@@ -58,7 +57,6 @@ const FIVE_HOURS: Record<string, Drawn> = {
   'Work five_hour': {
     fill: 62,
     tail: [[62, 100]],
-    swatch: true,
     corridor: true,
     places: ['now', 'reset'],
   },
@@ -67,14 +65,12 @@ const FIVE_HOURS: Record<string, Drawn> = {
   '7e6d5c4b five_hour': {
     fill: null,
     tail: [[0, 35]],
-    swatch: true,
     corridor: true,
     places: ['now', 'reset'],
   },
   'a1b2c3d4 five_hour': {
     fill: 74,
     tail: [[74, 100]],
-    swatch: true,
     corridor: true,
     places: ['now', 'reset'],
   },
@@ -82,7 +78,6 @@ const FIVE_HOURS: Record<string, Drawn> = {
   'Edge five_hour': {
     fill: 100,
     tail: [],
-    swatch: false,
     corridor: true,
     places: ['now', 'reset'],
   },
@@ -95,11 +90,10 @@ const WEEKS: Record<string, Drawn> = {
       [41, 57],
       [57, 61],
     ],
-    swatch: true,
     corridor: true,
     places: ['now', 'reset'],
   },
-  'Work week_model': { fill: 12.5, tail: [], swatch: false, corridor: false, places: ['now'] },
+  'Work week_model': { fill: 12.5, tail: [], corridor: false, places: ['now'] },
   // Silent, its share as solid as a fresh one's, and a range that may run out, cut at the end.
   '7e6d5c4b week': {
     fill: 88,
@@ -107,13 +101,12 @@ const WEEKS: Record<string, Drawn> = {
       [88, 97.5],
       [97.5, 100],
     ],
-    swatch: true,
     corridor: true,
     places: ['now', 'reset'],
   },
-  'a1b2c3d4 week': { fill: 20, tail: [], swatch: false, corridor: false, places: ['now'] },
+  'a1b2c3d4 week': { fill: 20, tail: [], corridor: false, places: ['now'] },
   // Read past 100 %: the fill stops at the track's end and nothing is ahead of it.
-  'Edge week': { fill: 100, tail: [], swatch: false, corridor: true, places: ['now', 'reset'] },
+  'Edge week': { fill: 100, tail: [], corridor: true, places: ['now', 'reset'] },
   // A fresh 0 %: no fill, the tail from the track's start.
   'Edge week_model': {
     fill: null,
@@ -121,7 +114,6 @@ const WEEKS: Record<string, Drawn> = {
       [0, 4],
       [4, 9],
     ],
-    swatch: true,
     corridor: true,
     places: ['now', 'reset'],
   },
@@ -170,7 +162,6 @@ const windowsOf = (page: Page) =>
         forecast: (window.querySelector('[data-fact="forecast"]')?.textContent ?? '')
           .replaceAll(/\s+/gu, ' ')
           .trim(),
-        swatch: Boolean(window.querySelector('[data-fact="forecast"] [data-mark="hatch"]')),
         corridor: Boolean(window.querySelector('[data-mark="corridor"]')),
         legend: Boolean(window.querySelector('[data-key="ahead"]')),
       }
@@ -336,15 +327,14 @@ for (const lang of ['en', 'ru'] as const)
         expect(await boxes(page), `${section}: the boxes held still`).toHaveLength(
           windows.length * 2 + lines.length * 3,
         )
-        // Each window as its case draws it: the fill, the tail, the swatch, the corridor and the
-        // places past its readings.
+        // Each window as its case draws it: the fill, the tail, the corridor and the places past
+        // its readings.
         const drawn = Object.fromEntries(
           windows.map((one, index) => [
             one.key,
             {
               fill: one.fill,
               tail: one.tail.map(({ from, to }) => [from, to]),
-              swatch: one.swatch,
               corridor: one.corridor,
               places: lines[index]?.places.map(({ kind }) => kind) ?? [],
             },
@@ -356,8 +346,8 @@ for (const lang of ['en', 'ru'] as const)
           expect(one.solid, `${one.key}: its fill solid`).toBe(true)
           expect(one.lead, `${one.key}: its state`).toMatch(states[one.state] ?? /^$/u)
           // Every part of the tail inside the track, 2px of ground past the fill or the part
-          // before; the forecast after the hatch's key wherever there is one; the legend names
-          // the corridor where one is drawn.
+          // before; the forecast after its name wherever there is one; the legend names the
+          // corridor where one is drawn.
           expect(
             one.tail.every(({ inside }) => inside),
             `${one.key}: its tail in its track`,
@@ -371,22 +361,20 @@ for (const lang of ['en', 'ru'] as const)
           )
           expect(one.legend, `${one.key}: the corridor named`).toBe(one.corridor)
         }
-        // The hatch's swatch hangs in the card's start gutter: the forecast line's words start
-        // where the reset's under them do, and the swatch stands whole inside the card.
-        const keyed = await swatchLines(page)
-        measured[`${section} swatches`] = keyed
-        expect(keyed, `${section}: the windows keyed by a swatch`).toHaveLength(
-          Object.values(cases).filter(({ swatch }) => swatch).length,
-        )
-        for (const one of keyed) {
+        // The forecast's line is its words alone, flush with the reset's under them: nothing of
+        // it stands left of where they start.
+        const said = await forecastLines(page)
+        measured[`${section} forecast lines`] = said
+        expect(said, `${section}: the forecast lines`).toHaveLength(Object.keys(cases).length)
+        for (const one of said) {
           expect(
             Math.abs(one.forecast - one.reset),
             `${one.key}: the forecast's words at ${one.forecast}, the reset's at ${one.reset}`,
           ).toBeLessThanOrEqual(0.5)
-          expect({ inCard: one.inCard, seen: one.seen }, `${one.key}: its swatch`).toEqual({
-            inCard: true,
-            seen: true,
-          })
+          expect(one.leftmost, `${one.key}: the leftmost of its line`).toBeGreaterThanOrEqual(
+            one.reset - 0.5,
+          )
+          expect(one.marks, `${one.key}: what it draws besides its words`).toBe(0)
         }
         for (const [index, line] of lines.entries())
           expect(cornersOutside(line), `line ${index}: corners outside its plot`).toEqual([])
@@ -397,10 +385,10 @@ for (const lang of ['en', 'ru'] as const)
     })
 
 /**
- * How the forecast's keys are painted against what they name, as the browser resolves them: the
- * swatch at the head of a window's forecast line (`QuotaWindow`) and the forecast's key in its
- * step line's head (`StepLineHead`), each against the first part of the window's tail; whether
- * each is hatched, as the tail is and the fill never is; and the palette's text ink.
+ * How the forecast's key is painted against what it names, as the browser resolves it: the
+ * forecast's key in the window's step line's head (`StepLineHead`) against the first part of the
+ * window's tail; whether each is hatched, as the tail is and the fill never is; and the palette's
+ * text ink.
  */
 const forecastKeys = (page: Page, window: string) =>
   page
@@ -425,7 +413,6 @@ const forecastKeys = (page: Page, window: string) =>
         ink,
         tail: drawn('[data-mark="ahead"]'),
         fill: drawn('[data-mark="fill"]'),
-        swatch: drawn('[data-fact="forecast"] [data-mark="hatch"]'),
         legend: drawn('[data-chart="steps"] [data-key="ahead"] [data-mark="hatch"]'),
       }
     })
@@ -437,7 +424,7 @@ const PALETTES = [
 ] as const
 
 for (const { forcedColors, name, ink } of PALETTES)
-  test(`${name}the forecast's keys are hatched and painted as its tail is, the fill not hatched`, async ({
+  test(`${name}the forecast's key is hatched and painted as its tail is, the fill not hatched`, async ({
     page,
   }, info) => {
     await page.emulateMedia({ forcedColors })
@@ -445,7 +432,7 @@ for (const { forcedColors, name, ink } of PALETTES)
     await serveQuota(page, quotaOfEdges(NOW))
     await page.setViewportSize({ width: 1440, height: 1000 })
     await openDrawn(page, 'quota_five_hour')
-    // «Work»'s five hours: a fill, a tail to the track's end, its swatch and its corridor named.
+    // «Work»'s five hours: a fill, a tail to the track's end and its corridor named.
     const keys = await forecastKeys(page, 'five_hour')
     await record(info, `forecast keys ${forcedColors}`, keys)
     const tail = keys.tail?.paint ?? 'no tail'
@@ -453,14 +440,12 @@ for (const { forcedColors, name, ink } of PALETTES)
       {
         tail: keys.tail?.hatched,
         fill: keys.fill?.hatched,
-        swatch: keys.swatch,
         legend: keys.legend,
       },
-      'what is hatched, and the keys painted as the tail',
+      'what is hatched, and the key painted as the tail',
     ).toEqual({
       tail: true,
       fill: false,
-      swatch: { paint: tail, hatched: true },
       legend: { paint: tail, hatched: true },
     })
     expect(tail === keys.ink, 'the tail in the text ink').toBe(ink)
@@ -476,10 +461,10 @@ test('a window past its reset draws no tail, no corridor and no place past its r
   await openDrawn(page, 'quota_five_hour', 4)
   const windows = await windowsOf(page)
   const lines = await page.evaluate(aheadOfLines, LINES)
-  expect(windows.map(({ key, tail, swatch, corridor }) => [key, tail, swatch, corridor])).toEqual([
-    ['Work five_hour', [], false, false],
-    ['7e6d5c4b five_hour', [], false, false],
-    ['a1b2c3d4 five_hour', [], false, false],
+  expect(windows.map(({ key, tail, corridor }) => [key, tail, corridor])).toEqual([
+    ['Work five_hour', [], false],
+    ['7e6d5c4b five_hour', [], false],
+    ['a1b2c3d4 five_hour', [], false],
   ])
   expect(lines.map(({ places }) => places)).toEqual([[], [], []])
   // No forecast is said either, the reset in its place.

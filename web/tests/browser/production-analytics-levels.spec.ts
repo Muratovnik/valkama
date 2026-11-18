@@ -148,7 +148,12 @@ for (const { width, height, tallest } of QUOTA_SIZES)
     expect(seen.surface.radius).not.toBe('0px')
     const [week, model] = seen.work
     expect(model?.top, 'the two windows of «Work» on one row').toBe(week?.top)
-    expect((model?.left ?? 0) - (week?.left ?? 0) - (week?.width ?? 0), 'apart as blocks').toBe(16)
+    // Further apart than a group's blocks, with a hairline midway
+    // (`production-analytics-quota-apart.spec.ts`).
+    expect(
+      (model?.left ?? 0) - (week?.left ?? 0) - (week?.width ?? 0),
+      'apart as neighbouring windows',
+    ).toBe(32)
     expect(seen.height, 'six accounts').toBeLessThan(tallest)
   })
 
