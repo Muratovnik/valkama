@@ -12,7 +12,8 @@ A question with a purpose, such as the one a move into review asks, is the owner
 to answer, in Valkama; its answer is carried out in the write that gives it
 (`carry_out`), so it is never declined or changed, and only the session that asked
 it withdraws it. A question about a write that waits for the owner (`pending`) carries
-that write out, declines it or drops it, by its point (`CARRIERS`).
+that write out, declines it or drops it, by its point (`CARRIERS`); the answer about a
+triage review's group of findings is carried out by `groups.carry_out`.
 
 A decision recommends an answer in every required field. Where the owner's setting
 leaves decisions to the agent, an agent's decision to the owner is answered by those
@@ -33,6 +34,7 @@ from . import (
     consent,
     decisions,
     deferral,
+    groups,
     leases,
     model,
     participation,
@@ -1058,7 +1060,7 @@ def _check_purpose(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> N
 
 def carry_out(
     conn: sqlite3.Connection, row: sqlite3.Row, answers: dict | None, note: str, author: str | None
-) -> str | None:
+) -> str | dict | None:
     """What the answer to a question with a purpose does, in the write that gives it.
 
     `answers` is the answer as stored, None for a withdrawal. Review's answer
@@ -1130,7 +1132,7 @@ def _carry_action(
     answers: dict | None,
     note: str,
     author: str | None,
-) -> str | None:
+) -> str | dict | None:
     """The answer to a question about a write that waits for the owner, or its withdrawal.
 
     A withdrawal withdraws the action, and every other question and request of it
@@ -1157,6 +1159,10 @@ def _carry_action(
         if action.point == "cancel_shared":
             consent.settle(conn, action)
         return None
+    if action.kind == "group":
+        # The owner's answer about a group of findings: it moves out the tasks they did
+        # not keep before it decides whether it still applies (`groups.carry_out`).
+        return groups.carry_out(conn, row, action, answers, note, author)
     carrier = CARRIERS.get(action.point)
     given = answers.get(request_model.REVIEW_ANSWER)
     why = pending.inapplicable(conn, action)
@@ -1171,11 +1177,7 @@ def _carry_action(
         )
     outcome = carrier.outcomes.get(str(given)) if given is not None else None
     if outcome is None:
-        choices = ", ".join(carrier.outcomes)
-        raise model.PlanningError(
-            f"[purpose] answer is one of {choices}: an own variant carries nothing out;"
-            " say more in note"
-        )
+        raise pending.own_variant(carrier.outcomes)
     pending.end(conn, action, outcome, author=author)
     # The owner makes the write; its events say who asked for it, as the question does.
     with service.asked_by(pending.asker(conn, action, str(row["author"]))):

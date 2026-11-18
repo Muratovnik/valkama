@@ -452,22 +452,19 @@ class CarryOutTests(Harness):
         self.assertEqual("answer answer does not match its field", str(refused.exception))
         self.assertEqual(before, self.counts())
         self.assertEqual((None, False, False), self.ended(waiting))
-        # The review of findings asks at its own point, which nothing here carries out.
-        task = self.filed("Nothing carries this point")
-        other = self.ask(
-            task,
-            pending.Proposal("group", {"items": [self.id(task)]}, f"accept {task}"),
-            point="finding",
-            purpose="triage",
-        )
+        # A point a build has no carrier for refuses the answer, writing nothing.
+        other = self.ask(self.filed("Nothing carries this point", kind="goal"))
         before = self.counts()
-        with self.assertRaises(model.PlanningError) as nothing:
+        with (
+            mock.patch.dict(requests.CARRIERS, clear=True),
+            self.assertRaises(model.PlanningError) as nothing,
+        ):
             self.answer(other.question, "do")
         self.assertEqual(before, self.counts())
         self.assertIsNone(self.action(other.action)["outcome"])
         self.assertTrue(
             str(nothing.exception).startswith(
-                "[purpose] this build carries out no answer on finding"
+                "[purpose] this build carries out no answer on proposed_goal"
             )
         )
         self.assertEqual("pending", self.request(other.question)["status"])
