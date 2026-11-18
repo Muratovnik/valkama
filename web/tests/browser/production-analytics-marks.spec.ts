@@ -4,11 +4,11 @@
  * row and a day the keyboard stands on each show a hint, and none of them moves the plot, the
  * panel's first block or the table by a pixel; so does a ranked row the panel has to scroll to,
  * pointed at or brought under a resting pointer by the wheel. A ranked row prints its name, its
- * figure and its share, so its hint is what the name leaves out: here an account's whole id, the
- * account named by its start. No line of words stands over a plot, so the drawing field keeps
- * that room; a task's segment opens the task's side panel, whose «Open the card» opens the card
- * over the page, the module still Analytics, and closing them gives back the section, the period
- * and the scroll. Each run prints what it measured.
+ * figure and its share, so its hint is what the name leaves out: here a session's client and the
+ * start of its id, the session named by its title. No line of words stands over a plot, so the
+ * drawing field keeps that room; a task's segment opens the task's side panel, whose «Open the
+ * card» opens the card over the page, the module still Analytics, and closing them gives back the
+ * section, the period and the scroll. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -19,14 +19,14 @@ import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { task } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import {
-  ACCOUNT_REPORT,
-  ACCOUNTS,
   openReport,
   pageAt,
   record,
   serve,
   serveTask,
-  WHOLE_ID,
+  SESSION_PLACE,
+  SESSION_REPORT,
+  SESSIONS,
 } from './analyticsPage.ts'
 import { drawAllLined } from './drawnViews.ts'
 import { openOverview, worked, WORLD } from './overviewPage.ts'
@@ -71,9 +71,9 @@ async function hintOf(page: Page, reach: () => Promise<void>, show: () => Promis
 test('a segment, a ranked row and a day the keyboard stands on each say themselves in a hint, and nothing moves', async ({
   page,
 }, info) => {
-  await serve(page, ACCOUNTS)
-  const analytics = await openReport(page, 1440, ACCOUNT_REPORT)
-  // Six accounts draw as a ring until asked for their bars.
+  await serve(page, SESSIONS)
+  const analytics = await openReport(page, 1440, SESSION_REPORT)
+  // Six sessions draw as a ring until asked for their bars.
   await drawAllLined(analytics)
   await page.setViewportSize({ width: 1440, height: 900 })
   const days = analytics.locator('.spending-days')
@@ -90,14 +90,14 @@ test('a segment, a ranked row and a day the keyboard stands on each say themselv
   )
   expect(onSegment.says).toMatch(/ of the total\n/u)
 
-  // A ranked row: what its printed name, figure and share leave out, the account's whole id.
+  // A ranked row: what its printed name, figure and share leave out, the session's client and id.
   const row = analytics.locator('.spending-bars .ranked-line').first()
   const onRow = await hintOf(
     page,
     () => row.scrollIntoViewIfNeeded(),
     () => row.hover(),
   )
-  expect(onRow.says).toMatch(WHOLE_ID)
+  expect(onRow.says).toMatch(SESSION_PLACE)
 
   // A day the keyboard stands on: its sum, then its series, a line each.
   const stop = days.locator('.period-column[tabindex="0"]')
@@ -139,9 +139,9 @@ const reach = (page: Page) =>
 test('a ranked row the panel scrolls to reach says what its name leaves out, and nothing moves', async ({
   page,
 }, info) => {
-  await serve(page, ACCOUNTS)
-  const analytics = await openReport(page, 1440, ACCOUNT_REPORT)
-  // Six accounts draw as a ring until asked for their bars.
+  await serve(page, SESSIONS)
+  const analytics = await openReport(page, 1440, SESSION_REPORT)
+  // Six sessions draw as a ring until asked for their bars.
   await drawAllLined(analytics)
   await page.setViewportSize({ width: 1440, height: 400 })
   const days = analytics.locator('.spending-days')
@@ -161,16 +161,16 @@ test('a ranked row the panel scrolls to reach says what its name leaves out, and
   expect(after.scrolled, 'pointing at the row scrolled the panel').toBeGreaterThan(0)
   const seen = await shownAndGone(page)
   await record(info, 'a ranked row reached by the scroll', { before, after, ...seen })
-  expect(seen.says).toMatch(WHOLE_ID)
+  expect(seen.says).toMatch(SESSION_PLACE)
   expect(seen.now, 'the hint moved nothing').toEqual(seen.gone)
 })
 
 test('a ranked row a wheel brings under a resting pointer says itself, and nothing moves', async ({
   page,
 }, info) => {
-  await serve(page, ACCOUNTS)
-  const analytics = await openReport(page, 1440, ACCOUNT_REPORT)
-  // Six accounts draw as a ring until asked for their bars.
+  await serve(page, SESSIONS)
+  const analytics = await openReport(page, 1440, SESSION_REPORT)
+  // Six sessions draw as a ring until asked for their bars.
   await drawAllLined(analytics)
   await page.setViewportSize({ width: 1440, height: 400 })
   await expect(analytics.locator('.spending-days')).toHaveAttribute('data-shown', 'chart')
@@ -196,7 +196,7 @@ test('a ranked row a wheel brings under a resting pointer says itself, and nothi
   await expect.poll(under, { message: 'a ranked row came under the pointer' }).not.toBeNull()
   const seen = await shownAndGone(page)
   await record(info, 'a ranked row under a resting pointer', { under: await under(), ...seen })
-  expect(seen.says).toMatch(WHOLE_ID)
+  expect(seen.says).toMatch(SESSION_PLACE)
   expect(seen.now, 'the hint moved nothing').toEqual(seen.gone)
 })
 

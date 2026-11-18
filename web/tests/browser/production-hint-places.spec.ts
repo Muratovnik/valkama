@@ -23,10 +23,10 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { busyFrame } from '../support/liveFrame.ts'
 import {
-  ACCOUNT_REPORT,
-  ACCOUNTS,
   pageAt as analyticsAt,
   serve as serveAnalytics,
+  SESSION_REPORT,
+  SESSIONS,
 } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
@@ -243,8 +243,8 @@ for (const width of [1440, 1024]) {
     })
 
     test('no hint of the Analytics bars covers its own bar', async ({ page }) => {
-      // Accounts named by the start of their ids, so each row hints the whole id beside its bar.
-      await openDays(page, width, ACCOUNTS, ACCOUNT_REPORT)
+      // Sessions named by their titles, so each row hints its client and id beside its bar.
+      await openDays(page, width, SESSIONS, SESSION_REPORT)
       // Each section drawn as its chart, whichever the width of the panel opened it as.
       await drawAllLined(page)
       const ranking = page.locator('.spending-bars .ranked-grid')

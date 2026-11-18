@@ -79,25 +79,33 @@ export const WORLD: TimedStretch[] = [
 ]
 
 /**
- * Six accounts over the week, largest first, each an organization's id the page names by its
- * start. A ranked row prints its name, figure and share, so the one thing its hint has to say is
- * what the name leaves out: here the account's whole id. A row named whole with nothing left out,
- * as a task's, has no hint to place.
+ * Six sessions over the week, largest first, each named by its title. A ranked row prints its
+ * name, figure and share, so the one thing its hint has to say is what the title leaves out: the
+ * session's client and the start of its id. A row named whole with nothing left out, as a task's,
+ * has no hint to place.
  */
-export const ACCOUNTS: TimedStretch[] = Array.from({ length: 6 }, (_, index) => ({
+export const SESSIONS: TimedStretch[] = Array.from({ length: 6 }, (_, index) => ({
   at: on(9 + (index % 3)),
   group: {
     work_item: task(index + 1, `Task ${index + 1}`),
-    account: value(`${String(index + 1).repeat(8)}-4a3f-4d8e-9c16-2f7a8b9d0e1f`),
+    executor: {
+      id: `${String(index + 1).repeat(8)}-0000-4000-8000-00000000000${index + 1}`,
+      unknown: false,
+      family: 'claude',
+      opened_in: '',
+      opened_host: '',
+      title: `Session ${index + 1}`,
+    },
+    account: WORK,
   },
   spend: { seconds: (7 - index) * 3600, tokens: (7 - index) * 100_000, cost: 7 - index },
 }))
 
-/** The account section's report, whose rows `ACCOUNTS` fills. */
-export const ACCOUNT_REPORT = pageAt({ by: 'account' })
+/** The section of sessions, whose rows `SESSIONS` fills. */
+export const SESSION_REPORT = pageAt({ by: 'executor' })
 
-/** What an account's row says in its hint: the account's whole id, on a line of its own. */
-export const WHOLE_ID = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/mu
+/** What a session's row says in its hint: its client and the start of its id, on a line of its own. */
+export const SESSION_PLACE = /^claude · \d{8}$/mu
 
 /** One task the whole week: a chart of one value. */
 export const ONE_VALUE: TimedStretch[] = [0, 1, 2].map((day) => ({

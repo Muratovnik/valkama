@@ -20,13 +20,13 @@ import { expect } from '@playwright/test'
 import type { Locator, Page, TestInfo } from '@playwright/test'
 
 import {
-  ACCOUNT_REPORT,
-  ACCOUNTS,
   LEGEND_SERIES,
   openReport,
   pageAt,
   record,
   serve,
+  SESSION_REPORT,
+  SESSIONS,
 } from './analyticsPage.ts'
 import type { Answer } from './analyticsPage.ts'
 import { drawAllLined } from './drawnViews.ts'
@@ -391,9 +391,9 @@ for (const width of [1440, 390]) {
   test(`at ${width}px a day's, a ranked row's and a legend entry's hint stand at their marks`, async ({
     page,
   }, info) => {
-    // Accounts named by the start of their ids: a ranked row prints its name, figure and share,
-    // so its hint is the whole id its name leaves out.
-    await open(page, width, ACCOUNT_REPORT, ACCOUNTS)
+    // Sessions named by their titles: a ranked row prints its name, figure and share, so its
+    // hint is the client and the start of the id its title leaves out.
+    await open(page, width, SESSION_REPORT, SESSIONS)
     const days = page.locator('.spending-days .period-column')
     const rows = page.locator('.spending-bars .ranked-line')
     // A key of a series: the hatch's key says its name whole while it is cut and has no hint of
