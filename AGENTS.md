@@ -33,6 +33,11 @@ is complete on its own.
   only, `checklist`, `summary` and `review_question` entering review,
   `question`, `children`), a question with a purpose (`owner_only`,
   `not_asker`, `[purpose]`; withdrawing review's returns its item to `ready`),
+  or one a write waiting for the owner carries, a goal an agent proposes, a
+  task it files in accepted goals and a task a label's rule accepts, which may
+  wait for the owner or be accepted at once (`waits_for_owner`, `agent`,
+  `label_rule`), a second write of a point that waits (`[participation]`),
+  the queue where the owner hands out work by hand (`queue_off`),
   a decision that recommends an answer in every required field and may come
   back answered by it (`[decision]`), a launch that no longer moves its item
   to review, a cancel of a goal or stage with open work under it (`cancel_list`, `cancels`), a parent cleared only by

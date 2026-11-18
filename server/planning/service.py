@@ -1003,7 +1003,10 @@ def _ask_about_task(
             f"accepted {reference} under {goal}",
             seen={"parent": goal_id},
         )
-        prompt = f"An agent files the task {reference} in {goal}: {row['title']}."
+        prompt = (
+            f"An agent files the task {reference} in {goal}: {row['title']}. Take it on, put"
+            " it off, move it out of the goal, or drop it."
+        )
     else:
         done = "moved" if moved_from["acceptance"] is not None else "accepted"
         proposal = pending.Proposal(
@@ -1015,14 +1018,17 @@ def _ask_about_task(
                 "accepted": moved_from["acceptance"] is not None,
             },
         )
-        prompt = f"An agent moves the task {reference} into {goal}: {row['title']}."
+        prompt = (
+            f"An agent moves the task {reference} into {goal}: {row['title']}. Take it on,"
+            " put it off, leave it where it was, or drop it."
+        )
     return pending.ask(
         conn,
         identity,
         "task_in_goal",
         proposal,
         purpose="task",
-        prompt=prompt + " Take it on, put it off, leave it out of the goal, or drop it.",
+        prompt=prompt,
         fields=request_model.fields(request_model.task_fields(moving=moved_from is not None)),
         author=author,
     )
@@ -5400,19 +5406,58 @@ def _log(
     limit: int = EVENT_DETAIL_LIMIT,
 ) -> int:
     """Write one history event, and answer its id; `limit` is raised only for a detail
-    this module composes."""
+    this module composes. While an owner's answer carries out a write an agent asked
+    for (`asked_by`), the event that records that write names the asker after the
+    detail, which keeps its own limit."""
 
+    text = model.text_field(detail, "event.detail", limit=limit, required=False)
+    asker = _ASKED_BY.get()
+    if asker is not None and action in ASKED_EVENTS:
+        text = _asked(text, asker, keyed=ASKED_EVENTS[action])
     inserted = conn.execute(
         "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id) VALUES(?,?,?,?,?)",
         (
             work_item_id,
             model.event_action(action),
-            model.text_field(detail, "event.detail", limit=limit, required=False),
+            text,
             model.actor(author),
             calls.call_id(conn, work_item_id),
         ),
     )
     return int(inserted.lastrowid or 0)
+
+
+#: The events that record a write an owner's answer carries out, which name its asker,
+#: and whether their detail leads with a state key or a count that a reader takes up to
+#: `: `. A step's text and a reference are matched as they stand, so their events name
+#: nobody.
+ASKED_EVENTS = {"accepted": True, "transitioned": True, "checklist_replaced": True, "opened": False}
+#: Who asked the write an owner's answer is carrying out; None outside one.
+_ASKED_BY: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "planning_asked_by", default=None
+)
+
+
+@contextlib.contextmanager
+def asked_by(asker: str) -> Iterator[None]:
+    """Name `asker` in the detail of the events the block records a write with: the owner
+    made it, and the agent, or Valkama, asked for it (`pending.asker`)."""
+
+    token = _ASKED_BY.set(asker)
+    try:
+        yield
+    finally:
+        _ASKED_BY.reset(token)
+
+
+def _asked(detail: str, asker: str, *, keyed: bool) -> str:
+    """`detail` with `as asked by <asker>` after it: after `: ` where it is a key or a
+    count alone, so the key still reads as one, and after `; ` behind a reason."""
+
+    said = f"as asked by {asker}"
+    if not detail:
+        return said
+    return f"{detail}: {said}" if keyed and ": " not in detail else f"{detail}; {said}"
 
 
 def _step(steps: list[dict], item_id: object, conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
