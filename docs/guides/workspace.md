@@ -29,12 +29,15 @@ each remember their own.
 
 ## Names for accounts
 
-The usage records hold only the id of the organization work was billed to. Under
-Settings → General → Accounts, each account the past year saw is listed with its
-id and its share of agent time, and you can give it a name or clear one.
-Analytics then labels the account by that name, and
-quota alerts say it. In the quota panel, the menu beside an account's name renames
-it, adds it to the page's filter and copies its id. Names are kept in Valkama's store, so every browser and the
+Work is billed to an organization and spent on one of its subscription accounts, which
+Valkama reads from the quota's readings. Under Settings → General → Accounts, each
+organization the past year saw is listed with its id and its share of agent time, and under
+it each of its accounts: its UUID, or, where no reading names one, when its week resets.
+You can give an organization or an account a name or clear one. Analytics then labels the
+account by that name, and by its organization's name and the start of its id where it has
+none of its own, and quota alerts say it. An account two accounts' readings may run under,
+because their weeks reset at the same time, says so. In the quota panel, the menu beside an
+account's name renames it, adds it to the page's filter and copies its id. Names are kept in Valkama's store, so every browser and the
 desktop app say the same one; names a device kept on its own before are moved
 there once.
 

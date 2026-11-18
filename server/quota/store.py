@@ -42,8 +42,9 @@ model, the model. Rows older than a year are deleted by the start-up housekeepin
 (`alerts.quota`), so a restart does not give it again. A row is the alert's key: the
 account, as its organization and its seat, the window (its kind and, for a model's week,
 the model, `''` for none), the reset the window named and the level. `account_uuid` is the
-account's UUID where it was known when the alert was raised, NULL for a provisional seat;
-it is not part of the key, so learning it later does not raise the same alert again.
+account's UUID where it was known when the alert was raised, NULL for an account known by its
+weekly reset; it is not part of the key, so learning it later does not raise the same alert
+again.
 `sample_at` is the sample the alert was given on: where the window's count restarted after
 it, the level counts as not given, and giving it again rewrites the row. A row whose window
 has reset can match no reading any more, and the next evaluation deletes it.

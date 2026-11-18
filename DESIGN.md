@@ -1124,7 +1124,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   the hatch, «in progress» beside a hatched swatch, and drops the key once none is. A change
   at a period's start, such as the account the work ran under, is a line up the plot in the gap
   before its column, a shape and not a hue, and the period's hint, name and table row say it,
-  «Account change: a → a, b», naming each account as Settings does: the chart keeps no row for
+  «Account change: a → a, b», naming each account as the page does, an account and not its
+  organization, and leaving out work no reading places on an account: the chart keeps no row for
   changes, over the plot or under it, so they cost the plot none of its height. The periods are one Tab stop and the arrows walk
   them; nothing in a chart moves on its own but a live span's frame keeping up with its running
   period, as below, which never meant that nothing may stand over it: a hint lies in the hint
@@ -2524,8 +2525,16 @@ line, and on a narrow screen the way back over the section names nothing a secon
 sentence longer than 90 characters, and each caveat stands in its section's «ⓘ» alone.
 
 The rail holds a tile for the overview, one for the token kinds, two for the subscription
-quota — «Five hours» and «Week» — and one for each dimension of the read: account, project,
-task, executor, role, launch class, model, effort and environment. A tile is a summary of its own — the leading value, its share, how many values
+quota — «Five hours» and «Week» — and one for each dimension of the read: account,
+organization, project, task, executor, role, launch class, model, effort and environment.
+«Account» is the subscription account the work was spent on (`seat`), «Organization» the
+organization it was billed to; an old link's `account` filter still filters by organization.
+An account is said by the name the owner gave it, and one known by its UUID by the name its
+weekly reset was given before; else by its organization's name, or the start of its id, with
+what tells it apart: the start of its UUID, or when its week resets in the reader's time for
+one known by that alone, «Lab · resets Thu 12:00». An organization's work no reading places
+on an account is «Lab · account not known», and an account two accounts' readings may run
+under says «may be two accounts» after its name. A tile is a summary of its own — the leading value, its share, how many values
 have a figure in the chosen measure and one bar of the split — so every breakdown is in view
 before any is opened, and choosing a tile opens its section in the panel. Opening a section,
 from its tile or a card's heading, is a step of the history, so Back returns to where it was,
@@ -2575,7 +2584,8 @@ to the chart.
 
 A dimension's section answers «of what»: the same cells, then its values three ways. The
 form follows how the values are named (`splitView.ts`). Named by identifiers — accounts,
-projects, roles, models, efforts, environments, launch classes — they split one whole, drawn as
+organizations, projects, roles, models, efforts, environments, launch classes — they split one
+whole, drawn as
 a ring or as ranked bars and switched with the table as «Ring | Bars | Table», the same numbers
 in each, opening on the ring: the ranked bars list the first twelve, and under them «All N»
 opens every value of the period in the side panel, and the ring (`DonutChart`) names its first
@@ -2643,7 +2653,9 @@ name, with its share, its state in words beside the section's name and a thin `W
 its forecast's tail, which the bar's words and hint name «Forecast ·», since a tile has no room
 for a key. A tile with no window to name says why: no source read the work, the windows reset
 since they were read, or no reading. The panel has a group per account on a surface of its
-own, by the name its owner gave it or the start of its id, a menu beside the name and its
+own, named as the page names an account, a menu beside the name, the facts beside them where
+there are any — its plan, and «May be two accounts: their readings run under one weekly
+reset» where they may — and its
 windows side by side where the width allows, 32px apart with a hairline in the rule's ink midway
 between two neighbours: 16px apart with nothing between, the moment ending one window's axis and
 the one starting the next stood a few pixels apart and read as one axis. Every window, the five hours, the week and a
@@ -2651,9 +2663,11 @@ model's week, has the same three parts 12px apart: what stands now, the `StepLin
 readings and «Where the window went», which opens what used it in the side panel.
 The menu beside an account's name, named «Account actions: Work», holds three entries and no
 more. «Rename» puts a field in the name's place that saves through the same names and rules as
-Settings: Enter or leaving it saves, Escape leaves the name as it was, either gives the focus
-back to the menu's button, and a save that fails keeps the field with the reason under it.
-«Add to filter» adds the account to the page's filter beside the accounts already there, as the
+Settings, by the account's key, and on the group of an organization no source read by the
+organization's: Enter or leaving it saves, Escape leaves the name as it was, either gives the
+focus back to the menu's button, and a save that fails keeps the field with the reason under it.
+«Add to filter» adds the account to the page's filter by account beside the accounts already
+there, as the
 value panel's button does, and the section stays where it is; once the filter holds it, the entry
 is disabled and reads «Already in filter», and where no filter can take it the entry is absent.
 «Copy ID» copies the account's whole id with the copy's usual note. No hint says that id.
@@ -2701,8 +2715,9 @@ no switch, the rest and the work on no task apart after the five under their rul
 names the stretch it covers. That it is the API price estimate and not quota points, and that
 work in claude.ai and the desktop app, which the window's share counts, is not in it, the
 section's «ⓘ» says once for every window and the panel's own «ⓘ» beside its «Chart | Table»
-says for this one, never as a line of the panel. It is read by the
-account's seat when its panel opens, never for a window nobody opened, so another account's work
+says for this one, never as a line of the panel. It is read by account, the account's and its
+organization's work on no known account, when its panel opens, never for a window nobody
+opened, so another account's work
 is never in it; work its organization recorded with no account known is a quiet line of its
 own, never counted to the account. No work, only such work, a wait and a read that failed, with
 its retry, each say so in the panel, and the quota's own figures stand meanwhile. It stands
@@ -2764,10 +2779,14 @@ holds a row per type: its glyph and word in the colour they have now, the platfo
 colour field, the value in words and a reset, with one reset for all under them. A
 colour under 3:1 on the hover card is said beside its field in a quiet line and stays
 chosen. A plain task has no glyph anywhere, so its row is its word. Accounts holds a
-row per account the past year's work was billed to, the most agent time first: its
-whole id with its share of that time, a name field whose placeholder says what Analytics
-shows without one, and a clear; an account named before that the year did not see keeps
-its row, so its name can still be taken away. A name is saved when its field is left or
+row per organization the past year's work or the quota saw, the most agent time first, with
+its whole id and its share of that time, its work on no known account counted in, and under
+it, set in, a row per account of it, the most time first: its UUID, or when its week resets
+for one known by that alone, with «May be two accounts under one weekly reset» where it may
+be, and an account the quota read and the year's work did not show says so. Each row has a
+name field whose placeholder says what Analytics shows without one, and a clear; an
+organization or an account named before that neither saw keeps its row, so its name can still
+be taken away. A name is saved when its field is left or
 Enter is pressed, and the group's status line, where its reads say they are under way or
 failed, says the save under way, a save that failed with a retry beside it, a saved name
 and a cleared one; a field keeps what was typed until its save holds. Analytics says an
