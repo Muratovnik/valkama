@@ -1277,6 +1277,8 @@ class LastRouteTests(StoreCase):
             (True, {"dropped": [], "kept": 1}), (post_routes["passed"], post_routes["detail"])
         )
         self.assertEqual([record], self.route())
+        # The kept route is one this build writes, so the store opens with it.
+        store.connect(self.path).close()
 
 
 KEPT_STEPS = {"WM-7": ("Wire it", "agent-c"), "WM-8": ("Try it", "agent-f")}
