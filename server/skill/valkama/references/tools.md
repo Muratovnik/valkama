@@ -52,7 +52,8 @@ says what it is:
   it is not. Work under goals and stages that are all accepted and open is accepted
   as part of them (`inherited`); a claim of any other work accepts it
   (`assignment`). `agent` is an agent's own decision where the owner's setting
-  leaves it to the agent: a goal you file with no parent is accepted at once on it,
+  leaves it to the agent: a goal you file with no parent, or move from `triage` to
+  `ready` with no `acceptance`, is accepted at once on it,
   or, where the owner decides, stays in `triage` and the answer says
   `waits_for_owner` with the question they answer. A task you file or move under
   goals and stages that are all accepted and open, or move out of `triage` into
@@ -164,7 +165,7 @@ id. The claim does not depend on them.
 
 The owner's participation setting, which only the server reads, decides at each of
 these points whether an agent's write is made at once or waits for the owner: a goal
-you file with no parent (`proposed_goal`), a task you file or move into accepted
+with no parent you file or accept out of `triage` (`proposed_goal`), a task you file or move into accepted
 goals and stages (`task_in_goal`), a cancel of an item your own work did not file
 (`cancel_outside`) or of work other live sessions do (`cancel_shared`), a removal or
 rewording of a step of a goal or stage (`condition`), the completion of a goal,
