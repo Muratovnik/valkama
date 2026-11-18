@@ -45,18 +45,27 @@ REVIEW_FIELDS = (
 #: it to the next session that takes work in its space.
 CONFIRM_CONFIRM = "confirm"
 CONFIRM_LEAVE = "leave"
-CONFIRM_FIELDS = (
-    {
-        "id": REVIEW_ANSWER,
-        "label": "Answer",
-        "type": "choice",
-        "required": True,
-        "options": [
-            {"id": CONFIRM_CONFIRM, "label": "Confirm it"},
-            {"id": CONFIRM_LEAVE, "label": "Leave it to the next session"},
-        ],
-    },
-)
+
+
+def _confirm_fields(leave: str) -> tuple[dict, ...]:
+    return (
+        {
+            "id": REVIEW_ANSWER,
+            "label": "Answer",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {"id": CONFIRM_CONFIRM, "label": "Confirm it"},
+                {"id": CONFIRM_LEAVE, "label": leave},
+            ],
+        },
+    )
+
+
+CONFIRM_FIELDS = _confirm_fields("Leave it to the next session")
+#: The same field when an agent closes a goal with nothing under it: no period of waiting
+#: stands behind it, so `leave` leaves it open and hands it to no session.
+CONFIRM_OPEN_FIELDS = _confirm_fields("Leave it open")
 #: The fields of the question put-off work asks when its condition came under goals
 #: and stages all accepted: `do` takes it up, `later` puts it off again until `until`
 #: (a day or an item's reference, as `defer` reads it), and `drop` cancels it, with

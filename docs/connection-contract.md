@@ -447,7 +447,9 @@ agent asked for recommended: `goal` (`do`, `later` with the text `until`, `drop`
 with the text `cancels`, a cancel list's token), `task` (`do`, `later` with
 `until`, `out`, `drop`), `cancel` (`cancel` with `cancels`, `keep`), `condition`
 (`allow`, `keep`) and, for `goal_close`, the `confirm` of the goal's period of
-waiting, or the agent's own for a goal with nothing under it (`confirm`, `leave`).
+waiting, or the agent's own for a goal with nothing under it (`confirm`, `leave`,
+labelled `Leave it open`: no period of waiting stands behind it, so the goal stays
+open and no session is handed it).
 Only a person answers it, in Valkama (`owner_only`), and its answer is never
 declined or changed (`[purpose]`); only the session that asked withdraws it
 (`not_asker`). Read whole, it carries the `action`:

@@ -2483,6 +2483,70 @@ class GoalCloseTests(SettingHarness):
         self.assertEqual("completed", self.card(made)["state"]["category"])
         self.assertIn(("goal_close", made, f"close {made}"), self.decided())
 
+    def asked(self, goal: str, summary: dict | None) -> tuple[str, list[str]]:
+        """The agent ticks the goal's step and completes it with `summary`, or with none,
+        carried past that guard: the first line of the owner's question and the labels of
+        its answers."""
+
+        [step] = self.card(goal)["checklist"]
+        self.tool("apply_work_item_changes", id=goal, checklist_ticks=[{"item_id": step["id"]}])
+        sent: dict[str, object] = {"summary": summary} if summary else {}
+        answer = self.tool(
+            "apply_work_item_changes",
+            id=goal,
+            transition={"state": "completed", "force": summary is None},
+            **sent,
+        )
+        question = self.request(answer["waits_for_owner"]["question"])
+        [field] = json.loads(question["fields_json"])
+        head = str(question["prompt"]).splitlines()[0]
+        return head, [str(option["label"]) for option in field["options"]]
+
+    def test_the_question_says_what_stands_under_the_goal_and_quotes_the_summary_once(
+        self,
+    ) -> None:
+        """A goal awaiting confirmation is said to have all its work closed and is left to
+        the next session; one with nothing under it is said to have nothing and is left
+        open. Either quotes the summary without its own final full stop, and says nothing
+        of a summary it was not given."""
+
+        self.at(participation.MAXIMAL)
+        unstopped = {**CLOSE_SUMMARY, "done": "Shipped with the release"}
+        leave_next = ["Confirm it", "Leave it to the next session"]
+        leave_open = ["Confirm it", "Leave it open"]
+        cases = []
+        for number, (summary, said) in enumerate(
+            (
+                (CLOSE_SUMMARY, ", and its summary says: Shipped with the release"),
+                (unstopped, ", and its summary says: Shipped with the release"),
+                (None, ""),
+            )
+        ):
+            goal = self.awaiting(f"Awaiting goal {number}")
+            cases.append(
+                (
+                    self.asked(goal, summary),
+                    (
+                        f"An agent confirms {goal}: all work under it is closed{said}. Confirm"
+                        " it, or leave it to the next session that takes work in this space.",
+                        leave_next,
+                    ),
+                )
+            )
+            goal = self.empty(f"Empty goal {number}")
+            cases.append(
+                (
+                    self.asked(goal, summary),
+                    (
+                        f"An agent closes {goal}, which has nothing under it{said}. Confirm it,"
+                        " or leave it open.",
+                        leave_open,
+                    ),
+                )
+            )
+        for found, expected in cases:
+            self.assertEqual(expected, found)
+
 
 #: The summary the agent confirms a goal with.
 CLOSE_SUMMARY = {"done": "Shipped with the release.", "next": "Nothing."}
