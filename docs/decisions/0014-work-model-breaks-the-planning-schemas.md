@@ -144,10 +144,6 @@ and no compatibility layer.
      question `task`, and a task filed into `triage`, or given a label there, is
      accepted at once on the basis `label_rule` when one of its labels has a
      rule that makes it ready;
-   - a group's `why` (the `group` of a `create_work_item`) is one line of up to
-     386 characters, the longest reason its answer writes whole (`agent: later:`
-     before it in the defer reason); a longer one is refused by the form, with
-     nothing created, and no reason is cut;
    - while one write of a point waits for the owner on an item, another write of
      that point there is refused with `[participation]`, and the same write sent
      again answers the same `waits_for_owner` and writes nothing;
