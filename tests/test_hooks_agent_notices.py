@@ -301,7 +301,35 @@ class OwnSubagentTests(Harness):
         self.assertIsNone(self.hook(), "once")
 
     def test_an_orchestrator_hears_a_claim_and_close_in_one_call(self) -> None:
+        """One line for the move the claim made and the close, whatever second each took.
+
+        Each event takes the second it is written in, so on a slow machine the two moves
+        of one call stand a second apart: the claim's is put a second before the close's
+        here, as such a machine writes them.
+        """
+
         self.close(AS_CHILD, self.held, claim=True)
+        moves = [
+            row[0]
+            for row in self.conn.execute(
+                "SELECT id FROM work_item_events WHERE action = 'transitioned'"
+                " AND call_id = (SELECT MAX(call_id) FROM work_item_events) ORDER BY id"
+            )
+        ]
+        self.assertEqual(2, len(moves), "the call started the item and closed it")
+        self.conn.execute(
+            "UPDATE work_item_events SET created_at ="
+            " strftime('%Y-%m-%dT%H:%M:%SZ', created_at, '-1 second') WHERE id = ?",
+            (moves[0],),
+        )
+        self.conn.commit()
+        started, closed = (
+            self.conn.execute(
+                "SELECT created_at FROM work_item_events WHERE id = ?", (move,)
+            ).fetchone()[0]
+            for move in moves
+        )
+        self.assertLess(started, closed)
         told = self.hook()
         self.told_closed(told, self.held, "Held by B")
         assert told is not None
