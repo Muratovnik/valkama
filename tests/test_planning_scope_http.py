@@ -66,6 +66,10 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.server = http_surface.PlatformHTTPServer(
             ("127.0.0.1", 0), http_surface.Handler, token_path=self.root / "installation-token"
         )
+        # A stream's handler closes its store connection after it unsubscribes, so a
+        # stream that has unsubscribed may still hold the store. Only non-daemon handler
+        # threads make `server_close` wait for each of them to close its connection.
+        self.server.daemon_threads = False
         thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(thread.join, 2)
