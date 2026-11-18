@@ -312,6 +312,29 @@ class _Scenario:
             conn.close()
         return self.http(f"/api/modules/planning/request?{self.scope(id=request['request_id'])}")
 
+    def proposed_goal(self) -> dict:
+        """The question about a goal an agent proposes, with the write that waits for the
+        owner's answer."""
+
+        agent = calls.Identity(
+            state=calls.CONFIRMED,
+            source=calls.CLAUDE_HOOK,
+            session_id="6f1c2a8e-0000-4000-8000-0000000000b1",
+            tool_use_id="t",
+            client="claude",
+        )
+        conn = store.connect()
+        try:
+            with calls.bind(agent, "create_work_item"):
+                answer = service.create_work_item(
+                    conn, space=SPACE, title="Goal an agent proposes", kind="goal"
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        question = answer["waits_for_owner"]["question"]
+        return self.http(f"/api/modules/planning/request?{self.scope(id=question)}")
+
     def put_off(self) -> dict[str, dict]:
         """A card put off until another item, and one that came back when the item it
         waited on was deleted."""
@@ -954,6 +977,7 @@ class _Scenario:
             "request-session-gone": self.session_gone(),
             **self.put_off(),
             **self.converted(),
+            "request-proposed-goal": self.proposed_goal(),
         }
 
 

@@ -2769,6 +2769,25 @@ def _close_what(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
     return f"close {read_model.reference(conn, row)}"
 
 
+def _close_asked(reference: str, summary: Mapping[str, object], *, waits: bool) -> str:
+    """The first line of the owner's question about an agent's close of a goal: what stands
+    under it, the agent's summary quoted without its own final full stop, and what the
+    answers do. A goal with nothing under it has no period of waiting, so leaving it hands
+    it to no session: it stays open."""
+
+    done = str(summary.get("done") or "").strip()[:_SUMMARY_SHOWN].rstrip().removesuffix(".")
+    said = f", and its summary says: {done}" if done else ""
+    if waits:
+        return (
+            f"An agent confirms {reference}: all work under it is closed{said}."
+            " Confirm it, or leave it to the next session that takes work in this space."
+        )
+    return (
+        f"An agent closes {reference}, which has nothing under it{said}."
+        " Confirm it, or leave it open."
+    )
+
+
 def _ask_about_close(
     conn: sqlite3.Connection,
     row: sqlite3.Row,
@@ -2806,18 +2825,19 @@ def _ask_about_close(
             part = closing.confirmation(conn, row)
             steps = [str(step["text"]) for step in model.checklist(row["checklist"])]
             reference = read_model.reference(conn, row)
-            done = str(summary.get("done") or "").strip()[:_SUMMARY_SHOWN]
-            head = (
-                f"An agent confirms {reference}: all work under it is closed"
-                + (f", and its summary says: {done}" if done else "")
-                + ". Confirm it, or leave it to the next session that takes work in this space."
-            )
+            waits = closing.waits(conn, identity)
             question = pending.ask_owner(
                 conn,
                 action,
                 purpose=closing.CONFIRM,
-                prompt=closing.prompt(reference, part, steps, head=head),
-                fields=request_model.fields(list(request_model.CONFIRM_FIELDS)),
+                prompt=closing.prompt(
+                    reference, part, steps, head=_close_asked(reference, summary, waits=waits)
+                ),
+                fields=request_model.fields(
+                    list(
+                        request_model.CONFIRM_FIELDS if waits else request_model.CONFIRM_OPEN_FIELDS
+                    )
+                ),
                 author=author,
             )
             closing.asked(conn, identity, question)

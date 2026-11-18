@@ -182,7 +182,7 @@ const workItemRowSchema = recordObject({
   queue_order: positiveInt().nullable(),
 })
 
-const summarySchema = strictObject({
+export const summarySchema = strictObject({
   done: blankable(4000),
   next: blankable(4000),
   why: blankable(4000).optional(),

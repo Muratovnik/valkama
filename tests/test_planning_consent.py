@@ -658,6 +658,61 @@ class OwnersAnswerTests(Harness):
         self.assertEqual("declined", self.action(kept).outcome)
 
 
+#: `session-b` proved by the same channel as `B`, whose session row carries the client
+#: name its handshake gave instead of the channel's.
+PROBE = calls.Identity(
+    calls.CONFIRMED, calls.CLAUDE_PAIR, session_id="session-b", client="probe-client"
+)
+
+
+class SessionNameTests(Harness):
+    """A session the round asks is named as it holds, by the channel that proved it, in
+    every place the round names it: the write's answer, the question read whole, the
+    owner's question and the cancel's history. Its session row's client name is not that."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.at(participation.MINIMAL)
+
+    def round(self, title: str) -> tuple[str, str]:
+        """A goal whose two tasks `PROBE` and `C` hold, and the agent's cancel of it, waiting
+        for them: the goal's reference and the one `PROBE` holds."""
+
+        goal = self.filed(title, kind="goal")
+        held_b, held_c = (self.filed(name, parent=goal) for name in ("B's", "C's"))
+        self.as_(PROBE, "claim_work_item", service.claim_work_item, held_b, author="claude")
+        self.as_(C, "claim_work_item", service.claim_work_item, held_c, author="claude")
+        self.tool("apply_work_item_changes", id=goal, comment={"body": "Another goal covers it."})
+        self.assertEqual(
+            [LABEL_B, LABEL_C], self.cancel(goal)["waits_for_sessions"]["sessions"], title
+        )
+        return goal, held_b
+
+    def test_a_session_is_named_by_its_channel_not_its_client(self) -> None:
+        goal, held_b = self.round("The owner's goal")
+        [client] = self.conn.execute(
+            "SELECT client FROM sessions WHERE id = 'session-b'"
+        ).fetchone()
+        self.assertEqual("probe-client", client)
+        held = self.card(held_b)["claim_ref"]
+        self.assertEqual((LABEL_B, ("session-b", None)), (held, calls.holder_ids(held)))
+        shown = requests.get(self.conn, self.asked_of(goal, PROBE))["action"]["consent"]
+        self.assertEqual([held, LABEL_C], [entry["session"] for entry in shown])
+        # An objection passes the cancel to the owner, whose question names the session so.
+        self.consent(goal, PROBE, "object", reason="the release needs it")
+        [question] = self.owners_list()
+        self.assertIn(f"{held} objects: the release needs it.", self.request(question)["prompt"])
+        # Where both agree, the cancel Valkama makes says who agreed, so too.
+        agreed, _held = self.round("Another goal of the owner's")
+        self.consent(agreed, PROBE, "agree")
+        self.consent(agreed, C, "agree")
+        detail, source, tool = self.cancelled_by(agreed)
+        self.assertEqual(
+            (f"cancelled: {REASON}; agreed by {held}, {LABEL_C}", "valkama", "consent-cancel"),
+            (detail, source, tool),
+        )
+
+
 class DescriptionTests(unittest.TestCase):
     def described(self, name: str) -> str:
         [tool] = [entry for entry in tools.TOOLS if entry["name"] == name]

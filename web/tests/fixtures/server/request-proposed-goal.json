@@ -1,0 +1,98 @@
+{
+  "interface_version": "valkama-planning-requests",
+  "target": {
+    "space_ref": {
+      "data_scope_id": "00000000-0000-4000-8000-000000000004",
+      "space_key": "MAIN"
+    },
+    "reference": "MAIN-25",
+    "writable": true
+  },
+  "request": {
+    "request_id": "00000000-0000-4000-8000-000000000055",
+    "work_item_id": "00000000-0000-4000-8000-000000000056",
+    "reference": "MAIN-25",
+    "title": "Goal an agent proposes",
+    "kind": "question",
+    "prompt": "An agent proposes the goal MAIN-25: Goal an agent proposes. Take it on, put it off, or drop it.",
+    "fields": [
+      {
+        "id": "answer",
+        "label": "Answer",
+        "options": [
+          {
+            "id": "do",
+            "label": "Take it on",
+            "recommended": true
+          },
+          {
+            "id": "later",
+            "label": "Put it off"
+          },
+          {
+            "id": "drop",
+            "label": "Drop it"
+          }
+        ],
+        "required": true,
+        "type": "choice"
+      },
+      {
+        "id": "until",
+        "label": "Until: a day YYYY-MM-DD or the item it waits on",
+        "options": [],
+        "required": true,
+        "type": "text",
+        "under": {
+          "field": "answer",
+          "option": "later"
+        }
+      },
+      {
+        "id": "cancels",
+        "label": "The list token, for a goal or stage with open work under it",
+        "options": [],
+        "required": false,
+        "type": "text",
+        "under": {
+          "field": "answer",
+          "option": "drop"
+        }
+      }
+    ],
+    "answers": null,
+    "own": null,
+    "field_notes": null,
+    "note": null,
+    "answer_version": 0,
+    "status": "pending",
+    "author": "agent",
+    "answered_by": "",
+    "execution_id": null,
+    "session_id": null,
+    "addressee": null,
+    "expires_at": null,
+    "created_at": "2026-01-02T03:04:05.000000Z",
+    "resolved_at": null,
+    "revision": 0,
+    "expired_reason": null,
+    "comment_id": null,
+    "purpose": "goal",
+    "action": {
+      "id": "00000000-0000-4000-8000-000000000057",
+      "point": "proposed_goal",
+      "asked_by": "claude (session 00000000-0000-4000-8000-000000000025)",
+      "asked_at": "2026-01-02T03:04:05.000000Z",
+      "reason": null,
+      "proposed": {},
+      "outcome": null,
+      "cancel_list": {
+        "cancels": [],
+        "dependents": [],
+        "list_token": "dfb537979b8d6988"
+      }
+    },
+    "by_person": null,
+    "history": []
+  }
+}

@@ -309,22 +309,39 @@ def ask_sessions(
             )
 
 
-def consent_rows(conn: sqlite3.Connection, action: Action) -> list[sqlite3.Row]:
-    """The requests an action asked of sessions, oldest first, with each session's client."""
+#: The requests an action asked of sessions, each with `channel`: the source of the
+#: latest confirmed call its session made through a channel that names a holder.
+_CONSENT_ROWS = (
+    "SELECT r.*, (SELECT c.identity_source FROM execution_events c"
+    " WHERE c.session_id = r.addressee AND c.identity_state = ?"
+    " AND c.identity_source IN (SELECT value FROM json_each(?))"
+    " ORDER BY c.id DESC LIMIT 1) AS channel"
+    " FROM work_item_requests r"
+    " WHERE r.work_item_id = ? AND r.action_id = ? AND r.addressee IS NOT NULL"
+    # The order they were asked in: their ids are random, and one write asks them all.
+    " ORDER BY r.created_at, r.rowid"
+)
 
+
+def consent_rows(conn: sqlite3.Connection, action: Action) -> list[sqlite3.Row]:
+    """The requests an action asked of sessions, oldest first, each with the channel that
+    proved its session (`session_label`)."""
+
+    channels = json.dumps(list(calls.CHANNEL_SOURCES))
     return conn.execute(
-        "SELECT r.*, s.client FROM work_item_requests r LEFT JOIN sessions s ON s.id = r.addressee"
-        " WHERE r.work_item_id = ? AND r.action_id = ? AND r.addressee IS NOT NULL"
-        # The order they were asked in: their ids are random, and one write asks them all.
-        " ORDER BY r.created_at, r.rowid",
-        (action.work_item_id, action.id),
+        _CONSENT_ROWS, (calls.CONFIRMED, channels, action.work_item_id, action.id)
     ).fetchall()
 
 
 def session_label(row: sqlite3.Row) -> str:
-    """How a request asked of a session names that session."""
+    """How a request asked of a session names that session: as it holds, by the channel its
+    confirmed calls proved it through (`calls.channel_holder`), never by the client name its
+    session row took from a handshake. A session a round asks holds or follows work, so a
+    call of it proved a channel; `agent` names one whose calls proved none."""
 
-    return calls.holder_label(str(row["client"] or "agent"), str(row["addressee"]))
+    session = str(row["addressee"])
+    held = calls.channel_holder(str(row["channel"]), session) if row["channel"] else None
+    return held if held is not None else calls.holder_label("agent", session)
 
 
 def round_of(conn: sqlite3.Connection, action: Action) -> Round:

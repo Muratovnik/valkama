@@ -40,6 +40,8 @@ from server.planning import (
     sweep,
     tools,
 )
+from server.planning import store as planning_store
+from tests.web_lists import WEB_API, web_list
 
 AGENT = calls.Identity(calls.CONFIRMED, calls.CLAUDE_PAIR, session_id="session-a")
 #: A subagent of the same session: what it asks, the session's conversation follows.
@@ -2481,6 +2483,70 @@ class GoalCloseTests(SettingHarness):
         self.assertEqual("completed", self.card(made)["state"]["category"])
         self.assertIn(("goal_close", made, f"close {made}"), self.decided())
 
+    def asked(self, goal: str, summary: dict | None) -> tuple[str, list[str]]:
+        """The agent ticks the goal's step and completes it with `summary`, or with none,
+        carried past that guard: the first line of the owner's question and the labels of
+        its answers."""
+
+        [step] = self.card(goal)["checklist"]
+        self.tool("apply_work_item_changes", id=goal, checklist_ticks=[{"item_id": step["id"]}])
+        sent: dict[str, object] = {"summary": summary} if summary else {}
+        answer = self.tool(
+            "apply_work_item_changes",
+            id=goal,
+            transition={"state": "completed", "force": summary is None},
+            **sent,
+        )
+        question = self.request(answer["waits_for_owner"]["question"])
+        [field] = json.loads(question["fields_json"])
+        head = str(question["prompt"]).splitlines()[0]
+        return head, [str(option["label"]) for option in field["options"]]
+
+    def test_the_question_says_what_stands_under_the_goal_and_quotes_the_summary_once(
+        self,
+    ) -> None:
+        """A goal awaiting confirmation is said to have all its work closed and is left to
+        the next session; one with nothing under it is said to have nothing and is left
+        open. Either quotes the summary without its own final full stop, and says nothing
+        of a summary it was not given."""
+
+        self.at(participation.MAXIMAL)
+        unstopped = {**CLOSE_SUMMARY, "done": "Shipped with the release"}
+        leave_next = ["Confirm it", "Leave it to the next session"]
+        leave_open = ["Confirm it", "Leave it open"]
+        cases = []
+        for number, (summary, said) in enumerate(
+            (
+                (CLOSE_SUMMARY, ", and its summary says: Shipped with the release"),
+                (unstopped, ", and its summary says: Shipped with the release"),
+                (None, ""),
+            )
+        ):
+            goal = self.awaiting(f"Awaiting goal {number}")
+            cases.append(
+                (
+                    self.asked(goal, summary),
+                    (
+                        f"An agent confirms {goal}: all work under it is closed{said}. Confirm"
+                        " it, or leave it to the next session that takes work in this space.",
+                        leave_next,
+                    ),
+                )
+            )
+            goal = self.empty(f"Empty goal {number}")
+            cases.append(
+                (
+                    self.asked(goal, summary),
+                    (
+                        f"An agent closes {goal}, which has nothing under it{said}. Confirm it,"
+                        " or leave it open.",
+                        leave_open,
+                    ),
+                )
+            )
+        for found, expected in cases:
+            self.assertEqual(expected, found)
+
 
 #: The summary the agent confirms a goal with.
 CLOSE_SUMMARY = {"done": "Shipped with the release.", "next": "Nothing."}
@@ -2781,6 +2847,20 @@ class DescriptionTests(unittest.TestCase):
         self.assertEqual(500, schema["checklist_reason"]["maxLength"])
         step = schema["checklist"]["properties"]["items"]["items"]["anyOf"][1]
         self.assertEqual({"id", "text", "done", "clarifies"}, set(step["properties"]))
+
+
+class WebListTests(unittest.TestCase):
+    """The web's strict reader of a question refuses a purpose, a point or an outcome its
+    lists lack, and with it the whole list of questions: its lists are the store's."""
+
+    def test_the_web_reads_every_purpose_a_question_has(self) -> None:
+        listed = web_list(WEB_API / "inputRequestModel.ts", "REQUEST_PURPOSES")
+        self.assertEqual(list(request_model.PURPOSES), listed)
+
+    def test_the_web_reads_every_point_and_outcome_of_a_waiting_write(self) -> None:
+        path = WEB_API / "inputRequestAction.ts"
+        self.assertEqual(list(planning_store.PENDING_POINTS), web_list(path, "ACTION_POINTS"))
+        self.assertEqual(list(planning_store.PENDING_OUTCOMES), web_list(path, "ACTION_OUTCOMES"))
 
 
 if __name__ == "__main__":

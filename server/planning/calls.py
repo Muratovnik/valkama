@@ -353,6 +353,8 @@ def by_person() -> bool:
 #: after the channel rather than the handshake's `clientInfo`, so one client
 #: reads the same whether or not it opened with `initialize`.
 _CHANNEL_NAMES = {CODEX_META: "codex", CLAUDE_PAIR: "claude", CLAUDE_HOOK: "claude"}
+#: The sources whose confirmed calls name a holder (`channel_holder`).
+CHANNEL_SOURCES = tuple(_CHANNEL_NAMES)
 _PLAIN_TEXT = r"[A-Za-z0-9._:-]{1,40}"
 #: An identifier a holder carries as it is: what both clients send today.
 _PLAIN_ID = re.compile(f"^{_PLAIN_TEXT}$")
