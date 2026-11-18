@@ -14,7 +14,10 @@ once and leave the stack with it, and then:
   While it waits, the question on the goal holds its tasks: no claim, move or label
   rule takes one of them (`questions.acceptance_asked`). The owner's answer is carried
   out by `carry_out`: the tasks it does not keep go back to the stack, and the answer
-  acts on the goal and the tasks it keeps.
+  acts on the goal and the tasks it keeps. The asker's withdrawal of the question
+  dissolves the group (`withdrawn`). A person who takes the goal on, puts it off or
+  cancels it before answering decides by that write, which ends the question and the
+  action as any acceptance question of the item (`service._settled_by_owner`, a close).
 - **The agent decides** otherwise, and the same write carries its answer out: `do`
   accepts the goal on the basis `agent` with the tasks `inherited`; `later` puts the
   goal off with the tasks under it; `drop` cancels the tasks, then the goal. One mark
@@ -34,6 +37,7 @@ from dataclasses import dataclass
 
 from . import (
     calls,
+    closing,
     deferral,
     leases,
     model,
@@ -574,6 +578,37 @@ def _answer(
     )
 
 
+#: The reason the tasks of a withdrawn group leave its goal with, and the goal is cancelled with.
+WITHDRAWN = "group withdrawn"
+#: What the goal of a withdrawn group says was done, unless it said so itself.
+WITHDRAWN_DONE = "Not needed: the group was withdrawn"
+
+
+def withdrawn(conn: sqlite3.Connection, action: pending.Action, author: str | None) -> None:
+    """The asking session withdraws its question `triage` about a group, in the write that
+    withdraws it (`requests.carry_out`): the action ends `withdrawn` with its questions,
+    and the group dissolves as the asker's own write.
+
+    Every child of the goal lying in triage moves out (`split.move_out`) as
+    `group withdrawn` and goes back to the stack. Then the goal, with nothing open left
+    under it, is cancelled as `group withdrawn`, its summary saying it was not needed. Work
+    a person took on under it meanwhile, which nobody asked them about again, keeps the
+    goal open in triage instead: a cancel would close that work with it.
+    """
+
+    pending.end(conn, action, pending.WITHDRAWN, author=author)
+    goal = read_model.item_by_id(conn, action.work_item_id)
+    for child in _triage_children(conn, goal):
+        split.move_out(conn, read_model.reference(conn, child), reason=WITHDRAWN, author=author)
+    if closing.cancel_list(conn, goal) is not None:
+        return
+    reference = read_model.reference(conn, goal)
+    _close_summary(conn, reference, None, author, done=WITHDRAWN_DONE)
+    service.transition_work_item(
+        conn, reference, _state(conn, goal, "cancelled"), reason=WITHDRAWN, author=author
+    )
+
+
 def _state(conn: sqlite3.Connection, row: sqlite3.Row, category: str) -> str:
     """The key of the first state of `category` in the item's workflow."""
 
@@ -585,4 +620,4 @@ def _state(conn: sqlite3.Connection, row: sqlite3.Row, category: str) -> str:
     return str(found["key"])
 
 
-__all__ = ["ANSWERS", "Group", "Proposed", "carry_out", "form", "parse", "propose"]
+__all__ = ["ANSWERS", "Group", "Proposed", "carry_out", "form", "parse", "propose", "withdrawn"]

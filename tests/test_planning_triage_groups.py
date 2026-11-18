@@ -8,7 +8,9 @@ answer is carried out in the same call, with one mark of the summary of decision
 `finding`, or waits for the owner on an action of kind `group` and the question
 `triage`, which holds the tasks under it from a claim, a move and a label's rule. A
 group outside its form or naming a task that does not wait in the stack is refused
-whole, with nothing created and no number spent.
+whole, with nothing created and no number spent. The asker's withdrawal dissolves a
+waiting group, its tasks going back to the stack, and a person's own write on the goal
+before the answer decides it, ending the question and the action.
 """
 
 from __future__ import annotations
@@ -74,6 +76,16 @@ class GroupHarness(SettingHarness):
             **more,
         }
         return self.tool("create_work_item", **payload)
+
+    def waiting_group(
+        self, count: int = 4, answer: str = "do", **more: object
+    ) -> tuple[str, list[str], str]:
+        """A group of `count` findings waiting for the owner: the goal, its tasks and the
+        question."""
+
+        tasks = self.findings(count)
+        written = self.group(tasks, answer, **more)
+        return str(written["reference"]), tasks, str(written["waits_for_owner"]["question"])
 
     def where(self, reference: str) -> tuple[str | None, str | None, str | None]:
         """The category, the basis and the parent of an item."""
@@ -424,16 +436,6 @@ class OwnerAnswerTests(GroupHarness):
     carried out in the write that gives it: the tasks left unticked go back to the stack,
     a ticked one that left the group takes no part, and the answer acts on the goal."""
 
-    def waiting_group(
-        self, count: int = 4, answer: str = "do", **more: object
-    ) -> tuple[str, list[str], str]:
-        """A group of `count` findings waiting for the owner: the goal, its tasks and the
-        question."""
-
-        tasks = self.findings(count)
-        written = self.group(tasks, answer, **more)
-        return str(written["reference"]), tasks, str(written["waits_for_owner"]["question"])
-
     def owner_answers(self, question: str, answer: str, items: list[str], **more: object) -> dict:
         """The owner's answer through the HTTP route, ticking `items`: the answer's record."""
 
@@ -635,6 +637,143 @@ class OwnerAnswerTests(GroupHarness):
             )
         self.assertEqual("cancelled", self.where(tasks[2])[0], "cancelled by the list")
         self.assertEqual(("cancelled", None, None), self.where(goal))
+
+
+class EndedBeforeAnswerTests(GroupHarness):
+    """A group whose question ends without the owner's answer: the asking session withdraws
+    it, or a person decides on the goal by their own write first."""
+
+    def ended(self, question: str) -> tuple[str, str]:
+        row = self.request(question)
+        return str(row["status"]), str(row["expired_reason"])
+
+    def test_withdrawing_dissolves_the_group(self) -> None:
+        goal, tasks, question = self.waiting_group()
+        [action] = self.waiting_on(goal)
+        self.withdraw(question, by=AGENT)
+        self.assertEqual("withdrawn", self.action(action.id)["outcome"])
+        self.assertEqual(("expired", "withdrawn"), self.ended(question))
+        # Every task goes back to the top level in triage, and to the stack, unmarked.
+        for task in tasks:
+            self.assertEqual(("triage", None, None), self.where(task))
+            self.assertEqual(
+                [f"triage: moved out of {goal}: group withdrawn"],
+                self.events(task, "transitioned"),
+            )
+        self.assertEqual(
+            [f"{task}: group withdrawn" for task in tasks], self.events(goal, "child_left")
+        )
+        stack = triage.waiting(self.conn, self.space, items=[self.id(task) for task in tasks])
+        self.assertEqual(
+            sorted((self.id(task), None) for task in tasks),
+            sorted((found.work_item_id, found.seen_at) for found in stack),
+        )
+        # The goal, with nothing left under it, is cancelled as not needed.
+        self.assertEqual(("cancelled", None, None), self.where(goal))
+        self.assertEqual(["cancelled: group withdrawn"], self.events(goal, "transitioned"))
+        self.assertEqual(
+            {"done": "Not needed: the group was withdrawn", "next": "Nothing."},
+            json.loads(self.row(goal)["summary"]),
+        )
+        self.assertEqual(([], [], []), (self.waiting_on(goal), self.owners_list(), self.decided()))
+
+    def test_withdrawing_keeps_the_goal_over_work_a_person_took_on(self) -> None:
+        # A person took one task on under the waiting goal; cancelling the goal would
+        # close that task with it, which nobody asked them about.
+        goal, tasks, question = self.waiting_group()
+        self.person("/api/planning/work-item/transition", id=tasks[2], state="ready")
+        self.withdraw(question, by=AGENT)
+        for task in (tasks[0], tasks[1], tasks[3]):
+            self.assertEqual(("triage", None, None), self.where(task))
+        self.assertEqual(("ready", "owner", goal), self.where(tasks[2]))
+        self.assertEqual(("triage", None, None), self.where(goal))
+        self.assertEqual([], self.events(goal, "transitioned"))
+        self.assertEqual(("expired", "withdrawn"), self.ended(question))
+
+    def test_the_owner_acting_on_the_goal_ends_the_group(self) -> None:
+        goal, tasks, question = self.waiting_group()
+        [action] = self.waiting_on(goal)
+        self.person("/api/planning/work-item/transition", id=goal, state="ready")
+        # The person's acceptance is their answer: the question ends withdrawn and the
+        # action dropped, as taken by the owner.
+        self.assertEqual(("expired", "withdrawn"), self.ended(question))
+        self.assertEqual("dropped", self.action(action.id)["outcome"])
+        self.assertEqual(["finding: taken by the owner"], self.events(goal, "action_dropped"))
+        self.assertEqual((None, "owner", None), self.where(goal))
+        for task in tasks:
+            self.assertEqual(("ready", "inherited", goal), self.where(task))
+        self.assertEqual(([], [], []), (self.waiting_on(goal), self.owners_list(), self.decided()))
+
+    def test_the_owner_putting_the_goal_off_ends_the_group(self) -> None:
+        goal, tasks, question = self.waiting_group()
+        [action] = self.waiting_on(goal)
+        self.person("/api/planning/work-item/defer", id=goal, until=UNTIL, reason="later")
+        self.assertEqual(("expired", "withdrawn"), self.ended(question))
+        self.assertEqual("dropped", self.action(action.id)["outcome"])
+        self.assertEqual(("deferred", None, None), self.where(goal))
+        for task in tasks:
+            self.assertEqual(("triage", None, goal), self.where(task))
+
+    def test_the_owner_cancelling_the_goal_ends_the_group_by_its_list(self) -> None:
+        goal, tasks, question = self.waiting_group()
+        [action] = self.waiting_on(goal)
+        self.person(
+            "/api/planning/work-item/apply",
+            id=goal,
+            summary={"done": "Not needed", "next": "Nothing"},
+        )
+        cancel = functools.partial(
+            self.person,
+            "/api/planning/work-item/transition",
+            id=goal,
+            state="cancelled",
+            reason="not needed",
+        )
+        before = (self.counts(), self.items())
+        with self.assertRaises(model.PlanningError) as refused:
+            cancel()
+        self.conn.rollback()
+        status, body = api.error_response(refused.exception)
+        self.assertEqual((409, "cancel_list"), (status, body["error"]["code"]))
+        self.assertEqual(tasks, [entry["reference"] for entry in body["error"]["cancels"]])
+        self.assertEqual(before, (self.counts(), self.items()), "nothing written")
+        self.assertEqual("pending", self.request(question)["status"])
+        cancel(cancels=body["error"]["list_token"])
+        # The close ends the question as the item closed, and drops the action.
+        self.assertEqual(("expired", "item_cancelled"), self.ended(question))
+        self.assertEqual("dropped", self.action(action.id)["outcome"])
+        self.assertEqual(("cancelled", None, None), self.where(goal))
+        for task in tasks:
+            self.assertEqual(("cancelled", None, goal), self.where(task))
+        self.assertEqual([], self.decided())
+
+
+class SummaryTests(GroupHarness):
+    """What the summary of decisions reads of a triage review left to the agent."""
+
+    def test_agent_groups_enter_the_summary(self) -> None:
+        self.at(participation.MINIMAL)
+        tasks = self.findings(3)
+        group = str(self.group(tasks)["reference"])
+        proposed = self.filed("A goal nobody accepted", kind="goal")
+        self.tool("apply_work_item_changes", id=proposed, transition={"state": "ready"})
+        path = "/api/planning/decisions"
+        read = {}
+        for point in ("finding", "proposed_goal"):
+            answer = api.handle_get(self.conn, path, {"point": [point]})
+            assert answer is not None
+            self.assertEqual(200, answer[0])
+            read[point] = [
+                (entry["point"], entry["item"]["reference"], entry["what"])
+                for entry in answer[1]["items"]
+            ]
+        self.assertEqual(
+            {
+                "finding": [("finding", group, "group «Export fixes»: do 3 items")],
+                "proposed_goal": [("proposed_goal", proposed, f"accepted {proposed}")],
+            },
+            read,
+        )
 
 
 if __name__ == "__main__":

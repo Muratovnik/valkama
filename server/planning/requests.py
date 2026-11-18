@@ -13,7 +13,8 @@ to answer, in Valkama; its answer is carried out in the write that gives it
 (`carry_out`), so it is never declined or changed, and only the session that asked
 it withdraws it. A question about a write that waits for the owner (`pending`) carries
 that write out, declines it or drops it, by its point (`CARRIERS`); the answer about a
-triage review's group of findings is carried out by `groups.carry_out`.
+triage review's group of findings is carried out by `groups.carry_out`, and its
+withdrawal dissolves the group (`groups.withdrawn`).
 
 A decision recommends an answer in every required field. Where the owner's setting
 leaves decisions to the agent, an agent's decision to the owner is answered by those
@@ -1136,9 +1137,9 @@ def _carry_action(
     """The answer to a question about a write that waits for the owner, or its withdrawal.
 
     A withdrawal withdraws the action, and every other question and request of it
-    ends with it. An answer to a request asked of a session carries nothing out here,
-    but a session's answer about a cancel of its work may settle that cancel
-    (`consent.settle`).
+    ends with it; a group's dissolves the group too (`groups.withdrawn`). An answer to
+    a request asked of a session carries nothing out here, but a session's answer about
+    a cancel of its work may settle that cancel (`consent.settle`).
     The owner's answer to an action that no longer applies drops it (`pending.inapplicable`),
     the answer standing as given; to one that still does, the action ends with the
     outcome its carrier gives the choice, and then the carrier does what the choice
@@ -1149,6 +1150,10 @@ def _carry_action(
     """
 
     if answers is None:
+        if action.kind == "group":
+            # The group dissolves with its question: its tasks go back to the stack.
+            groups.withdrawn(conn, action, author)
+            return pending.WITHDRAWN
         pending.end(conn, action, pending.WITHDRAWN, author=author)
         if action.point == "goal_close":
             # The confirmation the asker withdrew is the sweep's to ask again.

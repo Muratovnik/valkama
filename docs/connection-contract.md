@@ -603,6 +603,23 @@ otherwise. The answer's record says what was done:
 "carried_out": {"answer": "do", "moved_out": ["MAIN-42"], "skipped": ["MAIN-43"]}
 ```
 
+The session that asked may withdraw the question instead, which dissolves the
+group as its own write: the action ends `withdrawn`, every child of the goal
+lying in `triage` leaves it by `move_out` with the reason `group withdrawn` and
+goes back to the triage stack, and the goal, with nothing open left under it, is
+cancelled with the reason `group withdrawn`, its summary saying `Not needed: the
+group was withdrawn` unless it said what was done. Work a person accepted under
+the goal meanwhile keeps the goal open in `triage`, since its cancel would close
+that work too.
+
+A person who decides on the goal before answering decides the group by that
+write. Moving the goal into accepted work accepts it on `owner`, and the tasks
+under it in `triage` take `inherited`; putting it off leaves them under it.
+Either ends the question `withdrawn` and the action `dropped`
+(`finding: taken by the owner`). Cancelling the goal goes by its cancel list,
+the tasks under it included, and the close ends the question as `item_cancelled`
+and the action `dropped`.
+
 | Code | Status | When |
 | --- | --- | --- |
 | `[group]` | 400 | the form: `[group] a group is a new goal without a parent, with its conditions in checklist and 2 to 20 items: <what is wrong>` |
