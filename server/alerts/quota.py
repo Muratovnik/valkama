@@ -6,7 +6,8 @@ forecast says it runs out before its reset: only `forecast.outlook` decides that
 an answer that is `alert_eligible`. A week's outlook is a range and never eligible, so a
 week alerts on what was spent alone, and its forecast is never asked. One call of the
 forecast takes one series: the five-hour readings of one account, never a week beside
-them.
+them, each with its feed, so a counter zeroed inside the window restarts the count the
+forecast reads rather than leaving its earlier top in force (`forecast.count`).
 
 Whose window. A reading of a session (`statusline`, `mod`) names no organization: it is
 the one the session's usage rows say it worked for at the reading's moment
@@ -80,6 +81,8 @@ class _Sample:
     model: str
     percent: float
     resets_at: str
+    #: The feed it belongs to (`seats.AccountSample.feed`), which the forecast reads.
+    feed: str
 
     @property
     def series(self) -> tuple[str, str, str, str]:
@@ -113,6 +116,7 @@ def _known(conn: sqlite3.Connection, since: str) -> list[_Sample]:
             one.model or "",
             one.percent,
             one.resets_at,
+            one.feed,
         )
         for one in seats.account_samples(conn, since, quota_store.ALERT_KINDS)
         if one.seat is not None and one.percent is not None and one.resets_at is not None
@@ -136,7 +140,9 @@ def _five_hour_dues(series: list[_Sample], now: int) -> list[_Due]:
         return []
     window = forecast.Window(forecast.FIVE_HOURS, latest.percent, _millis(latest.resets_at))
     readings = [
-        forecast.Reading(_millis(one.at), one.percent, _millis(one.resets_at), forecast.FIVE_HOURS)
+        forecast.Reading(
+            _millis(one.at), one.percent, _millis(one.resets_at), forecast.FIVE_HOURS, one.feed
+        )
         for one in series
     ]
     found = forecast.outlook(window, readings, now)

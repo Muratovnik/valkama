@@ -269,6 +269,26 @@ class FiveHourTests(_Quota):
         self.assertEqual([], self.evaluate(2 * HOUR))
         self.assertEqual([], self.keys())
 
+    def test_a_counter_zeroed_inside_the_window_is_forecast_from_the_restart(self) -> None:
+        # The session reads 99, and 37 minutes later 0 under the same reset; another
+        # session's 20 under the 99 is a stale reading and restarts nothing. Read from the 99,
+        # the window would keep one point and spend none of it; read from the restart, the
+        # last quarter hour spent 30 and the 29 minutes since it 60.
+        self.working("sess-2", ORG_A)
+        self.read()
+        self.statusline(HOUR, five=50, week=20)
+        self.statusline(HOUR + 20 * MINUTE, five=99, week=20)
+        self.statusline(HOUR + 30 * MINUTE, five=20, week=20, session="sess-2")
+        self.statusline(HOUR + 57 * MINUTE, five=0, week=20)
+        self.statusline(HOUR + 70 * MINUTE, five=30, week=20)
+        self.statusline(HOUR + 85 * MINUTE, five=60, week=20)
+        [shown] = quota_alerts.due(self.reader, now=moment(HOUR + 86 * MINUTE), zone=dt.UTC)
+        # (30/15 + 60/29) / 2 points a minute leaves the 40 points left 19.7 minutes after
+        # 11:26.
+        self.assertEqual(
+            "Valkama: the five-hour quota runs out at about 11:45", texts(shown.message)[0]
+        )
+
     def test_a_spent_window_alerts_and_a_new_window_alerts_again(self) -> None:
         self.statusline(2 * HOUR, five=100, week=20)
         [spent] = self.evaluate(2 * HOUR + MINUTE)

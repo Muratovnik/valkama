@@ -25,6 +25,10 @@ No forecast is given while a window holds less history than its pace needs:
 `MIN_HISTORY_FIVE_HOURS` since the window began, or of readings, for the five-hour window,
 and `MIN_HISTORY_WEEK` since the reset for a week.
 
+Where a window's count restarted inside it (see below), the window begins again for its pace
+at the restart, from the share the restarting reading names: its average and its history run
+from there, since what was spent before it no longer counts toward the reset.
+
 `forecast` is the point estimate for either window. `outlook` is what a threshold or a
 page asks for, and it decides what may raise an alert:
 
@@ -40,12 +44,23 @@ page asks for, and it decides what may raise an alert:
 
 Where a reading reports the window spent although the window itself does not, the window
 is spent: the arithmetic would otherwise divide by what is left, which is nothing.
+
+Which readings a window's count trusts (`count`). A window's readings come from several
+feeds -- a feed is what `seats` calls one: the samples one identity (a session, or an
+organization's poll and imports) made of one window -- and a feed that has not read for a
+while still holds its last value. So a reading lower than one before it is, as a rule, a
+stale one and is left out. The exception is a feed that falls by `RESTART_FALL` points or
+more below its own previous reading of the same window, and as far below the count: the
+source then reports a counter that was zeroed inside the window, its reset unchanged, and
+the count restarts from that reading. A forecast that kept the window's earlier top would
+read the rest of the window from what no longer counts. What zeroed the counter cannot be
+told from the readings, so nothing here names a cause.
 """
 
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import ClassVar, Literal, Protocol, TypeAlias, TypeVar
 
@@ -62,6 +77,14 @@ MIN_HISTORY_WEEK = HOUR
 #: Two resets this close are one window: the server's reset times jitter by fractions of a
 #: second, and the plan's own rounding is ten minutes.
 RESET_SLACK = 10 * MIN
+
+#: How far a feed's reading must fall below its own previous one, and below the count, for the
+#: window's count to restart there (`count`). A provider's percent wobbles by a point between
+#: two readings, and a source rounds to whole points, so a small fall is noise; a counter
+#: zeroed inside its window falls by most of what was spent. Ten points is ten times the
+#: wobble, and a zeroing it misses leaves the count at most ten points high until the
+#: readings pass it again.
+RESTART_FALL = 10
 
 #: Below this many points of five-hour growth the window's cost to the week is too coarse
 #: to trust, and there is no ceiling.
@@ -81,6 +104,9 @@ class Reading:
     #: The reset the sample named; `None` when the window had not started.
     resets_at: int | None
     window_length: int
+    #: The feed the sample belongs to (see the module); `None` where it is not known, and a
+    #: reading of no known feed never restarts the count.
+    feed: Hashable | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,7 +327,9 @@ def same_window(a: int | None, b: int | None) -> bool:
 def _rising(points: Iterable[_T], value: Callable[[_T], float]) -> list[_T]:
     """Oldest first, without a point that reads lower than an earlier one or repeats it.
 
-    What is spent in a window never falls, so a lower reading is a stale one.
+    The credits spent in a month are read here as one series that never falls, a lower
+    reading a stale one: their readings name no feed, so one feed's fall could not be told
+    from another feed's stale value, as `count` tells them apart for a window.
     """
 
     kept: list[_T] = []
@@ -314,18 +342,67 @@ def _rising(points: Iterable[_T], value: Callable[[_T], float]) -> list[_T]:
     return kept
 
 
-def settle(readings: Iterable[Reading], window_length: int, resets_at: int | None) -> list[Reading]:
-    """One window's readings as the forecast trusts them: only this window's, oldest first,
-    and none that reads lower than an earlier one."""
+@dataclass(frozen=True, slots=True)
+class Count:
+    """One window's readings as the forecast trusts them, and where its count restarted.
 
-    return _rising(
+    `readings`: oldest first, from the latest restart on, none lower than an earlier one.
+    `restarts`: the moment of each restart, oldest first; empty where the count never did.
+    """
+
+    readings: list[Reading]
+    restarts: list[int]
+
+
+def _restarts_at(one: Reading, before: Reading | None, top: Reading) -> bool:
+    """Whether `one` restarts the count: it falls `RESTART_FALL` or more below its own feed's
+    previous reading `before`, both naming a reset, and as far below the count's `top`."""
+
+    return (
+        before is not None
+        and one.resets_at is not None
+        and before.resets_at is not None
+        and one.percent <= before.percent - RESTART_FALL
+        and one.percent <= top.percent - RESTART_FALL
+    )
+
+
+def count(readings: Iterable[Reading], window_length: int, resets_at: int | None) -> Count:
+    """One window's readings, only this window's, as the forecast trusts them (see the
+    module): a reading lower than the count is a stale one and left out, unless it is its own
+    feed's fall of `RESTART_FALL` or more, from which the count starts again."""
+
+    kept: list[Reading] = []
+    restarts: list[int] = []
+    previous: dict[Hashable, Reading] = {}
+    for one in sorted(
         (
             one
             for one in readings
             if one.window_length == window_length and same_window(one.resets_at, resets_at)
         ),
-        lambda one: one.percent,
-    )
+        key=lambda one: one.at,
+    ):
+        before = None if one.feed is None else previous.get(one.feed)
+        if one.feed is not None:
+            previous[one.feed] = one
+        if kept and _restarts_at(one, before, kept[-1]):
+            kept = [one]
+            restarts.append(one.at)
+            continue
+        if kept:
+            last = kept[-1]
+            if one.percent < last.percent or (one.at == last.at and one.percent == last.percent):
+                continue
+        kept.append(one)
+    return Count(kept, restarts)
+
+
+def settle(readings: Iterable[Reading], window_length: int, resets_at: int | None) -> list[Reading]:
+    """One window's readings as the forecast trusts them (`count`): oldest first, from the
+    latest restart of its count on, and none that reads lower than an earlier one."""
+
+    return count(readings, window_length, resets_at).readings
 
 
 def _last_by(points: Sequence[_T], moment: float) -> _T | None:
@@ -342,8 +419,11 @@ class _State:
     group: _Group
     readings: list[Reading]
     spent: float
+    #: Since the window began for its pace: its start, or its count's latest restart.
     elapsed: int
     resets_at: int
+    #: The share spent where it began: nothing at its start, the restarting reading's share.
+    base: float = 0.0
 
 
 def _state(window: Window, readings: Iterable[Reading], now: int) -> _State | Spent | None:
@@ -355,24 +435,29 @@ def _state(window: Window, readings: Iterable[Reading], now: int) -> _State | Sp
         return None
     if window.percent >= 100:
         return Spent(resets_at)
-    series = settle(readings, window.length, resets_at)
+    counted = count(readings, window.length, resets_at)
+    series = counted.readings
     spent = max(window.percent, series[-1].percent if series else 0)
     if spent >= 100:
         return Spent(resets_at)
+    if counted.restarts:
+        # The count's first reading is the one that restarted it.
+        began, base = series[0].at, series[0].percent
+        return _State(group, series, spent, now - began, resets_at, base)
     return _State(group, series, spent, now - (resets_at - window.length), resets_at)
 
 
 def _steady_base(state: _State, steady: int, now: int) -> tuple[float, int] | None:
     """Where the window stood the longer span ago, for the steady half of a blended pace:
-    the reading in force then; else, for a window younger than that span, its start at
-    nothing spent; else the oldest reading, when it reaches past the recent span."""
+    the reading in force then; else, for a window younger than that span, where it began
+    (`_State.base`); else the oldest reading, when it reaches past the recent span."""
 
     far = _last_by(state.readings, now - steady)
     if far is not None:
         return far.percent, steady
     recent = state.group.lookback
     if recent < state.elapsed < steady:
-        return 0.0, state.elapsed
+        return state.base, state.elapsed
     if state.readings and now - state.readings[0].at > recent:
         first = state.readings[0]
         return first.percent, now - first.at
@@ -398,11 +483,11 @@ def _recent_pace(state: _State, now: int) -> tuple[float, Basis] | None:
 
 
 def _window_pace(state: _State) -> tuple[float, Basis] | None:
-    """The average since the window began, once it is old enough."""
+    """The average since the window began, or its count restarted, once it is old enough."""
 
     if state.elapsed < state.group.min_history:
         return None
-    return state.spent / state.elapsed, Basis("window", state.elapsed)
+    return max(0, state.spent - state.base) / state.elapsed, Basis("window", state.elapsed)
 
 
 def _pace(state: _State, now: int) -> tuple[float, Basis] | None:

@@ -29,7 +29,9 @@ A seat no sample with a UUID names, or that two accounts' samples name, is provi
 the seat is known for that week and its account is not.
 
 `account_samples` is the one read of samples by account, for whatever reads the quota
-of an account: the alerts and the Analytics read.
+of an account: the alerts and the Analytics read. Each sample it gives names its feed,
+which the forecast reads to tell a counter zeroed inside its window from a stale reading
+(`forecast.count`).
 """
 
 from __future__ import annotations
@@ -107,6 +109,17 @@ class AccountSample:
     model: str | None
     percent: float | None
     resets_at: str | None
+    #: The session that read it; `None` for an organization's poll and imports.
+    session_id: str | None = None
+
+    @property
+    def feed(self) -> str:
+        """The feed it belongs to within its account's window: its session's, or else its
+        organization's poll and imports, which are one feed."""
+
+        if self.session_id is not None:
+            return f"session:{self.session_id}"
+        return f"organization:{self.organization}"
 
 
 #: Every sample of some kinds since a moment, in the order they were made.
@@ -171,6 +184,7 @@ def account_samples(
                 model,
                 None if percent is None else float(percent),
                 resets_at,
+                session,
             )
         )
     return known
