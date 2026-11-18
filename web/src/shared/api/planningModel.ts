@@ -127,6 +127,14 @@ const workItemBriefShape = {
     basis: enumField(ACCEPTANCE_BASES),
     at: boundedText(ISO, 96),
   }).nullable(),
+  /**
+   * Only on an item waiting for a triage review: when a review marked it seen and who,
+   * both null while none did.
+   */
+  triage_stack: strictObject({
+    seen_at: boundedText(ISO, 96).nullable(),
+    seen_by: holderField().nullable(),
+  }).optional(),
   /** When it started: a task's own start, a container's earliest descendant's. */
   started_at: boundedText(ISO, 96).nullable(),
   /** The open items that block it, by reference. */

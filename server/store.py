@@ -266,9 +266,16 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
 # A write that accepts a goal or stage, starts the first task under it, or takes its
 # acceptance away (triage, deferred) takes or drops its row; a build at 20 would do
 # neither and leave a row standing for an acceptance that no longer holds, or none for
-# one that does, so the ratchet makes it refuse a store at 21. The work-model
-# migration carries a store at 17 straight to 21.
-STORE_SCHEMA_VERSION = 21
+# one that does, so the ratchet makes it refuse a store at 21.
+#
+# 22 keeps the marks a triage review leaves on the items it saw (`triage_marks`), empty
+# in a migrated store, and the five triggers through which the store takes a mark away
+# when the item leaves triage, moves under a goal or out of one, or gains a comment, a
+# thread or a question to the owner. A store a build at 21 brought to its number has
+# neither, and would pass for current; the ratchet makes this build refuse it, and a
+# build at 21 refuse a store at 22. The work-model migration carries a store at 17
+# straight to 22.
+STORE_SCHEMA_VERSION = 22
 
 
 class StoreTooNewError(RuntimeError):

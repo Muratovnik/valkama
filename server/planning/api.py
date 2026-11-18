@@ -26,6 +26,7 @@ from . import (
     commits,
     decisions,
     goal_volumes,
+    groups,
     held,
     images,
     item_projects,
@@ -296,6 +297,7 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             owner=_first(parameters, "owner"),
             parent=_first(parameters, "parent"),
             project=_first(parameters, "project"),
+            triage_stack=_first(parameters, "triage_stack"),
             # The list of a space is a read of it: other spaces' items naming its projects too.
             other_spaces=True,
             limit=_int(_first(parameters, "limit"), "limit", 200),
@@ -717,10 +719,13 @@ def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     Each step after the creation is the write its single tool makes, inside one
     savepoint with the creation, so a refused link or claim leaves no item, no
     spent number and no call row behind. Without `claim` or `links` the answer
-    is the one this route always gave; with them it adds `applied`.
+    is the one this route always gave; with them it adds `applied`. A `group` is held
+    to its form before anything is created (`groups.form`).
     """
 
     steps = _steps(payload, CREATE_GROUPS)
+    if payload.get("group") is not None:
+        groups.form(payload)
     if not steps:
         return _created(conn, payload)
     with _all_or_nothing(conn):
@@ -780,6 +785,8 @@ def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         projects=payload.get("projects"),
         # `_create` claims it in the same all-or-nothing change, before anything is kept.
         claimed=payload.get("claim") is True,
+        # Its group, proposed in the same change, decides who decides on it.
+        grouped=payload.get("group") is not None,
     )
 
 
@@ -1434,6 +1441,8 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         ),
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
+    # A boolean, not an object: `_steps` takes it whole. It stands beside no state change.
+    ("triage_seen", frozenset()),
     (
         "transition",
         frozenset({"state", "reason", "force", "acceptance", "to_check", "cancels", "following"}),
@@ -1444,12 +1453,17 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
 #: The groups that each change the state: a batch names at most one of them. Converting
 #: changes what the item is, and where it stands with it.
 _STATE_CHANGES = ("convert", "transition", "defer", "move_out")
+#: The groups that take an item out of triage or put it elsewhere, which a triage mark
+#: may not stand beside: the mark holds only on an item the same call leaves in triage.
+_LEAVES_TRIAGE = ("transition", "defer", "move_out")
 #: What a creation may do to the item it just made, after making it and in this
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
+#: `group` proposes the new goal for tasks waiting for a triage review (`groups`).
 CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("claim", frozenset()),
     ("checklist", frozenset({"items"})),
     ("links", frozenset({"other", "kind"})),
+    ("group", frozenset({"items", "answer", "until", "why"})),
 )
 #: The groups that are lists of entries rather than one object.
 _APPLY_LISTS = frozenset(
@@ -1480,6 +1494,15 @@ def _apply_entries(payload: Mapping[str, object]) -> list[_Step]:
             "invalid_request",
             f"{' and '.join(changing)} each change the state: send one, and the other in a"
             " call of its own",
+        )
+    if payload.get("triage_seen") is not None and any(
+        payload.get(group) is not None for group in _LEAVES_TRIAGE
+    ):
+        raise PlanningHttpError(
+            400,
+            "invalid_request",
+            "[triage_seen] a mark stays only on an item that stays in triage: send it without"
+            " transition, defer or move_out",
         )
     steps = _steps(payload, APPLY_GROUPS)
     if not steps:
@@ -1518,6 +1541,11 @@ def _steps(
             if not isinstance(value, bool):
                 raise PlanningHttpError(400, "invalid_request", "subscribe must be a boolean")
             steps.append((group, 0, {"follows": value}))
+            continue
+        if group == "triage_seen":
+            if not isinstance(value, bool):
+                raise PlanningHttpError(400, "invalid_request", "triage_seen must be a boolean")
+            steps.append((group, 0, {"seen": value}))
             continue
         if group == "checklist" and isinstance(value, list):
             # The steps alone: the object form is needed only to carry `force`.
@@ -1609,6 +1637,10 @@ def _apply_step(
     if group == "links":
         _link(conn, {**entry, **base})
         return {}, 1
+    if group == "group":
+        proposed = groups.propose(conn, _text(base, "id"), groups.parse(entry), _author(base))
+        waits = {} if proposed.waits is None else {"waits_for_owner": proposed.waits.answer()}
+        return waits, proposed.applied()
     if group in ("comment", "comments"):
         written = _comment(conn, {**entry, **base})
         # The root a reply joined, as the single tool's answer says it, and its list.
@@ -1639,6 +1671,11 @@ def _apply_step(
         if TOLD in answer:
             written["mentions"] = answer[TOLD]
         return {}, written
+    if group == "triage_seen":
+        marked = service.mark_triage(
+            conn, _text(base, "id"), bool(entry["seen"]), author=_author(base)
+        )
+        return {}, marked
     if group == "move_out":
         return _moved_out(conn, {**entry, **base})
     if group == "convert":

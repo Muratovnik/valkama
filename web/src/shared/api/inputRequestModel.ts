@@ -1,6 +1,7 @@
 import { boundedList, boundedText, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
-import { actionSchema } from '@/shared/api/inputRequestAction.ts'
+import { ACTION_OUTCOMES, actionSchema } from '@/shared/api/inputRequestAction.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
+import { otherSpaceSchema } from '@/shared/api/planningSpaceModel.ts'
 import { planningCoverageSchema, planningTargetSchema } from '@/shared/api/planningTarget.ts'
 import { ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
@@ -104,6 +105,28 @@ const REQUEST_PURPOSES = [
   'triage',
 ] as const
 
+/**
+ * What the owner's answer to a question with a purpose did, on the answer's own record and
+ * on no read: the category its item reached, or how the write it was asked about ended; for
+ * a group of findings, the answer with the tasks it moved out of the group and the ticked
+ * ones that took no part.
+ */
+const carriedOutSchema = z.union([
+  z.enum([
+    ...ACTION_OUTCOMES,
+    'completed',
+    'ready',
+    'deferred',
+    'cancelled',
+    'left_for_next_session',
+  ]),
+  strictObject({
+    answer: z.enum(['do', 'later', 'drop']),
+    moved_out: boundedList(boundedText(WORK_ITEM_REFERENCE, 20)),
+    skipped: boundedList(boundedText(WORK_ITEM_REFERENCE, 20)),
+  }),
+])
+
 const requestSchema = strictObject({
   request_id: boundedText(UUID, 36),
   work_item_id: boundedText(UUID, 36),
@@ -160,6 +183,7 @@ const requestSchema = strictObject({
   purpose: z.enum(REQUEST_PURPOSES).nullable(),
   /** The write the question is about, which waits for the owner; only on such a question. */
   action: actionSchema.optional(),
+  carried_out: carriedOutSchema.optional(),
 })
   .refine(
     (request) => new Set(request.fields.map((field) => field.id)).size === request.fields.length,
@@ -207,6 +231,17 @@ const listSchema = strictObject({
   limit: positiveInt().max(200),
   total: positiveInt(true),
   has_more: z.boolean(),
+  /**
+   * One line per space read whose triage stack waits past its thresholds: no question, so
+   * in no count or page. The age is the reader's to count from `oldest_at`.
+   */
+  triage_due: z.array(
+    strictObject({
+      space: otherSpaceSchema,
+      count: positiveInt(),
+      oldest_at: boundedText(ISO, 96),
+    }),
+  ),
 })
 
 export type InputRequestOption = z.infer<typeof optionSchema>

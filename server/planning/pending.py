@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 
@@ -56,8 +56,9 @@ KINDS = ("accept", "transition", "checklist", "defer", "parent", "group")
 VALKAMA = "Valkama"
 #: The longest detail of an event.
 DETAIL_LIMIT = 512
-#: The purposes whose question shows the cancel list as it stands (`part`).
-_LISTED = frozenset({"goal", "cancel"})
+#: The purposes whose question shows the cancel list as it stands (`part`): a goal's, a
+#: cancel's and a group's, whose `drop` cancels the goal by it.
+_LISTED = frozenset({"goal", "cancel", "triage"})
 #: Why a cancel no longer applies when its list alone changed: the owner may confirm
 #: the list as it stands instead (`requests.Carrier.by_list`).
 LIST_CHANGED = "the work it cancels changed since"
@@ -79,9 +80,11 @@ class Proposal:
     saw of the item that the answer must still find (`inapplicable` reads, by point:
     `parent` in `params` and in `seen` for a task in a goal, and `accepted` in `seen`
     too for one being moved there; `item`, `cancels` and `dependents` for a cancel, as `cancel_seen`
-    gives them). `proposed` is what the question shows was proposed (`removed` and
-    `rewritten` for a condition, `until` for putting a goal off, `summary` for a
-    close), and `what` the line of the summary of decisions once it is carried out.
+    gives them; for a group, `items`, each task with the state it stood in). `proposed` is
+    what the question shows was proposed (`removed` and `rewritten` for a condition,
+    `until` for putting a goal off, `summary` for a close, and for a group its
+    `conditions`, `items`, `answer`, `until` and `why`), and `what` the line of the
+    summary of decisions once it is carried out.
     """
 
     kind: str
@@ -464,7 +467,8 @@ def inapplicable(conn: sqlite3.Connection, action: Action) -> str | None:
     if row["state_terminal"]:
         return f"the item closed in {row['state_key']}"
     accepted = row["acceptance"] is not None
-    if action.point == "proposed_goal":
+    # A group of findings waits on its goal as a proposed goal does: in triage, unaccepted.
+    if action.point in ("proposed_goal", "finding"):
         if row["state_category"] != "triage":
             return f"the goal left triage for {row['state_key']}"
         return "the goal was accepted" if accepted else None
@@ -480,6 +484,15 @@ def inapplicable(conn: sqlite3.Connection, action: Action) -> str | None:
     if action.point == "goal_defer":
         return None if accepted else "it is not accepted"
     return None
+
+
+def own_variant(choices: Iterable[str]) -> model.PlanningError:
+    """The refusal of an answer that names none of the `choices` a carrier carries out."""
+
+    return model.PlanningError(
+        f"[purpose] answer is one of {', '.join(choices)}: an own variant carries nothing out;"
+        " say more in note"
+    )
 
 
 def _task_in_goal(conn: sqlite3.Connection, action: Action, row: sqlite3.Row) -> str | None:

@@ -106,6 +106,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'request-pending.json': validateInputRequestDetail,
   'request-proposed-goal.json': validateInputRequestDetail,
   'request-session-gone.json': validateInputRequestDetail,
+  'request-triage-group.json': validateInputRequestDetail,
   'requests.json': validateInputRequestList,
   'usage-item.json': validateItemUsageAnswer,
   'usage-session.json': validateSessionUsageAnswer,
@@ -383,5 +384,13 @@ describe('the server fixtures', () => {
     // A goal an agent proposes: the question carries the write that waits for the owner.
     const proposed = validateInputRequestDetail(read('request-proposed-goal.json')).request
     expect([proposed.purpose, proposed.action?.point]).toEqual(['goal', 'proposed_goal'])
+    // A group of findings: the question names the tasks, and the action what was proposed.
+    const group = validateInputRequestDetail(read('request-triage-group.json')).request
+    expect([group.purpose, group.action?.point, group.action?.proposed.answer]).toEqual([
+      'triage',
+      'finding',
+      'later',
+    ])
+    expect(group.action?.proposed.items?.length).toBe(2)
   })
 })

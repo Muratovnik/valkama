@@ -45,6 +45,7 @@ from . import (
     store,
     subscriptions,
     transitions,
+    triage,
     volumes,
     waiting,
     words,
@@ -212,6 +213,7 @@ def list_work_items(
     owner: str | None = None,
     parent: str | None = None,
     project: str | None = None,
+    triage_stack: str | None = None,
     other_spaces: bool = False,
     limit: int | None = 200,
     offset: int = 0,
@@ -246,6 +248,12 @@ def list_work_items(
     does not give it. Every row the filters keep is loaded, ordered and then cut,
     so on a store nothing writes to the pages of one walk neither repeat nor skip.
 
+    `triage_stack` keeps the items that wait in the triage stack (`triage.waiting`):
+    `unseen` those no review marked, `seen` those it did. They come in the stack's
+    order instead, oldest entry first, then by the space's key and the number, which
+    is total as well, and every other filter narrows them as it narrows any list.
+    Each record of an item in the stack carries its `triage_stack`.
+
     Nothing here caps the count: a caller that wants a bounded page with an
     honest account of what it left out asks `list_work_items_page`.
     """
@@ -253,6 +261,11 @@ def list_work_items(
     space_row = read_model.space_row(conn, space) if space is not None else None
     space_id = str(space_row["planning_space_id"]) if space_row is not None else None
     wanted = item_projects.project_id(project, "project") if project is not None else None
+    seen = (
+        model.enum_field(triage_stack, triage.FILTERS, "triage_stack")
+        if triage_stack is not None
+        else None
+    )
     marked = space_row is not None and other_spaces
     clauses, parameters = item_projects.space_read(
         conn, space_row, wanted, other_spaces=other_spaces
@@ -284,6 +297,9 @@ def list_work_items(
     if parent is not None:
         clauses.append("i.parent_id = ?")
         parameters.append(str(read_model.item_row(conn, parent)["work_item_id"]))
+    if seen is not None:
+        # The stack stands in triage; what else it asks is `triage.waiting`'s, below.
+        clauses.append("s.category = 'triage'")
     start = model.count_field(offset, "offset")
     query = with_clauses(
         "SELECT i.*, s.position AS state_position, p.key AS space_key, p.name AS space_name"
@@ -295,10 +311,22 @@ def list_work_items(
     # Every row the filters keep, ordered and cut here rather than in SQL: the order
     # of work reads the tree, which the read loads anyway, once for the spaces read.
     rows = conn.execute(query, parameters).fetchall()
+    stack: dict[str, dict] | None = None
+    if seen is not None:
+        listed = triage.listed(conn, [str(row["work_item_id"]) for row in rows], seen)
+        place = {found.work_item_id: index for index, found in enumerate(listed)}
+        stack = {found.work_item_id: triage.shown(found) for found in listed}
+        rows = sorted(
+            (row for row in rows if str(row["work_item_id"]) in place),
+            key=lambda row: place[str(row["work_item_id"])],
+        )
     spaces = {str(row["planning_space_id"]) for row in rows}
     tree = item_tree.of_spaces(conn, spaces)
-    rows.sort(key=lambda row: queue.list_key(row, tree))
+    if seen is None:
+        rows.sort(key=lambda row: queue.list_key(row, tree))
     rows = rows[start:] if limit is None else rows[start : start + max(1, int(limit))]
+    if stack is None:
+        stack = read_model.triage_stacks(conn, rows)
     # A row's place in its space's queue: one count of the queue of each space read.
     places = queue.places(
         queue.of_spaces(conn, {str(row["planning_space_id"]) for row in rows}, tree)
@@ -321,6 +349,7 @@ def list_work_items(
             projects=projects,
             read_space=read_space,
             settings=settings,
+            stack=stack,
         )
         outside = marked and str(row["planning_space_id"]) != space_id
         record["queue_order"] = None if outside else places.get(str(row["work_item_id"]))
@@ -348,6 +377,7 @@ def list_work_items_page(
     owner: str | None = None,
     parent: str | None = None,
     project: str | None = None,
+    triage_stack: str | None = None,
     other_spaces: bool = False,
     limit: int = 200,
     offset: int = 0,
@@ -364,6 +394,7 @@ def list_work_items_page(
         owner=owner,
         parent=parent,
         project=project,
+        triage_stack=triage_stack,
         other_spaces=other_spaces,
         limit=size + 1,
         offset=offset,
@@ -477,7 +508,8 @@ def search_work_items(
             tree = _page_tree(conn, rows)
             projects = item_projects.of_items(conn, rows)
             settings = participation.load(conn)
-            return [_word_hit(conn, row, found, tree, projects, settings) for row in rows]
+            stack = read_model.triage_stacks(conn, rows)
+            return [_word_hit(conn, row, found, tree, projects, settings, stack) for row in rows]
     return _phrase_search(conn, text, space_id=space_id, limit=limit, offset=offset)
 
 
@@ -488,11 +520,14 @@ def _word_hit(
     tree: item_tree.Tree,
     projects: Mapping[str, list[dict]],
     settings: participation.Settings,
+    stack: Mapping[str, dict],
 ) -> dict:
     """One item a word search found, with the lines that say why (`words.hits`)."""
 
     return {
-        **read_model.present(conn, row, tree=tree, projects=projects, settings=settings),
+        **read_model.present(
+            conn, row, tree=tree, projects=projects, settings=settings, stack=stack
+        ),
         **words.hits(conn, row, found),
     }
 
@@ -554,8 +589,11 @@ def _phrase_search(
     tree = _page_tree(conn, rows)
     projects = item_projects.of_items(conn, rows)
     settings = participation.load(conn)
+    stack = read_model.triage_stacks(conn, rows)
     for row in rows:
-        item = read_model.present(conn, row, tree=tree, projects=projects, settings=settings)
+        item = read_model.present(
+            conn, row, tree=tree, projects=projects, settings=settings, stack=stack
+        )
         comment_hit = row["comment_hit"] or decisions.get(str(row["work_item_id"]))
         if comment_hit:
             item["comment_hit"] = str(comment_hit)[:240]
@@ -699,6 +737,7 @@ def create_work_item(
     acceptance: object = None,
     projects: object = None,
     claimed: bool = False,
+    grouped: bool = False,
 ) -> dict:
     """A new item, placed where the work model puts it, accepted when it is accepted work.
 
@@ -726,7 +765,10 @@ def create_work_item(
     the executor; without it the active state is refused (`executor`).
     `projects` names the projects a task changes, each `named`
     (`item_projects`); a goal or stage names none. `space` may be left out: the
-    item then lies where `item_projects.placement` puts it.
+    item then lies where `item_projects.placement` puts it. `grouped` says the goal is
+    a triage review's group, which the same write proposes (`groups.propose`): the
+    setting `proposed_goal` is read for the group there, so the goal lies in triage
+    here and nobody is asked about it yet.
     """
 
     named_kind = model.public_kind(kind)
@@ -743,7 +785,7 @@ def create_work_item(
     parent_row = _parent_row(conn, space_id, parent)
     parent_id = None if parent_row is None else str(parent_row["work_item_id"])
     entry = _entry_basis(named)
-    proposed = _proposed_goal(conn, space_id, stored_kind, parent_id, entry)
+    proposed = None if grouped else _proposed_goal(conn, space_id, stored_kind, parent_id, entry)
     if proposed == participation.AGENT:
         entry = model.AGENT_BASIS
     given = _given(conn, parent_id, entry)
@@ -910,6 +952,18 @@ _ACCEPTANCE_POINTS = {
 }
 
 
+@dataclasses.dataclass(frozen=True)
+class Decided:
+    """An agent's own decision a move carries out where the owner's setting left it to the
+    agent, as a triage review's group (`groups.propose`): the point of the summary of
+    decisions and the line its mark says. A move into accepted work that carries one out
+    gives an item with no basis the basis `agent`, and the mark stands on the event that
+    recorded the move, its `accepted` or its `transitioned`."""
+
+    point: str
+    what: str
+
+
 def _accepted(
     conn: sqlite3.Connection,
     identity: str,
@@ -919,6 +973,7 @@ def _accepted(
     named: str | None = None,
     in_goal: bool = False,
     ruled: str | None = None,
+    decided: Decided | None = None,
 ) -> int:
     """Record that a write accepted the item on `basis`: its `accepted` event, which it
     answers, and the mark of an acceptance an agent makes alone in the summary of decisions.
@@ -928,10 +983,13 @@ def _accepted(
     basis decides, and under such a chain, where the order of bases gives `inherited`,
     the basis the write names: the agent's word that the owner gave the work is
     `assignment` whatever basis the order gives. `ruled` is the label a rule accepted by.
+    A decision the move carries out (`decided`) is marked as it says instead.
     """
 
     accepted = _log(conn, identity, "accepted", _accepted_detail(basis, ruled), author)
-    if calls.from_agent():
+    if decided is not None:
+        decisions.mark(conn, accepted, decided.point, decided.what)
+    elif calls.from_agent():
         said = named if basis == "inherited" else basis
         point = "task_in_goal" if in_goal else _ACCEPTANCE_POINTS.get(said or "")
         if point is not None:
@@ -972,16 +1030,34 @@ def _ask_about_task(
     author: str | None,
     *,
     moved_from: sqlite3.Row | None = None,
+    move: _HeldMove | None = None,
 ) -> pending.Waiting:
     """Ask the owner whether to take on a task an agent filed under the accepted goal or
     stage `goal_id`, which lies there in triage, or, with `moved_from` the task as it
     stands, one it moves there, which stays where it was; the action waits on the answer
-    (`requests.carry_out`)."""
+    (`requests.carry_out`).
+
+    `move` is the agent's move of a task lying there out of triage to a state other than
+    ready: the action keeps it as a `transition`, which the answer `do` makes."""
 
     row = read_model.item_by_id(conn, identity)
     reference = read_model.reference(conn, row)
     goal = read_model.reference(conn, read_model.item_by_id(conn, goal_id))
-    if moved_from is None:
+    if move is not None:
+        # It lies under the goal, as a filed one does; the answer makes the move it asked.
+        proposal = pending.Proposal(
+            "transition",
+            {"parent": goal_id, **move.params()},
+            f"accepted {reference} under {goal}",
+            seen={"parent": goal_id},
+            reason=move.reason or None,
+        )
+        prompt = (
+            f"An agent moves the task {reference}, lying in {goal}, to {move.state}:"
+            f" {row['title']}. Take it on and move it there, put it off, move it out of the"
+            " goal, or drop it."
+        )
+    elif moved_from is None:
         # It lies under the goal: moved away before the answer, it is no longer asked about.
         proposal = pending.Proposal(
             "accept",
@@ -1290,26 +1366,87 @@ def _moved_into_goal(
     return participation.load(conn).mode(str(row["planning_space_id"]), "task_in_goal")
 
 
-def _accepted_in_goal(
+@dataclasses.dataclass(frozen=True)
+class _Gate:
+    """The point of the owner's setting an agent's move out of triage into accepted work
+    meets, and who decides there by it: `agent` or `human`."""
+
+    point: str
+    mode: str
+
+
+def _gate(
     conn: sqlite3.Connection,
     row: sqlite3.Row,
     current: sqlite3.Row,
-    gives: str | None,
+    target: sqlite3.Row,
     named: str | None,
-) -> str | None:
-    """Who decides on a task an agent moves out of triage into accepted work under goals
-    and stages all accepted and open, on no one's word, `agent` or `human` by the
-    owner's setting of its space (`task_in_goal`); None for any other move.
+) -> _Gate | None:
+    """The point an agent's move of the item out of triage into accepted work meets on no
+    one's word; None for any other move, which meets none.
 
-    Such a move accepts it `inherited` (`gives`), as filing it there does. The agent's
-    `assignment` is the owner's word and passes; a claim by number meets no gate.
+    It is read before the move's refusals, the `acceptance` one among them. A goal with
+    no parent has no chain to take a basis from: `proposed_goal` decides on it, as on one
+    an agent files, and left to the agent the move accepts it on the basis `agent`. A
+    task under goals and stages all accepted and open would be `inherited`, as filing it
+    there makes it, and `task_in_goal` decides on it. The agent's `assignment` is the
+    owner's word and passes; a claim by number meets no gate.
     """
 
-    if gives != "inherited" or named is not None or not calls.from_agent():
+    if named is not None or not calls.from_agent() or row["acceptance"] is not None:
         return None
-    if row["kind"] == model.CONTAINER_KIND or current["category"] != "triage":
+    if current["category"] != "triage" or target["category"] not in model.ACCEPTED_CATEGORIES:
         return None
-    return participation.load(conn).mode(str(row["planning_space_id"]), "task_in_goal")
+    parent = None if row["parent_id"] is None else str(row["parent_id"])
+    if row["kind"] == model.CONTAINER_KIND:
+        point = "proposed_goal" if parent is None else None
+    else:
+        point = "task_in_goal" if item_tree.accepted_chain(conn, parent) else None
+    if point is None:
+        return None
+    return _Gate(point, participation.load(conn).mode(str(row["planning_space_id"]), point))
+
+
+@dataclasses.dataclass(frozen=True)
+class _HeldMove:
+    """An agent's move of a task out of triage that waits for the owner: the key of the
+    state it goes to, and the reason and what to check it was sent with."""
+
+    state: str
+    reason: str
+    to_check: str
+
+    def params(self) -> dict[str, str]:
+        """The move as its waiting action keeps it, what is empty left out."""
+
+        found = {"state": self.state, "reason": self.reason, "to_check": self.to_check}
+        return {name: value for name, value in found.items() if value}
+
+
+def _ask_about_move(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    gate: _Gate,
+    author: str | None,
+    warnings: list[str],
+    move: _HeldMove | None,
+) -> dict:
+    """The answer of an agent's move out of triage that `gate` keeps for the owner: the
+    item stays in triage, a goal asked about by the question `goal`, a task under its
+    goal by the question `task`, and `waits_for_owner` names the question.
+
+    The action of a task moved to ready is to accept it, as one filed there; of a task
+    moved anywhere else, `move`, the move itself, made by the answer `do`."""
+
+    identity = str(row["work_item_id"])
+    if gate.point == "proposed_goal":
+        waits = _ask_about_goal(conn, identity, author, by_agent=True)
+    else:
+        waits = _ask_about_task(conn, identity, str(row["parent_id"]), author, move=move)
+    answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    answer["warnings"] = warnings
+    answer["waits_for_owner"] = waits.answer()
+    return answer
 
 
 def _accept_by_label(
@@ -1730,6 +1867,32 @@ def pin_work_item(conn: sqlite3.Connection, reference: str, pinned: bool) -> str
     return identity
 
 
+def mark_triage(conn: sqlite3.Connection, reference: object, seen: bool, *, author: object) -> dict:
+    """Mark an item a triage review saw and left in the stack, or take the mark away: the
+    answer, `{seen_at}` or `{cleared: true}`.
+
+    Both refuse an item that does not wait in the stack, and say why. The event records
+    `seen` or `cleared`; no revision moves, since a mark changes nothing the item holds.
+    """
+
+    row = _row_for_write(conn, reference, None)
+    identity = str(row["work_item_id"])
+    if not triage.waiting(conn, items=[identity]):
+        raise model.WorkflowGuardError(
+            f"[triage_seen] {read_model.reference(conn, row)} is not waiting for a triage"
+            f" review: {triage.refusal(conn, identity)}"
+        )
+    answer = triage.mark(
+        conn,
+        identity,
+        seen,
+        author=model.actor(author),
+        call_id=calls.call_id(conn, identity),
+    )
+    _log(conn, identity, "triage_seen", "seen" if seen else "cleared", model.actor(author))
+    return answer
+
+
 def list_pins(conn: sqlite3.Connection, spaces: list[str]) -> list[dict]:
     """The pins of these spaces' items, by space key and number, as an export carries them."""
 
@@ -1820,15 +1983,18 @@ def transition_work_item(
     of work other live sessions do asks those sessions (`cancel_shared`): with the owner
     where the setting says `human`, alone otherwise, and then it waits for their
     answers (`waits_for_sessions`), even when it follows an owner's answer. So is
-    an agent's move of a task in triage into accepted work under goals and stages all
-    accepted and open, where `task_in_goal` says `human`: the task stays in triage and
-    the question `task` asks about it; left to the agent, the acceptance is marked in
-    the summary of decisions, as is an assignment an agent names. An agent's
-    completion of a goal, which confirms it, is the owner's to make where
-    `goal_close` says `human`: the goal stays as it is, with what the call wrote
-    before the move, and waits on the question `confirm` (`_ask_about_close`); left
-    to the agent, the close is marked. The
-    writes Valkama composes, the cancel an owner's answer carries out among them, are
+    an agent's move out of triage into accepted work on no one's word (`_gate`): of a
+    goal with no parent where `proposed_goal` says `human`, which the question `goal`
+    asks about, and of a task under goals and stages all accepted and open where
+    `task_in_goal` says `human`, which the question `task` asks about; either stays in
+    triage, and a task's move to a state other than ready waits as that move, which the
+    owner's answer `do` makes. Left to the agent, the goal is accepted on the basis
+    `agent`, and either acceptance is marked in the summary of decisions, as is an
+    assignment an agent names. An agent's completion of a goal, which confirms it, is
+    the owner's to make where `goal_close` says `human`: the goal stays as it is, with
+    what the call wrote before the move, and waits on the question `confirm`
+    (`_ask_about_close`); left to the agent, the close is marked. The writes Valkama
+    composes, the cancel an owner's answer carries out among them, are
     not gated. `following` names the owner's answered question, on the item or over
     it, that the cancel follows from: it needs no question of the owner and reads no
     setting.
@@ -1852,6 +2018,22 @@ def transition_work_item(
         following=following,
         gated=gated,
     )
+
+
+def decided_move(
+    conn: sqlite3.Connection,
+    reference: str,
+    state: str,
+    *,
+    reason: str,
+    decided: Decided,
+    author: str | None,
+) -> dict:
+    """Move an item as an agent's own decision the owner's setting left to the agent, a
+    write Valkama composes and so not gated: into accepted work on the basis `agent`, or
+    to cancelled, marked in the summary of decisions as `decided` says (`Decided`)."""
+
+    return _transition(conn, reference, state, reason=reason, author=author, decided=decided)
 
 
 #: The refusal a launch's put-back is spared: it returns a task to where it stood.
@@ -1960,13 +2142,16 @@ def _transition(
     following: object = None,
     gated: bool = False,
     agreed: str | None = None,
+    decided: Decided | None = None,
 ) -> dict:
     """`transition_work_item`, sparing the refusals named in `spared`; `ruled` is the
     label whose rule accepts the item on this move (`label_rule`); `agreed` is the line
-    of the summary of decisions a cancel the sessions agreed to marks (`cancel_agreed`)."""
+    of the summary of decisions a cancel the sessions agreed to marks (`cancel_agreed`);
+    `decided` the agent's own decision the move carries out (`decided_move`)."""
 
     row = _row_for_write(conn, reference, expected_revision)
-    named = model.named_basis(acceptance)
+    # The agent's own decision names its basis, as an assignment does.
+    named = model.AGENT_BASIS if decided is not None else model.named_basis(acceptance)
     identity = str(row["work_item_id"])
     current = read_model.state_by_id(conn, str(row["state_id"]))
     target = _destination(conn, row, states.resolve(conn, str(row["workflow_id"]), state))
@@ -1987,6 +2172,11 @@ def _transition(
     check = _to_check(to_check, into_review, target)
     note = transition_reason(reason, str(target["key"]))
     gives = LABEL_RULE if ruled is not None else _basis(conn, row, target, named)
+    accept_gate = _gate(conn, row, current, target, named) if gated else None
+    if accept_gate is not None and accept_gate.point == "proposed_goal":
+        # The setting gives the goal its basis before the `acceptance` refusal reads it,
+        # so a move that waits for the owner is checked as it would be made now.
+        gives = model.AGENT_BASIS
     refusals, warnings = transitions.findings(
         conn,
         row,
@@ -2010,15 +2200,11 @@ def _transition(
         # Checked as the close would be made now, confirming the goal is the owner's: it
         # waits on their question `confirm`.
         return _ask_about_close(conn, row, target, note, author, warnings)
-    in_goal = _accepted_in_goal(conn, row, current, gives, named) if gated else None
-    if in_goal == participation.HUMAN:
-        # Checked as the move would be made now, taking the task on is the owner's: it
-        # stays in triage under its goal and waits for the answer.
-        waits = _ask_about_task(conn, identity, str(row["parent_id"]), author)
-        answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
-        answer["warnings"] = warnings
-        answer["waits_for_owner"] = waits.answer()
-        return answer
+    if accept_gate is not None and accept_gate.mode == participation.HUMAN:
+        # Checked as the move would be made now, taking the goal or the task on is the
+        # owner's: it stays in triage and waits for the answer.
+        move = None if target["category"] == "ready" else _HeldMove(str(target["key"]), note, check)
+        return _ask_about_move(conn, row, accept_gate, author, warnings, move)
     updates = ["state_id = ?"]
     parameters: list[object] = [str(target["state_id"])]
     updates += _accepting(row, target, gives, parameters)
@@ -2052,8 +2238,9 @@ def _transition(
             gives,
             author,
             named=named,
-            in_goal=in_goal == participation.AGENT,
+            in_goal=accept_gate is not None and accept_gate.point == "task_in_goal",
             ruled=ruled,
+            decided=decided,
         )
     _settled_by_owner(conn, identity, str(current["category"]), target, author)
     if opened:
@@ -2072,6 +2259,8 @@ def _transition(
             decisions.mark(conn, moved, gate.point, _cancel_what(conn, row, followed))
         if agreed is not None:
             decisions.mark(conn, moved, "cancel_shared", agreed)
+        if decided is not None and gives is None:
+            decisions.mark(conn, moved, decided.point, decided.what)
         if confirming == participation.AGENT:
             decisions.mark(conn, moved, "goal_close", _close_what(conn, row))
     if held:
@@ -2155,6 +2344,7 @@ def defer_work_item(
     expected_revision: int | None = None,
     author: str | None = None,
     gated: bool = False,
+    decided: Decided | None = None,
 ) -> dict:
     """Put an item off until a day, a time or another item's close (`deferral`).
 
@@ -2170,7 +2360,8 @@ def defer_work_item(
     putting off of an accepted goal or stage takes back the owner's acceptance, and is
     the owner's to make where `goal_defer` says `human`. Then the item stays as it is
     and the answer names what waits in `waits_for_owner` (`_ask_about_put_off`); left
-    to the agent, it is marked in the summary of decisions.
+    to the agent, it is marked in the summary of decisions. An agent's own decision the
+    put-off carries out (`decided`, Valkama's composed write) is marked as it says.
     """
 
     row = _row_for_write(conn, reference, expected_revision)
@@ -2210,6 +2401,7 @@ def defer_work_item(
         reason=f"until {said}: {why}",
         author=author,
         spared=_DEFER_SPARES,
+        decided=decided,
     )
     if putting_off == participation.AGENT:
         decisions.mark(
@@ -2529,6 +2721,21 @@ _FILED_BY = (
 )
 
 
+def filed_by_caller(conn: sqlite3.Connection, identity: str) -> bool:
+    """Whether the caller's own work filed the item: its `created` was written by a call
+    of the caller's session, confirmed. An item filed with no confirmed session, or by
+    another session, lies outside it (`cancel_outside`)."""
+
+    caller = calls.confirmed_session()
+    filed = conn.execute(_FILED_BY, (identity,)).fetchone()
+    return (
+        caller is not None
+        and filed is not None
+        and filed["identity_state"] == calls.CONFIRMED
+        and filed["session_id"] == caller
+    )
+
+
 def _following(
     conn: sqlite3.Connection, row: sqlite3.Row, following: object, cancel: bool
 ) -> str | None:
@@ -2596,14 +2803,7 @@ def _cancel_point(
         settings = participation.load(conn)
         mode = settings.mode(str(row["planning_space_id"]), "cancel_shared")
         return _CancelGate("cancel_shared", FOLLOWING if followed else mode, busy)
-    filed = conn.execute(_FILED_BY, (str(row["work_item_id"]),)).fetchone()
-    own = (
-        caller is not None
-        and filed is not None
-        and filed["identity_state"] == calls.CONFIRMED
-        and filed["session_id"] == caller
-    )
-    if own:
+    if filed_by_caller(conn, str(row["work_item_id"])):
         return None
     if followed is not None:
         return _CancelGate("cancel_outside", FOLLOWING)

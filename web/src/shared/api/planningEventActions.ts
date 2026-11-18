@@ -47,6 +47,7 @@ const EVENT_ACTIONS = [
   'commit_attached',
   'commit_detached',
   'commit_rewritten',
+  'triage_seen',
 ] as const
 
 /** The longest detail any event but `labels_changed` carries. */

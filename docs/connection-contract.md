@@ -113,10 +113,10 @@ changed. `url` is described in [The address of a work item](#the-address-of-a-wo
 
 | Tool | Also carries |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
+| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim`, `links` or `group`, and `waits_for_owner` when a group waits for the owner ([A group of findings](#a-group-of-findings)); `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)); `project_roots` unless it released |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`, `by_previous_holder`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim`; `unreported_commits`, `unreported_total` and `unreported_unread` when a close found any (see [The net at a close](#the-net-at-a-close)) |
+| `apply_work_item_changes` | `applied`, what each group changed, with `applied.triage_seen` (`{seen_at}` or `{cleared: true}`) when the batch marked an item, `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim`; `unreported_commits`, `unreported_total` and `unreported_unread` when a close found any (see [The net at a close](#the-net-at-a-close)) |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
 `project_roots` is the root of each project the claimed task changes, or of its
@@ -200,7 +200,14 @@ in every space unless `space` is given. With `space`, it keeps that space's
 items that name it, and other spaces' items that name it when it is one of the
 space's projects. A goal or stage stores no projects and names those of every
 task under it, at any depth, so it is kept when one of them names the project;
-a project no item names lists nothing.
+a project no item names lists nothing. They take `triage_stack` as well,
+`unseen` or `seen`: the list keeps the items that wait for a triage review (see
+`triage_stack` in [The work model](#the-work-model)) that no review marked, or
+those one did, oldest entry first. An item entered at its last change of state,
+or at its creation when its history records none; a tie goes to the smaller space
+key, then the smaller number. Any other value is refused:
+`triage_stack must be one of seen, unseen`. The other filters narrow it as they
+narrow each other.
 
 Each answer is one page. `truncated` is true when more items match than the page
 holds, and `next_offset` is then the offset of the next page; on the last page
@@ -313,6 +320,7 @@ model; the card's `state` has no `is_terminal`:
 | `open` | whether its work is still open: false in a `completed` or `cancelled` state. A reader decides openness by it, since an accepted open goal or stage has no `state` to read `is_terminal` from |
 | `container_state` | for an accepted open goal or stage, `not_started`, `in_progress` or `awaiting_confirmation`; `null` for every other item, a goal or stage in `triage`, `deferred`, `completed` or `cancelled` included, whose `state` says where it stands |
 | `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule`, `agent` (an agent's own decision where the owner's participation setting leaves it to the agent) or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
+| `triage_stack` | `{seen_at, seen_by}`, only on an item that waits for a triage review: in a `triage` state, under no goal or stage or under goals and stages all accepted and open, and with no question to the owner open on it. When a review marked it seen and who; both `null` while no review did. Absent from every other item |
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
 | `cancelled_blockers` | the cancelled items still linked `blocks` to it, by reference, which `waits_for` no longer names: the work it waited for will not be done. Only on open work and only when there is one; it lasts while the link stands |
@@ -325,7 +333,8 @@ Four other answers carry only some of these fields:
 - an MCP list row (`list_work_items`, unless `verbose`) carries `state`, as its
   key (`null` for an accepted open goal or stage), `container_state` where the
   item has one, `queue_order` where the queue gives it and `withheld` where it
-  does not; none of `open`, `acceptance`, `started_at`, `waits_for` or `workable`;
+  does not; none of `open`, `acceptance`, `triage_stack`, `started_at`, `waits_for`
+  or `workable`;
 - an HTTP chain member of `GET /api/planning/work-item/chain` carries `state`,
   `open`, `container_state` and `workable`; none of `acceptance`, `started_at` or
   `waits_for`;
@@ -394,7 +403,7 @@ the same at any setting. A point of the setting is `agent` or `human`:
 
 | Point | The agent's write it decides |
 | --- | --- |
-| `proposed_goal` | `create_work_item` of a goal with no parent, which then lies in `triage` |
+| `proposed_goal` | `create_work_item` of a goal with no parent, which then lies in `triage`, and a move of such a goal out of `triage` into accepted work without `acceptance`, which accepts it on `agent` |
 | `task_in_goal` | a task filed under goals and stages all accepted and open, or moved there by `parent` or out of `triage` into them |
 | `cancel_outside` | a cancel of an item that its own work did not file |
 | `cancel_shared` | a cancel of work other live sessions do |
@@ -468,8 +477,8 @@ question Valkama asked itself (a put-off goal that came back, which nobody
 withdraws), and the call's `author` when it proved no session. `proposed` holds
 the `until` of a put-off, the steps `removed` (`id`, `text`) and `rewritten`
 (`id`, `from`, `to`) of a step change, or the `summary` of a completion.
-`cancel_list`, read as it stands, comes with `goal` and `cancel`, and `consent`
-with `cancel_shared`. The compact form carries `purpose` and `action.point`.
+`cancel_list`, read as it stands, comes with `goal`, `cancel` and `triage`, and
+`consent` with `cancel_shared`. The compact form carries `purpose` and `action.point`.
 
 The owner's answer makes the write, if it still applies, as the owner's: the
 basis it gives is `owner`, and the `accepted`, `opened`, `transitioned` and
@@ -521,6 +530,146 @@ carry it.
 | `[consent]` | 400 | a consent answer that is not `agree`, `object` with a `reason` or `moved_out`, or `moved_out` while the session's work is still in the list |
 | `owner_only` | 403 | an agent's answer to a question with a purpose but `consent`, or to one a waiting write carries; an agent's write of the setting |
 | `not_asker` | 403 | a withdrawal by another session than the one that asked, or of a question Valkama asked |
+
+#### The triage stack
+
+The items that carry `triage_stack` wait for a triage review: in a `triage`
+state, under no goal or stage or under goals and stages all accepted and open,
+with no question to the owner open on them. A review lists them with the
+`triage_stack` filter of the lists, oldest entry first, decides them by a merge,
+a [group](#a-group-of-findings) or a move, and marks each one it leaves as it is
+with the batch's group `triage_seen`, in `apply_work_item_changes` and
+`POST /api/planning/work-item/apply`:
+
+- `true` marks the item seen by the call, and marking it again moves the mark to
+  the later call; `false` takes the mark away. The answer carries
+  `applied.triage_seen`, `{"seen_at": "…"}` or `{"cleared": true}`. The item
+  records a `triage_seen` event with the detail `seen` or `cleared`, which is told
+  to nobody, and its revision does not move.
+- The group comes after `summary`, so a comment sent in the same call is written
+  first and the mark stays. Beside `transition`, `defer` or `move_out` it is
+  refused with `invalid_request` (400): `[triage_seen] a mark stays only on an
+  item that stays in triage: send it without transition, defer or move_out`.
+- An item that does not wait in the stack is refused, for `true` and `false`
+  alike, with `workflow_guard` (409): `[triage_seen] MAIN-12 is not waiting for a
+  triage review: <why>`, the why being `it is not in triage`, `it waits for the
+  owner's answer` or `it lies under MAIN-3`.
+
+The store takes the mark away, with no event of its own, when the item's state or
+parent changes, when it gains a comment (a reply, a summary and the note a merge
+into it writes among them) or a question to the owner, and when a merge moves a
+thread or a pending question to the owner onto it. A change of state takes it
+away, so only an item in `triage` holds one. A request asked of a session and a
+list under a comment are no questions to the owner and leave it.
+
+A row of the MCP `list_work_items` carries no `triage_stack`, as the list above
+says: a review lists the stack with the filter, which already says whether the
+rows it gives are marked, and reads when and by whom on `get_work_item`, a
+`verbose` list or the HTTP list.
+
+#### A group of findings
+
+A review of work in `triage` proposes tasks that belong together as one new goal:
+`create_work_item` of a goal, and `POST /api/planning/work-items`, take the step
+`group` after `links`:
+
+```json
+{"kind": "goal", "title": "…", "checklist": ["…"],
+ "group": {"items": ["MAIN-41", "MAIN-42"], "answer": "later", "until": "2026-12-01", "why": "…"}}
+```
+
+`items` names 1 to 20 distinct tasks that wait in the triage stack: in `triage`,
+under no goal or stage, in the goal's space, with no question of the owner open
+on them. A task alone is one of priority `high` or `urgent`, its priority read
+when the group is written. `answer` is `do`, `later` or `drop`; `until`, a day or
+an item's reference as `defer` takes it, comes with `later` and only with it; `why` is one
+line of up to 386 characters, the longest that `agent: later: <why>` holds whole
+as a defer reason. A longer one is refused and no reason is cut. The goal names
+its conditions in `checklist` and
+no `parent`, `acceptance`, `claim` or `state`. The goal is created in `triage`,
+the tasks move under it at once, and the answer carries
+`applied.group = {items, answer, carried_out}`.
+
+Who decides reads two points, `finding` and `proposed_goal`, and the owner does
+if either says `human`; for `drop` also where `cancel_outside` says `human` and
+a task was filed outside the agent's own work. Otherwise the same call carries
+the answer out (`carried_out: true`): `do` accepts the goal on `agent` with its
+tasks `inherited`; `later` puts it off until `until`, its reason
+`agent: later: <why>`; `drop` cancels each task, its reason
+`Not to be done: <why>`, then the goal. One decision is marked, at `finding`, on
+the goal's event that records the answer: `group «<title>»: do 3 items`, or
+`do 1 item` for a group of one. A person's group is the owner's write, made at
+once.
+
+Where the owner decides, nothing is carried out (`carried_out: false`): the goal
+stays in `triage` with its tasks under it, `waits_for_owner` names the point
+`finding`, and the question of purpose `triage`, `Group of <n> items: «<title>»`
+(`Group of 1 item` for one),
+offers `answer` (`do`, `later`, `drop`, the agent's recommended with its
+`why`), `items` (a `multi_choice`, one option per task with its lowercase
+reference as id and `MAIN-41 · <title>` as label, all recommended), `until` and
+`cancels`. Its `action.proposed` holds the goal's `conditions` when asked, the
+`items` (`reference`, `title`), `answer`, `until` with `later`, and `why`. While
+it waits, no agent claims or moves a task of the group (`acceptance_question`),
+and no rule of a label accepts one.
+
+The owner's answer is carried out as theirs in the write that gives it, the tasks
+it keeps being the ones `items` ticks. First every open child of the goal lying
+in `triage` that is not ticked, one put under the goal after the question among
+them, leaves it by `move_out` with the reason `owner: not in this group`: it
+goes back to the triage stack, unmarked, entering it with the answer. A ticked
+task that no longer lies under the goal in `triage` (moved out, accepted,
+closed or merged meanwhile) takes no part and stays as it is. Then `do` accepts
+the goal on `owner`, and the ticked tasks under it in `triage` take `inherited`;
+`later` puts the goal off until the answer's `until`, or the agent's when it
+names none, with the reason `owner: later`, the tasks lying under it; `drop`
+cancels each ticked task under the goal in `triage` with the reason `owner: not
+to be done`, then the goal, whose summary says `Not needed: the owner answered
+not to do it` unless it said what was done (the note, when given, is the `why`
+of these summaries). Open work not in `triage` under the goal, such as a task a
+person accepted meanwhile, was not in the question, and the goal's cancel would
+close it: `drop` is then refused with `cancel_list` (409), the list and its
+token; answered again with that token in `cancels`, it cancels the goal by the
+list, that work with it.
+A `do` or `later` with no ticked task left under the goal in `triage` no longer
+applies: the action ends `dropped` (`finding: no item ticked lies under the goal
+in triage`), the goal staying in `triage` as a card of the stack; so does any
+answer once the goal left `triage` or was accepted, with nothing done. The
+action ends `carried_out` when the owner's answer is the agent's, `declined`
+otherwise. The answer's record says what was done:
+
+```json
+"carried_out": {"answer": "do", "moved_out": ["MAIN-42"], "skipped": ["MAIN-43"]}
+```
+
+The session that asked may withdraw the question instead, which dissolves the
+group as its own write: the action ends `withdrawn`, every child of the goal
+lying in `triage` leaves it by `move_out` with the reason `group withdrawn` and
+goes back to the triage stack, and the goal, with nothing open left under it, is
+cancelled with the reason `group withdrawn`, its summary saying `Not needed: the
+group was withdrawn` unless it said what was done. Work a person accepted under
+the goal meanwhile keeps the goal open in `triage`, since its cancel would close
+that work too.
+
+A person who decides on the goal before answering decides the group by that
+write. Moving the goal into accepted work accepts it on `owner`, and the tasks
+under it in `triage` take `inherited`; putting it off leaves them under it.
+Either ends the question `withdrawn` and the action `dropped`
+(`finding: taken by the owner`). Cancelling the goal goes by its cancel list,
+the tasks under it included, and the close ends the question as `item_cancelled`
+and the action `dropped`.
+
+| Code | Status | When |
+| --- | --- | --- |
+| `[group]` | 400 | the form: `[group] a group is a new goal without a parent, with its conditions in checklist and 1 to 20 items: <what is wrong>` |
+| `[group]` | 409 | a task alone below `high`: `[group] a group of one takes a task of priority high or urgent: MAIN-41 is medium` |
+| `[group]` | 409 | a task that does not wait in the stack: `[group] MAIN-41 is not waiting for a triage review: <why>`, the why being `it is in another space`, `it is a goal or stage`, `it is not in triage`, `it lies under MAIN-3` or `it waits for the owner's answer` |
+| `[triage]` | 400 | the owner's answer: `do` or `later` with no task ticked, `[triage] tick what is to be done, or answer drop`; `later` with no `until` of its own or the agent's, `[triage] later needs until: a date (2026-12-01) or an item reference` |
+| `cancel_list` | 409 | `drop` while open work not in `triage` stands under the goal, and `cancels` is missing or names another list: the list and its `list_token`, as a cancel's first call hands them over |
+
+Either `[group]` refusal creates nothing and spends no number; a `[triage]` or
+`cancel_list` refusal of the owner's answer writes nothing and leaves the
+question open.
 
 #### Retired words
 
@@ -684,7 +833,8 @@ take it, given and not given rows alike; a goal or stage takes the parts of the
 key from its own priority, the earliest start under it and its parent. Without a
 space the rows of different spaces interleave, a tie going to the smaller space
 key. The key reads stored fields and the tree of items, never the clock or a
-lease.
+lease. A list read with `triage_stack` takes the stack's order instead, which is
+total as well.
 
 A row of a list read -- `list_work_items`, its pages, `work_items` of
 `GET /api/planning` -- and a chain member carry `queue_order`: the row's 1-based
@@ -1425,6 +1575,28 @@ its own form: `review`, `confirm`, `return`, `goal`, `task`, `cancel`,
 `condition` and `triage`, each answered once, by the owner, and carried out in
 the same write ([Writes that wait for the owner](#writes-that-wait-for-the-owner)).
 
+Beside the questions, every answer of that read carries `triage_due`: one line
+for each space read whose work waiting for a triage review has grown past the
+owner's thresholds, such as
+`[{"space": {"key": "MAIN", "name": "Main"}, "count": 120, "oldest_at": "2026-11-02T09:12:00Z"}]`.
+The work counted is the items in `triage` that no question to the owner holds,
+with no parent or under goals and stages all accepted and open, that no review
+has marked `triage_seen`. A space has a line while its `triage_reminder` is `on`
+and that work counts at least `triage_count` items, or the oldest of them came
+to `triage` at least `triage_age_days` days ago (see
+[the owner's participation](#writes-that-wait-for-the-owner)); `count` is how
+many there are and `oldest_at` when the oldest came. The answer carries no clock
+of the server: the reader counts the age from `oldest_at`. A line is no
+question: it is not in `items`, `total`, `limit`, `offset` or `has_more`, and it
+takes no answer. Nothing stores it, so it goes once the work is reviewed, and
+the MCP list of requests does not carry it.
+
+The lines belong to the whole list, not to a page, so only the first page
+carries them: `triage_due` is empty when `offset` is above 0, and a reader that
+reads on while `has_more` holds takes them from that first page. It is empty too
+when `status` names anything but `pending` and when `reference` names one item.
+A source the read could not reach is named in `coverage` and has no line.
+
 ### The card's waiting question
 
 `/open/<reference>?reveal=question` leads to the card as the plain address does, under the
@@ -1987,8 +2159,9 @@ A category counts the items of the scope that stand in a state of it. An accepte
 goal or stage stands in no category and is in none of these counts. Work in an open
 category is counted as it stands now; `completed` and `cancelled` count the items that
 came to stand there inside the period, and only those. An item came to stand where it
-is at its last state entry, the newest `created`, `transitioned` or `opened` event of
-its history, or at its creation when its history holds none. `oldest` is the item of an
+is at its last state entry in history order: the last `created`, `transitioned` or
+`opened` event of its history as written (the highest id, not the latest `created_at`),
+or at its creation when its history holds none. `oldest` is the item of an
 open category that came to stand there first, with that moment as `since`; it is `null`
 for a category nothing stands in, and always for `completed` and `cancelled`. How long
 ago that was is the reader's to say: the answer holds no clock of the server.
@@ -2928,6 +3101,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?, addressees?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
+| `triage_seen` | `true` or `false`; not with `transition`, `defer` or `move_out` | only here, see [The triage stack](#the-triage-stack) |
 | `transition` | `{state, reason?, force?, acceptance?, to_check?, cancels?}` | `/transition` |
 | `defer` | `{until, reason, force?}`; not with `transition`, `move_out` or `convert` | `/defer`, see [Putting work off](#putting-work-off) |
 | `move_out` | `{reason, force?}`; not with `transition`, `defer` or `convert` | `/move-out`, see [Moving work out of a goal or stage](#moving-work-out-of-a-goal-or-stage) |

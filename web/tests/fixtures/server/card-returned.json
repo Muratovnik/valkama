@@ -36,6 +36,10 @@
         "open": true,
         "container_state": null,
         "acceptance": null,
+        "triage_stack": {
+          "seen_at": null,
+          "seen_by": null
+        },
         "started_at": null,
         "waits_for": [],
         "claim_ref": "",

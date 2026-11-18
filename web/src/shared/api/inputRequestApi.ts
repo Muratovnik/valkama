@@ -52,7 +52,8 @@ const entryIdentity = (entry: InputRequestEntry) =>
  *
  * A page that brings nothing new ends the read with `has_more` still true, so a list that
  * moved under the read says it is incomplete rather than reading forever; a source one
- * page could not read stays unavailable in the whole.
+ * page could not read stays unavailable in the whole. The line that a space's triage is
+ * due belongs to the whole list, and only the first page carries it.
  */
 export async function fetchInputRequests(
   options: {
@@ -79,6 +80,7 @@ export async function fetchInputRequests(
     )
   }
   let page = await read(0)
+  const due = page.triage_due
   let offset = page.items.length
   const items = [...page.items]
   const seen = new Set(items.map((entry) => entryIdentity(entry)))
@@ -102,7 +104,7 @@ export async function fetchInputRequests(
   const coverage = page.coverage.map(
     (source) => skipped.get(JSON.stringify(source.space_ref)) ?? source,
   )
-  return { ...page, items, coverage }
+  return { ...page, items, coverage, triage_due: due }
 }
 
 export async function fetchInputRequest(

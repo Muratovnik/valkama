@@ -21,6 +21,7 @@ from . import (
     acknowledgements,
     api,
     calls,
+    groups,
     images,
     item_projects,
     mention_records,
@@ -30,6 +31,7 @@ from . import (
     request_model,
     requests,
     service,
+    triage,
     waiting,
     words,
 )
@@ -464,7 +466,10 @@ TOOLS = [
         " the item changes. space is where it lies: leave it out and the server places it"
         " under its parent's space, else in the home space of its projects, else in your"
         " session's space. Projects of two spaces need space, one of them. A goal or"
-        " stage names no projects.",
+        " stage names no projects. group, with kind goal, a checklist and no parent,"
+        " proposes the goal for 2 to 20 tasks waiting for a triage review, or for one of"
+        " priority high or urgent: they move under it, and the answer group names (do,"
+        " later with until, drop) is carried out at once, or waits for the owner as waits_for_owner says.",
         WRITES,
         {
             "space": _SPACE,
@@ -533,6 +538,28 @@ TOOLS = [
                     },
                     "required": ["other", "kind"],
                 },
+            },
+            "group": {
+                "type": "object",
+                "description": "The tasks of the triage stack this new goal groups, each"
+                " lying under no goal, and your answer about them, applied after the links."
+                " The answer's applied.group names the items, the answer and carried_out.",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "minItems": groups.FEWEST,
+                        "maxItems": groups.MOST,
+                        "items": WORK_ITEM_REFERENCE,
+                    },
+                    "answer": {"type": "string", "enum": list(groups.ANSWERS)},
+                    "until": {
+                        "type": "string",
+                        "description": "With later alone: a day YYYY-MM-DD or the item it"
+                        " waits on.",
+                    },
+                    "why": {"type": "string", "maxLength": groups.WHY_LIMIT},
+                },
+                "required": ["items", "answer", "why"],
             },
             "author": _AUTHOR,
             "verbose": _VERBOSE,
@@ -656,7 +683,9 @@ TOOLS = [
         " space's items and other spaces' items that name one of its projects, marked"
         " other_space. project keeps the items that name that project, in every space"
         " unless space is given; a goal or stage names what a task under it names."
-        " kind=goal lists the goals, kind=stage the stages."
+        " kind=goal lists the goals, kind=stage the stages. triage_stack unseen lists the"
+        " items a triage review is to decide that no review marked, oldest first; seen lists"
+        " the marked ones."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -680,6 +709,7 @@ TOOLS = [
                 "description": "Only the items that name this project, by its id in the"
                 " project registry.",
             },
+            "triage_stack": {"type": "string", "enum": [triage.UNSEEN, triage.SEEN]},
             "limit": _INT,
             "offset": _OFFSET,
             "verbose": _VERBOSE_ROWS,
@@ -893,8 +923,8 @@ TOOLS = [
         " in this order: claim,"
         " subscribe, update, convert, checklist, checklist_ticks, refs, commits, links, comment"
         " or comments,"
-        " resolutions, questions, summary, then one of transition, defer or move_out — so a"
-        " claim and"
+        " resolutions, questions, summary, triage_seen, then one of transition, defer or"
+        " move_out — so a claim and"
         " its steps take one call, and a closing"
         " transition sees the ticks and the summary sent with it, and a transition"
         " sent with claim moves an item the claim has already started; a closing"
@@ -913,7 +943,9 @@ TOOLS = [
         " is removed or rewritten; a step sent by its id with clarifies: true only clarifies"
         " its wording and is written at once. transition.following names the owner's answer a"
         " cancel follows, which is no act of a person against that cancel. While the owner has not answered whether an item is to be done,"
-        " only a cancel moves it out of triage (acceptance_question).",
+        " only a cancel moves it out of triage (acceptance_question). triage_seen true marks an"
+        " item waiting for a triage review as seen; a later comment, owner question, move or"
+        " change of state clears it.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -1178,6 +1210,12 @@ TOOLS = [
                     "mentions": _TEXT_MENTIONS,
                 },
                 "required": ["done", "next"],
+            },
+            "triage_seen": {
+                "type": "boolean",
+                "description": "true marks an item waiting for a triage review as seen, false"
+                " takes the mark away; the answer's applied.triage_seen says seen_at or cleared."
+                " Not with transition, defer or move_out in the same call.",
             },
             "transition": {
                 "type": "object",
@@ -2010,6 +2048,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
             "owner",
             "parent",
             "project",
+            "triage_stack",
             "limit",
             "offset",
         )

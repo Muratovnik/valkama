@@ -12,7 +12,9 @@ A question with a purpose, such as the one a move into review asks, is the owner
 to answer, in Valkama; its answer is carried out in the write that gives it
 (`carry_out`), so it is never declined or changed, and only the session that asked
 it withdraws it. A question about a write that waits for the owner (`pending`) carries
-that write out, declines it or drops it, by its point (`CARRIERS`).
+that write out, declines it or drops it, by its point (`CARRIERS`); the answer about a
+triage review's group of findings is carried out by `groups.carry_out`, and its
+withdrawal dissolves the group (`groups.withdrawn`).
 
 A decision recommends an answer in every required field. Where the owner's setting
 leaves decisions to the agent, an agent's decision to the owner is answered by those
@@ -33,6 +35,7 @@ from . import (
     consent,
     decisions,
     deferral,
+    groups,
     leases,
     model,
     participation,
@@ -1058,7 +1061,7 @@ def _check_purpose(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> N
 
 def carry_out(
     conn: sqlite3.Connection, row: sqlite3.Row, answers: dict | None, note: str, author: str | None
-) -> str | None:
+) -> str | dict | None:
     """What the answer to a question with a purpose does, in the write that gives it.
 
     `answers` is the answer as stored, None for a withdrawal. Review's answer
@@ -1130,13 +1133,13 @@ def _carry_action(
     answers: dict | None,
     note: str,
     author: str | None,
-) -> str | None:
+) -> str | dict | None:
     """The answer to a question about a write that waits for the owner, or its withdrawal.
 
     A withdrawal withdraws the action, and every other question and request of it
-    ends with it. An answer to a request asked of a session carries nothing out here,
-    but a session's answer about a cancel of its work may settle that cancel
-    (`consent.settle`).
+    ends with it; a group's dissolves the group too (`groups.withdrawn`). An answer to
+    a request asked of a session carries nothing out here, but a session's answer about
+    a cancel of its work may settle that cancel (`consent.settle`).
     The owner's answer to an action that no longer applies drops it (`pending.inapplicable`),
     the answer standing as given; to one that still does, the action ends with the
     outcome its carrier gives the choice, and then the carrier does what the choice
@@ -1147,6 +1150,10 @@ def _carry_action(
     """
 
     if answers is None:
+        if action.kind == "group":
+            # The group dissolves with its question: its tasks go back to the stack.
+            groups.withdrawn(conn, action, author)
+            return pending.WITHDRAWN
         pending.end(conn, action, pending.WITHDRAWN, author=author)
         if action.point == "goal_close":
             # The confirmation the asker withdrew is the sweep's to ask again.
@@ -1157,6 +1164,10 @@ def _carry_action(
         if action.point == "cancel_shared":
             consent.settle(conn, action)
         return None
+    if action.kind == "group":
+        # The owner's answer about a group of findings: it moves out the tasks they did
+        # not keep before it decides whether it still applies (`groups.carry_out`).
+        return groups.carry_out(conn, row, action, answers, note, author)
     carrier = CARRIERS.get(action.point)
     given = answers.get(request_model.REVIEW_ANSWER)
     why = pending.inapplicable(conn, action)
@@ -1171,11 +1182,7 @@ def _carry_action(
         )
     outcome = carrier.outcomes.get(str(given)) if given is not None else None
     if outcome is None:
-        choices = ", ".join(carrier.outcomes)
-        raise model.PlanningError(
-            f"[purpose] answer is one of {choices}: an own variant carries nothing out;"
-            " say more in note"
-        )
+        raise pending.own_variant(carrier.outcomes)
     pending.end(conn, action, outcome, author=author)
     # The owner makes the write; its events say who asked for it, as the question does.
     with service.asked_by(pending.asker(conn, action, str(row["author"]))):
@@ -1395,7 +1402,9 @@ def _task(
     triage, or one it moved there, which stayed where it was (an action of kind `parent`).
 
     `do` takes it on in the goal: a task lying there moves to its first ready state,
-    `inherited` as filing it there would make it, and a moved one is moved there now,
+    `inherited` as filing it there would make it, or, where the agent moved it out of
+    triage to another state (an action of kind `transition`), to that state with the
+    reason and what to check the agent sent; a moved one is moved there now,
     accepted from triage the same way. `later` puts it off under the goal until the
     answer's `until`, a moved one moved there first. `out` takes a task lying there out
     of the goal to triage (`split.move_out`), linked as discovered from the goal, and
@@ -1409,7 +1418,16 @@ def _task(
     given = answers.get(request_model.REVIEW_ANSWER)
     if moving and given in (request_model.RETURN_DO, request_model.RETURN_LATER):
         service.update_work_item(conn, reference, parent=goal, author=author)
-    if given == request_model.RETURN_DO and not moving:
+    if given == request_model.RETURN_DO and action.kind == "transition":
+        service.transition_work_item(
+            conn,
+            reference,
+            str(action.params["state"]),
+            reason=str(action.params.get("reason") or ""),
+            to_check=action.params.get("to_check"),
+            author=author,
+        )
+    elif given == request_model.RETURN_DO and not moving:
         key = _first_state(conn, item, "ready")
         service.transition_work_item(conn, reference, key, reason=_said(note, key), author=author)
     elif given == request_model.RETURN_LATER:

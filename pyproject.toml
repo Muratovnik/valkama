@@ -337,11 +337,14 @@ source_modules = [
   "server.planning.pending",
   "server.planning.questions",
   "server.planning.read_model",
+  "server.planning.standing",
   "server.planning.transitions",
+  "server.planning.triage",
 ]
 forbidden_modules = [
   "server.planning.api",
   "server.planning.consent",
+  "server.planning.groups",
   "server.planning.requests",
   "server.planning.service",
   "server.planning.split",

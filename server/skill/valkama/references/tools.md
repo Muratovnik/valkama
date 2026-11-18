@@ -52,7 +52,8 @@ says what it is:
   it is not. Work under goals and stages that are all accepted and open is accepted
   as part of them (`inherited`); a claim of any other work accepts it
   (`assignment`). `agent` is an agent's own decision where the owner's setting
-  leaves it to the agent: a goal you file with no parent is accepted at once on it,
+  leaves it to the agent: a goal you file with no parent, or move from `triage` to
+  `ready` with no `acceptance`, is accepted at once on it,
   or, where the owner decides, stays in `triage` and the answer says
   `waits_for_owner` with the question they answer. A task you file or move under
   goals and stages that are all accepted and open, or move out of `triage` into
@@ -87,6 +88,12 @@ says what it is:
   and `reached_at` once that came and the owner is asked; `returned`, on work in
   triage that came back, says why (`because`: `date`, `completed`, `cancelled`
   or `deleted`, with the `item`) and when.
+- `triage_stack`, only on an item waiting for a triage review, is `{seen_at, seen_by}`:
+  when a review marked it seen and who, both null while none did. `list_work_items`
+  with `triage_stack: "unseen"` lists the items no review marked, oldest first, and
+  `"seen"` the marked ones. A list row carries no `triage_stack`: the filter says
+  whether its rows are marked, and the card, or the list with `verbose`, says when
+  and by whom. See [the triage procedure](triage.md).
 - `get_work_item_chain` with `scope: "tree"` reads everything under an item at
   any depth; `scope: "chain"`, the default, adds what was discovered from it.
 
@@ -105,24 +112,13 @@ await confirmation: check each and complete it, as the skill's Close section say
 
 | Tool | Also answers |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task; `waits_for_owner` (`action`, `point`, `question`, `what`) when the owner decides on it and it waits in `triage` for their answer |
+| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist`, `links` or `group`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task; `waits_for_owner` (`action`, `point`, `question`, `what`) when the owner decides on it and it waits in `triage` for their answer |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `waits_for_owner` (as `create_work_item` gives it) when the owner decides on one of its writes, `waits_for_sessions` (`action`, `point`, `sessions`, `until`) when a cancel waits for the sessions whose work it ends, `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `waits_for_owner` (as `create_work_item` gives it) when the owner decides on one of its writes, `waits_for_sessions` (`action`, `point`, `sessions`, `until`) when a cancel waits for the sessions whose work it ends, `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.triage_seen` `{seen_at}`, or `{cleared: true}` when it took the mark away; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `commits`, `links`, `projects`) |
 
-`claim_ready_work_item` takes the first workable task in the order of work —
-urgent, started, a goal or stage under way, priority, age — which a list row
-says as `queue_order`, and answers with the card of the item it took as
-`work_item`, null when no task is workable. It reads one space's queue: `space`, or the space of
-`within`, a goal or stage whose tasks at any depth it keeps, or else the space
-whose project root holds your session's folder (`session_space` in
-`list_planning_spaces`); `label` keeps the tasks that carry that label
-themselves, and `project` the tasks that name that project, never one that
-names none. A call naming neither `space` nor `within` from a session in no
-space's project root is refused with the spaces, as is `within` naming a task or
-a goal of another space than `space`; a task of any space is claimed by number. A goal, a stage and work in triage or deferred are never
-taken. Nothing sets the order by hand. A comment in `applied` has `comment_id`, and `reply_to` and
+A comment in `applied` has `comment_id`, and `reply_to` and
 `reply_to_request`: the root a reply joined, both null for a new root, and
 `list_request_id` when it carried a `list`, as the summary does. A comment or a
 summary that named other items in `mentions` adds `mentions`: per item its
@@ -164,7 +160,10 @@ id. The claim does not depend on them.
 
 The owner's participation setting, which only the server reads, decides at each of
 these points whether an agent's write is made at once or waits for the owner: a goal
-you file with no parent (`proposed_goal`), a task you file or move into accepted
+with no parent you file or accept out of `triage` (`proposed_goal`), a group of findings
+you file under a new goal (`finding`: the owner decides it when this point or
+`proposed_goal` leaves it to them, or, for `drop` of tasks you did not file,
+`cancel_outside`; the wait names `finding`), a task you file or move into accepted
 goals and stages (`task_in_goal`), a cancel of an item your own work did not file
 (`cancel_outside`) or of work other live sessions do (`cancel_shared`), a removal or
 rewording of a step of a goal or stage (`condition`), the completion of a goal,
@@ -238,7 +237,7 @@ permission mode needs no such care.
 home space of its projects, else in your session's space; projects of two
 spaces need `space`, one of them. A named `space` must be the parent's space,
 or one of the projects' home spaces when they have one; a `[placement]` refusal
-names the candidates. Three more arguments act on the
+names the candidates. Four more arguments act on the
 new item in the same call, all or nothing:
 
 | Argument | Shape |
@@ -246,8 +245,23 @@ new item in the same call, all or nothing:
 | `claim` | `true` |
 | `checklist` | `["…", {"text": "…", "done": true}]` or `{"items": [...]}`, steps as below |
 | `links` | `[{"other": "MAIN-12", "kind": "discovered-from"}]`, at most 100 |
+| `group` | `{"items": ["MAIN-41", "MAIN-42"], "answer": "do", "why": "…"}`, with `until` beside `later` |
 
-A refused claim, step or link creates nothing and spends no number.
+A refused claim, step, link or group creates nothing and spends no number.
+
+`group` makes a new goal of 2 to 20 tasks waiting for a triage review, or of one
+of priority high or urgent: each in triage, under no goal, in the goal's space,
+with no question of the owner open.
+The goal needs `kind: "goal"` and its conditions in `checklist`, and takes no
+`parent`, `acceptance`, `claim` or `state` (`[group]`); `why` is one line of at
+most 386 characters. The tasks move under it at once. Your `answer` (`do`,
+`later` with `until`, `drop`) is carried out in the same call, and
+`applied.group.carried_out` is `true`; or it waits for the owner, as
+`waits_for_owner` says, and while it waits no task of the group is claimed or
+moved. A task that does not wait in the stack is refused with
+`[group] MAIN-41 is not waiting for a triage review: <why>`, and a task alone
+of lower priority with
+`[group] a group of one takes a task of priority high or urgent: MAIN-41 is medium`.
 
 `split_from` names an open task to split a part off, and `steps` the ids of its
 steps the part takes. The part stands beside the task, under the same parent,
@@ -269,7 +283,7 @@ matters, not when to do it:
 - `medium`: noticeably affects work, with a workaround
 - `low`: minor
 
-`labels` in the batch's `update` replaces the whole set: `["observation"]` leaves
+`labels` in the batch's `update` replaces the whole set: `["export"]` leaves
 the item with that one label and nothing else. To add or remove labels without
 knowing the rest, send `labels_add` or `labels_remove` (both may go in one
 call). A label already there is kept once, one the item lacks is ignored, and
@@ -315,6 +329,7 @@ resolves its discussion, records its summary and moves its state:
 | `resolutions` | `[{"comment_id": 12, "resolution": "…", "reopen": false}]` | marks thread roots resolved |
 | `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | asks as `create_work_item_request` does |
 | `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
+| `triage_seen` | `true` or `false` | marks an item waiting for a triage review as seen, or takes the mark away; not with `transition`, `defer` or `move_out` |
 | `transition` | `{"state": "completed", "reason": "…", "force": false}` | moves the state |
 | `defer` | `{"until": "2026-12-01", "reason": "…", "force": false}`, not with `transition`, `move_out` or `convert` | puts the item off until a day, a time with its zone, or an open item's close ([work model](work-model.md#goals-and-stages)) |
 | `move_out` | `{"reason": "…", "force": false}`, not with `transition`, `defer` or `convert` | takes the item out of its goal or stage, to triage |
@@ -542,6 +557,26 @@ match is weak, and an item with no attached commit cannot show.
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |
 | A refused batch or creation step | The message starts with the group and index; correct that entry. |
 
+## The order of work
+
+The order of work is computed, and nothing sets it by hand: urgent first, then
+work already started, then tasks of a goal or stage already under way, then
+priority, then age. A list row the queue gives says its `queue_order`, 1 being
+what `claim_ready_work_item` gives next; any other row says `withheld`, why the
+queue does not give it.
+
+`claim_ready_work_item` takes the first workable task in that order and answers
+with the card of the item it took as `work_item`, null when no task is workable.
+It reads one space's queue: `space`, or the space of `within`, a goal or stage
+whose tasks at any depth it keeps, or else the space whose project root holds
+your session's folder (`session_space` in `list_planning_spaces`); `label` keeps
+the tasks that carry that label themselves, and `project` the tasks that name
+that project, never one that names none. A call naming neither `space` nor
+`within` from a session in no space's project root is refused with the spaces,
+as is `within` naming a task or a goal of another space than `space`; a task of
+any space is claimed by number. A goal, a stage and work in triage or deferred
+are never taken.
+
 ## Claims
 
 A claim is a lease on the session that took it: `live` while that session is
@@ -651,7 +686,8 @@ no longer stands in for it, and the refusal says so: "answer path is required;
 give an option or your own variant in own; a note no longer stands in for a
 field".
 
-A pending question is answered once; a second answer is refused. `change: true`
+A pending question is answered once; a second answer is refused. A person changes
+an answer in Valkama. `change: true`
 replaces the answer of an answered question, held to the same rules, and keeps the
 replaced one as a version: `answer_version` rises by one and `answered_at` moves to
 the change. Change an answer only when the owner asks. Refused with

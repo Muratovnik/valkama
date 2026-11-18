@@ -22,7 +22,7 @@ hold other work at any depth and are never claimed; there are eight categories;
 work is accepted on a recorded basis; and an accepted open goal or stage shows
 what it derives from the work under it instead of a state. The order work is
 taken in was set by hand, a `rank` stored as the item's `position`; in 3.0 it is
-computed from the work model. The store moves to schema 21 through
+computed from the work model. The store moves to schema 22 through
 `valkama migrate work-model`.
 
 Several of the old names would mean something else under the new model. A

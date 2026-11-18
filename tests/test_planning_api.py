@@ -171,7 +171,8 @@ class PlanningApiTests(unittest.TestCase):
                 "mentions_total", "number", "open", "parent_id", "planning_space_id",
                 "priority", "projects", "reference", "refs", "revision", "source",
                 "started_at", "state", "subscribers", "summary", "summary_comment_id",
-                "title", "updated_at", "waits_for", "withheld", "work_item_id", "workable",
+                "title", "triage_stack", "updated_at", "waits_for", "withheld", "work_item_id",
+                "workable",
             },
             set(record),
         )  # fmt: skip

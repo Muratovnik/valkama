@@ -135,6 +135,23 @@ const ACTIONS: [string, ReturnType<typeof action>][] = [
     action('goal_defer', { reason: 'after the release', proposed: { until: '2026-12-01' } }),
   ],
   ['goal', action('proposed_goal', { asked_by: 'Valkama', outcome: 'carried_out' })],
+  [
+    'triage',
+    action('finding', {
+      reason: 'One change to the export',
+      proposed: {
+        conditions: ['The export writes every field'],
+        items: [
+          { reference: 'TASK-41', title: 'Finding in the export' },
+          { reference: 'TASK-42', title: 'Another finding' },
+        ],
+        answer: 'later',
+        until: '2026-12-01',
+        why: 'One change to the export',
+      },
+      cancel_list: cancelList,
+    }),
+  ],
 ]
 
 describe('a question with a purpose', () => {
@@ -182,6 +199,33 @@ describe('a question about a write that waits for the owner', () => {
         ...question(3, 'goal', part),
       }
       expect(() => validateInputRequestDetail(detail), JSON.stringify(part)).toThrow()
+    }
+  })
+})
+
+/** A question's record as the answer to it comes back, saying what the answer did. */
+function answered(carried: unknown) {
+  const entry = question(9, 'triage')
+  const request = { ...(entry.request as object), carried_out: carried }
+  return { interface_version: 'valkama-planning-requests', ...entry, request }
+}
+
+describe("the record of the owner's answer", () => {
+  it('reads what the answer did: a category, an outcome, or what a group answer moved', () => {
+    const group = { answer: 'do', moved_out: ['TASK-42'], skipped: ['TASK-43'] }
+    for (const carried of ['completed', 'left_for_next_session', 'dropped', group]) {
+      expect(validateInputRequestDetail(answered(carried)).request.carried_out).toEqual(carried)
+    }
+  })
+
+  it('is refused with what no answer does', () => {
+    const cases = [
+      'answered',
+      { answer: 'do', moved_out: [] },
+      { answer: 'out', moved_out: [], skipped: [] },
+    ]
+    for (const carried of cases) {
+      expect(() => validateInputRequestDetail(answered(carried)), JSON.stringify(carried)).toThrow()
     }
   })
 })

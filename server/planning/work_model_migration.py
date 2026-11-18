@@ -95,6 +95,12 @@ otherwise cascade into them:
   `migrated`, and that count is not known for one. Its postcondition of the same name
   holds a row only to a goal or stage accepted on another basis, which from then on
   every write keeps.
+- **triage-marks** creates the table of the items a triage review saw (`triage_marks`)
+  and the five triggers that take a mark away, empty: no 3.0 review has run. It comes
+  last, since the steps that rebuild the tables the triggers stand on set up again only
+  the triggers that stood before. Its postcondition of the same name holds the table
+  and the triggers to a fresh store's text, no item marked and no `triage_seen` in the
+  history. The action itself is one more in the events' CHECK, which `items` widens.
 
 The postcondition **agent-basis** holds that no item stands accepted on an agent's own
 decision (`agent`): before 3.0 no setting let an agent decide, so nothing was.
@@ -2416,6 +2422,58 @@ def _check_baselines(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError(f"{_BASELINES} holds {rows} rows, not 0")
 
 
+# -- triage-marks: the items a triage review saw ------------------------------------
+
+_TRIAGE_MARKS = "triage_marks"
+#: The step and the postcondition that hold the triage marks, named by what they do
+#: rather than numbered.
+TRIAGE_MARKS = "triage-marks"
+
+
+def _triage_marks_missing(conn: sqlite3.Connection) -> list[str]:
+    """The table and the triggers of the triage marks the store lacks, by name."""
+
+    present = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE (type = 'table' AND name = ?)"
+            " OR type = 'trigger'",
+            (_TRIAGE_MARKS,),
+        )
+    }
+    wanted = [_TRIAGE_MARKS, *planning_store.TRIAGE_MARK_TRIGGERS]
+    return [name for name in wanted if name not in present]
+
+
+def _triage_marks_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return bool(_triage_marks_missing(conn))
+
+
+def _create_triage_marks(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table of the items a triage review saw, empty, and the five triggers that
+    take a mark away, as a fresh store declares them.
+
+    "Seen" means a 3.0 review saw the item, and none has run yet: no item gets a mark.
+    The triggers stand on `work_items`, `work_item_comments` and `work_item_requests`,
+    which earlier steps rebuild, and a rebuild sets up again only the triggers that
+    stood before it: the step comes after every one of them.
+    """
+
+    del context
+    created = _triage_marks_missing(conn)
+    for statement in planning_store.TRIAGE_MARKS:
+        conn.execute(statement)
+    return {"created": created}
+
+
+def _check_triage_marks(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    missing = _triage_marks_missing(conn)
+    if missing:
+        raise UnmetError(f"the triage marks lack {', '.join(missing)}")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -2512,6 +2570,13 @@ STEPS = (
         _create_baselines,
         _baselines_needed,
         _check_baselines,
+    ),
+    Step(
+        TRIAGE_MARKS,
+        "the items a triage review saw",
+        _create_triage_marks,
+        _triage_marks_needed,
+        _check_triage_marks,
     ),
 )
 
@@ -2932,7 +2997,13 @@ def _holds_indexes(conn: sqlite3.Connection, context: Context) -> Mapping[str, A
     objects = _objects(conn)
     expected = {
         "work_items": sorted(
-            set(oracle.objects["work_items"]) | set(planning_store.STATE_FITS_KIND_TRIGGERS)
+            set(oracle.objects["work_items"])
+            | set(planning_store.STATE_FITS_KIND_TRIGGERS)
+            | {
+                name
+                for name, table in planning_store.TRIAGE_MARK_TRIGGERS.items()
+                if table == "work_items"
+            }
         ),
         "workflow_states": sorted(oracle.objects["workflow_states"]),
     }
@@ -3498,6 +3569,48 @@ def _baselines(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     return {"rows": rows}
 
 
+def _triage_marks_none(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table and the triggers stand as a fresh store declares them, word for word,
+    and no item is marked: no 3.0 review has run, nor written `triage_seen`. `fresh-shape` compares
+    their names and the table's shape, and the text says what a trigger does as well."""
+
+    del context
+    stored = {
+        str(name): str(sql)
+        for name, sql in conn.execute(
+            "SELECT name, sql FROM sqlite_master WHERE name = ? OR name IN"
+            " (SELECT value FROM json_each(?))",
+            (_TRIAGE_MARKS, json.dumps(list(planning_store.TRIAGE_MARK_TRIGGERS))),
+        )
+    }
+    # SQLite keeps a statement's text without its `IF NOT EXISTS`.
+    declared = {
+        name: statement.replace(" IF NOT EXISTS", "", 1)
+        for name, statement in zip(
+            (_TRIAGE_MARKS, *planning_store.TRIAGE_MARK_TRIGGERS),
+            planning_store.TRIAGE_MARKS,
+            strict=True,
+        )
+    }
+    found = [
+        f"{name} is {'missing' if name not in stored else 'declared otherwise'}"
+        for name, sql in declared.items()
+        if stored.get(name) != sql
+    ]
+    marks = int(conn.execute(f"SELECT COUNT(*) FROM {_TRIAGE_MARKS}").fetchone()[0])  # noqa: S608 - constant name
+    if marks:
+        found.append(f"{marks} items are marked")
+    events = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM work_item_events WHERE action = 'triage_seen'"
+        ).fetchone()[0]
+    )
+    if events:
+        found.append(f"{events} triage_seen events are recorded")
+    _unmet(found, "triage marks")
+    return {"marks": marks, "triage_seen_events": events}
+
+
 def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
@@ -3530,7 +3643,14 @@ POSTCONDITIONS = (
     Postcondition("request-shapes", "requests and waiting words shaped as a fresh store's", _p25),
     Postcondition("fresh-tables", "a table the store lacked is declared fresh and empty", _p26),
     Postcondition(
-        "requests-kept", "every request keeps its item, kind and status but those a close ended", _p27
+        "no-closed-waits",
+        "no request waits on a closed item or says task_closed",
+        _holds_no_closed_waits,
+    ),
+    Postcondition(
+        "requests-ended",
+        "a close ended the requests foreseen, each by its item's category",
+        _holds_requests_ended,
     ),
     Postcondition("no-closed-waits", "no request waits on a closed item or says task_closed", _p28),
     Postcondition("requests-ended", "a close ended the requests foreseen, each by its item's category", _p29),
@@ -3538,27 +3658,11 @@ POSTCONDITIONS = (
     Postcondition(
         DEFERRED_ITEMS, "a condition for each item put off, and for no other", _deferred_items
     ),
-    Postcondition(
-        "no-commit-refs",
-        "no commit ref is left; the refs take a fresh store's kinds",
-        _holds_no_commit_refs,
-    ),
-    Postcondition(
-        "other-refs", "each item keeps its other refs and gains its url records", _holds_other_refs
-    ),
-    Postcondition(
-        "record-pairs", "each item holds the pairs its records carry, migrated", _holds_record_pairs
-    ),
-    Postcondition(
-        "commits-attached",
-        "every commit is attached, with no session and no rewrite",
-        _holds_commits_attached,
-    ),
-    Postcondition(
-        "commit-projects",
-        "every project from commits is one of an attached commit",
-        _holds_commit_projects,
-    ),
+    Postcondition("no-commit-refs", "no commit ref is left; the refs take a fresh store's kinds", _p31),
+    Postcondition("other-refs", "each item keeps its other refs and gains its url records", _p32),
+    Postcondition("record-pairs", "each item holds the pairs its records carry, migrated", _p33),
+    Postcondition("commits-attached", "every commit is attached, with no session and no rewrite", _p34),
+    Postcondition("commit-projects", "every project from commits is one of an attached commit", _p35),
     Postcondition(
         PARTICIPATION, "no setting stored; every space at the default set", _participation_default
     ),
@@ -3567,6 +3671,9 @@ POSTCONDITIONS = (
     Postcondition(AGENT_BASIS, "no item accepted on an agent's own decision", _agent_basis_none),
     Postcondition(
         BASELINES, "a count at acceptance only where an acceptance was not migrated", _baselines
+    ),
+    Postcondition(
+        TRIAGE_MARKS, "the triage marks declared as a fresh store's, none set", _triage_marks_none
     ),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )

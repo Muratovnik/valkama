@@ -15,7 +15,7 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
-- **`valkama migrate work-model` carries a store Valkama 2.9 left to schema 21.** Run
+- **`valkama migrate work-model` carries a store Valkama 2.9 left to schema 22.** Run
   once with every session stopped, it takes a verified `pre3.0` snapshot with the
   pictures beside it, then gives the workflows their eight categories and the service
   state, the history their renamed keys and every item its kind, acceptance and start,
@@ -60,13 +60,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
-- **A fresh store holds the work model, at schema 21.** A new space's workflow has a
+- **A fresh store holds the work model, at schema 22.** A new space's workflow has a
   state for each of eight categories — Triage, Deferred, Ready, Dev, Review, Done,
   Blocked and Cancelled — and new work starts in Triage; `backlog` and `queued` are no
   longer categories. A goal or a stage is stored as a container, which the store keeps
   out of ready, active, review and blocked, and a service state beside the eight holds
   an accepted open one. A store Valkama 2.9 left is refused with "run `valkama migrate
-  work-model` once" and left as it was, and a 2.9 build refuses a store at 21.
+  work-model` once" and left as it was, and a 2.9 build refuses a store at 22.
 - **A close ends the questions on its item and says how.** Closing an item writes
   every question, decision and list still pending on it `expired`, with
   `expired_reason` `item_completed` or `item_cancelled` in place of `task_closed`,

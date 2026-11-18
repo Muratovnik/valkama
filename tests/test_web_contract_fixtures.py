@@ -337,6 +337,25 @@ class _Scenario:
         question = answer["waits_for_owner"]["question"]
         return self.http(f"/api/modules/planning/request?{self.scope(id=question)}")
 
+    def triage_group(self) -> dict:
+        """The question about a group of findings an agent proposes as one goal, with the
+        write that waits for the owner's answer."""
+
+        findings = [
+            str(self.tool("create_work_item", space=SPACE, title=title)["reference"])
+            for title in ("Finding in the export", "Another finding in the export")
+        ]
+        answer = self.tool(
+            "create_work_item",
+            space=SPACE,
+            title="Group of export findings",
+            kind="goal",
+            checklist=["The export writes every field"],
+            group={"items": findings, "answer": "later", "until": "2026-12-01", "why": "One fix"},
+        )
+        question = answer["waits_for_owner"]["question"]
+        return self.http(f"/api/modules/planning/request?{self.scope(id=question)}")
+
     def put_off(self) -> dict[str, dict]:
         """A card put off until another item, and one that came back when the item it
         waited on was deleted."""
@@ -755,6 +774,9 @@ class _Scenario:
             waiting = item("Tree goal not accepted yet", kind="goal")
             loose = item("Tree stage not accepted yet", kind="stage", parent=waiting)
             item("Tree work under the stage not accepted", parent=loose)
+            # A review saw the goal and left it waiting: the board reads its mark, and the
+            # items of the stack nobody marked read theirs as empty.
+            service.mark_triage(conn, waiting, True, author="worker-a")
             conn.commit()
         finally:
             conn.close()
@@ -1081,6 +1103,8 @@ class _Scenario:
             "planning-portfolio": self.http(
                 "/api/platform/planning?scope_kind=global&directory_only=true"
             ),
+            # After the counts above, which the group's goal and findings would change.
+            "request-triage-group": self.triage_group(),
         }
 
 
