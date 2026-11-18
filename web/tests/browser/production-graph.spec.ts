@@ -348,6 +348,52 @@ for (const width of [1440, 1024]) {
   })
 }
 
+test('the key keeps «Done»’s place unseen until the switch draws the closed members', async ({
+  page,
+}) => {
+  // The long chain above draws a closed member that holds open work, so «Done» is named there
+  // before the switch. Here no closed member holds any: none is drawn, and «Done» is only kept.
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  const { chain, items, edges } = smallChain()
+  await serve(page, chain, items, edges)
+  await page.goto(graphRoute({ chain: 'MAIN-264', chain_scope: 'chain' }))
+  await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
+  const card = (reference: string) =>
+    page.locator('.flow-node-card').filter({
+      has: page.locator('.flow-node-id').getByText(reference, { exact: true }),
+    })
+  const closedMembers = items.filter((item) => item.state.is_terminal).map((item) => item.reference)
+  expect(closedMembers).toHaveLength(7)
+  // An open member is drawn; no closed one is.
+  await expect(card('MAIN-1005')).toHaveCount(1)
+  for (const reference of closedMembers) await expect(card(reference)).toHaveCount(0)
+
+  // The key names the open members' two groups, under way and in the backlog, and keeps «Done»'s place
+  // before them, unseen (DESIGN.md: the graph's key names only the states its drawing holds and
+  // keeps the place of a state a switch can add).
+  const fieldKey = page.locator('.graph-canvas .graph-legend')
+  const groups = fieldKey.locator('[data-dimension="work-item-chain-group"]')
+  const done = groups.and(fieldKey.locator('[data-state="done"]'))
+  await expect(groups).toHaveCount(3)
+  await expect(done).toHaveCount(1)
+  await expect(done).toHaveText('Done')
+  await expect(done).toBeHidden()
+  for (const group of ['active', 'backlog'])
+    await expect(groups.and(fieldKey.locator(`[data-state="${group}"]`))).toBeVisible()
+  const key = await fieldKey.boundingBox()
+  const kept = await done.boundingBox()
+  expect(kept?.width).toBeGreaterThan(0)
+
+  // The switch draws the closed members, and «Done» in the place kept for it: the key moves not.
+  await page.getByRole('switch', { name: 'Draw the closed members of the chain' }).click()
+  for (const reference of closedMembers) await expect(card(reference)).toHaveCount(1)
+  await expect(groups).toHaveCount(3)
+  await expect(done).toBeVisible()
+  expect(await done.boundingBox()).toEqual(kept)
+  expect(await fieldKey.boundingBox()).toEqual(key)
+})
+
 test('at a phone width the bar is one row and its options open under it', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await installBackend(page)
